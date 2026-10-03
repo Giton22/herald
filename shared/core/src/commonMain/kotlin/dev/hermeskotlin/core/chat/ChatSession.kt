@@ -386,6 +386,40 @@ class ChatSession(
         }
     }
 
+    /** The background processes this chat's agent started (`process.list`); null when offline or before the first prompt. */
+    suspend fun processes(): List<BackgroundProcess>? {
+        val client = connectedClient() ?: return null
+        val runtimeId = _state.value.runtimeSessionId ?: return null
+        return try {
+            BackgroundProcess.parseList(client.request("process.list", buildJsonObject { put("session_id", runtimeId) }) as? JsonObject)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** Stops one background process (`process.kill`), and says how that went. */
+    suspend fun killProcess(processId: String): String {
+        val client = connectedClient() ?: return NOT_CONNECTED
+        val runtimeId = _state.value.runtimeSessionId ?: return NOT_CONNECTED
+        return try {
+            killOutcome(
+                client.request(
+                    "process.kill",
+                    buildJsonObject {
+                        put("session_id", runtimeId)
+                        put("process_id", processId)
+                    },
+                ) as? JsonObject,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            e.message ?: "Couldn't stop it."
+        }
+    }
+
     /** `/stop`: stops the reply, then the background processes the agent left running (`process.stop`). */
     suspend fun stopEverything() = runOnGateway("/stop") { client, runtimeId ->
         val lines = mutableListOf<String>()

@@ -29,6 +29,7 @@ internal fun ChatMenu(
     onRenamed: (String?) -> Unit,
     onDeleted: () -> Unit,
     onUsage: () -> Unit,
+    onProcesses: () -> Unit,
     viewModel: SessionsViewModel = koinViewModel(),
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
@@ -51,6 +52,7 @@ internal fun ChatMenu(
         onExport = { media.share(transcriptMarkdown(title, messages).encodeToByteArray(), transcriptFileName(title, it.id)) },
         onCopyId = { clipboard.setText(AnnotatedString(it.id)) },
         onUsage = { onUsage() },
+        onProcesses = { onProcesses() },
     )
     RenameDialog(
         renameTarget,

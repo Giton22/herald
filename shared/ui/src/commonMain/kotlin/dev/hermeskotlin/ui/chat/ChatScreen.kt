@@ -205,6 +205,7 @@ fun ChatScreen(
     var petsOpen by remember { mutableStateOf(false) }
     var journeyOpen by remember { mutableStateOf(false) }
     var usageOpen by remember { mutableStateOf(false) }
+    var processesOpen by remember { mutableStateOf(false) }
     var viewing by remember { mutableStateOf<ViewerImage?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(notice) {
@@ -238,6 +239,7 @@ fun ChatScreen(
                 ChatRequest.OpenPets -> petsOpen = true
                 ChatRequest.OpenJourney -> journeyOpen = true
                 ChatRequest.OpenUsage -> usageOpen = true
+                ChatRequest.OpenProcesses -> processesOpen = true
                 ChatRequest.StartVoice -> startVoiceChat()
             }
         }
@@ -289,6 +291,13 @@ fun ChatScreen(
         live = state.usage,
         onLoad = viewModel::loadUsage,
         onDismiss = { usageOpen = false },
+    )
+    ProcessesSheet(
+        visible = processesOpen,
+        controller = viewModel.processes,
+        onStart = viewModel::watchProcesses,
+        onKill = viewModel::killProcess,
+        onDismiss = { processesOpen = false },
     )
     viewing?.let { image ->
         CompositionLocalProvider(LocalMediaLoader provides viewModel::loadMedia) {

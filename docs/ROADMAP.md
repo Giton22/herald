@@ -167,7 +167,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 
 ### Agents & processes
 - [x] Subagent tree and live progress (`subagent.*`, `subagent.list`, `subagent.interrupt`; saved `spawn_tree.*` snapshots not used)
-- [ ] Background process list, kill and stop (`process.*`, `agent.terminal.output`)
+- [x] Background process list and kill, from the chat menu (`process.list`, `process.kill`; polled while open, with each one's output tail). Live `agent.terminal.output` streaming not used
 - [ ] Rollback / checkpoints (`rollback.list`, `rollback.diff`, `rollback.restore`)
 
 ### Automation & configuration
