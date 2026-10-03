@@ -62,9 +62,14 @@ class ChatNotifier(
                 if (wanted && !serviceStarted) serviceStarted = ChatService.start(context)
                 if (!wanted) stopService()
 
-                for (request in state.inputRequests) {
-                    if (!notified.add(request.id)) continue
-                    if (!visible && prefs.notifyRequests) notifications.postRequest(state.title, request)
+                // Only what was actually posted counts: a question that came in while Herald was in sight
+                // still needs its notification once Herald isn't. In sight, cancelAttention took them down.
+                if (visible) {
+                    notified.clear()
+                } else if (prefs.notifyRequests) {
+                    for (request in state.inputRequests) {
+                        if (request.id !in notified && notifications.postRequest(state.title, request)) notified.add(request.id)
+                    }
                 }
                 val open = state.inputRequests.mapTo(HashSet()) { it.id }
                 notified.filter { it !in open }.forEach {
