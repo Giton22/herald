@@ -17,7 +17,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -42,7 +41,6 @@ import com.composables.icons.lucide.CircleSlash
 import com.composables.icons.lucide.ListChecks
 import com.composables.icons.lucide.CircleDashed
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.X
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
@@ -71,11 +69,11 @@ import kotlinx.coroutines.delay
 
 /**
  * The agent's plan above the composer. While its turn runs it's open and ticks off as the agent works;
- * afterwards it folds to a "Last plan" line to look back at, or dismiss, until the agent plans again.
+ * afterwards it folds to a "Last plan" line to look back at. The agent alone ends it: a new plan
+ * replaces it, an emptied one removes it.
  */
 @Composable
 fun TodoPanel(todos: TodoList?, live: Boolean, hazeState: HazeState) {
-    var dismissed by remember { mutableStateOf<TodoList?>(null) }
     // Once a live plan finishes, let the last check land before it folds away.
     var settling by remember { mutableStateOf(false) }
     LaunchedEffect(live) {
@@ -86,7 +84,7 @@ fun TodoPanel(todos: TodoList?, live: Boolean, hazeState: HazeState) {
             settling = false
         }
     }
-    val visible = todos != null && todos.items.isNotEmpty() && todos != dismissed
+    val visible = todos != null && todos.items.isNotEmpty()
     // Kept through the exit animation, so the panel doesn't empty before it leaves.
     var shown by remember { mutableStateOf(todos) }
     if (visible) shown = todos
@@ -96,13 +94,13 @@ fun TodoPanel(todos: TodoList?, live: Boolean, hazeState: HazeState) {
         exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom),
     ) {
         shown?.let { list ->
-            Panel(list, live = live || settling, hazeState, onDismiss = { dismissed = list })
+            Panel(list, live = live || settling, hazeState)
         }
     }
 }
 
 @Composable
-private fun Panel(todos: TodoList, live: Boolean, hazeState: HazeState, onDismiss: () -> Unit) {
+private fun Panel(todos: TodoList, live: Boolean, hazeState: HazeState) {
     // Open while the agent works through it, folded once it's a past plan.
     var expanded by remember(live) { mutableStateOf(live) }
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
@@ -153,14 +151,6 @@ private fun Panel(todos: TodoList, live: Boolean, hazeState: HazeState, onDismis
                 tint = Theme[colors][textTertiary],
                 modifier = Modifier.size(16.dp),
             )
-            if (!live) {
-                UnstyledIcon(
-                    Lucide.X,
-                    contentDescription = "Dismiss the plan",
-                    tint = Theme[colors][textTertiary],
-                    modifier = Modifier.clip(CircleShape).clickable(onClick = onDismiss).padding(2.dp).size(16.dp),
-                )
-            }
         }
         AnimatedVisibility(visible = expanded) {
             Column(

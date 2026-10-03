@@ -35,6 +35,13 @@ class TodoTest {
     }
 
     @Test
+    fun theAgentClearingItsListEndsThePlan() {
+        val state = ChatState().reduce(event("todo.updated", todos(1, item("a", "completed"))))
+            .reduce(event("todo.updated", todos(2)))
+        assertTrue(state.todos!!.items.isEmpty())
+    }
+
+    @Test
     fun anUnusedStoreIsNoPlan() {
         assertNull(TodoList.parse(HermesJson.parseToJsonElement(todos(0)) as JsonObject))
     }
