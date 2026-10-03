@@ -814,44 +814,6 @@ private fun Tools(tools: List<ToolActivity>) {
 }
 
 @Composable
-private fun ToolRow(tool: ToolActivity) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
-        Box(Modifier.padding(top = 3.dp)) {
-            when {
-                tool.running -> Spinner(Modifier.size(14.dp))
-                tool.summary != null || tool.durationSeconds != null ->
-                    UnstyledIcon(Lucide.Check, contentDescription = null, tint = Theme[colors][success], modifier = Modifier.size(14.dp))
-                else -> UnstyledIcon(Lucide.Wrench, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
-            }
-        }
-        Column(Modifier.weight(1f)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text(tool.name, style = Theme[typography][label], color = Theme[colors][textColor])
-                tool.durationSeconds?.let {
-                    Text(formatDuration(it), style = Theme[typography][caption], color = Theme[colors][textTertiary], modifier = Modifier.padding(top = 2.dp))
-                }
-            }
-            val detail = tool.summary ?: tool.detail
-            if (!detail.isNullOrBlank()) {
-                Text(
-                    detail.trim(),
-                    style = Theme[typography][caption],
-                    color = Theme[colors][textTertiary],
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-    }
-}
-
-private fun formatDuration(seconds: Double): String = when {
-    seconds < 1 -> "<1s"
-    seconds < 60 -> "${seconds.toInt()}s"
-    else -> "${(seconds / 60).toInt()}m ${(seconds % 60).toInt()}s"
-}
-
-@Composable
 private fun Thinking(thinkingFrame: String?) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Spinner(Modifier.size(14.dp))
