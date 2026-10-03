@@ -796,8 +796,14 @@ class ChatSession(
         val id = _state.value.storedSessionId ?: return
         when (val result = sessions.messages(gateway, id, profile = profile)) {
             is ApiResult.Success -> _state.update { state ->
-                // Keep a reply that is streaming right now; the stored rows don't have it yet.
-                val live = state.messages.filter { it.isLocalOnly }
+                // Keep a reply that is streaming right now; the stored rows don't have it yet. Nor do they
+                // have a correction mid-turn, or the part of the reply shown before it.
+                val corrected = state.messages.indexOfFirst { it.key == state.correctedReplyKey }
+                val live = if (corrected >= 0) {
+                    state.messages.take(corrected).filter { it.isLocalOnly } + state.messages.drop(corrected)
+                } else {
+                    state.messages.filter { it.isLocalOnly }
+                }
                 state.copy(messages = historyToMessages(result.value.messages) + live, historyLoaded = true, historyError = null)
             }
             else -> _state.update { it.copy(historyLoaded = true, historyError = result.errorMessage) }
@@ -981,10 +987,13 @@ internal fun ChatState.sealReplyBefore(key: String): ChatState {
     )
 }
 
-/** Messages the stored transcript can't contain yet: the streaming reply and prompts still being sent. */
+/**
+ * Messages the stored transcript can't contain yet: the streaming reply and prompts still being sent.
+ * A reply that ended with a warning stays too: the warning is usually that it wasn't saved.
+ */
 private val ChatMessage.isLocalOnly: Boolean
     get() = when (this) {
-        is ChatMessage.Assistant -> streaming
+        is ChatMessage.Assistant -> streaming || warning != null
         is ChatMessage.User -> pending
-        is ChatMessage.Command -> true
+        is ChatMessage.Command, is ChatMessage.Notice -> true
     }
