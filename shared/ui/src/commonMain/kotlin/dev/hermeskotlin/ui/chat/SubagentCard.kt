@@ -42,6 +42,7 @@ import dev.hermeskotlin.core.chat.SubagentRow
 import dev.hermeskotlin.core.chat.SubagentStatus
 import dev.hermeskotlin.core.chat.ToolActivity
 import dev.hermeskotlin.core.chat.subagentRows
+import dev.hermeskotlin.core.models.displayModelName
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
 import dev.hermeskotlin.designsystem.code
@@ -193,7 +194,7 @@ private fun StatusGlyph(status: SubagentStatus) {
 
 /** "model · 12s · 5 tools", whichever are known. */
 private fun meta(row: SubagentRow): String = listOfNotNull(
-    row.model?.substringAfterLast('/'),
+    row.model?.let(::displayModelName),
     when (row.status) {
         SubagentStatus.Queued -> "Waiting to start"
         SubagentStatus.Interrupted -> "Stopped"
