@@ -172,7 +172,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 
 ### Automation & configuration
 - [x] Scheduled jobs in the sidebar (`GET /api/cron/jobs`): schedule in plain words, next run, state; a job page with its prompt, last error, Run now, Pause / Resume, and its runs (`/api/cron/jobs/{id}/runs`), each opening as a chat
-- [ ] Create and edit cron jobs; refetch on `cron.changed`
+- [x] Create, edit and delete cron jobs (`POST`/`PUT`/`DELETE /api/cron/jobs`): prompt, free-text schedule with presets, name, and delivery target (`/api/cron/delivery-targets`); refetch on `cron.changed`
 - [ ] Skills browser and management (`skills.manage`)
 - [ ] Tools and toolsets toggles (`tools.list`, `tools.configure`, `toolsets.list`)
 - [ ] MCP servers (`mcp.*`)

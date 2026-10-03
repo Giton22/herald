@@ -28,8 +28,11 @@ import com.composables.icons.lucide.CalendarClock
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pause
+import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Play
+import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.RefreshCw
+import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.Zap
 import com.composeunstyled.Text
 import com.composeunstyled.theme.Theme
@@ -43,6 +46,8 @@ import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
+import dev.hermeskotlin.designsystem.components.Dialog
+import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusMedium
@@ -85,11 +90,16 @@ internal fun ScheduledPage(
             viewModel.dismissMessage()
         }
     }
-    PlatformBackHandler(enabled = visible && job != null) { viewModel.closeJob() }
+    PlatformBackHandler(enabled = visible && job != null && state.editor == null) { viewModel.closeJob() }
+    PlatformBackHandler(enabled = visible && state.editor != null) { viewModel.closeEditor() }
 
     Column(Modifier.fillMaxSize()) {
-        if (job == null) {
-            SubpageHeader("Scheduled", onBack = onBack)
+        if (state.editor != null) {
+            JobEditorPage(state.editor, viewModel, state.deliveryTargets, onClose = viewModel::closeEditor)
+        } else if (job == null) {
+            SubpageHeader("Scheduled", onBack = onBack) {
+                IconButton(Lucide.Plus, contentDescription = "New job", onClick = viewModel::newJob, tint = Theme[colors][text])
+            }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     state.loading -> CenteredSpinner()
@@ -97,7 +107,9 @@ internal fun ScheduledPage(
                         Button("Try again", onClick = viewModel::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                     }
                     state.jobs.isEmpty() ->
-                        EmptyState(Lucide.CalendarClock, "No scheduled jobs", "Jobs you schedule on the gateway, and the chats their runs produce, show up here.")
+                        EmptyState(Lucide.CalendarClock, "No scheduled jobs", "Have the agent do something on a schedule, like a morning briefing. Each run opens as a chat here.") {
+                            Button("New job", onClick = viewModel::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
+                        }
                     else -> LazyColumn(
                         Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 96.dp),
@@ -107,7 +119,10 @@ internal fun ScheduledPage(
                 }
             }
         } else {
-            SubpageHeader(job.displayName, onBack = viewModel::closeJob)
+            SubpageHeader(job.displayName, onBack = viewModel::closeJob) {
+                IconButton(Lucide.Pencil, contentDescription = "Edit job", onClick = viewModel::editJob, enabled = !state.busy, tint = Theme[colors][text])
+                IconButton(Lucide.Trash2, contentDescription = "Delete job", onClick = viewModel::askDelete, enabled = !state.busy, tint = Theme[colors][text])
+            }
             LazyColumn(
                 Modifier.weight(1f).fillMaxWidth(),
                 contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 96.dp),
@@ -137,6 +152,17 @@ internal fun ScheduledPage(
         }
         state.message?.let { MessageBanner(it, onDismiss = viewModel::dismissMessage, modifier = Modifier.padding(bottom = 96.dp)) }
     }
+
+    Dialog(
+        visible = state.confirmingDelete,
+        onDismissRequest = viewModel::cancelDelete,
+        title = "Delete job?",
+        message = "“${job?.displayName.orEmpty()}” stops running. The chats from its past runs stay.",
+        actions = {
+            Button("Cancel", onClick = viewModel::cancelDelete, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button("Delete", onClick = viewModel::deleteJob, variant = ButtonVariant.Danger, size = ButtonSize.Small)
+        },
+    )
 }
 
 @Composable
