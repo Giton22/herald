@@ -8,8 +8,8 @@ import com.composeunstyled.theme.ThemeToken
 
 /*
  * Design tokens. Components read these through `Theme[colors][...]` — never raw literals.
- * Values are tuned in HermesTheme.kt; the look follows Hermes Desktop's principles
- * (flat surfaces, one hairline stroke, a single accent), not its assets.
+ * Values are tuned in HermesTheme.kt; the look follows Hermes Desktop's default "Nous" skin
+ * (GitHub neutrals, Nous blue, near-square corners, spaced capitals), not its assets or fonts.
  */
 
 val colors = ThemeProperty<Color>("colors")
@@ -25,6 +25,13 @@ val surfaceElevated = ThemeToken<Color>("surface_elevated")
 
 /** Text inputs. */
 val input = ThemeToken<Color>("input")
+
+/** The sessions drawer, a step darker than the chat in dark mode (Desktop's sidebar). */
+val sidebar = ThemeToken<Color>("sidebar")
+
+/** The boxed fill and outline of the user's own messages. */
+val userBubble = ThemeToken<Color>("user_bubble")
+val userBubbleStroke = ThemeToken<Color>("user_bubble_stroke")
 
 val text = ThemeToken<Color>("text")
 val textSecondary = ThemeToken<Color>("text_secondary")
@@ -61,3 +68,9 @@ val bodySmall = ThemeToken<TextStyle>("body_small")
 val label = ThemeToken<TextStyle>("label")
 val caption = ThemeToken<TextStyle>("caption")
 val code = ThemeToken<TextStyle>("code")
+
+/** Small spaced capitals for section labels ("SESSIONS"); set the text in upper case. */
+val eyebrow = ThemeToken<TextStyle>("eyebrow")
+
+/** Heavy spaced capitals for the empty-chat lettering; sized by the caller to fit. */
+val wordmark = ThemeToken<TextStyle>("wordmark")

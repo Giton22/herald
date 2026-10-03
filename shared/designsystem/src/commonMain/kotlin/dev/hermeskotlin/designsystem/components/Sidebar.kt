@@ -39,8 +39,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.designsystem.colors
+import dev.hermeskotlin.designsystem.sidebar as sidebarColor
 import dev.hermeskotlin.designsystem.stroke
-import dev.hermeskotlin.designsystem.surface
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
 
@@ -126,7 +126,7 @@ fun SidebarLayout(
                         .width(width * p)
                         .fillMaxHeight()
                         .clipToBounds()
-                        .background(Theme[colors][surface])
+                        .background(Theme[colors][sidebarColor])
                         .then(hidden),
                 ) {
                     Box(Modifier.requiredWidth(width).fillMaxHeight().align(Alignment.CenterEnd)) { sidebar() }
@@ -175,7 +175,7 @@ fun SidebarLayout(
                     .fillMaxHeight()
                     .align(Alignment.CenterStart)
                     .offset { IntOffset((-widthPx * (1f - p)).roundToInt(), 0) }
-                    .background(Theme[colors][surface])
+                    .background(Theme[colors][sidebarColor])
                     .then(hidden),
             ) {
                 sidebar()

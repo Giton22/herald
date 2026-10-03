@@ -21,12 +21,12 @@ import dev.hermeskotlin.designsystem.accentSoft
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.label
 import dev.hermeskotlin.designsystem.radii
-import dev.hermeskotlin.designsystem.radiusFull
+import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.typography
 
-/** A pill-shaped filter toggle. Selected chips take the soft accent fill. */
+/** A filter toggle. Selected chips take the soft accent fill. */
 @Composable
 fun Chip(
     text: String,
@@ -34,7 +34,7 @@ fun Chip(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(Theme[radii][radiusFull])
+    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
     val content = if (selected) Theme[colors][accent] else Theme[colors][textSecondary]
     UnstyledButton(
         onClick = onClick,

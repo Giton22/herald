@@ -7,22 +7,35 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.composeunstyled.theme.ColorScheme
 import com.composeunstyled.theme.buildThemeV2
 import com.composeunstyled.theme.rememberColoredIndication
 
+/**
+ * Hermes Desktop's default "Nous" skin: GitHub's Light/Dark Default neutrals carrying Nous blue,
+ * which dark mode lifts to #4A84FE to stay legible on near-black. Dark values are as Desktop renders them.
+ */
 private object Palette {
     val Blue = Color(0xFF0053FD)
-    val BlueDark = Color(0xFF4D86FF)
+    val BlueDark = Color(0xFF4A84FE)
 
-    val Ink = Color(0xFF17171A)
-    val Paper = Color(0xFFF8FAFF)
+    val Ink = Color(0xFF1F2328)
+    val InkMuted = Color(0xFF656D76)
+    val Canvas = Color(0xFFFFFFFF)
+    val CanvasSubtle = Color(0xFFF6F8FA)
+    val Border = Color(0xFFD0D7DE)
+    val BorderMuted = Color(0xFFD8DEE4)
 
-    val Night = Color(0xFF0A0A0B)
-    val NightCard = Color(0xFF161618)
-    val NightElevated = Color(0xFF1C1C1F)
-    val Snow = Color(0xFFEDEDF0)
+    val Night = Color(0xFF0D1014)
+    val NightSidebar = Color(0xFF090B0F)
+    val NightCard = Color(0xFF151B23)
+    val NightElevated = Color(0xFF1A2029)
+    val Snow = Color(0xFFE6EDF3)
+    val SnowMuted = Color(0xFF7D8590)
+    val NightBorder = Color(0xFF30363D)
+    val NightBorderMuted = Color(0xFF21262D)
 }
 
 private val baseText = TextStyle(fontFamily = FontFamily.Default)
@@ -38,10 +51,11 @@ val HermesTheme = buildThemeV2 {
     name = "HermesTheme"
     colorSchemeTransitionSpec = tween(200)
 
+    // Desktop scales every radius by 0.2: corners are barely there.
     properties[radii] = mapOf(
-        radiusSmall to 6.dp,
-        radiusMedium to 10.dp,
-        radiusLarge to 16.dp,
+        radiusSmall to 2.dp,
+        radiusMedium to 4.dp,
+        radiusLarge to 6.dp,
         radiusFull to 999.dp,
     )
 
@@ -54,29 +68,34 @@ val HermesTheme = buildThemeV2 {
         label to baseText.copy(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
         caption to baseText.copy(fontSize = 12.sp, lineHeight = 16.sp),
         code to TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 20.sp),
+        eyebrow to baseText.copy(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.14.em),
+        wordmark to baseText.copy(fontSize = 56.sp, lineHeight = 52.sp, fontWeight = FontWeight.Black, letterSpacing = 0.08.em),
     )
 
     colorScheme(ColorScheme.Light) {
         properties[colors] = mapOf(
-            background to Palette.Paper,
-            surface to Color.White,
-            surfaceElevated to Color.White,
-            input to Color(0xFFFCFCFC),
+            background to Palette.Canvas,
+            surface to Palette.CanvasSubtle,
+            surfaceElevated to Palette.Canvas,
+            input to Palette.Canvas,
+            sidebar to Palette.CanvasSubtle,
+            userBubble to Color(0xFFEDF3FF),
+            userBubbleStroke to Color(0xFFC9D8F5),
             text to Palette.Ink,
-            textSecondary to Palette.Ink.copy(alpha = 0.74f),
-            textTertiary to Palette.Ink.copy(alpha = 0.54f),
+            textSecondary to Palette.Ink.copy(alpha = 0.78f),
+            textTertiary to Palette.InkMuted,
             accent to Palette.Blue,
             onAccent to Color.White,
-            accentSoft to Color(0xFFE6EEFF),
-            stroke to Palette.Ink.copy(alpha = 0.08f),
-            strokeStrong to Palette.Ink.copy(alpha = 0.16f),
-            danger to Color(0xFFCF2D56),
-            success to Color(0xFF1F8A65),
-            warning to Color(0xFFC08532),
+            accentSoft to Color(0xFFE3EDFF),
+            stroke to Palette.BorderMuted,
+            strokeStrong to Palette.Border,
+            danger to Color(0xFFCF222E),
+            success to Color(0xFF1A7F37),
+            warning to Color(0xFF9A6700),
         )
         defaultContentColor = Palette.Ink
         defaultIndication = rememberColoredIndication(Palette.Ink)
-        defaultTextSelectionColors = TextSelectionColors(Palette.Blue, Palette.Blue.copy(alpha = 0.3f))
+        defaultTextSelectionColors = TextSelectionColors(Palette.Blue, Palette.Blue.copy(alpha = 0.25f))
     }
 
     colorScheme(ColorScheme.Dark) {
@@ -84,18 +103,21 @@ val HermesTheme = buildThemeV2 {
             background to Palette.Night,
             surface to Palette.NightCard,
             surfaceElevated to Palette.NightElevated,
-            input to Color(0xFF111113),
+            input to Palette.Night,
+            sidebar to Palette.NightSidebar,
+            userBubble to Color(0xFF0F1621),
+            userBubbleStroke to Color(0xFF1F2B41),
             text to Palette.Snow,
-            textSecondary to Palette.Snow.copy(alpha = 0.72f),
-            textTertiary to Palette.Snow.copy(alpha = 0.5f),
+            textSecondary to Palette.Snow.copy(alpha = 0.78f),
+            textTertiary to Palette.SnowMuted,
             accent to Palette.BlueDark,
-            onAccent to Color.White,
-            accentSoft to Color(0xFF15213A),
-            stroke to Palette.Snow.copy(alpha = 0.08f),
-            strokeStrong to Palette.Snow.copy(alpha = 0.18f),
-            danger to Color(0xFFE75E78),
-            success to Color(0xFF55A583),
-            warning to Color(0xFFD9A15A),
+            onAccent to Color(0xFF0D1117),
+            accentSoft to Color(0xFF17243A),
+            stroke to Palette.NightBorderMuted,
+            strokeStrong to Palette.NightBorder,
+            danger to Color(0xFFF85149),
+            success to Color(0xFF3FB950),
+            warning to Color(0xFFD29922),
         )
         defaultContentColor = Palette.Snow
         defaultIndication = rememberColoredIndication(Palette.Snow)
@@ -105,20 +127,23 @@ val HermesTheme = buildThemeV2 {
     colorScheme(PureBlack) {
         properties[colors] = mapOf(
             background to Color.Black,
-            surface to Color.Black,
+            surface to Color(0xFF0D1014),
             surfaceElevated to Palette.NightCard,
-            input to Palette.Night,
+            input to Color.Black,
+            sidebar to Color.Black,
+            userBubble to Color(0xFF0B121C),
+            userBubbleStroke to Color(0xFF1F2B41),
             text to Palette.Snow,
-            textSecondary to Palette.Snow.copy(alpha = 0.72f),
-            textTertiary to Palette.Snow.copy(alpha = 0.5f),
+            textSecondary to Palette.Snow.copy(alpha = 0.78f),
+            textTertiary to Palette.SnowMuted,
             accent to Palette.BlueDark,
-            onAccent to Color.White,
-            accentSoft to Color(0xFF15213A),
-            stroke to Palette.Snow.copy(alpha = 0.08f),
-            strokeStrong to Palette.Snow.copy(alpha = 0.18f),
-            danger to Color(0xFFE75E78),
-            success to Color(0xFF55A583),
-            warning to Color(0xFFD9A15A),
+            onAccent to Color(0xFF0D1117),
+            accentSoft to Color(0xFF17243A),
+            stroke to Palette.NightBorderMuted,
+            strokeStrong to Palette.NightBorder,
+            danger to Color(0xFFF85149),
+            success to Color(0xFF3FB950),
+            warning to Color(0xFFD29922),
         )
         defaultContentColor = Palette.Snow
         defaultIndication = rememberColoredIndication(Palette.Snow)
