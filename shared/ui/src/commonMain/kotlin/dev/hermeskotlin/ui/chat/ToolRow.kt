@@ -37,11 +37,13 @@ import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleX
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.ShieldAlert
 import com.composables.icons.lucide.Wrench
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.chat.ToolActivity
+import dev.hermeskotlin.core.chat.ToolRisk
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.caption
 import dev.hermeskotlin.designsystem.code
@@ -58,6 +60,7 @@ import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.designsystem.warning
 
 /**
  * One tool call in a reply's tool list: its name, time and one-line summary; tap it to see what it
@@ -65,7 +68,7 @@ import dev.hermeskotlin.designsystem.typography
  */
 @Composable
 internal fun ToolRow(tool: ToolActivity) {
-    val hasDetails = tool.input != null || tool.output != null || tool.diff != null
+    val hasDetails = tool.input != null || tool.output != null || tool.diff != null || tool.risk != null
     var expanded by remember(tool.id) { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
@@ -91,6 +94,16 @@ internal fun ToolRow(tool: ToolActivity) {
                     tool.durationSeconds?.let {
                         Text(formatDuration(it), style = Theme[typography][caption], color = Theme[colors][textTertiary], modifier = Modifier.padding(top = 2.dp))
                     }
+                    if (tool.risk != null) {
+                        Row(
+                            Modifier.padding(top = 2.dp),
+                            horizontalArrangement = Arrangement.spacedBy(3.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            UnstyledIcon(Lucide.ShieldAlert, contentDescription = null, tint = Theme[colors][warning], modifier = Modifier.size(12.dp))
+                            Text("Suspicious output", style = Theme[typography][caption], color = Theme[colors][warning])
+                        }
+                    }
                 }
                 val detail = tool.summary ?: tool.detail
                 if (!detail.isNullOrBlank() && !expanded) {
@@ -114,6 +127,7 @@ internal fun ToolRow(tool: ToolActivity) {
         }
         AnimatedVisibility(visible = expanded) {
             Column(Modifier.padding(start = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                tool.risk?.let { RiskNote(it) }
                 tool.input?.let { Block("Input", it) }
                 tool.diff?.let { Block("Changes", it, diff = true) }
                 tool.output?.let { Block(if (tool.failed) "Error" else "Output", it) }
@@ -121,6 +135,33 @@ internal fun ToolRow(tool: ToolActivity) {
                     Text("Still running…", style = Theme[typography][caption], color = Theme[colors][textTertiary])
                 }
             }
+        }
+    }
+}
+
+/** What the scan found in the output. The agent still saw it, fenced off as untrusted. */
+@Composable
+private fun RiskNote(risk: ToolRisk) {
+    val shape = RoundedCornerShape(Theme[radii][radiusSmall])
+    val tint = Theme[colors][warning]
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .border(1.dp, tint.copy(alpha = 0.4f), shape)
+            .background(tint.copy(alpha = 0.08f), shape)
+            .padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            "This output looks like it's trying to steer the agent or reach secrets. The agent was told not to trust it.",
+            style = Theme[typography][caption],
+            color = Theme[colors][text],
+        )
+        risk.labels.takeIf { it.isNotEmpty() }?.let { labels ->
+            Text("Found: ${labels.joinToString(", ")}", style = Theme[typography][caption], color = Theme[colors][textSecondary])
+        }
+        if (risk.redacted) {
+            Text("Parts of it were redacted.", style = Theme[typography][caption], color = Theme[colors][textSecondary])
         }
     }
 }

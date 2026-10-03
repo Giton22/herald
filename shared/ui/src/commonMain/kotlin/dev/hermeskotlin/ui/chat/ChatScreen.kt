@@ -96,8 +96,10 @@ import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.ListEnd
+import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PanelLeft
+import com.composables.icons.lucide.TriangleAlert
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Square
@@ -545,6 +547,7 @@ private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottom
                     is ChatMessage.User -> UserBubble(message)
                     is ChatMessage.Assistant -> AssistantReply(message, thinkingFrame.takeIf { message.streaming })
                     is ChatMessage.Command -> CommandOutput(message)
+                    is ChatMessage.Notice -> NoticeLine(message)
                 }
             }
         }
@@ -618,6 +621,12 @@ private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String
             TurnOutcome.Interrupted -> Text("Stopped", style = Theme[typography][caption], color = Theme[colors][textTertiary])
             else -> Unit
         }
+        message.warning?.let { warningText ->
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Top) {
+                UnstyledIcon(Lucide.TriangleAlert, contentDescription = null, tint = Theme[colors][warning], modifier = Modifier.padding(top = 2.dp).size(14.dp))
+                Text(warningText, style = Theme[typography][bodySmall], color = Theme[colors][warning])
+            }
+        }
         val usage = message.usage?.takeIf { settings.showUsage && !message.streaming }
         if ((!message.streaming && text.isNotBlank()) || usage != null) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -631,6 +640,19 @@ private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String
                 }
             }
         }
+    }
+}
+
+/** A session notice: a centred quiet line between the messages. */
+@Composable
+private fun NoticeLine(message: ChatMessage.Notice) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.Top,
+    ) {
+        UnstyledIcon(Lucide.Info, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.padding(top = 2.dp).size(13.dp))
+        Text(message.text, style = Theme[typography][caption], color = Theme[colors][textTertiary])
     }
 }
 
