@@ -229,4 +229,60 @@ class ChatSessionTest {
         host.close()
         assertEquals(null, host.session.value)
     }
+
+    @Test
+    fun picksOnANewChatGoIntoSessionCreate() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{"model":"m2","provider":"p2","reasoning_effort":"high","fast":true}}""",
+                "prompt.submit" to """{"status":"streaming"}""",
+            ),
+        )
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        assertEquals(ModelSwitch.Done, chat.setModel("m2", "p2"))
+        chat.setReasoningEffort("high")
+        chat.setFast(true)
+        assertTrue(chat.send("hi"))
+
+        val create = transport.awaitSent { it.isCall("session.create") }
+        assertEquals("m2", create.param("model"))
+        assertEquals("p2", create.param("provider"))
+        assertEquals("high", create.param("reasoning_effort"))
+        assertEquals("true", create.param("fast"))
+        assertTrue(transport.sent.value.none { it.isCall("config.set") })
+        val state = chat.state.value
+        assertEquals("high", state.reasoningEffort)
+        assertEquals(true, state.fast)
+    }
+
+    @Test
+    fun aLiveChatSwitchesOverConfigSetAndRollsBackWhenAskedToConfirm() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.resume" to """{"session_id":"rt1","running":false,"info":{"model":"m1","provider":"p1","reasoning_effort":""}}""",
+                "config.set" to """{"key":"model","confirm_required":true,"confirm_message":"Costs a lot"}""",
+            ),
+        )
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        val attached = chat.state.first { it.runtimeSessionId == "rt1" }
+        assertEquals("p1", attached.provider)
+        assertEquals(null, attached.reasoningEffort)
+
+        assertEquals(ModelSwitch.NeedsConfirmation("Costs a lot"), chat.setModel("big", "p1"))
+        val set = transport.awaitSent { it.isCall("config.set") }
+        assertEquals("rt1", set.param("session_id"))
+        assertEquals("big --provider p1", set.param("value"))
+        assertEquals("m1", chat.state.value.model)
+
+        chat.setReasoningEffort("low")
+        transport.awaitSent { it.isCall("config.set") && it.param("key") == "reasoning" && it.param("value") == "low" }
+        transport.push(event("session.info", "rt1", """{"model":"m1","reasoning_effort":"low","fast":false}"""))
+        chat.state.first { it.reasoningEffort == "low" && it.fast == false }
+    }
 }

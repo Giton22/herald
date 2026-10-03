@@ -19,7 +19,10 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonObjectBuilder
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
@@ -133,6 +136,74 @@ class ChatSession(
         } catch (e: Exception) {
             _state.update { it.copy(error = e.message ?: "Couldn't stop the turn.") }
         }
+    }
+
+    /**
+     * Switches this chat's model. A new chat only remembers the pick for `session.create`; a live one
+     * switches at once, or at the next turn when one is running. Pricey models ask to [confirm] first.
+     */
+    suspend fun setModel(model: String, provider: String, confirm: Boolean = false): ModelSwitch {
+        val previous = _state.value
+        if (!rowExists && previous.runtimeSessionId == null) {
+            _state.update { it.copy(model = model, provider = provider) }
+            return ModelSwitch.Done
+        }
+        _state.update { it.copy(model = model, provider = provider) }
+        return try {
+            val result = configSet("model", JsonPrimitive("$model --provider $provider")) {
+                if (confirm) put("confirm_expensive_model", true)
+            }
+            if (result.boolean("confirm_required") == true) {
+                _state.update { it.copy(model = previous.model, provider = previous.provider) }
+                ModelSwitch.NeedsConfirmation(result.string("confirm_message") ?: "This model costs more than usual. Switch anyway?")
+            } else {
+                ModelSwitch.Done
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _state.update { it.copy(model = previous.model, provider = previous.provider, error = e.message ?: "Couldn't switch the model.") }
+            ModelSwitch.Failed
+        }
+    }
+
+    /** Sets the reasoning effort ([effort] `none` turns thinking off) for this chat only. */
+    suspend fun setReasoningEffort(effort: String) = setLive({ it.copy(reasoningEffort = effort) }) {
+        configSet("reasoning", JsonPrimitive(effort))
+    }
+
+    /** Turns the priority tier on or off for this chat only. */
+    suspend fun setFast(fast: Boolean) = setLive({ it.copy(fast = fast) }) {
+        configSet("fast", JsonPrimitive(if (fast) "fast" else "normal"))
+    }
+
+    /** Applies [apply] at once and sends it with [call] when the chat is live; rolls back on failure. */
+    private suspend fun setLive(apply: (ChatState) -> ChatState, call: suspend () -> Unit) {
+        val previous = _state.value
+        _state.update(apply)
+        if (!rowExists && previous.runtimeSessionId == null) return
+        try {
+            call()
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _state.update { it.copy(reasoningEffort = previous.reasoningEffort, fast = previous.fast, error = e.message ?: "Couldn't change the setting.") }
+        }
+    }
+
+    /** Session-scoped `config.set`; attaches first, since the key needs a live runtime session. */
+    private suspend fun configSet(key: String, value: JsonElement, extra: JsonObjectBuilder.() -> Unit = {}): JsonObject? {
+        val client = connectedClient() ?: throw RpcException(0, "Not connected to the gateway.")
+        val runtimeId = ensureAttached(client)
+        return client.request(
+            "config.set",
+            buildJsonObject {
+                put("session_id", runtimeId)
+                put("key", key)
+                put("value", value)
+                extra()
+            },
+        ) as? JsonObject
     }
 
     /** Retries the transcript load or a failed attach. */
@@ -289,8 +360,7 @@ class ChatSession(
                 messages = messages,
                 inputRequests = open.plusNew(claimUnclaimed(runtimeId)),
                 keySeq = state.keySeq + 1,
-                model = (result["info"] as? JsonObject).string("model")?.takeIf { it.isNotBlank() } ?: state.model,
-            )
+            ).withInfo(result["info"] as? JsonObject)
         }
         runtimeId
     }
@@ -298,17 +368,28 @@ class ChatSession(
     /** `session.create` for a brand-new chat; its stored row appears with the first prompt. */
     private suspend fun create(client: JsonRpcClient): String = attachMutex.withLock {
         _state.update { it.copy(attachment = Attachment.Attaching) }
-        val result = client.request("session.create", buildJsonObject { put("cols", TERMINAL_COLUMNS) }) as? JsonObject
-            ?: error("Empty session.create reply")
+        val picks = _state.value
+        val result = client.request(
+            "session.create",
+            buildJsonObject {
+                put("cols", TERMINAL_COLUMNS)
+                // Picked before the first send; without them the profile defaults apply.
+                if (picks.model != null && picks.provider != null) {
+                    put("model", picks.model)
+                    put("provider", picks.provider)
+                }
+                picks.reasoningEffort?.let { put("reasoning_effort", it) }
+                picks.fast?.let { put("fast", it) }
+            },
+        ) as? JsonObject ?: error("Empty session.create reply")
         val runtimeId = result.string("session_id") ?: error("session.create returned no session_id")
         _state.update {
             it.copy(
                 attachment = Attachment.Attached(runtimeId),
                 storedSessionId = result.string("stored_session_id") ?: it.storedSessionId,
-                model = (result["info"] as? JsonObject).string("model")?.takeIf { m -> m.isNotBlank() } ?: it.model,
                 historyLoaded = true,
                 inputRequests = it.inputRequests.plusNew(claimUnclaimed(runtimeId)),
-            )
+            ).withInfo(result["info"] as? JsonObject)
         }
         runtimeId
     }
@@ -324,6 +405,17 @@ class ChatSession(
 
         const val MAX_UNCLAIMED = 8
     }
+}
+
+/** How [ChatSession.setModel] went. */
+sealed interface ModelSwitch {
+    data object Done : ModelSwitch
+
+    /** The gateway wants an explicit yes (an expensive model); call again with `confirm = true`. */
+    data class NeedsConfirmation(val message: String) : ModelSwitch
+
+    /** Rolled back; the reason is in [ChatState.error]. */
+    data object Failed : ModelSwitch
 }
 
 private fun List<InputRequest>.plusNew(more: List<InputRequest>): List<InputRequest> =

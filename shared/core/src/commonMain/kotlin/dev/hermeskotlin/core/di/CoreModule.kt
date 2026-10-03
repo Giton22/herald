@@ -8,6 +8,7 @@ import dev.hermeskotlin.core.cron.CronApi
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayProbe
 import dev.hermeskotlin.core.gateway.GatewayRepository
+import dev.hermeskotlin.core.models.ModelsApi
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.rpc.openGatewaySocket
@@ -42,4 +43,5 @@ val coreModule = module {
         )
     }
     single { ChatHost(get(), get(), get()) }
+    single { ModelsApi(get()) }
 }

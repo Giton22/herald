@@ -45,12 +45,21 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
         "status.update" -> copy(status = payload.string("text")?.takeIf { it.isNotBlank() })
         "error" -> copy(error = payload.string("message"))
         "session.title" -> copy(title = payload.string("title") ?: title)
-        "session.info" -> copy(
-            model = payload.string("model")?.takeIf { it.isNotBlank() } ?: model,
-            title = payload.string("title")?.takeIf { it.isNotBlank() } ?: title,
-        )
+        "session.info" -> withInfo(payload).copy(title = payload.string("title")?.takeIf { it.isNotBlank() } ?: title)
         else -> this
     }
+}
+
+/** The model fields of a `session.info` payload (also the `info` of `session.create`/`session.resume`). */
+internal fun ChatState.withInfo(info: JsonObject?): ChatState {
+    if (info == null) return this
+    return copy(
+        model = info.string("model")?.takeIf { it.isNotBlank() } ?: model,
+        provider = info.string("provider")?.takeIf { it.isNotBlank() } ?: provider,
+        // "" means the profile default, which is worth showing as such rather than as a stale pick.
+        reasoningEffort = info.string("reasoning_effort")?.let { it.ifBlank { null } } ?: reasoningEffort.takeIf { "reasoning_effort" !in info },
+        fast = info.boolean("fast") ?: fast,
+    )
 }
 
 private fun ChatState.appendText(chunk: String?): ChatState {

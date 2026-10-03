@@ -52,6 +52,12 @@ data class ChatState(
     val storedSessionId: String? = null,
     val title: String? = null,
     val model: String? = null,
+    /** Provider slug of [model]. */
+    val provider: String? = null,
+    /** `none`, a level such as `medium`, or null for the profile default (see ReasoningEffort). */
+    val reasoningEffort: String? = null,
+    /** Priority tier on; null until the gateway reports it. */
+    val fast: Boolean? = null,
     val historyLoaded: Boolean = false,
     val historyError: String? = null,
     val messages: List<ChatMessage> = emptyList(),
