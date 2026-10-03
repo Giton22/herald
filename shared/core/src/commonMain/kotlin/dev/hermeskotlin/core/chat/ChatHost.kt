@@ -20,6 +20,7 @@ class ChatHost(
     private val connection: GatewayConnection,
     private val sessions: SessionsApi,
     private val scope: CoroutineScope,
+    private val risks: ToolRiskStore? = null,
 ) {
     private val _session = MutableStateFlow<ChatSession?>(null)
     val session: StateFlow<ChatSession?> = _session.asStateFlow()
@@ -44,7 +45,7 @@ class ChatHost(
         this.gateway = gateway
         this.profile = profile
         sessionScope = childScope
-        return ChatSession(gateway, storedSessionId, title, connection, sessions, childScope, profile)
+        return ChatSession(gateway, storedSessionId, title, connection, sessions, childScope, profile, risks)
             .also { it.start() }
             .also { _session.value = it }
     }

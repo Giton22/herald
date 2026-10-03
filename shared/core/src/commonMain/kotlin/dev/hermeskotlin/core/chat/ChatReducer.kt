@@ -72,14 +72,8 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
                 withOpenReply(finish)
             }
         }
-        // Every scan of outside content reports, mostly "low"; only a finding is worth a badge.
         "tool.output_risk" -> {
-            val id = payload.string("tool_id") ?: return this
-            if (payload.string("risk") != "high") return this
-            val risk = ToolRisk(
-                findings = (payload?.get("findings") as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull },
-                redacted = payload.boolean("redacted") == true,
-            )
+            val (id, risk) = flaggedOutput(payload) ?: return this
             val owner = messages.indexOfLast { it is ChatMessage.Assistant && it.tools.any { tool -> tool.id == id } }
             if (owner < 0) return this
             val reply = messages[owner] as ChatMessage.Assistant
@@ -99,6 +93,19 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
         "todo.updated" -> withTodos(TodoList.parse(payload))
         else -> this
     }
+}
+
+/**
+ * A `tool.output_risk` with something found: the call id and why. Every scan of outside content
+ * reports, mostly "low"; only a finding is worth a badge.
+ */
+internal fun flaggedOutput(payload: JsonObject?): Pair<String, ToolRisk>? {
+    val id = payload.string("tool_id")?.takeIf { it.isNotEmpty() } ?: return null
+    if (payload.string("risk") != "high") return null
+    return id to ToolRisk(
+        findings = (payload?.get("findings") as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull },
+        redacted = payload.boolean("redacted") == true,
+    )
 }
 
 /** Takes a plan snapshot unless an older one arrived late. */

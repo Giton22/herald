@@ -55,6 +55,8 @@ class ChatSession(
     private val sessions: SessionsApi,
     private val scope: CoroutineScope,
     private val profile: String? = null,
+    /** Where flagged tool output is remembered, since the transcript forgets it. */
+    private val risks: ToolRiskStore? = null,
 ) {
     private val _state = MutableStateFlow(ChatState(storedSessionId = initialStoredId, title = initialTitle))
     val state: StateFlow<ChatState> = _state.asStateFlow()
@@ -752,6 +754,9 @@ class ChatSession(
             if (event.sessionId != runtimeId) return@collect
             _state.update { it.reduce(event) }
             when (event.type) {
+                "tool.output_risk" -> flaggedOutput(event.payload as? JsonObject)?.let { (id, risk) ->
+                    risks?.let { scope.launch { it.remember(id, risk) } }
+                }
                 "message.start" -> if (ownTurnsPending > 0) {
                     ownTurnsPending--
                 } else {
@@ -794,7 +799,9 @@ class ChatSession(
 
     private suspend fun loadHistory() {
         val id = _state.value.storedSessionId ?: return
-        when (val result = sessions.messages(gateway, id, profile = profile)) {
+        val result = sessions.messages(gateway, id, profile = profile)
+        val flagged = risks?.all().orEmpty()
+        when (result) {
             is ApiResult.Success -> _state.update { state ->
                 // Keep a reply that is streaming right now; the stored rows don't have it yet. Nor do they
                 // have a correction mid-turn, or the part of the reply shown before it.
@@ -804,7 +811,7 @@ class ChatSession(
                 } else {
                     state.messages.filter { it.isLocalOnly }
                 }
-                state.copy(messages = historyToMessages(result.value.messages) + live, historyLoaded = true, historyError = null)
+                state.copy(messages = historyToMessages(result.value.messages).withRisks(flagged) + live, historyLoaded = true, historyError = null)
             }
             else -> _state.update { it.copy(historyLoaded = true, historyError = result.errorMessage) }
         }

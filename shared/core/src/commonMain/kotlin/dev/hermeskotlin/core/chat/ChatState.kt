@@ -1,5 +1,7 @@
 package dev.hermeskotlin.core.chat
 
+import kotlinx.serialization.Serializable
+
 /** One tool call inside an assistant reply. [running] until `tool.complete` arrives. */
 data class ToolActivity(
     val id: String,
@@ -22,6 +24,7 @@ data class ToolActivity(
 )
 
 /** Why a tool's output was flagged (`tool.output_risk`): the scanner's finding ids. Advisory; nothing was blocked. */
+@Serializable
 data class ToolRisk(val findings: List<String>, val redacted: Boolean = false) {
     /** The ids (tools/threat_patterns.py, e.g. `exfil_curl`) as readable words: "Exfil curl". */
     val labels: List<String>

@@ -4,6 +4,7 @@ import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.LastChatStore
+import dev.hermeskotlin.core.chat.ToolRiskStore
 import dev.hermeskotlin.core.cron.CronApi
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayProbe
@@ -51,7 +52,8 @@ val coreModule = module {
             scope = get(),
         )
     }
-    single { ChatHost(get(), get(), get()) }
+    single { ToolRiskStore(get()) }
+    single { ChatHost(get(), get(), get(), get()) }
     single { ModelsApi(get()) }
     single { SlashApi(get()) }
     single { PetApi(get()) }
