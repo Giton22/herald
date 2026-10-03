@@ -8,6 +8,7 @@ import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayProbe
 import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.network.createHttpClient
+import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.rpc.openGatewaySocket
 import dev.hermeskotlin.core.sessions.SessionsApi
 import io.ktor.client.HttpClient
@@ -30,6 +31,7 @@ val coreModule = module {
     single { SessionsApi(get()) }
     single { CronApi(get()) }
     single { LastChatStore(get()) }
+    single { SettingsStore(get(), get()) }
     single {
         val client = get<HttpClient>()
         GatewayConnection(
