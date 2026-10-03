@@ -1,9 +1,12 @@
 package dev.hermeskotlin.core.voice
 
-/** How a recording decides you're done talking; Desktop's values, which mirror tools.voice_mode. */
+/**
+ * How a recording decides you're done talking. The timings are Desktop's (tools.voice_mode); the
+ * level is lower, since a phone's speech-recognition mic is unboosted where the browser's isn't.
+ */
 data class VoiceActivity(
-    /** Normalized level (0..1) that counts as speech. */
-    val speechLevel: Float = 0.075f,
+    /** The least normalized level (0..1) that counts as speech; noise around it raises the bar. */
+    val speechLevel: Float = 0.025f,
     /** Quiet this long after speech ends the recording. */
     val silenceMs: Long = 1_250,
     /** With no speech at all, give up after this long; 0 waits for [VoiceRecorder.finish]. */
@@ -21,7 +24,9 @@ class EndOfSpeech(private val activity: VoiceActivity) {
     var heardSpeech = false
         private set
 
-    private var noise = -1f
+    /** The measured background level, for diagnostics; negative until the first frame. */
+    var noise = -1f
+        private set
     private var silenceSince = -1L
 
     /** Feeds one frame's [level] at [elapsedMs] into the recording; true once the recording should end. */
@@ -71,9 +76,10 @@ class Recording(val bytes: ByteArray, val mimeType: String, val heardSpeech: Boo
 interface VoiceRecorder {
     /**
      * Records until [activity] says the speaker is done, [finish] is called, or the caller is
-     * cancelled (which discards it). [onLevel] gets the live input level, 0..1.
+     * cancelled (which discards it). [onLevel] gets the live input level, 0..1; [onSpeech] fires
+     * once, when speech is first heard.
      */
-    suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit = {}): Recording
+    suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit = {}, onSpeech: () -> Unit = {}): Recording
 
     /** Ends the recording in progress now and keeps what was said. */
     fun finish()

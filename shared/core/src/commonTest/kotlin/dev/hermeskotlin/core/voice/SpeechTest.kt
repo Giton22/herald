@@ -50,6 +50,13 @@ class SpeechTest {
     }
 
     @Test
+    fun anUnboostedPhoneMicStillCountsSoftSpeech() {
+        // A phone's raw mic: speech near 0.05 over a 0.005 room never reached Desktop's fixed 0.075.
+        val end = endsAt(frames(0.005f, 1_000) + frames(0.05f, 1_500) + frames(0.006f, 3_000))
+        assertEquals(3_780L, end)
+    }
+
+    @Test
     fun aNoisyRoomStillFindsTheEndOfSpeech() {
         // Background hum above Desktop's fixed level would never count as quiet without the noise floor.
         val noisy = frames(0.12f, 1_000) + frames(0.6f, 1_500) + frames(0.13f, 3_000)
