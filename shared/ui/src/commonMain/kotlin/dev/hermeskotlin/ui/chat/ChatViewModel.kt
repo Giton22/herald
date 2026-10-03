@@ -5,6 +5,7 @@ import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.hermeskotlin.core.chat.BackgroundProcess
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatSession
 import dev.hermeskotlin.core.chat.ChatState
@@ -87,6 +88,7 @@ sealed interface ChatRequest {
     data object OpenPets : ChatRequest
     data object OpenJourney : ChatRequest
     data object OpenUsage : ChatRequest
+    data object OpenProcesses : ChatRequest
 
     /** `/voice`: the screen asks for the microphone, then starts a voice chat. */
     data object StartVoice : ChatRequest
@@ -142,6 +144,9 @@ class ChatViewModel(
 
     /** Tokens and cost of the open chat. */
     val usage = UsageController(sessions, viewModelScope)
+
+    /** Background processes the agent started in the open chat. */
+    val processes = ProcessesController(viewModelScope)
 
     override val composer = TextFieldState()
     val connectionState: StateFlow<ConnectionState> = connection.state
@@ -252,6 +257,15 @@ class ChatViewModel(
     fun openUsage() {
         viewModelScope.launch { _requests.send(ChatRequest.OpenUsage) }
     }
+
+    /** Shows the background processes sheet (from the chat menu). */
+    fun openProcesses() {
+        viewModelScope.launch { _requests.send(ChatRequest.OpenProcesses) }
+    }
+
+    fun watchProcesses() = processes.start(session.value)
+
+    fun killProcess(process: BackgroundProcess) = processes.kill(session.value, process)
 
     fun loadUsage() {
         val target = target ?: return
