@@ -184,7 +184,7 @@ fun ChatScreen(
                         LocalOpenImage provides { viewing = it },
                         LocalNotice provides { notice = it },
                     ) {
-                        Messages(state.messages)
+                        Messages(state.messages, state.thinkingFrame)
                     }
                 }
             }
@@ -315,7 +315,7 @@ private val FOLLOW_UP_PROMPTS = listOf(
 )
 
 @Composable
-private fun Messages(messages: List<ChatMessage>) {
+private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?) {
     // Reversed layout keeps the newest message pinned to the bottom while a reply streams in.
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -333,7 +333,7 @@ private fun Messages(messages: List<ChatMessage>) {
             items(messages.asReversed(), key = { it.key }) { message ->
                 when (message) {
                     is ChatMessage.User -> UserBubble(message)
-                    is ChatMessage.Assistant -> AssistantReply(message)
+                    is ChatMessage.Assistant -> AssistantReply(message, thinkingFrame.takeIf { message.streaming })
                 }
             }
         }
@@ -384,19 +384,19 @@ private fun UserBubble(message: ChatMessage.User) {
 }
 
 @Composable
-private fun AssistantReply(message: ChatMessage.Assistant) {
+private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String?) {
     val settings = LocalAppSettings.current
     val showReasoning = settings.showReasoning && message.reasoning.isNotBlank()
     val showTools = settings.showToolActivity && message.tools.isNotEmpty()
     // Pictures and files the reply delivered show as themselves, not as Markdown a renderer can't load.
     val (text, media) = remember(message.text) { extractReplyMedia(message.text) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (showReasoning) Reasoning(message.reasoning, live = message.streaming && message.text.isEmpty())
+        if (showReasoning) Reasoning(message.reasoning, live = message.streaming && message.text.isEmpty(), thinkingFrame)
         if (showTools) Tools(message.tools)
         when {
             text.isNotBlank() -> SelectionContainer { MarkdownText(text, streaming = message.streaming) }
             // One activity cue at a time: live reasoning and running tools already show their own.
-            message.streaming && media.isEmpty() && !showReasoning && !(showTools && message.tools.any { it.running }) -> Thinking()
+            message.streaming && media.isEmpty() && !showReasoning && !(showTools && message.tools.any { it.running }) -> Thinking(thinkingFrame)
         }
         if (media.isNotEmpty()) ReplyMediaList(media)
         when (message.outcome) {
@@ -448,7 +448,7 @@ private fun Disclosure(
 }
 
 @Composable
-private fun Reasoning(text: String, live: Boolean) {
+private fun Reasoning(text: String, live: Boolean, thinkingFrame: String?) {
     var expanded by remember { mutableStateOf(false) }
     Disclosure(
         icon = {
@@ -458,7 +458,8 @@ private fun Reasoning(text: String, live: Boolean) {
                 UnstyledIcon(Lucide.Brain, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp))
             }
         },
-        label = if (live) "Thinking…" else "Thought it through",
+        // While live, the agent's own spinner frame ("(⌐■_■) formulating...") rather than a fixed word.
+        label = if (live) thinkingFrame ?: "Thinking…" else "Thought it through",
         expanded = expanded,
         onToggle = { expanded = !expanded },
     ) {
@@ -533,10 +534,16 @@ private fun formatDuration(seconds: Double): String = when {
 }
 
 @Composable
-private fun Thinking() {
+private fun Thinking(thinkingFrame: String?) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         Spinner(Modifier.size(14.dp))
-        Text("Thinking…", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+        Text(
+            thinkingFrame ?: "Thinking…",
+            style = Theme[typography][bodySmall],
+            color = Theme[colors][textTertiary],
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

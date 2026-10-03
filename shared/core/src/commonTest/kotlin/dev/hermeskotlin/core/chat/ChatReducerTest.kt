@@ -50,6 +50,10 @@ class ChatReducerTest {
         )
         assertEquals("Real thought.", assertIs<ChatMessage.Assistant>(state.messages.single()).reasoning)
         assertEquals("⏳ still waiting on the provider (45s)", state.status)
+        assertEquals("(>∀<☆)☆ musing...", state.thinkingFrame)
+
+        val done = state.reduce(event("message.complete", """{"text":"ok","status":"complete"}"""))
+        assertEquals(null, done.thinkingFrame)
     }
 
     @Test

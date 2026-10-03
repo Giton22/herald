@@ -19,10 +19,11 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
         "reasoning.delta", "reasoning.available" -> payload.string("text")?.let { chunk ->
             withOpenReply { it.copy(reasoning = it.reasoning + chunk) }
         } ?: this
-        // Mostly kaomoji spinner frames ("(>∀<☆)☆ musing..."), not reasoning. Like Desktop, only an explained
-        // provider wait is worth a line, and it goes to the status.
-        "thinking.delta" -> payload.string("text")?.trim()?.takeIf { PROVIDER_WAIT.containsMatchIn(it) }
-            ?.let { copy(status = it) } ?: this
+        // Not reasoning: each frame is the TUI's spinner rewritten ("(>∀<☆)☆ musing..."), so the latest one
+        // labels the live activity. An explained provider wait goes to the status line, like Desktop.
+        "thinking.delta" -> payload.string("text")?.trim()?.takeIf { it.isNotEmpty() }?.let { frame ->
+            if (PROVIDER_WAIT.containsMatchIn(frame)) copy(status = frame) else copy(thinkingFrame = frame)
+        } ?: this
         "tool.start" -> {
             val id = payload.string("tool_id") ?: return this
             val tool = ToolActivity(
@@ -87,7 +88,7 @@ private fun ChatState.complete(payload: JsonObject?): ChatState {
     val finalText = payload.string("text").orEmpty()
     val finalReasoning = payload.string("reasoning").orEmpty()
     val index = messages.openReplyIndex().takeIf { it >= 0 }
-        ?: if (finalText.isBlank() && error == null) return copy(running = false, status = null) else messages.size
+        ?: if (finalText.isBlank() && error == null) return copy(running = false, status = null, thinkingFrame = null) else messages.size
     val base = messages.getOrNull(index) as? ChatMessage.Assistant ?: ChatMessage.Assistant(key = "live-$keySeq")
     val reply = base.copy(
         // Prefer what streamed (it includes interim segments); fall back to the final text for
@@ -108,7 +109,7 @@ private fun ChatState.complete(payload: JsonObject?): ChatState {
             else -> set(index, reply)
         }
     }
-    return copy(running = false, status = null, messages = updated, keySeq = keySeq + 1)
+    return copy(running = false, status = null, thinkingFrame = null, messages = updated, keySeq = keySeq + 1)
 }
 
 /** The reply still streaming. Not necessarily last: a prompt queued mid-turn sits after it. */

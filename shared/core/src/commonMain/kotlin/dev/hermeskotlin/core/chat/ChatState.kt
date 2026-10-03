@@ -67,6 +67,8 @@ data class ChatState(
     val running: Boolean = false,
     /** Transient `status.update` line while a turn runs. */
     val status: String? = null,
+    /** The latest `thinking.delta` spinner frame ("(⌐■_■) formulating..."), the TUI's live activity cue. */
+    val thinkingFrame: String? = null,
     /** Session-level failure outside a turn (`error` event, failed send). */
     val error: String? = null,
     /** Questions the agent is blocked on (approval, clarify, sudo, secret), oldest first. */
