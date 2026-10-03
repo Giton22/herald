@@ -23,9 +23,9 @@ data class SessionSummary(
     @SerialName("started_at") val startedAt: Double? = null,
     @SerialName("last_active") val lastActive: Double? = null,
     @SerialName("message_count") val messageCount: Int = 0,
-    val pinned: Boolean = false,
-    val archived: Boolean = false,
-    @SerialName("is_active") val isActive: Boolean = false,
+    @Serializable(with = LenientBooleanSerializer::class) val pinned: Boolean = false,
+    @Serializable(with = LenientBooleanSerializer::class) val archived: Boolean = false,
+    @Serializable(with = LenientBooleanSerializer::class) @SerialName("is_active") val isActive: Boolean = false,
     /** Search hits only: the matching message excerpt (FTS5 `snippet()`, `>>>`/`<<<` markers stripped). */
     val snippet: String? = null,
 ) {
@@ -54,7 +54,8 @@ const val CRON_SOURCE = "cron"
 
 /**
  * The list views. Like Hermes Desktop, Recent leaves out cron runs, which are always the newest rows
- * and would otherwise push real conversations off the first page; Scheduled shows only them.
+ * and would otherwise push real conversations off the first page; they are reached through their
+ * job instead (`CronApi.runs`).
  */
 enum class SessionListFilter(
     val archived: ArchiveFilter,
@@ -62,7 +63,6 @@ enum class SessionListFilter(
     val excludeSources: List<String> = emptyList(),
 ) {
     Recent(ArchiveFilter.Exclude, excludeSources = listOf(CRON_SOURCE)),
-    Scheduled(ArchiveFilter.Exclude, source = CRON_SOURCE),
     Archived(ArchiveFilter.Only),
 }
 
