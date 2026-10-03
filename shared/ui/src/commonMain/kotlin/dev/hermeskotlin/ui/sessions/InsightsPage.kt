@@ -77,6 +77,7 @@ internal fun InsightsPage(
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
+    LaunchedEffect(Unit) { viewModel.refresh() }
     LaunchedEffect(state.sessionExpired) { if (state.sessionExpired) onSessionExpired() }
 
     Column(Modifier.fillMaxSize()) {
