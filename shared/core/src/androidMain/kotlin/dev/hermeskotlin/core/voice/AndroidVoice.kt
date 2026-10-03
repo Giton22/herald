@@ -7,7 +7,6 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaPlayer
 import android.media.MediaRecorder
-import android.media.audiofx.AutomaticGainControl
 import android.media.audiofx.NoiseSuppressor
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
@@ -45,15 +44,15 @@ class AndroidVoiceRecorder : VoiceRecorder {
             record.release()
             error("The microphone isn't available.")
         }
+        // Noise suppression only: automatic gain lifts the room's hum in every pause until it reads as
+        // talking, and the end of speech is never found.
         val effects = listOfNotNull(
             if (NoiseSuppressor.isAvailable()) NoiseSuppressor.create(record.audioSessionId)?.apply { enabled = true } else null,
-            if (AutomaticGainControl.isAvailable()) AutomaticGainControl.create(record.audioSessionId)?.apply { enabled = true } else null,
         )
         val pcm = ByteArrayOutputStream()
         val frame = ShortArray(FRAME_SAMPLES)
         val bytes = ByteBuffer.allocate(FRAME_SAMPLES * 2).order(ByteOrder.LITTLE_ENDIAN)
-        var heardSpeech = false
-        var silenceSince = -1L
+        val endOfSpeech = EndOfSpeech(activity)
         var elapsed = 0L
         try {
             record.startRecording()
@@ -72,16 +71,7 @@ class AndroidVoiceRecorder : VoiceRecorder {
                 // Desktop measures 8-bit samples (±128) against 42; 16-bit samples are 256 times larger.
                 val level = min(1.0, sqrt(sum / read) / 256.0 / 42.0).toFloat()
                 onLevel(level)
-                if (level >= activity.speechLevel) {
-                    heardSpeech = true
-                    silenceSince = -1
-                } else if (heardSpeech) {
-                    if (silenceSince < 0) silenceSince = elapsed
-                    if (elapsed - silenceSince >= activity.silenceMs) break
-                } else if (activity.idleMs > 0 && elapsed >= activity.idleMs) {
-                    break
-                }
-                if (elapsed >= activity.maxMs) break
+                if (endOfSpeech.onFrame(level, elapsed)) break
             }
         } finally {
             runCatching { record.stop() }
@@ -89,7 +79,7 @@ class AndroidVoiceRecorder : VoiceRecorder {
             record.release()
             onLevel(0f)
         }
-        Recording(wav(pcm.toByteArray()), "audio/wav", heardSpeech || finishRequested && pcm.size() > SAMPLE_RATE / 2)
+        Recording(wav(pcm.toByteArray()), "audio/wav", endOfSpeech.heardSpeech || finishRequested && pcm.size() > SAMPLE_RATE / 2)
     }
 
     override fun finish() {

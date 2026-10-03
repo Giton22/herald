@@ -12,6 +12,58 @@ data class VoiceActivity(
     val maxMs: Long = 60_000,
 )
 
+/**
+ * Decides, frame by frame, when someone has finished talking. Desktop's fixed level assumes a quiet
+ * room; a phone is often somewhere noisier, so the bar also rises with the measured background
+ * noise: speech must stand clearly above it, and quiet is anything back near it.
+ */
+class EndOfSpeech(private val activity: VoiceActivity) {
+    var heardSpeech = false
+        private set
+
+    private var noise = -1f
+    private var silenceSince = -1L
+
+    /** Feeds one frame's [level] at [elapsedMs] into the recording; true once the recording should end. */
+    fun onFrame(level: Float, elapsedMs: Long): Boolean {
+        // The opening moment only measures the room; nobody starts talking that fast.
+        if (elapsedMs <= CALIBRATION_MS) {
+            noise = if (noise < 0) level else noise + (level - noise) * 0.2f
+            return false
+        }
+        val speechBar = maxOf(activity.speechLevel, noise * SPEECH_OVER_NOISE)
+        val quietBar = maxOf(activity.speechLevel * QUIET_FRACTION, noise * QUIET_OVER_NOISE)
+        if (level >= speechBar) {
+            heardSpeech = true
+            silenceSince = -1
+            // A steady loud room lifts the bar too, slowly enough that a long sentence doesn't.
+            noise += (level - noise) * 0.002f
+        } else {
+            // The background noise follows the quiet frames: down quickly, up slowly.
+            noise = when {
+                noise < 0 -> level
+                level < noise -> noise + (level - noise) * 0.3f
+                else -> noise + (level - noise) * 0.02f
+            }
+            if (heardSpeech && level < quietBar) {
+                if (silenceSince < 0) silenceSince = elapsedMs
+                if (elapsedMs - silenceSince >= activity.silenceMs) return true
+            } else if (heardSpeech) {
+                silenceSince = -1
+            }
+        }
+        if (!heardSpeech && activity.idleMs > 0 && elapsedMs >= activity.idleMs) return true
+        return elapsedMs >= activity.maxMs
+    }
+
+    private companion object {
+        const val CALIBRATION_MS = 300L
+        const val SPEECH_OVER_NOISE = 2.5f
+        const val QUIET_OVER_NOISE = 1.6f
+        const val QUIET_FRACTION = 0.8f
+    }
+}
+
 /** One finished recording. [heardSpeech] is false when it never rose above the speech level. */
 class Recording(val bytes: ByteArray, val mimeType: String, val heardSpeech: Boolean)
 
