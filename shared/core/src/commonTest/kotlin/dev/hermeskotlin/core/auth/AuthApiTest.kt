@@ -1,6 +1,7 @@
 package dev.hermeskotlin.core.auth
 
 import dev.hermeskotlin.core.gateway.GatewayUrl
+import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import io.ktor.client.engine.mock.MockEngine
@@ -57,10 +58,10 @@ class AuthApiTest {
             }
         }
 
-        assertIs<AuthResult.Success<Unit>>(api.signIn(url, "basic", "me", "pw"))
+        assertIs<ApiResult.Success<Unit>>(api.signIn(url, "basic", "me", "pw"))
         assertTrue(api.hasStoredSession(url))
 
-        val ticket = assertIs<AuthResult.Success<WsTicket>>(api.mintWsTicket(url))
+        val ticket = assertIs<ApiResult.Success<WsTicket>>(api.mintWsTicket(url))
         assertEquals("T-123", ticket.value.ticket)
         assertTrue(ticketCookie!!.contains("__Host-hermes_session_at=AT1"))
         assertTrue(ticketCookie!!.contains("__Host-hermes_session_rt=RT1"))
@@ -72,32 +73,32 @@ class AuthApiTest {
     @Test
     fun badPasswordIsInvalidCredentials() = runTest {
         val api = api { respond("""{"detail":"Invalid credentials"}""", HttpStatusCode.Unauthorized, json) }
-        assertEquals(AuthResult.InvalidCredentials, api.signIn(url, "basic", "me", "wrong"))
+        assertEquals(ApiResult.InvalidCredentials, api.signIn(url, "basic", "me", "wrong"))
     }
 
     @Test
     fun rateLimited() = runTest {
         val api = api { respond("""{"detail":"Too many login attempts."}""", HttpStatusCode.TooManyRequests, json) }
-        assertEquals(AuthResult.RateLimited, api.signIn(url, "basic", "me", "pw"))
+        assertEquals(ApiResult.RateLimited, api.signIn(url, "basic", "me", "pw"))
     }
 
     @Test
     fun expiredSessionOnTicketMint() = runTest {
         val api = api { respond("""{"reason":"session_expired"}""", HttpStatusCode.Unauthorized, json) }
-        assertEquals(AuthResult.SessionExpired, api.mintWsTicket(url))
+        assertEquals(ApiResult.SessionExpired, api.mintWsTicket(url))
     }
 
     @Test
     fun serverErrorIsUnavailableWithDetail() = runTest {
         val api = api { respond("""{"detail":"Provider unreachable: boom"}""", HttpStatusCode.ServiceUnavailable, json) }
-        val result = assertIs<AuthResult.Unavailable>(api.signIn(url, "basic", "me", "pw"))
+        val result = assertIs<ApiResult.Unavailable>(api.signIn(url, "basic", "me", "pw"))
         assertEquals("Provider unreachable: boom", result.message)
     }
 
     @Test
     fun meParsesUser() = runTest {
         val api = api { respond("""{"user_id":"u1","display_name":"Ada","provider":"basic","extra":1}""", HttpStatusCode.OK, json) }
-        val me = assertIs<AuthResult.Success<AuthUser>>(api.me(url))
+        val me = assertIs<ApiResult.Success<AuthUser>>(api.me(url))
         assertEquals("Ada", me.value.label)
     }
 

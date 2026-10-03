@@ -1,8 +1,9 @@
 package dev.hermeskotlin.core.connection
 
 import dev.hermeskotlin.core.auth.AuthApi
-import dev.hermeskotlin.core.auth.AuthResult
+
 import dev.hermeskotlin.core.gateway.GatewayUrl
+import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.rpc.GatewayCloseCodes
 import dev.hermeskotlin.core.rpc.HandshakeRejectedException
 import dev.hermeskotlin.core.rpc.HeartbeatTimeoutException
@@ -87,15 +88,15 @@ class GatewayConnection(
             _state.value = ConnectionState.Connecting(attempt)
 
             val ticket = when (val result = auth.mintWsTicket(gateway)) {
-                is AuthResult.Success -> result.value.ticket
-                AuthResult.SessionExpired -> {
+                is ApiResult.Success -> result.value.ticket
+                ApiResult.SessionExpired -> {
                     _state.value = ConnectionState.SessionExpired
                     return
                 }
-                is AuthResult.Unavailable -> null.also { backoff(attempt, "Can't reach gateway: ${result.message}") }
-                AuthResult.RateLimited -> null.also { backoff(attempt, "Rate limited by gateway") }
-                is AuthResult.Failed -> null.also { backoff(attempt, result.message) }
-                AuthResult.InvalidCredentials -> null.also { backoff(attempt, "Not signed in") }
+                is ApiResult.Unavailable -> null.also { backoff(attempt, "Can't reach gateway: ${result.message}") }
+                ApiResult.RateLimited -> null.also { backoff(attempt, "Rate limited by gateway") }
+                is ApiResult.Failed -> null.also { backoff(attempt, result.message) }
+                ApiResult.InvalidCredentials -> null.also { backoff(attempt, "Not signed in") }
             } ?: continue
 
             var connectedAt: Long? = null

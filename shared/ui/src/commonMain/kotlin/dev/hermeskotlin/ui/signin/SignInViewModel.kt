@@ -5,8 +5,8 @@ import androidx.compose.foundation.text.input.clearText
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.auth.AuthApi
-import dev.hermeskotlin.core.auth.AuthResult
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.network.ApiResult
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -39,15 +39,15 @@ class SignInViewModel(private val auth: AuthApi) : ViewModel() {
         viewModelScope.launch {
             val result = auth.signIn(gateway.gatewayUrl, gateway.provider, user, pass)
             _state.value = when (result) {
-                is AuthResult.Success -> {
+                is ApiResult.Success -> {
                     password.clearText()
                     SignInUiState(signedIn = true)
                 }
-                AuthResult.InvalidCredentials -> SignInUiState(error = "Wrong username or password.")
-                AuthResult.RateLimited -> SignInUiState(error = "Too many attempts. Wait a moment and try again.")
-                is AuthResult.Unavailable -> SignInUiState(error = "Couldn't reach the gateway: ${result.message}")
-                is AuthResult.Failed -> SignInUiState(error = result.message)
-                AuthResult.SessionExpired -> SignInUiState(error = "Sign-in was rejected.")
+                ApiResult.InvalidCredentials -> SignInUiState(error = "Wrong username or password.")
+                ApiResult.RateLimited -> SignInUiState(error = "Too many attempts. Wait a moment and try again.")
+                is ApiResult.Unavailable -> SignInUiState(error = "Couldn't reach the gateway: ${result.message}")
+                is ApiResult.Failed -> SignInUiState(error = result.message)
+                ApiResult.SessionExpired -> SignInUiState(error = "Sign-in was rejected.")
             }
         }
     }
