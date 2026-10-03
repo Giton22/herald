@@ -29,10 +29,10 @@ internal object ToolDetails {
      * A stored tool row is JSON text, so text is parsed first.
      */
     fun output(result: JsonElement?, resultText: String? = null): String? {
-        resultText?.trim()?.takeIf { it.isNotEmpty() }?.let { return clip(it) }
+        resultText?.trim()?.takeIf { it.isNotEmpty() }?.let { return clip(unwrapUntrusted(it)) }
         return when (result) {
             null, JsonNull -> null
-            is JsonPrimitive -> result.contentOrNull?.let { fromJsonText(it) { parsed -> output(parsed) } }
+            is JsonPrimitive -> result.contentOrNull?.let { fromJsonText(unwrapUntrusted(it)) { parsed -> output(parsed) } }
             is JsonObject -> MAIN_TEXT
                 .firstNotNullOfOrNull { key -> (result[key] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim()?.takeIf { it.isNotEmpty() } }
                 ?.let { text ->
@@ -49,7 +49,7 @@ internal object ToolDetails {
     fun failed(result: JsonElement?): Boolean {
         val obj = when (result) {
             is JsonObject -> result
-            is JsonPrimitive -> result.contentOrNull?.let { runCatching { Json.parseToJsonElement(it) }.getOrNull() } as? JsonObject
+            is JsonPrimitive -> result.contentOrNull?.let { runCatching { Json.parseToJsonElement(unwrapUntrusted(it)) }.getOrNull() } as? JsonObject
             else -> null
         } ?: return false
         val error = obj["error"]
@@ -68,6 +68,14 @@ internal object ToolDetails {
         }
         return clip(trimmed)
     }
+
+    /**
+     * agent/tool_dispatch_helpers.py fences what web, browser and MCP tools bring back (flagged or not)
+     * with a note telling the model it's data. The note is for the model; the result is what's inside.
+     */
+    fun unwrapUntrusted(text: String): String = UNTRUSTED_FRAME.find(text.trim())?.groupValues?.get(1) ?: text
+
+    private val UNTRUSTED_FRAME = Regex("""^<untrusted_tool_result source="[^"]*">\n[^\n]*\n\n([\s\S]*)\n</untrusted_tool_result>$""")
 
     /** Huge outputs would stall the list; the agent has the rest. */
     private fun clip(text: String): String =
