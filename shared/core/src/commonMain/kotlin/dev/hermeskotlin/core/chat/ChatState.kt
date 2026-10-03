@@ -23,6 +23,8 @@ data class ToolActivity(
     val risk: ToolRisk? = null,
     /** For `delegate_task`: the tasks it handed out to subagents. */
     val tasks: List<DelegatedTask> = emptyList(),
+    /** For a `delegate_task` sent to the background: the ids its results are reported under later. */
+    val delegationIds: List<String> = emptyList(),
 )
 
 /** Why a tool's output was flagged (`tool.output_risk`): the scanner's finding ids. Advisory; nothing was blocked. */
@@ -62,8 +64,11 @@ sealed interface ChatMessage {
         val warning: String? = null,
     ) : ChatMessage
 
-    /** A one-line notice about the session (`notice`), shown on this device only. */
-    data class Notice(override val key: String, val text: String) : ChatMessage
+    /**
+     * A one-line notice about the session: a live `notice`, shown on this device only, or a [stored] row
+     * the transcript keeps for the agent (e.g. background subagents reporting back) put in a line.
+     */
+    data class Notice(override val key: String, val text: String, val stored: Boolean = false) : ChatMessage
 
     /**
      * A slash command and what it printed, shown on this device only (the transcript never holds it).

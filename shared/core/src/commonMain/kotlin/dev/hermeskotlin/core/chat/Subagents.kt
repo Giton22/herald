@@ -33,8 +33,10 @@ data class Subagent(
     val taskIndex: Int = 0,
     val model: String? = null,
     val toolCount: Int? = null,
-    /** Its tool calls and progress lines, oldest first. */
+    /** Its tool calls, oldest first. */
     val activity: List<String> = emptyList(),
+    /** Its latest thinking line, while it runs: the live glance between tool calls, not part of [activity]. */
+    val thinking: String? = null,
     val summary: String? = null,
     val durationSeconds: Double? = null,
     val filesWritten: List<String> = emptyList(),
@@ -57,6 +59,8 @@ data class SubagentRow(
     val model: String? = null,
     val durationSeconds: Double? = null,
     val activity: List<String> = emptyList(),
+    /** What it's thinking right now, while it runs. */
+    val thinking: String? = null,
     val summary: String? = null,
     val toolCount: Int? = null,
     val filesWritten: List<String> = emptyList(),
@@ -101,6 +105,106 @@ internal fun delegatedTasks(args: JsonElement?, result: JsonElement?, knownGoals
     }
 }
 
+/** The ids a background `delegate_task` [result] says its results will come back under (one per unit). */
+internal fun delegationIds(result: JsonElement?): List<String> {
+    val answer = result.asObject() ?: return emptyList()
+    return (listOfNotNull(answer.string("delegation_id")) + answer["units"].asObjectList().mapNotNull { it.string("delegation_id") })
+        .filter { it.isNotBlank() }
+        .distinct()
+}
+
+/** A stored report from background subagents (tools/process_registry_notifications.py), read back into tasks. */
+internal data class DelegationReport(
+    val delegationId: String,
+    /** By task index within the `delegate_task` call. */
+    val tasks: Map<Int, DelegatedTask>,
+    /** One task failed early while the others run on. */
+    val earlyFailure: Boolean = false,
+) {
+    /** The line it shows as in the chat. */
+    val line: String
+        get() {
+            val failed = tasks.values.count { it.status == SubagentStatus.Failed }
+            val stopped = tasks.values.count { it.status == SubagentStatus.Interrupted }
+            if (earlyFailure) return "A background task failed"
+            if (tasks.size <= 1) {
+                return when {
+                    failed > 0 -> "A background task failed"
+                    stopped > 0 -> "A background task was stopped"
+                    else -> "A background task finished"
+                }
+            }
+            val trouble = listOfNotNull("$failed failed".takeIf { failed > 0 }, "$stopped stopped".takeIf { stopped > 0 })
+            return (listOf("${tasks.size} background tasks finished") + trouble).joinToString(", ")
+        }
+}
+
+/**
+ * Reads a `[ASYNC DELEGATION … — id]` row: a batch's `--- ✓ TASK i/n: goal  (status=…) ---` sections, a
+ * single task's `Status:` and `--- RESULT ---`, or one task failing early. Null for anything else.
+ */
+internal fun parseDelegationReport(text: String): DelegationReport? {
+    val title = REPORT_TITLE.find(text) ?: return null
+    val (kind, rest) = title.destructured
+    return when (kind) {
+        "BATCH COMPLETE" -> {
+            val headers = TASK_HEADER.findAll(text).toList()
+            val tasks = headers.mapIndexed { i, header ->
+                val body = text.substring(header.range.last + 1, headers.getOrNull(i + 1)?.range?.first ?: text.length)
+                header.groupValues[1].toInt() - 1 to DelegatedTask(
+                    goal = header.groupValues[3].trim(),
+                    status = settledStatus(header.groupValues[4].trim()),
+                    summary = reportBody(body),
+                )
+            }.toMap()
+            DelegationReport(rest.trim(), tasks)
+        }
+        "TASK FAILED" -> {
+            val (id, index) = TASK_OF.find(rest)?.destructured ?: return null
+            val error = ERROR_LINE.find(text)?.groupValues?.get(1)?.trim()
+            DelegationReport(id.trim(), mapOf(index.toInt() - 1 to DelegatedTask("", SubagentStatus.Failed, summary = error)), earlyFailure = true)
+        }
+        else -> {
+            val status = STATUS_LINE.find(text)?.groupValues?.get(1)?.trim()
+            val result = RESULT_MARK.find(text)?.let { reportBody(text.substring(it.range.last + 1)) }
+            DelegationReport(rest.trim(), mapOf(0 to DelegatedTask("", settledStatus(status), summary = result)))
+        }
+    }
+}
+
+/** A task's section without the transcript path the agent is pointed to. */
+private fun reportBody(body: String): String? {
+    val text = body.replace(TRANSCRIPT_LINE, "").trim()
+    // "(no summary — status=…)" only repeats the status, which the row already shows; keep a reason after a colon.
+    val bare = NO_SUMMARY.matchEntire(text)
+    val shown = if (bare != null) bare.groupValues[1].trim() else text
+    return shown.ifEmpty { null }?.let { if (it.length <= MAX_SUMMARY) it else it.take(MAX_SUMMARY).trimEnd() + "…" }
+}
+
+/** Settles the tasks of the `delegate_task` call [report] belongs to; true when one was found. */
+internal fun MutableList<ChatMessage>.settle(report: DelegationReport): Boolean {
+    for (i in indices.reversed()) {
+        val reply = this[i] as? ChatMessage.Assistant ?: continue
+        val call = reply.tools.firstOrNull { report.delegationId in it.delegationIds } ?: continue
+        val tasks = call.tasks.mapIndexed { index, task ->
+            report.tasks[index]?.let { done -> task.copy(status = done.status, summary = done.summary ?: task.summary) } ?: task
+        }
+        this[i] = reply.copy(tools = reply.tools.map { if (it === call) it.copy(tasks = tasks) else it })
+        return true
+    }
+    return false
+}
+
+private val REPORT_TITLE = Regex("""^\[ASYNC DELEGATION (BATCH COMPLETE|COMPLETE|TASK FAILED) — ([^\]\n]+)]""")
+private val TASK_HEADER = Regex("""^--- [✓✗⚠] TASK (\d+)/(\d+)(?:: ([\s\S]*?))? {2}\(status=([^,)\n]*)[^\n]*\) ---\r?\n""", RegexOption.MULTILINE)
+private val TASK_OF = Regex("""^(.+), task (\d+)/\d+$""")
+private val STATUS_LINE = Regex("""^Status: (\S+)""", RegexOption.MULTILINE)
+private val ERROR_LINE = Regex("""^Error: (.+)$""", RegexOption.MULTILINE)
+private val RESULT_MARK = Regex("""^--- (?:RESULT|ERROR) ---\r?\n""", RegexOption.MULTILINE)
+private val TRANSCRIPT_LINE = Regex("""\n?Full live transcript \(complete tool/assistant trace\): [^\n]*""")
+private val NO_SUMMARY = Regex("""^\(no summary — status=[^):]*(?::\s*([\s\S]*))?\)$""")
+private const val MAX_SUMMARY = 4_000
+
 /** A finished task's `status`: only a success reads as done (timeouts and errors are failures). */
 private fun settledStatus(status: String?): SubagentStatus = when (status.orEmpty()) {
     "", "ok", "completed", "success" -> SubagentStatus.Done
@@ -131,16 +235,20 @@ internal fun ChatState.withSubagentEvent(type: String, payload: JsonObject?): Ch
         "subagent.spawn_requested" -> previous?.status?.takeUnless { it == SubagentStatus.Queued } ?: SubagentStatus.Queued
         else -> eventStatus(payload.string("status"), terminal)
     }
+    // Tool calls only: `subagent.progress` batches the same names again. The tail sent at the end
+    // stands in for the calls when none were seen live (this chat opened after they ran).
     val lines = buildList {
-        payload["output_tail"].asObjectList().forEach { tail ->
-            val tool = tail.string("tool")
-            val preview = tail.string("preview").orEmpty()
-            (if (tool != null) toolLine(tool, preview) else compact(preview)).takeIf { it.isNotEmpty() }?.let(::add)
+        if (type == "subagent.tool") payload.string("tool_name")?.let { add(toolLine(it, payload.string("tool_preview") ?: payload.string("text").orEmpty())) }
+        if (previous?.activity.isNullOrEmpty()) {
+            payload["output_tail"].asObjectList().forEach { tail ->
+                tail.string("tool")?.let { add(toolLine(it, "")) }
+            }
         }
-        when (type) {
-            "subagent.tool" -> payload.string("tool_name")?.let { add(toolLine(it, payload.string("tool_preview") ?: payload.string("text").orEmpty())) }
-            "subagent.progress", "subagent.thinking" -> compact(payload.string("text").orEmpty().removePrefix("🔀")).takeIf { it.isNotEmpty() }?.let(::add)
-        }
+    }
+    val thinking = when (type) {
+        "subagent.thinking" -> compact(payload.string("text").orEmpty()).ifEmpty { null } ?: previous?.thinking
+        "subagent.tool", "subagent.complete" -> null
+        else -> previous?.thinking
     }
     val updated = Subagent(
         id = id,
@@ -152,6 +260,7 @@ internal fun ChatState.withSubagentEvent(type: String, payload: JsonObject?): Ch
         model = payload.string("model")?.ifBlank { null } ?: previous?.model,
         toolCount = payload.int("tool_count") ?: previous?.toolCount,
         activity = lines.fold(previous?.activity.orEmpty()) { list, line -> if (list.lastOrNull() == line) list else (list + line).takeLast(MAX_ACTIVITY) },
+        thinking = thinking,
         summary = payload.string("summary")?.trim()?.ifEmpty { null }.takeIf { terminal } ?: previous?.summary,
         durationSeconds = payload.double("duration_seconds") ?: previous?.durationSeconds,
         filesWritten = payload["files_written"].strings().ifEmpty { previous?.filesWritten.orEmpty() },
@@ -256,6 +365,7 @@ private fun row(subagent: Subagent, all: List<Subagent>, depth: Int): SubagentRo
     model = subagent.model,
     durationSeconds = subagent.durationSeconds,
     activity = subagent.activity,
+    thinking = subagent.thinking.takeIf { subagent.status.live },
     summary = subagent.summary,
     toolCount = subagent.toolCount,
     filesWritten = subagent.filesWritten,

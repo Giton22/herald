@@ -50,6 +50,19 @@ class SubagentsTest {
     }
 
     @Test
+    fun thinkingIsTheLiveGlanceNotTheLog() {
+        val thinking = delegating
+            .reduce(event("subagent.start", """{"subagent_id":"s1","goal":"Read the docs"}"""))
+            .reduce(event("subagent.thinking", """{"subagent_id":"s1","text":"(o_o) pondering..."}"""))
+            .reduce(event("subagent.progress", """{"subagent_id":"s1","text":"[set 1] terminal"}"""))
+        assertEquals("(o_o) pondering...", thinking.rows()[0].thinking)
+        assertTrue(thinking.rows()[0].activity.isEmpty())
+        val tooling = thinking.reduce(event("subagent.tool", """{"subagent_id":"s1","tool_name":"terminal","tool_preview":"ls"}"""))
+        assertNull(tooling.rows()[0].thinking)
+        assertEquals(listOf("terminal: ls"), tooling.rows()[0].activity)
+    }
+
+    @Test
     fun aRunningSubagentCanBeStopped() {
         val state = delegating.reduce(event("subagent.start", """{"subagent_id":"s1","goal":"Read the docs"}"""))
         assertEquals("s1", state.rows()[0].subagentId)
@@ -112,6 +125,47 @@ class SubagentsTest {
         assertEquals("Find the bug", shown.goal)
         assertEquals(SubagentStatus.Failed, shown.status)
         assertEquals("No access", shown.summary)
+    }
+
+    @Test
+    fun aBackgroundReportSettlesItsCardAndShowsAsALine() {
+        val args = """{"tasks":[{"goal":"Run date"},{"goal":"List files"}]}"""
+        val dispatched = """{"status":"dispatched","mode":"background","count":2,"delegation_id":"deleg_ab12","goals":["Run date","List files"]}"""
+        val report = listOf(
+            "[ASYNC DELEGATION BATCH COMPLETE — deleg_ab12]",
+            "A background fan-out unit finished.",
+            "",
+            "Role: leaf   Model: m   Total duration: 9.1s",
+            "",
+            "--- ✓ TASK 1/2: Run date  (status=completed, api_calls=2, 7.0s) ---",
+            "Sat Oct  3 11:26:48 UTC 2026",
+            "Full live transcript (complete tool/assistant trace): /opt/data/task-0.log",
+            "",
+            "--- ✗ TASK 2/2: List files  (status=timeout, 9.1s) ---",
+            "(no summary — status=timeout)",
+        ).joinToString("\n")
+        val rows = listOf(
+            SessionMessage(id = 1, role = "user", content = JsonPrimitive("Delegate two things")),
+            SessionMessage(id = 2, role = "assistant", content = JsonPrimitive(""), toolCalls = buildJsonArray {
+                add(buildJsonObject {
+                    put("id", "c1")
+                    put("function", buildJsonObject { put("name", "delegate_task"); put("arguments", args) })
+                })
+            }),
+            SessionMessage(id = 3, role = "tool", content = JsonPrimitive(dispatched), toolCallId = "c1"),
+            SessionMessage(id = 4, role = "assistant", content = JsonPrimitive("Both are running.")),
+            SessionMessage(id = 5, role = "user", content = JsonPrimitive(report)),
+        )
+        val messages = historyToMessages(rows)
+        val call = messages.filterIsInstance<ChatMessage.Assistant>().first().tools.single()
+        val shown = subagentRows(call, emptyList())
+        assertEquals(listOf(SubagentStatus.Done, SubagentStatus.Failed), shown.map { it.status })
+        assertEquals("Sat Oct  3 11:26:48 UTC 2026", shown[0].summary)
+        assertNull(shown[1].summary) // "(no summary — status=timeout)" only repeats the status
+        val line = messages.last() as ChatMessage.Notice
+        assertEquals("2 background tasks finished, 1 failed", line.text)
+        assertTrue(line.stored)
+        assertTrue(messages.none { it is ChatMessage.User && it.text.startsWith("[ASYNC") })
     }
 
     @Test

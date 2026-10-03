@@ -1043,5 +1043,6 @@ private val ChatMessage.isLocalOnly: Boolean
     get() = when (this) {
         is ChatMessage.Assistant -> streaming || warning != null
         is ChatMessage.User -> pending
-        is ChatMessage.Command, is ChatMessage.Notice -> true
+        is ChatMessage.Notice -> !stored
+        is ChatMessage.Command -> true
     }

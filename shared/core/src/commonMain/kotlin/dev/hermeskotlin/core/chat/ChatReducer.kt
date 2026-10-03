@@ -66,6 +66,7 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
                             result = payload?.get("result") ?: payload?.get("result_text") ?: JsonPrimitive(""),
                             knownGoals = it.tasks.map { task -> task.goal },
                         ),
+                        delegationIds = if (it.name != DELEGATE_TOOL) it.delegationIds else delegationIds(payload?.get("result") ?: payload?.get("result_text")),
                     )
                 })
             }
@@ -258,6 +259,12 @@ fun historyToMessages(rows: List<SessionMessage>): List<ChatMessage> {
         val key = row.id?.let { "row-$it" } ?: "h$index"
         when (row.role) {
             "user" -> {
+                // Background subagents reporting back: written for the agent, so a line here, and their results go to their card.
+                parseDelegationReport(row.text.trim())?.let { report ->
+                    messages.settle(report)
+                    messages += ChatMessage.Notice(key, report.line, stored = true)
+                    return@forEachIndexed
+                }
                 val raw = unwrapCorrection(row.text.trim())
                 val (refs, text) = skillInvocationText(raw)?.let { emptyList<ShownAttachment>() to it } ?: splitAttachmentRefs(raw, key)
                 val attachments = List(row.imageCount) { ShownAttachment("$key-i$it", "Image", AttachmentKind.Image) } + refs
@@ -274,6 +281,7 @@ fun historyToMessages(rows: List<SessionMessage>): List<ChatMessage> {
                         output = ToolDetails.output(result),
                         failed = ToolDetails.failed(result),
                         tasks = if (call.name == DELEGATE_TOOL) delegatedTasks(call.arguments, result) else emptyList(),
+                        delegationIds = if (call.name == DELEGATE_TOOL) delegationIds(result) else emptyList(),
                     )
                 }
                 val reasoning = row.reasoning.orEmpty()
