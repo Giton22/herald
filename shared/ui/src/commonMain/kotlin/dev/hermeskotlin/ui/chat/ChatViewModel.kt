@@ -14,6 +14,14 @@ import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.models.ModelCatalog
+import dev.hermeskotlin.core.models.ModelOption
+import dev.hermeskotlin.core.models.ModelsApi
+import dev.hermeskotlin.core.chat.ModelSwitch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -26,6 +34,16 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
+
+/** The model sheet: the catalog once loaded, and a pricey pick waiting for a yes. */
+data class ModelPickerState(
+    val catalog: ModelCatalog? = null,
+    val loading: Boolean = false,
+    val error: String? = null,
+    val confirm: PendingSwitch? = null,
+)
+
+data class PendingSwitch(val model: ModelOption, val message: String)
 
 /** Identifies what the chat screen shows: a stored session, or a new chat (`storedSessionId == null`). */
 data class ChatTarget(val gateway: SavedGateway, val storedSessionId: String?, val title: String?, val nonce: Long = 0)
@@ -40,6 +58,7 @@ class ChatViewModel(
     connection: GatewayConnection,
     private val host: ChatHost,
     private val lastChats: LastChatStore,
+    private val models: ModelsApi,
 ) : ViewModel() {
 
     val composer = TextFieldState()
@@ -52,7 +71,15 @@ class ChatViewModel(
         .flatMapLatest { it?.state ?: flowOf(ChatState()) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, ChatState())
 
+    private val _picker = MutableStateFlow(ModelPickerState())
+    private var loadJob: Job? = null
+    val picker: StateFlow<ModelPickerState> = _picker.asStateFlow()
+
     init {
+        // The catalog names the default model, which a new chat shows until it has its own.
+        viewModelScope.launch {
+            connection.state.collect { if (it is ConnectionState.Connected && _picker.value.catalog == null) loadModels() }
+        }
         viewModelScope.launch {
             state
                 .map { chat -> chat.storedSessionId?.takeIf { chat.messages.isNotEmpty() }?.let { LastChat(it, chat.title) } }
@@ -69,6 +96,47 @@ class ChatViewModel(
         composer.clearText()
         if (target.storedSessionId == null) viewModelScope.launch { lastChats.set(target.gateway.gatewayUrl, null) }
         session.value = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title)
+        // The catalog marks the previous chat's model; a new chat must show the profile default instead.
+        _picker.update { it.copy(catalog = null, confirm = null) }
+        if (connectionState.value is ConnectionState.Connected) loadModels()
+    }
+
+    /** Refreshes the catalog for the open chat (its current model marked). */
+    fun loadModels() {
+        // A load still running belongs to whatever chat was open when it started.
+        loadJob?.cancel()
+        _picker.update { it.copy(loading = true, error = null) }
+        loadJob = viewModelScope.launch {
+            try {
+                val catalog = models.options(session.value?.state?.value?.runtimeSessionId)
+                _picker.update { it.copy(catalog = catalog, loading = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _picker.update { it.copy(loading = false, error = e.message ?: "Couldn't load the models.") }
+            }
+        }
+    }
+
+    fun selectModel(model: ModelOption, confirmed: Boolean = false) {
+        val chat = session.value ?: return
+        _picker.update { it.copy(confirm = null) }
+        viewModelScope.launch {
+            val result = chat.setModel(model.id, model.provider, confirmed)
+            if (result is ModelSwitch.NeedsConfirmation) _picker.update { it.copy(confirm = PendingSwitch(model, result.message)) }
+        }
+    }
+
+    fun dismissConfirm() = _picker.update { it.copy(confirm = null) }
+
+    fun setReasoningEffort(wire: String) {
+        val chat = session.value ?: return
+        viewModelScope.launch { chat.setReasoningEffort(wire) }
+    }
+
+    fun setFast(on: Boolean) {
+        val chat = session.value ?: return
+        viewModelScope.launch { chat.setFast(on) }
     }
 
     fun send() {

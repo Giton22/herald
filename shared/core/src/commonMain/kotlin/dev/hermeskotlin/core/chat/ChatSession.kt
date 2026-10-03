@@ -150,7 +150,8 @@ class ChatSession(
         }
         _state.update { it.copy(model = model, provider = provider) }
         return try {
-            val result = configSet("model", JsonPrimitive("$model --provider $provider")) {
+            val result = // --session: a pick on the phone must not quietly rewrite the profile default (config.yaml).
+            configSet("model", JsonPrimitive("$model --provider $provider --session")) {
                 if (confirm) put("confirm_expensive_model", true)
             }
             if (result.boolean("confirm_required") == true) {

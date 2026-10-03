@@ -277,7 +277,7 @@ class ChatSessionTest {
         assertEquals(ModelSwitch.NeedsConfirmation("Costs a lot"), chat.setModel("big", "p1"))
         val set = transport.awaitSent { it.isCall("config.set") }
         assertEquals("rt1", set.param("session_id"))
-        assertEquals("big --provider p1", set.param("value"))
+        assertEquals("big --provider p1 --session", set.param("value"))
         assertEquals("m1", chat.state.value.model)
 
         chat.setReasoningEffort("low")
