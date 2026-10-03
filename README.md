@@ -124,7 +124,7 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 ### 7. Settings (MVP)
 - [x] Model picker in the composer (`model.options`), switched per chat (`config.set model … --session`; picks before the first send go into `session.create`), with a confirm for expensive models
 - [x] Thinking level and fast mode per chat (`config.set reasoning` / `fast`), offered when the model supports them
-- [ ] Profile picker (`profiles.list`)
+- [x] Profile picker (account sheet → Profile; `GET /api/profiles`, chats and sessions scoped with `profile`)
 - [x] Settings screen, opened from the account sheet
 - [x] Theme: system, light, dark, plus pure black; window and system bars follow it
 - [x] Text size on top of the system font scale
