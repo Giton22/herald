@@ -137,7 +137,11 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 ### Attachments & media
 - [x] Image attachments from the photo picker or camera (`image.attach_bytes`), upright and scaled to 2048 px; a failed send detaches them (`image.detach`)
 - [x] File and PDF attachments (`file.attach` as `@file:` refs, `pdf.attach` with a `file.attach` fallback when the gateway can't render pages)
-- [x] Images in history: stored `@image:` refs fetched through `GET /api/media`, `@file:` refs as file cards
+- [x] Images in history: stored `@image:` refs fetched through `GET /api/media`, `@file:` refs as file cards, the attached-context block hidden
+- [x] Pictures and files the agent delivers (`MEDIA:` paths, Markdown images, `::preview` widget files) shown inline or as cards, fetched through `GET /api/files/download`
+- [x] Full-screen image viewer with pinch-zoom; Save (Pictures / Download `Hermes`) and Share for pictures and files
+- [x] Chats open as the `desktop` surface (`source` on `session.create` / `session.resume`), so the agent knows Markdown and files render
+- [ ] Run `::preview` widgets inline (a WebView with Desktop's theme prelude)
 - [ ] Share sheet: "Send to Hermes" from other apps
 
 ### Voice
