@@ -103,8 +103,10 @@ data class ChatState(
     val usage: SessionUsage? = null,
     /** [usage] when the running turn started, to tell what the turn itself took. */
     val turnStartUsage: SessionUsage? = null,
-    /** The agent's plan for the running turn; a finished one stays until the next plan or chat. */
+    /** The agent's latest plan: live while its turn runs, kept afterwards as the last plan (done or not). */
     val todos: TodoList? = null,
+    /** [todos] was written by the turn running now, rather than kept from an earlier one. */
+    val todosLive: Boolean = false,
     /** The part of the running turn's reply shown before a mid-turn correction; the turn continues below it. */
     val correctedReplyKey: String? = null,
     /** Source of unique keys for messages created on this device. */

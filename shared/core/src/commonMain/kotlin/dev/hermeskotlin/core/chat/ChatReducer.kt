@@ -14,6 +14,8 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
         "message.start" -> withOpenReply { it }.copy(
             running = true,
             error = null,
+            // A new turn hasn't planned yet; the last plan is from before (a correction keeps its turn's plan).
+            todosLive = todosLive && running,
             // No totals yet means the agent isn't built, and a new one counts from zero.
             turnStartUsage = turnStartUsage.takeIf { running } ?: usage ?: SessionUsage(),
         )
@@ -83,7 +85,7 @@ internal fun ChatState.withTodos(list: TodoList?): ChatState {
     if (list == null) return this
     val current = todos
     if (current != null && list.revision < current.revision) return this
-    return copy(todos = list)
+    return copy(todos = list, todosLive = running)
 }
 
 /** A `/btw` answer: fills the card that asked it, or adds one when the question came from another client. */
@@ -179,8 +181,7 @@ private fun ChatState.endTurn(messages: List<ChatMessage>, finalUsage: SessionUs
     thinkingFrame = null,
     messages = messages,
     correctedReplyKey = null,
-    // A plan still open when its turn ends was abandoned (stopped, or no final update); a finished one stays.
-    todos = todos?.takeUnless { it.active },
+    todosLive = false,
     usage = finalUsage ?: usage,
     turnStartUsage = null,
 )

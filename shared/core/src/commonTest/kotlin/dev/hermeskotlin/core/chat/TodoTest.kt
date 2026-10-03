@@ -57,9 +57,19 @@ class TodoTest {
     }
 
     @Test
-    fun aTurnEndingMidPlanDropsItButAFinishedPlanStays() {
+    fun aNewTurnShowsTheLastPlanAsPastUntilItPlansAgain() {
+        val planned = ChatState(running = true).reduce(event("todo.updated", todos(1, item("a", "pending"))))
+        assertTrue(planned.todosLive)
+        val next = planned.reduce(event("message.complete", """{"text":"ok","status":"complete"}""")).reduce(event("message.start"))
+        assertFalse(next.todosLive)
+        assertTrue(next.reduce(event("todo.updated", todos(2, item("b", "pending")))).todosLive)
+    }
+
+    @Test
+    fun thePlanOutlivesItsTurnDoneOrNot() {
         val running = ChatState(running = true).reduce(event("todo.updated", todos(1, item("a", "in_progress"))))
-        assertNull(running.reduce(event("message.complete", """{"status":"interrupted"}""")).todos)
+        // The agent stopped without ticking it off: still worth looking back at.
+        assertTrue(running.reduce(event("message.complete", """{"status":"interrupted"}""")).todos!!.active)
 
         val finished = running.reduce(event("todo.updated", todos(2, item("a", "completed"))))
             .reduce(event("message.complete", """{"text":"Done","status":"complete"}"""))
