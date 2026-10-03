@@ -33,6 +33,9 @@ import kotlinx.serialization.json.put
  *
  * Re-attaches after every reconnect (runtime ids belong to the socket) and refetches the transcript,
  * since a turn may have finished while we were away.
+ *
+ * [profile] names the Hermes profile the chat belongs to (null: the gateway's launch profile). Only
+ * create, resume and REST calls carry it; the gateway scopes the rest by the runtime session.
  */
 class ChatSession(
     private val gateway: GatewayUrl,
@@ -41,6 +44,7 @@ class ChatSession(
     private val connection: GatewayConnection,
     private val sessions: SessionsApi,
     private val scope: CoroutineScope,
+    private val profile: String? = null,
 ) {
     private val _state = MutableStateFlow(ChatState(storedSessionId = initialStoredId, title = initialTitle))
     val state: StateFlow<ChatState> = _state.asStateFlow()
@@ -392,7 +396,7 @@ class ChatSession(
 
     private suspend fun loadHistory() {
         val id = _state.value.storedSessionId ?: return
-        when (val result = sessions.messages(gateway, id)) {
+        when (val result = sessions.messages(gateway, id, profile = profile)) {
             is ApiResult.Success -> _state.update { state ->
                 // Keep a reply that is streaming right now; the stored rows don't have it yet.
                 val live = state.messages.filter { it.isLocalOnly }
@@ -425,6 +429,7 @@ class ChatSession(
             "session.resume",
             buildJsonObject {
                 put("session_id", stored)
+                profile?.let { put("profile", it) }
                 put("source", CLIENT_SOURCE)
                 put("cols", TERMINAL_COLUMNS)
                 put("omit_messages", true)
@@ -468,6 +473,7 @@ class ChatSession(
         val result = client.request(
             "session.create",
             buildJsonObject {
+                profile?.let { put("profile", it) }
                 put("source", CLIENT_SOURCE)
                 put("cols", TERMINAL_COLUMNS)
                 // Picked before the first send; without them the profile defaults apply.

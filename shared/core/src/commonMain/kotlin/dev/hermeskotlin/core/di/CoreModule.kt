@@ -11,6 +11,8 @@ import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.media.MediaApi
 import dev.hermeskotlin.core.models.ModelsApi
 import dev.hermeskotlin.core.network.createHttpClient
+import dev.hermeskotlin.core.profiles.ProfileStore
+import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.rpc.openGatewaySocket
 import dev.hermeskotlin.core.sessions.SessionsApi
@@ -34,6 +36,8 @@ val coreModule = module {
     single { SessionsApi(get()) }
     single { CronApi(get()) }
     single { LastChatStore(get()) }
+    single { ProfilesApi(get()) }
+    single { ProfileStore(get()) }
     single { SettingsStore(get(), get()) }
     single {
         val client = get<HttpClient>()
