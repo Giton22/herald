@@ -1,0 +1,5 @@
+blank_issues_enabled: true
+contact_links:
+  - name: A problem with the agent itself
+    url: https://github.com/NousResearch/hermes-agent/issues
+    about: If Hermes Desktop or the CLI shows the same thing, it's the agent, not Herald. Report it to Hermes Agent.

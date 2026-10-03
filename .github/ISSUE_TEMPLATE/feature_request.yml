@@ -1,0 +1,25 @@
+name: Feature request
+description: Something Herald should do, or do better.
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Check the [roadmap](https://github.com/Giton22/herald/blob/master/docs/ROADMAP.md) first: it may already be planned.
+
+  - type: textarea
+    id: need
+    attributes:
+      label: What you'd like to do
+      description: The situation and what's missing, rather than a finished design.
+      placeholder: When I'm away from home I'd like to read my last chats, even without a connection.
+    validations:
+      required: true
+
+  - type: textarea
+    id: idea
+    attributes:
+      label: How it could work
+      description: Optional. Hermes Desktop or the CLI may already do it a certain way; say so if they do.
+    validations:
+      required: false

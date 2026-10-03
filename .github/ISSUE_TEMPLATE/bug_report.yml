@@ -1,0 +1,75 @@
+name: Bug report
+description: Something in Herald doesn't work as it should.
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! Please leave out passwords, tokens, gateway addresses and anything from your chats you'd rather not share: issues are public.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What went wrong, and what you expected instead.
+      placeholder: After I approved a command from the notification, the chat kept showing the approval.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The shortest way to make it happen again, if you know one.
+      placeholder: |
+        1. Start a turn that needs an approval
+        2. Lock the phone
+        3. Approve from the notification
+    validations:
+      required: false
+
+  - type: input
+    id: herald-version
+    attributes:
+      label: Herald version
+      description: Settings → About → App version.
+      placeholder: "0.1.0"
+    validations:
+      required: true
+
+  - type: input
+    id: hermes-version
+    attributes:
+      label: Hermes Agent version
+      description: Settings → About → Gateway.
+      placeholder: "Hermes 0.9.0"
+    validations:
+      required: true
+
+  - type: input
+    id: device
+    attributes:
+      label: Phone and Android version
+      placeholder: Pixel 9, Android 16
+    validations:
+      required: true
+
+  - type: dropdown
+    id: connection
+    attributes:
+      label: How Herald reaches your gateway
+      options:
+        - Tailscale
+        - Same Wi-Fi / local network
+        - HTTPS on the internet
+        - Something else
+    validations:
+      required: false
+
+  - type: textarea
+    id: extra
+    attributes:
+      label: Screenshots or anything else
+      description: Screenshots help a lot. Blur anything private first.
+    validations:
+      required: false
