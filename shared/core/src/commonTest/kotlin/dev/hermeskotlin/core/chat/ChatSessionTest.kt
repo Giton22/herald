@@ -16,6 +16,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -56,6 +57,8 @@ class ChatSessionTest {
                 val id = message["id"] ?: return@forEach
                 val method = message["method"]?.jsonPrimitive?.contentOrNull ?: return@forEach
                 val canned = results[method] ?: "{}"
+                // "silent" never answers, like a gateway that stopped responding.
+                if (canned == SILENT) return@forEach
                 // "error:<code>" answers with a JSON-RPC error instead.
                 transport.push(
                     if (canned.startsWith("error:")) {
@@ -405,6 +408,85 @@ class ChatSessionTest {
         assertTrue(chat.state.value.messages.isEmpty())
     }
 
+    private suspend fun resumedChat(scope: CoroutineScope, results: Map<String, String>): Pair<ChatSession, FakeTransport> {
+        val (connection, transport) = setup(scope, mapOf("session.resume" to """{"session_id":"rt1","running":false}""") + results)
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), scope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        return chat to transport
+    }
+
+    @Test
+    fun aSubmitNeverAnsweredAndMissingFromTheTranscriptIsHandedBack() = runTest {
+        val (chat, _) = resumedChat(backgroundScope, mapOf("prompt.submit" to SILENT))
+
+        val outcome = runCatching { chat.send("hello again") }
+
+        assertEquals(false, outcome.getOrNull(), "send threw ${outcome.exceptionOrNull()} instead of returning false")
+        assertEquals(listOf("hello", "Hi! What next?"), chat.state.value.messages.map { it.textOf() })
+        assertTrue(chat.state.value.error!!.contains("composer"))
+    }
+
+    @Test
+    fun aDropAfterTheSubmitWentOutIsSentWhenTheTranscriptHasIt() = runTest {
+        val (chat, transport) = resumedChat(backgroundScope, mapOf("prompt.submit" to SILENT))
+
+        val sending = backgroundScope.async { chat.send("deploy it") }
+        transport.awaitSent { it.isCall("prompt.submit") }
+        // The gateway has the prompt and is running it; only its reply is lost.
+        history = history.replace("]}", """,{"id":3,"role":"user","content":"deploy it"}]}""")
+        transport.serverClose(1006)
+
+        assertTrue(sending.await(), "the prompt reached the gateway, but send reported it unsent and handed the text back to resend")
+        val messages = chat.state.value.messages
+        assertEquals(listOf("hello", "Hi! What next?", "deploy it"), messages.map { it.textOf() })
+        assertEquals("row-3", messages.last().key)
+    }
+
+    @Test
+    fun aLostResendOfTheLastPromptIsNotTakenForTheEarlierOne() = runTest {
+        // Read on every call, so the gateway can stop answering partway through.
+        val results = mutableMapOf(
+            "session.resume" to """{"session_id":"rt1","running":false}""",
+            "prompt.submit" to """{"status":"streaming"}""",
+        )
+        val (connection, transport) = setup(backgroundScope, results)
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+
+        // An own turn: its bubble keeps its local key, as the transcript isn't reloaded after it.
+        assertTrue(chat.send("continue"))
+        transport.push(event("message.start", "rt1"))
+        transport.push(event("message.complete", "rt1", """{"text":"Done.","status":"complete"}"""))
+        chat.state.first { !it.running }
+        history = history.replace("]}", """,{"id":3,"role":"user","content":"continue"},{"id":4,"role":"assistant","content":"Done."}]}""")
+
+        // The same text again; it never reaches the gateway, so the transcript is unchanged.
+        results["prompt.submit"] = SILENT
+        val sending = backgroundScope.async { chat.send("continue") }
+        transport.sent.first { sent -> sent.count { it.isCall("prompt.submit") } == 2 }
+        transport.serverClose(1006)
+
+        assertFalse(sending.await(), "the resend never arrived, but the earlier \"continue\" was taken for it")
+        assertTrue(chat.state.value.error!!.contains("composer"))
+    }
+
+    @Test
+    fun aDropTheTranscriptCantSettleKeepsAMarkedBubble() = runTest {
+        // A new chat without a stored id yet: there's no transcript to look in.
+        val (chat, transport) = newChat(backgroundScope, mapOf("prompt.submit" to SILENT))
+
+        val sending = backgroundScope.async { chat.send("deploy it") }
+        transport.awaitSent { it.isCall("prompt.submit") }
+        transport.serverClose(1006)
+
+        assertFalse(sending.await())
+        val bubble = assertIs<ChatMessage.User>(chat.state.value.messages.single())
+        assertEquals(SendCheck.Unknown, bubble.check)
+        assertFalse(bubble.pending)
+    }
+
     private suspend fun newChat(scope: CoroutineScope, results: Map<String, String>): Pair<ChatSession, FakeTransport> {
         val (connection, transport) = setup(scope, mapOf("session.create" to """{"session_id":"rt9","info":{}}""") + results)
         connection.state.first { it is ConnectionState.Connected }
@@ -504,5 +586,9 @@ class ChatSessionTest {
 
         assertEquals("stored-2" to "Greeting #2", chat.branch(null))
         assertEquals("rt1", transport.sent.value.first { it.isCall("session.branch_whole") }.param("session_id"))
+    }
+
+    private companion object {
+        const val SILENT = "silent"
     }
 }

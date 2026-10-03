@@ -113,8 +113,9 @@ class ChatNotifications(private val context: Context) {
     /**
      * A question the agent is blocked on, answerable in place when it fits a notification. Every answer
      * asks for an unlock first: from a locked phone, Approve would run a command for whoever holds it.
+     * False when Herald may not post notifications.
      */
-    fun postRequest(title: String?, request: InputRequest) {
+    fun postRequest(title: String?, request: InputRequest): Boolean {
         val builder = base(CHANNEL_REQUESTS)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -164,7 +165,7 @@ class ChatNotifications(private val context: Context) {
                 .setContentTitle(if (request.kind == InputRequest.Secret.Kind.Sudo) "Sudo password needed" else "Secret needed")
                 .setContentText(request.command ?: request.prompt)
         }
-        post(request.id, REQUEST_ID, builder.build())
+        return post(request.id, REQUEST_ID, builder.build())
     }
 
     fun cancelRequest(id: String) = manager.cancel(id, REQUEST_ID)
@@ -212,8 +213,9 @@ class ChatNotifications(private val context: Context) {
         .setAutoCancel(true)
 
     @SuppressLint("MissingPermission") // canPost checks it.
-    private fun post(tag: String?, id: Int, notification: Notification) {
+    private fun post(tag: String?, id: Int, notification: Notification): Boolean {
         if (canPost) manager.notify(tag, id, notification)
+        return canPost
     }
 
     private fun openApp(): PendingIntent {

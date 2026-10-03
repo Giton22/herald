@@ -65,6 +65,18 @@ class JsonRpcClientTest {
     }
 
     @Test
+    fun aCallNobodyAnswersFailsWithATimeoutNotACancellation() = runTest {
+        val transport = FakeTransport()
+        val client = JsonRpcClient(transport)
+        val pump = launch { runCatching { client.run() } }
+
+        val error = assertFailsWith<RpcTimeoutException> { client.request("prompt.submit", timeoutMs = 1_000) }
+
+        assertEquals("prompt.submit", error.method)
+        pump.cancel()
+    }
+
+    @Test
     fun serverRequestIsEmittedAndAnsweredById() = runTest {
         val transport = FakeTransport()
         val client = JsonRpcClient(transport)

@@ -7,6 +7,7 @@ import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.rpc.JsonRpcClient
 import dev.hermeskotlin.core.rpc.RpcException
+import dev.hermeskotlin.core.rpc.RpcTimeoutException
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.slash.SlashCommand
 import dev.hermeskotlin.core.slash.SlashResult
@@ -102,6 +103,9 @@ class ChatSession(
      *
      * Mid-turn, the gateway folds text into the running turn (Desktop's stop-and-correct) unless [queue]
      * asks for it to run as the next turn instead.
+     *
+     * A prompt that went out without a reply may be running, so the stored transcript decides before
+     * this returns (see [settleUnanswered]).
      */
     suspend fun send(
         text: String,
@@ -128,12 +132,20 @@ class ChatSession(
         val queuedImages = mutableListOf<String>()
         var uploadClient: JsonRpcClient? = null
         var uploadRuntimeId: String? = null
+        // Only a prompt that starts a turn is written to the transcript at once; a correction or a
+        // queued one isn't, so for those the transcript can't say whether it arrived.
+        val startsTurn = !queue && !_state.value.running
+        // The prompts shown, which the transcript has too; not countable when the transcript failed to load.
+        val promptsBefore = _state.value.takeIf { it.historyError == null }
+            ?.messages?.count { it is ChatMessage.User && !it.pending && it.check == null }
+        var submitted = false
         return try {
             val client = connectedClient() ?: throw RpcException(0, "Not connected to the gateway. Your message will need resending.")
             val runtimeId = ensureAttached(client)
             uploadClient = client
             uploadRuntimeId = runtimeId
             val refs = attachments.mapNotNull { upload(client, runtimeId, it, queuedImages) }
+            submitted = true
             val result = client.request(
                 "prompt.submit",
                 buildJsonObject {
@@ -160,6 +172,11 @@ class ChatSession(
             throw e
         } catch (e: Exception) {
             ownTurnsPending = (ownTurnsPending - 1).coerceAtLeast(0)
+            // An error reply is the gateway turning it down; anything else after it went out is no verdict.
+            if (submitted && e !is RpcException) {
+                val arrived = if (startsTurn) findInTranscript(visible, key, promptsBefore) else null
+                return settleUnanswered(key, arrived) { detach(uploadClient, uploadRuntimeId, queuedImages) }
+            }
             detach(uploadClient, uploadRuntimeId, queuedImages)
             _state.update { state ->
                 state.copy(
@@ -170,6 +187,64 @@ class ChatSession(
             }
             false
         }
+    }
+
+    /**
+     * Settles a prompt that went out without a reply, once the transcript had its say ([arrived]). In it:
+     * sent, and the stored rows take over. Missing from it: the caller gets the text back as for any
+     * failure. Can't tell: the bubble stays, marked, so a resend is made knowing it may already be running.
+     */
+    private suspend fun settleUnanswered(key: String, arrived: Boolean?, takeBack: suspend () -> Unit): Boolean {
+        when (arrived) {
+            true -> {
+                rowExists = true
+                _state.update { it.copy(messages = it.messages.updateUser(key) { u -> u.copy(check = null) }) }
+                loadHistory()
+            }
+            false -> {
+                takeBack()
+                _state.update { state ->
+                    state.copy(
+                        error = "Hermes didn't get your message. It's back in the composer.",
+                        messages = state.messages.filterNot { it.key == key },
+                    )
+                }
+            }
+            null -> _state.update { state ->
+                state.copy(
+                    error = "Lost the connection while sending. Check that it isn't running before you send it again.",
+                    messages = state.messages.updateUser(key) { it.copy(pending = false, check = SendCheck.Unknown) },
+                )
+            }
+        }
+        return arrived == true
+    }
+
+    /**
+     * Whether the transcript has a prompt more than the [before] shown ahead of the send, the latest being
+     * [visible], while bubble [key] says it's being checked. Counted, not matched by key: an own prompt's
+     * bubble keeps its local key, so its stored row always looks new. The gateway writes the prompt as the
+     * turn starts, so a few looks a moment apart cover a slow start. Null when the transcript couldn't be read.
+     */
+    private suspend fun findInTranscript(visible: String, key: String, before: Int?): Boolean? {
+        _state.update { it.copy(messages = it.messages.updateUser(key) { u -> u.copy(pending = false, check = SendCheck.Checking) }) }
+        before ?: return null
+        val id = _state.value.storedSessionId ?: return null
+        var read = false
+        repeat(DELIVERY_LOOKS) { look ->
+            if (look > 0) delay(DELIVERY_LOOK_INTERVAL_MS)
+            when (val result = sessions.messages(gateway, id, profile = profile)) {
+                is ApiResult.Success -> {
+                    read = true
+                    val prompts = historyToMessages(result.value.messages).filterIsInstance<ChatMessage.User>()
+                    if (prompts.size > before && prompts.last().text.contains(visible)) return true
+                }
+                // A new chat's stored row only appears with its first prompt.
+                is ApiResult.Failed -> if (result.status == 404 && !rowExists) read = true
+                else -> {}
+            }
+        }
+        return if (read) false else null
     }
 
     /**
@@ -637,6 +712,8 @@ class ChatSession(
             finishCommand(key, output)
         } catch (e: TimeoutCancellationException) {
             finishCommand(key, "$command took too long to answer.", failed = true)
+        } catch (e: RpcTimeoutException) {
+            finishCommand(key, "$command took too long to answer.", failed = true)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -900,7 +977,11 @@ class ChatSession(
                 } else {
                     state.messages.filter { it.isLocalOnly }
                 }
-                state.copy(messages = historyToMessages(result.value.messages).withRisks(flagged) + live, historyLoaded = true, historyError = null)
+                val stored = historyToMessages(result.value.messages).withRisks(flagged)
+                // A prompt sent without a reply that the transcript now has arrived after all.
+                val storedPrompts = stored.mapNotNullTo(HashSet()) { (it as? ChatMessage.User)?.text }
+                val unsettled = live.filterNot { it is ChatMessage.User && it.check != null && storedPrompts.any { p -> p.contains(it.text) } }
+                state.copy(messages = stored + unsettled, historyLoaded = true, historyError = null)
             }
             else -> _state.update { it.copy(historyLoaded = true, historyError = result.errorMessage) }
         }
@@ -1026,6 +1107,10 @@ class ChatSession(
 
         const val NOT_CONNECTED = "Not connected to the gateway."
 
+        /** Looks at the transcript for a prompt sent without a reply: about 7 s in all. */
+        const val DELIVERY_LOOKS = 4
+        const val DELIVERY_LOOK_INTERVAL_MS = 2_500L
+
         val ANSI_ESCAPE = Regex("""\u001B\[[0-9;?]*[ -/]*[@-~]""")
 
         /** JSON-RPC "method not found": the gateway predates a call. */
@@ -1091,7 +1176,7 @@ internal fun ChatState.sealReplyBefore(key: String): ChatState {
 private val ChatMessage.isLocalOnly: Boolean
     get() = when (this) {
         is ChatMessage.Assistant -> streaming || warning != null
-        is ChatMessage.User -> pending
+        is ChatMessage.User -> pending || check != null
         is ChatMessage.Notice -> !stored
         is ChatMessage.Command -> true
     }

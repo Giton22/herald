@@ -29,6 +29,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayOutputStream
 import java.io.File
+import java.io.InputStream
 import kotlin.math.max
 import kotlin.random.Random
 
@@ -47,7 +48,11 @@ actual fun rememberAttachmentPicker(
     fun read(uris: List<Uri>) {
         if (uris.isEmpty()) return
         scope.launch {
-            val results = withContext(Dispatchers.IO) { uris.map { runCatching { readAttachment(context, it) } } }
+            val results = withContext(Dispatchers.IO) {
+                // Everything picked sits in memory until it's sent, so a pick has a budget as a whole too.
+                var left = MAX_PICK_BYTES
+                uris.map { uri -> runCatching { readAttachment(context, uri, left).also { left -= it.bytes.size } } }
+            }
             results.mapNotNull { it.exceptionOrNull()?.message }.firstOrNull()?.let(failed)
             results.mapNotNull { it.getOrNull() }.takeIf { it.isNotEmpty() }?.let(picked)
         }
@@ -66,7 +71,7 @@ actual fun rememberAttachmentPicker(
         }
         scope.launch {
             val result = withContext(Dispatchers.IO) {
-                runCatching { readAttachment(context, Uri.fromFile(file)) }.also { file.delete() }
+                runCatching { readAttachment(context, Uri.fromFile(file), MAX_PICK_BYTES) }.also { file.delete() }
             }
             result.onSuccess { picked(listOf(it)) }.onFailure { failed(it.message ?: "Couldn't read the photo.") }
         }
@@ -101,25 +106,47 @@ actual fun rememberImageBitmap(bytes: ByteArray, maxEdge: Int): ImageBitmap? = r
     decodeUpright(bytes, maxEdge)?.asImageBitmap()
 }
 
-/** Reads one picked item: photos are upright, at most [MAX_EDGE] px and JPEG; anything else is sent as is. */
-private fun readAttachment(context: Context, uri: Uri): OutgoingAttachment {
+/**
+ * Reads one picked item: photos are upright, at most [MAX_EDGE] px and JPEG; anything else is sent as is.
+ * [budget] is what's left of the pick's [MAX_PICK_BYTES] for what this adds.
+ */
+private fun readAttachment(context: Context, uri: Uri, budget: Long): OutgoingAttachment {
     val resolver = context.contentResolver
     val name = resolver.displayName(uri) ?: uri.lastPathSegment?.substringAfterLast('/') ?: "file"
     val mime = resolver.getType(uri) ?: guessMime(name)
     val id = "att-${Random.nextLong().toULong().toString(16)}"
+    val size = resolver.size(uri)
     if (mime.startsWith("image/") && mime != "image/gif" && mime != "image/svg+xml") {
-        val original = resolver.openInputStream(uri)?.use { it.readBytes() } ?: error("Couldn't read $name.")
+        // The original is read whole to decode it, so it has a ceiling of its own; only the resized JPEG is kept.
+        if (size != null && size > MAX_PHOTO_BYTES) error("$name is larger than 50 MB.")
+        val original = resolver.openInputStream(uri)?.use { it.readAtMost(MAX_PHOTO_BYTES) ?: error("$name is larger than 50 MB.") }
+            ?: error("Couldn't read $name.")
         val upright = decodeUpright(original, MAX_EDGE) ?: error("Couldn't read $name as an image.")
         val upload = upright.jpeg(UPLOAD_QUALITY)
+        if (upload.size > budget) error("That's more than 50 MB of attachments at once.")
         val thumbnail = upright.scaledTo(THUMBNAIL_EDGE).jpeg(THUMBNAIL_QUALITY)
         return OutgoingAttachment(id, name.withExtension("jpg"), "image/jpeg", upload, thumbnail)
     }
-    val size = resolver.size(uri)
     if (size != null && size > OutgoingAttachment.MAX_BYTES) error("$name is larger than 25 MB.")
-    val bytes = resolver.openInputStream(uri)?.use { it.readBytes() } ?: error("Couldn't read $name.")
-    if (bytes.size > OutgoingAttachment.MAX_BYTES) error("$name is larger than 25 MB.")
+    if (size != null && size > budget) error("That's more than 50 MB of attachments at once.")
+    // The reported size can be missing or wrong, so the read itself stops at the limit.
+    val limit = minOf(OutgoingAttachment.MAX_BYTES.toLong(), budget)
+    val bytes = resolver.openInputStream(uri)?.use { it.readAtMost(limit) ?: error("$name is too large to attach.") }
+        ?: error("Couldn't read $name.")
     val thumbnail = if (mime.startsWith("image/")) decodeUpright(bytes, THUMBNAIL_EDGE)?.jpeg(THUMBNAIL_QUALITY) else null
     return OutgoingAttachment(id, name, mime, bytes, thumbnail)
+}
+
+/** The whole stream, or null once it passes [limit] bytes. */
+private fun InputStream.readAtMost(limit: Long): ByteArray? {
+    val out = ByteArrayOutputStream()
+    val buffer = ByteArray(64 * 1024)
+    while (true) {
+        val read = read(buffer)
+        if (read < 0) return out.toByteArray()
+        if (out.size() + read > limit) return null
+        out.write(buffer, 0, read)
+    }
 }
 
 /** Decodes at roughly [maxEdge] (sampled, so a 50 MP photo never sits in memory whole) and applies the EXIF rotation. */
@@ -187,3 +214,9 @@ private const val MAX_EDGE = 2048
 private const val UPLOAD_QUALITY = 85
 private const val THUMBNAIL_EDGE = 320
 private const val THUMBNAIL_QUALITY = 80
+
+/** An original photo read to be resized: any phone camera's photo fits, a mislabelled video doesn't. */
+private const val MAX_PHOTO_BYTES = 50L * 1024 * 1024
+
+/** Everything one pick adds; up to two full-size files. */
+private const val MAX_PICK_BYTES = 50L * 1024 * 1024
