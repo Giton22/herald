@@ -20,6 +20,7 @@ kotlin {
             api(libs.compose.unstyled)
             api(libs.compose.unstyled.colored.indication)
             api(libs.icons.lucide)
+            implementation(libs.markdown.renderer)
             implementation(libs.compose.ui.tooling.preview)
         }
     }

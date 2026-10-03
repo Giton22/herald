@@ -76,6 +76,8 @@ fun TextField(
     error: String? = null,
     enabled: Boolean = true,
     singleLine: Boolean = true,
+    /** Grows up to this many lines when not [singleLine], then scrolls. */
+    maxLines: Int = Int.MAX_VALUE,
     password: Boolean = false,
     leadingIcon: ImageVector? = null,
     clearable: Boolean = false,
@@ -103,7 +105,7 @@ fun TextField(
             textStyle = Theme[typography][body],
             textColor = Theme[colors][text],
             cursorBrush = SolidColor(Theme[colors][accent]),
-            lineLimits = if (singleLine) TextFieldLineLimits.SingleLine else TextFieldLineLimits.Default,
+            lineLimits = if (singleLine) TextFieldLineLimits.SingleLine else TextFieldLineLimits.MultiLine(maxHeightInLines = maxLines),
             keyboardOptions = if (password) {
                 keyboardOptions.copy(keyboardType = KeyboardType.Password, autoCorrectEnabled = false)
             } else {

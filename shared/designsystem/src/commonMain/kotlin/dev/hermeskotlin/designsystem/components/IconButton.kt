@@ -1,5 +1,6 @@
 package dev.hermeskotlin.designsystem.components
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
@@ -25,11 +26,13 @@ fun IconButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     tint: Color = Theme[colors][textSecondary],
+    /** Fill behind the icon; transparent for toolbar use, the accent for a primary action like Send. */
+    containerColor: Color = Color.Transparent,
 ) {
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.size(40.dp).clip(CircleShape).alpha(if (enabled) 1f else 0.45f),
+        modifier = modifier.size(40.dp).clip(CircleShape).background(containerColor).alpha(if (enabled) 1f else 0.45f),
         indication = rememberColoredIndication(tint),
     ) {
         UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(20.dp))
