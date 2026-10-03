@@ -42,7 +42,6 @@ import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.ArrowUp
 import com.composables.icons.lucide.Brain
 import com.composables.icons.lucide.Check
@@ -51,8 +50,10 @@ import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.PanelLeft
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Sparkles
+import com.composables.icons.lucide.SquarePen
 import com.composables.icons.lucide.Square
 import com.composables.icons.lucide.Wrench
 import com.composables.icons.lucide.X
@@ -99,7 +100,8 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun ChatScreen(
     target: ChatTarget,
-    onBack: () -> Unit,
+    onOpenSidebar: () -> Unit,
+    onNewChat: () -> Unit,
     viewModel: ChatViewModel = koinViewModel(),
 ) {
     LaunchedEffect(target) { viewModel.open(target) }
@@ -122,7 +124,9 @@ fun ChatScreen(
                     state.attachment is Attachment.Attaching -> "Opening…"
                     else -> state.model
                 },
-                onBack = onBack,
+                onOpenSidebar = onOpenSidebar,
+                // Already on an untouched new chat: nothing to start over from.
+                onNewChat = onNewChat.takeIf { target.storedSessionId != null || state.messages.isNotEmpty() },
             )
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
@@ -153,15 +157,16 @@ fun ChatScreen(
 }
 
 @Composable
-private fun TopBar(title: String, subtitle: String?, onBack: () -> Unit) {
+private fun TopBar(title: String, subtitle: String?, onOpenSidebar: () -> Unit, onNewChat: (() -> Unit)?) {
     Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(Lucide.ArrowLeft, contentDescription = "Back", onClick = onBack)
+        IconButton(Lucide.PanelLeft, contentDescription = "Sessions", onClick = onOpenSidebar)
         Column(Modifier.weight(1f).padding(start = 4.dp, end = 12.dp)) {
             Text(title, style = Theme[typography][heading], color = Theme[colors][textColor], maxLines = 1, overflow = TextOverflow.Ellipsis)
             if (!subtitle.isNullOrBlank()) {
                 Text(subtitle, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
+        IconButton(Lucide.SquarePen, contentDescription = "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null)
     }
 }
 

@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.AuthUser
+import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
@@ -54,6 +55,7 @@ class SessionsViewModel(
     private val api: SessionsApi,
     private val auth: AuthApi,
     private val connection: GatewayConnection,
+    private val lastChats: LastChatStore,
 ) : ViewModel() {
 
     val connectionState: StateFlow<ConnectionState> = connection.state
@@ -138,7 +140,7 @@ class SessionsViewModel(
 
     fun delete(session: SessionSummary) = mutate(
         apply = { list -> list.filterNot { it.id == session.id } },
-        call = { url -> api.delete(url, session.id) },
+        call = { url -> api.delete(url, session.id).also { if (it is ApiResult.Success) lastChats.forget(url, session.id) } },
     )
 
     /** Optimistic row update: apply locally (list and search results), call the server, roll back on failure. */
