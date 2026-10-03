@@ -127,6 +127,22 @@ fun SettingsScreen(
                     )
                 }
 
+                Section("Notifications") {
+                    SwitchRow(
+                        title = "Approvals and questions",
+                        detail = "When the agent waits on you. Answer right from the notification.",
+                        checked = settings.notifyRequests,
+                        onCheckedChange = { on -> viewModel.update { it.copy(notifyRequests = on) } },
+                    )
+                    Divider()
+                    SwitchRow(
+                        title = "Finished replies",
+                        detail = "When a turn ends while Hermes is in the background. Reply from the notification.",
+                        checked = settings.notifyReplies,
+                        onCheckedChange = { on -> viewModel.update { it.copy(notifyReplies = on) } },
+                    )
+                }
+
                 Section("Account") {
                     InfoRow(info.userLabel ?: "Signed in", gateway.url)
                     Divider()
