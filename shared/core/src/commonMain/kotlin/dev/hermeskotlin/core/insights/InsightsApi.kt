@@ -98,8 +98,11 @@ class InsightsApi(private val client: HttpClient) {
  */
 fun UsageReport.dailySeries(lastEpochDay: Long): List<UsageDay> {
     val byDay = daily.associateBy { epochDayOf(it.day) }
-    val end = maxOf(lastEpochDay, byDay.keys.filterNotNull().maxOrNull() ?: lastEpochDay)
+    val keys = byDay.keys.filterNotNull()
     val days = periodDays.coerceIn(1, 365)
+    var end = maxOf(lastEpochDay, keys.maxOrNull() ?: lastEpochDay)
+    // [lastEpochDay] can run a day ahead of the gateway's own date; never cut off a day it reported.
+    keys.minOrNull()?.let { first -> if (first < end - days + 1) end = maxOf(first + days - 1, keys.max()) }
     return ((end - days + 1)..end).map { day -> byDay[day] ?: UsageDay(day = isoDateOf(day)) }
 }
 

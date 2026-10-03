@@ -64,6 +64,11 @@ class InsightsApiTest {
             series.map { it.day },
         )
         assertEquals(listOf(0L, 0L, 779265L, 0L, 1500L, 0L, 0L), series.map { it.tokens })
+
+        // A "today" ahead of the gateway's date still keeps its earliest reported day.
+        val ahead = report.dailySeries(lastEpochDay = epochDayOf("2026-10-03")!!)
+        assertEquals("2026-09-26", ahead.first().day)
+        assertEquals(7, ahead.size)
     }
 
     @Test
