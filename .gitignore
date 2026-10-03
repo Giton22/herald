@@ -10,3 +10,7 @@ captures/
 .cxx/
 *.apk
 *.aab
+
+# Local release signing (see androidApp/build.gradle.kts)
+keystore.properties
+*.jks
