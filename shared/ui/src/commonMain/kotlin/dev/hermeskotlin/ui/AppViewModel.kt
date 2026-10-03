@@ -16,10 +16,13 @@ sealed interface Route {
     data object Loading : Route
     data object Connect : Route
     data class SignIn(val gateway: SavedGateway, val notice: String? = null) : Route
-    data class Home(val gateway: SavedGateway) : Route
+    data class Sessions(val gateway: SavedGateway) : Route
+
+    /** A stored session opened from [Sessions]; Back returns there. */
+    data class Transcript(val gateway: SavedGateway, val sessionId: String, val title: String) : Route
 }
 
-/** Top-level flow: pick gateway → sign in → connected home. Owns the gateway connection lifecycle. */
+/** Top-level flow: pick gateway → sign in → sessions → transcript. Owns the gateway connection lifecycle. */
 class AppViewModel(
     private val gateways: GatewayRepository,
     private val auth: AuthApi,
@@ -34,17 +37,13 @@ class AppViewModel(
             val saved = gateways.current()
             _route.value = when {
                 saved == null -> Route.Connect
-                auth.hasStoredSession(saved.gatewayUrl) -> Route.Home(saved).also { connection.start(saved.gatewayUrl) }
+                auth.hasStoredSession(saved.gatewayUrl) -> Route.Sessions(saved).also { connection.start(saved.gatewayUrl) }
                 else -> Route.SignIn(saved)
             }
         }
         viewModelScope.launch {
             connection.state.collect { state ->
-                val home = _route.value as? Route.Home ?: return@collect
-                if (state is ConnectionState.SessionExpired) {
-                    connection.stop()
-                    _route.value = Route.SignIn(home.gateway, notice = "Your session expired. Sign in again.")
-                }
+                if (state is ConnectionState.SessionExpired) onSessionExpired()
             }
         }
     }
@@ -58,7 +57,19 @@ class AppViewModel(
 
     fun onSignedIn(gateway: SavedGateway) {
         connection.start(gateway.gatewayUrl)
-        _route.value = Route.Home(gateway)
+        _route.value = Route.Sessions(gateway)
+    }
+
+    fun openSession(sessionId: String, title: String) {
+        val gateway = signedInGateway() ?: return
+        _route.value = Route.Transcript(gateway, sessionId, title)
+    }
+
+    /** The dashboard rejected our cookies (socket or REST): back to sign-in with a notice. */
+    fun onSessionExpired() {
+        val gateway = signedInGateway() ?: return
+        connection.stop()
+        _route.value = Route.SignIn(gateway, notice = "Your session expired. Sign in again.")
     }
 
     fun signOut() {
@@ -81,7 +92,11 @@ class AppViewModel(
     }
 
     /** System back. Returns false when there is nowhere to go back to (let the platform close the app). */
-    fun back(): Boolean = when (_route.value) {
+    fun back(): Boolean = when (val r = _route.value) {
+        is Route.Transcript -> {
+            _route.value = Route.Sessions(r.gateway)
+            true
+        }
         is Route.SignIn -> {
             changeGateway()
             true
@@ -89,9 +104,11 @@ class AppViewModel(
         else -> false
     }
 
-    private fun currentGateway(): SavedGateway? = when (val r = _route.value) {
-        is Route.SignIn -> r.gateway
-        is Route.Home -> r.gateway
+    private fun signedInGateway(): SavedGateway? = when (val r = _route.value) {
+        is Route.Sessions -> r.gateway
+        is Route.Transcript -> r.gateway
         else -> null
     }
+
+    private fun currentGateway(): SavedGateway? = (_route.value as? Route.SignIn)?.gateway ?: signedInGateway()
 }

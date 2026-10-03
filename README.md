@@ -37,11 +37,12 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 ### Design system (`shared/designsystem`)
 - [x] Tokens: colors (light/dark), radii, typography
 - [x] `Button` (primary, secondary, outline, ghost, danger; three sizes; loading state; leading icon)
-- [x] `TextField` (label, placeholder, supporting text, error)
+- [x] `TextField` (label, placeholder, supporting text, error, leading icon, clear button)
 - [x] `Surface` (flat panel, or elevated with a soft shadow + hairline)
 - [x] `Spinner`, `StatusDot`
 - [x] `TextField` password mode (masked, show/hide toggle)
-- [ ] Sheet / dialog, menu, list row, toast, chat bubble, tool card, approval card
+- [x] `BottomSheet` with `SheetHeader`/`SheetAction` rows, `Dialog`, `IconButton`, `Chip`
+- [ ] Menu, toast, chat bubble, tool card, approval card
 - [ ] Theme picker (system / light / dark), optional Hermes-style accent presets
 
 ---
@@ -70,12 +71,15 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [x] Connection-state indicator in the UI (connecting, connected, retrying with countdown, refused, session expired)
 
 ### 3. Sessions
-- [ ] Session list (`session.list`) with title, preview, model, last-active time, and pinned/archived state
-- [ ] Create a new session (`session.create`)
-- [ ] Open or resume a session and load its history (`session.resume`, `session.history`)
-- [ ] Rename (`session.title`), delete (`session.delete`), archive (`session.archive`)
-- [ ] Live list updates (`sessions.changed`, `session.title`, `session.info`)
-- [ ] Search sessions by title
+- [x] Session list with title, preview, model, last-active time, source, message count, and pinned/archived state (`GET /api/sessions?order=recent`, paged; same REST endpoint Desktop uses because the WS `session.list` row has no model or last-active time)
+- [x] Pinned section on top, plus a Recent/Archived filter
+- [ ] Create a new session (`session.create`), together with chat
+- [x] Open a session and read its stored history (`GET /api/sessions/{id}/messages`, read-only; tool steps are folded into one reply)
+- [ ] Resume a session live so you can reply in it (`session.resume`), together with chat
+- [x] Rename, pin, archive and delete (`PATCH`/`DELETE /api/sessions/{id}`), with optimistic updates that roll back on error
+- [x] Live list updates (`sessions.changed`, `session.title` → refetch; also refetch after reconnect)
+- [ ] Live per-session status in the list (`session.info`, `session.active_list`)
+- [x] Search sessions by title, session id and message text (`GET /api/sessions/search`, debounced, with match snippet)
 
 ### 4. Chat
 - [ ] Send a prompt (`prompt.submit`)
