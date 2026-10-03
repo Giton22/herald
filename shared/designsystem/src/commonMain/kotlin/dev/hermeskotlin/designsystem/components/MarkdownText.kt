@@ -38,6 +38,9 @@ import com.mikepenz.markdown.compose.Markdown
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.compose.elements.MarkdownCodeBlock
 import com.mikepenz.markdown.compose.elements.MarkdownCodeFence
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.platform.UriHandler
 import com.mikepenz.markdown.model.DefaultMarkdownColors
 import com.mikepenz.markdown.model.DefaultMarkdownTypography
 import com.mikepenz.markdown.model.markdownDimens
@@ -101,17 +104,32 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier, streaming: Boolean
             codeBlock = { MarkdownCodeBlock(it.content, it.node, block = { code, language, style -> CodeBlock(code, language, style) }) },
         )
     }
-    Markdown(
-        content = text,
-        colors = markdownColors,
-        typography = markdownTypography,
-        modifier = modifier.fillMaxWidth(),
-        padding = markdownPadding(block = 4.dp, list = 2.dp, listItemTop = 2.dp, listItemBottom = 2.dp),
-        dimens = markdownDimens(codeBackgroundCornerSize = Theme[radii][radiusMedium], tableCornerSize = Theme[radii][radiusMedium]),
-        components = components,
-        retainState = true,
-        immediate = !streaming,
-    )
+    val parentUris = LocalUriHandler.current
+    val webOnly = remember(parentUris) { WebLinksOnly(parentUris) }
+    CompositionLocalProvider(LocalUriHandler provides webOnly) {
+        Markdown(
+            content = text,
+            colors = markdownColors,
+            typography = markdownTypography,
+            modifier = modifier.fillMaxWidth(),
+            padding = markdownPadding(block = 4.dp, list = 2.dp, listItemTop = 2.dp, listItemBottom = 2.dp),
+            dimens = markdownDimens(codeBackgroundCornerSize = Theme[radii][radiusMedium], tableCornerSize = Theme[radii][radiusMedium]),
+            components = components,
+            retainState = true,
+            immediate = !streaming,
+        )
+    }
+}
+
+/**
+ * Opens only web and mail links. The text may come from a page the agent read, so a link to an
+ * `intent:`, `file:` or app scheme must not reach another app on a tap.
+ */
+private class WebLinksOnly(private val parent: UriHandler) : UriHandler {
+    override fun openUri(uri: String) {
+        val scheme = uri.substringBefore(':', "").lowercase()
+        if (scheme in setOf("http", "https", "mailto")) runCatching { parent.openUri(uri) }
+    }
 }
 
 @Composable
