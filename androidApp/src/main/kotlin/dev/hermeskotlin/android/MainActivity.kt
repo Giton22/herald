@@ -1,29 +1,56 @@
 package dev.hermeskotlin.android
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Color
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.core.content.edit
+import androidx.lifecycle.lifecycleScope
+import dev.hermeskotlin.core.chat.ChatHost
+import dev.hermeskotlin.core.connection.ConnectionState
+import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.ui.App
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.launch
+import org.koin.android.ext.android.inject
 
 class MainActivity : ComponentActivity() {
 
     // The last theme shown, read synchronously so the window behind the first frame already matches it.
     private val windowPrefs by lazy { getSharedPreferences("window", MODE_PRIVATE) }
 
+    private val host: ChatHost by inject()
+    private val connection: GatewayConnection by inject()
+    private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
+
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         if (windowPrefs.contains(KEY_DARK)) applyWindowTheme(windowPrefs.getBoolean(KEY_DARK, false))
+        askForNotificationsOnFirstTurn()
         setContent {
             App(appVersion = packageManager.getPackageInfo(packageName, 0).versionName, onDarkTheme = { dark ->
                 applyWindowTheme(dark)
                 windowPrefs.edit { putBoolean(KEY_DARK, dark) }
             })
         }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // Android cuts a background app's network once no turn keeps it in the foreground; coming back
+        // shouldn't sit out the rest of a reconnect backoff.
+        if (connection.state.value is ConnectionState.Reconnecting) connection.retry()
     }
 
     /** The app theme can differ from the system's, so the window and bar icons follow the app. */
@@ -33,7 +60,21 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
     }
 
+    /** Asked once, when the first turn starts: that is when "tell me when it's done" makes sense. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun askForNotificationsOnFirstTurn() {
+        if (Build.VERSION.SDK_INT < 33 || windowPrefs.getBoolean(KEY_ASKED_NOTIFICATIONS, false)) return
+        val permission = Manifest.permission.POST_NOTIFICATIONS
+        if (ContextCompat.checkSelfPermission(this, permission) == PackageManager.PERMISSION_GRANTED) return
+        lifecycleScope.launch {
+            host.session.flatMapLatest { it?.state ?: emptyFlow() }.first { it.running }
+            windowPrefs.edit { putBoolean(KEY_ASKED_NOTIFICATIONS, true) }
+            notificationPermission.launch(permission)
+        }
+    }
+
     private companion object {
         const val KEY_DARK = "dark"
+        const val KEY_ASKED_NOTIFICATIONS = "asked_notifications"
     }
 }
