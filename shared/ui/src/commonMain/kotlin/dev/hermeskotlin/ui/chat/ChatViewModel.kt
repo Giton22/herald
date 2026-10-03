@@ -14,10 +14,13 @@ import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.media.MediaApi
+import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.models.ModelCatalog
 import dev.hermeskotlin.core.models.ModelOption
 import dev.hermeskotlin.core.models.ModelsApi
 import dev.hermeskotlin.core.chat.ModelSwitch
+import dev.hermeskotlin.core.chat.OutgoingAttachment
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.asStateFlow
@@ -59,6 +62,7 @@ class ChatViewModel(
     private val host: ChatHost,
     private val lastChats: LastChatStore,
     private val models: ModelsApi,
+    private val media: MediaApi,
 ) : ViewModel() {
 
     val composer = TextFieldState()
@@ -74,6 +78,14 @@ class ChatViewModel(
     private val _picker = MutableStateFlow(ModelPickerState())
     private var loadJob: Job? = null
     val picker: StateFlow<ModelPickerState> = _picker.asStateFlow()
+
+    private val _attachments = MutableStateFlow<List<OutgoingAttachment>>(emptyList())
+
+    /** Files waiting in the composer for the next send. */
+    val attachments: StateFlow<List<OutgoingAttachment>> = _attachments.asStateFlow()
+
+    private val _attachmentError = MutableStateFlow<String?>(null)
+    val attachmentError: StateFlow<String?> = _attachmentError.asStateFlow()
 
     init {
         // The catalog names the default model, which a new chat shows until it has its own.
@@ -94,6 +106,8 @@ class ChatViewModel(
         if (this.target == target) return
         this.target = target
         composer.clearText()
+        _attachments.value = emptyList()
+        _attachmentError.value = null
         if (target.storedSessionId == null) viewModelScope.launch { lastChats.set(target.gateway.gatewayUrl, null) }
         session.value = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title)
         // The catalog marks the previous chat's model; a new chat must show the profile default instead.
@@ -139,14 +153,44 @@ class ChatViewModel(
         viewModelScope.launch { chat.setFast(on) }
     }
 
+    private val gatewayImages = mutableMapOf<String, ByteArray?>()
+
+    /** An image a stored prompt refers to (`@image:<path>`), fetched once per path; null when unavailable. */
+    suspend fun gatewayImage(path: String): ByteArray? {
+        if (path in gatewayImages) return gatewayImages[path]
+        val gateway = target?.gateway?.gatewayUrl ?: return null
+        val bytes = (media.image(gateway, path) as? ApiResult.Success)?.value
+        if (gatewayImages.size >= MAX_CACHED_IMAGES) gatewayImages.remove(gatewayImages.keys.first())
+        gatewayImages[path] = bytes
+        return bytes
+    }
+
+    /** Adds picked files to the composer tray, up to [OutgoingAttachment.MAX_COUNT]. */
+    fun addAttachments(picked: List<OutgoingAttachment>) {
+        val room = OutgoingAttachment.MAX_COUNT - _attachments.value.size
+        if (picked.size > room) showAttachmentError("Up to ${OutgoingAttachment.MAX_COUNT} attachments per message.")
+        _attachments.update { it + picked.take(room.coerceAtLeast(0)) }
+    }
+
+    fun removeAttachment(id: String) = _attachments.update { tray -> tray.filterNot { it.id == id } }
+
+    fun showAttachmentError(message: String) = _attachmentError.update { message }
+
+    fun dismissAttachmentError() = _attachmentError.update { null }
+
     fun send() {
         val chat = session.value ?: return
         val text = composer.text.toString()
-        if (text.isBlank()) return
+        val attachments = _attachments.value
+        if (text.isBlank() && attachments.isEmpty()) return
         composer.clearText()
+        _attachments.value = emptyList()
         viewModelScope.launch {
-            // Give the text back if it never reached the gateway, so nothing typed is lost.
-            if (!chat.send(text) && composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
+            // Give everything back if it never reached the gateway, so nothing typed or picked is lost.
+            if (!chat.send(text, attachments)) {
+                if (composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
+                _attachments.update { attachments + it }
+            }
         }
     }
 
@@ -163,4 +207,9 @@ class ChatViewModel(
     fun retry() = session.value?.retry()
 
     fun dismissError() = session.value?.dismissError()
+
+    private companion object {
+        /** Full-size gateway photos are a few hundred KB each; keep a screenful or two. */
+        const val MAX_CACHED_IMAGES = 24
+    }
 }

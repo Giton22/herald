@@ -43,5 +43,16 @@
         <receiver
             android:name=".notify.NotificationActionReceiver"
             android:exported="false" />
+
+        <!-- Lets the camera app write a photo for the composer into our cache (AttachmentPicker). -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.attachments"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/attachment_paths" />
+        </provider>
     </application>
 </manifest>

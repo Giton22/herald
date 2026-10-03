@@ -37,6 +37,7 @@ import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
@@ -68,6 +69,7 @@ import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PanelLeft
+import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Square
 import com.composables.icons.lucide.SquarePen
@@ -84,6 +86,7 @@ import com.composeunstyled.theme.rememberColoredIndication
 import dev.hermeskotlin.core.chat.Attachment
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatState
+import dev.hermeskotlin.core.chat.OutgoingAttachment
 import dev.hermeskotlin.core.chat.ToolActivity
 import dev.hermeskotlin.core.chat.TurnOutcome
 import dev.hermeskotlin.core.connection.ConnectionState
@@ -133,7 +136,11 @@ fun ChatScreen(
     val picker = viewModel.picker.collectAsStateWithLifecycle().value
     val connection = viewModel.connectionState.collectAsStateWithLifecycle().value
     val connected = connection is ConnectionState.Connected
+    val attachments = viewModel.attachments.collectAsStateWithLifecycle().value
+    val attachmentError = viewModel.attachmentError.collectAsStateWithLifecycle().value
     var modelsOpen by remember { mutableStateOf(false) }
+    var attachOpen by remember { mutableStateOf(false) }
+    val attachmentPicker = rememberAttachmentPicker(onPicked = viewModel::addAttachments, onError = viewModel::showAttachmentError)
 
     Box(
         Modifier
@@ -162,7 +169,9 @@ fun ChatScreen(
                             Button("Try again", onClick = viewModel::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                         }
                     state.messages.isEmpty() -> Greeting()
-                    else -> Messages(state.messages)
+                    else -> CompositionLocalProvider(LocalGatewayImages provides viewModel::gatewayImage) {
+                        Messages(state.messages)
+                    }
                 }
             }
 
@@ -170,6 +179,7 @@ fun ChatScreen(
                 Banner(it.message, actionLabel = "Retry", onAction = viewModel::retry)
             }
             state.error?.let { Banner(it, actionLabel = null, onAction = viewModel::dismissError) }
+            attachmentError?.let { Banner(it, actionLabel = null, onAction = viewModel::dismissAttachmentError) }
             AnimatedVisibility(visible = state.running && state.status != null) { StatusLine(state.status.orEmpty()) }
 
             if (state.inputRequests.isNotEmpty()) {
@@ -184,12 +194,15 @@ fun ChatScreen(
                     state = state,
                     picker = picker,
                     connected = connected,
+                    attachments = attachments,
                     onOpenModels = { modelsOpen = true },
+                    onAttach = { attachOpen = true },
                 )
             }
         }
     }
 
+    AttachSheet(visible = attachOpen, onDismiss = { attachOpen = false }, picker = attachmentPicker)
     ModelSheet(
         visible = modelsOpen,
         onDismiss = { modelsOpen = false },
@@ -328,7 +341,10 @@ private fun Messages(messages: List<ChatMessage>) {
 @Composable
 private fun UserBubble(message: ChatMessage.User) {
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        SelectionContainer {
+        if (message.attachments.isNotEmpty()) {
+            Box(Modifier.alpha(if (message.pending) 0.6f else 1f)) { SentAttachments(message.attachments) }
+        }
+        if (message.text.isNotEmpty()) SelectionContainer {
             Text(
                 message.text,
                 style = Theme[typography][body],
@@ -550,9 +566,12 @@ private fun Composer(
     state: ChatState,
     picker: ModelPickerState,
     connected: Boolean,
+    attachments: List<OutgoingAttachment>,
     onOpenModels: () -> Unit,
+    onAttach: () -> Unit,
 ) {
-    val hasText = viewModel.composer.text.isNotBlank()
+    // Attachments alone are sendable: the gateway gets Desktop's image prompt or the file references.
+    val hasText = viewModel.composer.text.isNotBlank() || attachments.isNotEmpty()
     val shape = RoundedCornerShape(28.dp)
     Column(
         Modifier
@@ -562,8 +581,9 @@ private fun Composer(
             .clip(shape)
             .background(Theme[colors][surfaceElevated])
             .border(1.dp, Theme[colors][stroke], shape)
-            .padding(start = 8.dp, end = 8.dp, top = 18.dp, bottom = 8.dp),
+            .padding(start = 8.dp, end = 8.dp, top = if (attachments.isEmpty()) 18.dp else 10.dp, bottom = 8.dp),
     ) {
+        if (attachments.isNotEmpty()) ComposerTray(attachments, onRemove = viewModel::removeAttachment)
         UnstyledTextField(
             state = viewModel.composer,
             textStyle = Theme[typography][body],
@@ -590,6 +610,12 @@ private fun Composer(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            ComposerButton(
+                icon = Lucide.Plus,
+                contentDescription = "Add photos or files",
+                onClick = onAttach,
+                enabled = attachments.size < OutgoingAttachment.MAX_COUNT,
+            )
             Box(Modifier.weight(1f)) { ModelPill(state, picker, onClick = onOpenModels) }
             val stop = state.running && !hasText
             val send = hasText && connected
