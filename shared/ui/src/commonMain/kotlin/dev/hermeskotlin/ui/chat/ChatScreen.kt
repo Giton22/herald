@@ -147,11 +147,15 @@ fun ChatScreen(
             state.error?.let { Banner(it, actionLabel = null, onAction = viewModel::dismissError) }
             AnimatedVisibility(visible = state.running && state.status != null) { StatusLine(state.status.orEmpty()) }
 
-            Composer(
-                viewModel = viewModel,
-                connected = connected,
-                running = state.running,
-            )
+            if (state.inputRequests.isNotEmpty()) {
+                InputRequestPanel(state.inputRequests, connected, onAnswer = viewModel::answer)
+            } else {
+                Composer(
+                    viewModel = viewModel,
+                    connected = connected,
+                    running = state.running,
+                )
+            }
         }
     }
 }

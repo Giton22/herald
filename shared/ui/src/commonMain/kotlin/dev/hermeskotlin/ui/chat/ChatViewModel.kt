@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.chat.ChatSession
 import dev.hermeskotlin.core.chat.ChatState
+import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.chat.LastChat
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.connection.ConnectionState
@@ -24,6 +25,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
 
 /** Identifies what the chat screen shows: a stored session, or a new chat (`storedSessionId == null`). */
 data class ChatTarget(val gateway: SavedGateway, val storedSessionId: String?, val title: String?, val nonce: Long = 0)
@@ -91,6 +93,11 @@ class ChatViewModel(
     fun interrupt() {
         val chat = session.value ?: return
         viewModelScope.launch { chat.interrupt() }
+    }
+
+    fun answer(request: InputRequest, result: JsonObject) {
+        val chat = session.value ?: return
+        viewModelScope.launch { chat.answer(request, result) }
     }
 
     fun retry() = session.value?.retry()
