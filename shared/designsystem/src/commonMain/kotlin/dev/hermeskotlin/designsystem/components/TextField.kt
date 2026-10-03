@@ -18,6 +18,7 @@ import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldBuffer
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.clearText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -26,11 +27,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Eye
 import com.composables.icons.lucide.EyeOff
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.X
 import com.composeunstyled.Text
 import com.composeunstyled.TextInput
 import com.composeunstyled.UnstyledButton
@@ -61,7 +64,7 @@ private object PasswordMask : OutputTransformation {
 
 /**
  * The one text input: optional label above, helper/error text below.
- * [password] masks the text and adds a show/hide toggle.
+ * [password] masks the text and adds a show/hide toggle; [clearable] adds a clear button once non-empty.
  */
 @Composable
 fun TextField(
@@ -74,6 +77,8 @@ fun TextField(
     enabled: Boolean = true,
     singleLine: Boolean = true,
     password: Boolean = false,
+    leadingIcon: ImageVector? = null,
+    clearable: Boolean = false,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     onKeyboardAction: KeyboardActionHandler? = null,
 ) {
@@ -115,12 +120,34 @@ fun TextField(
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         ) {
             Row(verticalAlignment = Alignment.CenterVertically) {
+                if (leadingIcon != null) {
+                    UnstyledIcon(
+                        leadingIcon,
+                        contentDescription = null,
+                        tint = Theme[colors][textTertiary],
+                        modifier = Modifier.padding(end = 10.dp).size(18.dp),
+                    )
+                }
                 TextInput(
                     modifier = Modifier.weight(1f),
                     placeholder = placeholder?.let {
                         { Text(it, style = Theme[typography][body], color = Theme[colors][textTertiary]) }
                     },
                 )
+                if (clearable && state.text.isNotEmpty()) {
+                    UnstyledButton(
+                        onClick = { state.clearText() },
+                        modifier = Modifier.padding(start = 8.dp).size(24.dp),
+                        indication = null,
+                    ) {
+                        UnstyledIcon(
+                            Lucide.X,
+                            contentDescription = "Clear",
+                            tint = Theme[colors][textTertiary],
+                            modifier = Modifier.size(18.dp),
+                        )
+                    }
+                }
                 if (password) {
                     UnstyledButton(
                         onClick = { revealed = !revealed },
