@@ -120,7 +120,8 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [ ] Vault prompts (`vault.unlock_prompt`, `vault.code`, `vault.save_login`)
 
 ### 7. Settings (MVP)
-- [ ] Model picker (`model.options`)
+- [x] Model picker in the composer (`model.options`), switched per chat (`config.set model … --session`; picks before the first send go into `session.create`), with a confirm for expensive models
+- [x] Thinking level and fast mode per chat (`config.set reasoning` / `fast`), offered when the model supports them
 - [ ] Profile picker (`profiles.list`)
 - [x] Settings screen, opened from the account sheet
 - [x] Theme: system, light, dark, plus pure black; window and system bars follow it
