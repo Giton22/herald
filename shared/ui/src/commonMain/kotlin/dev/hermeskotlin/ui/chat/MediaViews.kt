@@ -62,6 +62,8 @@ import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.label
+import dev.hermeskotlin.designsystem.radii
+import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.text as textColor
@@ -91,7 +93,7 @@ internal fun ReplyMediaList(media: List<ReplyMedia>) {
 private fun ReplyImage(item: ReplyMedia) {
     val load = LocalMediaLoader.current
     val open = LocalOpenImage.current
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
     val bytes by produceState<ByteArray?>(null, item.source) { value = load(item.source) }
     var failed by remember(item.source) { mutableStateOf(false) }
     LaunchedEffect(item.source) {
@@ -138,7 +140,7 @@ private fun ReplyFile(item: ReplyMedia) {
     val notify = LocalNotice.current
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
 
     fun withBytes(action: suspend (ByteArray) -> Unit) {
         if (busy) return
@@ -263,7 +265,7 @@ internal fun ImageViewer(image: ViewerImage, onDismiss: () -> Unit) {
                         .align(Alignment.BottomCenter)
                         .navigationBarsPadding()
                         .padding(24.dp)
-                        .background(Color.White.copy(alpha = 0.16f), RoundedCornerShape(20.dp))
+                        .background(Color.White.copy(alpha = 0.16f), RoundedCornerShape(Theme[radii][radiusMedium]))
                         .padding(horizontal = 16.dp, vertical = 10.dp),
                 )
             }

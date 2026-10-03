@@ -11,6 +11,23 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.em
+import androidx.compose.ui.unit.sp
+import dev.hermeskotlin.designsystem.input
+import dev.hermeskotlin.designsystem.radii
+import dev.hermeskotlin.designsystem.radiusLarge
+import dev.hermeskotlin.designsystem.radiusMedium
+import dev.hermeskotlin.designsystem.strokeStrong
+import dev.hermeskotlin.designsystem.userBubble
+import dev.hermeskotlin.designsystem.userBubbleStroke
+import dev.hermeskotlin.designsystem.wordmark
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
@@ -243,52 +260,67 @@ fun ChatScreen(
     )
 }
 
+/** Desktop's tab strip on a phone: the title in small spaced capitals over an accent rule, plain icons either side. */
 @Composable
 private fun TopBar(title: String, subtitle: String?, onOpenSidebar: () -> Unit, onNewChat: (() -> Unit)?) {
-    Row(
-        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        RoundButton(Lucide.PanelLeft, "Sessions", onClick = onOpenSidebar)
-        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-            Text(
-                title,
-                style = Theme[typography][label],
-                color = Theme[colors][textColor],
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (!subtitle.isNullOrBlank()) {
-                Text(subtitle, style = Theme[typography][caption], color = Theme[colors][warning], maxLines = 1)
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            BarButton(Lucide.PanelLeft, "Sessions", onClick = onOpenSidebar)
+            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+                Column(Modifier.width(IntrinsicSize.Max), horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        title.uppercase(),
+                        style = Theme[typography][label].copy(fontWeight = FontWeight.Bold, letterSpacing = 0.06.em),
+                        color = Theme[colors][textColor],
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                    )
+                    Box(Modifier.fillMaxWidth().height(2.dp).background(Theme[colors][accent]))
+                }
+                if (!subtitle.isNullOrBlank()) {
+                    Text(subtitle, style = Theme[typography][caption], color = Theme[colors][warning], maxLines = 1, modifier = Modifier.padding(top = 2.dp))
+                }
             }
+            BarButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null)
         }
-        RoundButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null)
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Theme[colors][stroke]))
     }
 }
 
-/** A 44dp filled circle, the top bar's button style. */
+/** A 44dp square icon button with no fill, the top bar's style. */
 @Composable
-private fun RoundButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean = true) {
+private fun BarButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean = true) {
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(44.dp).clip(CircleShape).background(Theme[colors][surfaceElevated]).alpha(if (enabled) 1f else 0.4f),
+        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(Theme[radii][radiusMedium])).alpha(if (enabled) 1f else 0.35f),
         indication = rememberColoredIndication(Theme[colors][textColor]),
     ) {
-        UnstyledIcon(icon, contentDescription = contentDescription, tint = Theme[colors][textColor], modifier = Modifier.size(20.dp))
+        UnstyledIcon(icon, contentDescription = contentDescription, tint = Theme[colors][textSecondary], modifier = Modifier.size(20.dp))
     }
 }
 
-/** An empty chat shows the name, set in type: Hermes Desktop's splash idea without its wordmark asset. */
+/**
+ * An empty chat is titled in heavy spaced capitals stretched to the column, Desktop's splash lettering
+ * set in the system face rather than its bundled font.
+ */
 @Composable
 private fun Greeting() {
-    Box(Modifier.fillMaxSize().padding(horizontal = 32.dp), contentAlignment = Alignment.Center) {
-        Text(
-            "Hermes",
-            style = Theme[typography][display],
-            color = Theme[colors][textTertiary],
-            textAlign = TextAlign.Center,
+    // Blue on light; near-white on dark, where the blue at this size glares.
+    val color = if (Theme[colors][background].luminance() < 0.5f) Theme[colors][textColor].copy(alpha = 0.9f) else Theme[colors][accent]
+    Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
+        BasicText(
+            "HERMES AGENT",
+            style = Theme[typography][wordmark].copy(textAlign = TextAlign.Center),
+            color = { color },
+            maxLines = 1,
+            autoSize = TextAutoSize.StepBased(minFontSize = 28.sp, maxFontSize = 72.sp, stepSize = 1.sp),
+            modifier = Modifier.fillMaxWidth().padding(bottom = 48.dp),
         )
     }
 }
@@ -347,9 +379,9 @@ private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?) {
                 onClick = { scope.launch { listState.animateScrollToItem(0) } },
                 modifier = Modifier
                     .size(40.dp)
-                    .clip(CircleShape)
+                    .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
                     .background(Theme[colors][surfaceElevated])
-                    .border(1.dp, Theme[colors][stroke], CircleShape),
+                    .border(1.dp, Theme[colors][strokeStrong], RoundedCornerShape(Theme[radii][radiusMedium])),
                 indication = rememberColoredIndication(Theme[colors][textColor]),
             ) {
                 UnstyledIcon(Lucide.ArrowDown, contentDescription = "Jump to latest", tint = Theme[colors][textColor], modifier = Modifier.size(18.dp))
@@ -358,24 +390,24 @@ private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?) {
     }
 }
 
+/** Desktop's turn marker: the prompt in a full-width box with a tinted fill and outline; replies run bare beneath. */
 @Composable
 private fun UserBubble(message: ChatMessage.User) {
-    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        if (message.attachments.isNotEmpty()) {
-            Box(Modifier.alpha(if (message.pending) 0.6f else 1f)) { SentAttachments(message.attachments) }
-        }
-        if (message.text.isNotEmpty()) SelectionContainer {
-            Text(
-                message.text,
-                style = Theme[typography][body],
-                color = Theme[colors][textColor],
-                modifier = Modifier
-                    .padding(start = 56.dp)
-                    .widthIn(max = 560.dp)
-                    .alpha(if (message.pending) 0.6f else 1f)
-                    .background(Theme[colors][surfaceElevated], RoundedCornerShape(22.dp))
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
-            )
+    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .alpha(if (message.pending) 0.6f else 1f)
+                .background(Theme[colors][userBubble], shape)
+                .border(1.dp, Theme[colors][userBubbleStroke], shape)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (message.attachments.isNotEmpty()) SentAttachments(message.attachments)
+            if (message.text.isNotEmpty()) SelectionContainer {
+                Text(message.text, style = Theme[typography][body], color = Theme[colors][textColor])
+            }
         }
         if (message.queued) {
             Text("Queued · runs after the current turn", style = Theme[typography][caption], color = Theme[colors][textTertiary])
@@ -422,7 +454,7 @@ private fun Disclosure(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
-            Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onToggle).padding(vertical = 4.dp, horizontal = 2.dp),
+            Modifier.clip(RoundedCornerShape(Theme[radii][radiusMedium])).clickable(onClick = onToggle).padding(vertical = 4.dp, horizontal = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -439,8 +471,8 @@ private fun Disclosure(
             Box(
                 Modifier
                     .fillMaxWidth()
-                    .border(1.dp, Theme[colors][stroke], RoundedCornerShape(12.dp))
-                    .background(Theme[colors][surface], RoundedCornerShape(12.dp))
+                    .border(1.dp, Theme[colors][stroke], RoundedCornerShape(Theme[radii][radiusMedium]))
+                    .background(Theme[colors][surface], RoundedCornerShape(Theme[radii][radiusMedium]))
                     .padding(12.dp),
             ) { content() }
         }
@@ -574,8 +606,8 @@ private fun NoticeLine(text: String) {
             style = Theme[typography][bodySmall],
             color = Theme[colors][textColor],
             modifier = Modifier
-                .background(Theme[colors][surfaceElevated], RoundedCornerShape(20.dp))
-                .border(1.dp, Theme[colors][stroke], RoundedCornerShape(20.dp))
+                .background(Theme[colors][surfaceElevated], RoundedCornerShape(Theme[radii][radiusMedium]))
+                .border(1.dp, Theme[colors][strokeStrong], RoundedCornerShape(Theme[radii][radiusMedium]))
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         )
     }
@@ -602,8 +634,8 @@ private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit) 
 }
 
 /**
- * One rounded card, Claude-app style: the text on top; beneath it the model pill on the left and a
- * round send (or stop) button on the right.
+ * Desktop's composer stood up for a phone: a flat outlined box, the text on top; beneath it a plain +,
+ * the model and thinking level as quiet text, and the round send (or stop) button.
  */
 @Composable
 private fun Composer(
@@ -618,16 +650,18 @@ private fun Composer(
 ) {
     // Attachments alone are sendable: the gateway gets Desktop's image prompt or the file references.
     val hasText = viewModel.composer.text.isNotBlank() || attachments.isNotEmpty()
-    val shape = RoundedCornerShape(28.dp)
+    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
+    var focused by remember { mutableStateOf(false) }
     Column(
         Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
             .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)
             .clip(shape)
-            .background(Theme[colors][surfaceElevated])
-            .border(1.dp, Theme[colors][stroke], shape)
-            .padding(start = 8.dp, end = 8.dp, top = if (attachments.isEmpty()) 18.dp else 10.dp, bottom = 8.dp),
+            .background(Theme[colors][input])
+            .border(1.dp, if (focused) Theme[colors][textTertiary] else Theme[colors][strokeStrong], shape)
+            .onFocusChanged { focused = it.hasFocus }
+            .padding(start = 4.dp, end = 6.dp, top = if (attachments.isEmpty()) 14.dp else 8.dp, bottom = 6.dp),
     ) {
         if (attachments.isNotEmpty()) ComposerTray(attachments, onRemove = viewModel::removeAttachment)
         UnstyledTextField(
@@ -652,9 +686,9 @@ private fun Composer(
             )
         }
         Row(
-            Modifier.fillMaxWidth().padding(top = 14.dp),
+            Modifier.fillMaxWidth().padding(top = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             ComposerButton(
                 icon = Lucide.Plus,
@@ -662,76 +696,88 @@ private fun Composer(
                 onClick = onAttach,
                 enabled = attachments.size < OutgoingAttachment.MAX_COUNT,
             )
-            Box(Modifier.weight(1f)) { ModelPill(state, picker, onClick = onOpenModels) }
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { ModelPill(state, picker, onClick = onOpenModels) }
             val stop = state.running && !hasText
-            val send = hasText && connected
-            ComposerButton(
-                icon = if (stop) Lucide.Square else Lucide.ArrowUp,
-                contentDescription = if (stop) "Stop" else "Send",
+            SendButton(
+                stop = stop,
                 onClick = if (stop) viewModel::interrupt else viewModel::send,
                 enabled = connected && (stop || hasText),
-                highlighted = send,
-                iconSize = if (stop) 18.dp else 22.dp,
             )
         }
     }
 }
 
-/** The composer's 44dp round buttons: a soft neutral fill, or the accent for a ready Send. */
+/** A plain square icon button inside the composer, like Desktop's +. */
 @Composable
-private fun ComposerButton(
-    icon: ImageVector,
-    contentDescription: String,
-    onClick: () -> Unit,
-    enabled: Boolean,
-    highlighted: Boolean = false,
-    iconSize: androidx.compose.ui.unit.Dp = 20.dp,
-) {
-    val fill = if (highlighted) Theme[colors][accent] else Theme[colors][textColor].copy(alpha = 0.08f)
-    val tint = when {
-        highlighted -> Theme[colors][onAccent]
-        enabled -> Theme[colors][textColor]
-        else -> Theme[colors][textTertiary]
-    }
+private fun ComposerButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean) {
+    val tint = if (enabled) Theme[colors][textSecondary] else Theme[colors][textTertiary].copy(alpha = 0.5f)
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(44.dp).clip(CircleShape).background(fill),
+        modifier = Modifier.size(40.dp).clip(RoundedCornerShape(Theme[radii][radiusMedium])),
         indication = rememberColoredIndication(tint),
     ) {
-        UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(iconSize))
+        UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(22.dp))
     }
 }
 
-/** "Opus 5.5 Medium" in a pill: the chat's model and thinking level; opens the model sheet. */
+/** Desktop's round send: a disc in the text colour (white on dark) with the icon cut in the page colour. */
+@Composable
+private fun SendButton(stop: Boolean, onClick: () -> Unit, enabled: Boolean) {
+    val fill = if (enabled) Theme[colors][textColor] else Theme[colors][textColor].copy(alpha = 0.12f)
+    val tint = if (enabled) Theme[colors][background] else Theme[colors][textTertiary]
+    UnstyledButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(40.dp).clip(CircleShape).background(fill),
+        indication = rememberColoredIndication(tint),
+    ) {
+        UnstyledIcon(
+            if (stop) Lucide.Square else Lucide.ArrowUp,
+            contentDescription = if (stop) "Stop" else "Send",
+            tint = tint,
+            modifier = Modifier.size(if (stop) 16.dp else 20.dp),
+        )
+    }
+}
+
+/** "Opus 5.5 ⌄  Medium ⌄" as quiet text, Desktop's composer selectors; opens the model sheet. */
 @Composable
 private fun ModelPill(state: ChatState, picker: ModelPickerState, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val selection = ModelSelection.of(state, picker.catalog)
     val model = selection.model ?: return
     val effort = state.effort(selection.option)
-    val primary = Theme[colors][textColor]
-    val secondary = Theme[colors][textTertiary]
+    val tint = Theme[colors][textSecondary]
     Row(
         modifier
-            .height(44.dp)
-            .clip(CircleShape)
-            .background(Theme[colors][textColor].copy(alpha = 0.08f))
+            .height(40.dp)
+            .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
             .clickable(onClick = onClick)
-            .padding(horizontal = 18.dp),
+            .padding(horizontal = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         if (state.fast == true) {
             UnstyledIcon(Lucide.Zap, contentDescription = "Fast mode", tint = Theme[colors][warning], modifier = Modifier.size(14.dp))
         }
         Text(
-            buildAnnotatedString {
-                withStyle(SpanStyle(color = primary)) { append(displayModelName(model)) }
-                if (effort != null) withStyle(SpanStyle(color = secondary)) { append("  ${effort.label}") }
-            },
-            style = Theme[typography][body],
+            displayModelName(model),
+            style = Theme[typography][bodySmall],
+            color = tint,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f, fill = false),
         )
+        UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
+        if (effort != null) {
+            Text(
+                effort.label,
+                style = Theme[typography][bodySmall],
+                color = tint,
+                maxLines = 1,
+                modifier = Modifier.padding(start = 10.dp),
+            )
+            UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
+        }
     }
 }

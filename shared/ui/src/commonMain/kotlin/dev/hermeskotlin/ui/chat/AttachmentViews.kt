@@ -49,6 +49,8 @@ import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.BottomSheet
 import dev.hermeskotlin.designsystem.components.SheetAction
 import dev.hermeskotlin.designsystem.components.SheetHeader
+import dev.hermeskotlin.designsystem.radii
+import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.text as textColor
@@ -88,8 +90,7 @@ internal fun SentAttachments(attachments: List<ShownAttachment>) {
     val load = LocalMediaLoader.current
     val open = LocalOpenImage.current
     FlowRow(
-        Modifier.padding(start = 56.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         attachments.forEach { attachment ->
@@ -99,7 +100,7 @@ internal fun SentAttachments(attachments: List<ShownAttachment>) {
             }
             val viewable = attachment.kind == AttachmentKind.Image && bytes != null
             Box(
-                Modifier.clip(RoundedCornerShape(14.dp)).clickable(enabled = viewable) {
+                Modifier.clip(RoundedCornerShape(Theme[radii][radiusMedium])).clickable(enabled = viewable) {
                     open(ViewerImage(attachment.name, source = attachment.gatewayPath, bytes = attachment.original))
                 },
             ) {
@@ -112,7 +113,7 @@ internal fun SentAttachments(attachments: List<ShownAttachment>) {
 /** A photo thumbnail, or for files (and history images without bytes) an icon card with the name. */
 @Composable
 private fun AttachmentTile(name: String, kind: AttachmentKind, thumbnail: ByteArray?, size: Dp) {
-    val shape = RoundedCornerShape(14.dp)
+    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
     val bitmap = thumbnail?.let { rememberImageBitmap(it) }
     if (bitmap != null) {
         Image(
