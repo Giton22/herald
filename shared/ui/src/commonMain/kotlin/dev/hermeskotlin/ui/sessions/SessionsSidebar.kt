@@ -54,6 +54,8 @@ import com.composables.icons.lucide.ArrowLeftRight
 import com.composables.icons.lucide.CalendarClock
 import com.composables.icons.lucide.CircleUser
 import com.composables.icons.lucide.CloudOff
+import com.composables.icons.lucide.Copy
+import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
@@ -613,14 +615,17 @@ internal fun ListNotice(text: String, action: String? = null, onAction: () -> Un
     }
 }
 
+/** A session's verbs, from a sidebar row or the open chat's menu; the chat adds export and copy id. */
 @Composable
-private fun SessionActionsSheet(
+internal fun SessionActionsSheet(
     session: SessionSummary?,
     onDismiss: () -> Unit,
     onTogglePinned: (SessionSummary) -> Unit,
     onRename: (SessionSummary) -> Unit,
     onToggleArchived: (SessionSummary) -> Unit,
     onDelete: (SessionSummary) -> Unit,
+    onExport: ((SessionSummary) -> Unit)? = null,
+    onCopyId: ((SessionSummary) -> Unit)? = null,
 ) {
     // Keep the last target while the sheet animates out.
     var shown by remember { mutableStateOf(session) }
@@ -634,15 +639,17 @@ private fun SessionActionsSheet(
         }
         SheetHeader(s.displayTitle, age)
         fun act(block: (SessionSummary) -> Unit) = { onDismiss(); block(s) }
-        SheetAction(if (s.pinned) "Unpin" else "Pin", if (s.pinned) Lucide.PinOff else Lucide.Pin, act(onTogglePinned))
         SheetAction("Rename", Lucide.Pencil, act(onRename))
+        SheetAction(if (s.pinned) "Unpin" else "Pin", if (s.pinned) Lucide.PinOff else Lucide.Pin, act(onTogglePinned))
+        onExport?.let { SheetAction("Export as Markdown", Lucide.Download, act(it)) }
+        onCopyId?.let { SheetAction("Copy session ID", Lucide.Copy, act(it)) }
         SheetAction(if (s.archived) "Unarchive" else "Archive", if (s.archived) Lucide.ArchiveRestore else Lucide.Archive, act(onToggleArchived))
         SheetAction("Delete", Lucide.Trash2, act(onDelete), destructive = true)
     }
 }
 
 @Composable
-private fun RenameDialog(session: SessionSummary?, onDismiss: () -> Unit, onRename: (SessionSummary, String) -> Unit) {
+internal fun RenameDialog(session: SessionSummary?, onDismiss: () -> Unit, onRename: (SessionSummary, String) -> Unit) {
     var shown by remember { mutableStateOf(session) }
     if (session != null) shown = session
     val s = shown ?: return
@@ -672,7 +679,7 @@ private fun RenameDialog(session: SessionSummary?, onDismiss: () -> Unit, onRena
 }
 
 @Composable
-private fun DeleteDialog(session: SessionSummary?, onDismiss: () -> Unit, onDelete: (SessionSummary) -> Unit) {
+internal fun DeleteDialog(session: SessionSummary?, onDismiss: () -> Unit, onDelete: (SessionSummary) -> Unit) {
     var shown by remember { mutableStateOf(session) }
     if (session != null) shown = session
     val s = shown ?: return

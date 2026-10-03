@@ -11,16 +11,21 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import dev.hermeskotlin.designsystem.input
+import com.composables.icons.lucide.EllipsisVertical
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusLarge
 import dev.hermeskotlin.designsystem.radiusMedium
@@ -148,6 +153,8 @@ fun ChatScreen(
     target: ChatTarget,
     onOpenSidebar: () -> Unit,
     onNewChat: () -> Unit,
+    /** The open chat's options; null until it exists on the gateway. */
+    onOpenMenu: (() -> Unit)?,
     viewModel: ChatViewModel = koinViewModel(),
 ) {
     LaunchedEffect(target) { viewModel.open(target) }
@@ -187,49 +194,44 @@ fun ChatScreen(
                 onOpenSidebar = onOpenSidebar,
                 // Already on an untouched new chat: nothing to start over from.
                 onNewChat = onNewChat.takeIf { target.storedSessionId != null || state.messages.isNotEmpty() },
+                onOpenMenu = onOpenMenu,
             )
+            // The composer floats over the conversation, which scrolls on beneath it; its height pads the list.
+            var dockHeight by remember { mutableIntStateOf(0) }
+            val dockInset = with(LocalDensity.current) { dockHeight.toDp() }
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                when {
-                    !state.historyLoaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
-                    state.messages.isEmpty() && state.historyError != null ->
-                        EmptyState(Lucide.CloudOff, "Couldn't load the conversation", state.historyError.orEmpty()) {
-                            Button("Try again", onClick = viewModel::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
-                        }
-                    state.messages.isEmpty() -> Greeting()
-                    else -> CompositionLocalProvider(
+                if (state.historyLoaded && state.messages.isNotEmpty()) {
+                    CompositionLocalProvider(
                         LocalMediaLoader provides viewModel::loadMedia,
                         LocalOpenImage provides { viewing = it },
                         LocalNotice provides { notice = it },
                     ) {
-                        Messages(state.messages, state.thinkingFrame)
+                        Messages(state.messages, state.thinkingFrame, bottomInset = dockInset)
+                    }
+                } else Box(Modifier.fillMaxSize().padding(bottom = dockInset)) {
+                    when {
+                        !state.historyLoaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
+                        state.historyError != null ->
+                            EmptyState(Lucide.CloudOff, "Couldn't load the conversation", state.historyError.orEmpty()) {
+                                Button("Try again", onClick = viewModel::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+                            }
+                        else -> Greeting()
                     }
                 }
-            }
-
-            (state.attachment as? Attachment.Failed)?.let {
-                Banner(it.message, actionLabel = "Retry", onAction = viewModel::retry)
-            }
-            state.error?.let { Banner(it, actionLabel = null, onAction = viewModel::dismissError) }
-            attachmentError?.let { Banner(it, actionLabel = null, onAction = viewModel::dismissAttachmentError) }
-            AnimatedVisibility(visible = state.running && state.status != null) { StatusLine(state.status.orEmpty()) }
-            AnimatedVisibility(visible = notice != null) { NoticeLine(notice.orEmpty()) }
-
-            if (state.inputRequests.isNotEmpty()) {
-                InputRequestPanel(state.inputRequests, connected, onAnswer = viewModel::answer)
-            } else {
-                Composer(
-                    viewModel = viewModel,
-                    // Re-rolled per conversation, kept while a new chat gets its stored id.
-                    placeholder = remember(target) {
-                        (if (target.storedSessionId == null) NEW_CHAT_PROMPTS else FOLLOW_UP_PROMPTS).random()
-                    },
-                    state = state,
-                    picker = picker,
-                    connected = connected,
-                    attachments = attachments,
-                    onOpenModels = { modelsOpen = true },
-                    onAttach = { attachOpen = true },
-                )
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { dockHeight = it.height }) {
+                    Dock(
+                        viewModel = viewModel,
+                        target = target,
+                        state = state,
+                        picker = picker,
+                        connected = connected,
+                        attachments = attachments,
+                        attachmentError = attachmentError,
+                        notice = notice,
+                        onOpenModels = { modelsOpen = true },
+                        onAttach = { attachOpen = true },
+                    )
+                }
             }
         }
     }
@@ -260,9 +262,59 @@ fun ChatScreen(
     )
 }
 
-/** Desktop's tab strip on a phone: the title in small spaced capitals over an accent rule, plain icons either side. */
+/** What floats at the bottom of the chat: banners, the live status, and the composer or the agent's question. */
 @Composable
-private fun TopBar(title: String, subtitle: String?, onOpenSidebar: () -> Unit, onNewChat: (() -> Unit)?) {
+private fun ColumnScope.Dock(
+    viewModel: ChatViewModel,
+    target: ChatTarget,
+    state: ChatState,
+    picker: ModelPickerState,
+    connected: Boolean,
+    attachments: List<OutgoingAttachment>,
+    attachmentError: String?,
+    notice: String?,
+    onOpenModels: () -> Unit,
+    onAttach: () -> Unit,
+) {
+    (state.attachment as? Attachment.Failed)?.let {
+        Banner(it.message, actionLabel = "Retry", onAction = viewModel::retry)
+    }
+    state.error?.let { Banner(it, actionLabel = null, onAction = viewModel::dismissError) }
+    attachmentError?.let { Banner(it, actionLabel = null, onAction = viewModel::dismissAttachmentError) }
+    AnimatedVisibility(visible = state.running && state.status != null) { StatusLine(state.status.orEmpty()) }
+    AnimatedVisibility(visible = notice != null) { NoticeLine(notice.orEmpty()) }
+
+    if (state.inputRequests.isNotEmpty()) {
+        InputRequestPanel(state.inputRequests, connected, onAnswer = viewModel::answer)
+    } else {
+        Composer(
+            viewModel = viewModel,
+            // Re-rolled per conversation, kept while a new chat gets its stored id.
+            placeholder = remember(target) {
+                (if (target.storedSessionId == null) NEW_CHAT_PROMPTS else FOLLOW_UP_PROMPTS).random()
+            },
+            state = state,
+            picker = picker,
+            connected = connected,
+            attachments = attachments,
+            onOpenModels = onOpenModels,
+            onAttach = onAttach,
+        )
+    }
+}
+
+/**
+ * Desktop's tab strip on a phone: the title in small spaced capitals over an accent rule, the sessions
+ * button on the left and new chat with the chat's options grouped on the right.
+ */
+@Composable
+private fun TopBar(
+    title: String,
+    subtitle: String?,
+    onOpenSidebar: () -> Unit,
+    onNewChat: (() -> Unit)?,
+    onOpenMenu: (() -> Unit)?,
+) {
     Column(Modifier.fillMaxWidth()) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
@@ -286,7 +338,11 @@ private fun TopBar(title: String, subtitle: String?, onOpenSidebar: () -> Unit, 
                     Text(subtitle, style = Theme[typography][caption], color = Theme[colors][warning], maxLines = 1, modifier = Modifier.padding(top = 2.dp))
                 }
             }
-            BarButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null)
+            val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+            Row(Modifier.clip(shape).border(1.dp, Theme[colors][stroke], shape)) {
+                BarButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null)
+                BarButton(Lucide.EllipsisVertical, "Chat options", onClick = { onOpenMenu?.invoke() }, enabled = onOpenMenu != null)
+            }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(Theme[colors][stroke]))
     }
@@ -347,7 +403,7 @@ private val FOLLOW_UP_PROMPTS = listOf(
 )
 
 @Composable
-private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?) {
+private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottomInset: Dp) {
     // Reversed layout keeps the newest message pinned to the bottom while a reply streams in.
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -359,7 +415,7 @@ private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?) {
             state = listState,
             reverseLayout = true,
             modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp + bottomInset),
             verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.Bottom),
         ) {
             items(messages.asReversed(), key = { it.key }) { message ->
@@ -373,7 +429,7 @@ private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?) {
             visible = awayFromBottom,
             enter = fadeIn() + scaleIn(),
             exit = fadeOut() + scaleOut(),
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp + bottomInset),
         ) {
             UnstyledButton(
                 onClick = { scope.launch { listState.animateScrollToItem(0) } },
@@ -581,8 +637,12 @@ private fun Thinking(thinkingFrame: String?) {
 
 @Composable
 private fun StatusLine(status: String) {
+    // Backed so it stays legible over the conversation scrolling beneath the dock.
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
+        Modifier
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .background(Theme[colors][background].copy(alpha = 0.85f), RoundedCornerShape(Theme[radii][radiusMedium]))
+            .padding(horizontal = 8.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -658,7 +718,8 @@ private fun Composer(
             .navigationBarsPadding()
             .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)
             .clip(shape)
-            .background(Theme[colors][input])
+            // See-through so the conversation shows beneath the floating box.
+            .background(Theme[colors][surface].copy(alpha = 0.92f))
             .border(1.dp, if (focused) Theme[colors][textTertiary] else Theme[colors][strokeStrong], shape)
             .onFocusChanged { focused = it.hasFocus }
             .padding(start = 4.dp, end = 6.dp, top = if (attachments.isEmpty()) 14.dp else 8.dp, bottom = 6.dp),

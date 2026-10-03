@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -36,6 +37,7 @@ import dev.hermeskotlin.designsystem.components.rememberSidebarState
 import dev.hermeskotlin.ui.chat.ChatScreen
 import dev.hermeskotlin.ui.chat.ChatViewModel
 import dev.hermeskotlin.ui.connect.ConnectScreen
+import dev.hermeskotlin.ui.sessions.ChatMenu
 import dev.hermeskotlin.ui.sessions.SessionsSidebar
 import dev.hermeskotlin.ui.settings.SettingsScreen
 import dev.hermeskotlin.ui.signin.SignInScreen
@@ -114,6 +116,7 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    var menuOpen by remember { mutableStateOf(false) }
 
     // The open chat, once it exists on the gateway (a new chat gets its row with the first prompt).
     val openSessionId = chatState.storedSessionId?.takeIf { route.target.storedSessionId != null || chatState.messages.isNotEmpty() }
@@ -155,9 +158,20 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
             target = route.target,
             onOpenSidebar = { scope.launch { sidebar.toggle() } },
             onNewChat = app::newChat,
+            onOpenMenu = openSessionId?.let { { menuOpen = true } },
             viewModel = chat,
         )
     }
+
+    ChatMenu(
+        visible = menuOpen && openSessionId != null,
+        sessionId = openSessionId,
+        title = chatState.title?.takeIf { it.isNotBlank() } ?: route.target.title ?: "Untitled session",
+        messages = chatState.messages,
+        onDismiss = { menuOpen = false },
+        onRenamed = chat::showTitle,
+        onDeleted = app::newChat,
+    )
 
     if (settingsOpen) {
         SettingsScreen(

@@ -307,6 +307,9 @@ class ChatSession(
 
     fun dismissError() = _state.update { it.copy(error = null) }
 
+    /** Shows a title set elsewhere (a REST rename) without waiting for the gateway to echo it. */
+    fun showTitle(title: String?) = _state.update { it.copy(title = title) }
+
     /**
      * Sends [result] as the answer to [request] (see [InputAnswers]). The request leaves the state
      * once the answer is out; another client may have answered first, which the gateway ignores.

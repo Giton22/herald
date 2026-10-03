@@ -220,6 +220,8 @@ class ChatViewModel(
 
     fun dismissError() = session.value?.dismissError()
 
+    fun showTitle(title: String?) = session.value?.showTitle(title)
+
     private companion object {
         /** Full-size gateway photos are a few hundred KB each; keep a screenful or two. */
         const val MAX_CACHED_MEDIA = 24
