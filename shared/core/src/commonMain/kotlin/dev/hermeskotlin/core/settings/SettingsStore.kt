@@ -22,6 +22,16 @@ enum class TextSize(val scale: Float) {
     Largest(1.3f),
 }
 
+/**
+ * How long a voice chat waits after you stop talking before it sends. Desktop's chat uses 1.25 s
+ * and the terminal 3 s; on a phone people pause mid-thought, so the default sits between.
+ */
+enum class VoicePause(val millis: Long) {
+    Short(1_250),
+    Normal(2_000),
+    Long(3_000),
+}
+
 /** App-side preferences, kept on the device (not on the gateway). New fields need defaults. */
 @Serializable
 data class AppSettings(
@@ -33,6 +43,7 @@ data class AppSettings(
     val showToolActivity: Boolean = true,
     /** Show the profile's pet (when the gateway has one on) above the composer. */
     val showPet: Boolean = true,
+    val voicePause: VoicePause = VoicePause.Normal,
     /** Notify when a turn finishes while the app is in the background. */
     val notifyReplies: Boolean = true,
     /** Notify when the agent waits on an approval or a question while the app is in the background. */
