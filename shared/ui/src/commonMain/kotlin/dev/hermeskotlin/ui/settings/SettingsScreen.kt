@@ -39,6 +39,7 @@ import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.settings.TextSize
 import dev.hermeskotlin.core.settings.ThemeMode
+import dev.hermeskotlin.core.settings.VoicePause
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
@@ -132,6 +133,17 @@ fun SettingsScreen(
                         checked = settings.showPet,
                         onCheckedChange = { on -> viewModel.update { it.copy(showPet = on) } },
                     )
+                }
+
+                Section("Voice") {
+                    Field("Pause before sending", detail = "How long a voice chat waits after you stop talking. Short is Desktop's timing.") {
+                        SegmentedControl(
+                            options = VoicePause.entries,
+                            selected = settings.voicePause,
+                            onSelect = { pause -> viewModel.update { it.copy(voicePause = pause) } },
+                            optionLabel = { it.name },
+                        )
+                    }
                 }
 
                 Section("Notifications") {

@@ -75,7 +75,8 @@ class VoiceController(
     private var speechJob: Job? = null
     private var dictationJob: Job? = null
 
-    fun startChat(session: ChatSession, gateway: GatewayUrl, profile: String?) {
+    /** [pauseMs] is how long a quiet spell after speech has to last before it's sent. */
+    fun startChat(session: ChatSession, gateway: GatewayUrl, profile: String?, pauseMs: Long = VoiceActivity().silenceMs) {
         if (chatJob?.isActive == true) return
         cancelDictation()
         _chat.value = VoiceChatState(VoicePhase.Listening)
@@ -85,7 +86,7 @@ class VoiceController(
             var failures = 0
             try {
                 while (isActive) {
-                    if (!converseOnce(session, gateway, profile)) break
+                    if (!converseOnce(session, gateway, profile, VoiceActivity(silenceMs = pauseMs))) break
                     failures = if (_chat.value.error == null) 0 else failures + 1
                     // A provider that keeps failing would loop forever; give up after a few in a row.
                     if (failures >= MAX_FAILURES) break
@@ -113,11 +114,11 @@ class VoiceController(
     fun dismissChatError() = _chat.update { it.copy(error = null) }
 
     /** One turn of the conversation; false when it should end. */
-    private suspend fun converseOnce(session: ChatSession, gateway: GatewayUrl, profile: String?): Boolean {
+    private suspend fun converseOnce(session: ChatSession, gateway: GatewayUrl, profile: String?, activity: VoiceActivity): Boolean {
         _chat.update { it.copy(phase = VoicePhase.Listening, level = 0f, hearing = false) }
         val recording = try {
             recorder.record(
-                VoiceActivity(),
+                activity,
                 onLevel = { level -> _chat.update { it.copy(level = level) } },
                 onSpeech = { _chat.update { it.copy(hearing = true) } },
             )
