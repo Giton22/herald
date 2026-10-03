@@ -41,7 +41,7 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [x] `Surface` (flat panel, or elevated with a soft shadow + hairline)
 - [x] `Spinner`, `StatusDot`
 - [x] `TextField` password mode (masked, show/hide toggle)
-- [x] `BottomSheet` with `SheetHeader`/`SheetAction` rows, `Dialog`, `IconButton` (plain or filled), `Chip`, `SidebarLayout` (drawer on phones, docked and collapsible on wide screens)
+- [x] `BottomSheet` with `SheetHeader`/`SheetAction` rows, `Dialog`, `IconButton` (plain or filled), pill `Button`, `Chip`, `SidebarLayout` (drawer on phones, docked and collapsible on wide screens)
 - [x] `MarkdownText` (themed GFM via multiplatform-markdown-renderer core, no Material) and `CopyButton`
 - [ ] Menu, toast, chat bubble, tool card, approval card
 - [ ] Theme picker (system / light / dark), optional Hermes-style accent presets
@@ -74,17 +74,18 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 
 ### 3. Sessions
 - [x] Session list with title, preview, model, last-active time, source, message count, and pinned/archived state (`GET /api/sessions?order=recent`, paged; same REST endpoint Desktop uses because the WS `session.list` row has no model or last-active time)
-- [x] Pinned section on top, plus Recent / Scheduled / Archived filters (Recent leaves out cron runs via `exclude_sources=cron`, Scheduled shows only them, like Desktop)
+- [x] Pinned chats on top (with a pin), plus Scheduled and Archived pages opened from the sidebar (the chat list leaves out cron runs via `exclude_sources=cron`, Scheduled shows only them, like Desktop)
 - [x] Create a new session (`session.create`) from the New chat button (chat top bar or sidebar); the stored row appears with the first prompt
 - [x] Open a session and read its stored history (`GET /api/sessions/{id}/messages`, read-only; tool steps are folded into one reply)
 - [x] Resume a session live and reply in it (`session.resume {omit_messages}` + REST history, like Desktop)
 - [x] The app opens on a chat: the one you had open last on this gateway, or a fresh one if you left on a new chat (remembered per gateway)
 - [x] Sessions live in a left sidebar like ChatGPT: a swipe-in drawer on phones (swipe right or the panel button; swipe left, tap outside or Back to close), docked and collapsible on wide screens; the open chat is highlighted
+- [x] ChatGPT-style sidebar layout: title with a round search button, Scheduled / Archived rows, title-only chat rows with a live dot for running sessions, floating "New chat" pill and an initials avatar (with a connection warning dot) that opens the account sheet
 - [x] Refetch the list whenever the sidebar opens
 - [x] Rename, pin, archive and delete (`PATCH`/`DELETE /api/sessions/{id}`), with optimistic updates that roll back on error
 - [x] Live list updates (`sessions.changed`, `session.title` → refetch; also refetch after reconnect)
 - [ ] Live per-session status in the list (`session.info`, `session.active_list`)
-- [x] Search sessions by title, session id and message text (`GET /api/sessions/search`, debounced, with match snippet)
+- [x] Search sessions by title, session id and message text from the sidebar search button (`GET /api/sessions/search`, debounced, with match snippet)
 
 ### 4. Chat
 - [x] Send a prompt (`prompt.submit`); prompts sent mid-turn are marked queued; unsent text returns to the composer

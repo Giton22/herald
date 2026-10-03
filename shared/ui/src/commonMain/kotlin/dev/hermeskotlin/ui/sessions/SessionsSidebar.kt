@@ -13,6 +13,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -25,6 +27,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -36,17 +39,21 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.Archive
 import com.composables.icons.lucide.ArchiveRestore
+import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.ArrowLeftRight
 import com.composables.icons.lucide.CalendarClock
 import com.composables.icons.lucide.CircleUser
 import com.composables.icons.lucide.CloudOff
-import com.composables.icons.lucide.Inbox
 import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
@@ -67,7 +74,6 @@ import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.sessions.SessionListFilter
 import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.designsystem.accent
-import dev.hermeskotlin.designsystem.accentSoft
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
@@ -76,7 +82,6 @@ import dev.hermeskotlin.designsystem.components.BottomSheet
 import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
-import dev.hermeskotlin.designsystem.components.Chip
 import dev.hermeskotlin.designsystem.components.Dialog
 import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.components.SheetAction
@@ -84,14 +89,22 @@ import dev.hermeskotlin.designsystem.components.SheetHeader
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.components.Surface
 import dev.hermeskotlin.designsystem.components.TextField
+import dev.hermeskotlin.designsystem.danger
+import dev.hermeskotlin.designsystem.heading
 import dev.hermeskotlin.designsystem.label
+import dev.hermeskotlin.designsystem.onAccent
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusMedium
+import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.success
+import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
+import dev.hermeskotlin.designsystem.title
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.designsystem.warning
+import dev.hermeskotlin.ui.PlatformBackHandler
 import dev.hermeskotlin.ui.components.ConnectionLine
 import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.relativeTime
@@ -99,9 +112,10 @@ import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * The sessions sidebar beside the chat: new chat, search, Recent / Scheduled / Archived, and the
- * account footer. [selectedId] highlights the open chat; [visible] turning true refetches quietly,
- * since the chat may have changed the list while the sidebar was hidden.
+ * The sessions sidebar beside the chat, laid out like ChatGPT's: a title with a search button,
+ * Scheduled and Archived as navigation rows, then the conversations as plain titles, with a floating
+ * "New chat" pill and the account avatar at the bottom. [selectedId] highlights the open chat;
+ * [visible] turning true refetches quietly, since the chat may have changed the list meanwhile.
  */
 @Composable
 fun SessionsSidebar(
@@ -120,11 +134,21 @@ fun SessionsSidebar(
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
     val user by viewModel.user.collectAsStateWithLifecycle()
 
+    var searchOpen by remember { mutableStateOf(false) }
     var actionTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var renameTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var deleteTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var accountOpen by remember { mutableStateOf(false) }
 
+    fun closeSearch() {
+        searchOpen = false
+        viewModel.query.clearText()
+    }
+
+    // Back steps out of search or a Scheduled / Archived page before it closes the drawer.
+    PlatformBackHandler(enabled = visible && (searchOpen || state.filter != SessionListFilter.Recent)) {
+        if (searchOpen) closeSearch() else viewModel.setFilter(SessionListFilter.Recent)
+    }
     LaunchedEffect(gateway) { viewModel.bind(gateway) }
     var wasVisible by remember { mutableStateOf(visible) }
     LaunchedEffect(visible) {
@@ -139,95 +163,101 @@ fun SessionsSidebar(
         }
     }
 
-    Column(
+    val open: (SessionSummary) -> Unit = {
+        onOpenSession(it)
+        if (searchOpen) closeSearch()
+    }
+    val rowActions: (SessionSummary) -> Unit = { actionTarget = it }
+
+    Box(
         Modifier
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start)),
     ) {
-        Row(
-            Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextField(
-                state = viewModel.query,
-                placeholder = "Search",
-                leadingIcon = Lucide.Search,
-                clearable = true,
-                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                modifier = Modifier.weight(1f),
-            )
-            IconButton(Lucide.SquarePen, contentDescription = "New chat", onClick = onNewChat)
-        }
-        val searchResults = state.searchResults
-        if (searchResults == null) {
-            Row(
-                Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                FILTERS.forEach { (filter, label) ->
-                    Chip(label, selected = state.filter == filter, onClick = { viewModel.setFilter(filter) })
-                }
-            }
-        } else {
-            Box(Modifier.padding(top = 8.dp))
-        }
-
-        Box(Modifier.weight(1f).fillMaxWidth()) {
+        Column(Modifier.fillMaxSize()) {
             when {
-                searchResults != null -> when {
-                    state.searching && searchResults.isEmpty() -> CenteredSpinner()
-                    searchResults.isEmpty() -> EmptyState(Lucide.SearchX, "No matches", "Search looks at titles, session ids and message text.")
-                    else -> SessionList(
-                        sessions = searchResults,
+                searchOpen -> SearchHeader(viewModel, onClose = ::closeSearch)
+                state.filter != SessionListFilter.Recent -> SubpageHeader(
+                    title = state.filter.label,
+                    onBack = { viewModel.setFilter(SessionListFilter.Recent) },
+                )
+                else -> MainHeader(onSearch = { searchOpen = true })
+            }
+
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                val searchResults = state.searchResults
+                when {
+                    searchOpen && searchResults == null -> Unit
+                    searchResults != null -> when {
+                        state.searching && searchResults.isEmpty() -> CenteredSpinner()
+                        searchResults.isEmpty() -> EmptyState(Lucide.SearchX, "No matches", "Search looks at titles, session ids and message text.")
+                        else -> SessionList(searchResults, selectedId, open, rowActions, showSnippets = true)
+                    }
+                    state.filter == SessionListFilter.Recent -> SessionList(
+                        sessions = state.sessions,
                         selectedId = selectedId,
-                        sectioned = false,
-                        canLoadMore = false,
-                        loadingMore = false,
-                        onLoadMore = {},
-                        onOpen = onOpenSession,
-                        onActions = { actionTarget = it },
+                        onOpen = open,
+                        onActions = rowActions,
+                        canLoadMore = state.canLoadMore,
+                        loadingMore = state.loadingMore,
+                        onLoadMore = viewModel::loadMore,
+                    ) {
+                        item(key = "nav") {
+                            Column(Modifier.padding(bottom = 8.dp)) {
+                                NavRow(Lucide.CalendarClock, "Scheduled") { viewModel.setFilter(SessionListFilter.Scheduled) }
+                                NavRow(Lucide.Archive, "Archived") { viewModel.setFilter(SessionListFilter.Archived) }
+                                Box(
+                                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp).fillMaxWidth().height(1.dp)
+                                        .background(Theme[colors][stroke]),
+                                )
+                            }
+                        }
+                        when {
+                            state.loading -> item(key = "loading") { ListSpinner() }
+                            state.error != null -> item(key = "error") {
+                                ListNotice("Couldn't load sessions. ${state.error}", action = "Try again", onAction = viewModel::refresh)
+                            }
+                            state.sessions.isEmpty() -> item(key = "empty") {
+                                ListNotice("Your conversations will show up here.")
+                            }
+                        }
+                    }
+                    state.loading -> CenteredSpinner()
+                    state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load sessions", state.error) {
+                        Button("Try again", onClick = viewModel::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+                    }
+                    state.sessions.isEmpty() -> when (state.filter) {
+                        SessionListFilter.Scheduled ->
+                            EmptyState(Lucide.CalendarClock, "No scheduled runs", "Sessions started by cron jobs on the gateway show up here.")
+                        else ->
+                            EmptyState(Lucide.Archive, "Nothing archived", "Archived sessions are hidden from Recent but stay resumable.")
+                    }
+                    else -> SessionList(
+                        sessions = state.sessions,
+                        selectedId = selectedId,
+                        onOpen = open,
+                        onActions = rowActions,
+                        // Cron runs share their job's title, so say when each one ran.
+                        showSnippets = state.filter == SessionListFilter.Scheduled,
+                        canLoadMore = state.canLoadMore,
+                        loadingMore = state.loadingMore,
+                        onLoadMore = viewModel::loadMore,
                     )
                 }
-                state.loading -> CenteredSpinner()
-                state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load sessions", state.error) {
-                    Button("Try again", onClick = viewModel::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
-                }
-                state.sessions.isEmpty() -> when (state.filter) {
-                    SessionListFilter.Recent ->
-                        EmptyState(Lucide.Inbox, "No sessions yet", "Conversations from the desktop app, CLI and messaging platforms show up here.")
-                    SessionListFilter.Scheduled ->
-                        EmptyState(Lucide.CalendarClock, "No scheduled runs", "Sessions started by cron jobs on the gateway show up here.")
-                    SessionListFilter.Archived ->
-                        EmptyState(Lucide.Archive, "Nothing archived", "Archived sessions are hidden from Recent but stay resumable.")
-                }
-                else -> SessionList(
-                    sessions = state.sessions,
-                    selectedId = selectedId,
-                    sectioned = state.filter == SessionListFilter.Recent,
-                    canLoadMore = state.canLoadMore,
-                    loadingMore = state.loadingMore,
-                    onLoadMore = viewModel::loadMore,
-                    onOpen = onOpenSession,
-                    onActions = { actionTarget = it },
-                )
-            }
-            state.message?.let { message ->
-                MessageBanner(
-                    message,
-                    onDismiss = viewModel::dismissMessage,
-                    modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 8.dp),
-                )
             }
         }
 
-        AccountFooter(
+        BottomBar(
             userLabel = user?.label,
-            gateway = gateway,
             connection = connection,
-            refreshing = state.refreshing,
-            onRefresh = viewModel::refresh,
-            onClick = { accountOpen = true },
+            message = state.message,
+            onDismissMessage = viewModel::dismissMessage,
+            onNewChat = {
+                if (searchOpen) closeSearch()
+                onNewChat()
+            },
+            onAccount = { accountOpen = true },
+            modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
 
@@ -253,63 +283,192 @@ fun SessionsSidebar(
         gateway = gateway,
         userLabel = user?.label,
         connection = connection,
+        refreshing = state.refreshing,
         onDismiss = { accountOpen = false },
+        onRefresh = viewModel::refresh,
         onRetry = viewModel::retryConnection,
         onSignOut = onSignOut,
         onChangeGateway = onChangeGateway,
     )
 }
 
-/** Who is signed in where, and the live connection state; tapping opens the account sheet. */
+private val SessionListFilter.label: String
+    get() = when (this) {
+        SessionListFilter.Recent -> "Chats"
+        SessionListFilter.Scheduled -> "Scheduled"
+        SessionListFilter.Archived -> "Archived"
+    }
+
 @Composable
-private fun AccountFooter(
+private fun MainHeader(onSearch: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 24.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text("Hermes", style = Theme[typography][title], color = Theme[colors][text], modifier = Modifier.weight(1f))
+        RoundButton(Lucide.Search, "Search chats", onClick = onSearch)
+    }
+}
+
+@Composable
+private fun SubpageHeader(title: String, onBack: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 12.dp, end = 16.dp, top = 16.dp, bottom = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        IconButton(Lucide.ArrowLeft, contentDescription = "Back", onClick = onBack, tint = Theme[colors][text])
+        Text(title, style = Theme[typography][heading], color = Theme[colors][text])
+    }
+}
+
+@Composable
+private fun SearchHeader(viewModel: SessionsViewModel, onClose: () -> Unit) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(Unit) { focus.requestFocus() }
+    Row(
+        Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        TextField(
+            state = viewModel.query,
+            placeholder = "Search chats",
+            leadingIcon = Lucide.Search,
+            clearable = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            focusRequester = focus,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(Lucide.X, contentDescription = "Close search", onClick = onClose, tint = Theme[colors][text])
+    }
+}
+
+/** A 48dp circle with a soft fill, like ChatGPT's search button. */
+@Composable
+private fun RoundButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(48.dp)
+            .clip(CircleShape)
+            .background(Theme[colors][stroke])
+            .clickable(onClickLabel = contentDescription, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        UnstyledIcon(icon, contentDescription = contentDescription, tint = Theme[colors][text], modifier = Modifier.size(22.dp))
+    }
+}
+
+@Composable
+private fun NavRow(icon: ImageVector, label: String, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 52.dp)
+            .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][text], modifier = Modifier.size(22.dp))
+        Text(label, style = Theme[typography][heading], color = Theme[colors][text])
+    }
+}
+
+/**
+ * Floating footer: the "New chat" pill and the account avatar over a fade, so the list scrolls
+ * underneath. A failed row action shows its message just above.
+ */
+@Composable
+private fun BottomBar(
     userLabel: String?,
-    gateway: SavedGateway,
     connection: ConnectionState,
-    refreshing: Boolean,
-    onRefresh: () -> Unit,
-    onClick: () -> Unit,
+    message: String?,
+    onDismissMessage: () -> Unit,
+    onNewChat: () -> Unit,
+    onAccount: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    Row(Modifier.fillMaxWidth().padding(4.dp), verticalAlignment = Alignment.CenterVertically) {
+    val surfaceColor = Theme[colors][surface]
+    Column(
+        modifier
+            .fillMaxWidth()
+            .background(Brush.verticalGradient(0f to Color.Transparent, 0.3f to surfaceColor))
+            .padding(top = 32.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        if (message != null) MessageBanner(message, onDismiss = onDismissMessage)
         Row(
-            Modifier
-                .weight(1f)
-                .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
-                .clickable(onClickLabel = "Account", onClick = onClick)
-                .padding(8.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            UnstyledIcon(Lucide.CircleUser, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(28.dp))
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text(
-                    userLabel ?: gateway.gatewayUrl.host,
-                    style = Theme[typography][label],
-                    color = Theme[colors][text],
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                ConnectionLine(connection)
-            }
-        }
-        if (refreshing) {
-            Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
-        } else {
-            IconButton(Lucide.RefreshCw, contentDescription = "Refresh sessions", onClick = onRefresh)
+            Button(
+                "New chat",
+                onClick = onNewChat,
+                leadingIcon = Lucide.SquarePen,
+                size = ButtonSize.Large,
+                pill = true,
+            )
+            Box(Modifier.weight(1f))
+            Avatar(userLabel, connection, onClick = onAccount)
         }
     }
 }
+
+/** Initials in a circle, with a small dot when the gateway connection isn't healthy. */
+@Composable
+private fun Avatar(userLabel: String?, connection: ConnectionState, onClick: () -> Unit) {
+    val initials = userLabel?.initials()
+    Box(Modifier.size(52.dp)) {
+        Box(
+            Modifier
+                .size(48.dp)
+                .align(Alignment.Center)
+                .clip(CircleShape)
+                .background(Theme[colors][accent])
+                .clickable(onClickLabel = "Account", onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            if (initials.isNullOrEmpty()) {
+                UnstyledIcon(Lucide.CircleUser, contentDescription = "Account", tint = Theme[colors][onAccent], modifier = Modifier.size(24.dp))
+            } else {
+                Text(initials, style = Theme[typography][label], color = Theme[colors][onAccent])
+            }
+        }
+        val dot = when (connection) {
+            is ConnectionState.Connected -> null
+            is ConnectionState.Failed, is ConnectionState.SessionExpired -> Theme[colors][danger]
+            else -> Theme[colors][warning]
+        }
+        if (dot != null) {
+            Box(
+                Modifier
+                    .size(14.dp)
+                    .align(Alignment.TopEnd)
+                    .background(Theme[colors][surface], CircleShape)
+                    .padding(2.dp)
+                    .background(dot, CircleShape),
+            )
+        }
+    }
+}
+
+private fun String.initials(): String =
+    substringBefore('@').split(' ', '.', '_', '-').filter { it.isNotBlank() }.take(2)
+        .joinToString("") { it.first().uppercase() }
 
 @Composable
 private fun SessionList(
     sessions: List<SessionSummary>,
     selectedId: String?,
-    sectioned: Boolean,
-    canLoadMore: Boolean,
-    loadingMore: Boolean,
-    onLoadMore: () -> Unit,
     onOpen: (SessionSummary) -> Unit,
     onActions: (SessionSummary) -> Unit,
+    showSnippets: Boolean = false,
+    canLoadMore: Boolean = false,
+    loadingMore: Boolean = false,
+    onLoadMore: () -> Unit = {},
+    header: LazyListScope.() -> Unit = {},
 ) {
     val listState = rememberLazyListState()
     val nearEnd by remember {
@@ -324,67 +483,42 @@ private fun SessionList(
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+        // Room to scroll the last rows out from under the floating footer.
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 96.dp),
     ) {
-        if (sectioned) {
-            val (pinned, recent) = sessions.partition { it.pinned }
-            if (pinned.isNotEmpty()) {
-                section("Pinned", pinned, selectedId, onOpen, onActions)
-                section("Recent", recent, selectedId, onOpen, onActions)
-            } else {
-                rows(recent, selectedId, onOpen, onActions)
-            }
-        } else {
-            rows(sessions, selectedId, onOpen, onActions)
+        header()
+        // Pinned chats stay on top, marked with a pin.
+        val (pinned, rest) = sessions.partition { it.pinned }
+        items(pinned + rest, key = { it.id }) { session ->
+            SessionRow(
+                session,
+                selected = session.id == selectedId,
+                showSnippet = showSnippets,
+                onClick = { onOpen(session) },
+                onActions = { onActions(session) },
+            )
         }
-        if (loadingMore) {
-            item(key = "loading-more") {
-                Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { Spinner(Modifier.size(20.dp)) }
-            }
-        }
+        if (loadingMore) item(key = "loading-more") { ListSpinner() }
     }
 }
 
-private fun LazyListScope.section(
-    title: String,
-    sessions: List<SessionSummary>,
-    selectedId: String?,
-    onOpen: (SessionSummary) -> Unit,
-    onActions: (SessionSummary) -> Unit,
-) {
-    if (sessions.isEmpty()) return
-    item(key = "header-$title") {
-        Text(
-            title.uppercase(),
-            style = Theme[typography][caption],
-            color = Theme[colors][textTertiary],
-            modifier = Modifier.padding(start = 12.dp, top = 12.dp, bottom = 4.dp),
-        )
-    }
-    rows(sessions, selectedId, onOpen, onActions)
-}
-
-private fun LazyListScope.rows(
-    sessions: List<SessionSummary>,
-    selectedId: String?,
-    onOpen: (SessionSummary) -> Unit,
-    onActions: (SessionSummary) -> Unit,
-) {
-    items(sessions, key = { it.id }) { session ->
-        SessionRow(session, selected = session.id == selectedId, onClick = { onOpen(session) }, onActions = { onActions(session) })
-    }
-}
-
-/** Compact row: title and one meta line (plus the match excerpt for search hits). Long-press for actions. */
+/** Just the title, like ChatGPT; a dot marks a session that is running right now. Long-press for actions. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SessionRow(session: SessionSummary, selected: Boolean, onClick: () -> Unit, onActions: () -> Unit) {
+private fun SessionRow(
+    session: SessionSummary,
+    selected: Boolean,
+    showSnippet: Boolean,
+    onClick: () -> Unit,
+    onActions: () -> Unit,
+) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
     Column(
         Modifier
             .fillMaxWidth()
+            .heightIn(min = 52.dp)
             .clip(shape)
-            .then(if (selected) Modifier.background(Theme[colors][accentSoft], shape) else Modifier)
+            .then(if (selected) Modifier.background(Theme[colors][stroke], shape) else Modifier)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onActions,
@@ -392,43 +526,42 @@ private fun SessionRow(session: SessionSummary, selected: Boolean, onClick: () -
                 interactionSource = null,
                 indication = rememberColoredIndication(Theme[colors][text]),
             )
-            .padding(horizontal = 12.dp, vertical = 9.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+            .padding(horizontal = 12.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            if (session.isActive) Box(Modifier.size(7.dp).background(Theme[colors][success], CircleShape))
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Text(
                 session.displayTitle,
                 style = Theme[typography][body],
                 color = Theme[colors][text],
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
+                modifier = Modifier.weight(1f),
             )
             if (session.pinned) {
-                UnstyledIcon(Lucide.Pin, contentDescription = "Pinned", tint = Theme[colors][textTertiary], modifier = Modifier.size(13.dp))
+                UnstyledIcon(Lucide.Pin, contentDescription = "Pinned", tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
+            }
+            if (session.isActive) Box(Modifier.size(8.dp).background(Theme[colors][success], CircleShape))
+        }
+        if (showSnippet) {
+            val detail = session.snippet?.replace('\n', ' ')?.takeIf { it.isNotBlank() } ?: relativeTime(session.activityAt)
+            if (detail.isNotEmpty()) {
+                Text(detail, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
-        session.snippet?.takeIf { it.isNotBlank() }?.let { snippet ->
-            Text(
-                snippet.replace('\n', ' '),
-                style = Theme[typography][bodySmall],
-                color = Theme[colors][textSecondary],
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        Text(
-            listOfNotNull(
-                relativeTime(session.activityAt).takeIf { it.isNotEmpty() },
-                session.source?.takeIf { it.isNotBlank() },
-                "${session.messageCount} msgs".takeIf { session.messageCount > 0 },
-            ).joinToString(" · "),
-            style = Theme[typography][caption],
-            color = Theme[colors][textTertiary],
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+    }
+}
+
+@Composable
+private fun ListSpinner() {
+    Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { Spinner(Modifier.size(20.dp)) }
+}
+
+@Composable
+private fun ListNotice(text: String, action: String? = null, onAction: () -> Unit = {}) {
+    Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(text, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+        if (action != null) Button(action, onClick = onAction, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
     }
 }
 
@@ -518,7 +651,9 @@ private fun AccountSheet(
     gateway: SavedGateway,
     userLabel: String?,
     connection: ConnectionState,
+    refreshing: Boolean,
     onDismiss: () -> Unit,
+    onRefresh: () -> Unit,
     onRetry: () -> Unit,
     onSignOut: () -> Unit,
     onChangeGateway: () -> Unit,
@@ -526,6 +661,7 @@ private fun AccountSheet(
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         SheetHeader(userLabel ?: "Signed in", gateway.url)
         Box(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) { ConnectionLine(connection, detailed = true) }
+        SheetAction(if (refreshing) "Refreshing chats…" else "Refresh chats", Lucide.RefreshCw, onClick = { onDismiss(); onRefresh() })
         if (connection is ConnectionState.Reconnecting || connection is ConnectionState.Failed) {
             SheetAction("Retry connection now", Lucide.RefreshCw, onClick = onRetry)
         }
@@ -539,7 +675,6 @@ private fun CenteredSpinner() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
 }
 
-
 @Composable
 private fun MessageBanner(message: String, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     Surface(modifier.padding(horizontal = 16.dp).fillMaxWidth(), elevated = true) {
@@ -549,9 +684,3 @@ private fun MessageBanner(message: String, onDismiss: () -> Unit, modifier: Modi
         }
     }
 }
-
-private val FILTERS = listOf(
-    SessionListFilter.Recent to "Recent",
-    SessionListFilter.Scheduled to "Scheduled",
-    SessionListFilter.Archived to "Archived",
-)
