@@ -25,6 +25,12 @@ import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.settings.SettingsStore
+import dev.hermeskotlin.core.settings.AppSettings
+import dev.hermeskotlin.core.settings.ThemeMode
+import dev.hermeskotlin.core.pet.PetApi
+import dev.hermeskotlin.core.journey.JourneyApi
+import dev.hermeskotlin.ui.pet.PetController
+import dev.hermeskotlin.ui.journey.JourneyController
 import dev.hermeskotlin.core.slash.SlashApi
 import dev.hermeskotlin.core.slash.SlashCatalog
 import dev.hermeskotlin.core.slash.SlashCommand
@@ -73,6 +79,8 @@ sealed interface ChatRequest {
     data object PickModel : ChatRequest
     data object BrowseSessions : ChatRequest
     data class OpenChat(val storedSessionId: String, val title: String?) : ChatRequest
+    data object OpenPets : ChatRequest
+    data object OpenJourney : ChatRequest
 
     /** [profile] null is the gateway's launch profile. */
     data class SwitchProfile(val profile: String?) : ChatRequest
@@ -106,7 +114,15 @@ class ChatViewModel(
     private val sessions: SessionsApi,
     private val profiles: ProfilesApi,
     private val settings: SettingsStore,
+    petApi: PetApi,
+    journeyApi: JourneyApi,
 ) : ViewModel() {
+
+    /** The profile's pet and its gallery. */
+    val pets = PetController(petApi, viewModelScope)
+
+    /** What the profile's agent has learned (`/journey`). */
+    val journey = JourneyController(journeyApi, viewModelScope)
 
     val composer = TextFieldState()
     val connectionState: StateFlow<ConnectionState> = connection.state
@@ -150,7 +166,12 @@ class ChatViewModel(
     init {
         // The catalog names the default model, which a new chat shows until it has its own.
         viewModelScope.launch {
-            connection.state.collect { if (it is ConnectionState.Connected && _picker.value.catalog == null) loadModels() }
+            connection.state.collect {
+                if (it !is ConnectionState.Connected) return@collect
+                if (_picker.value.catalog == null) loadModels()
+                // Another client may have changed the pet while this one was away.
+                target?.let { open -> pets.bind(open.profile) }
+            }
         }
         viewModelScope.launch {
             state
@@ -172,7 +193,21 @@ class ChatViewModel(
         session.value = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title, target.profile)
         // The catalog marks the previous chat's model; a new chat must show the profile default instead.
         _picker.update { it.copy(catalog = null, confirm = null) }
-        if (connectionState.value is ConnectionState.Connected) loadModels()
+        if (connectionState.value is ConnectionState.Connected) {
+            loadModels()
+            pets.bind(target.profile)
+        }
+    }
+
+    /** A pet just adopted should show, even where this phone had hidden it. */
+    fun showPet() {
+        if (settings.settings.value?.showPet == false) settings.update { it.copy(showPet = true) }
+    }
+
+    /** Opens the journey for the open chat's profile. */
+    fun loadJourney() {
+        val target = target ?: return
+        journey.load(target.gateway.gatewayUrl, target.profile)
     }
 
     /** Refreshes the catalog for the open chat (its current model marked). */
@@ -323,8 +358,63 @@ class ChatViewModel(
                 }
                 SlashRoute.Profile -> profile(chat, arg)
                 SlashRoute.Handoff -> chat.handoff(arg)
+                SlashRoute.Skin -> skin(chat, arg)
+                SlashRoute.Journey -> _requests.send(ChatRequest.OpenJourney)
+                SlashRoute.Pet -> pet(chat, arg)
                 is SlashRoute.Unavailable -> chat.showCommandOutput("/${command.name}", route.message, failed = true)
                 SlashRoute.Gateway -> onGateway()
+            }
+        }
+    }
+
+    /** `/skin [light|dark|black|system]`: this app's theme; bare, it steps to the next one. */
+    private fun skin(chat: ChatSession, arg: String) {
+        val current = settings.settings.value ?: AppSettings()
+        val next = when (arg.lowercase()) {
+            "" -> when (current.theme) {
+                ThemeMode.System -> current.copy(theme = ThemeMode.Light)
+                ThemeMode.Light -> current.copy(theme = ThemeMode.Dark)
+                ThemeMode.Dark -> current.copy(theme = ThemeMode.System)
+            }
+            "light" -> current.copy(theme = ThemeMode.Light)
+            "dark" -> current.copy(theme = ThemeMode.Dark, pureBlack = false)
+            "black", "oled", "amoled" -> current.copy(theme = ThemeMode.Dark, pureBlack = true)
+            "system", "auto", "default" -> current.copy(theme = ThemeMode.System)
+            else -> return chat.showCommandOutput("/skin", "Themes here: light, dark, black or system.", failed = true)
+        }
+        settings.update { next }
+        val name = when (next.theme) {
+            ThemeMode.System -> "matches the system"
+            ThemeMode.Light -> "light"
+            ThemeMode.Dark -> if (next.pureBlack) "black" else "dark"
+        }
+        chat.showCommandOutput("/skin", "Theme: $name.")
+    }
+
+    /** `/pet [name|off]`: bare opens the gallery; a name adopts that pet; `off` puts it away. */
+    private suspend fun pet(chat: ChatSession, arg: String) {
+        when (arg.lowercase()) {
+            "", "list", "gallery", "browse", "all" -> _requests.send(ChatRequest.OpenPets)
+            "off", "hide", "disable", "none" -> try {
+                pets.hide()
+                chat.showCommandOutput("/pet", "Pet put away. Bring one back with /pet.")
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                chat.showCommandOutput("/pet", e.message ?: "Couldn't put the pet away.", failed = true)
+            }
+            else -> try {
+                val name = pets.adopt(arg)
+                if (name == null) {
+                    chat.showCommandOutput("/pet", "No pet called “$arg”. Type /pet to browse them.", failed = true)
+                } else {
+                    if (settings.settings.value?.showPet == false) settings.update { it.copy(showPet = true) }
+                    chat.showCommandOutput("/pet", "Adopted $name.")
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                chat.showCommandOutput("/pet", e.message ?: "Couldn't adopt $arg.", failed = true)
             }
         }
     }

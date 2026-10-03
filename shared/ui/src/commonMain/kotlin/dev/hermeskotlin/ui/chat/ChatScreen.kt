@@ -124,6 +124,10 @@ import dev.hermeskotlin.core.models.displayModelName
 import dev.hermeskotlin.core.slash.SlashKind
 import dev.hermeskotlin.core.slash.SlashSuggestion
 import dev.hermeskotlin.designsystem.code
+import dev.hermeskotlin.ui.journey.JourneySheet
+import dev.hermeskotlin.ui.pet.PetSheet
+import dev.hermeskotlin.ui.pet.PetView
+import dev.hermeskotlin.ui.pet.rememberPetState
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
@@ -180,6 +184,8 @@ fun ChatScreen(
     val attachmentError = viewModel.attachmentError.collectAsStateWithLifecycle().value
     var modelsOpen by remember { mutableStateOf(false) }
     var attachOpen by remember { mutableStateOf(false) }
+    var petsOpen by remember { mutableStateOf(false) }
+    var journeyOpen by remember { mutableStateOf(false) }
     var viewing by remember { mutableStateOf<ViewerImage?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(notice) {
@@ -197,6 +203,8 @@ fun ChatScreen(
                 ChatRequest.BrowseSessions -> onOpenSidebar()
                 is ChatRequest.OpenChat -> onOpenChat(request.storedSessionId, request.title)
                 is ChatRequest.SwitchProfile -> onSwitchProfile(request.profile)
+                ChatRequest.OpenPets -> petsOpen = true
+                ChatRequest.OpenJourney -> journeyOpen = true
             }
         }
     }
@@ -262,11 +270,32 @@ fun ChatScreen(
                         onAttach = { attachOpen = true },
                     )
                 }
+                // The pet sits on the composer's top edge, over the conversation rather than in the dock's height.
+                val sprite = viewModel.pets.sprite.collectAsStateWithLifecycle().value
+                if (sprite != null && LocalAppSettings.current.showPet && state.inputRequests.isEmpty()) {
+                    PetView(
+                        sprite = sprite,
+                        state = rememberPetState(state),
+                        onClick = { petsOpen = true },
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 28.dp, bottom = (dockInset - 6.dp).coerceAtLeast(0.dp)),
+                    )
+                }
             }
         }
     }
 
     AttachSheet(visible = attachOpen, onDismiss = { attachOpen = false }, picker = attachmentPicker)
+    PetSheet(
+        visible = petsOpen,
+        controller = viewModel.pets,
+        onDismiss = { petsOpen = false },
+        onAdopted = { name ->
+            viewModel.showPet()
+            petsOpen = false
+            notice = "Adopted $name"
+        },
+    )
+    JourneySheet(visible = journeyOpen, controller = viewModel.journey, onLoad = viewModel::loadJourney, onDismiss = { journeyOpen = false })
     viewing?.let { image ->
         CompositionLocalProvider(LocalMediaLoader provides viewModel::loadMedia) {
             ImageViewer(image, onDismiss = { viewing = null })

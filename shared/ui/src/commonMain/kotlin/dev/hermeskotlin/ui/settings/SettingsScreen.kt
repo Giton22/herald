@@ -125,6 +125,13 @@ fun SettingsScreen(
                         checked = settings.showToolActivity,
                         onCheckedChange = { on -> viewModel.update { it.copy(showToolActivity = on) } },
                     )
+                    Divider()
+                    SwitchRow(
+                        title = "Show the pet",
+                        detail = "The profile's pet sits on the composer and acts out what the agent is doing. Adopt one with /pet.",
+                        checked = settings.showPet,
+                        onCheckedChange = { on -> viewModel.update { it.copy(showPet = on) } },
+                    )
                 }
 
                 Section("Notifications") {
