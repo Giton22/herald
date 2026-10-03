@@ -21,7 +21,7 @@ internal fun transcriptMarkdown(title: String, messages: List<ChatMessage>): Str
                 appendLine(message.text.trim())
             }
             // Command output never reached the transcript; an export matches what the gateway stored.
-            is ChatMessage.Command -> Unit
+            is ChatMessage.Command, is ChatMessage.Notice -> Unit
         }
     }
 }

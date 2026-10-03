@@ -17,7 +17,16 @@ data class ToolActivity(
     val diff: String? = null,
     /** It reported an error (the turn may still have carried on). */
     val failed: Boolean = false,
+    /** Its output was scanned and looked like a prompt injection or a leaked secret. */
+    val risk: ToolRisk? = null,
 )
+
+/** Why a tool's output was flagged (`tool.output_risk`): the scanner's finding ids. Advisory; nothing was blocked. */
+data class ToolRisk(val findings: List<String>, val redacted: Boolean = false) {
+    /** The ids (tools/threat_patterns.py, e.g. `exfil_curl`) as readable words: "Exfil curl". */
+    val labels: List<String>
+        get() = findings.map { id -> id.replace('_', ' ').trim().replaceFirstChar { it.uppercaseChar() } }.distinct()
+}
 
 enum class TurnOutcome { Complete, Interrupted, Error }
 
@@ -44,7 +53,12 @@ sealed interface ChatMessage {
         val error: String? = null,
         /** Tokens the turn took; only for turns watched live (the transcript doesn't keep it). */
         val usage: TurnUsage? = null,
+        /** Something the gateway wants known about the finished turn, e.g. that it wasn't saved. */
+        val warning: String? = null,
     ) : ChatMessage
+
+    /** A one-line notice about the session (`notice`), shown on this device only. */
+    data class Notice(override val key: String, val text: String) : ChatMessage
 
     /**
      * A slash command and what it printed, shown on this device only (the transcript never holds it).
@@ -114,6 +128,6 @@ data class ChatState(
 ) {
     val runtimeSessionId: String? get() = (attachment as? Attachment.Attached)?.runtimeSessionId
 
-    /** Prompts or replies exist, so the stored row does too; command output alone doesn't make one. */
-    val hasConversation: Boolean get() = messages.any { it !is ChatMessage.Command }
+    /** Prompts or replies exist, so the stored row does too; command output or notices alone don't make one. */
+    val hasConversation: Boolean get() = messages.any { it is ChatMessage.User || it is ChatMessage.Assistant }
 }

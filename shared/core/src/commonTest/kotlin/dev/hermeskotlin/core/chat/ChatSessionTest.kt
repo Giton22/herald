@@ -72,6 +72,7 @@ class ChatSessionTest {
         is ChatMessage.User -> text
         is ChatMessage.Assistant -> text
         is ChatMessage.Command -> output
+        is ChatMessage.Notice -> text
     }
 
     private fun JsonObject.isCall(method: String) = this["method"]?.jsonPrimitive?.contentOrNull == method

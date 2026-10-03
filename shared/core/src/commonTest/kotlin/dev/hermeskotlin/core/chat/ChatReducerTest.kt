@@ -122,6 +122,7 @@ class ChatReducerTest {
                 is ChatMessage.User -> it.text
                 is ChatMessage.Assistant -> it.text
                 is ChatMessage.Command -> it.output
+                is ChatMessage.Notice -> it.text
             }
         })
         assertEquals("ok", assertIs<ChatMessage.Assistant>(state.messages[1]).tools.single().summary)

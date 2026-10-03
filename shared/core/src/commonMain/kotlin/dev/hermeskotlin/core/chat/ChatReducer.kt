@@ -2,7 +2,10 @@ package dev.hermeskotlin.core.chat
 
 import dev.hermeskotlin.core.rpc.GatewayEvent
 import dev.hermeskotlin.core.sessions.SessionMessage
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 /**
  * Folds one live session event (tui_gateway/contracts/events.py) into the chat. Events for other
@@ -69,6 +72,24 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
                 withOpenReply(finish)
             }
         }
+        // Every scan of outside content reports, mostly "low"; only a finding is worth a badge.
+        "tool.output_risk" -> {
+            val id = payload.string("tool_id") ?: return this
+            if (payload.string("risk") != "high") return this
+            val risk = ToolRisk(
+                findings = (payload?.get("findings") as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull },
+                redacted = payload.boolean("redacted") == true,
+            )
+            val owner = messages.indexOfLast { it is ChatMessage.Assistant && it.tools.any { tool -> tool.id == id } }
+            if (owner < 0) return this
+            val reply = messages[owner] as ChatMessage.Assistant
+            copy(messages = messages.toMutableList().apply {
+                set(owner, reply.copy(tools = reply.tools.map { if (it.id == id) it.copy(risk = risk) else it }))
+            })
+        }
+        "notice" -> payload.string("message")?.trim()?.takeIf { it.isNotEmpty() }?.let { text ->
+            copy(messages = messages + ChatMessage.Notice("notice-$keySeq", text), keySeq = keySeq + 1)
+        } ?: this
         "message.complete" -> complete(payload)
         "status.update" -> copy(status = payload.string("text")?.takeIf { it.isNotBlank() })
         "error" -> copy(error = payload.string("message"))
@@ -134,6 +155,7 @@ private fun ChatState.complete(payload: JsonObject?): ChatState {
         else -> TurnOutcome.Complete
     }
     val error = payload.string("error") ?: payload.string("failure_reason")
+    val warning = payload.string("warning")?.trim()?.takeIf { it.isNotEmpty() }
     // The turn is over, so no tool runs on, including in a part a correction closed early.
     val messages = messages.map { message ->
         if (message is ChatMessage.Assistant && message.tools.any { it.running }) {
@@ -150,7 +172,7 @@ private fun ChatState.complete(payload: JsonObject?): ChatState {
     val finalReasoning = payload.string("reasoning").orEmpty().takeIf { correctedReplyKey == null }.orEmpty()
     val finalUsage = SessionUsage.parse(payload?.get("usage") as? JsonObject)
     val index = messages.openReplyIndex().takeIf { it >= 0 }
-        ?: if (finalText.isBlank() && error == null) return endTurn(messages, finalUsage) else messages.size
+        ?: if (finalText.isBlank() && error == null && warning == null) return endTurn(messages, finalUsage) else messages.size
     val base = messages.getOrNull(index) as? ChatMessage.Assistant ?: ChatMessage.Assistant(key = "live-$keySeq")
     val reply = base.copy(
         // Prefer what streamed (it includes interim segments); fall back to the final text for
@@ -162,9 +184,10 @@ private fun ChatState.complete(payload: JsonObject?): ChatState {
         outcome = outcome,
         error = error.takeIf { outcome == TurnOutcome.Error },
         usage = finalUsage?.let { end -> turnStartUsage?.let { end - it } }?.takeIf { it.any },
+        warning = warning,
     )
-    // A turn that ended with nothing to show (e.g. interrupted at once) leaves no bubble, unless it failed.
-    val empty = reply.text.isBlank() && reply.reasoning.isBlank() && reply.tools.isEmpty() && reply.error == null
+    // A turn that ended with nothing to show (e.g. interrupted at once) leaves no bubble, unless it failed or warns.
+    val empty = reply.text.isBlank() && reply.reasoning.isBlank() && reply.tools.isEmpty() && reply.error == null && warning == null
     val updated = messages.toMutableList().apply {
         when {
             index == size -> if (!empty) add(reply)
