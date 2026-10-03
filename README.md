@@ -20,7 +20,7 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [x] Kotlin Multiplatform project: shared `core` / `designsystem` / `ui` modules plus `androidApp`
 - [ ] iOS targets (`iosArm64`/`iosSimulatorArm64`) and a `jvm` desktop target
 - [x] Compose Multiplatform UI built on **Compose Unstyled**, with our own design system (`HermesTheme` tokens + primitives), edge-to-edge
-- [x] Light/dark color schemes following the system
+- [x] Light/dark color schemes following the system, or forced from Settings, plus pure black
 - [x] Ktor client: OkHttp engine on Android, content negotiation, WebSockets plugin installed
 - [ ] Ktor Darwin engine (iOS)
 - [x] kotlinx.serialization
@@ -45,7 +45,8 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [x] `MarkdownText` (themed GFM via multiplatform-markdown-renderer core, no Material) and `CopyButton`
 - [x] `Switch` and `SegmentedControl`; a pure black dark scheme (`PureBlack`)
 - [ ] Menu, toast, chat bubble, tool card, approval card
-- [ ] Theme picker (system / light / dark), optional Hermes-style accent presets
+- [x] Theme picker (system / light / dark) and pure black
+- [ ] Hermes-style accent presets
 
 ---
 
@@ -121,7 +122,11 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 ### 7. Settings (MVP)
 - [ ] Model picker (`model.options`)
 - [ ] Profile picker (`profiles.list`)
-- [ ] Theme: system, light, dark (🚧 follows system)
+- [x] Settings screen, opened from the account sheet
+- [x] Theme: system, light, dark, plus pure black; window and system bars follow it
+- [x] Text size on top of the system font scale
+- [x] Show or hide reasoning and tool activity in the chat
+- [x] Account (sign out, change gateway) and about (app and gateway versions)
 - [ ] Manage several saved gateways (add, edit, remove, choose primary)
 
 ---
