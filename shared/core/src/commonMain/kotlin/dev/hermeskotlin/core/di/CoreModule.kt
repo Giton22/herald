@@ -19,6 +19,7 @@ import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.slash.SlashApi
 import dev.hermeskotlin.core.journey.JourneyApi
 import dev.hermeskotlin.core.pet.PetApi
+import dev.hermeskotlin.core.voice.AudioApi
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -55,5 +56,6 @@ val coreModule = module {
     single { SlashApi(get()) }
     single { PetApi(get()) }
     single { JourneyApi(get()) }
+    single { AudioApi(get()) }
     single { MediaApi(get()) }
 }

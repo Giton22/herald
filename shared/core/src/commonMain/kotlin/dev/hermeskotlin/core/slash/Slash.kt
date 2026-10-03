@@ -112,6 +112,7 @@ sealed interface SlashRoute {
     data object Skin : SlashRoute
     data object Journey : SlashRoute
     data object Pet : SlashRoute
+    data object Voice : SlashRoute
 
     /** Known, but there is nothing on this client to run it with. */
     data class Unavailable(val message: String) : SlashRoute
@@ -128,7 +129,7 @@ sealed interface SlashRoute {
             return when (catalog?.surface(canonical)) {
                 "terminal" -> Unavailable("/$canonical only works in the terminal.")
                 "messaging" -> Unavailable("/$canonical is for messaging platforms.")
-                "composer-voice" -> Unavailable("Voice isn't available in this app yet.")
+                "composer-voice" -> Voice
                 "settings", "advanced" -> Unavailable("/$canonical isn't available in this app.")
                 else -> Gateway
             }
@@ -159,6 +160,7 @@ sealed interface SlashRoute {
             "skin" to Skin,
             "journey" to Journey,
             "pet" to Pet,
+            "voice" to Voice,
         )
 
         private val LOCAL_ALIASES = mapOf(
