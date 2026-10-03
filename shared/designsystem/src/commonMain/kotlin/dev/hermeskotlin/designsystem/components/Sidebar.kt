@@ -1,7 +1,9 @@
 package dev.hermeskotlin.designsystem.components
 
-import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
+import androidx.compose.foundation.MutatePriority
+import androidx.compose.foundation.MutatorMutex
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -19,6 +21,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -49,8 +52,10 @@ import kotlin.math.roundToInt
 @Stable
 class SidebarState internal constructor() {
 
-    /** 0 = closed, 1 = open; follows the finger while dragging. */
-    internal val progress = Animatable(0f)
+    // 0 = closed, 1 = open. Drags write it synchronously, so a late drag delta can never cancel the
+    // settle animation that starts when the finger lifts and strand the drawer half open.
+    private var progress by mutableFloatStateOf(0f)
+    private val motion = MutatorMutex()
 
     private var drawerOpen by mutableStateOf(false)
     private var dockedOpen by mutableStateOf(true)
@@ -63,7 +68,7 @@ class SidebarState internal constructor() {
     val isOpen: Boolean get() = if (docked) dockedOpen else drawerOpen
 
     /** How far open it is right now, 0 to 1; follows the finger while dragging. */
-    val fraction: Float get() = progress.value
+    val fraction: Float get() = progress
 
     suspend fun open() = settle(true)
 
@@ -73,16 +78,21 @@ class SidebarState internal constructor() {
 
     internal suspend fun settle(open: Boolean) {
         if (docked) dockedOpen = open else drawerOpen = open
-        progress.animateTo(if (open) 1f else 0f, spring(stiffness = 600f))
+        motion.mutate {
+            animate(progress, if (open) 1f else 0f, animationSpec = spring(stiffness = 600f)) { value, _ -> progress = value }
+        }
     }
 
-    internal suspend fun dragBy(fraction: Float) {
-        progress.snapTo((progress.value + fraction).coerceIn(0f, 1f))
+    /** A new drag grabs the drawer mid-animation. */
+    internal suspend fun stopAnimation() = motion.mutate(MutatePriority.UserInput) {}
+
+    internal fun dragBy(fraction: Float) {
+        progress = (progress + fraction).coerceIn(0f, 1f)
     }
 
     internal suspend fun updateDocked(value: Boolean) {
         docked = value
-        progress.snapTo(if (isOpen) 1f else 0f)
+        motion.mutate { progress = if (isOpen) 1f else 0f }
     }
 }
 
@@ -106,7 +116,7 @@ fun SidebarLayout(
         val docked = maxWidth >= dockedBreakpoint
         LaunchedEffect(docked) { state.updateDocked(docked) }
         val width = if (docked) 304.dp else min(maxWidth * 0.86f, 340.dp)
-        val p = state.progress.value
+        val p = state.fraction
         val hidden = Modifier.clearAndSetSemantics { }.takeIf { !state.isOpen && p == 0f } ?: Modifier
 
         if (docked) {
@@ -129,18 +139,19 @@ fun SidebarLayout(
 
         val widthPx = with(LocalDensity.current) { width.toPx() }
         val scope = rememberCoroutineScope()
-        val dragState = rememberDraggableState { delta -> scope.launch { state.dragBy(delta / widthPx) } }
+        val dragState = rememberDraggableState { delta -> state.dragBy(delta / widthPx) }
         Box(
             Modifier
                 .fillMaxSize()
                 .draggable(
                     state = dragState,
                     orientation = Orientation.Horizontal,
+                    onDragStarted = { state.stopAnimation() },
                     onDragStopped = { velocity ->
                         val open = when {
                             velocity > FLING_VELOCITY -> true
                             velocity < -FLING_VELOCITY -> false
-                            else -> state.progress.value > 0.5f
+                            else -> state.fraction > 0.5f
                         }
                         state.settle(open)
                     },
@@ -166,7 +177,11 @@ fun SidebarLayout(
                     .offset { IntOffset((-widthPx * (1f - p)).roundToInt(), 0) }
                     .background(Theme[colors][surface])
                     .then(hidden),
-            ) { sidebar() }
+            ) {
+                sidebar()
+                // The dim alone doesn't show the edge when both are black (pure black theme).
+                Box(Modifier.align(Alignment.CenterEnd).width(1.dp).fillMaxHeight().background(Theme[colors][stroke]))
+            }
         }
     }
 }
