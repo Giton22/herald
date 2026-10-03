@@ -119,7 +119,7 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
     var menuOpen by remember { mutableStateOf(false) }
 
     // The open chat, once it exists on the gateway (a new chat gets its row with the first prompt).
-    val openSessionId = chatState.storedSessionId?.takeIf { route.target.storedSessionId != null || chatState.messages.isNotEmpty() }
+    val openSessionId = chatState.storedSessionId?.takeIf { route.target.storedSessionId != null || chatState.hasConversation }
 
     fun closeDrawer() {
         if (!sidebar.docked) scope.launch { sidebar.close() }

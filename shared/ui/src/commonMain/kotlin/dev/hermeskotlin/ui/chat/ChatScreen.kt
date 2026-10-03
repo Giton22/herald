@@ -101,6 +101,7 @@ import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Square
 import com.composables.icons.lucide.SquarePen
+import com.composables.icons.lucide.SquareTerminal
 import com.composables.icons.lucide.Wrench
 import com.composables.icons.lucide.X
 import com.composables.icons.lucide.Zap
@@ -120,6 +121,9 @@ import dev.hermeskotlin.core.chat.ToolActivity
 import dev.hermeskotlin.core.chat.TurnOutcome
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.models.displayModelName
+import dev.hermeskotlin.core.slash.SlashKind
+import dev.hermeskotlin.core.slash.SlashSuggestion
+import dev.hermeskotlin.designsystem.code
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
@@ -181,6 +185,15 @@ fun ChatScreen(
         }
     }
     val attachmentPicker = rememberAttachmentPicker(onPicked = viewModel::addAttachments, onError = viewModel::showAttachmentError)
+    LaunchedEffect(viewModel) {
+        viewModel.requests.collect { request ->
+            when (request) {
+                ChatRequest.NewChat -> onNewChat()
+                ChatRequest.PickModel -> modelsOpen = true
+                ChatRequest.BrowseSessions -> onOpenSidebar()
+            }
+        }
+    }
 
     Box(
         Modifier
@@ -299,6 +312,13 @@ private fun ColumnScope.Dock(
     if (state.inputRequests.isNotEmpty()) {
         InputRequestPanel(state.inputRequests, connected, onAnswer = viewModel::answer)
     } else {
+        val suggestions = viewModel.suggestions.collectAsStateWithLifecycle().value
+        AnimatedVisibility(visible = suggestions.isNotEmpty() && connected, enter = fadeIn(), exit = fadeOut()) {
+            // Kept through the fade-out, so the list doesn't empty before it leaves.
+            var shown by remember { mutableStateOf(suggestions) }
+            if (suggestions.isNotEmpty()) shown = suggestions
+            SlashSuggestions(shown, hazeState, onPick = viewModel::pickSuggestion)
+        }
         Composer(
             hazeState = hazeState,
             viewModel = viewModel,
@@ -435,6 +455,7 @@ private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottom
                 when (message) {
                     is ChatMessage.User -> UserBubble(message)
                     is ChatMessage.Assistant -> AssistantReply(message, thinkingFrame.takeIf { message.streaming })
+                    is ChatMessage.Command -> CommandOutput(message)
                 }
             }
         }
@@ -509,6 +530,101 @@ private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String
             else -> Unit
         }
         if (!message.streaming && text.isNotBlank()) CopyButton(text)
+    }
+}
+
+/** A slash command and what it printed: a quiet outlined card in the terminal face, local to this device. */
+@Composable
+private fun CommandOutput(message: ChatMessage.Command) {
+    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(Theme[colors][surface], shape)
+            .border(1.dp, Theme[colors][stroke], shape)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            UnstyledIcon(Lucide.SquareTerminal, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
+            Text(
+                message.command,
+                style = Theme[typography][code].copy(fontWeight = FontWeight.SemiBold),
+                color = Theme[colors][textSecondary],
+                modifier = Modifier.weight(1f),
+            )
+            if (message.running) Spinner(Modifier.size(12.dp))
+        }
+        if (message.output.isNotEmpty()) SelectionContainer {
+            Text(
+                message.output,
+                style = Theme[typography][code].copy(fontSize = 12.sp, lineHeight = 18.sp),
+                color = if (message.failed) Theme[colors][danger] else Theme[colors][textColor],
+            )
+        }
+    }
+}
+
+/** The `/` list over the composer: commands, skills and argument choices, best match first. */
+@Composable
+private fun SlashSuggestions(suggestions: List<SlashSuggestion>, hazeState: HazeState, onPick: (SlashSuggestion) -> Unit) {
+    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
+    val page = Theme[colors][background]
+    val frosted = remember(page) {
+        HazeBlurStyle {
+            blurEnabled(true)
+            blurRadius(20.dp)
+            backgroundColor(page)
+        }
+    }
+    LazyColumn(
+        Modifier
+            .padding(start = 12.dp, end = 12.dp, top = 6.dp)
+            .fillMaxWidth()
+            .heightIn(max = 280.dp)
+            .clip(shape)
+            .hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)
+            .background(Theme[colors][surfaceElevated].copy(alpha = 0.85f))
+            .border(1.dp, Theme[colors][strokeStrong], shape),
+        contentPadding = PaddingValues(vertical = 6.dp),
+    ) {
+        suggestions.forEachIndexed { index, row ->
+            val group = row.group
+            if (group != null && group != suggestions.getOrNull(index - 1)?.group) {
+                item(key = "group-$index-$group") {
+                    Text(
+                        group.uppercase(),
+                        style = Theme[typography][caption].copy(fontWeight = FontWeight.Bold, letterSpacing = 0.06.em),
+                        color = Theme[colors][textTertiary],
+                        modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = if (index == 0) 4.dp else 10.dp, bottom = 2.dp),
+                    )
+                }
+            }
+            item(key = "row-$index-${row.text}") {
+                Row(
+                    Modifier.fillMaxWidth().clickable { onPick(row) }.padding(horizontal = 14.dp, vertical = 8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        row.label,
+                        style = Theme[typography][code].copy(fontWeight = FontWeight.SemiBold),
+                        color = if (row.kind == SlashKind.Skill) Theme[colors][accent] else Theme[colors][textColor],
+                        maxLines = 1,
+                    )
+                    if (row.description.isNotBlank()) {
+                        Text(
+                            row.description,
+                            style = Theme[typography][caption],
+                            color = Theme[colors][textTertiary],
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 

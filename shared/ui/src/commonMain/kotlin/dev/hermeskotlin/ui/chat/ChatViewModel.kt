@@ -21,8 +21,21 @@ import dev.hermeskotlin.core.models.ModelOption
 import dev.hermeskotlin.core.models.ModelsApi
 import dev.hermeskotlin.core.chat.ModelSwitch
 import dev.hermeskotlin.core.chat.OutgoingAttachment
+import dev.hermeskotlin.core.slash.SlashApi
+import dev.hermeskotlin.core.slash.SlashCatalog
+import dev.hermeskotlin.core.slash.SlashCommand
+import dev.hermeskotlin.core.slash.SlashKind
+import dev.hermeskotlin.core.slash.SlashRoute
+import dev.hermeskotlin.core.slash.SlashSuggestion
+import androidx.compose.runtime.snapshotFlow
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.mapLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlinx.coroutines.flow.asStateFlow
@@ -50,6 +63,9 @@ data class ModelPickerState(
 
 data class PendingSwitch(val model: ModelOption, val message: String)
 
+/** Something a slash command asks of the screen around the chat. */
+enum class ChatRequest { NewChat, PickModel, BrowseSessions }
+
 /**
  * Identifies what the chat screen shows: a stored session, or a new chat (`storedSessionId == null`),
  * in [profile] (null: the gateway's launch profile).
@@ -67,13 +83,14 @@ data class ChatTarget(
  * Remembers the open chat in [LastChatStore] so the next launch returns to it: a stored session once
  * it has messages, or nothing while a new chat is still empty.
  */
-@OptIn(ExperimentalCoroutinesApi::class)
+@OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class ChatViewModel(
     connection: GatewayConnection,
     private val host: ChatHost,
     private val lastChats: LastChatStore,
     private val models: ModelsApi,
     private val media: MediaApi,
+    private val slashApi: SlashApi,
 ) : ViewModel() {
 
     val composer = TextFieldState()
@@ -98,6 +115,23 @@ class ChatViewModel(
     private val _attachmentError = MutableStateFlow<String?>(null)
     val attachmentError: StateFlow<String?> = _attachmentError.asStateFlow()
 
+    private val _requests = Channel<ChatRequest>(Channel.BUFFERED)
+
+    /** Commands the screen answers: a new chat, the model sheet, the sessions list. */
+    val requests: Flow<ChatRequest> = _requests.receiveAsFlow()
+
+    /** The commands and skills of the open chat's profile; fetched once per chat, on the first `/`. */
+    private var catalog: SlashCatalog? = null
+    private var catalogFor: ChatTarget? = null
+
+    /** Rows for the `/` list above the composer; empty hides it. */
+    val suggestions: StateFlow<List<SlashSuggestion>> = snapshotFlow { composer.text.toString() }
+        .map { it.takeIf(::isSlashQuery) }
+        .distinctUntilChanged()
+        .debounce { if (it == null || it == "/") 0 else COMPLETION_DEBOUNCE_MS }
+        .mapLatest { query -> query?.let { completions(it) }.orEmpty() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+
     init {
         // The catalog names the default model, which a new chat shows until it has its own.
         viewModelScope.launch {
@@ -105,7 +139,7 @@ class ChatViewModel(
         }
         viewModelScope.launch {
             state
-                .map { chat -> chat.storedSessionId?.takeIf { chat.messages.isNotEmpty() }?.let { LastChat(it, chat.title) } }
+                .map { chat -> chat.storedSessionId?.takeIf { chat.hasConversation }?.let { LastChat(it, chat.title) } }
                 // Distinct before dropping nulls, so returning to the same chat after a new one saves it again.
                 .distinctUntilChanged()
                 .filterNotNull()
@@ -200,11 +234,84 @@ class ChatViewModel(
 
     fun dismissAttachmentError() = _attachmentError.update { null }
 
+    /** Puts a picked row in the composer: a command gets a space for its argument, an option is the whole line. */
+    fun pickSuggestion(suggestion: SlashSuggestion) {
+        composer.setTextAndPlaceCursorAtEnd(if (suggestion.kind == SlashKind.Option) suggestion.text else "${suggestion.text} ")
+    }
+
+    private fun isSlashQuery(text: String): Boolean = '\n' !in text && SlashCommand.looksLikeCommand(text) || text == "/"
+
+    private suspend fun completions(query: String): List<SlashSuggestion> = try {
+        val runtimeId = session.value?.state?.value?.runtimeSessionId
+        val catalog = catalog()
+        if (query == "/") {
+            catalog?.suggestions.orEmpty().filterNot { SlashRoute.hidden(it.text.removePrefix("/"), catalog) }
+        } else {
+            slashApi.complete(query, runtimeId).filter { row ->
+                if (row.kind == SlashKind.Option) row.text.trim() != query.trim()
+                else !SlashRoute.hidden(row.text.removePrefix("/").substringBefore(' '), catalog)
+            }
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        emptyList()
+    }
+
+    private suspend fun catalog(): SlashCatalog? {
+        val target = target ?: return null
+        if (catalogFor == target) catalog?.let { return it }
+        return try {
+            slashApi.catalog(session.value?.state?.value?.runtimeSessionId, target.profile).also {
+                catalog = it
+                catalogFor = target
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            null
+        }
+    }
+
+    /** A command typed in the composer: answered here when this app has its own control for it, else run on the gateway. */
+    private fun runCommand(chat: ChatSession, command: SlashCommand) {
+        viewModelScope.launch {
+            when (val route = SlashRoute.of(command.name, catalog())) {
+                SlashRoute.NewChat -> _requests.send(ChatRequest.NewChat)
+                SlashRoute.PickModel -> _requests.send(ChatRequest.PickModel)
+                SlashRoute.BrowseSessions -> _requests.send(ChatRequest.BrowseSessions)
+                SlashRoute.Stop -> chat.interrupt()
+                SlashRoute.Help -> chat.showCommandOutput("/help", helpText(catalog()))
+                SlashRoute.Compress -> chat.compress(command.arg)
+                SlashRoute.Status -> chat.status()
+                is SlashRoute.Unavailable -> chat.showCommandOutput("/${command.name}", route.message, failed = true)
+                SlashRoute.Gateway -> chat.runCommand(command)?.let { text ->
+                    if (composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
+                }
+            }
+        }
+    }
+
+    private fun helpText(catalog: SlashCatalog?): String {
+        val rows = catalog?.suggestions.orEmpty().filterNot { SlashRoute.hidden(it.text.removePrefix("/"), catalog) }
+        if (rows.isEmpty()) return "Couldn't load the command list. Type / to try again."
+        return rows.groupBy { it.group ?: "Commands" }.entries.joinToString("\n\n") { (group, items) ->
+            group + "\n" + items.joinToString("\n") { row -> if (row.description.isBlank()) row.text else "${row.text}  ${row.description}" }
+        }
+    }
+
     fun send() {
         val chat = session.value ?: return
         val text = composer.text.toString()
         val attachments = _attachments.value
         if (text.isBlank() && attachments.isEmpty()) return
+        val command = SlashCommand.parse(text.trim())
+        if (command != null && attachments.isEmpty()) {
+            if (command.name.isEmpty()) return
+            composer.clearText()
+            runCommand(chat, command)
+            return
+        }
         composer.clearText()
         _attachments.value = emptyList()
         viewModelScope.launch {
@@ -235,5 +342,8 @@ class ChatViewModel(
     private companion object {
         /** Full-size gateway photos are a few hundred KB each; keep a screenful or two. */
         const val MAX_CACHED_MEDIA = 24
+
+        /** Typing pauses this long before asking the gateway for matches. */
+        const val COMPLETION_DEBOUNCE_MS = 120L
     }
 }
