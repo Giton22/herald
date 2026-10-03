@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -79,27 +80,43 @@ internal fun CapabilitiesPage(
             viewModel.dismissMessage()
         }
     }
+    CapabilitiesView(state, viewModel.skillQuery, viewModel, onBack = onBack)
+}
 
+/** What the Capabilities page can ask for; [CapabilitiesViewModel] does it all, previews nothing. */
+interface CapabilitiesActions {
+    fun selectTab(tab: CapabilityTab)
+    fun refresh()
+    fun setSkillEnabled(skill: Skill, enabled: Boolean)
+    fun setToolsetEnabled(toolset: Toolset, enabled: Boolean)
+    fun setServerEnabled(server: McpServer, enabled: Boolean)
+    fun testServer(server: McpServer)
+    fun dismissMessage()
+}
+
+/** The Capabilities page's layout, apart from its view model, so previews can draw it from sample data. */
+@Composable
+internal fun CapabilitiesView(state: CapabilitiesUiState, skillQuery: TextFieldState, actions: CapabilitiesActions, onBack: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         SubpageHeader("Capabilities", onBack = onBack)
         SegmentedControl(
             options = CapabilityTab.entries,
             selected = state.tab,
-            onSelect = viewModel::selectTab,
+            onSelect = actions::selectTab,
             optionLabel = { it.label },
             modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
         )
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (state.tab) {
-                CapabilityTab.Skills -> SkillsTab(state, viewModel)
-                CapabilityTab.Tools -> TabList(state.toolsets, empty = "No toolsets configured.", onRetry = viewModel::refresh) { toolsets ->
+                CapabilityTab.Skills -> SkillsTab(state, skillQuery, actions)
+                CapabilityTab.Tools -> TabList(state.toolsets, empty = "No toolsets configured.", onRetry = actions::refresh) { toolsets ->
                     item(key = "note") { Hint("Toolsets the agent gets in new chats.") }
-                    items(toolsets, key = { it.name }) { ToolsetRow(it, onToggle = { on -> viewModel.setToolsetEnabled(it, on) }) }
+                    items(toolsets, key = { it.name }) { ToolsetRow(it, onToggle = { on -> actions.setToolsetEnabled(it, on) }) }
                 }
                 CapabilityTab.Mcp -> TabList(
                     state.servers,
                     empty = "No MCP servers. Add one on the gateway with `hermes mcp add`, or from Desktop.",
-                    onRetry = viewModel::refresh,
+                    onRetry = actions::refresh,
                 ) { servers ->
                     item(key = "note") { Hint("Changes apply from the next chat.") }
                     items(servers, key = { it.name }) { server ->
@@ -107,26 +124,26 @@ internal fun CapabilitiesPage(
                             server,
                             test = state.tests[server.name],
                             testing = server.name in state.tests && state.tests[server.name] == null,
-                            onToggle = { on -> viewModel.setServerEnabled(server, on) },
-                            onTest = { viewModel.testServer(server) },
+                            onToggle = { on -> actions.setServerEnabled(server, on) },
+                            onTest = { actions.testServer(server) },
                         )
                     }
                 }
             }
         }
-        state.message?.let { MessageBanner(it, onDismiss = viewModel::dismissMessage, modifier = Modifier.padding(bottom = 96.dp)) }
+        state.message?.let { MessageBanner(it, onDismiss = actions::dismissMessage, modifier = Modifier.padding(bottom = 96.dp)) }
     }
 }
 
 @Composable
-private fun SkillsTab(state: CapabilitiesUiState, viewModel: CapabilitiesViewModel) {
-    val query = viewModel.skillQuery.text.toString().trim()
+private fun SkillsTab(state: CapabilitiesUiState, skillQuery: TextFieldState, actions: CapabilitiesActions) {
+    val query = skillQuery.text.toString().trim()
     val all = state.skills.items
     val groups = remember(all, query) { skillGroups(all.orEmpty(), query) }
-    TabList(state.skills, empty = "No skills yet. The agent writes them as it learns, or install them with `hermes skills`.", onRetry = viewModel::refresh) { skills ->
+    TabList(state.skills, empty = "No skills yet. The agent writes them as it learns, or install them with `hermes skills`.", onRetry = actions::refresh) { skills ->
         item(key = "search") {
             TextField(
-                state = viewModel.skillQuery,
+                state = skillQuery,
                 placeholder = "Search ${skills.size} skills",
                 leadingIcon = Lucide.Search,
                 clearable = true,
@@ -144,7 +161,7 @@ private fun SkillsTab(state: CapabilitiesUiState, viewModel: CapabilitiesViewMod
                     modifier = Modifier.padding(start = 12.dp, top = 12.dp, bottom = 4.dp),
                 )
             }
-            items(inGroup, key = { "s-${it.name}" }) { skill -> SkillRow(skill, onToggle = { on -> viewModel.setSkillEnabled(skill, on) }) }
+            items(inGroup, key = { "s-${it.name}" }) { skill -> SkillRow(skill, onToggle = { on -> actions.setSkillEnabled(skill, on) }) }
         }
     }
 }

@@ -160,8 +160,6 @@ class ScheduledViewModel(
         _state.update { it.copy(editor = null) }
     }
 
-    fun setSchedule(text: String) = schedule.setTextAndPlaceCursorAtEnd(text)
-
     fun setDeliver(target: String) = _state.update { state -> state.copy(editor = state.editor?.copy(deliver = target, error = null)) }
 
     /** Creates the job, or sends an existing job only the fields that changed. */

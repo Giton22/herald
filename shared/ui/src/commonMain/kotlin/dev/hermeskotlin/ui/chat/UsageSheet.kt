@@ -111,7 +111,12 @@ fun UsageSheet(visible: Boolean, controller: UsageController, live: SessionUsage
     LaunchedEffect(visible) { if (visible) onLoad() }
     // The context split is fetched, not streamed; follow the live count so it keeps up with the turn.
     LaunchedEffect(visible, live?.contextUsed) { if (visible) controller.refreshBreakdown() }
-    val state = controller.state.collectAsStateWithLifecycle().value
+    UsageSheetView(visible, controller.state.collectAsStateWithLifecycle().value, live, onDismiss)
+}
+
+/** The usage sheet's layout, apart from its controller, so previews can draw it from sample data. */
+@Composable
+internal fun UsageSheetView(visible: Boolean, state: UsageSheetState, live: SessionUsage?, onDismiss: () -> Unit) {
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         SheetHeader("Usage", state.totals?.model?.takeIf { it.isNotBlank() }?.let { "This chat · $it" } ?: "This chat")
         Column(Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(20.dp)) {

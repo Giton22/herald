@@ -40,7 +40,7 @@ data class CapabilitiesUiState(
  * The profile's skills, toolsets and MCP servers, each with its switch. A switch flips straight
  * away and flips back if the gateway refuses; either way the change applies from the next chat.
  */
-class CapabilitiesViewModel(private val api: CapabilitiesApi) : ViewModel() {
+class CapabilitiesViewModel(private val api: CapabilitiesApi) : ViewModel(), CapabilitiesActions {
 
     val skillQuery = TextFieldState()
 
@@ -63,13 +63,13 @@ class CapabilitiesViewModel(private val api: CapabilitiesApi) : ViewModel() {
         refresh()
     }
 
-    fun selectTab(tab: CapabilityTab) {
+    override fun selectTab(tab: CapabilityTab) {
         _state.update { it.copy(tab = tab) }
         if (current(tab).items == null) refresh()
     }
 
     /** Refetches the open tab. */
-    fun refresh() {
+    override fun refresh() {
         val url = gateway?.gatewayUrl ?: return
         val profile = profile
         when (_state.value.tab) {
@@ -79,25 +79,25 @@ class CapabilitiesViewModel(private val api: CapabilitiesApi) : ViewModel() {
         }
     }
 
-    fun setSkillEnabled(skill: Skill, enabled: Boolean) = toggle(
+    override fun setSkillEnabled(skill: Skill, enabled: Boolean) = toggle(
         apply = { s, on -> s.copy(skills = s.skills.mapItems { if (it.name == skill.name) it.copy(enabled = on) else it }) },
         enabled = enabled,
         label = skill.name,
     ) { url -> api.setSkillEnabled(url, profile, skill.name, enabled) }
 
-    fun setToolsetEnabled(toolset: Toolset, enabled: Boolean) = toggle(
+    override fun setToolsetEnabled(toolset: Toolset, enabled: Boolean) = toggle(
         apply = { s, on -> s.copy(toolsets = s.toolsets.mapItems { if (it.name == toolset.name) it.copy(enabled = on) else it }) },
         enabled = enabled,
         label = toolset.label,
     ) { url -> api.setToolsetEnabled(url, profile, toolset.name, enabled) }
 
-    fun setServerEnabled(server: McpServer, enabled: Boolean) = toggle(
+    override fun setServerEnabled(server: McpServer, enabled: Boolean) = toggle(
         apply = { s, on -> s.copy(servers = s.servers.mapItems { if (it.name == server.name) it.copy(enabled = on) else it }) },
         enabled = enabled,
         label = server.name,
     ) { url -> api.setMcpServerEnabled(url, profile, server.name, enabled) }
 
-    fun testServer(server: McpServer) {
+    override fun testServer(server: McpServer) {
         val url = gateway?.gatewayUrl ?: return
         _state.update { it.copy(tests = it.tests + (server.name to null)) }
         viewModelScope.launch(binding) {
@@ -110,7 +110,7 @@ class CapabilitiesViewModel(private val api: CapabilitiesApi) : ViewModel() {
         }
     }
 
-    fun dismissMessage() = _state.update { it.copy(message = null) }
+    override fun dismissMessage() = _state.update { it.copy(message = null) }
 
     private fun newBinding(): Job = SupervisorJob(viewModelScope.coroutineContext[Job])
 

@@ -79,13 +79,18 @@ internal fun InsightsPage(
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
     LaunchedEffect(Unit) { viewModel.refresh() }
     LaunchedEffect(state.sessionExpired) { if (state.sessionExpired) onSessionExpired() }
+    InsightsView(state, onBack = onBack, onSelectPeriod = viewModel::selectPeriod, onRetry = viewModel::refresh)
+}
 
+/** The Insights page's layout, apart from its view model, so previews can draw it from sample data. */
+@Composable
+internal fun InsightsView(state: InsightsUiState, onBack: () -> Unit, onSelectPeriod: (InsightsPeriod) -> Unit, onRetry: () -> Unit) {
     Column(Modifier.fillMaxSize()) {
         SubpageHeader("Insights", onBack = onBack)
         SegmentedControl(
             options = InsightsPeriod.entries,
             selected = state.period,
-            onSelect = viewModel::selectPeriod,
+            onSelect = onSelectPeriod,
             optionLabel = { it.label },
             modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
         )
@@ -93,7 +98,7 @@ internal fun InsightsPage(
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
                 report == null && state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load insights", state.error) {
-                    Button("Try again", onClick = viewModel::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+                    Button("Try again", onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                 }
                 report == null -> CenteredSpinner()
                 report.totals.sessions == 0 && report.totals.apiCalls == 0 ->

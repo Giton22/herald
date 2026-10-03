@@ -9,6 +9,8 @@ import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -37,8 +39,12 @@ import dev.hermeskotlin.designsystem.typography
 @Composable
 internal fun JobEditorPage(
     editor: JobEditor,
-    viewModel: ScheduledViewModel,
+    prompt: TextFieldState,
+    schedule: TextFieldState,
+    name: TextFieldState,
     deliveryTargets: List<DeliveryTarget>,
+    onSetDeliver: (String) -> Unit,
+    onSave: () -> Unit,
     onClose: () -> Unit,
 ) {
     // A job may deliver somewhere the target list doesn't name (a specific chat, or `origin`); keep it selectable.
@@ -59,7 +65,7 @@ internal fun JobEditorPage(
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             TextField(
-                state = viewModel.prompt,
+                state = prompt,
                 label = "Prompt",
                 placeholder = "Summarize my unread email and flag anything urgent",
                 supportingText = "What the agent does on each run, as a fresh chat.",
@@ -69,7 +75,7 @@ internal fun JobEditorPage(
             )
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextField(
-                    state = viewModel.schedule,
+                    state = schedule,
                     label = "Schedule",
                     placeholder = "every 30m",
                     supportingText = scheduleHint(editor),
@@ -78,12 +84,12 @@ internal fun JobEditorPage(
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     SCHEDULE_PRESETS.forEach { (label, value) ->
-                        Chip(label, selected = viewModel.schedule.text.toString() == value, onClick = { viewModel.setSchedule(value) })
+                        Chip(label, selected = schedule.text.toString() == value, onClick = { schedule.setTextAndPlaceCursorAtEnd(value) })
                     }
                 }
             }
             TextField(
-                state = viewModel.name,
+                state = name,
                 label = "Name",
                 placeholder = "Optional",
                 enabled = !editor.saving,
@@ -93,7 +99,7 @@ internal fun JobEditorPage(
                 Text("DELIVER TO", style = Theme[typography][caption], color = Theme[colors][textTertiary])
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     targets.forEach { target ->
-                        Chip(target.name, selected = target.id == editor.deliver, onClick = { viewModel.setDeliver(target.id) })
+                        Chip(target.name, selected = target.id == editor.deliver, onClick = { onSetDeliver(target.id) })
                     }
                 }
                 targets.firstOrNull { it.id == editor.deliver && !it.homeTargetSet }?.let {
@@ -107,7 +113,7 @@ internal fun JobEditorPage(
             editor.error?.let { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
             Button(
                 if (editor.isNew) "Schedule job" else "Save",
-                onClick = viewModel::saveJob,
+                onClick = onSave,
                 leadingIcon = Lucide.Check,
                 loading = editor.saving,
                 modifier = Modifier.fillMaxWidth(),
