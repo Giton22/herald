@@ -12,13 +12,14 @@ data class ReplyMedia(val source: String, val name: String, val isImage: Boolean
     val gatewayPath: String get() = source.removePrefix("file://")
 }
 
-private val MARKDOWN_IMAGE = Regex("""!\[([^\]]*)]\(\s*<?([^)\s>]+)>?(?:\s+"[^"]*")?\s*\)""")
+private val MARKDOWN_IMAGE = Regex("""!\[([^\]]*)\]\(\s*<?([^\)\s>]+)>?(?:\s+"[^"]*")?\s*\)""")
 
 /** Hermes' delivery directive; trailing sentence punctuation is not part of the path. */
 private val MEDIA_TOKEN = Regex("""[ \t]*MEDIA:(\S+?)(?=[.,;:!?)\]]*(?:\s|$))""")
 
 /** Desktop's inline widget directive, alone on its line; shown here as its file. */
-private val PREVIEW_DIRECTIVE = Regex("""(?m)^[ \t]*::preview\{[^}]*?file="([^"]+)"[^}]*}[ \t]*$""")
+// Braces and brackets are escaped everywhere: Android's ICU regex rejects a bare `}` that the JVM allows.
+private val PREVIEW_DIRECTIVE = Regex("""(?m)^[ \t]*::preview\{[^\}]*?file="([^"]+)"[^\}]*\}[ \t]*$""")
 
 private val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "gif", "webp", "bmp", "svg")
 
