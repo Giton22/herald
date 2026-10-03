@@ -422,6 +422,7 @@ class ChatSession(
             "session.resume",
             buildJsonObject {
                 put("session_id", stored)
+                put("source", CLIENT_SOURCE)
                 put("cols", TERMINAL_COLUMNS)
                 put("omit_messages", true)
             },
@@ -464,6 +465,7 @@ class ChatSession(
         val result = client.request(
             "session.create",
             buildJsonObject {
+                put("source", CLIENT_SOURCE)
                 put("cols", TERMINAL_COLUMNS)
                 // Picked before the first send; without them the profile defaults apply.
                 if (picks.model != null && picks.provider != null) {
@@ -489,6 +491,13 @@ class ChatSession(
     private fun connectedClient(): JsonRpcClient? = (connection.state.value as? ConnectionState.Connected)?.client
 
     private companion object {
+        /**
+         * The surface the agent is told it's on (agent/prompt_builder.py PLATFORM_HINTS). "desktop", like
+         * Hermes Desktop and the dashboard chat: Markdown renders and files come back as `MEDIA:` paths,
+         * where the default "tui" tells the agent there is no way to show a picture.
+         */
+        const val CLIENT_SOURCE = "desktop"
+
         /** Width the agent formats terminal-ish output for; a phone is narrow. */
         const val TERMINAL_COLUMNS = 80
 

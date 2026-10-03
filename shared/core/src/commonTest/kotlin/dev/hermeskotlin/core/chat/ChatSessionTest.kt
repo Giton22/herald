@@ -99,6 +99,7 @@ class ChatSessionTest {
         val resume = transport.awaitSent { it.isCall("session.resume") }
         assertEquals("stored-1", resume.param("session_id"))
         assertEquals("true", resume.param("omit_messages"))
+        assertEquals("desktop", resume.param("source"))
         val attached = chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
         assertEquals(2, attached.messages.size)
         assertEquals("m1", attached.model)
@@ -257,6 +258,7 @@ class ChatSessionTest {
         assertTrue(chat.send("hi"))
 
         val create = transport.awaitSent { it.isCall("session.create") }
+        assertEquals("desktop", create.param("source"))
         assertEquals("m2", create.param("model"))
         assertEquals("p2", create.param("provider"))
         assertEquals("high", create.param("reasoning_effort"))
