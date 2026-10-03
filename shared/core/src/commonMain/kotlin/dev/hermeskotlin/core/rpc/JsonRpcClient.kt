@@ -1,0 +1,226 @@
+package dev.hermeskotlin.core.rpc
+
+import dev.hermeskotlin.core.network.HermesJson
+import io.ktor.util.date.getTimeMillis
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.intOrNull
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.longOrNull
+import kotlinx.serialization.json.put
+
+/** A server `event` notification: `{"method":"event","params":{"type":…,"payload":…}}`. */
+data class GatewayEvent(
+    val type: String,
+    val payload: JsonElement?,
+    val sessionId: String?,
+    val seq: Long?,
+)
+
+/** JSON-RPC error returned by the gateway. */
+class RpcException(val code: Int, override val message: String) : Exception(message)
+
+/** The gateway stopped answering (no inbound frame within the heartbeat deadline). */
+class HeartbeatTimeoutException : Exception("Gateway heartbeat timed out")
+
+/**
+ * A server→client request (approval, clarify, sudo, secret…). Answer exactly once with
+ * [respond] or [fail]; the agent thread blocks until we do.
+ */
+class ServerRequest internal constructor(
+    val id: String,
+    val method: String,
+    val params: JsonElement?,
+    private val reply: suspend (JsonObject) -> Unit,
+) {
+    suspend fun respond(result: JsonElement) = reply(buildJsonObject { put("result", result) })
+
+    suspend fun fail(code: Int, message: String) = reply(
+        buildJsonObject {
+            put("error", buildJsonObject { put("code", code); put("message", message) })
+        },
+    )
+}
+
+/**
+ * JSON-RPC 2.0 peer over the dashboard WebSocket (tui_gateway/ws.py + apps/shared/json-rpc-channel.ts).
+ *
+ * Call [run] to pump the socket; it returns only by throwing (closed, heartbeat timeout).
+ * On `gateway.ready` it advertises `client.capabilities {server_requests: true}` and, when the server
+ * offers it, starts the `gateway.ping` heartbeat (15 s interval, 45 s inbound deadline).
+ */
+class JsonRpcClient(
+    private val transport: RpcTransport,
+    private val heartbeatIntervalMs: Long = 15_000,
+    private val heartbeatDeadlineMs: Long = 45_000,
+    private val clock: () -> Long = { getTimeMillis() },
+) {
+    private val sendMutex = Mutex()
+    private val pending = mutableMapOf<String, CompletableDeferred<JsonElement>>()
+    private val pendingMutex = Mutex()
+    private var nextId = 0L
+    @kotlin.concurrent.Volatile private var lastInboundAt = clock()
+    private var heartbeatJob: Job? = null
+
+    private val _events = MutableSharedFlow<GatewayEvent>(extraBufferCapacity = 256)
+    val events: SharedFlow<GatewayEvent> = _events.asSharedFlow()
+
+    private val _serverRequests = MutableSharedFlow<ServerRequest>(extraBufferCapacity = 16)
+    /** With no collector, requests are failed with -32601 immediately so the agent doesn't stall. */
+    val serverRequests: SharedFlow<ServerRequest> = _serverRequests.asSharedFlow()
+
+    /** Completed with the `gateway.ready` payload. */
+    val ready = CompletableDeferred<JsonObject>()
+
+    suspend fun run(): Nothing = coroutineScope {
+        try {
+            transport.incoming.collect { text ->
+                lastInboundAt = clock()
+                // One JSON document per frame today; split defensively in case frames get batched.
+                text.lineSequence().map { it.trim() }.filter { it.isNotEmpty() }.forEach { handleLine(it, this) }
+            }
+            throw TransportClosedException(null, "stream ended")
+        } catch (e: Throwable) {
+            failPending(e)
+            if (!ready.isCompleted) ready.completeExceptionally(e)
+            throw e
+        } finally {
+            heartbeatJob?.cancel()
+        }
+    }
+
+    suspend fun request(method: String, params: JsonObject = JsonObject(emptyMap()), timeoutMs: Long = 30_000): JsonElement {
+        val id = "c${++nextId}"
+        val deferred = CompletableDeferred<JsonElement>()
+        pendingMutex.withLock { pending[id] = deferred }
+        try {
+            send(buildJsonObject {
+                put("jsonrpc", "2.0")
+                put("id", id)
+                put("method", method)
+                put("params", params)
+            })
+            return withTimeout(timeoutMs) { deferred.await() }
+        } finally {
+            pendingMutex.withLock { pending.remove(id) }
+        }
+    }
+
+    suspend fun close() = transport.close()
+
+    private suspend fun handleLine(line: String, scope: CoroutineScope) {
+        val frame = runCatching { HermesJson.parseToJsonElement(line).jsonObject }.getOrNull() ?: return
+        val id = frame["id"]?.takeUnless { it is JsonNull }?.jsonPrimitive?.contentOrNull
+        val method = frame["method"]?.jsonPrimitive?.contentOrNull
+
+        when {
+            method == "event" -> handleEvent(frame["params"] as? JsonObject ?: return, scope)
+            method != null && id != null -> handleServerRequest(id, method, frame["params"])
+            id != null -> {
+                val deferred = pendingMutex.withLock { pending.remove(id) } ?: return
+                val error = frame["error"] as? JsonObject
+                if (error != null) {
+                    deferred.completeExceptionally(
+                        RpcException(
+                            error["code"]?.jsonPrimitive?.intOrNull ?: -32000,
+                            error["message"]?.jsonPrimitive?.contentOrNull ?: "RPC error",
+                        ),
+                    )
+                } else {
+                    deferred.complete(frame["result"] ?: JsonNull)
+                }
+            }
+        }
+    }
+
+    private suspend fun handleEvent(params: JsonObject, scope: CoroutineScope) {
+        val type = params["type"]?.jsonPrimitive?.contentOrNull ?: return
+        val payload = params["payload"]
+        if (type == "gateway.ready") {
+            val readyPayload = payload as? JsonObject ?: JsonObject(emptyMap())
+            scope.launch { runCatching { request("client.capabilities", buildJsonObject { put("server_requests", true) }) } }
+            if (readyPayload["heartbeat"]?.jsonPrimitive?.booleanOrNull == true) startHeartbeat(scope)
+            ready.complete(readyPayload)
+        }
+        _events.emit(
+            GatewayEvent(
+                type = type,
+                payload = payload,
+                sessionId = params["session_id"]?.jsonPrimitive?.contentOrNull,
+                seq = params["seq"]?.jsonPrimitive?.longOrNull,
+            ),
+        )
+    }
+
+    private suspend fun handleServerRequest(id: String, method: String, params: JsonElement?) {
+        var answered = false
+        val request = ServerRequest(id, method, params) { body ->
+            if (answered) return@ServerRequest
+            answered = true
+            send(buildJsonObject {
+                put("jsonrpc", "2.0")
+                put("id", id)
+                body.forEach { (k, v) -> put(k, v) }
+            })
+        }
+        if (_serverRequests.subscriptionCount.value == 0) {
+            request.fail(METHOD_NOT_FOUND, "This client does not handle '$method' yet")
+        } else {
+            _serverRequests.emit(request)
+        }
+    }
+
+    private fun startHeartbeat(scope: CoroutineScope) {
+        if (heartbeatJob?.isActive == true) return
+        heartbeatJob = scope.launch {
+            while (isActive) {
+                delay(heartbeatIntervalMs)
+                if (clock() - lastInboundAt > heartbeatDeadlineMs) {
+                    runCatching { transport.close(GOING_AWAY, "heartbeat timeout") }
+                    throw HeartbeatTimeoutException()
+                }
+                // Fire-and-forget: any inbound frame (including the pong) counts as liveness.
+                runCatching {
+                    send(buildJsonObject {
+                        put("jsonrpc", "2.0")
+                        put("id", "ping${++nextId}")
+                        put("method", "gateway.ping")
+                        put("params", JsonObject(emptyMap()))
+                    })
+                }
+            }
+        }
+    }
+
+    private suspend fun send(frame: JsonObject) = sendMutex.withLock {
+        transport.send(HermesJson.encodeToString(JsonObject.serializer(), frame))
+    }
+
+    private suspend fun failPending(cause: Throwable) {
+        val calls = pendingMutex.withLock { pending.values.toList().also { pending.clear() } }
+        calls.forEach { it.completeExceptionally(cause) }
+    }
+
+    private companion object {
+        const val METHOD_NOT_FOUND = -32601
+        const val GOING_AWAY: Short = 1001
+    }
+}
