@@ -1,3 +1,5 @@
+<img src="docs/logo.svg" alt="" width="96" height="96">
+
 # Hermes Kotlin
 
 A modern Kotlin Multiplatform client for [Hermes Agent](https://github.com/NousResearch/hermes-agent).

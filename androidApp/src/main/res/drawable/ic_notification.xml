@@ -1,14 +1,24 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Lucide "server" glyph (ISC license), the launcher icon's shape as a status-bar silhouette. -->
+<!-- The app mark (ic_launcher_foreground) cropped to fill the status bar's 24dp icon. -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
     android:width="24dp"
     android:height="24dp"
-    android:viewportWidth="24"
-    android:viewportHeight="24">
-    <path
-        android:pathData="M4,2h16a2,2 0,0 1,2 2v4a2,2 0,0 1,-2 2H4a2,2 0,0 1,-2 -2V4a2,2 0,0 1,2 -2zM4,14h16a2,2 0,0 1,2 2v4a2,2 0,0 1,-2 2H4a2,2 0,0 1,-2 -2v-4a2,2 0,0 1,2 -2zM6,6h0.01M6,18h0.01"
-        android:strokeWidth="2"
-        android:strokeColor="#FFFFFF"
-        android:strokeLineCap="round"
-        android:strokeLineJoin="round" />
+    android:viewportWidth="56"
+    android:viewportHeight="56">
+    <group
+        android:translateX="-26"
+        android:translateY="-26">
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M38.5,30a5.5,5.5 0,0 1,5.5 5.5v37a5.5,5.5 0,0 1,-5.5 5.5a5.5,5.5 0,0 1,-5.5 -5.5v-37a5.5,5.5 0,0 1,5.5 -5.5z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M69.5,30a5.5,5.5 0,0 1,5.5 5.5v37a5.5,5.5 0,0 1,-5.5 5.5a5.5,5.5 0,0 1,-5.5 -5.5v-37a5.5,5.5 0,0 1,5.5 -5.5z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M38,43h18a5,5 0,0 1,5 5a5,5 0,0 1,-5 5h-18a5,5 0,0 1,-5 -5a5,5 0,0 1,5 -5z" />
+        <path
+            android:fillColor="#FFFFFF"
+            android:pathData="M52,55h18a5,5 0,0 1,5 5a5,5 0,0 1,-5 5h-18a5,5 0,0 1,-5 -5a5,5 0,0 1,5 -5z" />
+    </group>
 </vector>
