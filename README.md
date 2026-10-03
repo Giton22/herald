@@ -135,9 +135,9 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 ## Later
 
 ### Attachments & media
-- [ ] Image attachments from the gallery or camera (`image.attach_bytes`, `image.detach`)
-- [ ] File and PDF attachments (`file.attach`, `pdf.attach`)
-- [ ] Inline images in history (`inline_images`)
+- [x] Image attachments from the photo picker or camera (`image.attach_bytes`), upright and scaled to 2048 px; a failed send detaches them (`image.detach`)
+- [x] File and PDF attachments (`file.attach` as `@file:` refs, `pdf.attach` with a `file.attach` fallback when the gateway can't render pages)
+- [x] Images in history: stored `@image:` refs fetched through `GET /api/media`, `@file:` refs as file cards
 - [ ] Share sheet: "Send to Hermes" from other apps
 
 ### Voice
