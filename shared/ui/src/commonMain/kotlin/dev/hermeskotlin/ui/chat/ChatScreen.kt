@@ -41,7 +41,10 @@ import dev.hermeskotlin.designsystem.userBubbleStroke
 import dev.hermeskotlin.designsystem.wordmark
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -911,6 +914,7 @@ private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit) 
  * Desktop's composer stood up for a phone: a flat outlined box, the text on top; beneath it a plain +,
  * the model and thinking level as quiet text, and the round send (or stop) button.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Composer(
     hazeState: HazeState,
@@ -938,6 +942,11 @@ private fun Composer(
         }
     }
     var focused by remember { mutableStateOf(false) }
+    // Back hides the keyboard but leaves the field focused, and a focused field brings the keyboard back on
+    // the next relayout (opening a tool card, the menu). Put away means done typing, so let go of the focus.
+    val imeVisible = WindowInsets.isImeVisible
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(imeVisible) { if (!imeVisible && focused) focusManager.clearFocus() }
     Column(
         Modifier
             .fillMaxWidth()
