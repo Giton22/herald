@@ -104,4 +104,27 @@ class ChatReducerTest {
         assertEquals("Fix the build", state.title)
         assertEquals("claude-x", state.model)
     }
+
+    @Test
+    fun afterACorrectionTheFinalTextDoesNotRepeatWhatWasShown() {
+        val shown = ChatMessage.Assistant("a", text = "Hello there", tools = listOf(ToolActivity("t1", "terminal", running = true)))
+        val state = ChatState(
+            messages = listOf(ChatMessage.User("u", "greet"), shown, ChatMessage.User("c", "in French")),
+            running = true,
+            correctedReplyKey = "a",
+        ).apply(
+            event("tool.complete", """{"tool_id":"t1","summary":"ok"}"""),
+            // A non-streaming provider: only the final text, which covers the whole turn.
+            event("message.complete", """{"text":"Hello there Bonjour","status":"complete"}"""),
+        )
+        assertEquals(listOf("greet", "Hello there", "in French", "Bonjour"), state.messages.map {
+            when (it) {
+                is ChatMessage.User -> it.text
+                is ChatMessage.Assistant -> it.text
+                is ChatMessage.Command -> it.output
+            }
+        })
+        assertEquals("ok", assertIs<ChatMessage.Assistant>(state.messages[1]).tools.single().summary)
+        assertEquals(null, state.correctedReplyKey)
+    }
 }

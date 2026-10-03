@@ -187,11 +187,11 @@ class ChatSessionTest {
 
         assertTrue(chat.send("in French"))
         transport.push(event("message.delta", "rt1", """{"text":"Bonjour"}"""))
-        transport.push(event("message.complete", "rt1", """{"text":"Hello thereBonjour","status":"complete"}"""))
 
-        val done = chat.state.first { !it.running }
-        assertEquals(listOf("hello", "Hi! What next?", "Hello there", "in French", "Bonjour"), done.messages.map { it.textOf() })
-        assertFalse(assertIs<ChatMessage.User>(done.messages[3]).queued)
+        val live = chat.state.first { s -> (s.messages.last() as? ChatMessage.Assistant)?.text == "Bonjour" }
+        assertEquals(listOf("hello", "Hi! What next?", "Hello there", "in French", "Bonjour"), live.messages.map { it.textOf() })
+        assertFalse(assertIs<ChatMessage.Assistant>(live.messages[2]).streaming)
+        assertFalse(assertIs<ChatMessage.User>(live.messages[3]).queued)
     }
 
     @Test
