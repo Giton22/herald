@@ -5,6 +5,11 @@ plugins {
     alias(libs.plugins.compose.compiler)
 }
 
+// A release sets these from its tag (-PappVersion=0.2.0) and repo (-PreleasesRepo=owner/name); see
+// .github/workflows/release.yml. A local build is 0.1.0 and never looks for updates.
+val appVersion = (findProperty("appVersion") as String?)?.removePrefix("v") ?: "0.1.0"
+val releasesRepo = (findProperty("releasesRepo") as String?).orEmpty()
+
 android {
     namespace = "dev.hermeskotlin.android"
     compileSdk = libs.versions.android.compileSdk.get().toInt()
@@ -13,8 +18,12 @@ android {
         applicationId = "dev.hermeskotlin.android"
         minSdk = libs.versions.android.minSdk.get().toInt()
         targetSdk = libs.versions.android.targetSdk.get().toInt()
-        versionCode = 1
-        versionName = "0.1.0"
+        // 1.2.3 → 10203: each release installs over the last, as long as the tags only go up.
+        val (major, minor, patch) = appVersion.substringBefore('-').split('.').map { it.toInt() }.plus(listOf(0, 0)).take(3)
+        require(minor < 100 && patch < 100) { "appVersion $appVersion: minor and patch must stay under 100" }
+        versionCode = major * 10_000 + minor * 100 + patch
+        versionName = appVersion
+        buildConfigField("String", "RELEASES_REPO", "\"$releasesRepo\"")
     }
 
     // Release signing comes from an untracked keystore.properties at the repo root
@@ -22,6 +31,8 @@ android {
     val keystore = rootProject.file("keystore.properties").takeIf { it.exists() }?.let { file ->
         Properties().apply { file.inputStream().use(::load) }
     }
+    // A published APK signed with a debug key wouldn't install over the real one, so a release fails instead.
+    if (keystore == null && releasesRepo.isNotEmpty()) error("releasesRepo is set but keystore.properties is missing")
     signingConfigs {
         if (keystore != null) create("release") {
             storeFile = file(keystore.getProperty("storeFile"))
@@ -33,6 +44,7 @@ android {
 
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 
     buildTypes {

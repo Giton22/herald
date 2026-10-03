@@ -39,7 +39,7 @@ class MainActivity : ComponentActivity() {
         if (windowPrefs.contains(KEY_DARK)) applyWindowTheme(windowPrefs.getBoolean(KEY_DARK, false))
         askForNotificationsOnFirstTurn()
         setContent {
-            App(appVersion = packageManager.getPackageInfo(packageName, 0).versionName, onDarkTheme = { dark ->
+            App(appVersion = BuildConfig.VERSION_NAME, releasesRepo = BuildConfig.RELEASES_REPO, onDarkTheme = { dark ->
                 applyWindowTheme(dark)
                 windowPrefs.edit { putBoolean(KEY_DARK, dark) }
             })
