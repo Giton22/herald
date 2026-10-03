@@ -26,6 +26,12 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.EllipsisVertical
+import dev.chrisbanes.haze.HazeInput
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.blur.HazeBlurStyle
+import dev.chrisbanes.haze.blur.hazeBlur
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusLarge
 import dev.hermeskotlin.designsystem.radiusMedium
@@ -199,27 +205,32 @@ fun ChatScreen(
             // The composer floats over the conversation, which scrolls on beneath it; its height pads the list.
             var dockHeight by remember { mutableIntStateOf(0) }
             val dockInset = with(LocalDensity.current) { dockHeight.toDp() }
+            // What scrolls under the composer is captured here and frosted behind it.
+            val hazeState = rememberHazeState()
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                if (state.historyLoaded && state.messages.isNotEmpty()) {
-                    CompositionLocalProvider(
-                        LocalMediaLoader provides viewModel::loadMedia,
-                        LocalOpenImage provides { viewing = it },
-                        LocalNotice provides { notice = it },
-                    ) {
-                        Messages(state.messages, state.thinkingFrame, bottomInset = dockInset)
-                    }
-                } else Box(Modifier.fillMaxSize().padding(bottom = dockInset)) {
-                    when {
-                        !state.historyLoaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
-                        state.historyError != null ->
-                            EmptyState(Lucide.CloudOff, "Couldn't load the conversation", state.historyError.orEmpty()) {
-                                Button("Try again", onClick = viewModel::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
-                            }
-                        else -> Greeting()
+                Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
+                    if (state.historyLoaded && state.messages.isNotEmpty()) {
+                        CompositionLocalProvider(
+                            LocalMediaLoader provides viewModel::loadMedia,
+                            LocalOpenImage provides { viewing = it },
+                            LocalNotice provides { notice = it },
+                        ) {
+                            Messages(state.messages, state.thinkingFrame, bottomInset = dockInset)
+                        }
+                    } else Box(Modifier.fillMaxSize().padding(bottom = dockInset)) {
+                        when {
+                            !state.historyLoaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
+                            state.historyError != null ->
+                                EmptyState(Lucide.CloudOff, "Couldn't load the conversation", state.historyError.orEmpty()) {
+                                    Button("Try again", onClick = viewModel::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+                                }
+                            else -> Greeting()
+                        }
                     }
                 }
                 Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { dockHeight = it.height }) {
                     Dock(
+                        hazeState = hazeState,
                         viewModel = viewModel,
                         target = target,
                         state = state,
@@ -265,6 +276,7 @@ fun ChatScreen(
 /** What floats at the bottom of the chat: banners, the live status, and the composer or the agent's question. */
 @Composable
 private fun ColumnScope.Dock(
+    hazeState: HazeState,
     viewModel: ChatViewModel,
     target: ChatTarget,
     state: ChatState,
@@ -288,6 +300,7 @@ private fun ColumnScope.Dock(
         InputRequestPanel(state.inputRequests, connected, onAnswer = viewModel::answer)
     } else {
         Composer(
+            hazeState = hazeState,
             viewModel = viewModel,
             // Re-rolled per conversation, kept while a new chat gets its stored id.
             placeholder = remember(target) {
@@ -699,6 +712,7 @@ private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit) 
  */
 @Composable
 private fun Composer(
+    hazeState: HazeState,
     viewModel: ChatViewModel,
     placeholder: String,
     state: ChatState,
@@ -711,6 +725,14 @@ private fun Composer(
     // Attachments alone are sendable: the gateway gets Desktop's image prompt or the file references.
     val hasText = viewModel.composer.text.isNotBlank() || attachments.isNotEmpty()
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
+    val page = Theme[colors][background]
+    val frosted = remember(page) {
+        HazeBlurStyle {
+            blurEnabled(true)
+            blurRadius(20.dp)
+            backgroundColor(page)
+        }
+    }
     var focused by remember { mutableStateOf(false) }
     Column(
         Modifier
@@ -718,8 +740,9 @@ private fun Composer(
             .navigationBarsPadding()
             .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)
             .clip(shape)
-            // See-through so the conversation shows beneath the floating box.
-            .background(Theme[colors][surface].copy(alpha = 0.92f))
+            // Frosted: the conversation beneath is blurred, then tinted so the text on top stays clear.
+            .hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)
+            .background(Theme[colors][surface].copy(alpha = 0.55f))
             .border(1.dp, if (focused) Theme[colors][textTertiary] else Theme[colors][strokeStrong], shape)
             .onFocusChanged { focused = it.hasFocus }
             .padding(start = 4.dp, end = 6.dp, top = if (attachments.isEmpty()) 14.dp else 8.dp, bottom = 6.dp),

@@ -22,6 +22,8 @@ kotlin {
             implementation(libs.koin.core)
             implementation(libs.koin.compose.viewmodel)
             implementation(libs.compose.ui.tooling.preview)
+            implementation(libs.haze)
+            implementation(libs.haze.blur)
         }
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
