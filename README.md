@@ -86,3 +86,12 @@ The version comes from the tag (`1.2.3` → version code `10203`), so tags must 
 The workflow needs these repository secrets: `ANDROID_KEYSTORE_BASE64` (the keystore, base64-encoded),
 `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. Local release builds read
 the same values from an untracked `keystore.properties` at the repository root.
+
+## License
+
+Herald is released under the [MIT License](LICENSE).
+
+It's built to work with [Hermes Agent](https://github.com/NousResearch/hermes-agent) by Nous Research,
+also MIT-licensed, and follows Hermes Desktop's behaviour and some of its wording so the two feel alike.
+"Hermes" and "Hermes Agent" are names of Nous Research's project; Herald uses them only to say what it
+works with. Icons are from [Lucide](https://lucide.dev) (ISC License).
