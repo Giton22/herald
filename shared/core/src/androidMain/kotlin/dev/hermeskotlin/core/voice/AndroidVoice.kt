@@ -8,7 +8,6 @@ import android.media.AudioRecord
 import android.media.MediaPlayer
 import android.media.MediaRecorder
 import android.media.audiofx.NoiseSuppressor
-import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.suspendCancellableCoroutine
@@ -55,8 +54,6 @@ class AndroidVoiceRecorder : VoiceRecorder {
         val bytes = ByteBuffer.allocate(FRAME_SAMPLES * 2).order(ByteOrder.LITTLE_ENDIAN)
         val endOfSpeech = EndOfSpeech(activity)
         var elapsed = 0L
-        var peak = 0f
-        var lastLog = 0L
         try {
             record.startRecording()
             while (!finishRequested) {
@@ -76,21 +73,8 @@ class AndroidVoiceRecorder : VoiceRecorder {
                 onLevel(level)
                 val heardBefore = endOfSpeech.heardSpeech
                 val done = endOfSpeech.onFrame(level, elapsed)
-                if (endOfSpeech.heardSpeech && !heardBefore) {
-                    Log.d(TAG, "speech at ${elapsed}ms: level=${"%.3f".format(level)} noise=${"%.3f".format(endOfSpeech.noise)}")
-                    onSpeech()
-                }
-                // A level trace every half second, to tune the detector from a real phone (adb logcat -s HermesVoice).
-                peak = maxOf(peak, level)
-                if (elapsed - lastLog >= LOG_EVERY_MS) {
-                    Log.d(TAG, "t=${elapsed}ms peak=${"%.3f".format(peak)} noise=${"%.3f".format(endOfSpeech.noise)} heard=${endOfSpeech.heardSpeech}")
-                    peak = 0f
-                    lastLog = elapsed
-                }
-                if (done) {
-                    Log.d(TAG, "end at ${elapsed}ms, heard=${endOfSpeech.heardSpeech}")
-                    break
-                }
+                if (endOfSpeech.heardSpeech && !heardBefore) onSpeech()
+                if (done) break
             }
         } finally {
             runCatching { record.stop() }
@@ -129,9 +113,6 @@ class AndroidVoiceRecorder : VoiceRecorder {
 
         /** 20 ms frames: fine-grained enough for the silence timer. */
         const val FRAME_SAMPLES = SAMPLE_RATE / 50
-
-        const val TAG = "HermesVoice"
-        const val LOG_EVERY_MS = 500L
     }
 }
 
