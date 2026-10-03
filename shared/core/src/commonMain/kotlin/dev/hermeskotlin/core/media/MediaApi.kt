@@ -22,7 +22,20 @@ private data class MediaResponse(@SerialName("data_url") val dataUrl: String = "
  */
 class MediaApi(private val client: HttpClient) {
 
-    /** The image's bytes, decoded from the `data_url` the gateway answers with. */
+    /**
+     * Any file on the gateway by absolute path (`GET /api/files/download`, what Desktop opens remote
+     * `MEDIA:` files with), falling back to [image] for pictures when managed files are locked down.
+     */
+    suspend fun file(url: GatewayUrl, path: String): ApiResult<ByteArray> {
+        val download = apiCall {
+            client.get(url.resolve("api/files/download")) { parameter("path", path) }
+        }.map { it.body<ByteArray>() }
+        if (download is ApiResult.Success) return download
+        val isImage = path.substringAfterLast('.', "").lowercase() in setOf("png", "jpg", "jpeg", "gif", "webp", "bmp")
+        return if (isImage) image(url, path) else download
+    }
+
+    /** The image's bytes, decoded from the `data_url` the gateway answers with (media folders only). */
     @OptIn(ExperimentalEncodingApi::class)
     suspend fun image(url: GatewayUrl, path: String): ApiResult<ByteArray> = apiCall {
         client.get(url.resolve("api/media")) { parameter("path", path) }
