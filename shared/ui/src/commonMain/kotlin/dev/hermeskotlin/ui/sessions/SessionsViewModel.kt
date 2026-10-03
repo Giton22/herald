@@ -13,6 +13,8 @@ import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
+import dev.hermeskotlin.core.profiles.ProfileRoster
+import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.sessions.SessionListFilter
 import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.core.sessions.SessionsApi
@@ -56,6 +58,7 @@ class SessionsViewModel(
     private val auth: AuthApi,
     private val connection: GatewayConnection,
     private val lastChats: LastChatStore,
+    private val profiles: ProfilesApi,
 ) : ViewModel() {
 
     val connectionState: StateFlow<ConnectionState> = connection.state
@@ -63,12 +66,20 @@ class SessionsViewModel(
     private val _user = MutableStateFlow<AuthUser?>(null)
     val user: StateFlow<AuthUser?> = _user.asStateFlow()
 
+    private val _roster = MutableStateFlow<ProfileRoster?>(null)
+
+    /** The gateway's profiles; null until loaded (or when the gateway doesn't list them). */
+    val roster: StateFlow<ProfileRoster?> = _roster.asStateFlow()
+
     private val _state = MutableStateFlow(SessionsUiState())
     val state: StateFlow<SessionsUiState> = _state.asStateFlow()
 
     val query = TextFieldState()
 
     private var gateway: SavedGateway? = null
+
+    /** The profile whose sessions are listed; null is the gateway's launch profile. */
+    private var profile: String? = null
     private var loadJob: Job? = null
 
     init {
@@ -76,14 +87,29 @@ class SessionsViewModel(
         observeSearch()
     }
 
-    /** Idempotent: binds to [gateway] and loads the first page once. */
-    fun bind(gateway: SavedGateway) {
-        if (this.gateway == gateway) return
+    /** Idempotent: binds to [gateway] and [profile] and loads the first page once. */
+    fun bind(gateway: SavedGateway, profile: String? = null) {
+        if (this.gateway == gateway && this.profile == profile) return
+        val newGateway = this.gateway != gateway
         this.gateway = gateway
+        this.profile = profile
         _state.value = SessionsUiState()
         load(refresh = false)
+        if (newGateway) {
+            _user.value = null
+            _roster.value = null
+            viewModelScope.launch {
+                (auth.me(gateway.gatewayUrl) as? ApiResult.Success)?.let { _user.value = it.value }
+            }
+            refreshProfiles()
+        }
+    }
+
+    /** Refetches the profile list, e.g. when the account sheet opens (one may have been added on the host). */
+    fun refreshProfiles() {
+        val url = gateway?.gatewayUrl ?: return
         viewModelScope.launch {
-            (auth.me(gateway.gatewayUrl) as? ApiResult.Success)?.let { _user.value = it.value }
+            (profiles.roster(url) as? ApiResult.Success)?.let { _roster.value = it.value }
         }
     }
 
@@ -104,7 +130,7 @@ class SessionsViewModel(
         if (!current.canLoadMore || current.loadingMore || loadJob?.isActive == true) return
         _state.update { it.copy(loadingMore = true) }
         loadJob = viewModelScope.launch {
-            val result = api.list(url, offset = current.sessions.size, filter = current.filter)
+            val result = api.list(url, offset = current.sessions.size, filter = current.filter, profile = profile)
             _state.update { state ->
                 when (result) {
                     is ApiResult.Success -> {
@@ -124,32 +150,38 @@ class SessionsViewModel(
 
     fun rename(session: SessionSummary, title: String) = mutate(
         apply = { list -> list.map { if (it.id == session.id) it.copy(title = title.ifBlank { null }) else it } },
-        call = { url -> api.rename(url, session.id, title.trim()) },
+        call = { url, profile -> api.rename(url, session.id, title.trim(), profile) },
     )
 
     fun togglePinned(session: SessionSummary) = mutate(
         apply = { list -> list.map { if (it.id == session.id) it.copy(pinned = !session.pinned) else it } },
-        call = { url -> api.setPinned(url, session.id, !session.pinned) },
+        call = { url, profile -> api.setPinned(url, session.id, !session.pinned, profile) },
     )
 
     /** Archiving moves the row to the other filter, so it leaves the current list either way. */
     fun toggleArchived(session: SessionSummary) = mutate(
         apply = { list -> list.filterNot { it.id == session.id } },
-        call = { url -> api.setArchived(url, session.id, !session.archived) },
+        call = { url, profile -> api.setArchived(url, session.id, !session.archived, profile) },
     )
 
     fun delete(session: SessionSummary) = mutate(
         apply = { list -> list.filterNot { it.id == session.id } },
-        call = { url -> api.delete(url, session.id).also { if (it is ApiResult.Success) lastChats.forget(url, session.id) } },
+        call = { url, profile ->
+            api.delete(url, session.id, profile).also { if (it is ApiResult.Success) lastChats.forget(url, session.id, profile) }
+        },
     )
 
     /** Optimistic row update: apply locally (list and search results), call the server, roll back on failure. */
-    private fun mutate(apply: (List<SessionSummary>) -> List<SessionSummary>, call: suspend (GatewayUrl) -> ApiResult<Unit>) {
+    private fun mutate(
+        apply: (List<SessionSummary>) -> List<SessionSummary>,
+        call: suspend (GatewayUrl, String?) -> ApiResult<Unit>,
+    ) {
         val url = gateway?.gatewayUrl ?: return
+        val profile = profile
         val before = _state.value
         _state.update { it.copy(sessions = apply(it.sessions), searchResults = it.searchResults?.let(apply)) }
         viewModelScope.launch {
-            val result = call(url)
+            val result = call(url, profile)
             if (result !is ApiResult.Success) {
                 _state.update {
                     it.copy(
@@ -171,7 +203,7 @@ class SessionsViewModel(
         loadJob = viewModelScope.launch {
             // Keep however many rows are already showing so a background refetch doesn't truncate the list.
             val limit = _state.value.sessions.size.coerceIn(SessionsApi.PAGE_SIZE, 100)
-            val result = api.list(url, limit = limit, filter = filter)
+            val result = api.list(url, limit = limit, filter = filter, profile = profile)
             _state.update { state ->
                 if (state.filter != filter) return@update state
                 when (result) {
@@ -227,7 +259,7 @@ class SessionsViewModel(
                         return@collectLatest
                     }
                     _state.update { it.copy(searching = true) }
-                    val result = api.search(url, q)
+                    val result = api.search(url, q, profile = profile)
                     _state.update {
                         when (result) {
                             is ApiResult.Success -> it.copy(searchResults = result.value, searching = false)

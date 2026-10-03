@@ -6,6 +6,7 @@ import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.createHttpClient
+import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import io.ktor.client.engine.mock.MockEngine
@@ -53,7 +54,7 @@ class SessionsViewModelTest {
         val client = createHttpClient(engine, cookies)
         val auth = AuthApi(client, cookies)
         val connection = GatewayConnection(auth, { _, _ -> error("not connecting in tests") }, CoroutineScope(dispatcher))
-        return SessionsViewModel(SessionsApi(client), auth, connection, LastChatStore(InMemoryKeyValueStore()))
+        return SessionsViewModel(SessionsApi(client), auth, connection, LastChatStore(InMemoryKeyValueStore()), ProfilesApi(client))
     }
 
     /** The mock engine completes on Ktor's own dispatcher, so wait on state rather than the test scheduler. */

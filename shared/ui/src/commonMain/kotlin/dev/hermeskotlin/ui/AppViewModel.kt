@@ -9,6 +9,7 @@ import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.profiles.ProfileStore
 import dev.hermeskotlin.ui.chat.ChatTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,6 +34,7 @@ class AppViewModel(
     private val connection: GatewayConnection,
     private val lastChats: LastChatStore,
     private val host: ChatHost,
+    private val profiles: ProfileStore,
 ) : ViewModel() {
 
     private val _route = MutableStateFlow<Route>(Route.Loading)
@@ -70,12 +72,25 @@ class AppViewModel(
 
     fun openSession(sessionId: String, title: String) {
         val gateway = signedInGateway() ?: return
-        _route.value = Route.Chat(ChatTarget(gateway, sessionId, title))
+        _route.value = Route.Chat(ChatTarget(gateway, sessionId, title, profile = currentProfile()))
     }
 
     fun newChat() {
         val gateway = signedInGateway() ?: return
-        _route.value = Route.Chat(newChatTarget(gateway))
+        _route.value = Route.Chat(newChatTarget(gateway, currentProfile()))
+    }
+
+    /**
+     * Switches to [profile] (null: the launch profile) and back to where the user left off in it,
+     * since its chats, memory and model are its own.
+     */
+    fun switchProfile(profile: String?) {
+        val gateway = signedInGateway() ?: return
+        if (profile == currentProfile()) return
+        viewModelScope.launch {
+            profiles.set(gateway.gatewayUrl, profile)
+            _route.value = home(gateway)
+        }
     }
 
     /** The dashboard rejected our cookies (socket or REST): back to sign-in with a notice. */
@@ -116,16 +131,20 @@ class AppViewModel(
         else -> false
     }
 
-    /** The last chat the user had open on [gateway], or a fresh one. */
+    /** The last chat the user had open on [gateway] in its picked profile, or a fresh one. */
     private suspend fun home(gateway: SavedGateway): Route.Chat {
-        val last = lastChats.get(gateway.gatewayUrl)
-        return Route.Chat(last?.let { ChatTarget(gateway, it.sessionId, it.title) } ?: newChatTarget(gateway))
+        val profile = profiles.get(gateway.gatewayUrl)
+        val last = lastChats.get(gateway.gatewayUrl, profile)
+        return Route.Chat(last?.let { ChatTarget(gateway, it.sessionId, it.title, profile = profile) } ?: newChatTarget(gateway, profile))
     }
 
     // The nonce makes every new chat a fresh target, even right after another empty one.
-    private fun newChatTarget(gateway: SavedGateway) = ChatTarget(gateway, storedSessionId = null, title = null, nonce = ++newChatCount)
+    private fun newChatTarget(gateway: SavedGateway, profile: String?) =
+        ChatTarget(gateway, storedSessionId = null, title = null, nonce = ++newChatCount, profile = profile)
 
     private fun signedInGateway(): SavedGateway? = (_route.value as? Route.Chat)?.gateway
+
+    private fun currentProfile(): String? = (_route.value as? Route.Chat)?.target?.profile
 
     private fun currentGateway(): SavedGateway? = (_route.value as? Route.SignIn)?.gateway ?: signedInGateway()
 }

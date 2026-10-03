@@ -50,8 +50,17 @@ data class ModelPickerState(
 
 data class PendingSwitch(val model: ModelOption, val message: String)
 
-/** Identifies what the chat screen shows: a stored session, or a new chat (`storedSessionId == null`). */
-data class ChatTarget(val gateway: SavedGateway, val storedSessionId: String?, val title: String?, val nonce: Long = 0)
+/**
+ * Identifies what the chat screen shows: a stored session, or a new chat (`storedSessionId == null`),
+ * in [profile] (null: the gateway's launch profile).
+ */
+data class ChatTarget(
+    val gateway: SavedGateway,
+    val storedSessionId: String?,
+    val title: String?,
+    val nonce: Long = 0,
+    val profile: String? = null,
+)
 
 /**
  * Shows the [ChatSession] the app-wide [ChatHost] has open; opening another target replaces it.
@@ -100,7 +109,7 @@ class ChatViewModel(
                 // Distinct before dropping nulls, so returning to the same chat after a new one saves it again.
                 .distinctUntilChanged()
                 .filterNotNull()
-                .collect { last -> target?.let { lastChats.set(it.gateway.gatewayUrl, last) } }
+                .collect { last -> target?.let { lastChats.set(it.gateway.gatewayUrl, last, it.profile) } }
         }
     }
 
@@ -110,8 +119,8 @@ class ChatViewModel(
         composer.clearText()
         _attachments.value = emptyList()
         _attachmentError.value = null
-        if (target.storedSessionId == null) viewModelScope.launch { lastChats.set(target.gateway.gatewayUrl, null) }
-        session.value = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title)
+        if (target.storedSessionId == null) viewModelScope.launch { lastChats.set(target.gateway.gatewayUrl, null, target.profile) }
+        session.value = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title, target.profile)
         // The catalog marks the previous chat's model; a new chat must show the profile default instead.
         _picker.update { it.copy(catalog = null, confirm = null) }
         if (connectionState.value is ConnectionState.Connected) loadModels()
@@ -124,7 +133,8 @@ class ChatViewModel(
         _picker.update { it.copy(loading = true, error = null) }
         loadJob = viewModelScope.launch {
             try {
-                val catalog = models.options(session.value?.state?.value?.runtimeSessionId)
+                // Without a live session the catalog marks the default of the chat's profile.
+                val catalog = models.options(session.value?.state?.value?.runtimeSessionId, target?.profile)
                 _picker.update { it.copy(catalog = catalog, loading = false) }
             } catch (e: CancellationException) {
                 throw e

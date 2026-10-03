@@ -136,6 +136,7 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
         sidebar = {
             SessionsSidebar(
                 gateway = route.gateway,
+                profile = route.target.profile,
                 selectedId = openSessionId,
                 visible = sidebar.isOpen,
                 onOpenSession = {
@@ -151,6 +152,10 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
                 onSignOut = app::signOut,
                 onChangeGateway = app::changeGateway,
                 onOpenSettings = { settingsOpen = true },
+                onSwitchProfile = {
+                    app.switchProfile(it)
+                    closeDrawer()
+                },
             )
         },
     ) {

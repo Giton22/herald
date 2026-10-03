@@ -51,7 +51,9 @@ import com.composables.icons.lucide.Archive
 import com.composables.icons.lucide.ArchiveRestore
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.ArrowLeftRight
+import com.composables.icons.lucide.Bot
 import com.composables.icons.lucide.CalendarClock
+import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.CircleUser
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.Copy
@@ -74,6 +76,8 @@ import com.composeunstyled.theme.Theme
 import com.composeunstyled.theme.rememberColoredIndication
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.models.displayModelName
+import dev.hermeskotlin.core.profiles.Profile
 import dev.hermeskotlin.core.sessions.SessionListFilter
 import dev.hermeskotlin.core.sessions.SessionSummary
 import androidx.compose.ui.text.font.FontWeight
@@ -130,6 +134,7 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun SessionsSidebar(
     gateway: SavedGateway,
+    profile: String?,
     selectedId: String?,
     visible: Boolean,
     onOpenSession: (SessionSummary) -> Unit,
@@ -139,11 +144,14 @@ fun SessionsSidebar(
     onSignOut: () -> Unit,
     onChangeGateway: () -> Unit,
     onOpenSettings: () -> Unit,
+    onSwitchProfile: (String?) -> Unit,
     viewModel: SessionsViewModel = koinViewModel(),
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
     val user by viewModel.user.collectAsStateWithLifecycle()
+    val roster by viewModel.roster.collectAsStateWithLifecycle()
+    var profilesOpen by remember { mutableStateOf(false) }
 
     var searchOpen by remember { mutableStateOf(false) }
     var scheduledOpen by remember { mutableStateOf(false) }
@@ -165,7 +173,7 @@ fun SessionsSidebar(
             else -> viewModel.setFilter(SessionListFilter.Recent)
         }
     }
-    LaunchedEffect(gateway) { viewModel.bind(gateway) }
+    LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
     var wasVisible by remember { mutableStateOf(visible) }
     LaunchedEffect(visible) {
         if (visible && !wasVisible) viewModel.refreshQuietly()
@@ -274,7 +282,10 @@ fun SessionsSidebar(
                 if (searchOpen) closeSearch()
                 onNewChat()
             },
-            onAccount = { accountOpen = true },
+            onAccount = {
+                accountOpen = true
+                viewModel.refreshProfiles()
+            },
             modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
@@ -296,18 +307,33 @@ fun SessionsSidebar(
             onDeleted(it)
         },
     )
+    // The picked profile, else the one the gateway runs as.
+    val activeProfile = roster?.let { r -> r.profiles.find { it.name == (profile ?: r.launch) } }
     AccountSheet(
         visible = accountOpen,
         gateway = gateway,
         userLabel = user?.label,
+        profileLabel = activeProfile?.label ?: profile,
         connection = connection,
         refreshing = state.refreshing,
         onDismiss = { accountOpen = false },
+        onOpenProfiles = { profilesOpen = true },
         onRefresh = viewModel::refresh,
         onRetry = viewModel::retryConnection,
         onSignOut = onSignOut,
         onChangeGateway = onChangeGateway,
         onOpenSettings = onOpenSettings,
+    )
+    ProfileSheet(
+        visible = profilesOpen && roster != null,
+        profiles = roster?.profiles.orEmpty(),
+        selected = activeProfile?.name,
+        onDismiss = { profilesOpen = false },
+        onSelect = { picked ->
+            profilesOpen = false
+            // The launch profile is stored as "none picked", so calls stay exactly as before profiles.
+            onSwitchProfile(picked.name.takeIf { it != roster?.launch })
+        },
     )
 }
 
@@ -705,9 +731,11 @@ private fun AccountSheet(
     visible: Boolean,
     gateway: SavedGateway,
     userLabel: String?,
+    profileLabel: String?,
     connection: ConnectionState,
     refreshing: Boolean,
     onDismiss: () -> Unit,
+    onOpenProfiles: () -> Unit,
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
     onSignOut: () -> Unit,
@@ -717,6 +745,9 @@ private fun AccountSheet(
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         SheetHeader(userLabel ?: "Signed in", gateway.url)
         Box(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) { ConnectionLine(connection, detailed = true) }
+        if (profileLabel != null) {
+            SheetAction("Profile: $profileLabel", Lucide.Bot, onClick = { onDismiss(); onOpenProfiles() })
+        }
         SheetAction("Settings", Lucide.Settings, onClick = { onDismiss(); onOpenSettings() })
         SheetAction(if (refreshing) "Refreshing chats…" else "Refresh chats", Lucide.RefreshCw, onClick = { onDismiss(); onRefresh() })
         if (connection is ConnectionState.Reconnecting || connection is ConnectionState.Failed) {
@@ -724,6 +755,67 @@ private fun AccountSheet(
         }
         SheetAction("Sign out", Lucide.LogOut, onClick = { onDismiss(); onSignOut() })
         SheetAction("Use a different gateway", Lucide.ArrowLeftRight, onClick = { onDismiss(); onChangeGateway() })
+    }
+}
+
+/**
+ * Desktop's profile picker: the gateway's profiles, default first, the active one checked. Each is its
+ * own agent, so switching changes the chats listed and starts from where that profile left off.
+ */
+@Composable
+private fun ProfileSheet(
+    visible: Boolean,
+    profiles: List<Profile>,
+    selected: String?,
+    onDismiss: () -> Unit,
+    onSelect: (Profile) -> Unit,
+) {
+    BottomSheet(visible = visible, onDismiss = onDismiss) {
+        SheetHeader("Profiles", "Each profile is its own agent, with its own chats, memory and model.")
+        profiles.forEach { profile ->
+            ProfileRow(profile, checked = profile.name == selected, onClick = { onSelect(profile) })
+        }
+        if (profiles.size < 2) {
+            Text(
+                "Add profiles on the gateway host with “hermes profile create”.",
+                style = Theme[typography][bodySmall],
+                color = Theme[colors][textTertiary],
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+            )
+        }
+    }
+}
+
+@Composable
+private fun ProfileRow(profile: Profile, checked: Boolean, onClick: () -> Unit) {
+    val detail = profile.description?.trim()?.takeIf { it.isNotEmpty() } ?: profile.model?.let(::displayModelName)
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 56.dp)
+            .clickable(onClick = onClick)
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(28.dp).clip(CircleShape).background(Theme[colors][if (checked) accent else surface]),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                profile.label.take(1).uppercase(),
+                style = Theme[typography][caption].copy(fontWeight = FontWeight.SemiBold),
+                color = Theme[colors][if (checked) onAccent else textSecondary],
+            )
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(profile.label, style = Theme[typography][body], color = Theme[colors][text], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val sub = listOfNotNull("Default".takeIf { profile.isDefault }, detail).joinToString(" · ")
+            if (sub.isNotEmpty()) {
+                Text(sub, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        if (checked) UnstyledIcon(Lucide.Check, contentDescription = "Active", tint = Theme[colors][accent], modifier = Modifier.size(20.dp))
     }
 }
 
