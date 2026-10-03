@@ -7,7 +7,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.int
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
@@ -66,14 +65,36 @@ class JsonRpcClientTest {
     }
 
     @Test
-    fun unhandledServerRequestIsFailedImmediately() = runTest {
+    fun serverRequestIsEmittedAndAnsweredById() = runTest {
+        val transport = FakeTransport()
+        val client = JsonRpcClient(transport)
+        val pump = launch { runCatching { client.run() } }
+        val incoming = async(start = CoroutineStart.UNDISPATCHED) { client.serverRequests.first() }
+
+        transport.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"s1","command":"rm -rf /tmp/x"}}""")
+        val request = incoming.await()
+        assertEquals("approval", request.method)
+        assertEquals("s1", request.sessionId)
+
+        client.respond(request.id, buildJsonObject { put("choice", "once") })
+        val reply = transport.awaitSent { it["id"]?.jsonPrimitive?.str() == "srq-1" }
+        assertEquals("once", reply["result"]!!.jsonObject["choice"]!!.jsonPrimitive.str())
+        pump.cancel()
+    }
+
+    @Test
+    fun unhandledServerRequestIsLeftForOtherClients() = runTest {
         val transport = FakeTransport()
         val client = JsonRpcClient(transport)
         val pump = launch { runCatching { client.run() } }
 
-        transport.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"command":"rm -rf /tmp/x"}}""")
-        val reply = transport.awaitSent { it["id"]?.jsonPrimitive?.str() == "srq-1" }
-        assertEquals(-32601, reply["error"]!!.jsonObject["code"]!!.jsonPrimitive.int)
+        transport.push("""{"jsonrpc":"2.0","id":"srq-2","method":"preview.read","params":{"session_id":"s1"}}""")
+        // A ping round-trip proves the frame was processed without any reply to srq-2.
+        val call = async { client.request("gateway.ping") }
+        val id = transport.awaitSent { it["method"]?.jsonPrimitive?.str() == "gateway.ping" }["id"]!!.jsonPrimitive.str()
+        transport.push("""{"jsonrpc":"2.0","id":"$id","result":{}}""")
+        call.await()
+        assertTrue(transport.sent.value.none { it["id"]?.jsonPrimitive?.str() == "srq-2" })
         pump.cancel()
     }
 

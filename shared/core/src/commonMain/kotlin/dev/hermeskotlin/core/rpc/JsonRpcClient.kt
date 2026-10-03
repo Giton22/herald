@@ -42,22 +42,16 @@ class RpcException(val code: Int, override val message: String) : Exception(mess
 class HeartbeatTimeoutException : Exception("Gateway heartbeat timed out")
 
 /**
- * A server→client request (approval, clarify, sudo, secret…). Answer exactly once with
- * [respond] or [fail]; the agent thread blocks until we do.
+ * A server→client request (approval, clarify, sudo, secret…), answered with [JsonRpcClient.respond].
+ * The gateway sends it to every client attached to [sessionId] and the first answer wins, so a
+ * client answers only what it can show; the rest it leaves to the others.
  */
-class ServerRequest internal constructor(
+data class ServerRequest(
     val id: String,
     val method: String,
-    val params: JsonElement?,
-    private val reply: suspend (JsonObject) -> Unit,
+    val params: JsonObject,
 ) {
-    suspend fun respond(result: JsonElement) = reply(buildJsonObject { put("result", result) })
-
-    suspend fun fail(code: Int, message: String) = reply(
-        buildJsonObject {
-            put("error", buildJsonObject { put("code", code); put("message", message) })
-        },
-    )
+    val sessionId: String? get() = params["session_id"]?.jsonPrimitive?.contentOrNull
 }
 
 /**
@@ -84,7 +78,12 @@ class JsonRpcClient(
     val events: SharedFlow<GatewayEvent> = _events.asSharedFlow()
 
     private val _serverRequests = MutableSharedFlow<ServerRequest>(extraBufferCapacity = 16)
-    /** With no collector, requests are failed with -32601 immediately so the agent doesn't stall. */
+
+    /**
+     * Requests are never failed on the user's behalf: an error reply settles the request for every
+     * client (an approval is withdrawn even while Desktop shows it). One nobody answers here stays
+     * open until another client answers it, it times out, or `session.resume` replays it.
+     */
     val serverRequests: SharedFlow<ServerRequest> = _serverRequests.asSharedFlow()
 
     /** Completed with the `gateway.ready` payload. */
@@ -123,6 +122,16 @@ class JsonRpcClient(
             pendingMutex.withLock { pending.remove(id) }
         }
     }
+
+    /**
+     * Answers server request [id], live or replayed from `open_requests`. A late answer is harmless:
+     * the gateway drops responses for requests that are no longer open.
+     */
+    suspend fun respond(id: String, result: JsonElement) = send(buildJsonObject {
+        put("jsonrpc", "2.0")
+        put("id", id)
+        put("result", result)
+    })
 
     suspend fun close() = transport.close()
 
@@ -171,21 +180,7 @@ class JsonRpcClient(
     }
 
     private suspend fun handleServerRequest(id: String, method: String, params: JsonElement?) {
-        var answered = false
-        val request = ServerRequest(id, method, params) { body ->
-            if (answered) return@ServerRequest
-            answered = true
-            send(buildJsonObject {
-                put("jsonrpc", "2.0")
-                put("id", id)
-                body.forEach { (k, v) -> put(k, v) }
-            })
-        }
-        if (_serverRequests.subscriptionCount.value == 0) {
-            request.fail(METHOD_NOT_FOUND, "This client does not handle '$method' yet")
-        } else {
-            _serverRequests.emit(request)
-        }
+        _serverRequests.emit(ServerRequest(id, method, params as? JsonObject ?: JsonObject(emptyMap())))
     }
 
     private fun startHeartbeat(scope: CoroutineScope) {
@@ -220,7 +215,6 @@ class JsonRpcClient(
     }
 
     private companion object {
-        const val METHOD_NOT_FOUND = -32601
         const val GOING_AWAY: Short = 1001
     }
 }
