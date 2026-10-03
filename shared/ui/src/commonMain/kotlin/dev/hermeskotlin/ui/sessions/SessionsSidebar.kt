@@ -135,6 +135,7 @@ fun SessionsSidebar(
     val user by viewModel.user.collectAsStateWithLifecycle()
 
     var searchOpen by remember { mutableStateOf(false) }
+    var scheduledOpen by remember { mutableStateOf(false) }
     var actionTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var renameTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var deleteTarget by remember { mutableStateOf<SessionSummary?>(null) }
@@ -145,9 +146,13 @@ fun SessionsSidebar(
         viewModel.query.clearText()
     }
 
-    // Back steps out of search or a Scheduled / Archived page before it closes the drawer.
-    PlatformBackHandler(enabled = visible && (searchOpen || state.filter != SessionListFilter.Recent)) {
-        if (searchOpen) closeSearch() else viewModel.setFilter(SessionListFilter.Recent)
+    // Back steps out of search or the Scheduled / Archived pages before it closes the drawer.
+    PlatformBackHandler(enabled = visible && (searchOpen || scheduledOpen || state.filter != SessionListFilter.Recent)) {
+        when {
+            searchOpen -> closeSearch()
+            scheduledOpen -> scheduledOpen = false
+            else -> viewModel.setFilter(SessionListFilter.Recent)
+        }
     }
     LaunchedEffect(gateway) { viewModel.bind(gateway) }
     var wasVisible by remember { mutableStateOf(visible) }
@@ -174,7 +179,16 @@ fun SessionsSidebar(
             .fillMaxSize()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start)),
     ) {
-        Column(Modifier.fillMaxSize()) {
+        if (scheduledOpen && !searchOpen) {
+            ScheduledPage(
+                gateway = gateway,
+                visible = visible,
+                selectedId = selectedId,
+                onBack = { scheduledOpen = false },
+                onOpenRun = open,
+                onSessionExpired = onSessionExpired,
+            )
+        } else Column(Modifier.fillMaxSize()) {
             when {
                 searchOpen -> SearchHeader(viewModel, onClose = ::closeSearch)
                 state.filter != SessionListFilter.Recent -> SubpageHeader(
@@ -204,7 +218,7 @@ fun SessionsSidebar(
                     ) {
                         item(key = "nav") {
                             Column(Modifier.padding(bottom = 8.dp)) {
-                                NavRow(Lucide.CalendarClock, "Scheduled") { viewModel.setFilter(SessionListFilter.Scheduled) }
+                                NavRow(Lucide.CalendarClock, "Scheduled") { scheduledOpen = true }
                                 NavRow(Lucide.Archive, "Archived") { viewModel.setFilter(SessionListFilter.Archived) }
                                 Box(
                                     Modifier.padding(horizontal = 12.dp, vertical = 8.dp).fillMaxWidth().height(1.dp)
@@ -226,19 +240,13 @@ fun SessionsSidebar(
                     state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load sessions", state.error) {
                         Button("Try again", onClick = viewModel::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                     }
-                    state.sessions.isEmpty() -> when (state.filter) {
-                        SessionListFilter.Scheduled ->
-                            EmptyState(Lucide.CalendarClock, "No scheduled runs", "Sessions started by cron jobs on the gateway show up here.")
-                        else ->
-                            EmptyState(Lucide.Archive, "Nothing archived", "Archived sessions are hidden from Recent but stay resumable.")
-                    }
+                    state.sessions.isEmpty() ->
+                        EmptyState(Lucide.Archive, "Nothing archived", "Archived sessions are hidden from Recent but stay resumable.")
                     else -> SessionList(
                         sessions = state.sessions,
                         selectedId = selectedId,
                         onOpen = open,
                         onActions = rowActions,
-                        // Cron runs share their job's title, so say when each one ran.
-                        showSnippets = state.filter == SessionListFilter.Scheduled,
                         canLoadMore = state.canLoadMore,
                         loadingMore = state.loadingMore,
                         onLoadMore = viewModel::loadMore,
@@ -295,7 +303,6 @@ fun SessionsSidebar(
 private val SessionListFilter.label: String
     get() = when (this) {
         SessionListFilter.Recent -> "Chats"
-        SessionListFilter.Scheduled -> "Scheduled"
         SessionListFilter.Archived -> "Archived"
     }
 
@@ -311,7 +318,7 @@ private fun MainHeader(onSearch: () -> Unit) {
 }
 
 @Composable
-private fun SubpageHeader(title: String, onBack: () -> Unit) {
+internal fun SubpageHeader(title: String, onBack: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(start = 12.dp, end = 16.dp, top = 16.dp, bottom = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -505,7 +512,7 @@ private fun SessionList(
 /** Just the title, like ChatGPT; a dot marks a session that is running right now. Long-press for actions. */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun SessionRow(
+internal fun SessionRow(
     session: SessionSummary,
     selected: Boolean,
     showSnippet: Boolean,
@@ -553,12 +560,12 @@ private fun SessionRow(
 }
 
 @Composable
-private fun ListSpinner() {
+internal fun ListSpinner() {
     Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { Spinner(Modifier.size(20.dp)) }
 }
 
 @Composable
-private fun ListNotice(text: String, action: String? = null, onAction: () -> Unit = {}) {
+internal fun ListNotice(text: String, action: String? = null, onAction: () -> Unit = {}) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(text, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
         if (action != null) Button(action, onClick = onAction, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
@@ -671,12 +678,12 @@ private fun AccountSheet(
 }
 
 @Composable
-private fun CenteredSpinner() {
+internal fun CenteredSpinner() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
 }
 
 @Composable
-private fun MessageBanner(message: String, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
+internal fun MessageBanner(message: String, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
     Surface(modifier.padding(horizontal = 16.dp).fillMaxWidth(), elevated = true) {
         Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(message, style = Theme[typography][bodySmall], color = Theme[colors][text], modifier = Modifier.weight(1f))

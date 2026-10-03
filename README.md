@@ -74,7 +74,7 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 
 ### 3. Sessions
 - [x] Session list with title, preview, model, last-active time, source, message count, and pinned/archived state (`GET /api/sessions?order=recent`, paged; same REST endpoint Desktop uses because the WS `session.list` row has no model or last-active time)
-- [x] Pinned chats on top (with a pin), plus Scheduled and Archived pages opened from the sidebar (the chat list leaves out cron runs via `exclude_sources=cron`, Scheduled shows only them, like Desktop)
+- [x] Pinned chats on top (with a pin), plus an Archived page; the chat list leaves out cron runs (`exclude_sources=cron`, like Desktop), which are reached through their job under Scheduled
 - [x] Create a new session (`session.create`) from the New chat button (chat top bar or sidebar); the stored row appears with the first prompt
 - [x] Open a session and read its stored history (`GET /api/sessions/{id}/messages`, read-only; tool steps are folded into one reply)
 - [x] Resume a session live and reply in it (`session.resume {omit_messages}` + REST history, like Desktop)
@@ -95,6 +95,7 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [ ] Syntax highlighting in code blocks
 - [x] Reasoning/thinking blocks, collapsible (`reasoning.delta`, `thinking.delta`, `reasoning.available`)
 - [x] Stop a running turn (`session.interrupt`): the Send button turns into Stop while a turn runs
+- [x] Prompts sent from another client (Desktop, CLI, messaging) show up live: a turn this client didn't start refetches the transcript at its start and end, since the gateway streams only the reply
 - [ ] Steer a running turn (`session.steer`)
 - [ ] Token usage and cost per turn and per session (`session.usage`, `MessageCompletePayload.usage`)
 - [x] Error banner and live status line (`error`, `status.update`, failed turns)
@@ -149,7 +150,8 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [ ] Rollback / checkpoints (`rollback.list`, `rollback.diff`, `rollback.restore`)
 
 ### Automation & configuration
-- [ ] Cron jobs: list, create, pause, resume, run (`cron.manage`, `cron.changed`)
+- [x] Scheduled jobs in the sidebar (`GET /api/cron/jobs`): schedule in plain words, next run, state; a job page with its prompt, last error, Run now, Pause / Resume, and its runs (`/api/cron/jobs/{id}/runs`), each opening as a chat
+- [ ] Create and edit cron jobs; refetch on `cron.changed`
 - [ ] Skills browser and management (`skills.manage`)
 - [ ] Tools and toolsets toggles (`tools.list`, `tools.configure`, `toolsets.list`)
 - [ ] MCP servers (`mcp.*`)
