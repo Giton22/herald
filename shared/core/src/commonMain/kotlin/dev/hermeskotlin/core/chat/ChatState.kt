@@ -62,6 +62,8 @@ data class ChatState(
     val status: String? = null,
     /** Session-level failure outside a turn (`error` event, failed send). */
     val error: String? = null,
+    /** Questions the agent is blocked on (approval, clarify, sudo, secret), oldest first. */
+    val inputRequests: List<InputRequest> = emptyList(),
     /** Source of unique keys for messages created on this device. */
     val keySeq: Int = 0,
 ) {

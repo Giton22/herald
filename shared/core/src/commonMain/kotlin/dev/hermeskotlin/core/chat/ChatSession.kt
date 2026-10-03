@@ -55,12 +55,19 @@ class ChatSession(
     private var foreignTurn = false
     private var jobs: List<Job> = emptyList()
 
+    /**
+     * Requests for a runtime id we don't know yet: one can land between the gateway answering
+     * `session.resume`/`session.create` and us reading that reply. Claimed once the id is known.
+     */
+    private val unclaimed = ArrayDeque<Pair<String, InputRequest>>()
+
     fun start() {
         if (jobs.isNotEmpty()) return
         jobs = listOf(
             scope.launch { if (rowExists) loadHistory() else _state.update { it.copy(historyLoaded = true) } },
             scope.launch { followConnection() },
             scope.launch { followEvents() },
+            scope.launch { followServerRequests() },
         )
     }
 
@@ -137,6 +144,27 @@ class ChatSession(
 
     fun dismissError() = _state.update { it.copy(error = null) }
 
+    /**
+     * Sends [result] as the answer to [request] (see [InputAnswers]). The request leaves the state
+     * once the answer is out; another client may have answered first, which the gateway ignores.
+     */
+    suspend fun answer(request: InputRequest, result: JsonObject): Boolean {
+        val client = connectedClient() ?: run {
+            _state.update { it.copy(error = "Not connected to the gateway. Answer again once it reconnects.") }
+            return false
+        }
+        return try {
+            client.respond(request.id, result)
+            _state.update { state -> state.copy(inputRequests = state.inputRequests.filterNot { it.id == request.id }) }
+            true
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _state.update { it.copy(error = e.message ?: "Couldn't send the answer.") }
+            false
+        }
+    }
+
     private suspend fun followConnection() {
         var attachedBefore = false
         connection.state.collectLatest { connectionState ->
@@ -163,13 +191,38 @@ class ChatSession(
                     scope.launch { loadHistory() }
                 }
                 // Swap the live copy for the stored rows, which now hold the other client's prompt for sure.
-                "message.complete" -> if (foreignTurn) {
-                    foreignTurn = false
-                    scope.launch { loadHistory() }
+                "message.complete" -> {
+                    // Nothing can still wait on a person once the turn is over; this also clears a
+                    // clarify answered on another client, which gets no request.cancel.
+                    _state.update { it.copy(inputRequests = emptyList()) }
+                    if (foreignTurn) {
+                        foreignTurn = false
+                        scope.launch { loadHistory() }
+                    }
+                }
+                "request.cancel" -> {
+                    val id = (event.payload as? JsonObject).string("id") ?: return@collect
+                    _state.update { state -> state.copy(inputRequests = state.inputRequests.filterNot { it.id == id }) }
                 }
             }
         }
     }
+
+    private suspend fun followServerRequests() {
+        connection.serverRequests.collect { request ->
+            val sessionId = request.sessionId ?: return@collect
+            val parsed = InputRequest.parse(request.id, request.method, request.params) ?: return@collect
+            if (sessionId == _state.value.runtimeSessionId) {
+                _state.update { it.copy(inputRequests = it.inputRequests.plusNew(listOf(parsed))) }
+            } else {
+                unclaimed.addLast(sessionId to parsed)
+                if (unclaimed.size > MAX_UNCLAIMED) unclaimed.removeFirst()
+            }
+        }
+    }
+
+    private fun claimUnclaimed(runtimeId: String): List<InputRequest> =
+        unclaimed.filter { it.first == runtimeId }.map { it.second }.also { unclaimed.removeAll { it.first == runtimeId } }
 
     private suspend fun loadHistory() {
         val id = _state.value.storedSessionId ?: return
@@ -215,6 +268,14 @@ class ChatSession(
         // A turn already running when we attach is someone else's; reconcile with the stored rows when it ends.
         if (running && ownTurnsPending == 0) foreignTurn = true
         val inflight = result["inflight"] as? JsonObject
+        // Questions asked while no socket of ours was attached; the gateway keeps them open for us.
+        val open = result["open_requests"].asObjectList().mapNotNull { snapshot ->
+            InputRequest.parse(
+                id = snapshot.string("id") ?: return@mapNotNull null,
+                method = snapshot.string("method") ?: return@mapNotNull null,
+                params = snapshot["params"] as? JsonObject ?: JsonObject(emptyMap()),
+            )
+        }
         _state.update { state ->
             var messages = state.messages
             val streamed = inflight.string("assistant").orEmpty()
@@ -226,6 +287,7 @@ class ChatSession(
                 attachment = Attachment.Attached(runtimeId),
                 running = running,
                 messages = messages,
+                inputRequests = open.plusNew(claimUnclaimed(runtimeId)),
                 keySeq = state.keySeq + 1,
                 model = (result["info"] as? JsonObject).string("model")?.takeIf { it.isNotBlank() } ?: state.model,
             )
@@ -245,6 +307,7 @@ class ChatSession(
                 storedSessionId = result.string("stored_session_id") ?: it.storedSessionId,
                 model = (result["info"] as? JsonObject).string("model")?.takeIf { m -> m.isNotBlank() } ?: it.model,
                 historyLoaded = true,
+                inputRequests = it.inputRequests.plusNew(claimUnclaimed(runtimeId)),
             )
         }
         runtimeId
@@ -258,8 +321,13 @@ class ChatSession(
 
         /** `prompt.submit` statuses that start (or queue) a turn of their own. */
         val TURN_STARTING_STATUSES = setOf("streaming", "queued")
+
+        const val MAX_UNCLAIMED = 8
     }
 }
+
+private fun List<InputRequest>.plusNew(more: List<InputRequest>): List<InputRequest> =
+    this + more.filter { new -> none { it.id == new.id } }
 
 private fun List<ChatMessage>.updateUser(key: String, change: (ChatMessage.User) -> ChatMessage.User): List<ChatMessage> =
     map { if (it is ChatMessage.User && it.key == key) change(it) else it }

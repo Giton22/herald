@@ -9,6 +9,7 @@ import dev.hermeskotlin.core.rpc.HandshakeRejectedException
 import dev.hermeskotlin.core.rpc.HeartbeatTimeoutException
 import dev.hermeskotlin.core.rpc.JsonRpcClient
 import dev.hermeskotlin.core.rpc.RpcTransport
+import dev.hermeskotlin.core.rpc.ServerRequest
 import dev.hermeskotlin.core.rpc.TransportClosedException
 import io.ktor.util.date.getTimeMillis
 import kotlinx.coroutines.CancellationException
@@ -64,6 +65,12 @@ class GatewayConnection(
     @OptIn(ExperimentalCoroutinesApi::class)
     val events: Flow<GatewayEvent> = state.flatMapLatest { state ->
         (state as? ConnectionState.Connected)?.client?.events ?: emptyFlow()
+    }
+
+    /** Server→client requests from the connected socket; dropped while nothing collects them. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val serverRequests: Flow<ServerRequest> = state.flatMapLatest { state ->
+        (state as? ConnectionState.Connected)?.client?.serverRequests ?: emptyFlow()
     }
 
     private var job: Job? = null

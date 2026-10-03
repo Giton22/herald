@@ -172,4 +172,44 @@ class ChatSessionTest {
         assertTrue(chat.state.value.messages.isEmpty())
         assertTrue(chat.state.value.error != null)
     }
+
+    @Test
+    fun approvalRequestIsShownAnsweredAndWithdrawn() = runTest {
+        val (connection, transport) = setup(backgroundScope, mapOf("session.resume" to """{"session_id":"rt1","running":true}"""))
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" }
+
+        transport.push("""{"jsonrpc":"2.0","id":"srq-other","method":"approval","params":{"session_id":"rt9","command":"ls"}}""")
+        transport.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt1","command":"rm -rf build","choices":["once","session","deny"]}}""")
+        transport.push("""{"jsonrpc":"2.0","id":"srq-2","method":"sudo","params":{"session_id":"rt1","command":"apt install jq"}}""")
+
+        val asked = chat.state.first { it.inputRequests.size == 2 }
+        val approval = assertIs<InputRequest.Approval>(asked.inputRequests.first())
+        assertEquals("srq-1", approval.id)
+
+        assertTrue(chat.answer(approval, InputAnswers.approval(ApprovalChoice.Session)))
+        val reply = transport.awaitSent { it["id"]?.jsonPrimitive?.contentOrNull == "srq-1" }
+        assertEquals("session", reply["result"]!!.jsonObject["choice"]!!.jsonPrimitive.contentOrNull)
+
+        // Desktop typed the password first: the gateway withdraws the request everywhere.
+        transport.push(event("request.cancel", "rt1", """{"id":"srq-2","method":"sudo","reason":"resolved"}"""))
+        chat.state.first { it.inputRequests.isEmpty() }
+    }
+
+    @Test
+    fun resumeRestoresQuestionsAskedWhileAway() = runTest {
+        val (connection, _) = setup(
+            backgroundScope,
+            mapOf(
+                "session.resume" to """{"session_id":"rt1","running":true,"open_requests":[{"id":"srq-7","method":"clarify","params":{"session_id":"rt1","question":"Which branch?","choices":["main","dev"]}},{"id":"srq-8","method":"terminal.read","params":{"session_id":"rt1"}}]}""",
+            ),
+        )
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        val attached = chat.state.first { it.runtimeSessionId == "rt1" }
+        val clarify = assertIs<InputRequest.Clarify>(attached.inputRequests.single())
+        assertEquals("Which branch?", clarify.questions.single().question)
+    }
 }
