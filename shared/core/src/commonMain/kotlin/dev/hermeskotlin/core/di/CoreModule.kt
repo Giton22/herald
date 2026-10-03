@@ -27,7 +27,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import org.koin.core.module.Module
+import org.koin.core.qualifier.named
 import org.koin.dsl.module
+
+private const val OUTSIDE_CLIENT = "outside"
 
 /** Platform bindings: a [dev.hermeskotlin.core.storage.KeyValueStore] implementation. */
 expect val platformModule: Module
@@ -60,7 +63,8 @@ val coreModule = module {
     single { PetApi(get()) }
     single { JourneyApi(get()) }
     single { AudioApi(get()) }
-    single { MediaApi(get()) }
-    // Its own client: GitHub gets no gateway cookies and no redirect rules meant for the dashboard.
-    single { UpdateChecker(createHttpClient(), get()) }
+    // Outside requests (pictures from the web, GitHub) get a client without the gateway's cookies.
+    single(named(OUTSIDE_CLIENT)) { createHttpClient() }
+    single { MediaApi(get(), get(named(OUTSIDE_CLIENT))) }
+    single { UpdateChecker(get(named(OUTSIDE_CLIENT)), get()) }
 }

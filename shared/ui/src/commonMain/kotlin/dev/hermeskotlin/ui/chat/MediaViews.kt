@@ -48,6 +48,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.File
+import com.composables.icons.lucide.Image
 import com.composables.icons.lucide.ImageOff
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Share2
@@ -67,6 +68,7 @@ import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.text as textColor
+import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import kotlinx.coroutines.delay
@@ -94,6 +96,31 @@ private fun ReplyImage(item: ReplyMedia) {
     val load = LocalMediaLoader.current
     val open = LocalOpenImage.current
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    // A picture from the web waits for a tap: fetching it tells that site you read the reply, and a
+    // reply steered by something the agent read could put data in the address.
+    val remoteHost = remember(item.source) { webHost(item.source) }
+    var allowed by remember(item.source) { mutableStateOf(remoteHost == null) }
+    if (!allowed) {
+        Row(
+            Modifier
+                .widthIn(max = 420.dp)
+                .fillMaxWidth()
+                .clip(shape)
+                .border(1.dp, Theme[colors][stroke], shape)
+                .background(Theme[colors][surface])
+                .clickable { allowed = true }
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            UnstyledIcon(Lucide.Image, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(18.dp))
+            Column(Modifier.weight(1f)) {
+                Text("Picture from $remoteHost", style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
+                Text("Tap to load it from that site", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+            }
+        }
+        return
+    }
     val bytes by produceState<ByteArray?>(null, item.source) { value = load(item.source) }
     var failed by remember(item.source) { mutableStateOf(false) }
     LaunchedEffect(item.source) {
@@ -130,6 +157,12 @@ private fun ReplyImage(item: ReplyMedia) {
             else -> Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) { Spinner() }
         }
     }
+}
+
+/** The site an `http(s)://` picture would be fetched from; null for the gateway's own files and inline data. */
+internal fun webHost(source: String): String? {
+    if (!source.startsWith("http://") && !source.startsWith("https://")) return null
+    return source.substringAfter("://").substringBefore('/').substringBefore('?').substringBefore('#').substringAfterLast('@').ifEmpty { null } ?: "the web"
 }
 
 /** A delivered file: its name, with Save and Share. */
