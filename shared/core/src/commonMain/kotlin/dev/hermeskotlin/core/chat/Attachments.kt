@@ -39,32 +39,42 @@ class OutgoingAttachment(
     }
 }
 
-/** An attachment as a message shows it; history only knows names and kinds, not the bytes. */
+/**
+ * An attachment as a message shows it. One sent from here carries its [thumbnail]; one from history
+ * knows only its name and, for an image the gateway stored, the [gatewayPath] to fetch it from.
+ */
 class ShownAttachment(
     val key: String,
     val name: String,
     val kind: AttachmentKind,
     val thumbnail: ByteArray? = null,
+    val gatewayPath: String? = null,
 )
 
 /** Desktop's prompt when only images go out (`use-prompt-actions/submit.ts`). */
 internal const val IMAGE_ONLY_PROMPT = "What do you see in this image?"
 
-private val FILE_REF = Regex("""^@file:(?:"([^"]+)"|(\S+))\s*$""")
+/** A whole line `@file:<path>` or `@image:<path>`; paths with spaces are quoted. */
+private val REF_LINE = Regex("""^@(file|image):(?:"([^"]+)"|(\S+))\s*$""")
 
 /**
- * Splits the `@file:` reference lines Hermes clients put in front of a prompt back into files, so a
- * stored prompt shows its attachments as chips instead of raw references.
+ * Pulls the attachment reference lines out of a stored prompt: `@file:` lines that clients put in
+ * front of it, and the `@image:` lines the gateway adds for the images that went with it. Returns
+ * the attachments and the prompt without them, so history shows chips and thumbnails, not raw refs.
  */
-internal fun splitFileRefs(text: String): Pair<List<String>, String> {
-    val lines = text.lines()
-    val refs = mutableListOf<String>()
-    var index = 0
-    while (index < lines.size) {
-        val match = FILE_REF.matchEntire(lines[index].trim()) ?: break
-        refs += (match.groupValues[1].ifEmpty { match.groupValues[2] }).substringAfterLast('/')
-        index++
+internal fun splitAttachmentRefs(text: String, keyPrefix: String): Pair<List<ShownAttachment>, String> {
+    val attachments = mutableListOf<ShownAttachment>()
+    val kept = text.lines().filter { line ->
+        val match = REF_LINE.matchEntire(line.trim()) ?: return@filter true
+        val path = match.groupValues[2].ifEmpty { match.groupValues[3] }
+        val name = path.substringAfterLast('/')
+        attachments += when {
+            match.groupValues[1] == "image" -> ShownAttachment("$keyPrefix-r${attachments.size}", name, AttachmentKind.Image, gatewayPath = path)
+            name.endsWith(".pdf", ignoreCase = true) -> ShownAttachment("$keyPrefix-r${attachments.size}", name, AttachmentKind.Pdf)
+            else -> ShownAttachment("$keyPrefix-r${attachments.size}", name, AttachmentKind.File)
+        }
+        false
     }
-    if (refs.isEmpty()) return emptyList<String>() to text
-    return refs to lines.drop(index).joinToString("\n").trim()
+    if (attachments.isEmpty()) return emptyList<ShownAttachment>() to text
+    return attachments to kept.joinToString("\n").trim()
 }

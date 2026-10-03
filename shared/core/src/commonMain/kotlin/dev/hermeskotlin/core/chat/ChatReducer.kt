@@ -128,9 +128,8 @@ fun historyToMessages(rows: List<SessionMessage>): List<ChatMessage> {
         val key = row.id?.let { "row-$it" } ?: "h$index"
         when (row.role) {
             "user" -> {
-                val (files, text) = splitFileRefs(row.text.trim())
-                val attachments = List(row.imageCount) { ShownAttachment("$key-i$it", "Image", AttachmentKind.Image) } +
-                    files.mapIndexed { i, name -> ShownAttachment("$key-f$i", name, if (name.endsWith(".pdf", true)) AttachmentKind.Pdf else AttachmentKind.File) }
+                val (refs, text) = splitAttachmentRefs(row.text.trim(), key)
+                val attachments = List(row.imageCount) { ShownAttachment("$key-i$it", "Image", AttachmentKind.Image) } + refs
                 if (text.isNotEmpty() || attachments.isNotEmpty()) messages += ChatMessage.User(key, text, attachments = attachments)
             }
             "assistant" -> {
