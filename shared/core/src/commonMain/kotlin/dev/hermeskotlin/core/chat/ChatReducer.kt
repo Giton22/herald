@@ -59,8 +59,17 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
         "session.title" -> copy(title = payload.string("title") ?: title)
         "session.info" -> withInfo(payload).copy(title = payload.string("title")?.takeIf { it.isNotBlank() } ?: title)
         "btw.complete" -> answerAside(payload)
+        "todo.updated" -> withTodos(TodoList.parse(payload))
         else -> this
     }
+}
+
+/** Takes a plan snapshot unless an older one arrived late. */
+internal fun ChatState.withTodos(list: TodoList?): ChatState {
+    if (list == null) return this
+    val current = todos
+    if (current != null && list.revision < current.revision) return this
+    return copy(todos = list)
 }
 
 /** A `/btw` answer: fills the card that asked it, or adds one when the question came from another client. */
@@ -124,7 +133,7 @@ private fun ChatState.complete(payload: JsonObject?): ChatState {
     val finalReasoning = payload.string("reasoning").orEmpty().takeIf { correctedReplyKey == null }.orEmpty()
     val index = messages.openReplyIndex().takeIf { it >= 0 }
         ?: if (finalText.isBlank() && error == null) {
-            return copy(running = false, status = null, thinkingFrame = null, messages = messages, correctedReplyKey = null)
+            return copy(running = false, status = null, thinkingFrame = null, messages = messages, correctedReplyKey = null, todos = todosAfterTurn())
         } else {
             messages.size
         }
@@ -148,8 +157,19 @@ private fun ChatState.complete(payload: JsonObject?): ChatState {
             else -> set(index, reply)
         }
     }
-    return copy(running = false, status = null, thinkingFrame = null, messages = updated, keySeq = keySeq + 1, correctedReplyKey = null)
+    return copy(
+        running = false,
+        status = null,
+        thinkingFrame = null,
+        messages = updated,
+        keySeq = keySeq + 1,
+        correctedReplyKey = null,
+        todos = todosAfterTurn(),
+    )
 }
+
+/** A plan still open when its turn ends was abandoned (stopped, or no final update); a finished one stays. */
+private fun ChatState.todosAfterTurn(): TodoList? = todos?.takeUnless { it.active }
 
 /** The reply still streaming. Not necessarily last: a prompt queued mid-turn sits after it. */
 private fun List<ChatMessage>.openReplyIndex(): Int = indexOfLast { it is ChatMessage.Assistant && it.streaming }

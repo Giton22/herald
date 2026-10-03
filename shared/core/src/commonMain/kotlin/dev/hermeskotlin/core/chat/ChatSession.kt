@@ -838,7 +838,10 @@ class ChatSession(
                 messages = messages,
                 inputRequests = open.plusNew(claimUnclaimed(runtimeId)),
                 keySeq = state.keySeq + 1,
-            ).withInfo(result["info"] as? JsonObject)
+            ).withInfo(result["info"] as? JsonObject).let { attached ->
+                // Only a plan its turn is still working through; an idle chat's last plan is history.
+                if (running) attached.withTodos(TodoList.parse(result["todo_state"] as? JsonObject)) else attached
+            }
         }
         runtimeId
     }

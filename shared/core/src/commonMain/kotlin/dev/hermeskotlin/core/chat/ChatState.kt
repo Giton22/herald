@@ -89,6 +89,8 @@ data class ChatState(
     val error: String? = null,
     /** Questions the agent is blocked on (approval, clarify, sudo, secret), oldest first. */
     val inputRequests: List<InputRequest> = emptyList(),
+    /** The agent's plan for the running turn; a finished one stays until the next plan or chat. */
+    val todos: TodoList? = null,
     /** The part of the running turn's reply shown before a mid-turn correction; the turn continues below it. */
     val correctedReplyKey: String? = null,
     /** Source of unique keys for messages created on this device. */
