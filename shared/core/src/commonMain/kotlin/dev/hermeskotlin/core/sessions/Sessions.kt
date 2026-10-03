@@ -1,0 +1,103 @@
+package dev.hermeskotlin.core.sessions
+
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonPrimitive
+
+/**
+ * One stored session row as `GET /api/sessions` returns it (hermes_cli/web_routers/sessions.py,
+ * `StoredSessionRow` in tui_gateway/contracts/common.py). Times are epoch seconds.
+ */
+@Serializable
+data class SessionSummary(
+    val id: String,
+    val title: String? = null,
+    val preview: String? = null,
+    val source: String? = null,
+    val model: String? = null,
+    @SerialName("started_at") val startedAt: Double? = null,
+    @SerialName("last_active") val lastActive: Double? = null,
+    @SerialName("message_count") val messageCount: Int = 0,
+    val pinned: Boolean = false,
+    val archived: Boolean = false,
+    @SerialName("is_active") val isActive: Boolean = false,
+    /** Search hits only: the matching message excerpt (FTS5 `snippet()`, `>>>`/`<<<` markers stripped). */
+    val snippet: String? = null,
+) {
+    /** What a list shows as the name: the title, else the first prompt, else a placeholder. */
+    val displayTitle: String
+        get() = title?.takeIf { it.isNotBlank() } ?: preview?.takeIf { it.isNotBlank() }?.lineSequence()?.first()
+            ?: "Untitled session"
+
+    /** Latest activity in epoch seconds, falling back to when the session started. */
+    val activityAt: Double? get() = lastActive ?: startedAt
+}
+
+@Serializable
+data class SessionPage(
+    val sessions: List<SessionSummary> = emptyList(),
+    val total: Int = 0,
+    val limit: Int = 0,
+    val offset: Int = 0,
+)
+
+/** Which part of the archive a listing covers (`archived=` query). */
+enum class ArchiveFilter(val wire: String) { Exclude("exclude"), Only("only"), Include("include") }
+
+/**
+ * One stored transcript row from `GET /api/sessions/{id}/messages` — the raw `messages` table row
+ * plus display projections. [content] is usually a string, but multimodal turns store a parts array.
+ */
+@Serializable
+data class SessionMessage(
+    val id: Long? = null,
+    val role: String,
+    val content: JsonElement? = null,
+    @SerialName("display_content") val displayContent: JsonElement? = null,
+    @SerialName("tool_calls") val toolCalls: JsonElement? = null,
+    @SerialName("tool_call_id") val toolCallId: String? = null,
+    @SerialName("tool_name") val toolName: String? = null,
+    val timestamp: Double? = null,
+    val reasoning: String? = null,
+    @SerialName("display_kind") val displayKind: String? = null,
+) {
+    /** Plain text to render: the display projection when present, else the stored content. */
+    val text: String get() = (displayContent ?: content).plainText()
+
+    /** Names of the tools an assistant turn called (`tool_calls[].function.name`). */
+    val calledTools: List<String>
+        get() = (toolCalls as? JsonArray).orEmpty().mapNotNull { call ->
+            val function = (call as? JsonObject)?.get("function") as? JsonObject
+            (function?.get("name") ?: (call as? JsonObject)?.get("name"))?.stringOrNull()
+        }
+
+    /** Rows the gateway marks for storage only (compaction wrappers, seeded context). */
+    val isHidden: Boolean get() = displayKind == "hidden"
+}
+
+@Serializable
+data class SessionMessagesPage(
+    @SerialName("session_id") val sessionId: String,
+    val messages: List<SessionMessage> = emptyList(),
+)
+
+private fun JsonElement?.stringOrNull(): String? = (this as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
+
+/** Strings pass through; OpenAI-style parts arrays join their `text` parts; anything else is dropped. */
+private fun JsonElement?.plainText(): String = when (this) {
+    null -> ""
+    is JsonPrimitive -> if (isString) content else ""
+    is JsonArray -> mapNotNull { part ->
+        when (part) {
+            is JsonPrimitive -> part.contentOrNull
+            is JsonObject -> part["text"]?.jsonPrimitive?.contentOrNull
+            else -> null
+        }
+    }.joinToString("\n")
+    is JsonObject -> this["text"]?.stringOrNull() ?: ""
+}

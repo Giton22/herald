@@ -1,10 +1,10 @@
 package dev.hermeskotlin.core.connection
 
 import dev.hermeskotlin.core.auth.AuthApi
-
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.rpc.GatewayCloseCodes
+import dev.hermeskotlin.core.rpc.GatewayEvent
 import dev.hermeskotlin.core.rpc.HandshakeRejectedException
 import dev.hermeskotlin.core.rpc.HeartbeatTimeoutException
 import dev.hermeskotlin.core.rpc.JsonRpcClient
@@ -13,13 +13,17 @@ import dev.hermeskotlin.core.rpc.TransportClosedException
 import io.ktor.util.date.getTimeMillis
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
@@ -55,6 +59,12 @@ class GatewayConnection(
 ) {
     private val _state = MutableStateFlow<ConnectionState>(ConnectionState.Idle)
     val state: StateFlow<ConnectionState> = _state.asStateFlow()
+
+    /** Server events from whichever socket is currently connected; silent while disconnected. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val events: Flow<GatewayEvent> = state.flatMapLatest { state ->
+        (state as? ConnectionState.Connected)?.client?.events ?: emptyFlow()
+    }
 
     private var job: Job? = null
     private var url: GatewayUrl? = null
