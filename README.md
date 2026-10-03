@@ -163,7 +163,7 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [ ] Context compression (`session.compress`, `session.context_breakdown`)
 
 ### Agents & processes
-- [ ] Subagent tree and live progress (`subagent.*`, `spawn_tree.*`)
+- [x] Subagent tree and live progress (`subagent.*`, `subagent.list`, `subagent.interrupt`; saved `spawn_tree.*` snapshots not used)
 - [ ] Background process list, kill and stop (`process.*`, `agent.terminal.output`)
 - [ ] Rollback / checkpoints (`rollback.list`, `rollback.diff`, `rollback.restore`)
 
