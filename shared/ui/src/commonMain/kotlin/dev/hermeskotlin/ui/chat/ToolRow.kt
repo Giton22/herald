@@ -217,7 +217,7 @@ private fun diffText(diff: String): AnnotatedString {
     }
 }
 
-private fun formatDuration(seconds: Double): String = when {
+internal fun formatDuration(seconds: Double): String = when {
     seconds < 1 -> "<1s"
     seconds < 60 -> "${seconds.toInt()}s"
     else -> "${(seconds / 60).toInt()}m ${(seconds % 60).toInt()}s"

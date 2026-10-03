@@ -274,6 +274,7 @@ fun ChatScreen(
                             LocalMediaLoader provides viewModel::loadMedia,
                             LocalOpenImage provides { viewing = it },
                             LocalNotice provides { notice = it },
+                            LocalSubagents provides SubagentContext(state.subagents, viewModel::stopSubagent),
                         ) {
                             Messages(state.messages, state.thinkingFrame, bottomInset = dockInset)
                         }
@@ -610,6 +611,8 @@ private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (showReasoning) Reasoning(message.reasoning, live = message.streaming && message.text.isEmpty(), thinkingFrame)
         if (showTools) Tools(message.tools)
+        // Shown whatever the tool-activity setting: the work happens out of sight, in other agents.
+        message.tools.filter { it.name == "delegate_task" }.forEach { DelegationCard(it) }
         when {
             text.isNotBlank() -> SelectionContainer { MarkdownText(text, streaming = message.streaming) }
             // One activity cue at a time: live reasoning and running tools already show their own.

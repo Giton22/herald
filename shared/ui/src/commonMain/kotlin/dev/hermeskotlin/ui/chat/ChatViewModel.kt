@@ -546,6 +546,11 @@ class ChatViewModel(
         viewModelScope.launch { chat.interrupt() }
     }
 
+    fun stopSubagent(subagentId: String) {
+        val chat = session.value ?: return
+        viewModelScope.launch { chat.stopSubagent(subagentId) }
+    }
+
     fun answer(request: InputRequest, result: JsonObject) {
         val chat = session.value ?: return
         viewModelScope.launch { chat.answer(request, result) }
