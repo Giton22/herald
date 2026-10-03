@@ -128,6 +128,14 @@ import dev.hermeskotlin.ui.journey.JourneySheet
 import dev.hermeskotlin.ui.pet.PetSheet
 import dev.hermeskotlin.ui.pet.PetView
 import dev.hermeskotlin.ui.pet.rememberPetState
+import dev.hermeskotlin.ui.voice.DictationState
+import dev.hermeskotlin.ui.voice.VoiceChatState
+import dev.hermeskotlin.ui.voice.VoicePhase
+import dev.hermeskotlin.ui.voice.rememberMicrophonePermission
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
+import com.composables.icons.lucide.AudioLines
+import com.composables.icons.lucide.Mic
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
@@ -195,6 +203,19 @@ fun ChatScreen(
         }
     }
     val attachmentPicker = rememberAttachmentPicker(onPicked = viewModel::addAttachments, onError = viewModel::showAttachmentError)
+    val microphone = rememberMicrophonePermission()
+    val startVoiceChat = {
+        microphone.withMicrophone(onDenied = { notice = "Voice needs the microphone. Allow it in Android's settings." }) {
+            viewModel.startVoiceChat()
+        }
+    }
+    val toggleDictation = {
+        microphone.withMicrophone(onDenied = { notice = "Dictation needs the microphone. Allow it in Android's settings." }) {
+            viewModel.toggleDictation()
+        }
+    }
+    // Recording stops when the app leaves the screen; Android doesn't let it listen from the background.
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.voice.stopAll() }
     LaunchedEffect(viewModel) {
         viewModel.requests.collect { request ->
             when (request) {
@@ -205,6 +226,7 @@ fun ChatScreen(
                 is ChatRequest.SwitchProfile -> onSwitchProfile(request.profile)
                 ChatRequest.OpenPets -> petsOpen = true
                 ChatRequest.OpenJourney -> journeyOpen = true
+                ChatRequest.StartVoice -> startVoiceChat()
             }
         }
     }
@@ -268,6 +290,8 @@ fun ChatScreen(
                         notice = notice,
                         onOpenModels = { modelsOpen = true },
                         onAttach = { attachOpen = true },
+                        onDictate = toggleDictation,
+                        onVoiceChat = startVoiceChat,
                     )
                 }
                 // The pet sits on the composer's top edge, over the conversation rather than in the dock's height.
@@ -335,17 +359,31 @@ private fun ColumnScope.Dock(
     notice: String?,
     onOpenModels: () -> Unit,
     onAttach: () -> Unit,
+    onDictate: () -> Unit,
+    onVoiceChat: () -> Unit,
 ) {
+    val voiceChat = viewModel.voice.chat.collectAsStateWithLifecycle().value
+    val dictation = viewModel.voice.dictation.collectAsStateWithLifecycle().value
     (state.attachment as? Attachment.Failed)?.let {
         Banner(it.message, actionLabel = "Retry", onAction = viewModel::retry)
     }
     state.error?.let { Banner(it, actionLabel = null, onAction = viewModel::dismissError) }
     attachmentError?.let { Banner(it, actionLabel = null, onAction = viewModel::dismissAttachmentError) }
+    voiceChat.error?.let { Banner(it, actionLabel = null, onAction = viewModel.voice::dismissChatError) }
+    dictation.error?.let { Banner(it, actionLabel = null, onAction = viewModel.voice::dismissDictationError) }
     AnimatedVisibility(visible = state.running && state.status != null) { StatusLine(state.status.orEmpty()) }
     AnimatedVisibility(visible = notice != null) { NoticeLine(notice.orEmpty()) }
 
     if (state.inputRequests.isNotEmpty()) {
         InputRequestPanel(state.inputRequests, connected, onAnswer = viewModel::answer)
+    } else if (voiceChat.phase != VoicePhase.Off) {
+        VoicePanel(
+            hazeState = hazeState,
+            state = voiceChat,
+            onDone = viewModel.voice::doneTalking,
+            onSkip = viewModel.voice::skipSpeech,
+            onEnd = viewModel.voice::stopChat,
+        )
     } else {
         val suggestions = viewModel.suggestions.collectAsStateWithLifecycle().value
         AnimatedVisibility(visible = suggestions.isNotEmpty() && connected, enter = fadeIn(), exit = fadeOut()) {
@@ -365,8 +403,11 @@ private fun ColumnScope.Dock(
             picker = picker,
             connected = connected,
             attachments = attachments,
+            dictation = dictation,
             onOpenModels = onOpenModels,
             onAttach = onAttach,
+            onDictate = onDictate,
+            onVoiceChat = onVoiceChat,
         )
     }
 }
@@ -870,8 +911,11 @@ private fun Composer(
     picker: ModelPickerState,
     connected: Boolean,
     attachments: List<OutgoingAttachment>,
+    dictation: DictationState,
     onOpenModels: () -> Unit,
     onAttach: () -> Unit,
+    onDictate: () -> Unit,
+    onVoiceChat: () -> Unit,
 ) {
     // Attachments alone are sendable: the gateway gets Desktop's image prompt or the file references.
     val hasText = viewModel.composer.text.isNotBlank() || attachments.isNotEmpty()
@@ -931,12 +975,23 @@ private fun Composer(
                 onClick = onAttach,
                 enabled = attachments.size < OutgoingAttachment.MAX_COUNT,
             )
+            DictationButton(dictation, onClick = onDictate, enabled = connected)
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { ModelPill(state, picker, onClick = onOpenModels) }
             val stop = state.running && !hasText
+            // An empty composer offers a voice chat in the send button's place, as phone assistants do.
+            val voice = !stop && !hasText && !dictation.active
             SendButton(
-                stop = stop,
-                onClick = if (stop) viewModel::interrupt else viewModel::send,
-                enabled = connected && (stop || hasText),
+                icon = when {
+                    stop -> SendIcon.Stop
+                    voice -> SendIcon.Voice
+                    else -> SendIcon.Send
+                },
+                onClick = when {
+                    stop -> viewModel::interrupt
+                    voice -> onVoiceChat
+                    else -> viewModel::send
+                },
+                enabled = connected && (stop || hasText || voice),
             )
         }
     }
@@ -956,9 +1011,11 @@ private fun ComposerButton(icon: ImageVector, contentDescription: String, onClic
     }
 }
 
+private enum class SendIcon { Send, Stop, Voice }
+
 /** Desktop's round send: a disc in the text colour (white on dark) with the icon cut in the page colour. */
 @Composable
-private fun SendButton(stop: Boolean, onClick: () -> Unit, enabled: Boolean) {
+private fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
     val fill = if (enabled) Theme[colors][textColor] else Theme[colors][textColor].copy(alpha = 0.12f)
     val tint = if (enabled) Theme[colors][background] else Theme[colors][textTertiary]
     UnstyledButton(
@@ -968,11 +1025,118 @@ private fun SendButton(stop: Boolean, onClick: () -> Unit, enabled: Boolean) {
         indication = rememberColoredIndication(tint),
     ) {
         UnstyledIcon(
-            if (stop) Lucide.Square else Lucide.ArrowUp,
-            contentDescription = if (stop) "Stop" else "Send",
+            when (icon) {
+                SendIcon.Send -> Lucide.ArrowUp
+                SendIcon.Stop -> Lucide.Square
+                SendIcon.Voice -> Lucide.AudioLines
+            },
+            contentDescription = when (icon) {
+                SendIcon.Send -> "Send"
+                SendIcon.Stop -> "Stop"
+                SendIcon.Voice -> "Start a voice chat"
+            },
             tint = tint,
-            modifier = Modifier.size(if (stop) 16.dp else 20.dp),
+            modifier = Modifier.size(if (icon == SendIcon.Stop) 16.dp else 20.dp),
         )
+    }
+}
+
+/** The composer's microphone: tap to dictate, tap again to finish; the ring follows your voice. */
+@Composable
+private fun DictationButton(state: DictationState, onClick: () -> Unit, enabled: Boolean) {
+    if (state.transcribing) {
+        Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
+        return
+    }
+    val recording = state.recording
+    val tint = when {
+        recording -> Theme[colors][danger]
+        enabled -> Theme[colors][textSecondary]
+        else -> Theme[colors][textTertiary].copy(alpha = 0.5f)
+    }
+    UnstyledButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier
+            .size(40.dp)
+            .clip(CircleShape)
+            .then(if (recording) Modifier.border(2.dp, tint.copy(alpha = 0.25f + 0.75f * state.level), CircleShape) else Modifier),
+        indication = rememberColoredIndication(tint),
+    ) {
+        UnstyledIcon(
+            if (recording) Lucide.Square else Lucide.Mic,
+            contentDescription = if (recording) "Finish dictating" else "Dictate",
+            tint = tint,
+            modifier = Modifier.size(if (recording) 16.dp else 22.dp),
+        )
+    }
+}
+
+/**
+ * Takes the composer's place during a voice chat: what's happening now, a circle that swells with
+ * your voice, and buttons to send now, skip the reply being read, or end the chat.
+ */
+@Composable
+private fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onDone: () -> Unit, onSkip: () -> Unit, onEnd: () -> Unit) {
+    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
+    val page = Theme[colors][background]
+    val frosted = remember(page) {
+        HazeBlurStyle {
+            blurEnabled(true)
+            blurRadius(20.dp)
+            backgroundColor(page)
+        }
+    }
+    val label = when (state.phase) {
+        VoicePhase.Listening -> "Listening…"
+        VoicePhase.Transcribing -> "Catching that…"
+        VoicePhase.Thinking -> "Thinking…"
+        VoicePhase.Speaking -> "Speaking…"
+        VoicePhase.Off -> ""
+    }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)
+            .clip(shape)
+            .hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)
+            .background(Theme[colors][surface].copy(alpha = 0.55f))
+            .border(1.dp, Theme[colors][strokeStrong], shape)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
+            when (state.phase) {
+                VoicePhase.Listening -> {
+                    val size = 16.dp + 24.dp * state.level.coerceIn(0f, 1f)
+                    Box(Modifier.size(size).clip(CircleShape).background(Theme[colors][accent]))
+                }
+                VoicePhase.Speaking -> UnstyledIcon(Lucide.AudioLines, contentDescription = null, tint = Theme[colors][accent], modifier = Modifier.size(24.dp))
+                else -> Spinner(Modifier.size(18.dp))
+            }
+        }
+        Column(Modifier.weight(1f)) {
+            Text(label, style = Theme[typography][body], color = Theme[colors][textColor])
+            Text(
+                when (state.phase) {
+                    VoicePhase.Listening -> "Pause to send · “stop” ends"
+                    VoicePhase.Speaking -> "Tap skip to talk again."
+                    else -> "Voice chat"
+                },
+                style = Theme[typography][caption],
+                color = Theme[colors][textTertiary],
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        when (state.phase) {
+            VoicePhase.Listening -> Button("Send", onClick = onDone, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
+            VoicePhase.Speaking -> Button("Skip", onClick = onSkip, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
+            else -> Unit
+        }
+        IconButton(Lucide.X, contentDescription = "End voice chat", onClick = onEnd)
     }
 }
 

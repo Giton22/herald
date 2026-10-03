@@ -31,6 +31,11 @@ import dev.hermeskotlin.core.pet.PetApi
 import dev.hermeskotlin.core.journey.JourneyApi
 import dev.hermeskotlin.ui.pet.PetController
 import dev.hermeskotlin.ui.journey.JourneyController
+import dev.hermeskotlin.core.voice.AudioApi
+import dev.hermeskotlin.core.voice.SpeechPlayer
+import dev.hermeskotlin.core.voice.VoiceRecorder
+import dev.hermeskotlin.ui.voice.VoiceController
+import kotlinx.coroutines.CoroutineScope
 import dev.hermeskotlin.core.slash.SlashApi
 import dev.hermeskotlin.core.slash.SlashCatalog
 import dev.hermeskotlin.core.slash.SlashCommand
@@ -82,6 +87,9 @@ sealed interface ChatRequest {
     data object OpenPets : ChatRequest
     data object OpenJourney : ChatRequest
 
+    /** `/voice`: the screen asks for the microphone, then starts a voice chat. */
+    data object StartVoice : ChatRequest
+
     /** [profile] null is the gateway's launch profile. */
     data class SwitchProfile(val profile: String?) : ChatRequest
 }
@@ -116,7 +124,14 @@ class ChatViewModel(
     private val settings: SettingsStore,
     petApi: PetApi,
     journeyApi: JourneyApi,
+    audioApi: AudioApi,
+    recorder: VoiceRecorder,
+    player: SpeechPlayer,
+    appScope: CoroutineScope,
 ) : ViewModel() {
+
+    /** Dictation and voice chat for the open chat. */
+    val voice = VoiceController(audioApi, recorder, player, viewModelScope, appScope)
 
     /** The profile's pet and its gallery. */
     val pets = PetController(petApi, viewModelScope)
@@ -186,6 +201,8 @@ class ChatViewModel(
     fun open(target: ChatTarget) {
         if (this.target == target) return
         this.target = target
+        // A voice chat belongs to the chat it started in.
+        voice.stopAll()
         composer.clearText()
         _attachments.value = emptyList()
         _attachmentError.value = null
@@ -196,6 +213,22 @@ class ChatViewModel(
         if (connectionState.value is ConnectionState.Connected) {
             loadModels()
             pets.bind(target.profile)
+        }
+    }
+
+    fun startVoiceChat() {
+        val chat = session.value ?: return
+        val target = target ?: return
+        voice.startChat(chat, target.gateway.gatewayUrl, target.profile)
+    }
+
+    /** Starts dictating into the composer, or finishes the dictation in progress. */
+    fun toggleDictation() {
+        val target = target ?: return
+        if (voice.dictation.value.recording) return voice.finishDictation()
+        voice.startDictation(target.gateway.gatewayUrl, target.profile) { text ->
+            val current = composer.text.toString()
+            composer.setTextAndPlaceCursorAtEnd(if (current.isBlank()) text else "${current.trimEnd()} $text")
         }
     }
 
@@ -361,6 +394,7 @@ class ChatViewModel(
                 SlashRoute.Skin -> skin(chat, arg)
                 SlashRoute.Journey -> _requests.send(ChatRequest.OpenJourney)
                 SlashRoute.Pet -> pet(chat, arg)
+                SlashRoute.Voice -> if (arg.lowercase() in setOf("off", "stop")) voice.stopChat() else _requests.send(ChatRequest.StartVoice)
                 is SlashRoute.Unavailable -> chat.showCommandOutput("/${command.name}", route.message, failed = true)
                 SlashRoute.Gateway -> onGateway()
             }

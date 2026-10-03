@@ -147,9 +147,11 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [ ] Share sheet: "Send to Hermes" from other apps
 
 ### Voice
-- [ ] Voice input / transcription (`voice.record`, `voice.transcript`)
-- [ ] Text-to-speech playback (`voice.tts`)
-- [ ] Voice mode toggle and status (`voice.toggle`, `voice.status`)
+- [x] Dictation into the composer (phone mic → `POST /api/audio/transcribe`)
+- [x] Voice chat like Desktop's: listen, transcribe, send, read the reply aloud (`/api/audio/speak`, `tts-lease`), say "stop" to end; `/voice`
+- [ ] Talk over the reply to interrupt it (barge-in) and speak while the reply streams (`/api/audio/speak-stream`)
+- [ ] Live voice mode (`/api/audio/voice-live/*`)
+- [ ] Wake word "Hey Hermes" (phone mic → `wake.feed`, `wake.detected`)
 
 ### Slash commands & composer
 - [x] Slash command catalog and autocomplete (`commands.catalog`, `complete.slash`, `slash.exec`, `command.dispatch`; skills, plus Desktop's own `/new`, `/model`, `/resume`, `/stop`, `/compress`, `/status`, `/btw`, `/reasoning`, `/yolo`, `/title`, `/branch`, `/profile`, `/handoff`, `/skin`)
