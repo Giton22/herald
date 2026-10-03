@@ -48,6 +48,7 @@ import dev.hermeskotlin.designsystem.title
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -72,7 +73,12 @@ class UsageController(private val sessions: SessionsApi, private val scope: Coro
     private val _state = MutableStateFlow(UsageSheetState())
     val state: StateFlow<UsageSheetState> = _state.asStateFlow()
 
+    private var chat: ChatSession? = null
+    private var refresh: Job? = null
+
     fun load(gateway: GatewayUrl, sessionId: String?, profile: String?, chat: ChatSession?) {
+        this.chat = chat
+        refresh?.cancel()
         _state.value = UsageSheetState(loading = true)
         scope.launch {
             val limits = async { chat?.accountLimits().orEmpty() }
@@ -87,11 +93,24 @@ class UsageController(private val sessions: SessionsApi, private val scope: Coro
             )
         }
     }
+
+    /** Fetches the context split again, as a turn moves on, so an open sheet doesn't show an old one. */
+    fun refreshBreakdown() {
+        val chat = chat ?: return
+        if (_state.value.loading) return
+        refresh?.cancel()
+        refresh = scope.launch {
+            val breakdown = chat.contextBreakdown()?.takeUnless { it.isEmpty } ?: return@launch
+            _state.update { if (it.loading) it else it.copy(breakdown = breakdown) }
+        }
+    }
 }
 
 @Composable
 fun UsageSheet(visible: Boolean, controller: UsageController, live: SessionUsage?, onLoad: () -> Unit, onDismiss: () -> Unit) {
     LaunchedEffect(visible) { if (visible) onLoad() }
+    // The context split is fetched, not streamed; follow the live count so it keeps up with the turn.
+    LaunchedEffect(visible, live?.contextUsed) { if (visible) controller.refreshBreakdown() }
     val state = controller.state.collectAsStateWithLifecycle().value
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         SheetHeader("Usage", state.totals?.model?.takeIf { it.isNotBlank() }?.let { "This chat · $it" } ?: "This chat")
