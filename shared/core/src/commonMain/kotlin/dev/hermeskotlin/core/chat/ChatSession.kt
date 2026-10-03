@@ -27,11 +27,13 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
 
 /**
@@ -346,6 +348,25 @@ class ChatSession(
     suspend fun status() = runOnGateway("/status") { client, runtimeId ->
         val result = client.request("session.status", buildJsonObject { put("session_id", runtimeId) }) as? JsonObject
         result.string("output") ?: "No status."
+    }
+
+    /**
+     * The provider account's limits and credits as the gateway words them (`session.usage`
+     * `account_lines` / `credits_lines`, e.g. a quota window); empty when there are none or offline.
+     */
+    suspend fun accountLimits(): List<String> {
+        val client = connectedClient() ?: return emptyList()
+        val runtimeId = _state.value.runtimeSessionId ?: return emptyList()
+        return try {
+            val result = client.request("session.usage", buildJsonObject { put("session_id", runtimeId) }) as? JsonObject
+            listOf("account_lines", "credits_lines").flatMap { key ->
+                (result?.get(key) as? JsonArray).orEmpty().mapNotNull { (it as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf(String::isNotEmpty) }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }
     }
 
     /** `/stop`: stops the reply, then the background processes the agent left running (`process.stop`). */

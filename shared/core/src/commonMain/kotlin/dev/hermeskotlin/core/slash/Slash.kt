@@ -113,6 +113,7 @@ sealed interface SlashRoute {
     data object Journey : SlashRoute
     data object Pet : SlashRoute
     data object Voice : SlashRoute
+    data object Usage : SlashRoute
 
     /** Known, but there is nothing on this client to run it with. */
     data class Unavailable(val message: String) : SlashRoute
@@ -161,6 +162,7 @@ sealed interface SlashRoute {
             "journey" to Journey,
             "pet" to Pet,
             "voice" to Voice,
+            "usage" to Usage,
         )
 
         private val LOCAL_ALIASES = mapOf(
