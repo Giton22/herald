@@ -21,18 +21,18 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import com.composeunstyled.Text
 import com.composeunstyled.theme.Theme
+import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.label
+import dev.hermeskotlin.designsystem.onAccent
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.radiusSmall
 import dev.hermeskotlin.designsystem.stroke
-import dev.hermeskotlin.designsystem.surfaceElevated
-import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.typography
 
-/** Equal-width options in a tinted track; the selected one sits on a raised chip. */
+/** Equal-width options in a tinted track; the selected one takes the accent fill. */
 @Composable
 fun <T> SegmentedControl(
     options: List<T>,
@@ -52,7 +52,7 @@ fun <T> SegmentedControl(
     ) {
         options.forEach { option ->
             val isSelected = option == selected
-            val fill by animateColorAsState(if (isSelected) Theme[colors][surfaceElevated] else Color.Transparent)
+            val fill by animateColorAsState(if (isSelected) Theme[colors][accent] else Color.Transparent)
             val shape = RoundedCornerShape(Theme[radii][radiusSmall])
             Box(
                 Modifier
@@ -67,7 +67,7 @@ fun <T> SegmentedControl(
                 Text(
                     optionLabel(option),
                     style = Theme[typography][label],
-                    color = if (isSelected) Theme[colors][text] else Theme[colors][textSecondary],
+                    color = if (isSelected) Theme[colors][onAccent] else Theme[colors][textSecondary],
                     singleLine = true,
                 )
             }
