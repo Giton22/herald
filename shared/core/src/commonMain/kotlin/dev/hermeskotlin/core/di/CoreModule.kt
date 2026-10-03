@@ -7,6 +7,7 @@ import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.chat.ToolRiskStore
 import dev.hermeskotlin.core.capabilities.CapabilitiesApi
 import dev.hermeskotlin.core.cron.CronApi
+import dev.hermeskotlin.core.insights.InsightsApi
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayProbe
 import dev.hermeskotlin.core.gateway.GatewayRepository
@@ -46,6 +47,7 @@ val coreModule = module {
     single { SessionsApi(get()) }
     single { CronApi(get()) }
     single { CapabilitiesApi(get()) }
+    single { InsightsApi(get()) }
     single { LastChatStore(get()) }
     single { ProfilesApi(get()) }
     single { ProfileStore(get()) }

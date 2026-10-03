@@ -178,7 +178,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] MCP servers on the Capabilities page: switch, and a connection test listing its tools (`/api/mcp/servers`, `…/{name}/enabled`, `…/{name}/test`). Adding servers and OAuth not yet
 - [ ] Config viewer and editor (`config.get`, `config.set`)
 - [ ] Projects and workspaces (`projects.*`)
-- [ ] Insights and usage analytics (`insights.get`, `usage.bars`)
+- [x] Insights page in the sidebar, after Desktop's (`GET /api/analytics/usage`): cost, sessions, tokens and cache share over 7/30/90 days, tokens by day (tap a day), top models, tools and skills. `usage.bars` (subscription limits) not yet
 
 ### Notifications & background
 - [x] Foreground service that keeps the WS alive during long runs
