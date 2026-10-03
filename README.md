@@ -174,7 +174,7 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [x] Notification toggles in Settings; permission asked on the first turn
 - [x] Stay connected: keeps the socket up in the background (quiet notification) so turns started on other devices reach the open chat
 - [ ] Gateway-pushed `notification.show`
-- [ ] Notifications for chats other than the open one
+- [ ] Follow all sessions: notify for chats other than the open one (watch `session.active_list`, attach to sessions that start a turn)
 - [ ] ntfy integration as a push channel without Google services (Hermes ntfy platform adapter)
 
 ### Auth & connectivity extras
