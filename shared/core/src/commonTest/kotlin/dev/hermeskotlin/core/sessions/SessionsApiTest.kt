@@ -43,11 +43,26 @@ class SessionsApiTest {
 
         val page = assertIs<ApiResult.Success<SessionPage>>(api.list(url)).value
 
-        assertEquals("limit=50&offset=0&archived=exclude&order=recent", query)
+        assertEquals("limit=50&offset=0&archived=exclude&order=recent&exclude_sources=cron", query)
         val row = page.sessions.single()
         assertEquals("fix the build", row.displayTitle)
         assertEquals(1700000100.0, row.activityAt)
         assertTrue(row.pinned)
+    }
+
+    @Test
+    fun scheduledAndArchivedViewsMapToTheirQueries() = runTest {
+        val queries = mutableListOf<String>()
+        val api = api { request ->
+            queries += request.url.encodedQuery
+            respond("""{"sessions":[],"total":0}""", HttpStatusCode.OK, json)
+        }
+
+        api.list(url, filter = SessionListFilter.Scheduled)
+        api.list(url, filter = SessionListFilter.Archived)
+
+        assertEquals("limit=50&offset=0&archived=exclude&order=recent&source=cron", queries[0])
+        assertEquals("limit=50&offset=0&archived=only&order=recent", queries[1])
     }
 
     @Test

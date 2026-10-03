@@ -12,7 +12,7 @@ import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
-import dev.hermeskotlin.core.sessions.ArchiveFilter
+import dev.hermeskotlin.core.sessions.SessionListFilter
 import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.core.sessions.SessionsApi
 import kotlinx.coroutines.FlowPreview
@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
 
 data class SessionsUiState(
     val sessions: List<SessionSummary> = emptyList(),
-    val filter: ArchiveFilter = ArchiveFilter.Exclude,
+    val filter: SessionListFilter = SessionListFilter.Recent,
     /** Nothing loaded yet for this filter. */
     val loading: Boolean = true,
     val refreshing: Boolean = false,
@@ -90,7 +90,7 @@ class SessionsViewModel(
     /** Background refetch without the spinner, e.g. when the list becomes visible again. */
     fun refreshQuietly() = load(refresh = false)
 
-    fun setFilter(filter: ArchiveFilter) {
+    fun setFilter(filter: SessionListFilter) {
         if (filter == _state.value.filter) return
         _state.update { SessionsUiState(filter = filter) }
         load(refresh = false)
@@ -102,7 +102,7 @@ class SessionsViewModel(
         if (!current.canLoadMore || current.loadingMore || loadJob?.isActive == true) return
         _state.update { it.copy(loadingMore = true) }
         loadJob = viewModelScope.launch {
-            val result = api.list(url, offset = current.sessions.size, archived = current.filter)
+            val result = api.list(url, offset = current.sessions.size, filter = current.filter)
             _state.update { state ->
                 when (result) {
                     is ApiResult.Success -> {
@@ -169,7 +169,7 @@ class SessionsViewModel(
         loadJob = viewModelScope.launch {
             // Keep however many rows are already showing so a background refetch doesn't truncate the list.
             val limit = _state.value.sessions.size.coerceIn(SessionsApi.PAGE_SIZE, 100)
-            val result = api.list(url, limit = limit, archived = filter)
+            val result = api.list(url, limit = limit, filter = filter)
             _state.update { state ->
                 if (state.filter != filter) return@update state
                 when (result) {

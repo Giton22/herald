@@ -37,13 +37,15 @@ class SessionsApi(private val client: HttpClient) {
         url: GatewayUrl,
         limit: Int = PAGE_SIZE,
         offset: Int = 0,
-        archived: ArchiveFilter = ArchiveFilter.Exclude,
+        filter: SessionListFilter = SessionListFilter.Recent,
     ): ApiResult<SessionPage> = apiCall {
         client.get(url.resolve("api/sessions")) {
             parameter("limit", limit.coerceIn(1, 100))
             parameter("offset", offset)
-            parameter("archived", archived.wire)
+            parameter("archived", filter.archived.wire)
             parameter("order", "recent")
+            filter.source?.let { parameter("source", it) }
+            if (filter.excludeSources.isNotEmpty()) parameter("exclude_sources", filter.excludeSources.joinToString(","))
         }
     }.map { it.body<SessionPage>() }
 

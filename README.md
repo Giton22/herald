@@ -74,7 +74,7 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 
 ### 3. Sessions
 - [x] Session list with title, preview, model, last-active time, source, message count, and pinned/archived state (`GET /api/sessions?order=recent`, paged; same REST endpoint Desktop uses because the WS `session.list` row has no model or last-active time)
-- [x] Pinned section on top, plus a Recent/Archived filter
+- [x] Pinned section on top, plus Recent / Scheduled / Archived filters (Recent leaves out cron runs via `exclude_sources=cron`, Scheduled shows only them, like Desktop)
 - [x] Create a new session (`session.create`) from a "New chat" button; the stored row appears with the first prompt
 - [x] Open a session and read its stored history (`GET /api/sessions/{id}/messages`, read-only; tool steps are folded into one reply)
 - [x] Resume a session live and reply in it (`session.resume {omit_messages}` + REST history, like Desktop)

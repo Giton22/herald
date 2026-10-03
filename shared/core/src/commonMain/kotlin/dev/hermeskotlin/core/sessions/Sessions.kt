@@ -49,6 +49,23 @@ data class SessionPage(
 /** Which part of the archive a listing covers (`archived=` query). */
 enum class ArchiveFilter(val wire: String) { Exclude("exclude"), Only("only"), Include("include") }
 
+/** `source` of sessions started by scheduled (cron) jobs. */
+const val CRON_SOURCE = "cron"
+
+/**
+ * The list views. Like Hermes Desktop, Recent leaves out cron runs, which are always the newest rows
+ * and would otherwise push real conversations off the first page; Scheduled shows only them.
+ */
+enum class SessionListFilter(
+    val archived: ArchiveFilter,
+    val source: String? = null,
+    val excludeSources: List<String> = emptyList(),
+) {
+    Recent(ArchiveFilter.Exclude, excludeSources = listOf(CRON_SOURCE)),
+    Scheduled(ArchiveFilter.Exclude, source = CRON_SOURCE),
+    Archived(ArchiveFilter.Only),
+}
+
 /**
  * One stored transcript row from `GET /api/sessions/{id}/messages` — the raw `messages` table row
  * plus display projections. [content] is usually a string, but multimodal turns store a parts array.

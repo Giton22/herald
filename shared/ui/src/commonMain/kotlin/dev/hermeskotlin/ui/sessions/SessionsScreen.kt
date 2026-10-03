@@ -43,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.Archive
 import com.composables.icons.lucide.ArchiveRestore
 import com.composables.icons.lucide.ArrowLeftRight
+import com.composables.icons.lucide.CalendarClock
 import com.composables.icons.lucide.CircleUser
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.EllipsisVertical
@@ -64,7 +65,7 @@ import com.composeunstyled.theme.Theme
 import com.composeunstyled.theme.rememberColoredIndication
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.gateway.SavedGateway
-import dev.hermeskotlin.core.sessions.ArchiveFilter
+import dev.hermeskotlin.core.sessions.SessionListFilter
 import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.background
@@ -160,8 +161,9 @@ fun SessionsScreen(
                     Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Chip("Recent", selected = state.filter == ArchiveFilter.Exclude, onClick = { viewModel.setFilter(ArchiveFilter.Exclude) })
-                    Chip("Archived", selected = state.filter == ArchiveFilter.Only, onClick = { viewModel.setFilter(ArchiveFilter.Only) })
+                    FILTERS.forEach { (filter, label) ->
+                        Chip(label, selected = state.filter == filter, onClick = { viewModel.setFilter(filter) })
+                    }
                 }
             } else {
                 Box(Modifier.padding(top = 12.dp))
@@ -186,14 +188,17 @@ fun SessionsScreen(
                     state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load sessions", state.error) {
                         Button("Try again", onClick = viewModel::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                     }
-                    state.sessions.isEmpty() -> if (state.filter == ArchiveFilter.Only) {
-                        EmptyState(Lucide.Archive, "Nothing archived", "Archived sessions are hidden from Recent but stay resumable.")
-                    } else {
-                        EmptyState(Lucide.Inbox, "No sessions yet", "Conversations from the desktop app, CLI and messaging platforms show up here.")
+                    state.sessions.isEmpty() -> when (state.filter) {
+                        SessionListFilter.Recent ->
+                            EmptyState(Lucide.Inbox, "No sessions yet", "Conversations from the desktop app, CLI and messaging platforms show up here.")
+                        SessionListFilter.Scheduled ->
+                            EmptyState(Lucide.CalendarClock, "No scheduled runs", "Sessions started by cron jobs on the gateway show up here.")
+                        SessionListFilter.Archived ->
+                            EmptyState(Lucide.Archive, "Nothing archived", "Archived sessions are hidden from Recent but stay resumable.")
                     }
                     else -> SessionList(
                         sessions = state.sessions,
-                        sectioned = state.filter == ArchiveFilter.Exclude,
+                        sectioned = state.filter == SessionListFilter.Recent,
                         canLoadMore = state.canLoadMore,
                         loadingMore = state.loadingMore,
                         onLoadMore = viewModel::loadMore,
@@ -516,3 +521,9 @@ private fun MessageBanner(message: String, onDismiss: () -> Unit, modifier: Modi
         }
     }
 }
+
+private val FILTERS = listOf(
+    SessionListFilter.Recent to "Recent",
+    SessionListFilter.Scheduled to "Scheduled",
+    SessionListFilter.Archived to "Archived",
+)
