@@ -157,10 +157,13 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Slash command catalog and autocomplete (`commands.catalog`, `complete.slash`, `slash.exec`, `command.dispatch`; skills, plus Desktop's own `/new`, `/model`, `/resume`, `/stop`, `/compress`, `/status`, `/btw`, `/reasoning`, `/yolo`, `/title`, `/branch`, `/profile`, `/handoff`, `/skin`)
 - [x] Pet: Petdex gallery, adopt or put away, animated on the composer by the agent's activity (`pet.gallery`, `pet.info`, `pet.select`, `pet.disable`; `/pet`)
 - [x] Journey: learned skills and memories by month, with their text (`/api/learning/graph`, `/api/learning/node`; `/journey`)
-- [ ] Background prompts and BTW side questions (`prompt.background`, `prompt.btw`, `background.complete`, `btw.complete`)
+- [x] BTW side questions (`/btw` → `prompt.btw`, answered in place by `btw.complete`)
+- [ ] Background prompts (`prompt.background`, `background.complete`)
 - [ ] Message reactions (`message.react`)
-- [ ] Undo, branch and fork sessions (`session.undo`, `session.branch`)
-- [ ] Context compression (`session.compress`, `session.context_breakdown`)
+- [x] Undo and branch from the composer (`/undo` hands the last prompt back; `/branch` → `session.branch_whole` / `session.branch`)
+- [ ] Undo and branch from a message (buttons on a turn instead of slash commands)
+- [x] Context compression (`/compress` → `session.compress`)
+- [ ] Context breakdown (`session.context_breakdown`)
 
 ### Agents & processes
 - [x] Subagent tree and live progress (`subagent.*`, `subagent.list`, `subagent.interrupt`; saved `spawn_tree.*` snapshots not used)
