@@ -49,6 +49,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.Archive
+import com.composables.icons.lucide.Blocks
 import com.composables.icons.lucide.ArchiveRestore
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.ArrowLeftRight
@@ -159,6 +160,7 @@ fun SessionsSidebar(
 
     var searchOpen by remember { mutableStateOf(false) }
     var scheduledOpen by remember { mutableStateOf(false) }
+    var capabilitiesOpen by remember { mutableStateOf(false) }
     var actionTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var renameTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var deleteTarget by remember { mutableStateOf<SessionSummary?>(null) }
@@ -170,10 +172,11 @@ fun SessionsSidebar(
     }
 
     // Back steps out of search or the Scheduled / Archived pages before it closes the drawer.
-    PlatformBackHandler(enabled = visible && (searchOpen || scheduledOpen || state.filter != SessionListFilter.Recent)) {
+    PlatformBackHandler(enabled = visible && (searchOpen || scheduledOpen || capabilitiesOpen || state.filter != SessionListFilter.Recent)) {
         when {
             searchOpen -> closeSearch()
             scheduledOpen -> scheduledOpen = false
+            capabilitiesOpen -> capabilitiesOpen = false
             else -> viewModel.setFilter(SessionListFilter.Recent)
         }
     }
@@ -209,6 +212,13 @@ fun SessionsSidebar(
                 selectedId = selectedId,
                 onBack = { scheduledOpen = false },
                 onOpenRun = open,
+                onSessionExpired = onSessionExpired,
+            )
+        } else if (capabilitiesOpen && !searchOpen) {
+            CapabilitiesPage(
+                gateway = gateway,
+                profile = profile,
+                onBack = { capabilitiesOpen = false },
                 onSessionExpired = onSessionExpired,
             )
         } else Column(Modifier.fillMaxSize()) {
@@ -257,6 +267,7 @@ fun SessionsSidebar(
                         item(key = "nav") {
                             Column(Modifier.padding(bottom = 4.dp)) {
                                 NavRow(Lucide.CalendarClock, "Scheduled jobs") { scheduledOpen = true }
+                                NavRow(Lucide.Blocks, "Capabilities") { capabilitiesOpen = true }
                                 NavRow(Lucide.Archive, "Archived") { viewModel.setFilter(SessionListFilter.Archived) }
                             }
                         }
@@ -362,6 +373,7 @@ internal fun SessionsSidebarSample(sessions: List<SessionSummary>, selectedId: S
                     item(key = "nav") {
                         Column(Modifier.padding(bottom = 4.dp)) {
                             NavRow(Lucide.CalendarClock, "Scheduled jobs") {}
+                            NavRow(Lucide.Blocks, "Capabilities") {}
                             NavRow(Lucide.Archive, "Archived") {}
                         }
                     }
