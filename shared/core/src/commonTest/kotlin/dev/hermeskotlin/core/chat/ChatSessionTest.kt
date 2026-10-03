@@ -54,7 +54,15 @@ class ChatSessionTest {
                 answered++
                 val id = message["id"] ?: return@forEach
                 val method = message["method"]?.jsonPrimitive?.contentOrNull ?: return@forEach
-                transport.push("""{"jsonrpc":"2.0","id":$id,"result":${results[method] ?: "{}"}}""")
+                val canned = results[method] ?: "{}"
+                // "error:<code>" answers with a JSON-RPC error instead.
+                transport.push(
+                    if (canned.startsWith("error:")) {
+                        """{"jsonrpc":"2.0","id":$id,"error":{"code":${canned.removePrefix("error:")},"message":"nope"}}"""
+                    } else {
+                        """{"jsonrpc":"2.0","id":$id,"result":$canned}"""
+                    },
+                )
             }
         }
     }
@@ -284,5 +292,60 @@ class ChatSessionTest {
         transport.awaitSent { it.isCall("config.set") && it.param("key") == "reasoning" && it.param("value") == "low" }
         transport.push(event("session.info", "rt1", """{"model":"m1","reasoning_effort":"low","fast":false}"""))
         chat.state.first { it.reasoningEffort == "low" && it.fast == false }
+    }
+
+    @Test
+    fun attachmentsAreUploadedBeforeThePromptAndFilesBecomeReferences() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
+                "image.attach_bytes" to """{"attached":true,"path":"/tmp/upload_1.jpg"}""",
+                "pdf.attach" to "error:5028",
+                "file.attach" to """{"attached":true,"name":"x","path":"p","ref_path":"r","ref_text":"@file:attachments/notes.txt","uploaded":true}""",
+                "prompt.submit" to """{"status":"streaming"}""",
+            ),
+        )
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        val image = OutgoingAttachment("a1", "cat.jpg", "image/jpeg", byteArrayOf(1, 2, 3))
+        val pdf = OutgoingAttachment("a2", "spec.pdf", "application/pdf", byteArrayOf(4))
+        val file = OutgoingAttachment("a3", "notes.txt", "text/plain", "hi".encodeToByteArray())
+        assertTrue(chat.send("  summarise  ", listOf(image, pdf, file)))
+
+        val sent = transport.sent.value.mapNotNull { it["method"]?.jsonPrimitive?.contentOrNull }.filter { it != "client.capabilities" && it != "ping" }
+        assertEquals(listOf("session.create", "image.attach_bytes", "pdf.attach", "file.attach", "file.attach", "prompt.submit"), sent)
+        val upload = transport.sent.value.first { it.isCall("image.attach_bytes") }
+        assertEquals("AQID", upload.param("content_base64"))
+        assertEquals("rt9", upload.param("session_id"))
+        // The PDF fell back to a plain file once the gateway said it can't render pages.
+        assertEquals("data:application/pdf;base64,BA==", transport.sent.value.first { it.isCall("file.attach") }.param("data_url"))
+        val submit = transport.sent.value.first { it.isCall("prompt.submit") }
+        assertEquals("@file:attachments/notes.txt\n\n@file:attachments/notes.txt\n\nsummarise", submit.param("text"))
+        val user = assertIs<ChatMessage.User>(chat.state.value.messages.single())
+        assertEquals(listOf("cat.jpg", "spec.pdf", "notes.txt"), user.attachments.map { it.name })
+    }
+
+    @Test
+    fun aFailedSendTakesBackTheImagesItQueued() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
+                "image.attach_bytes" to """{"attached":true,"path":"/tmp/upload_1.jpg"}""",
+                "prompt.submit" to "error:5000",
+            ),
+        )
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        assertFalse(chat.send("", listOf(OutgoingAttachment("a1", "cat.jpg", "image/jpeg", byteArrayOf(1)))))
+
+        val detach = transport.awaitSent { it.isCall("image.detach") }
+        assertEquals("/tmp/upload_1.jpg", detach.param("path"))
+        assertTrue(chat.state.value.messages.isEmpty())
     }
 }

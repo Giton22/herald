@@ -86,6 +86,12 @@ data class SessionMessage(
     /** Plain text to render: the display projection when present, else the stored content. */
     val text: String get() = (displayContent ?: content).plainText()
 
+    /** Image parts of a multimodal row (`image_url` / `image` / `input_image`). */
+    val imageCount: Int
+        get() = ((displayContent as? JsonArray) ?: (content as? JsonArray)).orEmpty().count { part ->
+            (part as? JsonObject)?.get("type")?.stringOrNull() in IMAGE_PART_TYPES
+        }
+
     /** Names of the tools an assistant turn called (`tool_calls[].function.name`). */
     val calledTools: List<String>
         get() = (toolCalls as? JsonArray).orEmpty().mapNotNull { call ->
@@ -102,6 +108,8 @@ data class SessionMessagesPage(
     @SerialName("session_id") val sessionId: String,
     val messages: List<SessionMessage> = emptyList(),
 )
+
+private val IMAGE_PART_TYPES = setOf("image_url", "image", "input_image")
 
 private fun JsonElement?.stringOrNull(): String? = (this as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
 

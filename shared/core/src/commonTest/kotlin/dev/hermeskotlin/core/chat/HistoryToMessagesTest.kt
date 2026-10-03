@@ -1,6 +1,7 @@
 package dev.hermeskotlin.core.chat
 
 import dev.hermeskotlin.core.sessions.SessionMessage
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonArray
 import kotlinx.serialization.json.buildJsonObject
@@ -46,5 +47,25 @@ class HistoryToMessagesTest {
             ),
         )
         assertEquals(3, messages.size)
+    }
+
+    @Test
+    fun storedPromptsShowTheirImagesAndFileReferencesAsAttachments() {
+        val parts = Json.parseToJsonElement(
+            """[{"type":"text","text":"What is this?"},{"type":"image_url","image_url":{"url":"data:image/png;base64,AA"}}]""",
+        )
+        val messages = historyToMessages(
+            listOf(
+                SessionMessage(id = 1, role = "user", content = parts),
+                SessionMessage(id = 2, role = "user", content = JsonPrimitive("@file:attachments/notes.txt\n@file:\"attachments/my spec.pdf\"\n\nsummarise both")),
+            ),
+        )
+        val image = messages[0] as ChatMessage.User
+        assertEquals("What is this?", image.text)
+        assertEquals(listOf(AttachmentKind.Image), image.attachments.map { it.kind })
+        val files = messages[1] as ChatMessage.User
+        assertEquals("summarise both", files.text)
+        assertEquals(listOf("notes.txt", "my spec.pdf"), files.attachments.map { it.name })
+        assertEquals(listOf(AttachmentKind.File, AttachmentKind.Pdf), files.attachments.map { it.kind })
     }
 }

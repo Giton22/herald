@@ -79,24 +79,42 @@ class ChatSession(
         jobs = emptyList()
     }
 
-    /** Sends a prompt, creating or attaching the live session first. Returns false if it was not accepted. */
-    suspend fun send(text: String): Boolean {
+    /**
+     * Sends a prompt with any [attachments], creating or attaching the live session first and uploading
+     * the attachments to it before `prompt.submit`. Returns false if it was not accepted.
+     */
+    suspend fun send(text: String, attachments: List<OutgoingAttachment> = emptyList()): Boolean {
         val trimmed = text.trim()
-        if (trimmed.isEmpty()) return false
+        if (trimmed.isEmpty() && attachments.isEmpty()) return false
+        // Desktop's fallback, so an image-only prompt still asks something.
+        val visible = trimmed.ifEmpty { if (attachments.any { it.kind != AttachmentKind.File }) IMAGE_ONLY_PROMPT else "" }
         val key = "local-${_state.value.keySeq}"
         _state.update {
-            it.copy(messages = it.messages + ChatMessage.User(key, trimmed, pending = true), keySeq = it.keySeq + 1, error = null)
+            it.copy(
+                messages = it.messages + ChatMessage.User(key, visible, pending = true, attachments = attachments.map { a -> a.toShown() }),
+                keySeq = it.keySeq + 1,
+                error = null,
+            )
         }
         // Counted before submitting: the turn's message.start can arrive before the prompt.submit reply.
         ownTurnsPending++
+        // Images and PDF pages queued on the session: if the prompt never goes out they would ride along
+        // with the next one, so a failed send takes them back.
+        val queuedImages = mutableListOf<String>()
+        var uploadClient: JsonRpcClient? = null
+        var uploadRuntimeId: String? = null
         return try {
             val client = connectedClient() ?: throw RpcException(0, "Not connected to the gateway. Your message will need resending.")
             val runtimeId = ensureAttached(client)
+            uploadClient = client
+            uploadRuntimeId = runtimeId
+            val refs = attachments.mapNotNull { upload(client, runtimeId, it, queuedImages) }
             val result = client.request(
                 "prompt.submit",
                 buildJsonObject {
                     put("session_id", runtimeId)
-                    put("text", trimmed)
+                    // Like Desktop: the file references first, then what was typed.
+                    put("text", (refs + visible).filter { it.isNotEmpty() }.joinToString("\n\n"))
                 },
             ) as? JsonObject
             rowExists = true
@@ -114,6 +132,7 @@ class ChatSession(
             throw e
         } catch (e: Exception) {
             ownTurnsPending = (ownTurnsPending - 1).coerceAtLeast(0)
+            detach(uploadClient, uploadRuntimeId, queuedImages)
             _state.update { state ->
                 state.copy(
                     error = e.message ?: "Couldn't send the message.",
@@ -122,6 +141,78 @@ class ChatSession(
                 )
             }
             false
+        }
+    }
+
+    /**
+     * Uploads one attachment to [runtimeId]. Images and PDF pages are queued for the next turn; a file
+     * comes back as the `@file:` reference to put in the prompt, which this returns.
+     */
+    private suspend fun upload(
+        client: JsonRpcClient,
+        runtimeId: String,
+        attachment: OutgoingAttachment,
+        queuedImages: MutableList<String>,
+    ): String? {
+        val failure = "Couldn't attach ${attachment.name}"
+        suspend fun asFile(): String {
+            val result = client.request(
+                "file.attach",
+                buildJsonObject {
+                    put("session_id", runtimeId)
+                    put("name", attachment.name)
+                    put("data_url", "data:${attachment.mimeType};base64,${attachment.base64()}")
+                },
+                timeoutMs = UPLOAD_TIMEOUT_MS,
+            ) as? JsonObject
+            return result.string("ref_text")?.takeIf { result.boolean("attached") == true } ?: throw RpcException(0, failure)
+        }
+        return when (attachment.kind) {
+            AttachmentKind.Image -> {
+                val result = client.request(
+                    "image.attach_bytes",
+                    buildJsonObject {
+                        put("session_id", runtimeId)
+                        put("content_base64", attachment.base64())
+                        put("filename", attachment.name)
+                    },
+                    timeoutMs = UPLOAD_TIMEOUT_MS,
+                ) as? JsonObject
+                if (result.boolean("attached") != true) throw RpcException(0, result.string("message") ?: failure)
+                result.string("path")?.let(queuedImages::add)
+                null
+            }
+            AttachmentKind.Pdf -> try {
+                val result = client.request(
+                    "pdf.attach",
+                    buildJsonObject {
+                        put("session_id", runtimeId)
+                        put("content_base64", attachment.base64())
+                        put("filename", attachment.name)
+                    },
+                    timeoutMs = UPLOAD_TIMEOUT_MS,
+                ) as? JsonObject
+                result?.get("pages").asObjectList().mapNotNullTo(queuedImages) { it.string("path") }
+                null
+            } catch (e: RpcException) {
+                // 5028: the gateway can't render PDFs (no poppler); the agent can still read the file.
+                if (e.code == PDF_RENDER_UNAVAILABLE) asFile() else throw e
+            }
+            AttachmentKind.File -> asFile()
+        }
+    }
+
+    /** Best effort: un-queues [paths] after a send that failed part-way. */
+    private suspend fun detach(client: JsonRpcClient?, runtimeId: String?, paths: List<String>) {
+        if (client == null || runtimeId == null) return
+        for (path in paths) {
+            try {
+                client.request("image.detach", buildJsonObject { put("session_id", runtimeId); put("path", path) })
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                return // the socket is likely gone, and the runtime session's queue with it
+            }
         }
     }
 
@@ -405,6 +496,11 @@ class ChatSession(
         val TURN_STARTING_STATUSES = setOf("streaming", "queued")
 
         const val MAX_UNCLAIMED = 8
+
+        /** Uploads of several MB over a phone link take a while. */
+        const val UPLOAD_TIMEOUT_MS = 120_000L
+
+        const val PDF_RENDER_UNAVAILABLE = 5028
     }
 }
 

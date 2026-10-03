@@ -22,6 +22,7 @@ sealed interface ChatMessage {
         val text: String,
         val pending: Boolean = false,
         val queued: Boolean = false,
+        val attachments: List<ShownAttachment> = emptyList(),
     ) : ChatMessage
 
     /** One reply: streamed text, reasoning and the tools it ran. [streaming] until `message.complete`. */
