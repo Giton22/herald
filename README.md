@@ -1,8 +1,9 @@
 <img src="docs/logo.svg" alt="" width="96" height="96">
 
-# Hermes Kotlin
+# Herald
 
 A modern Kotlin Multiplatform client for [Hermes Agent](https://github.com/NousResearch/hermes-agent).
+Herald is an independent project, not made or endorsed by Nous Research.
 Android first, with iOS and desktop to follow. It connects to a **remote Hermes gateway**, meaning a
 `hermes dashboard` running on your server, homelab, VPS or Tailnet, the same way the official Desktop
 app's "Remote gateway" connection does.

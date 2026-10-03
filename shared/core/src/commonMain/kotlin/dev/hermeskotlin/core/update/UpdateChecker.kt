@@ -29,7 +29,7 @@ class UpdateChecker(private val client: HttpClient, private val store: KeyValueS
         val release = try {
             val response = client.get("https://api.github.com/repos/$repo/releases/latest") {
                 header(HttpHeaders.Accept, "application/vnd.github+json")
-                header(HttpHeaders.UserAgent, "hermes-kotlin")
+                header(HttpHeaders.UserAgent, "herald-android")
             }
             if (!response.status.isSuccess()) return null
             HermesJson.parseToJsonElement(response.bodyAsText()) as? JsonObject

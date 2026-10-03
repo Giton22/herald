@@ -164,7 +164,7 @@ fun SettingsScreen(
                     Divider()
                     SwitchRow(
                         title = "Finished replies",
-                        detail = "When a turn ends while Hermes is in the background. Reply from the notification.",
+                        detail = "When a turn ends while Herald is in the background. Reply from the notification.",
                         checked = settings.notifyReplies,
                         onCheckedChange = { on -> viewModel.update { it.copy(notifyReplies = on) } },
                     )

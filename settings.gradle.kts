@@ -1,4 +1,4 @@
-rootProject.name = "hermes-kotlin"
+rootProject.name = "herald"
 
 enableFeaturePreview("TYPESAFE_PROJECT_ACCESSORS")
 

@@ -20,7 +20,7 @@ class UpdateCheckerTest {
 
     private val release = """{"tag_name":"v0.3.0","html_url":"https://github.com/o/r/releases/tag/v0.3.0",
         "assets":[{"name":"notes.txt","browser_download_url":"https://x/notes.txt"},
-                  {"name":"hermes-kotlin-0.3.0.apk","browser_download_url":"https://x/app.apk"}]}"""
+                  {"name":"herald-0.3.0.apk","browser_download_url":"https://x/app.apk"}]}"""
 
     private fun checker(status: HttpStatusCode = HttpStatusCode.OK, body: String = release) = UpdateChecker(
         createHttpClient(MockEngine { respond(body, status, headersOf(HttpHeaders.ContentType, "application/json")) }),

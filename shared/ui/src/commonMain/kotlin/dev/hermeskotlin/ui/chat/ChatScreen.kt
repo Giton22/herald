@@ -489,17 +489,14 @@ private fun BarButton(icon: ImageVector, contentDescription: String, onClick: ()
     }
 }
 
-/**
- * An empty chat is titled in heavy spaced capitals stretched to the column, Desktop's splash lettering
- * set in the system face rather than its bundled font.
- */
+/** An empty chat is titled with the app's name in heavy spaced capitals stretched to the column. */
 @Composable
 private fun Greeting() {
     // Blue on light; near-white on dark, where the blue at this size glares.
     val color = if (Theme[colors][background].luminance() < 0.5f) Theme[colors][textColor].copy(alpha = 0.9f) else Theme[colors][accent]
     Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
         BasicText(
-            "HERMES AGENT",
+            "HERALD",
             style = Theme[typography][wordmark].copy(textAlign = TextAlign.Center),
             color = { color },
             maxLines = 1,

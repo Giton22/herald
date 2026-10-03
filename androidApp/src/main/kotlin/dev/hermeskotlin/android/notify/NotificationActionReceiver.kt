@@ -62,14 +62,14 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 // Clears the inline reply's spinner; a failure posts in its place.
                 notifications.cancelReply(storedId)
                 if (session == null || session.state.value.storedSessionId != storedId) {
-                    notifications.postFailure(storedId, ChatNotifications.REPLY_ID, "That chat isn't open anymore. Open Hermes to reply.")
+                    notifications.postFailure(storedId, ChatNotifications.REPLY_ID, "That chat isn't open anymore. Open Herald to reply.")
                     return
                 }
                 awaitConnection()
                 // The send itself outlives this receiver's few seconds; only the verdict is waited for.
                 val sent = scope.async { session.send(text) }
                 if (withTimeoutOrNull(RECEIVER_BUDGET_MS) { sent.await() } == false) {
-                    notifications.postFailure(storedId, ChatNotifications.REPLY_ID, session.state.value.error ?: "Open Hermes to send it again.")
+                    notifications.postFailure(storedId, ChatNotifications.REPLY_ID, session.state.value.error ?: "Open Herald to send it again.")
                 }
             }
         }
@@ -87,7 +87,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         if (session.answer(request, answer)) {
             notifications.cancelRequest(requestId)
         } else {
-            notifications.postFailure(requestId, ChatNotifications.REQUEST_ID, "Not connected to the gateway. Open Hermes to answer.")
+            notifications.postFailure(requestId, ChatNotifications.REQUEST_ID, "Not connected to the gateway. Open Herald to answer.")
         }
     }
 

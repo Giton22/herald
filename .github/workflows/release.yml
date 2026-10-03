@@ -57,7 +57,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          apk="hermes-kotlin-${GITHUB_REF_NAME#v}.apk"
+          apk="herald-${GITHUB_REF_NAME#v}.apk"
           cp androidApp/build/outputs/apk/release/androidApp-release.apk "$apk"
           sha256sum "$apk" > "$apk.sha256"
           gh release create "$GITHUB_REF_NAME" "$apk" "$apk.sha256" --draft --generate-notes --title "$GITHUB_REF_NAME"

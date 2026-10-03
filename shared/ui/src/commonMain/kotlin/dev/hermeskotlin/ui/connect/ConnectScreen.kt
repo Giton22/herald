@@ -18,13 +18,13 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.ArrowRight
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PlugZap
-import com.composables.icons.lucide.Server
 import com.composeunstyled.Text
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.gateway.ProbeResult
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.code
+import dev.hermeskotlin.designsystem.HeraldMark
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.components.Button
@@ -56,9 +56,9 @@ fun ConnectScreen(
 
     ScreenScaffold {
         ScreenHeader(
-            icon = Lucide.Server,
-            title = "Connect to Hermes",
-            subtitle = "Point the app at a remote Hermes gateway. Nothing is sent until you sign in.",
+            icon = HeraldMark,
+            title = "Welcome to Herald",
+            subtitle = "Connect to your Hermes Agent gateway. Nothing is sent until you sign in.",
         )
 
         TextField(

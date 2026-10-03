@@ -355,7 +355,7 @@ private fun MainHeader(onSearch: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "HERMES",
+            "HERALD",
             style = Theme[typography][wordmark].copy(fontSize = 22.sp, lineHeight = 26.sp),
             color = Theme[colors][text],
             modifier = Modifier.weight(1f),
