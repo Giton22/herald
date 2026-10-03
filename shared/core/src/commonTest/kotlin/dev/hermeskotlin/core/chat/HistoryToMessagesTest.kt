@@ -16,6 +16,14 @@ class HistoryToMessagesTest {
     }
 
     @Test
+    fun aStoredCorrectionShowsWhatWasTyped() {
+        val stored = "[OUT-OF-BAND USER MESSAGE — a direct message from the user, delivered once at this position]\n" +
+            "Actually describe London instead\n[/OUT-OF-BAND USER MESSAGE]"
+        val messages = historyToMessages(listOf(SessionMessage(id = 1, role = "user", content = JsonPrimitive(stored))))
+        assertEquals("Actually describe London instead", (messages.single() as ChatMessage.User).text)
+    }
+
+    @Test
     fun toolStepsMergeIntoOneReplyAndToolRowsDropOut() {
         val messages = historyToMessages(
             listOf(

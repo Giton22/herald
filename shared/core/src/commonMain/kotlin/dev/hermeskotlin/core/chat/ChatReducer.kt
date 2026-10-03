@@ -187,6 +187,12 @@ private fun ChatState.withOpenReply(change: (ChatMessage.Assistant) -> ChatMessa
     }
 }
 
+/** agent/prompt_builder.py's frame around a mid-turn correction, stored as the user row. */
+private val CORRECTION_FRAME = Regex("""^\[OUT-OF-BAND USER MESSAGE[^\]]*]\s*([\s\S]*?)\s*\[/OUT-OF-BAND USER MESSAGE]$""")
+
+/** A correction's stored row → what the person typed; anything else unchanged. */
+internal fun unwrapCorrection(text: String): String = CORRECTION_FRAME.find(text)?.groupValues?.get(1) ?: text
+
 /**
  * Stored rows → chat messages: tool results and system/hidden rows drop out, and consecutive
  * assistant rows (text and tool-call steps) merge into one reply listing every tool it used.
@@ -198,7 +204,7 @@ fun historyToMessages(rows: List<SessionMessage>): List<ChatMessage> {
         val key = row.id?.let { "row-$it" } ?: "h$index"
         when (row.role) {
             "user" -> {
-                val raw = row.text.trim()
+                val raw = unwrapCorrection(row.text.trim())
                 val (refs, text) = skillInvocationText(raw)?.let { emptyList<ShownAttachment>() to it } ?: splitAttachmentRefs(raw, key)
                 val attachments = List(row.imageCount) { ShownAttachment("$key-i$it", "Image", AttachmentKind.Image) } + refs
                 if (text.isNotEmpty() || attachments.isNotEmpty()) messages += ChatMessage.User(key, text, attachments = attachments)
