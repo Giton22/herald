@@ -9,6 +9,14 @@ data class ToolActivity(
     val running: Boolean = false,
     val summary: String? = null,
     val durationSeconds: Double? = null,
+    /** What it was given: a command or query as itself, else the arguments as JSON. */
+    val input: String? = null,
+    /** What it gave back, clipped. */
+    val output: String? = null,
+    /** The edit a file tool made, as a unified diff. */
+    val diff: String? = null,
+    /** It reported an error (the turn may still have carried on). */
+    val failed: Boolean = false,
 )
 
 enum class TurnOutcome { Complete, Interrupted, Error }

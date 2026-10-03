@@ -117,15 +117,23 @@ data class SessionMessage(
         }
 
     /** Names of the tools an assistant turn called (`tool_calls[].function.name`). */
-    val calledTools: List<String>
+    val calledTools: List<String> get() = storedToolCalls.map { it.name }
+
+    /** The calls an assistant turn made, with their ids (to find each result row) and arguments. */
+    val storedToolCalls: List<StoredToolCall>
         get() = (toolCalls as? JsonArray).orEmpty().mapNotNull { call ->
-            val function = (call as? JsonObject)?.get("function") as? JsonObject
-            (function?.get("name") ?: (call as? JsonObject)?.get("name"))?.stringOrNull()
+            val obj = call as? JsonObject ?: return@mapNotNull null
+            val function = obj["function"] as? JsonObject
+            val name = (function?.get("name") ?: obj["name"])?.stringOrNull() ?: return@mapNotNull null
+            StoredToolCall(id = obj["id"]?.stringOrNull(), name = name, arguments = function?.get("arguments") ?: obj["arguments"])
         }
 
     /** Rows the gateway marks for storage only (compaction wrappers, seeded context). */
     val isHidden: Boolean get() = displayKind == "hidden"
 }
+
+/** One `tool_calls[]` entry; [arguments] is usually JSON text. */
+data class StoredToolCall(val id: String?, val name: String, val arguments: JsonElement?)
 
 @Serializable
 data class SessionMessagesPage(

@@ -39,7 +39,7 @@ class HistoryToMessagesTest {
         assertEquals(
             listOf(
                 ChatMessage.User("row-1", "list files"),
-                ChatMessage.Assistant("row-2", text = "There is one file.", tools = listOf(ToolActivity("row-2-0", "terminal"))),
+                ChatMessage.Assistant("row-2", text = "There is one file.", tools = listOf(ToolActivity("c-terminal", "terminal", output = "a.txt"))),
             ),
             messages,
         )

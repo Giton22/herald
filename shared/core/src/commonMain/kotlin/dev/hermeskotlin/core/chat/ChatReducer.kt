@@ -37,9 +37,13 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
                 name = payload.string("name") ?: "tool",
                 detail = payload.string("context") ?: payload.string("preview"),
                 running = true,
+                input = ToolDetails.input(payload?.get("args"), payload.string("args_text")),
             )
-            withOpenReply { reply -> reply.copy(tools = reply.tools.filterNot { it.id == id } + tool) }.copy(running = true)
+            withOpenReply { reply -> reply.copy(tools = reply.tools.filterNot { it.id == id } + tool) }
+                .copy(running = true, thinkingFrame = null)
         }
+        // The model is still writing the call's arguments; say what's coming.
+        "tool.generating" -> payload.string("name")?.let { copy(thinkingFrame = "preparing $it…") } ?: this
         "tool.complete" -> {
             val id = payload.string("tool_id") ?: return this
             val finish = { reply: ChatMessage.Assistant ->
@@ -48,6 +52,10 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
                         running = false,
                         summary = payload.string("summary"),
                         durationSeconds = payload.double("duration_s"),
+                        input = it.input ?: ToolDetails.input(payload?.get("args")),
+                        output = ToolDetails.output(payload?.get("result"), payload.string("result_text")),
+                        diff = payload.string("inline_diff")?.takeIf { d -> d.isNotBlank() },
+                        failed = ToolDetails.failed(payload?.get("result")),
                     )
                 })
             }
@@ -205,6 +213,8 @@ internal fun unwrapCorrection(text: String): String = CORRECTION_FRAME.find(text
  */
 fun historyToMessages(rows: List<SessionMessage>): List<ChatMessage> {
     val messages = mutableListOf<ChatMessage>()
+    // Each call's result is a later `tool` row carrying its id.
+    val results = rows.filter { it.role == "tool" && it.toolCallId != null }.associateBy { it.toolCallId }
     rows.forEachIndexed { index, row ->
         if (row.isHidden) return@forEachIndexed
         val key = row.id?.let { "row-$it" } ?: "h$index"
@@ -217,7 +227,16 @@ fun historyToMessages(rows: List<SessionMessage>): List<ChatMessage> {
             }
             "assistant" -> {
                 val text = row.text.trim()
-                val tools = row.calledTools.mapIndexed { i, name -> ToolActivity(id = "$key-$i", name = name) }
+                val tools = row.storedToolCalls.mapIndexed { i, call ->
+                    val result = call.id?.let(results::get)?.content
+                    ToolActivity(
+                        id = call.id ?: "$key-$i",
+                        name = call.name,
+                        input = ToolDetails.input(call.arguments),
+                        output = ToolDetails.output(result),
+                        failed = ToolDetails.failed(result),
+                    )
+                }
                 val reasoning = row.reasoning.orEmpty()
                 val previous = messages.lastOrNull() as? ChatMessage.Assistant
                 if (previous != null) {
