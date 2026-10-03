@@ -1,6 +1,10 @@
 package dev.hermeskotlin.ui.chat
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -13,6 +17,8 @@ import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
@@ -24,24 +30,34 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.composables.icons.lucide.ArrowDown
 import com.composables.icons.lucide.ArrowUp
 import com.composables.icons.lucide.Brain
 import com.composables.icons.lucide.Check
@@ -52,21 +68,26 @@ import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PanelLeft
 import com.composables.icons.lucide.RefreshCw
-import com.composables.icons.lucide.Sparkles
-import com.composables.icons.lucide.SquarePen
 import com.composables.icons.lucide.Square
+import com.composables.icons.lucide.SquarePen
 import com.composables.icons.lucide.Wrench
 import com.composables.icons.lucide.X
+import com.composables.icons.lucide.Zap
 import com.composeunstyled.Text
+import com.composeunstyled.TextInput
+import com.composeunstyled.UnstyledButton
 import com.composeunstyled.UnstyledIcon
+import com.composeunstyled.UnstyledTextField
 import com.composeunstyled.theme.Theme
+import com.composeunstyled.theme.rememberColoredIndication
 import dev.hermeskotlin.core.chat.Attachment
 import dev.hermeskotlin.core.chat.ChatMessage
+import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.ToolActivity
 import dev.hermeskotlin.core.chat.TurnOutcome
 import dev.hermeskotlin.core.connection.ConnectionState
+import dev.hermeskotlin.core.models.displayModelName
 import dev.hermeskotlin.designsystem.accent
-import dev.hermeskotlin.designsystem.accentSoft
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
@@ -80,22 +101,23 @@ import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.components.MarkdownText
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.components.Surface
-import dev.hermeskotlin.designsystem.components.TextField
 import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.heading
+import dev.hermeskotlin.designsystem.label
 import dev.hermeskotlin.designsystem.onAccent
-import dev.hermeskotlin.designsystem.radii
-import dev.hermeskotlin.designsystem.radiusFull
-import dev.hermeskotlin.designsystem.radiusLarge
 import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.success
 import dev.hermeskotlin.designsystem.surface
+import dev.hermeskotlin.designsystem.surfaceElevated
 import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
+import dev.hermeskotlin.designsystem.display
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.designsystem.warning
 import dev.hermeskotlin.ui.LocalAppSettings
 import dev.hermeskotlin.ui.components.EmptyState
+import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -107,8 +129,10 @@ fun ChatScreen(
 ) {
     LaunchedEffect(target) { viewModel.open(target) }
     val state = viewModel.state.collectAsStateWithLifecycle().value
+    val picker = viewModel.picker.collectAsStateWithLifecycle().value
     val connection = viewModel.connectionState.collectAsStateWithLifecycle().value
     val connected = connection is ConnectionState.Connected
+    var modelsOpen by remember { mutableStateOf(false) }
 
     Box(
         Modifier
@@ -123,7 +147,7 @@ fun ChatScreen(
                 subtitle = when {
                     !connected -> "Offline · reconnecting"
                     state.attachment is Attachment.Attaching -> "Opening…"
-                    else -> state.model
+                    else -> null
                 },
                 onOpenSidebar = onOpenSidebar,
                 // Already on an untouched new chat: nothing to start over from.
@@ -136,8 +160,7 @@ fun ChatScreen(
                         EmptyState(Lucide.CloudOff, "Couldn't load the conversation", state.historyError.orEmpty()) {
                             Button("Try again", onClick = viewModel::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                         }
-                    state.messages.isEmpty() ->
-                        EmptyState(Lucide.Sparkles, "Start a conversation", "Ask anything. The agent runs on your gateway with its own tools.")
+                    state.messages.isEmpty() -> Greeting()
                     else -> Messages(state.messages)
                 }
             }
@@ -153,45 +176,149 @@ fun ChatScreen(
             } else {
                 Composer(
                     viewModel = viewModel,
+                    // Re-rolled per conversation, kept while a new chat gets its stored id.
+                    placeholder = remember(target) {
+                        (if (target.storedSessionId == null) NEW_CHAT_PROMPTS else FOLLOW_UP_PROMPTS).random()
+                    },
+                    state = state,
+                    picker = picker,
                     connected = connected,
-                    running = state.running,
+                    onOpenModels = { modelsOpen = true },
                 )
             }
         }
     }
+
+    ModelSheet(
+        visible = modelsOpen,
+        onDismiss = { modelsOpen = false },
+        state = state,
+        picker = picker,
+        onRefresh = viewModel::loadModels,
+        onSelectModel = {
+            viewModel.selectModel(it)
+            modelsOpen = false
+        },
+        onSelectEffort = { viewModel.setReasoningEffort(it.wire) },
+        onFast = viewModel::setFast,
+    )
+    ModelConfirmDialog(
+        pending = picker.confirm,
+        onConfirm = { viewModel.selectModel(it, confirmed = true) },
+        onDismiss = viewModel::dismissConfirm,
+    )
 }
 
 @Composable
 private fun TopBar(title: String, subtitle: String?, onOpenSidebar: () -> Unit, onNewChat: (() -> Unit)?) {
-    Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(Lucide.PanelLeft, contentDescription = "Sessions", onClick = onOpenSidebar)
-        Column(Modifier.weight(1f).padding(start = 4.dp, end = 12.dp)) {
-            Text(title, style = Theme[typography][heading], color = Theme[colors][textColor], maxLines = 1, overflow = TextOverflow.Ellipsis)
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        RoundButton(Lucide.PanelLeft, "Sessions", onClick = onOpenSidebar)
+        Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(
+                title,
+                style = Theme[typography][label],
+                color = Theme[colors][textColor],
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
             if (!subtitle.isNullOrBlank()) {
-                Text(subtitle, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(subtitle, style = Theme[typography][caption], color = Theme[colors][warning], maxLines = 1)
             }
         }
-        IconButton(Lucide.SquarePen, contentDescription = "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null)
+        RoundButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null)
     }
 }
+
+/** A 44dp filled circle, the top bar's button style. */
+@Composable
+private fun RoundButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean = true) {
+    UnstyledButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(44.dp).clip(CircleShape).background(Theme[colors][surfaceElevated]).alpha(if (enabled) 1f else 0.4f),
+        indication = rememberColoredIndication(Theme[colors][textColor]),
+    ) {
+        UnstyledIcon(icon, contentDescription = contentDescription, tint = Theme[colors][textColor], modifier = Modifier.size(20.dp))
+    }
+}
+
+/** An empty chat shows the name, set in type: Hermes Desktop's splash idea without its wordmark asset. */
+@Composable
+private fun Greeting() {
+    Box(Modifier.fillMaxSize().padding(horizontal = 32.dp), contentAlignment = Alignment.Center) {
+        Text(
+            "Hermes",
+            style = Theme[typography][display],
+            color = Theme[colors][textTertiary],
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/** Hermes Desktop's composer lines (`composer.newSessionPlaceholders` / `followUpPlaceholders`). */
+private val NEW_CHAT_PROMPTS = listOf(
+    "What are we building?",
+    "Give Hermes a task",
+    "What's on your mind?",
+    "Describe what you need",
+    "What should we tackle?",
+    "Ask anything",
+    "Start with a goal",
+)
+
+private val FOLLOW_UP_PROMPTS = listOf(
+    "Send a follow-up",
+    "Add more context",
+    "Refine the request",
+    "What's next?",
+    "Keep it going",
+    "Push it further",
+    "Adjust or continue",
+)
 
 @Composable
 private fun Messages(messages: List<ChatMessage>) {
     // Reversed layout keeps the newest message pinned to the bottom while a reply streams in.
     val listState = rememberLazyListState()
+    val scope = rememberCoroutineScope()
     val newest = messages.lastOrNull()?.key
     LaunchedEffect(newest) { if (listState.firstVisibleItemIndex <= 1) listState.animateScrollToItem(0) }
-    LazyColumn(
-        state = listState,
-        reverseLayout = true,
-        modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp, Alignment.Bottom),
-    ) {
-        items(messages.asReversed(), key = { it.key }) { message ->
-            when (message) {
-                is ChatMessage.User -> UserBubble(message)
-                is ChatMessage.Assistant -> AssistantReply(message)
+    val awayFromBottom by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 600 } }
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            reverseLayout = true,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.Bottom),
+        ) {
+            items(messages.asReversed(), key = { it.key }) { message ->
+                when (message) {
+                    is ChatMessage.User -> UserBubble(message)
+                    is ChatMessage.Assistant -> AssistantReply(message)
+                }
+            }
+        }
+        AnimatedVisibility(
+            visible = awayFromBottom,
+            enter = fadeIn() + scaleIn(),
+            exit = fadeOut() + scaleOut(),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp),
+        ) {
+            UnstyledButton(
+                onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(Theme[colors][surfaceElevated])
+                    .border(1.dp, Theme[colors][stroke], CircleShape),
+                indication = rememberColoredIndication(Theme[colors][textColor]),
+            ) {
+                UnstyledIcon(Lucide.ArrowDown, contentDescription = "Jump to latest", tint = Theme[colors][textColor], modifier = Modifier.size(18.dp))
             }
         }
     }
@@ -206,11 +333,11 @@ private fun UserBubble(message: ChatMessage.User) {
                 style = Theme[typography][body],
                 color = Theme[colors][textColor],
                 modifier = Modifier
-                    .padding(start = 48.dp)
+                    .padding(start = 56.dp)
                     .widthIn(max = 560.dp)
                     .alpha(if (message.pending) 0.6f else 1f)
-                    .background(Theme[colors][accentSoft], RoundedCornerShape(Theme[radii][radiusLarge]))
-                    .padding(horizontal = 14.dp, vertical = 10.dp),
+                    .background(Theme[colors][surfaceElevated], RoundedCornerShape(22.dp))
+                    .padding(horizontal = 16.dp, vertical = 10.dp),
             )
         }
         if (message.queued) {
@@ -224,7 +351,7 @@ private fun AssistantReply(message: ChatMessage.Assistant) {
     val settings = LocalAppSettings.current
     val showReasoning = settings.showReasoning && message.reasoning.isNotBlank()
     val showTools = settings.showToolActivity && message.tools.isNotEmpty()
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (showReasoning) Reasoning(message.reasoning, live = message.streaming && message.text.isEmpty())
         if (showTools) Tools(message.tools)
         when {
@@ -244,74 +371,125 @@ private fun AssistantReply(message: ChatMessage.Assistant) {
     }
 }
 
+/** A tappable one-line header that opens to show more, shared by reasoning and tool activity. */
 @Composable
-private fun Reasoning(text: String, live: Boolean) {
-    var expanded by remember { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+private fun Disclosure(
+    icon: @Composable () -> Unit,
+    label: String,
+    expanded: Boolean,
+    onToggle: () -> Unit,
+    content: @Composable () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
-            Modifier.clickable { expanded = !expanded }.padding(vertical = 2.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            Modifier.clip(RoundedCornerShape(8.dp)).clickable(onClick = onToggle).padding(vertical = 4.dp, horizontal = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            UnstyledIcon(Lucide.Brain, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
-            Text(if (live) "Thinking…" else "Reasoning", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+            icon()
+            Text(label, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
             UnstyledIcon(
                 if (expanded) Lucide.ChevronDown else Lucide.ChevronRight,
-                contentDescription = if (expanded) "Hide reasoning" else "Show reasoning",
+                contentDescription = if (expanded) "Collapse" else "Expand",
                 tint = Theme[colors][textTertiary],
                 modifier = Modifier.size(14.dp),
             )
         }
         if (expanded) {
-            Text(
-                text.trim(),
-                style = Theme[typography][bodySmall],
-                color = Theme[colors][textSecondary],
-                modifier = Modifier.padding(start = 20.dp),
-            )
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Theme[colors][stroke], RoundedCornerShape(12.dp))
+                    .background(Theme[colors][surface], RoundedCornerShape(12.dp))
+                    .padding(12.dp),
+            ) { content() }
         }
+    }
+}
+
+@Composable
+private fun Reasoning(text: String, live: Boolean) {
+    var expanded by remember { mutableStateOf(false) }
+    Disclosure(
+        icon = {
+            if (live) {
+                Spinner(Modifier.size(14.dp))
+            } else {
+                UnstyledIcon(Lucide.Brain, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp))
+            }
+        },
+        label = if (live) "Thinking…" else "Thought it through",
+        expanded = expanded,
+        onToggle = { expanded = !expanded },
+    ) {
+        Text(text.trim(), style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
     }
 }
 
 @Composable
 private fun Tools(tools: List<ToolActivity>) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        tools.forEach { tool -> ToolRow(tool) }
+    var expanded by remember { mutableStateOf(false) }
+    val running = tools.lastOrNull { it.running }
+    val names = tools.map { it.name }.distinct()
+    val label = when {
+        running != null -> running.detail?.lineSequence()?.firstOrNull()?.let { "${running.name} · $it" } ?: "Running ${running.name}"
+        names.size <= 2 -> "Used ${names.joinToString(" and ")}"
+        else -> "Used ${tools.size} tools"
+    }
+    Disclosure(
+        icon = {
+            if (running != null) {
+                Spinner(Modifier.size(14.dp))
+            } else {
+                UnstyledIcon(Lucide.Wrench, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp))
+            }
+        },
+        label = label,
+        expanded = expanded,
+        onToggle = { expanded = !expanded },
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            tools.forEach { ToolRow(it) }
+        }
     }
 }
 
 @Composable
 private fun ToolRow(tool: ToolActivity) {
-    val shape = RoundedCornerShape(Theme[radii][radiusFull])
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-            Modifier
-                .border(1.dp, Theme[colors][stroke], shape)
-                .background(Theme[colors][surface], shape)
-                .padding(horizontal = 10.dp, vertical = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
+    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.Top) {
+        Box(Modifier.padding(top = 3.dp)) {
             when {
-                tool.running -> Spinner(Modifier.size(12.dp))
+                tool.running -> Spinner(Modifier.size(14.dp))
                 tool.summary != null || tool.durationSeconds != null ->
-                    UnstyledIcon(Lucide.Check, contentDescription = null, tint = Theme[colors][success], modifier = Modifier.size(12.dp))
-                else -> UnstyledIcon(Lucide.Wrench, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(12.dp))
+                    UnstyledIcon(Lucide.Check, contentDescription = null, tint = Theme[colors][success], modifier = Modifier.size(14.dp))
+                else -> UnstyledIcon(Lucide.Wrench, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
             }
-            Text(tool.name, style = Theme[typography][caption], color = Theme[colors][textSecondary])
         }
-        val detail = tool.summary ?: tool.detail
-        if (!detail.isNullOrBlank()) {
-            Text(
-                detail.lineSequence().first(),
-                style = Theme[typography][caption],
-                color = Theme[colors][textTertiary],
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
+        Column(Modifier.weight(1f)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(tool.name, style = Theme[typography][label], color = Theme[colors][textColor])
+                tool.durationSeconds?.let {
+                    Text(formatDuration(it), style = Theme[typography][caption], color = Theme[colors][textTertiary], modifier = Modifier.padding(top = 2.dp))
+                }
+            }
+            val detail = tool.summary ?: tool.detail
+            if (!detail.isNullOrBlank()) {
+                Text(
+                    detail.trim(),
+                    style = Theme[typography][caption],
+                    color = Theme[colors][textTertiary],
+                    maxLines = 3,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
         }
     }
+}
+
+private fun formatDuration(seconds: Double): String = when {
+    seconds < 1 -> "<1s"
+    seconds < 60 -> "${seconds.toInt()}s"
+    else -> "${(seconds / 60).toInt()}m ${(seconds % 60).toInt()}s"
 }
 
 @Composable
@@ -325,7 +503,7 @@ private fun Thinking() {
 @Composable
 private fun StatusLine(status: String) {
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 4.dp),
+        Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -360,32 +538,125 @@ private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit) 
     }
 }
 
+/**
+ * One rounded card, Claude-app style: the text on top; beneath it the model pill on the left and a
+ * round send (or stop) button on the right.
+ */
 @Composable
-private fun Composer(viewModel: ChatViewModel, connected: Boolean, running: Boolean) {
+private fun Composer(
+    viewModel: ChatViewModel,
+    placeholder: String,
+    state: ChatState,
+    picker: ModelPickerState,
+    connected: Boolean,
+    onOpenModels: () -> Unit,
+) {
     val hasText = viewModel.composer.text.isNotBlank()
-    Row(
-        Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 16.dp, end = 12.dp, top = 8.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.Bottom,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    val shape = RoundedCornerShape(28.dp)
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)
+            .clip(shape)
+            .background(Theme[colors][surfaceElevated])
+            .border(1.dp, Theme[colors][stroke], shape)
+            .padding(start = 8.dp, end = 8.dp, top = 18.dp, bottom = 8.dp),
     ) {
-        TextField(
+        UnstyledTextField(
             state = viewModel.composer,
-            placeholder = if (connected) "Message Hermes" else "Offline · reconnecting…",
-            singleLine = false,
-            maxLines = 6,
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences, imeAction = ImeAction.Default),
-            modifier = Modifier.weight(1f),
-        )
-        val stop = running && !hasText
-        val action: Pair<ImageVector, String> = if (stop) Lucide.Square to "Stop" else Lucide.ArrowUp to "Send"
-        IconButton(
-            icon = action.first,
-            contentDescription = action.second,
-            onClick = if (stop) viewModel::interrupt else viewModel::send,
-            enabled = connected && (stop || hasText),
-            tint = Theme[colors][onAccent],
-            containerColor = Theme[colors][accent],
-            modifier = Modifier.padding(bottom = 4.dp),
+            textStyle = Theme[typography][body],
+            textColor = Theme[colors][textColor],
+            cursorBrush = SolidColor(Theme[colors][accent]),
+            lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 8),
+            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 28.dp).padding(horizontal = 12.dp),
+        ) {
+            TextInput(
+                placeholder = {
+                    Text(
+                        if (connected) placeholder else "Reconnecting to Hermes…",
+                        style = Theme[typography][body],
+                        color = Theme[colors][textTertiary],
+                    )
+                },
+            )
+        }
+        Row(
+            Modifier.fillMaxWidth().padding(top = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Box(Modifier.weight(1f)) { ModelPill(state, picker, onClick = onOpenModels) }
+            val stop = state.running && !hasText
+            val send = hasText && connected
+            ComposerButton(
+                icon = if (stop) Lucide.Square else Lucide.ArrowUp,
+                contentDescription = if (stop) "Stop" else "Send",
+                onClick = if (stop) viewModel::interrupt else viewModel::send,
+                enabled = connected && (stop || hasText),
+                highlighted = send,
+                iconSize = if (stop) 18.dp else 22.dp,
+            )
+        }
+    }
+}
+
+/** The composer's 44dp round buttons: a soft neutral fill, or the accent for a ready Send. */
+@Composable
+private fun ComposerButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    enabled: Boolean,
+    highlighted: Boolean = false,
+    iconSize: androidx.compose.ui.unit.Dp = 20.dp,
+) {
+    val fill = if (highlighted) Theme[colors][accent] else Theme[colors][textColor].copy(alpha = 0.08f)
+    val tint = when {
+        highlighted -> Theme[colors][onAccent]
+        enabled -> Theme[colors][textColor]
+        else -> Theme[colors][textTertiary]
+    }
+    UnstyledButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(44.dp).clip(CircleShape).background(fill),
+        indication = rememberColoredIndication(tint),
+    ) {
+        UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(iconSize))
+    }
+}
+
+/** "Opus 5.5 Medium" in a pill: the chat's model and thinking level; opens the model sheet. */
+@Composable
+private fun ModelPill(state: ChatState, picker: ModelPickerState, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val selection = ModelSelection.of(state, picker.catalog)
+    val model = selection.model ?: return
+    val effort = state.effort(selection.option)
+    val primary = Theme[colors][textColor]
+    val secondary = Theme[colors][textTertiary]
+    Row(
+        modifier
+            .height(44.dp)
+            .clip(CircleShape)
+            .background(Theme[colors][textColor].copy(alpha = 0.08f))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 18.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        if (state.fast == true) {
+            UnstyledIcon(Lucide.Zap, contentDescription = "Fast mode", tint = Theme[colors][warning], modifier = Modifier.size(14.dp))
+        }
+        Text(
+            buildAnnotatedString {
+                withStyle(SpanStyle(color = primary)) { append(displayModelName(model)) }
+                if (effort != null) withStyle(SpanStyle(color = secondary)) { append("  ${effort.label}") }
+            },
+            style = Theme[typography][body],
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
