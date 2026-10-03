@@ -167,8 +167,13 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [ ] Insights and usage analytics (`insights.get`, `usage.bars`)
 
 ### Notifications & background
-- [ ] Foreground service that keeps the WS alive during long runs
-- [ ] Local notifications: approval waiting, run finished, `notification.show`
+- [x] Foreground service that keeps the WS alive during long runs
+- [x] Live Update while a turn runs (Android 16 status-bar chip): current tool or status, Stop button
+- [x] Local notifications: approval waiting, run finished
+- [x] Answer from the notification: approve/deny, clarify answers, inline reply to a finished turn
+- [x] Notification toggles in Settings; permission asked on the first turn
+- [ ] Gateway-pushed `notification.show`
+- [ ] Notifications for chats other than the open one
 - [ ] ntfy integration as a push channel without Google services (Hermes ntfy platform adapter)
 
 ### Auth & connectivity extras
