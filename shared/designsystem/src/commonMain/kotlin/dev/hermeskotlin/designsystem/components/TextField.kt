@@ -26,6 +26,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.input.KeyboardType
@@ -83,6 +85,8 @@ fun TextField(
     clearable: Boolean = false,
     keyboardOptions: KeyboardOptions = KeyboardOptions.Default,
     onKeyboardAction: KeyboardActionHandler? = null,
+    /** Lets the caller move focus into the field, e.g. when a search opens. */
+    focusRequester: FocusRequester? = null,
 ) {
     var revealed by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
@@ -115,6 +119,7 @@ fun TextField(
             onKeyboardAction = onKeyboardAction,
             interactionSource = interactionSource,
             modifier = Modifier
+                .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
                 .fillMaxWidth()
                 .defaultMinSize(minHeight = 48.dp)
                 .background(Theme[colors][input], shape)

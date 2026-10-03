@@ -29,6 +29,7 @@ import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.label
 import dev.hermeskotlin.designsystem.onAccent
 import dev.hermeskotlin.designsystem.radii
+import dev.hermeskotlin.designsystem.radiusFull
 import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.strokeStrong
 import dev.hermeskotlin.designsystem.text as textColor
@@ -53,8 +54,10 @@ fun Button(
     enabled: Boolean = true,
     loading: Boolean = false,
     leadingIcon: ImageVector? = null,
+    /** Fully rounded ends, for a floating action like "New chat". */
+    pill: Boolean = false,
 ) {
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    val shape = RoundedCornerShape(Theme[radii][if (pill) radiusFull else radiusMedium])
     val (container, content) = when (variant) {
         ButtonVariant.Primary -> Theme[colors][accent] to Theme[colors][onAccent]
         ButtonVariant.Secondary -> Theme[colors][accentSoft] to Theme[colors][accent]
