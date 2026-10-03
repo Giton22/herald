@@ -59,8 +59,19 @@ class HistoryToMessagesTest {
                 SessionMessage(id = 1, role = "user", content = parts),
                 SessionMessage(id = 2, role = "user", content = JsonPrimitive("@file:attachments/notes.txt\n@file:\"attachments/my spec.pdf\"\n\nsummarise both")),
                 SessionMessage(id = 3, role = "user", content = JsonPrimitive("Describe this\n@image:/opt/data/images/upload_1.jpg")),
+                SessionMessage(
+                    id = 4,
+                    role = "user",
+                    content = JsonPrimitive(
+                        "@file:attachments/notes.txt\n\nWhat is on this list\n\n--- Attached Context ---\n\n" +
+                            "📄 @file:attachments/notes.txt (12 tokens)\n```\nmilk, eggs\n```",
+                    ),
+                ),
             ),
         )
+        val expanded = messages[3] as ChatMessage.User
+        assertEquals("What is on this list", expanded.text)
+        assertEquals(listOf("notes.txt"), expanded.attachments.map { it.name })
         val stored = messages[2] as ChatMessage.User
         assertEquals("Describe this", stored.text)
         assertEquals("/opt/data/images/upload_1.jpg", stored.attachments.single().gatewayPath)
