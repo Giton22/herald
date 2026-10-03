@@ -94,6 +94,7 @@ import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.LocalAppSettings
 import dev.hermeskotlin.ui.components.EmptyState
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -220,13 +221,16 @@ private fun UserBubble(message: ChatMessage.User) {
 
 @Composable
 private fun AssistantReply(message: ChatMessage.Assistant) {
+    val settings = LocalAppSettings.current
+    val showReasoning = settings.showReasoning && message.reasoning.isNotBlank()
+    val showTools = settings.showToolActivity && message.tools.isNotEmpty()
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (message.reasoning.isNotBlank()) Reasoning(message.reasoning, live = message.streaming && message.text.isEmpty())
-        if (message.tools.isNotEmpty()) Tools(message.tools)
+        if (showReasoning) Reasoning(message.reasoning, live = message.streaming && message.text.isEmpty())
+        if (showTools) Tools(message.tools)
         when {
             message.text.isNotBlank() -> SelectionContainer { MarkdownText(message.text, streaming = message.streaming) }
             // One activity cue at a time: live reasoning and running tools already show their own.
-            message.streaming && message.reasoning.isBlank() && message.tools.none { it.running } -> Thinking()
+            message.streaming && !showReasoning && !(showTools && message.tools.any { it.running }) -> Thinking()
         }
         when (message.outcome) {
             TurnOutcome.Error -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {

@@ -1,19 +1,29 @@
 package dev.hermeskotlin.ui
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.unit.Density
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.composeunstyled.theme.ColorScheme
 import com.composeunstyled.theme.Theme
+import dev.hermeskotlin.core.settings.AppSettings
+import dev.hermeskotlin.core.settings.SettingsStore
+import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.designsystem.HermesTheme
+import dev.hermeskotlin.designsystem.PureBlack
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.SidebarLayout
@@ -26,34 +36,63 @@ import dev.hermeskotlin.ui.sessions.SessionsSidebar
 import dev.hermeskotlin.ui.signin.SignInScreen
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
-/** Root composable shared by every platform. Koin must be started by the platform host first. */
+/** The current [AppSettings], for screens that change how they draw. */
+val LocalAppSettings = compositionLocalOf { AppSettings() }
+
+/**
+ * Root composable shared by every platform. Koin must be started by the platform host first.
+ * [onDarkTheme] tells the host which theme is showing, e.g. to color the system bar icons.
+ */
 @Composable
-fun App() {
-    HermesTheme {
-        val app: AppViewModel = koinViewModel()
-        val route by app.route.collectAsStateWithLifecycle()
+fun App(onDarkTheme: (Boolean) -> Unit = {}) {
+    // Nothing is drawn until the stored settings are read, so the first frame has the right theme.
+    val settings = koinInject<SettingsStore>().settings.collectAsStateWithLifecycle().value ?: return
+    val dark = when (settings.theme) {
+        ThemeMode.System -> isSystemInDarkTheme()
+        ThemeMode.Light -> false
+        ThemeMode.Dark -> true
+    }
+    LaunchedEffect(dark) { onDarkTheme(dark) }
+    val scheme = when {
+        !dark -> ColorScheme.Light
+        settings.pureBlack -> PureBlack
+        else -> ColorScheme.Dark
+    }
+    val density = LocalDensity.current
+    HermesTheme(scheme) {
+        CompositionLocalProvider(
+            LocalAppSettings provides settings,
+            LocalDensity provides Density(density.density, density.fontScale * settings.textSize.scale),
+        ) { Routes() }
+    }
+}
 
-        PlatformBackHandler(enabled = route is Route.SignIn) { app.back() }
+@Composable
+private fun Routes() {
+    val app: AppViewModel = koinViewModel()
+    val route by app.route.collectAsStateWithLifecycle()
 
-        when (val r = route) {
-            Route.Loading -> Box(
-                Modifier.fillMaxSize().background(Theme[colors][background]),
-                contentAlignment = Alignment.Center,
-            ) { Spinner() }
+    PlatformBackHandler(enabled = route is Route.SignIn) { app.back() }
 
-            Route.Connect -> ConnectScreen(onContinue = app::onGatewayChosen)
+    when (val r = route) {
+        Route.Loading -> Box(
+            Modifier.fillMaxSize().background(Theme[colors][background]),
+            contentAlignment = Alignment.Center,
+        ) { Spinner() }
 
-            is Route.SignIn -> SignInScreen(
-                gateway = r.gateway,
-                notice = r.notice,
-                onSignedIn = { app.onSignedIn(r.gateway) },
-                onChangeGateway = app::changeGateway,
-            )
+        Route.Connect -> ConnectScreen(onContinue = app::onGatewayChosen)
 
-            is Route.Chat -> Home(r, app)
-        }
+        is Route.SignIn -> SignInScreen(
+            gateway = r.gateway,
+            notice = r.notice,
+            onSignedIn = { app.onSignedIn(r.gateway) },
+            onChangeGateway = app::changeGateway,
+        )
+
+        is Route.Chat -> Home(r, app)
     }
 }
 
