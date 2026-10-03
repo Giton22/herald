@@ -173,9 +173,9 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 ### Automation & configuration
 - [x] Scheduled jobs in the sidebar (`GET /api/cron/jobs`): schedule in plain words, next run, state; a job page with its prompt, last error, Run now, Pause / Resume, and its runs (`/api/cron/jobs/{id}/runs`), each opening as a chat
 - [ ] Create and edit cron jobs; refetch on `cron.changed`
-- [ ] Skills browser and management (`skills.manage`)
-- [ ] Tools and toolsets toggles (`tools.list`, `tools.configure`, `toolsets.list`)
-- [ ] MCP servers (`mcp.*`)
+- [x] Skills: a Capabilities page in the sidebar, after Desktop's, lists the profile's skills by category with search and an on/off switch (`GET /api/skills`, `PUT /api/skills/toggle`). Installing from the hub (`skills.manage`) not yet
+- [x] Toolsets on the Capabilities page with their switches and a "needs setup" tag (`GET /api/tools/toolsets`, `PUT /api/tools/toolsets/{name}`)
+- [x] MCP servers on the Capabilities page: switch, and a connection test listing its tools (`/api/mcp/servers`, `…/{name}/enabled`, `…/{name}/test`). Adding servers and OAuth not yet
 - [ ] Config viewer and editor (`config.get`, `config.set`)
 - [ ] Projects and workspaces (`projects.*`)
 - [ ] Insights and usage analytics (`insights.get`, `usage.bars`)

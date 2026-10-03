@@ -5,6 +5,7 @@ import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.chat.ToolRiskStore
+import dev.hermeskotlin.core.capabilities.CapabilitiesApi
 import dev.hermeskotlin.core.cron.CronApi
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayProbe
@@ -44,6 +45,7 @@ val coreModule = module {
     single { GatewayRepository(get()) }
     single { SessionsApi(get()) }
     single { CronApi(get()) }
+    single { CapabilitiesApi(get()) }
     single { LastChatStore(get()) }
     single { ProfilesApi(get()) }
     single { ProfileStore(get()) }
