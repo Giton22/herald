@@ -168,6 +168,8 @@ class ScheduledViewModel(
         )
         val existing = editor.jobId?.let { id -> _state.value.jobs.firstOrNull { it.id == id } }
         val problem = when {
+            // Removed elsewhere while the form was open; saving would quietly create it again.
+            editor.jobId != null && existing == null -> "This job was deleted on the gateway, so there's nothing to save."
             draft.prompt.isEmpty() -> "Say what the agent should do on each run."
             draft.schedule.isEmpty() && (existing == null || existing.editableSchedule.isNotEmpty()) -> "Say when it should run."
             else -> null
