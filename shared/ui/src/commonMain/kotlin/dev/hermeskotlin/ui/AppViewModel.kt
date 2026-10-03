@@ -3,6 +3,7 @@ package dev.hermeskotlin.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.auth.AuthApi
+import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
@@ -31,6 +32,7 @@ class AppViewModel(
     private val auth: AuthApi,
     private val connection: GatewayConnection,
     private val lastChats: LastChatStore,
+    private val host: ChatHost,
 ) : ViewModel() {
 
     private val _route = MutableStateFlow<Route>(Route.Loading)
@@ -80,12 +82,14 @@ class AppViewModel(
     fun onSessionExpired() {
         val gateway = signedInGateway() ?: return
         connection.stop()
+        host.close()
         _route.value = Route.SignIn(gateway, notice = "Your session expired. Sign in again.")
     }
 
     fun signOut() {
         val gateway = currentGateway() ?: return
         connection.stop()
+        host.close()
         viewModelScope.launch {
             auth.signOut(gateway.gatewayUrl)
             _route.value = Route.SignIn(gateway)
@@ -95,6 +99,7 @@ class AppViewModel(
     fun changeGateway() {
         val gateway = currentGateway()
         connection.stop()
+        host.close()
         viewModelScope.launch {
             gateway?.let { auth.signOut(it.gatewayUrl) }
             gateways.clear()

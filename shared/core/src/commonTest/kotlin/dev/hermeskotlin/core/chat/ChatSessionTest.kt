@@ -212,4 +212,21 @@ class ChatSessionTest {
         val clarify = assertIs<InputRequest.Clarify>(attached.inputRequests.single())
         assertEquals("Which branch?", clarify.questions.single().question)
     }
+
+    @Test
+    fun hostReusesTheOpenStoredChatAndReplacesEverythingElse() = runTest {
+        val (connection, _) = setup(backgroundScope, mapOf("session.resume" to """{"session_id":"rt1","running":false}"""))
+        val host = ChatHost(connection, SessionsApi(client()), backgroundScope)
+
+        val first = host.open(url, "stored-1", "Greeting")
+        assertTrue(first === host.open(url, "stored-1", null))
+        assertTrue(first === host.session.value)
+
+        val fresh = host.open(url, null, null)
+        assertFalse(fresh === first)
+        assertFalse(fresh === host.open(url, null, null))
+
+        host.close()
+        assertEquals(null, host.session.value)
+    }
 }

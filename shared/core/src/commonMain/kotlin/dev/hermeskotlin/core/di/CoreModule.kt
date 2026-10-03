@@ -2,6 +2,7 @@ package dev.hermeskotlin.core.di
 
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
+import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.cron.CronApi
 import dev.hermeskotlin.core.connection.GatewayConnection
@@ -40,4 +41,5 @@ val coreModule = module {
             scope = get(),
         )
     }
+    single { ChatHost(get(), get(), get()) }
 }
