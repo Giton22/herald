@@ -708,7 +708,8 @@ class ChatSession(
                 return@collectLatest
             }
             if (!rowExists) return@collectLatest // a new chat attaches on first send
-            if (attachedBefore) loadHistory() // catch up on whatever happened while offline
+            // Catch up on whatever happened while offline, or load what couldn't be read before the link came up.
+            if (attachedBefore || _state.value.historyError != null) loadHistory()
             if (runCatchingAttach(connectionState.client)) attachedBefore = true
         }
     }
