@@ -17,6 +17,7 @@ import androidx.compose.foundation.text.input.KeyboardActionHandler
 import androidx.compose.foundation.text.input.OutputTransformation
 import androidx.compose.foundation.text.input.TextFieldBuffer
 import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.runtime.Composable
@@ -109,6 +110,8 @@ fun TextField(
             textStyle = Theme[typography][body],
             textColor = Theme[colors][text],
             cursorBrush = SolidColor(Theme[colors][accent]),
+            // UnstyledTextField defaults to unspecified colors, which hides the selection and its handles.
+            selectionColors = LocalTextSelectionColors.current,
             lineLimits = if (singleLine) TextFieldLineLimits.SingleLine else TextFieldLineLimits.MultiLine(maxHeightInLines = maxLines),
             keyboardOptions = if (password) {
                 keyboardOptions.copy(keyboardType = KeyboardType.Password, autoCorrectEnabled = false)
