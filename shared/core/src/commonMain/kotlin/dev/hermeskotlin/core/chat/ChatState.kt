@@ -37,16 +37,29 @@ data class ToolRisk(val findings: List<String>, val redacted: Boolean = false) {
 
 enum class TurnOutcome { Complete, Interrupted, Error }
 
+/** A prompt that went out but got no reply: the link dropped or the gateway didn't answer in time. */
+enum class SendCheck {
+    /** Looking for it in the stored transcript. */
+    Checking,
+
+    /** The transcript couldn't tell: it may be running, so it shouldn't simply be sent again. */
+    Unknown,
+}
+
 sealed interface ChatMessage {
     val key: String
 
-    /** [pending] while `prompt.submit` has not answered; [queued] when the gateway held it behind a running turn. */
+    /**
+     * [pending] while `prompt.submit` has not answered; [queued] when the gateway held it behind a running
+     * turn; [check] when it went out without a reply.
+     */
     data class User(
         override val key: String,
         val text: String,
         val pending: Boolean = false,
         val queued: Boolean = false,
         val attachments: List<ShownAttachment> = emptyList(),
+        val check: SendCheck? = null,
     ) : ChatMessage
 
     /** One reply: streamed text, reasoning and the tools it ran. [streaming] until `message.complete`. */

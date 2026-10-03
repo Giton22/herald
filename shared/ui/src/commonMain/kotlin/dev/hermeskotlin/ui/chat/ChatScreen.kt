@@ -122,6 +122,7 @@ import dev.hermeskotlin.core.chat.Attachment
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.OutgoingAttachment
+import dev.hermeskotlin.core.chat.SendCheck
 import dev.hermeskotlin.core.chat.extractReplyMedia
 import dev.hermeskotlin.core.chat.ToolActivity
 import dev.hermeskotlin.core.chat.TurnOutcome
@@ -639,7 +640,7 @@ private fun UserBubble(message: ChatMessage.User) {
         Column(
             Modifier
                 .fillMaxWidth()
-                .alpha(if (message.pending) 0.6f else 1f)
+                .alpha(if (message.pending || message.check == SendCheck.Checking) 0.6f else 1f)
                 .background(Theme[colors][userBubble], shape)
                 .border(1.dp, Theme[colors][userBubbleStroke], shape)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
@@ -652,6 +653,11 @@ private fun UserBubble(message: ChatMessage.User) {
         }
         if (message.queued) {
             Text("Queued · runs after the current turn", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+        }
+        when (message.check) {
+            SendCheck.Checking -> Text("Checking whether Hermes got this…", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+            SendCheck.Unknown -> Text("May not have reached Hermes", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+            null -> {}
         }
     }
 }

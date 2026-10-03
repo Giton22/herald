@@ -408,26 +408,54 @@ class ChatSessionTest {
         assertTrue(chat.state.value.messages.isEmpty())
     }
 
-    @Test
-    fun aSubmitTheGatewayNeverAnswersFailsTheSendCleanly() = runTest {
-        val (chat, _) = newChat(backgroundScope, mapOf("prompt.submit" to SILENT))
-
-        val outcome = runCatching { chat.send("hello") }
-
-        assertEquals(false, outcome.getOrNull(), "send threw ${outcome.exceptionOrNull()} instead of returning false")
-        assertTrue(chat.state.value.messages.isEmpty(), "left behind ${chat.state.value.messages}")
+    private suspend fun resumedChat(scope: CoroutineScope, results: Map<String, String>): Pair<ChatSession, FakeTransport> {
+        val (connection, transport) = setup(scope, mapOf("session.resume" to """{"session_id":"rt1","running":false}""") + results)
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), scope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        return chat to transport
     }
 
     @Test
-    fun aDropAfterTheSubmitWentOutIsNotReportedAsUnsent() = runTest {
+    fun aSubmitNeverAnsweredAndMissingFromTheTranscriptIsHandedBack() = runTest {
+        val (chat, _) = resumedChat(backgroundScope, mapOf("prompt.submit" to SILENT))
+
+        val outcome = runCatching { chat.send("hello again") }
+
+        assertEquals(false, outcome.getOrNull(), "send threw ${outcome.exceptionOrNull()} instead of returning false")
+        assertEquals(listOf("hello", "Hi! What next?"), chat.state.value.messages.map { it.textOf() })
+        assertTrue(chat.state.value.error!!.contains("composer"))
+    }
+
+    @Test
+    fun aDropAfterTheSubmitWentOutIsSentWhenTheTranscriptHasIt() = runTest {
+        val (chat, transport) = resumedChat(backgroundScope, mapOf("prompt.submit" to SILENT))
+
+        val sending = backgroundScope.async { chat.send("deploy it") }
+        transport.awaitSent { it.isCall("prompt.submit") }
+        // The gateway has the prompt and is running it; only its reply is lost.
+        history = history.replace("]}", """,{"id":3,"role":"user","content":"deploy it"}]}""")
+        transport.serverClose(1006)
+
+        assertTrue(sending.await(), "the prompt reached the gateway, but send reported it unsent and handed the text back to resend")
+        val messages = chat.state.value.messages
+        assertEquals(listOf("hello", "Hi! What next?", "deploy it"), messages.map { it.textOf() })
+        assertEquals("row-3", messages.last().key)
+    }
+
+    @Test
+    fun aDropTheTranscriptCantSettleKeepsAMarkedBubble() = runTest {
+        // A new chat without a stored id yet: there's no transcript to look in.
         val (chat, transport) = newChat(backgroundScope, mapOf("prompt.submit" to SILENT))
 
         val sending = backgroundScope.async { chat.send("deploy it") }
         transport.awaitSent { it.isCall("prompt.submit") }
-        // The gateway has the prompt and may be running it; only its reply is lost.
         transport.serverClose(1006)
 
-        assertTrue(sending.await(), "the prompt reached the gateway, but send reported it unsent and handed the text back to resend")
+        assertFalse(sending.await())
+        val bubble = assertIs<ChatMessage.User>(chat.state.value.messages.single())
+        assertEquals(SendCheck.Unknown, bubble.check)
+        assertFalse(bubble.pending)
     }
 
     private suspend fun newChat(scope: CoroutineScope, results: Map<String, String>): Pair<ChatSession, FakeTransport> {
