@@ -16,9 +16,13 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
         "message.interim" ->
             // Commentary next to tool calls; when already streamed it is in the text already.
             if (payload.boolean("already_streamed") == true) this else appendText(payload.string("text")?.let { "$it\n\n" })
-        "reasoning.delta", "thinking.delta", "reasoning.available" -> payload.string("text")?.let { chunk ->
+        "reasoning.delta", "reasoning.available" -> payload.string("text")?.let { chunk ->
             withOpenReply { it.copy(reasoning = it.reasoning + chunk) }
         } ?: this
+        // Mostly kaomoji spinner frames ("(>∀<☆)☆ musing..."), not reasoning. Like Desktop, only an explained
+        // provider wait is worth a line, and it goes to the status.
+        "thinking.delta" -> payload.string("text")?.trim()?.takeIf { PROVIDER_WAIT.containsMatchIn(it) }
+            ?.let { copy(status = it) } ?: this
         "tool.start" -> {
             val id = payload.string("tool_id") ?: return this
             val tool = ToolActivity(
@@ -49,6 +53,12 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
         else -> this
     }
 }
+
+/** Desktop's `providerWaitText` (store/provider-wait.ts): the waits the core explains after a long silence. */
+private val PROVIDER_WAIT = Regex(
+    """^(?:⏳|⚠|↻|⚙)\s*(?:(?:still\s+)?waiting on|loading|processing prompt|no (?:output|response)|model returned|rate limited|provider (?:overloaded|temporarily unavailable))""",
+    RegexOption.IGNORE_CASE,
+)
 
 /** The model fields of a `session.info` payload (also the `info` of `session.create`/`session.resume`). */
 internal fun ChatState.withInfo(info: JsonObject?): ChatState {

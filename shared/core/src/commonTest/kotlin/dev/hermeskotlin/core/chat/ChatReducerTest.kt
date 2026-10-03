@@ -41,6 +41,18 @@ class ChatReducerTest {
     }
 
     @Test
+    fun spinnerFramesStayOutOfTheReasoningButProviderWaitsShow() {
+        val state = ChatState().apply(
+            event("message.start"),
+            event("thinking.delta", """{"text":"(>∀<☆)☆ musing..."}"""),
+            event("reasoning.delta", """{"text":"Real thought."}"""),
+            event("thinking.delta", """{"text":"⏳ still waiting on the provider (45s)"}"""),
+        )
+        assertEquals("Real thought.", assertIs<ChatMessage.Assistant>(state.messages.single()).reasoning)
+        assertEquals("⏳ still waiting on the provider (45s)", state.status)
+    }
+
+    @Test
     fun aPromptQueuedMidTurnDoesNotSplitTheReply() {
         val streaming = ChatState().apply(event("message.start"), event("message.delta", """{"text":"Working"}"""))
         val queued = streaming.copy(messages = streaming.messages + ChatMessage.User("q", "also this", queued = true))
