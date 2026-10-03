@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug builds only. Exported so `adb shell am start` can open it for screenshots; it shows sample data, nothing real. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name=".PreviewGalleryActivity"
+            android:exported="true"
+            android:theme="@style/Theme.HermesKotlin" />
+    </application>
+</manifest>
