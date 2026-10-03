@@ -17,6 +17,8 @@ import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.rpc.openGatewaySocket
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.slash.SlashApi
+import dev.hermeskotlin.core.journey.JourneyApi
+import dev.hermeskotlin.core.pet.PetApi
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -51,5 +53,7 @@ val coreModule = module {
     single { ChatHost(get(), get(), get()) }
     single { ModelsApi(get()) }
     single { SlashApi(get()) }
+    single { PetApi(get()) }
+    single { JourneyApi(get()) }
     single { MediaApi(get()) }
 }

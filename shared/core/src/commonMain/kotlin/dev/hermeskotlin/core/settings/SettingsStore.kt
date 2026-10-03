@@ -31,6 +31,8 @@ data class AppSettings(
     val textSize: TextSize = TextSize.Default,
     val showReasoning: Boolean = true,
     val showToolActivity: Boolean = true,
+    /** Show the profile's pet (when the gateway has one on) above the composer. */
+    val showPet: Boolean = true,
     /** Notify when a turn finishes while the app is in the background. */
     val notifyReplies: Boolean = true,
     /** Notify when the agent waits on an approval or a question while the app is in the background. */

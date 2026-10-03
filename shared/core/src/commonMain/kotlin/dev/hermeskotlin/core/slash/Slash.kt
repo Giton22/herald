@@ -109,6 +109,9 @@ sealed interface SlashRoute {
     data object Branch : SlashRoute
     data object Profile : SlashRoute
     data object Handoff : SlashRoute
+    data object Skin : SlashRoute
+    data object Journey : SlashRoute
+    data object Pet : SlashRoute
 
     /** Known, but there is nothing on this client to run it with. */
     data class Unavailable(val message: String) : SlashRoute
@@ -153,6 +156,9 @@ sealed interface SlashRoute {
             "branch" to Branch,
             "profile" to Profile,
             "handoff" to Handoff,
+            "skin" to Skin,
+            "journey" to Journey,
+            "pet" to Pet,
         )
 
         private val LOCAL_ALIASES = mapOf(
@@ -162,6 +168,9 @@ sealed interface SlashRoute {
             "commands" to "help",
             "compact" to "compress",
             "fork" to "branch",
+            "learning" to "journey",
+            "memory-graph" to "journey",
+            "pets" to "pet",
         )
 
         /**
@@ -171,10 +180,7 @@ sealed interface SlashRoute {
         private val DESKTOP_ONLY = buildMap {
             put("wake", "%s listens on the gateway computer's microphone, a Desktop feature.")
             put("browser", "%s connects a browser on the gateway computer, so it only works from Desktop there.")
-            put("skin", "Change the theme in Settings.")
-            listOf("journey", "learning", "memory-graph", "pet", "pets", "hatch", "generate-pet").forEach {
-                put(it, "%s opens a view only Desktop has.")
-            }
+            listOf("hatch", "generate-pet").forEach { put(it, "Hatching a new pet takes Desktop's generator for now; adopt one with /pet.") }
             listOf("density", "details", "logs", "mouse").forEach { put(it, "%s only works in the terminal.") }
         }
     }

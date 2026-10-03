@@ -56,7 +56,9 @@ class SlashTest {
         assertEquals(SlashRoute.Branch, SlashRoute.of("fork", catalog))
         assertEquals("/wake listens on the gateway computer's microphone, a Desktop feature.", (SlashRoute.of("wake", catalog) as SlashRoute.Unavailable).message)
         assertTrue(SlashRoute.hidden("paste", catalog))
-        assertTrue(SlashRoute.hidden("skin", catalog))
+        assertTrue(SlashRoute.hidden("hatch", catalog))
+        assertEquals(SlashRoute.Journey, SlashRoute.of("learning", catalog))
+        assertEquals(SlashRoute.Skin, SlashRoute.of("skin", catalog))
         assertFalse(SlashRoute.hidden("model", catalog))
         assertFalse(SlashRoute.hidden("usage", catalog))
     }
