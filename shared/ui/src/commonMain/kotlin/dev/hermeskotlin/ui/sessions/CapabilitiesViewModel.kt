@@ -12,6 +12,8 @@ import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -48,10 +50,15 @@ class CapabilitiesViewModel(private val api: CapabilitiesApi) : ViewModel() {
     private var gateway: SavedGateway? = null
     private var profile: String? = null
 
+    /** Parent of every call for the bound gateway and profile; cancelled on a switch so a late answer can't land in the next profile's lists. */
+    private var binding: Job = newBinding()
+
     fun bind(gateway: SavedGateway, profile: String?) {
         if (this.gateway == gateway && this.profile == profile) return
         this.gateway = gateway
         this.profile = profile
+        binding.cancel()
+        binding = newBinding()
         _state.value = CapabilitiesUiState(tab = _state.value.tab)
         refresh()
     }
@@ -93,7 +100,7 @@ class CapabilitiesViewModel(private val api: CapabilitiesApi) : ViewModel() {
     fun testServer(server: McpServer) {
         val url = gateway?.gatewayUrl ?: return
         _state.update { it.copy(tests = it.tests + (server.name to null)) }
-        viewModelScope.launch {
+        viewModelScope.launch(binding) {
             val result = api.testMcpServer(url, profile, server.name)
             val outcome = when (result) {
                 is ApiResult.Success -> result.value
@@ -104,6 +111,8 @@ class CapabilitiesViewModel(private val api: CapabilitiesApi) : ViewModel() {
     }
 
     fun dismissMessage() = _state.update { it.copy(message = null) }
+
+    private fun newBinding(): Job = SupervisorJob(viewModelScope.coroutineContext[Job])
 
     private fun current(tab: CapabilityTab): Loadable<*> = when (tab) {
         CapabilityTab.Skills -> _state.value.skills
@@ -118,7 +127,7 @@ class CapabilitiesViewModel(private val api: CapabilitiesApi) : ViewModel() {
         @Suppress("UNCHECKED_CAST")
         val before = current(_state.value.tab) as Loadable<T>
         _state.update { put(it, before.copy(loading = true)) }
-        viewModelScope.launch {
+        viewModelScope.launch(binding) {
             val result = call()
             _state.update { state ->
                 when (result) {
@@ -138,7 +147,7 @@ class CapabilitiesViewModel(private val api: CapabilitiesApi) : ViewModel() {
     ) {
         val url = gateway?.gatewayUrl ?: return
         _state.update { apply(it, enabled) }
-        viewModelScope.launch {
+        viewModelScope.launch(binding) {
             val result = call(url)
             if (result !is ApiResult.Success) {
                 _state.update {
