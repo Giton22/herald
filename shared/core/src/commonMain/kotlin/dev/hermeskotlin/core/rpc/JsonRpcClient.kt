@@ -14,7 +14,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -37,6 +37,12 @@ data class GatewayEvent(
 
 /** JSON-RPC error returned by the gateway. */
 class RpcException(val code: Int, override val message: String) : Exception(message)
+
+/**
+ * No reply to [method] within its timeout. The call went out, so the gateway may still have acted on it.
+ * An ordinary exception, not a cancellation: callers that rethrow cancellations would skip their cleanup.
+ */
+class RpcTimeoutException(val method: String) : Exception("The gateway didn't answer $method in time.")
 
 /** The gateway stopped answering (no inbound frame within the heartbeat deadline). */
 class HeartbeatTimeoutException : Exception("Gateway heartbeat timed out")
@@ -117,7 +123,8 @@ class JsonRpcClient(
                 put("method", method)
                 put("params", params)
             })
-            return withTimeout(timeoutMs) { deferred.await() }
+            // withTimeout would throw a cancellation, indistinguishable from the caller being cancelled.
+            return withTimeoutOrNull(timeoutMs) { deferred.await() } ?: throw RpcTimeoutException(method)
         } finally {
             pendingMutex.withLock { pending.remove(id) }
         }

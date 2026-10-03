@@ -7,6 +7,7 @@ import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.rpc.JsonRpcClient
 import dev.hermeskotlin.core.rpc.RpcException
+import dev.hermeskotlin.core.rpc.RpcTimeoutException
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.slash.SlashCommand
 import dev.hermeskotlin.core.slash.SlashResult
@@ -587,6 +588,8 @@ class ChatSession(
             val output = withTimeout(timeoutMs + 5_000) { call(client, ensureAttached(client)) }
             finishCommand(key, output)
         } catch (e: TimeoutCancellationException) {
+            finishCommand(key, "$command took too long to answer.", failed = true)
+        } catch (e: RpcTimeoutException) {
             finishCommand(key, "$command took too long to answer.", failed = true)
         } catch (e: CancellationException) {
             throw e
