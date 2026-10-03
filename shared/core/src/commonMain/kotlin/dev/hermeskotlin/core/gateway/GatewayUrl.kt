@@ -29,6 +29,12 @@ value class GatewayUrl private constructor(val value: String) {
     /** Host name only, e.g. `hermes.example.ts.net`. */
     val host: String get() = Url(value).host
 
+    /**
+     * Plain `http://` to a host that isn't on a private network, so the password, session cookie and
+     * every message cross the internet readable. A Tailscale address is already encrypted by Tailscale.
+     */
+    val isExposed: Boolean get() = Url(value).protocol != URLProtocol.HTTPS && !isPrivateHost(host)
+
     fun resolve(path: String): String = value + "/" + path.trimStart('/')
 
     override fun toString(): String = value
@@ -66,6 +72,19 @@ value class GatewayUrl private constructor(val value: String) {
         }
     }
 }
+
+/** Loopback, LAN and Tailscale (100.64.0.0/10, MagicDNS `.ts.net`) hosts, and local-only names. */
+internal fun isPrivateHost(host: String): Boolean {
+    val name = host.lowercase().trim('[', ']').trimEnd('.')
+    if (name == "localhost" || PRIVATE_SUFFIXES.any { name.endsWith(it) } || '.' !in name && ':' !in name) return true
+    if (':' in name) return name == "::1" || name.startsWith("fc") || name.startsWith("fd") || name.startsWith("fe80")
+    val octets = name.split('.').map { it.toIntOrNull() ?: return false }
+    if (octets.size != 4) return false
+    val (a, b) = octets
+    return a == 10 || a == 127 || (a == 172 && b in 16..31) || (a == 192 && b == 168) || (a == 100 && b in 64..127) || (a == 169 && b == 254)
+}
+
+private val PRIVATE_SUFFIXES = listOf(".ts.net", ".local", ".lan", ".home.arpa", ".internal", ".localhost")
 
 private val Url.hostWithPortIfSpecified: String
     get() = if (specifiedPort == 0 || specifiedPort == protocol.defaultPort) host else "$host:$specifiedPort"

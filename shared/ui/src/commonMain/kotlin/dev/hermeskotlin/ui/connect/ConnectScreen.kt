@@ -26,6 +26,7 @@ import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.code
 import dev.hermeskotlin.designsystem.colors
+import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
@@ -83,6 +84,15 @@ fun ConnectScreen(
         )
 
         result?.let { ResultCard(it) }
+
+        if (result is ProbeResult.Reachable && result.url.isExposed) {
+            Text(
+                "This address isn't private and doesn't use https://, so your password and chats would cross " +
+                    "the internet unencrypted. Use https://, Tailscale or your own network instead.",
+                style = Theme[typography][bodySmall],
+                color = Theme[colors][danger],
+            )
+        }
 
         if (signInReady) {
             result as ProbeResult.Reachable

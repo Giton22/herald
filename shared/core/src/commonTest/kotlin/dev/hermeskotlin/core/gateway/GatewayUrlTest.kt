@@ -3,7 +3,9 @@ package dev.hermeskotlin.core.gateway
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class GatewayUrlTest {
 
@@ -23,6 +25,19 @@ class GatewayUrlTest {
     fun nonHttpSchemesAreRejected() {
         assertFailsWith<InvalidGatewayUrlException> { GatewayUrl.parse("ftp://host") }
         assertFailsWith<InvalidGatewayUrlException> { GatewayUrl.parse("file:///etc/passwd") }
+    }
+
+    @Test
+    fun onlyPlainHttpToAPublicHostIsExposed() {
+        assertTrue(GatewayUrl.parse("http://203.0.113.5:9119").isExposed)
+        assertTrue(GatewayUrl.parse("http://hermes.example.com").isExposed)
+        assertFalse(GatewayUrl.parse("https://hermes.example.com").isExposed)
+        assertFalse(GatewayUrl.parse("100.64.0.1:9119").isExposed)
+        assertFalse(GatewayUrl.parse("http://hermes.example.ts.net").isExposed)
+        assertFalse(GatewayUrl.parse("192.168.1.20:9119").isExposed)
+        assertFalse(GatewayUrl.parse("http://localhost:9119").isExposed)
+        assertFalse(GatewayUrl.parse("http://homeserver:9119").isExposed)
+        assertTrue(GatewayUrl.parse("http://100.128.0.1").isExposed) // just past Tailscale's range
     }
 
     @Test
