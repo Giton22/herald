@@ -1,0 +1,228 @@
+package dev.hermeskotlin.android.notify
+
+import android.Manifest
+import android.annotation.SuppressLint
+import android.app.Notification
+import android.app.PendingIntent
+import android.content.Context
+import android.content.Intent
+import android.content.pm.PackageManager
+import androidx.core.app.NotificationChannelCompat
+import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
+import androidx.core.app.RemoteInput
+import androidx.core.content.ContextCompat
+import dev.hermeskotlin.android.R
+import dev.hermeskotlin.core.chat.ApprovalChoice
+import dev.hermeskotlin.core.chat.ChatState
+import dev.hermeskotlin.core.chat.InputRequest
+
+/** Builds and posts every notification the app shows; the actions land in [NotificationActionReceiver]. */
+class ChatNotifications(private val context: Context) {
+
+    private val manager = NotificationManagerCompat.from(context)
+
+    init {
+        manager.createNotificationChannelsCompat(
+            listOf(
+                NotificationChannelCompat.Builder(CHANNEL_WORKING, NotificationManagerCompat.IMPORTANCE_LOW)
+                    .setName("Running turns")
+                    .setDescription("Shown while the agent works, so the connection stays up in the background.")
+                    .setShowBadge(false)
+                    .build(),
+                NotificationChannelCompat.Builder(CHANNEL_REQUESTS, NotificationManagerCompat.IMPORTANCE_HIGH)
+                    .setName("Approvals and questions")
+                    .setDescription("The agent is waiting on you.")
+                    .build(),
+                NotificationChannelCompat.Builder(CHANNEL_REPLIES, NotificationManagerCompat.IMPORTANCE_DEFAULT)
+                    .setName("Finished replies")
+                    .setDescription("A turn ended while the app was in the background.")
+                    .build(),
+            ),
+        )
+    }
+
+    val canPost: Boolean
+        get() = manager.areNotificationsEnabled() && (
+            android.os.Build.VERSION.SDK_INT < 33 ||
+                ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+            )
+
+    /** The ongoing notification of [ChatService]: what the agent is doing, with a Stop button. */
+    fun working(state: ChatState?): Notification {
+        val waiting = state?.inputRequests?.isNotEmpty() == true
+        val runningTool = state?.messages?.lastOrNull()
+            ?.let { it as? dev.hermeskotlin.core.chat.ChatMessage.Assistant }
+            ?.tools?.lastOrNull { it.running }
+        val text = when {
+            waiting -> "Waiting for your answer"
+            !state?.status.isNullOrBlank() -> state.status
+            runningTool != null -> runningTool.detail?.let { "${runningTool.name}: $it" } ?: "Using ${runningTool.name}"
+            else -> "Working…"
+        }
+        // The status-bar chip of a Live Update has room for a word or two.
+        val chip = when {
+            waiting -> "Waiting"
+            runningTool != null -> runningTool.name.take(CHIP_LENGTH)
+            else -> "Working"
+        }
+        return base(CHANNEL_WORKING)
+            .setContentTitle(state?.title?.takeIf { it.isNotBlank() } ?: "Hermes is working")
+            .setContentText(text)
+            .setOngoing(true)
+            .setOnlyAlertOnce(true)
+            .setSilent(true)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+            // Android 16 Live Update: pinned to the top of the shade and the lock screen, with a chip
+            // in the status bar. Older versions ignore it and show a plain ongoing notification.
+            .setRequestPromotedOngoing(true)
+            .setShortCriticalText(chip)
+            .addAction(0, "Stop", action(NotificationActionReceiver.ACTION_STOP, "stop"))
+            .build()
+    }
+
+    fun postWorking(state: ChatState?) = post(null, WORKING_ID, working(state))
+
+    /** A question the agent is blocked on, answerable in place when it fits a notification. */
+    fun postRequest(title: String?, request: InputRequest) {
+        val builder = base(CHANNEL_REQUESTS)
+            .setCategory(NotificationCompat.CATEGORY_REMINDER)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setSubText(title)
+        when (request) {
+            is InputRequest.Approval -> {
+                val body = listOf(request.description, request.command).filter { it.isNotBlank() }.joinToString("\n\n")
+                builder.setContentTitle("Approve this command?")
+                    .setContentText(request.command.ifBlank { request.description })
+                    .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+                // "Always" is too big a decision for a notification; it stays in the app.
+                request.choices.filter { it != ApprovalChoice.Always }.forEach { choice ->
+                    builder.addAction(
+                        0,
+                        choice.label,
+                        action(NotificationActionReceiver.ACTION_APPROVE, request.id + choice.wire) {
+                            putExtra(NotificationActionReceiver.EXTRA_REQUEST_ID, request.id)
+                            putExtra(NotificationActionReceiver.EXTRA_CHOICE, choice.wire)
+                        },
+                    )
+                }
+            }
+            is InputRequest.Clarify -> {
+                val question = request.questions.singleOrNull()
+                builder.setContentTitle("Hermes has a question")
+                    .setContentText(question?.question ?: "${request.questions.size} questions")
+                    .setStyle(NotificationCompat.BigTextStyle().bigText(request.questions.joinToString("\n") { it.question }))
+                if (question != null && !request.batch && !question.multiSelect) {
+                    val input = RemoteInput.Builder(NotificationActionReceiver.KEY_TEXT)
+                        .setLabel("Your answer")
+                        .setChoices(question.choices.toTypedArray())
+                        .build()
+                    builder.addAction(
+                        NotificationCompat.Action.Builder(
+                            0,
+                            "Answer",
+                            action(NotificationActionReceiver.ACTION_CLARIFY, request.id, mutable = true) {
+                                putExtra(NotificationActionReceiver.EXTRA_REQUEST_ID, request.id)
+                            },
+                        ).addRemoteInput(input).setAllowGeneratedReplies(false).build(),
+                    )
+                }
+            }
+            is InputRequest.Secret -> builder
+                .setContentTitle(if (request.kind == InputRequest.Secret.Kind.Sudo) "Sudo password needed" else "Secret needed")
+                .setContentText(request.command ?: request.prompt)
+        }
+        post(request.id, REQUEST_ID, builder.build())
+    }
+
+    fun cancelRequest(id: String) = manager.cancel(id, REQUEST_ID)
+
+    /** A finished turn, with an inline Reply that sends the next prompt to the same chat. */
+    fun postReply(storedSessionId: String, title: String?, text: String, failed: Boolean) {
+        val preview = text.toPlainText().take(MAX_PREVIEW).ifBlank { if (failed) "The turn failed." else "Done." }
+        val input = RemoteInput.Builder(NotificationActionReceiver.KEY_TEXT).setLabel("Message Hermes").build()
+        val notification = base(CHANNEL_REPLIES)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setContentTitle(if (failed) "Turn failed" else title?.takeIf { it.isNotBlank() } ?: "Hermes replied")
+            .setContentText(preview)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(preview))
+            .addAction(
+                NotificationCompat.Action.Builder(
+                    0,
+                    "Reply",
+                    action(NotificationActionReceiver.ACTION_REPLY, storedSessionId, mutable = true) {
+                        putExtra(NotificationActionReceiver.EXTRA_SESSION_ID, storedSessionId)
+                    },
+                ).addRemoteInput(input).setAllowGeneratedReplies(true).build(),
+            )
+            .build()
+        post(storedSessionId, REPLY_ID, notification)
+    }
+
+    fun cancelReply(storedSessionId: String) = manager.cancel(storedSessionId, REPLY_ID)
+
+    /** Replaces an answered-from-the-shade notification when the answer couldn't be delivered. */
+    fun postFailure(tag: String?, id: Int, message: String) = post(
+        tag,
+        id,
+        base(CHANNEL_REQUESTS).setContentTitle("Couldn't send").setContentText(message).build(),
+    )
+
+    /** Everything except the ongoing notification, once the user is looking at the app. */
+    fun cancelAttention() {
+        manager.activeNotifications.filter { it.id != WORKING_ID }.forEach { manager.cancel(it.tag, it.id) }
+    }
+
+    private fun base(channel: String) = NotificationCompat.Builder(context, channel)
+        .setSmallIcon(R.drawable.ic_notification)
+        .setColor(ContextCompat.getColor(context, R.color.notification_accent))
+        .setContentIntent(openApp())
+        .setAutoCancel(true)
+
+    @SuppressLint("MissingPermission") // canPost checks it.
+    private fun post(tag: String?, id: Int, notification: Notification) {
+        if (canPost) manager.notify(tag, id, notification)
+    }
+
+    private fun openApp(): PendingIntent {
+        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)!!
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+        return PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
+    private fun action(name: String, key: String, mutable: Boolean = false, extras: Intent.() -> Unit = {}): PendingIntent {
+        val intent = Intent(context, NotificationActionReceiver::class.java).setAction(name).apply(extras)
+        val flags = PendingIntent.FLAG_UPDATE_CURRENT or if (mutable) PendingIntent.FLAG_MUTABLE else PendingIntent.FLAG_IMMUTABLE
+        return PendingIntent.getBroadcast(context, (name + key).hashCode(), intent, flags)
+    }
+
+    companion object {
+        const val WORKING_ID = 1
+        const val REPLY_ID = 2
+        const val REQUEST_ID = 3
+
+        private const val CHANNEL_WORKING = "working"
+        private const val CHANNEL_REQUESTS = "requests"
+        private const val CHANNEL_REPLIES = "replies"
+        private const val MAX_PREVIEW = 2_000
+        private const val CHIP_LENGTH = 12
+    }
+}
+
+private val ApprovalChoice.label: String
+    get() = when (this) {
+        ApprovalChoice.Once -> "Allow once"
+        ApprovalChoice.Session -> "Allow for chat"
+        ApprovalChoice.Always -> "Always allow"
+        ApprovalChoice.Deny -> "Deny"
+    }
+
+/** Markdown reads badly in the shade; keep the words, drop the markup. */
+internal fun String.toPlainText(): String = this
+    .replace(Regex("```[^\\n]*\\n?"), "")
+    .replace(Regex("(?m)^#{1,6}\\s+"), "")
+    .replace(Regex("(\\*\\*|__)(.+?)\\1"), "$2")
+    .replace(Regex("`([^`]+)`"), "$1")
+    .replace(Regex("!?\\[([^]]*)]\\([^)]*\\)"), "$1")
+    .replace(Regex("\\n{3,}"), "\n\n")
+    .trim()
