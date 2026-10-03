@@ -103,13 +103,13 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [x] Steer a running turn: a message sent mid-turn corrects it, the queue button holds it for the next turn, `/steer` injects a note (`prompt.submit` busy modes, `session.steer`)
 - [x] Token usage per turn (live turns) and per session with cost, context window and account limits (`session.usage`, `MessageCompletePayload.usage`, `GET /api/sessions/{id}`)
 - [x] Error banner and live status line (`error`, `status.update`, failed turns)
-- [ ] Notices and warnings (`notice`, `MessageCompletePayload.warning`)
+- [x] Notices and warnings (`notice`, `MessageCompletePayload.warning`)
 
 ### 5. Tool activity
 - [x] Tool rows in the reply: name, what it is doing, running spinner → done (`tool.start`, `tool.complete` summary)
 - [x] Expandable tool cards with full args and output, `tool.generating`
 - [x] Completion details: duration, error flag, output preview, diffs (`tool.complete`)
-- [ ] Output-risk warnings (`tool.output_risk`)
+- [x] Output-risk warnings (`tool.output_risk`)
 - [x] Todo list updates (`todo.updated`)
 
 ### 6. Interactive requests (server → client)
