@@ -386,7 +386,7 @@ private fun ColumnScope.Dock(
     dictation.error?.let { Banner(it, actionLabel = null, onAction = viewModel.voice::dismissDictationError) }
     AnimatedVisibility(visible = state.running && state.status != null) { StatusLine(state.status.orEmpty()) }
     AnimatedVisibility(visible = notice != null) { NoticeLine(notice.orEmpty()) }
-    TodoPanel(state.todos, hazeState)
+    TodoPanel(state.todos, live = state.todosLive, hazeState = hazeState)
 
     if (state.inputRequests.isNotEmpty()) {
         InputRequestPanel(state.inputRequests, connected, onAnswer = viewModel::answer)

@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -24,7 +25,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -40,7 +40,9 @@ import com.composables.icons.lucide.Circle
 import com.composables.icons.lucide.CircleCheck
 import com.composables.icons.lucide.CircleSlash
 import com.composables.icons.lucide.ListChecks
+import com.composables.icons.lucide.CircleDashed
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.X
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
@@ -68,23 +70,23 @@ import dev.hermeskotlin.designsystem.typography
 import kotlinx.coroutines.delay
 
 /**
- * The agent's plan above the composer, ticking off as it works. A finished plan stays a moment so the
- * last check lands, then leaves; tap the header to fold it to one line.
+ * The agent's plan above the composer. While its turn runs it's open and ticks off as the agent works;
+ * afterwards it folds to a "Last plan" line to look back at, or dismiss, until the agent plans again.
  */
 @Composable
-fun TodoPanel(todos: TodoList?, hazeState: HazeState) {
-    // A list seen finishing lingers briefly; one already finished when the chat opened stays hidden.
-    var sawActive by remember { mutableStateOf(false) }
-    var lingering by remember { mutableStateOf(false) }
-    LaunchedEffect(todos) {
-        if (todos?.active == true) sawActive = true
-        lingering = sawActive && todos != null && !todos.active
-        if (lingering) {
+fun TodoPanel(todos: TodoList?, live: Boolean, hazeState: HazeState) {
+    var dismissed by remember { mutableStateOf<TodoList?>(null) }
+    // Once a live plan finishes, let the last check land before it folds away.
+    var settling by remember { mutableStateOf(false) }
+    LaunchedEffect(live) {
+        if (live) {
+            settling = true
+        } else if (settling) {
             delay(FINISHED_LINGER_MS)
-            lingering = false
+            settling = false
         }
     }
-    val visible = todos != null && todos.items.isNotEmpty() && (todos.active || lingering)
+    val visible = todos != null && todos.items.isNotEmpty() && todos != dismissed
     // Kept through the exit animation, so the panel doesn't empty before it leaves.
     var shown by remember { mutableStateOf(todos) }
     if (visible) shown = todos
@@ -93,13 +95,16 @@ fun TodoPanel(todos: TodoList?, hazeState: HazeState) {
         enter = fadeIn() + expandVertically(expandFrom = Alignment.Bottom),
         exit = fadeOut() + shrinkVertically(shrinkTowards = Alignment.Bottom),
     ) {
-        shown?.let { Panel(it, hazeState) }
+        shown?.let { list ->
+            Panel(list, live = live || settling, hazeState, onDismiss = { dismissed = list })
+        }
     }
 }
 
 @Composable
-private fun Panel(todos: TodoList, hazeState: HazeState) {
-    var expanded by rememberSaveable { mutableStateOf(true) }
+private fun Panel(todos: TodoList, live: Boolean, hazeState: HazeState, onDismiss: () -> Unit) {
+    // Open while the agent works through it, folded once it's a past plan.
+    var expanded by remember(live) { mutableStateOf(live) }
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     val page = Theme[colors][background]
     val frosted = remember(page) {
@@ -125,10 +130,14 @@ private fun Panel(todos: TodoList, hazeState: HazeState) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             UnstyledIcon(Lucide.ListChecks, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(16.dp))
-            Text("Tasks ${todos.done}/${todos.total}", style = Theme[typography][label], color = Theme[colors][text])
+            Text(
+                "${if (live) "Tasks" else "Last plan"} ${todos.done}/${todos.total}",
+                style = Theme[typography][label],
+                color = if (live) Theme[colors][text] else Theme[colors][textSecondary],
+            )
             Box(Modifier.weight(1f)) {
                 // Folded, the step in hand still shows.
-                if (!expanded && current != null) {
+                if (!expanded && live && current != null) {
                     Text(
                         current.content,
                         style = Theme[typography][bodySmall],
@@ -144,20 +153,28 @@ private fun Panel(todos: TodoList, hazeState: HazeState) {
                 tint = Theme[colors][textTertiary],
                 modifier = Modifier.size(16.dp),
             )
+            if (!live) {
+                UnstyledIcon(
+                    Lucide.X,
+                    contentDescription = "Dismiss the plan",
+                    tint = Theme[colors][textTertiary],
+                    modifier = Modifier.clip(CircleShape).clickable(onClick = onDismiss).padding(2.dp).size(16.dp),
+                )
+            }
         }
         AnimatedVisibility(visible = expanded) {
             Column(
                 Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                todos.tree().forEach { (item, depth) -> TodoRow(item, depth) }
+                todos.tree().forEach { (item, depth) -> TodoRow(item, depth, live) }
             }
         }
     }
 }
 
 @Composable
-private fun TodoRow(item: TodoItem, depth: Int) {
+private fun TodoRow(item: TodoItem, depth: Int, live: Boolean) {
     Row(
         Modifier.fillMaxWidth().padding(start = (depth * 20).dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -165,7 +182,8 @@ private fun TodoRow(item: TodoItem, depth: Int) {
     ) {
         Box(Modifier.padding(top = 2.dp).size(16.dp), contentAlignment = Alignment.Center) {
             when (item.status) {
-                TodoStatus.InProgress -> Spinner(Modifier.size(13.dp))
+                // A past plan's step isn't still running, whatever it was marked.
+                TodoStatus.InProgress -> if (live) Spinner(Modifier.size(13.dp)) else StatusIcon(Lucide.CircleDashed, Theme[colors][textTertiary])
                 TodoStatus.Pending -> StatusIcon(Lucide.Circle, Theme[colors][textTertiary])
                 TodoStatus.Completed -> StatusIcon(Lucide.CircleCheck, Theme[colors][success])
                 TodoStatus.Cancelled -> StatusIcon(Lucide.CircleSlash, Theme[colors][textTertiary])
