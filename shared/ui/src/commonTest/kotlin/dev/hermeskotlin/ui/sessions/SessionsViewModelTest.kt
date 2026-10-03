@@ -27,6 +27,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -39,11 +40,15 @@ class SessionsViewModelTest {
     @BeforeTest fun setUp() = Dispatchers.setMain(dispatcher)
     @AfterTest fun tearDown() = Dispatchers.resetMain()
 
-    private fun viewModel(deleteStatus: HttpStatusCode = HttpStatusCode.OK, listStatus: HttpStatusCode = HttpStatusCode.OK): SessionsViewModel {
+    private fun viewModel(
+        deleteStatus: HttpStatusCode = HttpStatusCode.OK,
+        listStatus: HttpStatusCode = HttpStatusCode.OK,
+        total: Int = 2,
+    ): SessionsViewModel {
         val engine = MockEngine { request ->
             when {
                 request.url.encodedPath == "/api/sessions" -> respond(
-                    """{"sessions":[{"id":"a","title":"Alpha","pinned":true},{"id":"b","title":"Beta"}],"total":2}""",
+                    """{"sessions":[{"id":"a","title":"Alpha","pinned":true},{"id":"b","title":"Beta"}],"total":$total}""",
                     listStatus, json,
                 )
                 request.method == HttpMethod.Delete -> respond("""{"detail":"Store is busy"}""", deleteStatus, json)
@@ -67,6 +72,31 @@ class SessionsViewModelTest {
         val state = vm.awaitLoaded()
         assertEquals(listOf("a", "b"), state.sessions.map { it.id })
         assertEquals(false, state.canLoadMore)
+    }
+
+    @Test
+    fun aPageWithNothingNewStopsLoadingMore() = runTest(dispatcher) {
+        val vm = viewModel(total = 5)
+        vm.bind(gateway)
+        assertTrue(vm.awaitLoaded().canLoadMore)
+
+        vm.loadMore()
+
+        val state = vm.state.first { !it.loadingMore }
+        assertEquals(listOf("a", "b"), state.sessions.map { it.id })
+        assertFalse(state.canLoadMore)
+    }
+
+    @Test
+    fun aRefreshDuringLoadMoreClearsItsSpinner() = runTest(dispatcher) {
+        val vm = viewModel(total = 5)
+        vm.bind(gateway)
+        vm.awaitLoaded()
+
+        vm.loadMore()
+        vm.refresh()
+
+        assertFalse(vm.state.first { !it.refreshing }.loadingMore)
     }
 
     @Test

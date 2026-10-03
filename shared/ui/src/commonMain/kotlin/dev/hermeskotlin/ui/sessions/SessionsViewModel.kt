@@ -135,8 +135,10 @@ class SessionsViewModel(
                 when (result) {
                     is ApiResult.Success -> {
                         val known = state.sessions.mapTo(HashSet()) { it.id }
-                        val merged = state.sessions + result.value.sessions.filter { it.id !in known }
-                        state.copy(sessions = merged, loadingMore = false, canLoadMore = merged.size < result.value.total)
+                        val fresh = result.value.sessions.filter { it.id !in known }
+                        val merged = state.sessions + fresh
+                        // A page with nothing new means the server's total counts rows the list never returns.
+                        state.copy(sessions = merged, loadingMore = false, canLoadMore = fresh.isNotEmpty() && merged.size < result.value.total)
                     }
                     else -> state.copy(loadingMore = false, message = result.errorMessage, sessionExpired = result.isExpired)
                 }
@@ -198,8 +200,9 @@ class SessionsViewModel(
     private fun load(refresh: Boolean) {
         val url = gateway?.gatewayUrl ?: return
         val filter = _state.value.filter
+        // This may cancel a page fetch mid-flight, which would otherwise leave its spinner up for good.
         loadJob?.cancel()
-        _state.update { if (refresh) it.copy(refreshing = true) else it.copy(loading = it.sessions.isEmpty()) }
+        _state.update { (if (refresh) it.copy(refreshing = true) else it.copy(loading = it.sessions.isEmpty())).copy(loadingMore = false) }
         loadJob = viewModelScope.launch {
             // Keep however many rows are already showing so a background refetch doesn't truncate the list.
             val limit = _state.value.sessions.size.coerceIn(SessionsApi.PAGE_SIZE, 100)
