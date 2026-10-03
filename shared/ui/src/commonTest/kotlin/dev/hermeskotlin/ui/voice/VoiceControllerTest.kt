@@ -34,9 +34,10 @@ class VoiceControllerTest {
 
     private class FakeRecorder(private val heard: Boolean = true) : VoiceRecorder {
         var recordings = 0
-        override suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit): Recording {
+        override suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit, onSpeech: () -> Unit): Recording {
             recordings++
             onLevel(0.5f)
+            if (heard) onSpeech()
             return Recording(byteArrayOf(1, 2, 3), "audio/wav", heard)
         }
 

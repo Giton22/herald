@@ -129,6 +129,7 @@ import dev.hermeskotlin.ui.pet.PetSheet
 import dev.hermeskotlin.ui.pet.PetView
 import dev.hermeskotlin.ui.pet.rememberPetState
 import dev.hermeskotlin.ui.voice.DictationState
+import kotlin.math.sqrt
 import dev.hermeskotlin.ui.voice.VoiceChatState
 import dev.hermeskotlin.ui.voice.VoicePhase
 import dev.hermeskotlin.ui.voice.rememberMicrophonePermission
@@ -1087,7 +1088,7 @@ private fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onSkip: () -
         }
     }
     val label = when (state.phase) {
-        VoicePhase.Listening -> "Listening…"
+        VoicePhase.Listening -> if (state.hearing) "Hearing you…" else "Listening…"
         VoicePhase.Transcribing -> "Catching that…"
         VoicePhase.Thinking -> "Thinking…"
         VoicePhase.Speaking -> "Speaking…"
@@ -1109,7 +1110,8 @@ private fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onSkip: () -
         Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
             when (state.phase) {
                 VoicePhase.Listening -> {
-                    val size = 16.dp + 24.dp * state.level.coerceIn(0f, 1f)
+                    // Square root, so a phone mic's quiet range still visibly moves the circle.
+                    val size = 16.dp + 24.dp * sqrt((state.level * 4f).coerceIn(0f, 1f))
                     Box(Modifier.size(size).clip(CircleShape).background(Theme[colors][accent]))
                 }
                 VoicePhase.Speaking -> UnstyledIcon(Lucide.AudioLines, contentDescription = null, tint = Theme[colors][accent], modifier = Modifier.size(24.dp))

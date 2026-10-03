@@ -34,6 +34,8 @@ data class VoiceChatState(
     val phase: VoicePhase = VoicePhase.Off,
     /** Live microphone level while listening, 0..1. */
     val level: Float = 0f,
+    /** Speech has been picked up in this turn, so a pause will send it. */
+    val hearing: Boolean = false,
     /** The last thing that went wrong; the conversation carries on where it can. */
     val error: String? = null,
 )
@@ -112,9 +114,13 @@ class VoiceController(
 
     /** One turn of the conversation; false when it should end. */
     private suspend fun converseOnce(session: ChatSession, gateway: GatewayUrl, profile: String?): Boolean {
-        _chat.update { it.copy(phase = VoicePhase.Listening, level = 0f) }
+        _chat.update { it.copy(phase = VoicePhase.Listening, level = 0f, hearing = false) }
         val recording = try {
-            recorder.record(VoiceActivity()) { level -> _chat.update { it.copy(level = level) } }
+            recorder.record(
+                VoiceActivity(),
+                onLevel = { level -> _chat.update { it.copy(level = level) } },
+                onSpeech = { _chat.update { it.copy(hearing = true) } },
+            )
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -122,7 +128,7 @@ class VoiceController(
             return false
         }
         if (!recording.heardSpeech) return true
-        _chat.update { it.copy(phase = VoicePhase.Transcribing, level = 0f) }
+        _chat.update { it.copy(phase = VoicePhase.Transcribing, level = 0f, hearing = false) }
         val transcript = when (val result = audio.transcribe(gateway, recording.bytes, recording.mimeType, profile)) {
             is ApiResult.Success -> result.value
             else -> {
@@ -193,9 +199,10 @@ class VoiceController(
         dictationJob = scope.launch {
             try {
                 // Pauses to think are fine here; a long quiet spell still ends it.
-                val recording = recorder.record(VoiceActivity(silenceMs = DICTATION_SILENCE_MS, idleMs = DICTATION_IDLE_MS, maxMs = DICTATION_MAX_MS)) { level ->
-                    _dictation.update { it.copy(level = level) }
-                }
+                val recording = recorder.record(
+                    VoiceActivity(silenceMs = DICTATION_SILENCE_MS, idleMs = DICTATION_IDLE_MS, maxMs = DICTATION_MAX_MS),
+                    onLevel = { level -> _dictation.update { it.copy(level = level) } },
+                )
                 if (!recording.heardSpeech) {
                     _dictation.value = DictationState(error = "Didn't catch anything.")
                     return@launch
