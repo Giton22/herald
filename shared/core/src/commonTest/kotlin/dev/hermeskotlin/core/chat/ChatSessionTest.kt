@@ -33,7 +33,7 @@ class ChatSessionTest {
     private val url = GatewayUrl.parse("https://hermes.example.ts.net")
     private val json = headersOf(HttpHeaders.ContentType, "application/json")
 
-    private val history = """{"session_id":"stored-1","messages":[
+    private var history = """{"session_id":"stored-1","messages":[
         {"id":1,"role":"user","content":"hello"},{"id":2,"role":"assistant","content":"Hi! What next?"}]}"""
 
     private fun client() = createHttpClient(
@@ -57,6 +57,11 @@ class ChatSessionTest {
                 transport.push("""{"jsonrpc":"2.0","id":$id,"result":${results[method] ?: "{}"}}""")
             }
         }
+    }
+
+    private fun ChatMessage.textOf() = when (this) {
+        is ChatMessage.User -> text
+        is ChatMessage.Assistant -> text
     }
 
     private fun JsonObject.isCall(method: String) = this["method"]?.jsonPrimitive?.contentOrNull == method
@@ -93,10 +98,39 @@ class ChatSessionTest {
         transport.push(event("message.delta", "someone-else", """{"text":"not ours"}"""))
         transport.push(event("message.start", "rt1"))
         transport.push(event("message.delta", "rt1", """{"text":"Streaming"}"""))
+        // No prompt of ours started this turn, so the stored rows replace the live copy when it ends.
+        history = """{"session_id":"stored-1","messages":[
+            {"id":1,"role":"user","content":"hello"},{"id":2,"role":"assistant","content":"Hi! What next?"},
+            {"id":3,"role":"user","content":"go on"},{"id":4,"role":"assistant","content":"Streaming"}]}"""
         transport.push(event("message.complete", "rt1", """{"text":"Streaming","status":"complete"}"""))
 
-        val done = chat.state.first { s -> s.messages.size == 3 && !s.running }
+        val done = chat.state.first { s -> !s.running && (s.messages.last() as? ChatMessage.Assistant)?.key == "row-4" }
         assertEquals("Streaming", (done.messages.last() as ChatMessage.Assistant).text)
+    }
+
+    @Test
+    fun aTurnStartedByAnotherClientPullsItsPromptFromTheTranscript() = runTest {
+        val (connection, transport) = setup(backgroundScope, mapOf("session.resume" to """{"session_id":"rt1","running":false}"""))
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+
+        // Desktop sends "nice": the gateway stores it, but only the reply streams to us.
+        history = """{"session_id":"stored-1","messages":[
+            {"id":1,"role":"user","content":"hello"},{"id":2,"role":"assistant","content":"Hi! What next?"},
+            {"id":3,"role":"user","content":"nice"}]}"""
+        transport.push(event("message.start", "rt1"))
+        transport.push(event("message.delta", "rt1", """{"text":"Glad"}"""))
+
+        val live = chat.state.first { s -> s.messages.any { it is ChatMessage.User && it.text == "nice" } }
+        val reply = assertIs<ChatMessage.Assistant>(live.messages.last())
+        assertTrue(reply.streaming)
+
+        history = history.replace("""{"id":3,"role":"user","content":"nice"}]""", """{"id":3,"role":"user","content":"nice"},{"id":4,"role":"assistant","content":"Glad you like it"}]""")
+        transport.push(event("message.complete", "rt1", """{"text":"Glad you like it","status":"complete"}"""))
+
+        val done = chat.state.first { s -> !s.running && (s.messages.last() as? ChatMessage.Assistant)?.key == "row-4" }
+        assertEquals(listOf("hello", "Hi! What next?", "nice", "Glad you like it"), done.messages.map { it.textOf() })
     }
 
     @Test

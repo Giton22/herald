@@ -45,6 +45,14 @@ class ChatSession(
     /** The stored row exists only after the first accepted prompt; until then a reconnect re-creates. */
     private var rowExists = initialStoredId != null
     private val attachMutex = Mutex()
+
+    /**
+     * Prompts this client submitted whose turn hasn't started yet. A `message.start` beyond them is a
+     * turn another client (Desktop, CLI, a messaging platform) started: the gateway sends no event with
+     * that prompt, so the transcript is refetched to show it.
+     */
+    private var ownTurnsPending = 0
+    private var foreignTurn = false
     private var jobs: List<Job> = emptyList()
 
     fun start() {
@@ -69,6 +77,8 @@ class ChatSession(
         _state.update {
             it.copy(messages = it.messages + ChatMessage.User(key, trimmed, pending = true), keySeq = it.keySeq + 1, error = null)
         }
+        // Counted before submitting: the turn's message.start can arrive before the prompt.submit reply.
+        ownTurnsPending++
         return try {
             val client = connectedClient() ?: throw RpcException(0, "Not connected to the gateway. Your message will need resending.")
             val runtimeId = ensureAttached(client)
@@ -81,6 +91,8 @@ class ChatSession(
             ) as? JsonObject
             rowExists = true
             val queued = result.string("status") == "queued"
+            // Steering or redirecting folds the text into the running turn instead of starting one.
+            if (result.string("status") !in TURN_STARTING_STATUSES) ownTurnsPending = (ownTurnsPending - 1).coerceAtLeast(0)
             _state.update { state ->
                 state.copy(
                     running = true,
@@ -91,6 +103,7 @@ class ChatSession(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            ownTurnsPending = (ownTurnsPending - 1).coerceAtLeast(0)
             _state.update { state ->
                 state.copy(
                     error = e.message ?: "Couldn't send the message.",
@@ -140,7 +153,21 @@ class ChatSession(
     private suspend fun followEvents() {
         connection.events.collect { event ->
             val runtimeId = _state.value.runtimeSessionId ?: return@collect
-            if (event.sessionId == runtimeId) _state.update { it.reduce(event) }
+            if (event.sessionId != runtimeId) return@collect
+            _state.update { it.reduce(event) }
+            when (event.type) {
+                "message.start" -> if (ownTurnsPending > 0) {
+                    ownTurnsPending--
+                } else {
+                    foreignTurn = true
+                    scope.launch { loadHistory() }
+                }
+                // Swap the live copy for the stored rows, which now hold the other client's prompt for sure.
+                "message.complete" -> if (foreignTurn) {
+                    foreignTurn = false
+                    scope.launch { loadHistory() }
+                }
+            }
         }
     }
 
@@ -185,6 +212,8 @@ class ChatSession(
         ) as? JsonObject ?: error("Empty session.resume reply")
         val runtimeId = result.string("session_id") ?: error("session.resume returned no session_id")
         val running = result.boolean("running") == true
+        // A turn already running when we attach is someone else's; reconcile with the stored rows when it ends.
+        if (running && ownTurnsPending == 0) foreignTurn = true
         val inflight = result["inflight"] as? JsonObject
         _state.update { state ->
             var messages = state.messages
@@ -226,6 +255,9 @@ class ChatSession(
     private companion object {
         /** Width the agent formats terminal-ish output for; a phone is narrow. */
         const val TERMINAL_COLUMNS = 80
+
+        /** `prompt.submit` statuses that start (or queue) a turn of their own. */
+        val TURN_STARTING_STATUSES = setOf("streaming", "queued")
     }
 }
 
