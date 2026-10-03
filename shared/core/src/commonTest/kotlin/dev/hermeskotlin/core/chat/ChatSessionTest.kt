@@ -444,6 +444,35 @@ class ChatSessionTest {
     }
 
     @Test
+    fun aLostResendOfTheLastPromptIsNotTakenForTheEarlierOne() = runTest {
+        // Read on every call, so the gateway can stop answering partway through.
+        val results = mutableMapOf(
+            "session.resume" to """{"session_id":"rt1","running":false}""",
+            "prompt.submit" to """{"status":"streaming"}""",
+        )
+        val (connection, transport) = setup(backgroundScope, results)
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+
+        // An own turn: its bubble keeps its local key, as the transcript isn't reloaded after it.
+        assertTrue(chat.send("continue"))
+        transport.push(event("message.start", "rt1"))
+        transport.push(event("message.complete", "rt1", """{"text":"Done.","status":"complete"}"""))
+        chat.state.first { !it.running }
+        history = history.replace("]}", """,{"id":3,"role":"user","content":"continue"},{"id":4,"role":"assistant","content":"Done."}]}""")
+
+        // The same text again; it never reaches the gateway, so the transcript is unchanged.
+        results["prompt.submit"] = SILENT
+        val sending = backgroundScope.async { chat.send("continue") }
+        transport.sent.first { sent -> sent.count { it.isCall("prompt.submit") } == 2 }
+        transport.serverClose(1006)
+
+        assertFalse(sending.await(), "the resend never arrived, but the earlier \"continue\" was taken for it")
+        assertTrue(chat.state.value.error!!.contains("composer"))
+    }
+
+    @Test
     fun aDropTheTranscriptCantSettleKeepsAMarkedBubble() = runTest {
         // A new chat without a stored id yet: there's no transcript to look in.
         val (chat, transport) = newChat(backgroundScope, mapOf("prompt.submit" to SILENT))

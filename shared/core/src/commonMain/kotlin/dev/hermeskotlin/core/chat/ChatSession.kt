@@ -135,7 +135,9 @@ class ChatSession(
         // Only a prompt that starts a turn is written to the transcript at once; a correction or a
         // queued one isn't, so for those the transcript can't say whether it arrived.
         val startsTurn = !queue && !_state.value.running
-        val shownBefore = _state.value.messages.mapTo(HashSet()) { it.key }
+        // The prompts shown, which the transcript has too; not countable when the transcript failed to load.
+        val promptsBefore = _state.value.takeIf { it.historyError == null }
+            ?.messages?.count { it is ChatMessage.User && !it.pending && it.check == null }
         var submitted = false
         return try {
             val client = connectedClient() ?: throw RpcException(0, "Not connected to the gateway. Your message will need resending.")
@@ -172,7 +174,7 @@ class ChatSession(
             ownTurnsPending = (ownTurnsPending - 1).coerceAtLeast(0)
             // An error reply is the gateway turning it down; anything else after it went out is no verdict.
             if (submitted && e !is RpcException) {
-                val arrived = if (startsTurn) findInTranscript(visible, key, shownBefore) else null
+                val arrived = if (startsTurn) findInTranscript(visible, key, promptsBefore) else null
                 return settleUnanswered(key, arrived) { detach(uploadClient, uploadRuntimeId, queuedImages) }
             }
             detach(uploadClient, uploadRuntimeId, queuedImages)
@@ -219,12 +221,14 @@ class ChatSession(
     }
 
     /**
-     * Whether the transcript's latest prompt is [visible] and new since the send ([shown] were the rows
-     * before it), while bubble [key] says it's being checked. The gateway writes the prompt as the turn
-     * starts, so a few looks a moment apart cover a slow start. Null when the transcript couldn't be read.
+     * Whether the transcript has a prompt more than the [before] shown ahead of the send, the latest being
+     * [visible], while bubble [key] says it's being checked. Counted, not matched by key: an own prompt's
+     * bubble keeps its local key, so its stored row always looks new. The gateway writes the prompt as the
+     * turn starts, so a few looks a moment apart cover a slow start. Null when the transcript couldn't be read.
      */
-    private suspend fun findInTranscript(visible: String, key: String, shown: Set<String>): Boolean? {
+    private suspend fun findInTranscript(visible: String, key: String, before: Int?): Boolean? {
         _state.update { it.copy(messages = it.messages.updateUser(key) { u -> u.copy(pending = false, check = SendCheck.Checking) }) }
+        before ?: return null
         val id = _state.value.storedSessionId ?: return null
         var read = false
         repeat(DELIVERY_LOOKS) { look ->
@@ -232,8 +236,8 @@ class ChatSession(
             when (val result = sessions.messages(gateway, id, profile = profile)) {
                 is ApiResult.Success -> {
                     read = true
-                    val latest = historyToMessages(result.value.messages).lastOrNull { it is ChatMessage.User } as ChatMessage.User?
-                    if (latest != null && latest.key !in shown && latest.text.contains(visible)) return true
+                    val prompts = historyToMessages(result.value.messages).filterIsInstance<ChatMessage.User>()
+                    if (prompts.size > before && prompts.last().text.contains(visible)) return true
                 }
                 // A new chat's stored row only appears with its first prompt.
                 is ApiResult.Failed -> if (result.status == 404 && !rowExists) read = true
