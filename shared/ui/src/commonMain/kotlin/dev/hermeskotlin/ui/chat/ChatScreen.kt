@@ -133,6 +133,7 @@ import dev.hermeskotlin.core.slash.SlashKind
 import dev.hermeskotlin.core.slash.SlashSuggestion
 import dev.hermeskotlin.designsystem.code
 import dev.hermeskotlin.ui.journey.JourneySheet
+import dev.hermeskotlin.core.pet.PetSprite
 import dev.hermeskotlin.ui.pet.PetSheet
 import dev.hermeskotlin.ui.pet.PetView
 import dev.hermeskotlin.ui.pet.rememberPetState
@@ -242,83 +243,33 @@ fun ChatScreen(
         }
     }
 
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Theme[colors][background])
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
-        contentAlignment = Alignment.TopCenter,
-    ) {
-        Column(Modifier.widthIn(max = 760.dp).fillMaxSize().imePadding()) {
-            TopBar(
-                title = state.title?.takeIf { it.isNotBlank() } ?: target.title ?: "New chat",
-                subtitle = when {
-                    !connected -> "Offline · reconnecting"
-                    state.attachment is Attachment.Attaching -> "Opening…"
-                    else -> null
-                },
-                onOpenSidebar = onOpenSidebar,
-                // Already on an untouched new chat: nothing to start over from.
-                onNewChat = onNewChat.takeIf { target.storedSessionId != null || state.messages.isNotEmpty() },
-                onOpenMenu = onOpenMenu,
-            )
-            // The composer floats over the conversation, which scrolls on beneath it; its height pads the list.
-            var dockHeight by remember { mutableIntStateOf(0) }
-            val dockInset = with(LocalDensity.current) { dockHeight.toDp() }
-            // What scrolls under the composer is captured here and frosted behind it.
-            val hazeState = rememberHazeState()
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
-                    if (state.historyLoaded && state.messages.isNotEmpty()) {
-                        CompositionLocalProvider(
-                            LocalMediaLoader provides viewModel::loadMedia,
-                            LocalOpenImage provides { viewing = it },
-                            LocalNotice provides { notice = it },
-                            LocalSubagents provides SubagentContext(state.subagents, viewModel::stopSubagent),
-                        ) {
-                            Messages(state.messages, state.thinkingFrame, bottomInset = dockInset)
-                        }
-                    } else Box(Modifier.fillMaxSize().padding(bottom = dockInset)) {
-                        when {
-                            !state.historyLoaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
-                            state.historyError != null ->
-                                EmptyState(Lucide.CloudOff, "Couldn't load the conversation", state.historyError.orEmpty()) {
-                                    Button("Try again", onClick = viewModel::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
-                                }
-                            else -> Greeting()
-                        }
-                    }
-                }
-                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { dockHeight = it.height }) {
-                    Dock(
-                        hazeState = hazeState,
-                        viewModel = viewModel,
-                        target = target,
-                        state = state,
-                        picker = picker,
-                        connected = connected,
-                        attachments = attachments,
-                        attachmentError = attachmentError,
-                        notice = notice,
-                        onOpenModels = { modelsOpen = true },
-                        onAttach = { attachOpen = true },
-                        onDictate = toggleDictation,
-                        onVoiceChat = startVoiceChat,
-                    )
-                }
-                // The pet sits on the composer's top edge, over the conversation rather than in the dock's height.
-                val sprite = viewModel.pets.sprite.collectAsStateWithLifecycle().value
-                if (sprite != null && LocalAppSettings.current.showPet && state.inputRequests.isEmpty()) {
-                    PetView(
-                        sprite = sprite,
-                        state = rememberPetState(state),
-                        onClick = { petsOpen = true },
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 28.dp, bottom = (dockInset - 6.dp).coerceAtLeast(0.dp)),
-                    )
-                }
-            }
-        }
-    }
+    ChatView(
+        title = state.title?.takeIf { it.isNotBlank() } ?: target.title ?: "New chat",
+        state = state,
+        picker = picker,
+        connected = connected,
+        attachments = attachments,
+        attachmentError = attachmentError,
+        voiceChat = viewModel.voice.chat.collectAsStateWithLifecycle().value,
+        dictation = viewModel.voice.dictation.collectAsStateWithLifecycle().value,
+        suggestions = viewModel.suggestions.collectAsStateWithLifecycle().value,
+        sprite = viewModel.pets.sprite.collectAsStateWithLifecycle().value,
+        // Re-rolled per conversation, kept while a new chat gets its stored id.
+        placeholder = remember(target) { (if (target.storedSessionId == null) NEW_CHAT_PROMPTS else FOLLOW_UP_PROMPTS).random() },
+        notice = notice,
+        actions = viewModel,
+        onOpenSidebar = onOpenSidebar,
+        // Already on an untouched new chat: nothing to start over from.
+        onNewChat = onNewChat.takeIf { target.storedSessionId != null || state.messages.isNotEmpty() },
+        onOpenMenu = onOpenMenu,
+        onOpenModels = { modelsOpen = true },
+        onAttach = { attachOpen = true },
+        onDictate = toggleDictation,
+        onVoiceChat = startVoiceChat,
+        onOpenPets = { petsOpen = true },
+        onViewImage = { viewing = it },
+        onNotice = { notice = it },
+    )
 
     AttachSheet(visible = attachOpen, onDismiss = { attachOpen = false }, picker = attachmentPicker)
     PetSheet(
@@ -364,60 +315,167 @@ fun ChatScreen(
     )
 }
 
-/** What floats at the bottom of the chat: banners, the live status, and the composer or the agent's question. */
+/**
+ * The chat as it looks: top bar, conversation, and the dock with the composer or the agent's question.
+ * Stateless, so previews can draw it from sample data; [ChatScreen] feeds it the live chat.
+ */
 @Composable
-private fun ColumnScope.Dock(
-    hazeState: HazeState,
-    viewModel: ChatViewModel,
-    target: ChatTarget,
+internal fun ChatView(
+    title: String,
     state: ChatState,
     picker: ModelPickerState,
     connected: Boolean,
     attachments: List<OutgoingAttachment>,
     attachmentError: String?,
+    voiceChat: VoiceChatState,
+    dictation: DictationState,
+    suggestions: List<SlashSuggestion>,
+    sprite: PetSprite?,
+    placeholder: String,
+    notice: String?,
+    actions: ChatActions,
+    onOpenSidebar: () -> Unit,
+    onNewChat: (() -> Unit)?,
+    onOpenMenu: (() -> Unit)?,
+    onOpenModels: () -> Unit,
+    onAttach: () -> Unit,
+    onDictate: () -> Unit,
+    onVoiceChat: () -> Unit,
+    onOpenPets: () -> Unit,
+    onViewImage: (ViewerImage) -> Unit,
+    onNotice: (String) -> Unit,
+) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Theme[colors][background])
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
+        contentAlignment = Alignment.TopCenter,
+    ) {
+        Column(Modifier.widthIn(max = 760.dp).fillMaxSize().imePadding()) {
+            TopBar(
+                title = title,
+                subtitle = when {
+                    !connected -> "Offline · reconnecting"
+                    state.attachment is Attachment.Attaching -> "Opening…"
+                    else -> null
+                },
+                onOpenSidebar = onOpenSidebar,
+                onNewChat = onNewChat,
+                onOpenMenu = onOpenMenu,
+            )
+            // The composer floats over the conversation, which scrolls on beneath it; its height pads the list.
+            var dockHeight by remember { mutableIntStateOf(0) }
+            val dockInset = with(LocalDensity.current) { dockHeight.toDp() }
+            // What scrolls under the composer is captured here and frosted behind it.
+            val hazeState = rememberHazeState()
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
+                    if (state.historyLoaded && state.messages.isNotEmpty()) {
+                        CompositionLocalProvider(
+                            LocalMediaLoader provides actions::loadMedia,
+                            LocalOpenImage provides onViewImage,
+                            LocalNotice provides onNotice,
+                            LocalSubagents provides SubagentContext(state.subagents, actions::stopSubagent),
+                        ) {
+                            Messages(state.messages, state.thinkingFrame, bottomInset = dockInset)
+                        }
+                    } else Box(Modifier.fillMaxSize().padding(bottom = dockInset)) {
+                        when {
+                            !state.historyLoaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
+                            state.historyError != null ->
+                                EmptyState(Lucide.CloudOff, "Couldn't load the conversation", state.historyError.orEmpty()) {
+                                    Button("Try again", onClick = actions::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+                                }
+                            else -> Greeting()
+                        }
+                    }
+                }
+                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { dockHeight = it.height }) {
+                    Dock(
+                        hazeState = hazeState,
+                        actions = actions,
+                        placeholder = placeholder,
+                        state = state,
+                        picker = picker,
+                        connected = connected,
+                        attachments = attachments,
+                        attachmentError = attachmentError,
+                        voiceChat = voiceChat,
+                        dictation = dictation,
+                        suggestions = suggestions,
+                        notice = notice,
+                        onOpenModels = onOpenModels,
+                        onAttach = onAttach,
+                        onDictate = onDictate,
+                        onVoiceChat = onVoiceChat,
+                    )
+                }
+                // The pet sits on the composer's top edge, over the conversation rather than in the dock's height.
+                if (sprite != null && LocalAppSettings.current.showPet && state.inputRequests.isEmpty()) {
+                    PetView(
+                        sprite = sprite,
+                        state = rememberPetState(state),
+                        onClick = onOpenPets,
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 28.dp, bottom = (dockInset - 6.dp).coerceAtLeast(0.dp)),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** What floats at the bottom of the chat: banners, the live status, and the composer or the agent's question. */
+@Composable
+private fun ColumnScope.Dock(
+    hazeState: HazeState,
+    actions: ChatActions,
+    placeholder: String,
+    state: ChatState,
+    picker: ModelPickerState,
+    connected: Boolean,
+    attachments: List<OutgoingAttachment>,
+    attachmentError: String?,
+    voiceChat: VoiceChatState,
+    dictation: DictationState,
+    suggestions: List<SlashSuggestion>,
     notice: String?,
     onOpenModels: () -> Unit,
     onAttach: () -> Unit,
     onDictate: () -> Unit,
     onVoiceChat: () -> Unit,
 ) {
-    val voiceChat = viewModel.voice.chat.collectAsStateWithLifecycle().value
-    val dictation = viewModel.voice.dictation.collectAsStateWithLifecycle().value
     (state.attachment as? Attachment.Failed)?.let {
-        Banner(it.message, actionLabel = "Retry", onAction = viewModel::retry)
+        Banner(it.message, actionLabel = "Retry", onAction = actions::retry)
     }
-    state.error?.let { Banner(it, actionLabel = null, onAction = viewModel::dismissError) }
-    attachmentError?.let { Banner(it, actionLabel = null, onAction = viewModel::dismissAttachmentError) }
-    voiceChat.error?.let { Banner(it, actionLabel = null, onAction = viewModel.voice::dismissChatError) }
-    dictation.error?.let { Banner(it, actionLabel = null, onAction = viewModel.voice::dismissDictationError) }
+    state.error?.let { Banner(it, actionLabel = null, onAction = actions::dismissError) }
+    attachmentError?.let { Banner(it, actionLabel = null, onAction = actions::dismissAttachmentError) }
+    voiceChat.error?.let { Banner(it, actionLabel = null, onAction = actions::dismissVoiceChatError) }
+    dictation.error?.let { Banner(it, actionLabel = null, onAction = actions::dismissDictationError) }
     AnimatedVisibility(visible = state.running && state.status != null) { StatusLine(state.status.orEmpty()) }
     AnimatedVisibility(visible = notice != null) { NoticeLine(notice.orEmpty()) }
     TodoPanel(state.todos, live = state.todosLive, hazeState = hazeState)
 
     if (state.inputRequests.isNotEmpty()) {
-        InputRequestPanel(state.inputRequests, connected, onAnswer = viewModel::answer)
+        InputRequestPanel(state.inputRequests, connected, onAnswer = actions::answer)
     } else if (voiceChat.phase != VoicePhase.Off) {
         VoicePanel(
             hazeState = hazeState,
             state = voiceChat,
-            onSkip = viewModel.voice::skipSpeech,
-            onEnd = viewModel.voice::stopChat,
+            onSkip = actions::skipSpeech,
+            onEnd = actions::stopVoiceChat,
         )
     } else {
-        val suggestions = viewModel.suggestions.collectAsStateWithLifecycle().value
         AnimatedVisibility(visible = suggestions.isNotEmpty() && connected, enter = fadeIn(), exit = fadeOut()) {
             // Kept through the fade-out, so the list doesn't empty before it leaves.
             var shown by remember { mutableStateOf(suggestions) }
             if (suggestions.isNotEmpty()) shown = suggestions
-            SlashSuggestions(shown, hazeState, onPick = viewModel::pickSuggestion)
+            SlashSuggestions(shown, hazeState, onPick = actions::pickSuggestion)
         }
         Composer(
             hazeState = hazeState,
-            viewModel = viewModel,
-            // Re-rolled per conversation, kept while a new chat gets its stored id.
-            placeholder = remember(target) {
-                (if (target.storedSessionId == null) NEW_CHAT_PROMPTS else FOLLOW_UP_PROMPTS).random()
-            },
+            actions = actions,
+            placeholder = placeholder,
             state = state,
             picker = picker,
             connected = connected,
@@ -918,7 +976,7 @@ private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit) 
 @Composable
 private fun Composer(
     hazeState: HazeState,
-    viewModel: ChatViewModel,
+    actions: ChatActions,
     placeholder: String,
     state: ChatState,
     picker: ModelPickerState,
@@ -931,7 +989,7 @@ private fun Composer(
     onVoiceChat: () -> Unit,
 ) {
     // Attachments alone are sendable: the gateway gets Desktop's image prompt or the file references.
-    val hasText = viewModel.composer.text.isNotBlank() || attachments.isNotEmpty()
+    val hasText = actions.composer.text.isNotBlank() || attachments.isNotEmpty()
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     val page = Theme[colors][background]
     val frosted = remember(page) {
@@ -960,9 +1018,9 @@ private fun Composer(
             .onFocusChanged { focused = it.hasFocus }
             .padding(start = 4.dp, end = 6.dp, top = if (attachments.isEmpty()) 14.dp else 8.dp, bottom = 6.dp),
     ) {
-        if (attachments.isNotEmpty()) ComposerTray(attachments, onRemove = viewModel::removeAttachment)
+        if (attachments.isNotEmpty()) ComposerTray(attachments, onRemove = actions::removeAttachment)
         UnstyledTextField(
-            state = viewModel.composer,
+            state = actions.composer,
             textStyle = Theme[typography][body],
             textColor = Theme[colors][textColor],
             cursorBrush = SolidColor(Theme[colors][accent]),
@@ -996,11 +1054,11 @@ private fun Composer(
             DictationButton(dictation, onClick = onDictate, enabled = connected)
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { ModelPill(state, picker, onClick = onOpenModels) }
             // Mid-turn, send corrects the running turn; this holds the message for the next one instead.
-            if (state.running && hasText && !SlashCommand.looksLikeCommand(viewModel.composer.text.toString())) {
+            if (state.running && hasText && !SlashCommand.looksLikeCommand(actions.composer.text.toString())) {
                 ComposerButton(
                     icon = Lucide.ListEnd,
                     contentDescription = "Send after this turn",
-                    onClick = { viewModel.send(queue = true) },
+                    onClick = { actions.send(queue = true) },
                     enabled = connected,
                 )
             }
@@ -1014,9 +1072,9 @@ private fun Composer(
                     else -> SendIcon.Send
                 },
                 onClick = when {
-                    stop -> viewModel::interrupt
+                    stop -> actions::interrupt
                     voice -> onVoiceChat
-                    else -> { { viewModel.send() } }
+                    else -> { { actions.send() } }
                 },
                 enabled = connected && (stop || hasText || voice),
             )

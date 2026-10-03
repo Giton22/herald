@@ -129,7 +129,7 @@ class ChatViewModel(
     recorder: VoiceRecorder,
     player: SpeechPlayer,
     appScope: CoroutineScope,
-) : ViewModel() {
+) : ViewModel(), ChatActions {
 
     /** Dictation and voice chat for the open chat. */
     val voice = VoiceController(audioApi, recorder, player, viewModelScope, appScope)
@@ -143,7 +143,7 @@ class ChatViewModel(
     /** Tokens and cost of the open chat. */
     val usage = UsageController(sessions, viewModelScope)
 
-    val composer = TextFieldState()
+    override val composer = TextFieldState()
     val connectionState: StateFlow<ConnectionState> = connection.state
 
     private var target: ChatTarget? = null
@@ -304,7 +304,7 @@ class ChatViewModel(
      * `MEDIA:` in a reply), a web URL or a `data:` URL. Cached per source; null when it can't be had.
      */
     @OptIn(ExperimentalEncodingApi::class)
-    suspend fun loadMedia(source: String): ByteArray? {
+    override suspend fun loadMedia(source: String): ByteArray? {
         mediaCache[source]?.let { return it }
         val result = when {
             source.startsWith("data:") -> runCatching { Base64.decode(source.substringAfter("base64,")) }.getOrNull()
@@ -326,14 +326,14 @@ class ChatViewModel(
         _attachments.update { it + picked.take(room.coerceAtLeast(0)) }
     }
 
-    fun removeAttachment(id: String) = _attachments.update { tray -> tray.filterNot { it.id == id } }
+    override fun removeAttachment(id: String) = _attachments.update { tray -> tray.filterNot { it.id == id } }
 
     fun showAttachmentError(message: String) = _attachmentError.update { message }
 
-    fun dismissAttachmentError() = _attachmentError.update { null }
+    override fun dismissAttachmentError() = _attachmentError.update { null }
 
     /** Puts a picked row in the composer: a command gets a space for its argument, an option is the whole line. */
-    fun pickSuggestion(suggestion: SlashSuggestion) {
+    override fun pickSuggestion(suggestion: SlashSuggestion) {
         composer.setTextAndPlaceCursorAtEnd(if (suggestion.kind == SlashKind.Option) suggestion.text else "${suggestion.text} ")
     }
 
@@ -517,7 +517,7 @@ class ChatViewModel(
      * Sends what's in the composer. Mid-turn it corrects the running turn, unless [queue] holds it for
      * the next one.
      */
-    fun send(queue: Boolean = false) {
+    override fun send(queue: Boolean) {
         val chat = session.value ?: return
         val text = composer.text.toString()
         val attachments = _attachments.value
@@ -541,24 +541,36 @@ class ChatViewModel(
         }
     }
 
-    fun interrupt() {
+    override fun interrupt() {
         val chat = session.value ?: return
         viewModelScope.launch { chat.interrupt() }
     }
 
-    fun stopSubagent(subagentId: String) {
+    override fun stopSubagent(subagentId: String) {
         val chat = session.value ?: return
         viewModelScope.launch { chat.stopSubagent(subagentId) }
     }
 
-    fun answer(request: InputRequest, result: JsonObject) {
+    override fun answer(request: InputRequest, result: JsonObject) {
         val chat = session.value ?: return
         viewModelScope.launch { chat.answer(request, result) }
     }
 
-    fun retry() = session.value?.retry()
+    override fun retry() {
+        session.value?.retry()
+    }
 
-    fun dismissError() = session.value?.dismissError()
+    override fun dismissError() {
+        session.value?.dismissError()
+    }
+
+    override fun skipSpeech() = voice.skipSpeech()
+
+    override fun stopVoiceChat() = voice.stopChat()
+
+    override fun dismissVoiceChatError() = voice.dismissChatError()
+
+    override fun dismissDictationError() = voice.dismissDictationError()
 
     fun showTitle(title: String?) = session.value?.showTitle(title)
 

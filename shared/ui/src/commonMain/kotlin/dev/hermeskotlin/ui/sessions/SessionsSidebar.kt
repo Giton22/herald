@@ -342,6 +342,42 @@ fun SessionsSidebar(
     )
 }
 
+/**
+ * The sidebar's main page drawn from [sessions] alone, for previews: the same header, sections and
+ * bottom bar as [SessionsSidebar], with nothing to load or act on.
+ */
+@Composable
+internal fun SessionsSidebarSample(sessions: List<SessionSummary>, selectedId: String?, userLabel: String) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start)),
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            MainHeader(onSearch = {})
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                SessionList(sessions, selectedId, onOpen = {}, onActions = {}, sectioned = true) {
+                    item(key = "nav") {
+                        Column(Modifier.padding(bottom = 4.dp)) {
+                            NavRow(Lucide.CalendarClock, "Scheduled jobs") {}
+                            NavRow(Lucide.Archive, "Archived") {}
+                        }
+                    }
+                }
+            }
+        }
+        BottomBar(
+            userLabel = userLabel,
+            connection = null,
+            message = null,
+            onDismissMessage = {},
+            onNewChat = {},
+            onAccount = {},
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+}
+
 private val SessionListFilter.label: String
     get() = when (this) {
         SessionListFilter.Recent -> "Chats"
@@ -437,7 +473,8 @@ private fun NavRow(icon: ImageVector, label: String, onClick: () -> Unit) {
 @Composable
 private fun BottomBar(
     userLabel: String?,
-    connection: ConnectionState,
+    /** Null in previews, which have no connection to report. */
+    connection: ConnectionState?,
     message: String?,
     onDismissMessage: () -> Unit,
     onNewChat: () -> Unit,
@@ -460,7 +497,7 @@ private fun BottomBar(
 
 /** Initials in a circle, with a small dot when the gateway connection isn't healthy. */
 @Composable
-private fun Avatar(userLabel: String?, connection: ConnectionState, onClick: () -> Unit) {
+private fun Avatar(userLabel: String?, connection: ConnectionState?, onClick: () -> Unit) {
     val initials = userLabel?.initials()
     Box(Modifier.size(52.dp)) {
         Box(
@@ -479,7 +516,7 @@ private fun Avatar(userLabel: String?, connection: ConnectionState, onClick: () 
             }
         }
         val dot = when (connection) {
-            is ConnectionState.Connected -> null
+            null, is ConnectionState.Connected -> null
             is ConnectionState.Failed, is ConnectionState.SessionExpired -> Theme[colors][danger]
             else -> Theme[colors][warning]
         }

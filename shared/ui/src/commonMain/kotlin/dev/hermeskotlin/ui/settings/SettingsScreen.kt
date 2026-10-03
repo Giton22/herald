@@ -37,6 +37,7 @@ import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.TextSize
 import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.core.settings.VoicePause
@@ -72,7 +73,20 @@ fun SettingsScreen(
     val info by viewModel.gateway.collectAsStateWithLifecycle()
     LaunchedEffect(gateway) { viewModel.bind(gateway) }
     PlatformBackHandler(enabled = true, onBack = onBack)
+    SettingsView(settings, info, gateway.url, viewModel::update, onBack, onSignOut, onChangeGateway)
+}
 
+/** The settings page itself, stateless so previews can draw it. */
+@Composable
+internal fun SettingsView(
+    settings: AppSettings,
+    info: GatewayInfo,
+    gatewayUrl: String,
+    onUpdate: ((AppSettings) -> AppSettings) -> Unit,
+    onBack: () -> Unit,
+    onSignOut: () -> Unit,
+    onChangeGateway: () -> Unit,
+) {
     Box(
         Modifier
             .fillMaxSize()
@@ -91,7 +105,7 @@ fun SettingsScreen(
                         SegmentedControl(
                             options = ThemeMode.entries,
                             selected = settings.theme,
-                            onSelect = { mode -> viewModel.update { it.copy(theme = mode) } },
+                            onSelect = { mode -> onUpdate { it.copy(theme = mode) } },
                             optionLabel = { it.name },
                         )
                     }
@@ -100,14 +114,14 @@ fun SettingsScreen(
                         title = "Pure black",
                         detail = "True black backgrounds in dark mode, easier on OLED screens.",
                         checked = settings.pureBlack,
-                        onCheckedChange = { on -> viewModel.update { it.copy(pureBlack = on) } },
+                        onCheckedChange = { on -> onUpdate { it.copy(pureBlack = on) } },
                     )
                     Divider()
                     Field("Text size", detail = "On top of your phone's own font size.") {
                         SegmentedControl(
                             options = TextSize.entries,
                             selected = settings.textSize,
-                            onSelect = { size -> viewModel.update { it.copy(textSize = size) } },
+                            onSelect = { size -> onUpdate { it.copy(textSize = size) } },
                             optionLabel = { it.name },
                         )
                     }
@@ -118,28 +132,28 @@ fun SettingsScreen(
                         title = "Show reasoning",
                         detail = "The model's thinking, collapsed above each reply.",
                         checked = settings.showReasoning,
-                        onCheckedChange = { on -> viewModel.update { it.copy(showReasoning = on) } },
+                        onCheckedChange = { on -> onUpdate { it.copy(showReasoning = on) } },
                     )
                     Divider()
                     SwitchRow(
                         title = "Show tool activity",
                         detail = "The tools each reply used, such as the terminal or web search.",
                         checked = settings.showToolActivity,
-                        onCheckedChange = { on -> viewModel.update { it.copy(showToolActivity = on) } },
+                        onCheckedChange = { on -> onUpdate { it.copy(showToolActivity = on) } },
                     )
                     Divider()
                     SwitchRow(
                         title = "Show token usage",
                         detail = "What each reply took, under it. The chat menu has the totals and cost.",
                         checked = settings.showUsage,
-                        onCheckedChange = { on -> viewModel.update { it.copy(showUsage = on) } },
+                        onCheckedChange = { on -> onUpdate { it.copy(showUsage = on) } },
                     )
                     Divider()
                     SwitchRow(
                         title = "Show the pet",
                         detail = "The profile's pet sits on the composer and acts out what the agent is doing. Adopt one with /pet.",
                         checked = settings.showPet,
-                        onCheckedChange = { on -> viewModel.update { it.copy(showPet = on) } },
+                        onCheckedChange = { on -> onUpdate { it.copy(showPet = on) } },
                     )
                 }
 
@@ -148,7 +162,7 @@ fun SettingsScreen(
                         SegmentedControl(
                             options = VoicePause.entries,
                             selected = settings.voicePause,
-                            onSelect = { pause -> viewModel.update { it.copy(voicePause = pause) } },
+                            onSelect = { pause -> onUpdate { it.copy(voicePause = pause) } },
                             optionLabel = { it.name },
                         )
                     }
@@ -159,14 +173,14 @@ fun SettingsScreen(
                         title = "Approvals and questions",
                         detail = "When the agent waits on you. Answer right from the notification.",
                         checked = settings.notifyRequests,
-                        onCheckedChange = { on -> viewModel.update { it.copy(notifyRequests = on) } },
+                        onCheckedChange = { on -> onUpdate { it.copy(notifyRequests = on) } },
                     )
                     Divider()
                     SwitchRow(
                         title = "Finished replies",
                         detail = "When a turn ends while Herald is in the background. Reply from the notification.",
                         checked = settings.notifyReplies,
-                        onCheckedChange = { on -> viewModel.update { it.copy(notifyReplies = on) } },
+                        onCheckedChange = { on -> onUpdate { it.copy(notifyReplies = on) } },
                     )
                     Divider()
                     SwitchRow(
@@ -174,12 +188,12 @@ fun SettingsScreen(
                         detail = "Also catch turns started on other devices, like Hermes Desktop. " +
                             "Keeps a quiet notification and uses more battery.",
                         checked = settings.stayConnected,
-                        onCheckedChange = { on -> viewModel.update { it.copy(stayConnected = on) } },
+                        onCheckedChange = { on -> onUpdate { it.copy(stayConnected = on) } },
                     )
                 }
 
                 Section("Account") {
-                    InfoRow(info.userLabel ?: "Signed in", gateway.url)
+                    InfoRow(info.userLabel ?: "Signed in", gatewayUrl)
                     Divider()
                     ActionRow("Sign out", Lucide.LogOut, onSignOut)
                     Divider()
@@ -193,7 +207,7 @@ fun SettingsScreen(
                         title = "Check for updates",
                         detail = "Asks GitHub, where the app is released, whether there's a newer version. Nothing else is sent.",
                         checked = settings.checkForUpdates,
-                        onCheckedChange = { on -> viewModel.update { it.copy(checkForUpdates = on) } },
+                        onCheckedChange = { on -> onUpdate { it.copy(checkForUpdates = on) } },
                     )
                     UpdateBanner(Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                     Divider()
