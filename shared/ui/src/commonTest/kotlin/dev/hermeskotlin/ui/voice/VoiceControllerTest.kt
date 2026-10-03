@@ -21,8 +21,11 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -48,10 +51,16 @@ class VoiceControllerTest {
         override suspend fun play(audio: SpokenAudio) = Unit
     }
 
-    private fun audio(transcript: String, requests: MutableList<HttpRequestData>) = AudioApi(
+    private fun audio(
+        transcript: String,
+        requests: MutableList<HttpRequestData>,
+        /** Completed by the first `tts-lease` call, which the controller fires off without waiting for. */
+        leased: CompletableDeferred<Unit>? = null,
+    ) = AudioApi(
         createHttpClient(
             MockEngine { request ->
                 requests += request
+                if (request.url.encodedPath == "/api/audio/tts-lease") leased?.complete(Unit)
                 when (request.url.encodedPath) {
                     "/api/audio/transcribe" -> respond("""{"ok":true,"transcript":"$transcript"}""", HttpStatusCode.OK, json)
                     else -> respond("""{"ok":true}""", HttpStatusCode.OK, json)
@@ -78,8 +87,9 @@ class VoiceControllerTest {
     @Test
     fun saying_stop_endsTheVoiceChatWithoutSendingIt() = runTest {
         val requests = mutableListOf<HttpRequestData>()
+        val leased = CompletableDeferred<Unit>()
         val recorder = FakeRecorder()
-        val voice = VoiceController(audio("Stop.", requests), recorder, FakePlayer(), backgroundScope, backgroundScope)
+        val voice = VoiceController(audio("Stop.", requests, leased), recorder, FakePlayer(), backgroundScope, backgroundScope)
         val cookies = PersistentCookiesStorage(InMemoryKeyValueStore())
         val http = createHttpClient(MockEngine { error("no REST in this test") }, cookies)
         val connection = GatewayConnection(AuthApi(http, cookies), { _, _ -> error("not connecting") }, backgroundScope)
@@ -90,7 +100,8 @@ class VoiceControllerTest {
         voice.chat.first { it.phase == VoicePhase.Off }
         assertEquals(1, recorder.recordings)
         assertTrue(session.state.value.messages.isEmpty())
-        // The speech engine was warmed for the chat and released after.
-        assertTrue(requests.count { it.url.encodedPath == "/api/audio/tts-lease" } >= 1)
+        // The speech engine was warmed for the chat. The lease call isn't awaited and the mock answers on
+        // another thread, so wait for it in real time rather than assume it has landed.
+        withContext(Dispatchers.Default) { withTimeout(5_000) { leased.await() } }
     }
 }
