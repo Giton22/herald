@@ -74,7 +74,14 @@ import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.sessions.SessionListFilter
 import dev.hermeskotlin.core.sessions.SessionSummary
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
 import dev.hermeskotlin.designsystem.accent
+import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.components.SectionLabel
+import dev.hermeskotlin.designsystem.sidebar as sidebarColor
+import dev.hermeskotlin.designsystem.strokeStrong
+import dev.hermeskotlin.designsystem.wordmark
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
@@ -217,24 +224,23 @@ fun SessionsSidebar(
                         canLoadMore = state.canLoadMore,
                         loadingMore = state.loadingMore,
                         onLoadMore = viewModel::loadMore,
+                        sectioned = true,
+                        status = {
+                            when {
+                                state.loading -> item(key = "loading") { ListSpinner() }
+                                state.error != null -> item(key = "error") {
+                                    ListNotice("Couldn't load sessions. ${state.error}", action = "Try again", onAction = viewModel::refresh)
+                                }
+                                state.sessions.isEmpty() -> item(key = "empty") {
+                                    ListNotice("Your conversations will show up here.")
+                                }
+                            }
+                        },
                     ) {
                         item(key = "nav") {
-                            Column(Modifier.padding(bottom = 8.dp)) {
-                                NavRow(Lucide.CalendarClock, "Scheduled") { scheduledOpen = true }
+                            Column(Modifier.padding(bottom = 4.dp)) {
+                                NavRow(Lucide.CalendarClock, "Scheduled jobs") { scheduledOpen = true }
                                 NavRow(Lucide.Archive, "Archived") { viewModel.setFilter(SessionListFilter.Archived) }
-                                Box(
-                                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp).fillMaxWidth().height(1.dp)
-                                        .background(Theme[colors][stroke]),
-                                )
-                            }
-                        }
-                        when {
-                            state.loading -> item(key = "loading") { ListSpinner() }
-                            state.error != null -> item(key = "error") {
-                                ListNotice("Couldn't load sessions. ${state.error}", action = "Try again", onAction = viewModel::refresh)
-                            }
-                            state.sessions.isEmpty() -> item(key = "empty") {
-                                ListNotice("Your conversations will show up here.")
                             }
                         }
                     }
@@ -312,11 +318,16 @@ private val SessionListFilter.label: String
 @Composable
 private fun MainHeader(onSearch: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().padding(start = 24.dp, end = 16.dp, top = 12.dp, bottom = 12.dp),
+        Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("Hermes", style = Theme[typography][title], color = Theme[colors][text], modifier = Modifier.weight(1f))
-        RoundButton(Lucide.Search, "Search chats", onClick = onSearch)
+        Text(
+            "HERMES",
+            style = Theme[typography][wordmark].copy(fontSize = 22.sp, lineHeight = 26.sp),
+            color = Theme[colors][text],
+            modifier = Modifier.weight(1f),
+        )
+        SquareButton(Lucide.Search, "Search chats", onClick = onSearch)
     }
 }
 
@@ -354,41 +365,41 @@ private fun SearchHeader(viewModel: SessionsViewModel, onClose: () -> Unit) {
     }
 }
 
-/** A 48dp circle with a soft fill, like ChatGPT's search button. */
+/** A 44dp square icon button with no fill. */
 @Composable
-private fun RoundButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
+private fun SquareButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(48.dp)
-            .clip(CircleShape)
-            .background(Theme[colors][stroke])
+            .size(44.dp)
+            .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
             .clickable(onClickLabel = contentDescription, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
-        UnstyledIcon(icon, contentDescription = contentDescription, tint = Theme[colors][text], modifier = Modifier.size(22.dp))
+        UnstyledIcon(icon, contentDescription = contentDescription, tint = Theme[colors][textSecondary], modifier = Modifier.size(20.dp))
     }
 }
 
+/** Desktop's sidebar links: a line icon and a medium-weight label, compact. */
 @Composable
 private fun NavRow(icon: ImageVector, label: String, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = 52.dp)
+            .heightIn(min = 44.dp)
             .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][text], modifier = Modifier.size(22.dp))
-        Text(label, style = Theme[typography][heading], color = Theme[colors][text])
+        UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(18.dp))
+        Text(label, style = Theme[typography][body].copy(fontWeight = FontWeight.Medium), color = Theme[colors][text])
     }
 }
 
 /**
- * Floating footer: the "New chat" pill and the account avatar over a fade, so the list scrolls
- * underneath. A failed row action shows its message just above.
+ * Footer under a hairline: "New session" and the account avatar. A failed row action shows its
+ * message just above.
  */
 @Composable
 private fun BottomBar(
@@ -400,26 +411,14 @@ private fun BottomBar(
     onAccount: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val surfaceColor = Theme[colors][surface]
-    Column(
-        modifier
-            .fillMaxWidth()
-            .background(Brush.verticalGradient(0f to Color.Transparent, 0.3f to surfaceColor))
-            .padding(top = 32.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    Column(modifier.fillMaxWidth().background(Theme[colors][sidebarColor]), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (message != null) MessageBanner(message, onDismiss = onDismissMessage)
+        Box(Modifier.fillMaxWidth().height(1.dp).background(Theme[colors][stroke]))
         Row(
-            Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, bottom = 12.dp),
+            Modifier.fillMaxWidth().padding(start = 16.dp, end = 12.dp, bottom = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Button(
-                "New chat",
-                onClick = onNewChat,
-                leadingIcon = Lucide.SquarePen,
-                size = ButtonSize.Large,
-                pill = true,
-            )
+            Button("New session", onClick = onNewChat, leadingIcon = Lucide.SquarePen)
             Box(Modifier.weight(1f))
             Avatar(userLabel, connection, onClick = onAccount)
         }
@@ -456,7 +455,7 @@ private fun Avatar(userLabel: String?, connection: ConnectionState, onClick: () 
                 Modifier
                     .size(14.dp)
                     .align(Alignment.TopEnd)
-                    .background(Theme[colors][surface], CircleShape)
+                    .background(Theme[colors][sidebarColor], CircleShape)
                     .padding(2.dp)
                     .background(dot, CircleShape),
             )
@@ -478,6 +477,10 @@ private fun SessionList(
     canLoadMore: Boolean = false,
     loadingMore: Boolean = false,
     onLoadMore: () -> Unit = {},
+    /** Group under "PINNED" and "SESSIONS" labels, Desktop's sidebar sections. */
+    sectioned: Boolean = false,
+    /** Loading, error or empty notices, shown under the "SESSIONS" label. */
+    status: LazyListScope.() -> Unit = {},
     header: LazyListScope.() -> Unit = {},
 ) {
     val listState = rememberLazyListState()
@@ -499,7 +502,7 @@ private fun SessionList(
         header()
         // Pinned chats stay on top, marked with a pin.
         val (pinned, rest) = sessions.partition { it.pinned }
-        items(pinned + rest, key = { it.id }) { session ->
+        val row: @Composable (SessionSummary) -> Unit = { session ->
             SessionRow(
                 session,
                 selected = session.id == selectedId,
@@ -508,11 +511,31 @@ private fun SessionList(
                 onActions = { onActions(session) },
             )
         }
+        if (sectioned) {
+            if (pinned.isNotEmpty()) {
+                item(key = "label-pinned") { ListLabel("Pinned") }
+                items(pinned, key = { it.id }) { row(it) }
+            }
+            item(key = "label-sessions") { ListLabel("Sessions") }
+            status()
+            items(rest, key = { it.id }) { row(it) }
+            if (loadingMore) item(key = "loading-more") { ListSpinner() }
+            return@LazyColumn
+        }
+        items(pinned + rest, key = { it.id }) { row(it) }
         if (loadingMore) item(key = "loading-more") { ListSpinner() }
     }
 }
 
-/** Just the title, like ChatGPT; a dot marks a session that is running right now. Long-press for actions. */
+@Composable
+private fun ListLabel(text: String) {
+    SectionLabel(text, Modifier.padding(start = 12.dp, top = 16.dp, bottom = 8.dp))
+}
+
+/**
+ * Desktop's session row: a status dot, the title and its age. The dot lights up while the session is
+ * running. Long-press for actions.
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 internal fun SessionRow(
@@ -526,9 +549,9 @@ internal fun SessionRow(
     Column(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = 52.dp)
+            .heightIn(min = 44.dp)
             .clip(shape)
-            .then(if (selected) Modifier.background(Theme[colors][stroke], shape) else Modifier)
+            .then(if (selected) Modifier.background(Theme[colors][accentSoft], shape) else Modifier)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onActions,
@@ -536,13 +559,19 @@ internal fun SessionRow(
                 interactionSource = null,
                 indication = rememberColoredIndication(Theme[colors][text]),
             )
-            .padding(horizontal = 12.dp, vertical = 14.dp),
+            .padding(horizontal = 12.dp, vertical = 11.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp, Alignment.CenterVertically),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Box(
+                Modifier.size(6.dp).background(
+                    if (session.isActive) Theme[colors][success] else Theme[colors][strokeStrong],
+                    CircleShape,
+                ),
+            )
             Text(
                 session.displayTitle,
-                style = Theme[typography][body],
+                style = Theme[typography][body].copy(fontSize = 15.sp, fontWeight = if (selected) FontWeight.Medium else null),
                 color = Theme[colors][text],
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -551,12 +580,21 @@ internal fun SessionRow(
             if (session.pinned) {
                 UnstyledIcon(Lucide.Pin, contentDescription = "Pinned", tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
             }
-            if (session.isActive) Box(Modifier.size(8.dp).background(Theme[colors][success], CircleShape))
+            if (!showSnippet) {
+                Text(relativeTime(session.activityAt), style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
+            }
         }
         if (showSnippet) {
             val detail = session.snippet?.replace('\n', ' ')?.takeIf { it.isNotBlank() } ?: relativeTime(session.activityAt)
             if (detail.isNotEmpty()) {
-                Text(detail, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(
+                    detail,
+                    style = Theme[typography][bodySmall],
+                    color = Theme[colors][textSecondary],
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 16.dp),
+                )
             }
         }
     }
