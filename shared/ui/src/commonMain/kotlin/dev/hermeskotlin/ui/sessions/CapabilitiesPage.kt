@@ -122,13 +122,7 @@ internal fun CapabilitiesPage(
 private fun SkillsTab(state: CapabilitiesUiState, viewModel: CapabilitiesViewModel) {
     val query = viewModel.skillQuery.text.toString().trim()
     val all = state.skills.items
-    // Grouped by category, filtered by the search box over name, description and category.
-    val groups = remember(all, query) {
-        all.orEmpty()
-            .filter { query.isEmpty() || listOfNotNull(it.name, it.description, it.category).any { f -> f.contains(query, ignoreCase = true) } }
-            .groupBy { it.category?.takeIf(String::isNotBlank) ?: "Other" }
-            .toSortedMap(compareBy<String> { it == "Other" }.thenBy { it.lowercase() })
-    }
+    val groups = remember(all, query) { skillGroups(all.orEmpty(), query) }
     TabList(state.skills, empty = "No skills yet. The agent writes them as it learns, or install them with `hermes skills`.", onRetry = viewModel::refresh) { skills ->
         item(key = "search") {
             TextField(
@@ -154,6 +148,17 @@ private fun SkillsTab(state: CapabilitiesUiState, viewModel: CapabilitiesViewMod
         }
     }
 }
+
+/**
+ * Skills matching [query] (over name, description and category), grouped by category with
+ * uncategorised ones last as "other". Categories are compared ignoring case, as their headers are
+ * shown in capitals anyway, so "Research" and "research" are one group.
+ */
+internal fun skillGroups(skills: List<Skill>, query: String): Map<String, List<Skill>> =
+    skills
+        .filter { query.isEmpty() || listOfNotNull(it.name, it.description, it.category).any { f -> f.contains(query, ignoreCase = true) } }
+        .groupBy { it.category?.trim()?.lowercase()?.takeIf(String::isNotEmpty) ?: "other" }
+        .toSortedMap(compareBy<String> { it == "other" }.thenBy { it })
 
 /** A tab's loading, error and empty states around its list. */
 @Composable
