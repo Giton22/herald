@@ -58,6 +58,7 @@ import com.composables.icons.lucide.CircleUser
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.Download
+import com.composables.icons.lucide.Gauge
 import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
@@ -652,6 +653,7 @@ internal fun SessionActionsSheet(
     onDelete: (SessionSummary) -> Unit,
     onExport: ((SessionSummary) -> Unit)? = null,
     onCopyId: ((SessionSummary) -> Unit)? = null,
+    onUsage: ((SessionSummary) -> Unit)? = null,
 ) {
     // Keep the last target while the sheet animates out.
     var shown by remember { mutableStateOf(session) }
@@ -667,6 +669,7 @@ internal fun SessionActionsSheet(
         fun act(block: (SessionSummary) -> Unit) = { onDismiss(); block(s) }
         SheetAction("Rename", Lucide.Pencil, act(onRename))
         SheetAction(if (s.pinned) "Unpin" else "Pin", if (s.pinned) Lucide.PinOff else Lucide.Pin, act(onTogglePinned))
+        onUsage?.let { SheetAction("Usage and cost", Lucide.Gauge, act(it)) }
         onExport?.let { SheetAction("Export as Markdown", Lucide.Download, act(it)) }
         onCopyId?.let { SheetAction("Copy session ID", Lucide.Copy, act(it)) }
         SheetAction(if (s.archived) "Unarchive" else "Archive", if (s.archived) Lucide.ArchiveRestore else Lucide.Archive, act(onToggleArchived))

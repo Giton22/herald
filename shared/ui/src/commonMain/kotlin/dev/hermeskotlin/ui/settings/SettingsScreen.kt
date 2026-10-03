@@ -128,6 +128,13 @@ fun SettingsScreen(
                     )
                     Divider()
                     SwitchRow(
+                        title = "Show token usage",
+                        detail = "What each reply took, under it. The chat menu has the totals and cost.",
+                        checked = settings.showUsage,
+                        onCheckedChange = { on -> viewModel.update { it.copy(showUsage = on) } },
+                    )
+                    Divider()
+                    SwitchRow(
                         title = "Show the pet",
                         detail = "The profile's pet sits on the composer and acts out what the agent is doing. Adopt one with /pet.",
                         checked = settings.showPet,

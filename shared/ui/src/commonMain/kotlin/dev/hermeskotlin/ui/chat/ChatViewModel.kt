@@ -86,6 +86,7 @@ sealed interface ChatRequest {
     data class OpenChat(val storedSessionId: String, val title: String?) : ChatRequest
     data object OpenPets : ChatRequest
     data object OpenJourney : ChatRequest
+    data object OpenUsage : ChatRequest
 
     /** `/voice`: the screen asks for the microphone, then starts a voice chat. */
     data object StartVoice : ChatRequest
@@ -138,6 +139,9 @@ class ChatViewModel(
 
     /** What the profile's agent has learned (`/journey`). */
     val journey = JourneyController(journeyApi, viewModelScope)
+
+    /** Tokens and cost of the open chat. */
+    val usage = UsageController(sessions, viewModelScope)
 
     val composer = TextFieldState()
     val connectionState: StateFlow<ConnectionState> = connection.state
@@ -242,6 +246,16 @@ class ChatViewModel(
     fun loadJourney() {
         val target = target ?: return
         journey.load(target.gateway.gatewayUrl, target.profile)
+    }
+
+    /** Shows the usage sheet (from the chat menu). */
+    fun openUsage() {
+        viewModelScope.launch { _requests.send(ChatRequest.OpenUsage) }
+    }
+
+    fun loadUsage() {
+        val target = target ?: return
+        usage.load(target.gateway.gatewayUrl, state.value.storedSessionId, target.profile, session.value)
     }
 
     /** Refreshes the catalog for the open chat (its current model marked). */
@@ -396,6 +410,8 @@ class ChatViewModel(
                 SlashRoute.Journey -> _requests.send(ChatRequest.OpenJourney)
                 SlashRoute.Pet -> pet(chat, arg)
                 SlashRoute.Voice -> if (arg.lowercase() in setOf("off", "stop")) voice.stopChat() else _requests.send(ChatRequest.StartVoice)
+                // `/usage reset` and the like are the gateway's to run.
+                SlashRoute.Usage -> if (arg.isEmpty()) _requests.send(ChatRequest.OpenUsage) else onGateway()
                 is SlashRoute.Unavailable -> chat.showCommandOutput("/${command.name}", route.message, failed = true)
                 SlashRoute.Gateway -> onGateway()
             }

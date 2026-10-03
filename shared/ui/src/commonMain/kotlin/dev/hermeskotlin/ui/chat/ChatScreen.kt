@@ -120,6 +120,7 @@ import dev.hermeskotlin.core.chat.OutgoingAttachment
 import dev.hermeskotlin.core.chat.extractReplyMedia
 import dev.hermeskotlin.core.chat.ToolActivity
 import dev.hermeskotlin.core.chat.TurnOutcome
+import dev.hermeskotlin.core.chat.compactCount
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.models.displayModelName
 import dev.hermeskotlin.core.slash.SlashCommand
@@ -197,6 +198,7 @@ fun ChatScreen(
     var attachOpen by remember { mutableStateOf(false) }
     var petsOpen by remember { mutableStateOf(false) }
     var journeyOpen by remember { mutableStateOf(false) }
+    var usageOpen by remember { mutableStateOf(false) }
     var viewing by remember { mutableStateOf<ViewerImage?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(notice) {
@@ -229,6 +231,7 @@ fun ChatScreen(
                 is ChatRequest.SwitchProfile -> onSwitchProfile(request.profile)
                 ChatRequest.OpenPets -> petsOpen = true
                 ChatRequest.OpenJourney -> journeyOpen = true
+                ChatRequest.OpenUsage -> usageOpen = true
                 ChatRequest.StartVoice -> startVoiceChat()
             }
         }
@@ -323,6 +326,13 @@ fun ChatScreen(
         },
     )
     JourneySheet(visible = journeyOpen, controller = viewModel.journey, onLoad = viewModel::loadJourney, onDismiss = { journeyOpen = false })
+    UsageSheet(
+        visible = usageOpen,
+        controller = viewModel.usage,
+        live = state.usage,
+        onLoad = viewModel::loadUsage,
+        onDismiss = { usageOpen = false },
+    )
     viewing?.let { image ->
         CompositionLocalProvider(LocalMediaLoader provides viewModel::loadMedia) {
             ImageViewer(image, onDismiss = { viewing = null })
@@ -608,7 +618,19 @@ private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String
             TurnOutcome.Interrupted -> Text("Stopped", style = Theme[typography][caption], color = Theme[colors][textTertiary])
             else -> Unit
         }
-        if (!message.streaming && text.isNotBlank()) CopyButton(text)
+        val usage = message.usage?.takeIf { settings.showUsage && !message.streaming }
+        if ((!message.streaming && text.isNotBlank()) || usage != null) {
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (!message.streaming && text.isNotBlank()) CopyButton(text)
+                usage?.let {
+                    Text(
+                        "${compactCount(it.input)} in · ${compactCount(it.output)} out",
+                        style = Theme[typography][caption],
+                        color = Theme[colors][textTertiary],
+                    )
+                }
+            }
+        }
     }
 }
 

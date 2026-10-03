@@ -178,6 +178,7 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
         onDismiss = { menuOpen = false },
         onRenamed = chat::showTitle,
         onDeleted = app::newChat,
+        onUsage = chat::openUsage,
     )
 
     if (settingsOpen) {
