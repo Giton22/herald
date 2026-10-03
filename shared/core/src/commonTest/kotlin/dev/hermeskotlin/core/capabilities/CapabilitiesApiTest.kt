@@ -43,6 +43,27 @@ class CapabilitiesApiTest {
     }
 
     @Test
+    fun nullFieldsReadAsTheirDefaults() = runTest {
+        val api = CapabilitiesApi(createHttpClient(MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/mcp/servers" -> respond(
+                    """{"servers":[{"name":"remote","transport":"http","url":"https://mcp.example.com/mcp","command":null,"args":null,"enabled":true,"plugin":null}]}""",
+                    HttpStatusCode.OK, json,
+                )
+                else -> respond("""[{"name":"notes","description":null,"category":null,"enabled":true,"usage":null,"provenance":null}]""", HttpStatusCode.OK, json)
+            }
+        }))
+
+        val server = assertIs<ApiResult.Success<List<McpServer>>>(api.mcpServers(url, null)).value.single()
+        assertEquals(emptyList(), server.args)
+        assertEquals("https://mcp.example.com/mcp", server.target)
+
+        val skill = assertIs<ApiResult.Success<List<Skill>>>(api.skills(url, null)).value.single()
+        assertEquals("", skill.description)
+        assertEquals("agent", skill.provenance)
+    }
+
+    @Test
     fun togglesSendTheBodyEachRouteExpects() = runTest {
         val seen = mutableListOf<String>()
         val api = CapabilitiesApi(createHttpClient(MockEngine { request ->

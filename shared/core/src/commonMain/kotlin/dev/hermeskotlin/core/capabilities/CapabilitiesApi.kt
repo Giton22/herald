@@ -2,21 +2,24 @@ package dev.hermeskotlin.core.capabilities
 
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.ApiResult
+import dev.hermeskotlin.core.network.HermesJson
 import dev.hermeskotlin.core.network.apiCall
 import dev.hermeskotlin.core.network.map
 import io.ktor.client.HttpClient
-import io.ktor.client.call.body
 import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.put
 import io.ktor.client.request.setBody
+import io.ktor.client.statement.HttpResponse
+import io.ktor.client.statement.bodyAsText
 import io.ktor.http.ContentType
 import io.ktor.http.contentType
 import io.ktor.http.encodeURLPathPart
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
 /** A skill the profile's agent can load, as `GET /api/skills` lists it (disabled ones included). */
 @Serializable
@@ -88,7 +91,7 @@ class CapabilitiesApi(private val client: HttpClient) {
 
     suspend fun skills(url: GatewayUrl, profile: String?): ApiResult<List<Skill>> = apiCall {
         client.get(url.resolve("api/skills")) { profile(profile) }
-    }.map { it.body<List<Skill>>() }
+    }.map { it.decode<List<Skill>>() }
 
     suspend fun setSkillEnabled(url: GatewayUrl, profile: String?, name: String, enabled: Boolean): ApiResult<Unit> = apiCall {
         client.put(url.resolve("api/skills/toggle")) {
@@ -100,7 +103,7 @@ class CapabilitiesApi(private val client: HttpClient) {
 
     suspend fun toolsets(url: GatewayUrl, profile: String?): ApiResult<List<Toolset>> = apiCall {
         client.get(url.resolve("api/tools/toolsets")) { profile(profile) }
-    }.map { it.body<List<Toolset>>() }
+    }.map { it.decode<List<Toolset>>() }
 
     suspend fun setToolsetEnabled(url: GatewayUrl, profile: String?, name: String, enabled: Boolean): ApiResult<Unit> = apiCall {
         client.put(url.resolve("api/tools/toolsets/${name.encodeURLPathPart()}")) {
@@ -112,7 +115,7 @@ class CapabilitiesApi(private val client: HttpClient) {
 
     suspend fun mcpServers(url: GatewayUrl, profile: String?): ApiResult<List<McpServer>> = apiCall {
         client.get(url.resolve("api/mcp/servers")) { profile(profile) }
-    }.map { it.body<McpServersResponse>().servers }
+    }.map { it.decode<McpServersResponse>().servers }
 
     suspend fun setMcpServerEnabled(url: GatewayUrl, profile: String?, name: String, enabled: Boolean): ApiResult<Unit> = apiCall {
         client.put(url.resolve("api/mcp/servers/${name.encodeURLPathPart()}/enabled")) {
@@ -125,9 +128,16 @@ class CapabilitiesApi(private val client: HttpClient) {
     /** Connects to the server, lists its tools and disconnects; a failed connection is still a success here, with `ok = false`. */
     suspend fun testMcpServer(url: GatewayUrl, profile: String?, name: String): ApiResult<McpTestResult> = apiCall {
         client.post(url.resolve("api/mcp/servers/${name.encodeURLPathPart()}/test")) { profile(profile) }
-    }.map { it.body<McpTestResult>() }
+    }.map { it.decode<McpTestResult>() }
 
     private fun HttpRequestBuilder.profile(profile: String?) {
         profile?.let { parameter("profile", it) }
+    }
+
+    private suspend inline fun <reified T> HttpResponse.decode(): T = lenientJson.decodeFromString<T>(bodyAsText())
+
+    private companion object {
+        /** The gateway writes `null` for what it doesn't have (an http server's `args`, a skill's description); that reads as the field's default. */
+        val lenientJson = Json(HermesJson) { coerceInputValues = true }
     }
 }
