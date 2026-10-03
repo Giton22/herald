@@ -108,11 +108,6 @@ class VoiceController(
         speechJob?.cancel()
     }
 
-    /** Ends listening now and sends what was said, without waiting for the pause. */
-    fun doneTalking() {
-        if (_chat.value.phase == VoicePhase.Listening) recorder.finish()
-    }
-
     fun dismissChatError() = _chat.update { it.copy(error = null) }
 
     /** One turn of the conversation; false when it should end. */

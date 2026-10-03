@@ -380,7 +380,6 @@ private fun ColumnScope.Dock(
         VoicePanel(
             hazeState = hazeState,
             state = voiceChat,
-            onDone = viewModel.voice::doneTalking,
             onSkip = viewModel.voice::skipSpeech,
             onEnd = viewModel.voice::stopChat,
         )
@@ -1074,10 +1073,10 @@ private fun DictationButton(state: DictationState, onClick: () -> Unit, enabled:
 
 /**
  * Takes the composer's place during a voice chat: what's happening now, a circle that swells with
- * your voice, and buttons to send now, skip the reply being read, or end the chat.
+ * your voice, and buttons to skip the reply being read or end the chat. What you say sends itself.
  */
 @Composable
-private fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onDone: () -> Unit, onSkip: () -> Unit, onEnd: () -> Unit) {
+private fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onSkip: () -> Unit, onEnd: () -> Unit) {
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     val page = Theme[colors][background]
     val frosted = remember(page) {
@@ -1121,7 +1120,7 @@ private fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onDone: () -
             Text(label, style = Theme[typography][body], color = Theme[colors][textColor])
             Text(
                 when (state.phase) {
-                    VoicePhase.Listening -> "Pause to send · “stop” ends"
+                    VoicePhase.Listening -> "Just talk · say “stop” to end"
                     VoicePhase.Speaking -> "Tap skip to talk again."
                     else -> "Voice chat"
                 },
@@ -1131,10 +1130,8 @@ private fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onDone: () -
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        when (state.phase) {
-            VoicePhase.Listening -> Button("Send", onClick = onDone, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
-            VoicePhase.Speaking -> Button("Skip", onClick = onSkip, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
-            else -> Unit
+        if (state.phase == VoicePhase.Speaking) {
+            Button("Skip", onClick = onSkip, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
         }
         IconButton(Lucide.X, contentDescription = "End voice chat", onClick = onEnd)
     }
