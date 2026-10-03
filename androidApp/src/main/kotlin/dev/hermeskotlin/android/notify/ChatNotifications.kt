@@ -110,7 +110,10 @@ class ChatNotifications(private val context: Context) {
             .build()
     }
 
-    /** A question the agent is blocked on, answerable in place when it fits a notification. */
+    /**
+     * A question the agent is blocked on, answerable in place when it fits a notification. Every answer
+     * asks for an unlock first: from a locked phone, Approve would run a command for whoever holds it.
+     */
     fun postRequest(title: String?, request: InputRequest) {
         val builder = base(CHANNEL_REQUESTS)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
@@ -125,12 +128,14 @@ class ChatNotifications(private val context: Context) {
                 // "Always" is too big a decision for a notification; it stays in the app.
                 request.choices.filter { it != ApprovalChoice.Always }.forEach { choice ->
                     builder.addAction(
-                        0,
-                        choice.label,
-                        action(NotificationActionReceiver.ACTION_APPROVE, request.id + choice.wire) {
-                            putExtra(NotificationActionReceiver.EXTRA_REQUEST_ID, request.id)
-                            putExtra(NotificationActionReceiver.EXTRA_CHOICE, choice.wire)
-                        },
+                        NotificationCompat.Action.Builder(
+                            0,
+                            choice.label,
+                            action(NotificationActionReceiver.ACTION_APPROVE, request.id + choice.wire) {
+                                putExtra(NotificationActionReceiver.EXTRA_REQUEST_ID, request.id)
+                                putExtra(NotificationActionReceiver.EXTRA_CHOICE, choice.wire)
+                            },
+                        ).setAuthenticationRequired(true).build(),
                     )
                 }
             }
@@ -151,7 +156,7 @@ class ChatNotifications(private val context: Context) {
                             action(NotificationActionReceiver.ACTION_CLARIFY, request.id, mutable = true) {
                                 putExtra(NotificationActionReceiver.EXTRA_REQUEST_ID, request.id)
                             },
-                        ).addRemoteInput(input).setAllowGeneratedReplies(false).build(),
+                        ).addRemoteInput(input).setAllowGeneratedReplies(false).setAuthenticationRequired(true).build(),
                     )
                 }
             }
@@ -180,7 +185,7 @@ class ChatNotifications(private val context: Context) {
                     action(NotificationActionReceiver.ACTION_REPLY, storedSessionId, mutable = true) {
                         putExtra(NotificationActionReceiver.EXTRA_SESSION_ID, storedSessionId)
                     },
-                ).addRemoteInput(input).setAllowGeneratedReplies(true).build(),
+                ).addRemoteInput(input).setAllowGeneratedReplies(true).setAuthenticationRequired(true).build(),
             )
             .build()
         post(storedSessionId, REPLY_ID, notification)
