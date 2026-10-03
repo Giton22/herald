@@ -122,7 +122,7 @@ internal fun epochDayOf(iso: String): Long? {
 }
 
 /** `YYYY-MM-DD` for days since 1970-01-01. */
-internal fun isoDateOf(epochDay: Long): String {
+fun isoDateOf(epochDay: Long): String {
     val z = epochDay + 719468
     val era = (if (z >= 0) z else z - 146096) / 146097
     val doe = z - era * 146097

@@ -1,8 +1,28 @@
 package dev.hermeskotlin.ui.preview
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
+import androidx.compose.ui.Modifier
+import dev.hermeskotlin.core.capabilities.McpServer
+import dev.hermeskotlin.core.capabilities.Skill
+import dev.hermeskotlin.core.capabilities.Toolset
+import dev.hermeskotlin.ui.chat.ProcessesSheetView
+import dev.hermeskotlin.ui.chat.UsageSheetView
+import dev.hermeskotlin.ui.sessions.CapabilitiesActions
+import dev.hermeskotlin.ui.sessions.CapabilitiesView
+import dev.hermeskotlin.ui.sessions.CapabilityTab
+import dev.hermeskotlin.ui.sessions.InsightsView
+import dev.hermeskotlin.ui.sessions.JobEditorPage
 import dev.hermeskotlin.designsystem.components.SidebarLayout
 import dev.hermeskotlin.designsystem.components.rememberSidebarState
 import dev.hermeskotlin.core.settings.ThemeMode
@@ -33,6 +53,11 @@ enum class PreviewScene(val label: String) {
     NewChat("A new chat"),
     Sidebar("The sessions sidebar"),
     Settings("Settings"),
+    Insights("Insights"),
+    Capabilities("Capabilities"),
+    JobEditor("A new scheduled job"),
+    Usage("Usage and context"),
+    Processes("Background processes"),
 }
 
 /** One scene full-screen in the app theme: Android Studio previews and the debug screenshot gallery both use it. */
@@ -50,14 +75,36 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true) {
                 PreviewScene.Subagents -> SampleChat(ChatSamples.subagents)
                 PreviewScene.Voice -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.listening)
                 PreviewScene.NewChat -> SampleChat(ChatSamples.empty, placeholder = "What are we building?")
-                PreviewScene.Sidebar -> {
-                    // Opened as on a phone: the drawer over the chat. A static preview shows it closed.
-                    val sidebar = rememberSidebarState()
-                    LaunchedEffect(sidebar) { sidebar.open() }
-                    SidebarLayout(
-                        state = sidebar,
-                        sidebar = { SessionsSidebarSample(ChatSamples.sessions(), selectedId = "s1", userLabel = ChatSamples.USER) },
-                    ) { SampleChat(ChatSamples.reply) }
+                PreviewScene.Sidebar -> OpenSidebar {
+                    SessionsSidebarSample(ChatSamples.sessions(), selectedId = "s1", userLabel = ChatSamples.USER)
+                }
+                PreviewScene.Insights -> OpenSidebar {
+                    SidebarPage { InsightsView(PageSamples.insights(), onBack = {}, onSelectPeriod = {}, onRetry = {}) }
+                }
+                PreviewScene.Capabilities -> OpenSidebar {
+                    SidebarPage { CapabilitiesView(PageSamples.capabilities, remember { TextFieldState() }, PreviewCapabilitiesActions, onBack = {}) }
+                }
+                PreviewScene.JobEditor -> OpenSidebar {
+                    SidebarPage {
+                        JobEditorPage(
+                            PageSamples.jobEditor,
+                            prompt = remember { TextFieldState(PageSamples.JOB_PROMPT) },
+                            schedule = remember { TextFieldState(PageSamples.JOB_SCHEDULE) },
+                            name = remember { TextFieldState(PageSamples.JOB_NAME) },
+                            deliveryTargets = PageSamples.deliveryTargets,
+                            onSetDeliver = {},
+                            onSave = {},
+                            onClose = {},
+                        )
+                    }
+                }
+                PreviewScene.Usage -> Box(Modifier.fillMaxSize()) {
+                    SampleChat(ChatSamples.reply)
+                    UsageSheetView(visible = true, state = PageSamples.usage, live = PageSamples.liveUsage, onDismiss = {})
+                }
+                PreviewScene.Processes -> Box(Modifier.fillMaxSize()) {
+                    SampleChat(ChatSamples.reply)
+                    ProcessesSheetView(visible = true, state = PageSamples.processes, onKill = {}, onDismiss = {}, initiallyExpanded = "proc_1")
                 }
                 PreviewScene.Settings -> SettingsView(
                     settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light),
@@ -71,6 +118,32 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true) {
             }
         }
     }
+}
+
+/** The sidebar opened as on a phone: the drawer over the chat. A static preview shows it closed. */
+@Composable
+private fun OpenSidebar(content: @Composable () -> Unit) {
+    val sidebar = rememberSidebarState()
+    LaunchedEffect(sidebar) { sidebar.open() }
+    SidebarLayout(state = sidebar, sidebar = content) { SampleChat(ChatSamples.reply) }
+}
+
+/** One of the sidebar's pages, inset as the sidebar insets them. */
+@Composable
+private fun SidebarPage(content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start))) {
+        content()
+    }
+}
+
+private object PreviewCapabilitiesActions : CapabilitiesActions {
+    override fun selectTab(tab: CapabilityTab) = Unit
+    override fun refresh() = Unit
+    override fun setSkillEnabled(skill: Skill, enabled: Boolean) = Unit
+    override fun setToolsetEnabled(toolset: Toolset, enabled: Boolean) = Unit
+    override fun setServerEnabled(server: McpServer, enabled: Boolean) = Unit
+    override fun testServer(server: McpServer) = Unit
+    override fun dismissMessage() = Unit
 }
 
 @Composable
@@ -141,3 +214,23 @@ private fun SidebarPreview() = HeraldPreview(PreviewScene.Sidebar)
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun SettingsPreview() = HeraldPreview(PreviewScene.Settings)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun InsightsPreview() = HeraldPreview(PreviewScene.Insights)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun CapabilitiesPreview() = HeraldPreview(PreviewScene.Capabilities)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun JobEditorPreview() = HeraldPreview(PreviewScene.JobEditor)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun UsagePreview() = HeraldPreview(PreviewScene.Usage)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun ProcessesPreview() = HeraldPreview(PreviewScene.Processes)
