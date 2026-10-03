@@ -7,6 +7,7 @@ import dev.hermeskotlin.ui.chat.ChatViewModel
 import dev.hermeskotlin.ui.connect.ConnectViewModel
 import dev.hermeskotlin.ui.sessions.ScheduledViewModel
 import dev.hermeskotlin.ui.sessions.SessionsViewModel
+import dev.hermeskotlin.ui.settings.SettingsViewModel
 import dev.hermeskotlin.ui.signin.SignInViewModel
 import org.koin.core.module.dsl.viewModelOf
 import org.koin.dsl.module
@@ -18,6 +19,7 @@ val uiModule = module {
     viewModelOf(::SessionsViewModel)
     viewModelOf(::ScheduledViewModel)
     viewModelOf(::ChatViewModel)
+    viewModelOf(::SettingsViewModel)
 }
 
 /** Every shared module, in dependency order. */

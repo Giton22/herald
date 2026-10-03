@@ -7,6 +7,10 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
@@ -33,6 +37,7 @@ import dev.hermeskotlin.ui.chat.ChatScreen
 import dev.hermeskotlin.ui.chat.ChatViewModel
 import dev.hermeskotlin.ui.connect.ConnectScreen
 import dev.hermeskotlin.ui.sessions.SessionsSidebar
+import dev.hermeskotlin.ui.settings.SettingsScreen
 import dev.hermeskotlin.ui.signin.SignInScreen
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
@@ -42,12 +47,15 @@ import org.koin.compose.viewmodel.koinViewModel
 /** The current [AppSettings], for screens that change how they draw. */
 val LocalAppSettings = compositionLocalOf { AppSettings() }
 
+/** The app's own version name, shown in Settings; null when the platform didn't pass one. */
+val LocalAppVersion = staticCompositionLocalOf<String?> { null }
+
 /**
  * Root composable shared by every platform. Koin must be started by the platform host first.
  * [onDarkTheme] tells the host which theme is showing, e.g. to color the system bar icons.
  */
 @Composable
-fun App(onDarkTheme: (Boolean) -> Unit = {}) {
+fun App(appVersion: String? = null, onDarkTheme: (Boolean) -> Unit = {}) {
     // Nothing is drawn until the stored settings are read, so the first frame has the right theme.
     val settings = koinInject<SettingsStore>().settings.collectAsStateWithLifecycle().value ?: return
     val dark = when (settings.theme) {
@@ -65,6 +73,7 @@ fun App(onDarkTheme: (Boolean) -> Unit = {}) {
     HermesTheme(scheme) {
         CompositionLocalProvider(
             LocalAppSettings provides settings,
+            LocalAppVersion provides appVersion,
             LocalDensity provides Density(density.density, density.fontScale * settings.textSize.scale),
         ) { Routes() }
     }
@@ -104,6 +113,7 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
     val sidebar = rememberSidebarState()
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
+    var settingsOpen by rememberSaveable { mutableStateOf(false) }
 
     // The open chat, once it exists on the gateway (a new chat gets its row with the first prompt).
     val openSessionId = chatState.storedSessionId?.takeIf { route.target.storedSessionId != null || chatState.messages.isNotEmpty() }
@@ -137,6 +147,7 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
                 onSessionExpired = app::onSessionExpired,
                 onSignOut = app::signOut,
                 onChangeGateway = app::changeGateway,
+                onOpenSettings = { settingsOpen = true },
             )
         },
     ) {
@@ -145,6 +156,15 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
             onOpenSidebar = { scope.launch { sidebar.toggle() } },
             onNewChat = app::newChat,
             viewModel = chat,
+        )
+    }
+
+    if (settingsOpen) {
+        SettingsScreen(
+            gateway = route.gateway,
+            onBack = { settingsOpen = false },
+            onSignOut = app::signOut,
+            onChangeGateway = app::changeGateway,
         )
     }
 }

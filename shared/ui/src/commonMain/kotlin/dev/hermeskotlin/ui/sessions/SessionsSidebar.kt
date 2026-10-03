@@ -61,6 +61,7 @@ import com.composables.icons.lucide.Pin
 import com.composables.icons.lucide.PinOff
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
+import com.composables.icons.lucide.Settings
 import com.composables.icons.lucide.SearchX
 import com.composables.icons.lucide.SquarePen
 import com.composables.icons.lucide.Trash2
@@ -128,6 +129,7 @@ fun SessionsSidebar(
     onSessionExpired: () -> Unit,
     onSignOut: () -> Unit,
     onChangeGateway: () -> Unit,
+    onOpenSettings: () -> Unit,
     viewModel: SessionsViewModel = koinViewModel(),
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
@@ -297,6 +299,7 @@ fun SessionsSidebar(
         onRetry = viewModel::retryConnection,
         onSignOut = onSignOut,
         onChangeGateway = onChangeGateway,
+        onOpenSettings = onOpenSettings,
     )
 }
 
@@ -664,10 +667,12 @@ private fun AccountSheet(
     onRetry: () -> Unit,
     onSignOut: () -> Unit,
     onChangeGateway: () -> Unit,
+    onOpenSettings: () -> Unit,
 ) {
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         SheetHeader(userLabel ?: "Signed in", gateway.url)
         Box(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) { ConnectionLine(connection, detailed = true) }
+        SheetAction("Settings", Lucide.Settings, onClick = { onDismiss(); onOpenSettings() })
         SheetAction(if (refreshing) "Refreshing chats…" else "Refresh chats", Lucide.RefreshCw, onClick = { onDismiss(); onRefresh() })
         if (connection is ConnectionState.Reconnecting || connection is ConnectionState.Failed) {
             SheetAction("Retry connection now", Lucide.RefreshCw, onClick = onRetry)

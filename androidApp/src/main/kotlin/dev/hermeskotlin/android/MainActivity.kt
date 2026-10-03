@@ -19,7 +19,7 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         if (windowPrefs.contains(KEY_DARK)) applyWindowTheme(windowPrefs.getBoolean(KEY_DARK, false))
         setContent {
-            App(onDarkTheme = { dark ->
+            App(appVersion = packageManager.getPackageInfo(packageName, 0).versionName, onDarkTheme = { dark ->
                 applyWindowTheme(dark)
                 windowPrefs.edit { putBoolean(KEY_DARK, dark) }
             })
