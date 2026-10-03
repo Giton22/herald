@@ -19,6 +19,9 @@ data class BackgroundProcess(
     /** The last few thousand characters of its output. */
     val output: String,
 ) {
+    /** Ended by a signal (a negative exit code, -15 after `process.kill`) rather than on its own. */
+    val stopped: Boolean get() = !running && (exitCode ?: 0) < 0
+
     companion object {
         fun parseList(result: JsonObject?): List<BackgroundProcess> =
             (result?.get("processes") as? JsonArray).orEmpty().mapNotNull { item ->

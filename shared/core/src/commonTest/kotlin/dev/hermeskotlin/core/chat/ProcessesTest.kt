@@ -26,6 +26,19 @@ class ProcessesTest {
         assertEquals("VITE ready on :5173", processes[0].output)
         assertFalse(processes[1].running)
         assertEquals(1, processes[1].exitCode)
+        assertFalse(processes[1].stopped)
+    }
+
+    @Test
+    fun aKilledProcessCountsAsStopped() {
+        val result = HermesJson.parseToJsonElement(
+            """{"processes":[{"session_id":"proc_c","command":"npm run dev","status":"exited","exit_code":-15}]}""",
+        ).jsonObject
+
+        val process = BackgroundProcess.parseList(result).single()
+
+        assertFalse(process.running)
+        assertTrue(process.stopped)
     }
 
     @Test

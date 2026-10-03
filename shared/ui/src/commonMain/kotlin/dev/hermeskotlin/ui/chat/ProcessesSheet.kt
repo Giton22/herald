@@ -179,6 +179,7 @@ private fun ProcessRow(process: BackgroundProcess, expanded: Boolean, stopping: 
                 Modifier.size(8.dp).background(
                     when {
                         process.running -> Theme[colors][success]
+                        process.stopped -> Theme[colors][textTertiary]
                         process.exitCode != null && process.exitCode != 0 -> Theme[colors][danger]
                         else -> Theme[colors][textTertiary]
                     },
@@ -226,6 +227,7 @@ private fun Note(text: String) {
 private fun BackgroundProcess.statusLine(): String = listOfNotNull(
     when {
         running -> uptimeSeconds?.let { "running for ${duration(it)}" } ?: "running"
+        stopped -> "stopped"
         exitCode != null -> "exited with code $exitCode"
         else -> "finished"
     },
