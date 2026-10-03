@@ -98,13 +98,7 @@ adb shell am start -S -n dev.herald.android/dev.hermeskotlin.android.PreviewGall
 ```
 
 ```bash
-adb exec-out screencap -p > reply-full.png
-```
-
-Then scale it to 448 px wide, so it fits on screen when opened on GitHub:
-
-```bash
-ffmpeg -i reply-full.png -vf "scale=448:-1:flags=lanczos" docs/screenshots/reply.png
+adb exec-out screencap -p > docs/screenshots/reply.png
 ```
 
 The scenes are `Reply`, `Working`, `Approval`, `Subagents`, `Voice`, `NewChat`, `Sidebar` and `Settings`.
