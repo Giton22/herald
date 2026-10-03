@@ -45,7 +45,8 @@ class InsightsViewModel(private val api: InsightsApi) : ViewModel() {
 
     fun selectPeriod(period: InsightsPeriod) {
         if (period == _state.value.period) return
-        _state.update { it.copy(period = period) }
+        // Drop the old period's report so the page shows a spinner, then this period's numbers or error.
+        _state.update { it.copy(period = period, report = null) }
         refresh()
     }
 
