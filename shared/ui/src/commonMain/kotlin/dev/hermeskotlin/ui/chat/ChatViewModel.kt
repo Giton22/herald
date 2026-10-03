@@ -497,12 +497,17 @@ class ChatViewModel(
         }
     }
 
-    fun send() {
+    /**
+     * Sends what's in the composer. Mid-turn it corrects the running turn, unless [queue] holds it for
+     * the next one.
+     */
+    fun send(queue: Boolean = false) {
         val chat = session.value ?: return
         val text = composer.text.toString()
         val attachments = _attachments.value
         if (text.isBlank() && attachments.isEmpty()) return
         val command = SlashCommand.parse(text.trim())
+        // Commands run at once either way; they never become a turn to queue.
         if (command != null && attachments.isEmpty()) {
             if (command.name.isEmpty()) return
             composer.clearText()
@@ -513,7 +518,7 @@ class ChatViewModel(
         _attachments.value = emptyList()
         viewModelScope.launch {
             // Give everything back if it never reached the gateway, so nothing typed or picked is lost.
-            if (!chat.send(text, attachments)) {
+            if (!chat.send(text, attachments, queue = queue)) {
                 if (composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
                 _attachments.update { attachments + it }
             }

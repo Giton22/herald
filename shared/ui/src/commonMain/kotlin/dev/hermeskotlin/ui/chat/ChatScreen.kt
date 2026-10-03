@@ -95,6 +95,7 @@ import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.CloudOff
+import com.composables.icons.lucide.ListEnd
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PanelLeft
 import com.composables.icons.lucide.Plus
@@ -121,6 +122,7 @@ import dev.hermeskotlin.core.chat.ToolActivity
 import dev.hermeskotlin.core.chat.TurnOutcome
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.models.displayModelName
+import dev.hermeskotlin.core.slash.SlashCommand
 import dev.hermeskotlin.core.slash.SlashKind
 import dev.hermeskotlin.core.slash.SlashSuggestion
 import dev.hermeskotlin.designsystem.code
@@ -977,6 +979,15 @@ private fun Composer(
             )
             DictationButton(dictation, onClick = onDictate, enabled = connected)
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { ModelPill(state, picker, onClick = onOpenModels) }
+            // Mid-turn, send corrects the running turn; this holds the message for the next one instead.
+            if (state.running && hasText && !SlashCommand.looksLikeCommand(viewModel.composer.text.toString())) {
+                ComposerButton(
+                    icon = Lucide.ListEnd,
+                    contentDescription = "Send after this turn",
+                    onClick = { viewModel.send(queue = true) },
+                    enabled = connected,
+                )
+            }
             val stop = state.running && !hasText
             // An empty composer offers a voice chat in the send button's place, as phone assistants do.
             val voice = !stop && !hasText && !dictation.active
@@ -989,7 +1000,7 @@ private fun Composer(
                 onClick = when {
                     stop -> viewModel::interrupt
                     voice -> onVoiceChat
-                    else -> viewModel::send
+                    else -> { { viewModel.send() } }
                 },
                 enabled = connected && (stop || hasText || voice),
             )
