@@ -109,12 +109,13 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [ ] Todo list updates (`todo.updated`)
 
 ### 6. Interactive requests (server → client)
-- [ ] **Approval** sheet for dangerous commands, with choices `once`, `session`, `always`, `deny` filtered by `allow_session`, `allow_permanent` and `smart_denied`
-- [ ] Approval cancelled or withdrawn (`approval.cancelled`, `request.cancel`)
-- [ ] **Clarify** (1–5 questions)
-- [ ] **Sudo** password prompt (masked)
-- [ ] **Secret** env-var prompt (masked)
-- [ ] Graceful "unsupported" reply for desktop-only requests (`preview.*`, `terminal.read`, `window.read`, `tour`). 🚧 Today every server request gets a "method not found" reply, so approvals are declined until the approval sheet exists
+- [x] **Approval** panel for dangerous commands, with choices `once`, `session`, `always` (confirmed first), `deny` filtered by the gateway's `choices` / `allow_session`, `allow_permanent` and `smart_denied`
+- [x] Requests withdrawn or answered elsewhere (`request.cancel`, turn end) and restored after reconnect (`open_requests`)
+- [x] **Clarify**: single or batch questions, choices, multi-select and free text
+- [x] **Sudo** password prompt (masked)
+- [x] **Secret** env-var prompt (masked)
+- [x] Desktop-only requests (`preview.*`, `terminal.read`, `window.read`, `tour`, `vault.*`) are left unanswered for another client: an error reply would settle them for every client
+- [ ] Vault prompts (`vault.unlock_prompt`, `vault.code`, `vault.save_login`)
 
 ### 7. Settings (MVP)
 - [ ] Model picker (`model.options`)
