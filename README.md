@@ -25,6 +25,18 @@ Herald is an independent project. It isn't made or endorsed by Nous Research.
 
 The full feature list, and what's planned, is in the [roadmap](docs/ROADMAP.md).
 
+## Screenshots
+
+| A reply | At work | An approval |
+|:---:|:---:|:---:|
+| <img src="docs/screenshots/reply.png" width="240" alt="A reply with reasoning, tools and Markdown"> | <img src="docs/screenshots/working.png" width="240" alt="A running turn with the agent's plan"> | <img src="docs/screenshots/approval.png" width="240" alt="The agent asking to run a command"> |
+| **Subagents** | **Sessions** | **Voice chat** |
+| <img src="docs/screenshots/subagents.png" width="240" alt="Three subagents working side by side"> | <img src="docs/screenshots/sidebar.png" width="240" alt="The sessions sidebar"> | <img src="docs/screenshots/voice.png" width="240" alt="A hands-free voice chat, listening"> |
+| **Light theme** | **A new chat** | **Settings** |
+| <img src="docs/screenshots/reply-light.png" width="240" alt="A reply in the light theme"> | <img src="docs/screenshots/new-chat.png" width="240" alt="An empty new chat"> | <img src="docs/screenshots/settings.png" width="240" alt="The settings page"> |
+
+The conversations are sample data, not a real gateway.
+
 ## Install
 
 1. Download the APK from the latest [release](../../releases/latest) on your Android phone (Android 8 or newer).
@@ -73,6 +85,23 @@ androidApp           Android host: Application, Activity, notifications, manifes
 ```
 
 The gateway protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protocol-research.md).
+
+### Previews and screenshots
+
+Every main screen has a Compose `@Preview` drawn from sample data
+([`HeraldPreviews.kt`](shared/ui/src/commonMain/kotlin/dev/hermeskotlin/ui/preview/HeraldPreviews.kt)), so it
+shows in Android Studio without a gateway. Debug builds also include `PreviewGalleryActivity`, which shows
+one scene full-screen; the README screenshots are taken from it on an emulator:
+
+```bash
+adb shell am start -S -n dev.herald.android/dev.hermeskotlin.android.PreviewGalleryActivity --es scene Reply --ez dark true
+```
+
+```bash
+adb exec-out screencap -p > docs/screenshots/reply.png
+```
+
+The scenes are `Reply`, `Working`, `Approval`, `Subagents`, `Voice`, `NewChat`, `Sidebar` and `Settings`.
 
 > **Windows note:** if host tests fail with `Could not find or load main class Files\...`, your `PATH`
 > contains a stray `"` character. Remove it from the environment variable.
