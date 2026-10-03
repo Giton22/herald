@@ -41,7 +41,8 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [x] `Surface` (flat panel, or elevated with a soft shadow + hairline)
 - [x] `Spinner`, `StatusDot`
 - [x] `TextField` password mode (masked, show/hide toggle)
-- [x] `BottomSheet` with `SheetHeader`/`SheetAction` rows, `Dialog`, `IconButton`, `Chip`
+- [x] `BottomSheet` with `SheetHeader`/`SheetAction` rows, `Dialog`, `IconButton` (plain or filled), `Chip`
+- [x] `MarkdownText` (themed GFM via multiplatform-markdown-renderer core, no Material) and `CopyButton`
 - [ ] Menu, toast, chat bubble, tool card, approval card
 - [ ] Theme picker (system / light / dark), optional Hermes-style accent presets
 
@@ -67,34 +68,39 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [x] Handle server→client requests (`srq-<n>`) and answer them with the matching id (unhandled ones get `-32601` right away so the agent never stalls)
 - [x] `gateway.ping` keepalive every 15 s, 45 s inbound deadline
 - [x] Automatic reconnect with backoff (fresh ticket each time)
-- [ ] `session.resume` / `session.events.since` replay after reconnect
+- [x] Re-attach (`session.resume`) and refetch the transcript after a reconnect; rebuild a running turn from `inflight`
+- [ ] Exact event replay after reconnect (`session.events.since`)
 - [x] Connection-state indicator in the UI (connecting, connected, retrying with countdown, refused, session expired)
 
 ### 3. Sessions
 - [x] Session list with title, preview, model, last-active time, source, message count, and pinned/archived state (`GET /api/sessions?order=recent`, paged; same REST endpoint Desktop uses because the WS `session.list` row has no model or last-active time)
 - [x] Pinned section on top, plus a Recent/Archived filter
-- [ ] Create a new session (`session.create`), together with chat
+- [x] Create a new session (`session.create`) from a "New chat" button; the stored row appears with the first prompt
 - [x] Open a session and read its stored history (`GET /api/sessions/{id}/messages`, read-only; tool steps are folded into one reply)
-- [ ] Resume a session live so you can reply in it (`session.resume`), together with chat
+- [x] Resume a session live and reply in it (`session.resume {omit_messages}` + REST history, like Desktop)
+- [x] Refetch the list when returning from a chat
 - [x] Rename, pin, archive and delete (`PATCH`/`DELETE /api/sessions/{id}`), with optimistic updates that roll back on error
 - [x] Live list updates (`sessions.changed`, `session.title` → refetch; also refetch after reconnect)
 - [ ] Live per-session status in the list (`session.info`, `session.active_list`)
 - [x] Search sessions by title, session id and message text (`GET /api/sessions/search`, debounced, with match snippet)
 
 ### 4. Chat
-- [ ] Send a prompt (`prompt.submit`)
-- [ ] Streaming assistant text (`message.start`, `message.delta`, `message.complete`)
-- [ ] Interim commentary (`message.interim`)
-- [ ] Markdown rendering with code blocks, syntax highlighting and a copy button
-- [ ] Reasoning/thinking blocks, collapsible (`reasoning.delta`, `thinking.delta`)
-- [ ] Stop or interrupt a running turn (`session.interrupt`)
+- [x] Send a prompt (`prompt.submit`); prompts sent mid-turn are marked queued; unsent text returns to the composer
+- [x] Streaming assistant text (`message.start`, `message.delta`, `message.complete`), including outcome (complete / stopped / error)
+- [x] Interim commentary (`message.interim`), folded into the reply
+- [x] Markdown rendering (GFM: lists, tables, links, code blocks with language label and copy button; copy whole reply)
+- [ ] Syntax highlighting in code blocks
+- [x] Reasoning/thinking blocks, collapsible (`reasoning.delta`, `thinking.delta`, `reasoning.available`)
+- [x] Stop a running turn (`session.interrupt`): the Send button turns into Stop while a turn runs
 - [ ] Steer a running turn (`session.steer`)
 - [ ] Token usage and cost per turn and per session (`session.usage`, `MessageCompletePayload.usage`)
-- [ ] Error, warning and notice display (`error`, `notice`, `status.update`)
+- [x] Error banner and live status line (`error`, `status.update`, failed turns)
+- [ ] Notices and warnings (`notice`, `MessageCompletePayload.warning`)
 
 ### 5. Tool activity
-- [ ] Tool call cards: name, args preview, running state (`tool.start`, `tool.generating`)
-- [ ] Completion state: duration, error flag, output preview (`tool.complete`)
+- [x] Tool rows in the reply: name, what it is doing, running spinner → done (`tool.start`, `tool.complete` summary)
+- [ ] Expandable tool cards with full args and output, `tool.generating`
+- [ ] Completion details: duration, error flag, output preview (`tool.complete`)
 - [ ] Output-risk warnings (`tool.output_risk`)
 - [ ] Todo list updates (`todo.updated`)
 
@@ -104,7 +110,7 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [ ] **Clarify** (1–5 questions)
 - [ ] **Sudo** password prompt (masked)
 - [ ] **Secret** env-var prompt (masked)
-- [ ] Graceful "unsupported" reply for desktop-only requests (`preview.*`, `terminal.read`, `window.read`, `tour`)
+- [ ] Graceful "unsupported" reply for desktop-only requests (`preview.*`, `terminal.read`, `window.read`, `tour`). 🚧 Today every server request gets a "method not found" reply, so approvals are declined until the approval sheet exists
 
 ### 7. Settings (MVP)
 - [ ] Model picker (`model.options`)

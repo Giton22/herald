@@ -7,6 +7,7 @@ import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.ui.chat.ChatTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -18,11 +19,13 @@ sealed interface Route {
     data class SignIn(val gateway: SavedGateway, val notice: String? = null) : Route
     data class Sessions(val gateway: SavedGateway) : Route
 
-    /** A stored session opened from [Sessions]; Back returns there. */
-    data class Transcript(val gateway: SavedGateway, val sessionId: String, val title: String) : Route
+    /** A chat opened from [Sessions] (stored, or new when `target.storedSessionId` is null); Back returns there. */
+    data class Chat(val target: ChatTarget) : Route {
+        val gateway: SavedGateway get() = target.gateway
+    }
 }
 
-/** Top-level flow: pick gateway → sign in → sessions → transcript. Owns the gateway connection lifecycle. */
+/** Top-level flow: pick gateway → sign in → sessions → chat. Owns the gateway connection lifecycle. */
 class AppViewModel(
     private val gateways: GatewayRepository,
     private val auth: AuthApi,
@@ -31,6 +34,8 @@ class AppViewModel(
 
     private val _route = MutableStateFlow<Route>(Route.Loading)
     val route: StateFlow<Route> = _route.asStateFlow()
+
+    private var newChatCount = 0L
 
     init {
         viewModelScope.launch {
@@ -62,7 +67,13 @@ class AppViewModel(
 
     fun openSession(sessionId: String, title: String) {
         val gateway = signedInGateway() ?: return
-        _route.value = Route.Transcript(gateway, sessionId, title)
+        _route.value = Route.Chat(ChatTarget(gateway, sessionId, title))
+    }
+
+    fun newChat() {
+        val gateway = signedInGateway() ?: return
+        // The nonce makes every "New chat" a fresh target, even right after another empty one.
+        _route.value = Route.Chat(ChatTarget(gateway, storedSessionId = null, title = null, nonce = ++newChatCount))
     }
 
     /** The dashboard rejected our cookies (socket or REST): back to sign-in with a notice. */
@@ -93,7 +104,7 @@ class AppViewModel(
 
     /** System back. Returns false when there is nowhere to go back to (let the platform close the app). */
     fun back(): Boolean = when (val r = _route.value) {
-        is Route.Transcript -> {
+        is Route.Chat -> {
             _route.value = Route.Sessions(r.gateway)
             true
         }
@@ -106,7 +117,7 @@ class AppViewModel(
 
     private fun signedInGateway(): SavedGateway? = when (val r = _route.value) {
         is Route.Sessions -> r.gateway
-        is Route.Transcript -> r.gateway
+        is Route.Chat -> r.gateway
         else -> null
     }
 

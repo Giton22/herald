@@ -87,6 +87,9 @@ class SessionsViewModel(
 
     fun refresh() = load(refresh = true)
 
+    /** Background refetch without the spinner, e.g. when the list becomes visible again. */
+    fun refreshQuietly() = load(refresh = false)
+
     fun setFilter(filter: ArchiveFilter) {
         if (filter == _state.value.filter) return
         _state.update { SessionsUiState(filter = filter) }

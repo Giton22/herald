@@ -55,6 +55,7 @@ import com.composables.icons.lucide.PinOff
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
 import com.composables.icons.lucide.SearchX
+import com.composables.icons.lucide.SquarePen
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.X
 import com.composeunstyled.Text
@@ -100,9 +101,12 @@ import org.koin.compose.viewmodel.koinViewModel
 fun SessionsScreen(
     gateway: SavedGateway,
     onOpenSession: (SessionSummary) -> Unit,
+    onNewChat: () -> Unit,
     onSessionExpired: () -> Unit,
     onSignOut: () -> Unit,
     onChangeGateway: () -> Unit,
+    /** False while a chat covers the list; turning true again refetches, since that chat may have changed it. */
+    onTop: Boolean = true,
     viewModel: SessionsViewModel = koinViewModel(),
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
@@ -115,6 +119,11 @@ fun SessionsScreen(
     var accountOpen by remember { mutableStateOf(false) }
 
     LaunchedEffect(gateway) { viewModel.bind(gateway) }
+    var wasOnTop by remember { mutableStateOf(onTop) }
+    LaunchedEffect(onTop) {
+        if (onTop && !wasOnTop) viewModel.refreshQuietly()
+        wasOnTop = onTop
+    }
     LaunchedEffect(state.sessionExpired) { if (state.sessionExpired) onSessionExpired() }
     LaunchedEffect(state.message) {
         if (state.message != null) {
@@ -193,8 +202,20 @@ fun SessionsScreen(
                     )
                 }
 
-                state.message?.let { message ->
-                    MessageBanner(message, onDismiss = viewModel::dismissMessage, modifier = Modifier.align(Alignment.BottomCenter))
+                Column(
+                    Modifier.align(Alignment.BottomCenter).fillMaxWidth()
+                        .padding(bottom = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding() + 16.dp),
+                    horizontalAlignment = Alignment.End,
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    state.message?.let { message -> MessageBanner(message, onDismiss = viewModel::dismissMessage) }
+                    Button(
+                        "New chat",
+                        onClick = onNewChat,
+                        leadingIcon = Lucide.SquarePen,
+                        size = ButtonSize.Large,
+                        modifier = Modifier.padding(end = 16.dp),
+                    )
                 }
             }
         }
@@ -270,7 +291,8 @@ private fun SessionList(
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
-        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, bottom = bottomInset + 16.dp),
+        // Room for the floating "New chat" button.
+        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, bottom = bottomInset + 88.dp),
     ) {
         if (sectioned) {
             val (pinned, recent) = sessions.partition { it.pinned }
@@ -487,8 +509,7 @@ private fun CenteredSpinner() {
 
 @Composable
 private fun MessageBanner(message: String, onDismiss: () -> Unit, modifier: Modifier = Modifier) {
-    val bottomInset = WindowInsets.navigationBars.asPaddingValues().calculateBottomPadding()
-    Surface(modifier.padding(start = 16.dp, end = 16.dp, bottom = bottomInset + 16.dp).fillMaxWidth(), elevated = true) {
+    Surface(modifier.padding(horizontal = 16.dp).fillMaxWidth(), elevated = true) {
         Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(message, style = Theme[typography][bodySmall], color = Theme[colors][text], modifier = Modifier.weight(1f))
             IconButton(Lucide.X, contentDescription = "Dismiss", onClick = onDismiss, tint = Theme[colors][accent])
