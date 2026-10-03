@@ -14,7 +14,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
+import dev.hermeskotlin.core.models.ReasoningEffort
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -331,6 +335,206 @@ class ChatSession(
     suspend fun status() = runOnGateway("/status") { client, runtimeId ->
         val result = client.request("session.status", buildJsonObject { put("session_id", runtimeId) }) as? JsonObject
         result.string("output") ?: "No status."
+    }
+
+    /** `/stop`: stops the reply, then the background processes the agent left running (`process.stop`). */
+    suspend fun stopEverything() = runOnGateway("/stop") { client, runtimeId ->
+        val lines = mutableListOf<String>()
+        if (_state.value.running) {
+            client.request("session.interrupt", buildJsonObject { put("session_id", runtimeId) })
+            lines += "Stopped the reply."
+        }
+        val killed = (client.request("process.stop", JsonObject(emptyMap())) as? JsonObject).int("killed") ?: 0
+        lines += when (killed) {
+            0 -> "No background processes were running."
+            1 -> "Stopped 1 background process."
+            else -> "Stopped $killed background processes."
+        }
+        lines.joinToString("\n")
+    }
+
+    /**
+     * `/btw`: a side question answered from a snapshot of the chat without interrupting it
+     * (`prompt.btw`). The answer arrives later as `btw.complete` and fills in the same card.
+     */
+    suspend fun askAside(question: String) {
+        if (question.isBlank()) {
+            showCommandOutput("/btw", "Usage: /btw <question>. It's answered from a snapshot of this chat, without interrupting it.")
+            return
+        }
+        val key = addCommand("/btw ${question.trim()}")
+        val client = connectedClient() ?: return finishCommand(key, NOT_CONNECTED, failed = true)
+        try {
+            val runtimeId = ensureAttached(client)
+            val result = client.request(
+                "prompt.btw",
+                buildJsonObject {
+                    put("session_id", runtimeId)
+                    put("text", question.trim())
+                },
+            ) as? JsonObject
+            val taskId = result.string("task_id")
+            _state.update { state ->
+                state.copy(messages = state.messages.map { if (it is ChatMessage.Command && it.key == key) it.copy(taskId = taskId) else it })
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            finishCommand(key, e.message ?: "Couldn't ask the side question.", failed = true)
+        }
+    }
+
+    /**
+     * `/reasoning [level|show|hide] [--global]` through `config.set reasoning`, as the TUI does; bare,
+     * it reports the current setting. Returns the value the gateway settled on.
+     */
+    suspend fun reasoning(arg: String): String? {
+        var settled: String? = null
+        runOnGateway("/reasoning") { client, runtimeId ->
+            val words = arg.trim().split(Regex("""\s+""")).filter { it.isNotEmpty() }
+            val scope = when {
+                words.any { it.lowercase() in GLOBAL_FLAGS } -> "global"
+                words.any { it.lowercase() in SESSION_FLAGS } -> "session"
+                else -> null
+            }
+            val value = words.filterNot { it.lowercase() in GLOBAL_FLAGS || it.lowercase() in SESSION_FLAGS }.joinToString(" ")
+            if (value.isEmpty()) {
+                val current = client.request(
+                    "config.get",
+                    buildJsonObject {
+                        put("key", "reasoning")
+                        put("session_id", runtimeId)
+                    },
+                ) as? JsonObject
+                return@runOnGateway "Reasoning: ${current.string("value")?.ifBlank { null } ?: "medium"} · " +
+                    "thinking ${if (current.string("display") == "show") "shown" else "hidden"}"
+            }
+            val result = client.request(
+                "config.set",
+                buildJsonObject {
+                    put("key", "reasoning")
+                    put("session_id", runtimeId)
+                    put("value", value)
+                    scope?.let { put("scope", it) }
+                },
+            ) as? JsonObject
+            val applied = result.string("value") ?: value
+            settled = applied
+            if (ReasoningEffort.fromWire(applied) != null) _state.update { it.copy(reasoningEffort = applied) }
+            when (applied) {
+                "show" -> "Thinking is shown."
+                "hide" -> "Thinking is hidden."
+                else -> "Reasoning set to $applied" + if (scope == "global") " for every chat." else "."
+            }
+        }
+        return settled
+    }
+
+    /** `/yolo`: skips (or restores) tool approvals for this chat only (`config.set yolo`, session scope). */
+    suspend fun toggleYolo() = runOnGateway("/yolo") { client, runtimeId ->
+        val next = _state.value.yolo != true
+        val result = client.request(
+            "config.set",
+            buildJsonObject {
+                put("key", "yolo")
+                put("session_id", runtimeId)
+                put("value", if (next) "1" else "0")
+            },
+        ) as? JsonObject
+        val on = result.string("value") == "1"
+        _state.update { it.copy(yolo = on) }
+        if (on) "YOLO on: this chat runs tools without asking for approval." else "YOLO off: risky tools ask for approval again."
+    }
+
+    /** `/title <name>`: renames the chat through `session.title` (REST can't address a live session's row yet). */
+    suspend fun retitle(title: String) = runOnGateway("/title") { client, runtimeId ->
+        val result = client.request(
+            "session.title",
+            buildJsonObject {
+                put("session_id", runtimeId)
+                put("title", title.trim())
+            },
+        ) as? JsonObject
+        val final = (result.string("title") ?: title).trim()
+        _state.update { it.copy(title = final.ifEmpty { null }) }
+        when {
+            final.isEmpty() -> "Title cleared."
+            result.boolean("pending") == true -> "Title set: $final (saved once the chat starts)."
+            else -> "Title set: $final"
+        }
+    }
+
+    /**
+     * `/branch [count]`: copies this chat (or its first [count] messages) into a new one, as Desktop's
+     * branch does. Returns the new chat's stored id and title to open, or null when it failed.
+     */
+    suspend fun branch(count: Int?): Pair<String, String?>? {
+        if (!rowExists) {
+            showCommandOutput("/branch", "Nothing to branch yet. Send a message first.", failed = true)
+            return null
+        }
+        var branched: Pair<String, String?>? = null
+        runOnGateway("/branch") { client, runtimeId ->
+            val params = buildJsonObject {
+                put("session_id", runtimeId)
+                count?.let { put("count", it) }
+            }
+            val result = try {
+                client.request(if (count == null) "session.branch_whole" else "session.branch", params) as? JsonObject
+            } catch (e: RpcException) {
+                // Gateways older than branch_whole only have session.branch.
+                if (e.code != METHOD_NOT_FOUND) throw e
+                client.request("session.branch", params) as? JsonObject
+            }
+            val stored = result.string("stored_session_id") ?: throw RpcException(0, "The gateway didn't say where the branch went.")
+            val title = result.string("title")?.takeIf { it.isNotBlank() }
+            branched = stored to title
+            "Branched into ${title?.let { "“$it”" } ?: "a new chat"}."
+        }
+        return branched
+    }
+
+    /**
+     * `/handoff <platform>`: queues this chat for a messaging platform's home channel and waits for the
+     * gateway's messaging service to claim it (`handoff.request`, then `handoff.state`), like Desktop.
+     */
+    suspend fun handoff(platform: String) {
+        val target = platform.trim().lowercase()
+        if (target.isEmpty()) {
+            showCommandOutput("/handoff", "Usage: /handoff <platform>, e.g. /handoff telegram.")
+            return
+        }
+        runOnGateway("/handoff $target", HANDOFF_WAIT_MS) { client, runtimeId ->
+            client.request(
+                "handoff.request",
+                buildJsonObject {
+                    put("session_id", runtimeId)
+                    put("platform", target)
+                },
+            )
+            val deadline = TimeSource.Monotonic.markNow() + HANDOFF_WAIT_MS.milliseconds
+            while (deadline.hasNotPassedNow()) {
+                delay(800)
+                val record = runCatching {
+                    client.request("handoff.state", buildJsonObject { put("session_id", runtimeId) }) as? JsonObject
+                }.getOrNull() ?: continue
+                when (record.string("state")) {
+                    "completed" -> return@runOnGateway "Handed off to $target. Continue the chat there."
+                    "failed" -> throw RpcException(0, record.string("error")?.ifBlank { null } ?: "The handoff to $target failed.")
+                }
+            }
+            val cleanup = runCatching {
+                client.request(
+                    "handoff.fail",
+                    buildJsonObject {
+                        put("session_id", runtimeId)
+                        put("error", "Timed out waiting for the messaging service.")
+                    },
+                ) as? JsonObject
+            }.getOrNull()
+            if (cleanup.string("state") == "completed") "Handed off to $target. Continue the chat there."
+            else throw RpcException(0, "Nothing picked up the handoff. Is the gateway's messaging service running?")
+        }
     }
 
     /** Shows [text] under [command] at once, for commands this client answers itself. */
@@ -684,6 +888,16 @@ class ChatSession(
         const val NOT_CONNECTED = "Not connected to the gateway."
 
         val ANSI_ESCAPE = Regex("""\u001B\[[0-9;?]*[ -/]*[@-~]""")
+
+        /** JSON-RPC "method not found": the gateway predates a call. */
+        const val METHOD_NOT_FOUND = -32601
+
+        /** How long a handoff may wait for the messaging service to claim it (Desktop's minute). */
+        const val HANDOFF_WAIT_MS = 60_000L
+
+        /** `/reasoning`'s scope words (Desktop's reasoning-slash.ts). */
+        val GLOBAL_FLAGS = setOf("--global", "-g", "global")
+        val SESSION_FLAGS = setOf("--session", "-s", "session")
 
         /** The slash worker can be slow to start (it loads the agent and its MCP servers). */
         const val COMMAND_TIMEOUT_MS = 60_000L

@@ -51,8 +51,23 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
         "error" -> copy(error = payload.string("message"))
         "session.title" -> copy(title = payload.string("title") ?: title)
         "session.info" -> withInfo(payload).copy(title = payload.string("title")?.takeIf { it.isNotBlank() } ?: title)
+        "btw.complete" -> answerAside(payload)
         else -> this
     }
+}
+
+/** A `/btw` answer: fills the card that asked it, or adds one when the question came from another client. */
+private fun ChatState.answerAside(payload: JsonObject?): ChatState {
+    val text = payload.string("text")?.trim()?.takeIf { it.isNotEmpty() } ?: return this
+    val taskId = payload.string("task_id")
+    val index = messages.indexOfFirst { it is ChatMessage.Command && it.taskId != null && it.taskId == taskId }
+    if (index >= 0) {
+        val asked = messages[index] as ChatMessage.Command
+        return copy(messages = messages.toMutableList().apply { set(index, asked.copy(output = text, running = false)) })
+    }
+    val question = payload.string("question")?.trim().orEmpty()
+    val card = ChatMessage.Command("btw-$keySeq", "/btw $question".trimEnd(), text, running = false, taskId = taskId)
+    return copy(messages = messages + card, keySeq = keySeq + 1)
 }
 
 /** Desktop's `providerWaitText` (store/provider-wait.ts): the waits the core explains after a long silence. */
@@ -70,6 +85,7 @@ internal fun ChatState.withInfo(info: JsonObject?): ChatState {
         // "" means the profile default, which is worth showing as such rather than as a stale pick.
         reasoningEffort = info.string("reasoning_effort")?.let { it.ifBlank { null } } ?: reasoningEffort.takeIf { "reasoning_effort" !in info },
         fast = info.boolean("fast") ?: fast,
+        yolo = info.boolean("yolo") ?: yolo,
     )
 }
 

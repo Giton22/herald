@@ -102,6 +102,13 @@ sealed interface SlashRoute {
     data object Help : SlashRoute
     data object Compress : SlashRoute
     data object Status : SlashRoute
+    data object Aside : SlashRoute
+    data object Reasoning : SlashRoute
+    data object Yolo : SlashRoute
+    data object Title : SlashRoute
+    data object Branch : SlashRoute
+    data object Profile : SlashRoute
+    data object Handoff : SlashRoute
 
     /** Known, but there is nothing on this client to run it with. */
     data class Unavailable(val message: String) : SlashRoute
@@ -114,7 +121,7 @@ sealed interface SlashRoute {
         fun of(name: String, catalog: SlashCatalog?): SlashRoute {
             val canonical = LOCAL_ALIASES[name] ?: catalog?.canonical(name) ?: name
             LOCAL[canonical]?.let { return it }
-            if (canonical in DESKTOP_ONLY) return Unavailable("/$canonical isn't available in this app yet.")
+            DESKTOP_ONLY[canonical]?.let { return Unavailable(it.replace("%s", "/$canonical")) }
             return when (catalog?.surface(canonical)) {
                 "terminal" -> Unavailable("/$canonical only works in the terminal.")
                 "messaging" -> Unavailable("/$canonical is for messaging platforms.")
@@ -139,7 +146,13 @@ sealed interface SlashRoute {
             "help" to Help,
             "compress" to Compress,
             "status" to Status,
-            "profile" to Unavailable("Switch profiles from the account menu: tap your avatar in the sidebar."),
+            "btw" to Aside,
+            "reasoning" to Reasoning,
+            "yolo" to Yolo,
+            "title" to Title,
+            "branch" to Branch,
+            "profile" to Profile,
+            "handoff" to Handoff,
         )
 
         private val LOCAL_ALIASES = mapOf(
@@ -148,14 +161,22 @@ sealed interface SlashRoute {
             "switch" to "resume",
             "commands" to "help",
             "compact" to "compress",
+            "fork" to "branch",
         )
 
-        /** Desktop actions with no counterpart here yet. */
-        private val DESKTOP_ONLY = setOf(
-            "branch", "fork", "btw", "yolo", "reasoning", "wake", "handoff", "skin", "browser",
-            "journey", "learning", "memory-graph", "pet", "pets", "hatch", "generate-pet",
-            "density", "details", "logs", "mouse",
-        )
+        /**
+         * Commands Desktop answers inside its own window. The gateway offers them to graphical clients,
+         * but run there they'd act on a background copy of the agent, not this chat.
+         */
+        private val DESKTOP_ONLY = buildMap {
+            put("wake", "%s listens on the gateway computer's microphone, a Desktop feature.")
+            put("browser", "%s connects a browser on the gateway computer, so it only works from Desktop there.")
+            put("skin", "Change the theme in Settings.")
+            listOf("journey", "learning", "memory-graph", "pet", "pets", "hatch", "generate-pet").forEach {
+                put(it, "%s opens a view only Desktop has.")
+            }
+            listOf("density", "details", "logs", "mouse").forEach { put(it, "%s only works in the terminal.") }
+        }
     }
 }
 

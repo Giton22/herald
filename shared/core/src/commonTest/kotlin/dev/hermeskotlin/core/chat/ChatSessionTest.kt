@@ -408,4 +408,49 @@ class ChatSessionTest {
         val shown = assertIs<ChatMessage.Command>(failing.state.value.messages.single())
         assertTrue(shown.failed)
     }
+
+    @Test
+    fun aSideQuestionIsAnsweredIntoItsOwnCard() = runTest {
+        val (chat, transport) = newChat(backgroundScope, mapOf("prompt.btw" to """{"task_id":"t1"}"""))
+
+        chat.askAside("what was the file?")
+
+        assertEquals("what was the file?", transport.sent.value.first { it.isCall("prompt.btw") }.param("text"))
+        chat.state.first { (it.messages.singleOrNull() as? ChatMessage.Command)?.taskId == "t1" }
+        transport.push(event("btw.complete", "rt9", """{"task_id":"t1","question":"what was the file?","text":"notes.txt"}"""))
+        val card = chat.state.first { (it.messages.single() as ChatMessage.Command).output.isNotEmpty() }.messages.single() as ChatMessage.Command
+        assertEquals("/btw what was the file?", card.command)
+        assertEquals("notes.txt", card.output)
+        assertFalse(card.running)
+    }
+
+    @Test
+    fun yoloTogglesForThisChatOnly() = runTest {
+        val (chat, transport) = newChat(backgroundScope, mapOf("config.set" to """{"key":"yolo","value":"1"}"""))
+
+        chat.toggleYolo()
+
+        val set = transport.sent.value.first { it.isCall("config.set") }
+        assertEquals("yolo", set.param("key"))
+        assertEquals("1", set.param("value"))
+        assertEquals(null, set.param("scope"))
+        assertEquals(true, chat.state.value.yolo)
+    }
+
+    @Test
+    fun branchingReturnsTheNewChatToOpen() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.resume" to """{"session_id":"rt1","running":false}""",
+                "session.branch_whole" to """{"session_id":"rt2","stored_session_id":"stored-2","title":"Greeting #2","message_count":2}""",
+            ),
+        )
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" }
+
+        assertEquals("stored-2" to "Greeting #2", chat.branch(null))
+        assertEquals("rt1", transport.sent.value.first { it.isCall("session.branch_whole") }.param("session_id"))
+    }
 }

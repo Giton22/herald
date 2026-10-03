@@ -46,6 +46,8 @@ sealed interface ChatMessage {
         val output: String = "",
         val running: Boolean = true,
         val failed: Boolean = false,
+        /** The side task answering a `/btw`, whose `btw.complete` fills [output] in. */
+        val taskId: String? = null,
     ) : ChatMessage
 }
 
@@ -71,6 +73,8 @@ data class ChatState(
     val reasoningEffort: String? = null,
     /** Priority tier on; null until the gateway reports it. */
     val fast: Boolean? = null,
+    /** Tool approvals skipped for this chat (`/yolo`); null until the gateway reports it. */
+    val yolo: Boolean? = null,
     val historyLoaded: Boolean = false,
     val historyError: String? = null,
     val messages: List<ChatMessage> = emptyList(),
