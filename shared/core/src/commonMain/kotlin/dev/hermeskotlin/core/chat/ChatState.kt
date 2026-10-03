@@ -34,6 +34,8 @@ sealed interface ChatMessage {
         val streaming: Boolean = false,
         val outcome: TurnOutcome? = null,
         val error: String? = null,
+        /** Tokens the turn took; only for turns watched live (the transcript doesn't keep it). */
+        val usage: TurnUsage? = null,
     ) : ChatMessage
 
     /**
@@ -89,6 +91,10 @@ data class ChatState(
     val error: String? = null,
     /** Questions the agent is blocked on (approval, clarify, sudo, secret), oldest first. */
     val inputRequests: List<InputRequest> = emptyList(),
+    /** The live agent's latest token totals. */
+    val usage: SessionUsage? = null,
+    /** [usage] when the running turn started, to tell what the turn itself took. */
+    val turnStartUsage: SessionUsage? = null,
     /** The agent's plan for the running turn; a finished one stays until the next plan or chat. */
     val todos: TodoList? = null,
     /** The part of the running turn's reply shown before a mid-turn correction; the turn continues below it. */

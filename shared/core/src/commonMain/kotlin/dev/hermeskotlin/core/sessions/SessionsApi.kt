@@ -76,6 +76,13 @@ class SessionsApi(private val client: HttpClient) {
         }
     }.map { it.body<SessionMessagesPage>() }
 
+    /** `GET /api/sessions/{id}` — the stored row, read for its token and cost totals. */
+    suspend fun totals(url: GatewayUrl, sessionId: String, profile: String? = null): ApiResult<SessionTotals> = apiCall {
+        client.get(url.resolve("api/sessions/${sessionId.encodeURLPathPart()}")) {
+            profile?.let { parameter("profile", it) }
+        }
+    }.map { it.body<SessionTotals>() }
+
     /** Sets a title; an empty [title] clears it. Titles are unique per profile, so a clash is a 400 with a message. */
     suspend fun rename(url: GatewayUrl, sessionId: String, title: String, profile: String? = null): ApiResult<Unit> =
         patch(url, sessionId, SessionPatch(title = title, profile = profile))

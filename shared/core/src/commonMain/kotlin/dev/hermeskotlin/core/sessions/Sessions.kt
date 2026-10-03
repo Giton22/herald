@@ -38,6 +38,30 @@ data class SessionSummary(
     val activityAt: Double? get() = lastActive ?: startedAt
 }
 
+/**
+ * What a stored session has used so far, from its row (`GET /api/sessions/{id}`). The gateway keeps
+ * these through restarts; costs are estimates from its price table unless the provider billed exactly.
+ */
+@Serializable
+data class SessionTotals(
+    // Null in rows written before a counter existed.
+    @SerialName("input_tokens") val inputTokens: Long? = null,
+    @SerialName("output_tokens") val outputTokens: Long? = null,
+    @SerialName("cache_read_tokens") val cacheReadTokens: Long? = null,
+    @SerialName("cache_write_tokens") val cacheWriteTokens: Long? = null,
+    @SerialName("reasoning_tokens") val reasoningTokens: Long? = null,
+    @SerialName("api_call_count") val apiCalls: Long? = null,
+    @SerialName("estimated_cost_usd") val estimatedCostUsd: Double? = null,
+    @SerialName("actual_cost_usd") val actualCostUsd: Double? = null,
+    /** e.g. `estimated`, `actual`, `included` (a subscription), `unknown` (no price for the model). */
+    @SerialName("cost_status") val costStatus: String? = null,
+    val model: String? = null,
+) {
+    /** The billed amount when there is one, else the estimate. */
+    val costUsd: Double? get() = actualCostUsd?.takeIf { it > 0 } ?: estimatedCostUsd
+    val costIsEstimate: Boolean get() = actualCostUsd == null || actualCostUsd <= 0
+}
+
 @Serializable
 data class SessionPage(
     val sessions: List<SessionSummary> = emptyList(),

@@ -11,7 +11,13 @@ import kotlinx.serialization.json.JsonObject
 fun ChatState.reduce(event: GatewayEvent): ChatState {
     val payload = event.payload as? JsonObject
     return when (event.type) {
-        "message.start" -> withOpenReply { it }.copy(running = true, error = null)
+        "message.start" -> withOpenReply { it }.copy(
+            running = true,
+            error = null,
+            // No totals yet means the agent isn't built, and a new one counts from zero.
+            turnStartUsage = turnStartUsage.takeIf { running } ?: usage ?: SessionUsage(),
+        )
+        "session.usage" -> copy(usage = SessionUsage.parse(payload?.get("usage") as? JsonObject) ?: usage)
         "message.delta" -> appendText(payload.string("text"))
         "message.interim" ->
             // Commentary next to tool calls; when already streamed it is in the text already.
@@ -102,6 +108,7 @@ internal fun ChatState.withInfo(info: JsonObject?): ChatState {
         reasoningEffort = info.string("reasoning_effort")?.let { it.ifBlank { null } } ?: reasoningEffort.takeIf { "reasoning_effort" !in info },
         fast = info.boolean("fast") ?: fast,
         yolo = info.boolean("yolo") ?: yolo,
+        usage = SessionUsage.parse(info["usage"] as? JsonObject) ?: usage,
     )
 }
 
@@ -131,12 +138,9 @@ private fun ChatState.complete(payload: JsonObject?): ChatState {
         if (shown != null && text.startsWith(shown)) text.removePrefix(shown).trim() else text
     }
     val finalReasoning = payload.string("reasoning").orEmpty().takeIf { correctedReplyKey == null }.orEmpty()
+    val finalUsage = SessionUsage.parse(payload?.get("usage") as? JsonObject)
     val index = messages.openReplyIndex().takeIf { it >= 0 }
-        ?: if (finalText.isBlank() && error == null) {
-            return copy(running = false, status = null, thinkingFrame = null, messages = messages, correctedReplyKey = null, todos = todosAfterTurn())
-        } else {
-            messages.size
-        }
+        ?: if (finalText.isBlank() && error == null) return endTurn(messages, finalUsage) else messages.size
     val base = messages.getOrNull(index) as? ChatMessage.Assistant ?: ChatMessage.Assistant(key = "live-$keySeq")
     val reply = base.copy(
         // Prefer what streamed (it includes interim segments); fall back to the final text for
@@ -147,6 +151,7 @@ private fun ChatState.complete(payload: JsonObject?): ChatState {
         streaming = false,
         outcome = outcome,
         error = error.takeIf { outcome == TurnOutcome.Error },
+        usage = finalUsage?.let { end -> turnStartUsage?.let { end - it } }?.takeIf { it.any },
     )
     // A turn that ended with nothing to show (e.g. interrupted at once) leaves no bubble, unless it failed.
     val empty = reply.text.isBlank() && reply.reasoning.isBlank() && reply.tools.isEmpty() && reply.error == null
@@ -157,19 +162,20 @@ private fun ChatState.complete(payload: JsonObject?): ChatState {
             else -> set(index, reply)
         }
     }
-    return copy(
-        running = false,
-        status = null,
-        thinkingFrame = null,
-        messages = updated,
-        keySeq = keySeq + 1,
-        correctedReplyKey = null,
-        todos = todosAfterTurn(),
-    )
+    return endTurn(updated, finalUsage).copy(keySeq = keySeq + 1)
 }
 
-/** A plan still open when its turn ends was abandoned (stopped, or no final update); a finished one stays. */
-private fun ChatState.todosAfterTurn(): TodoList? = todos?.takeUnless { it.active }
+private fun ChatState.endTurn(messages: List<ChatMessage>, finalUsage: SessionUsage?) = copy(
+    running = false,
+    status = null,
+    thinkingFrame = null,
+    messages = messages,
+    correctedReplyKey = null,
+    // A plan still open when its turn ends was abandoned (stopped, or no final update); a finished one stays.
+    todos = todos?.takeUnless { it.active },
+    usage = finalUsage ?: usage,
+    turnStartUsage = null,
+)
 
 /** The reply still streaming. Not necessarily last: a prompt queued mid-turn sits after it. */
 private fun List<ChatMessage>.openReplyIndex(): Int = indexOfLast { it is ChatMessage.Assistant && it.streaming }
