@@ -101,16 +101,16 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [x] Stop a running turn (`session.interrupt`): the Send button turns into Stop while a turn runs
 - [x] Prompts sent from another client (Desktop, CLI, messaging) show up live: a turn this client didn't start refetches the transcript at its start and end, since the gateway streams only the reply
 - [x] Steer a running turn: a message sent mid-turn corrects it, the queue button holds it for the next turn, `/steer` injects a note (`prompt.submit` busy modes, `session.steer`)
-- [ ] Token usage and cost per turn and per session (`session.usage`, `MessageCompletePayload.usage`)
+- [x] Token usage per turn (live turns) and per session with cost, context window and account limits (`session.usage`, `MessageCompletePayload.usage`, `GET /api/sessions/{id}`)
 - [x] Error banner and live status line (`error`, `status.update`, failed turns)
 - [ ] Notices and warnings (`notice`, `MessageCompletePayload.warning`)
 
 ### 5. Tool activity
 - [x] Tool rows in the reply: name, what it is doing, running spinner → done (`tool.start`, `tool.complete` summary)
-- [ ] Expandable tool cards with full args and output, `tool.generating`
-- [ ] Completion details: duration, error flag, output preview (`tool.complete`)
+- [x] Expandable tool cards with full args and output, `tool.generating`
+- [x] Completion details: duration, error flag, output preview, diffs (`tool.complete`)
 - [ ] Output-risk warnings (`tool.output_risk`)
-- [ ] Todo list updates (`todo.updated`)
+- [x] Todo list updates (`todo.updated`)
 
 ### 6. Interactive requests (server → client)
 - [x] **Approval** panel for dangerous commands, with choices `once`, `session`, `always` (confirmed first), `deny` filtered by the gateway's `choices` / `allow_session`, `allow_permanent` and `smart_denied`
