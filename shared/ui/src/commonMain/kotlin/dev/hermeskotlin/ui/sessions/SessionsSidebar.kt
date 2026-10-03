@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
@@ -67,6 +68,7 @@ import com.composables.icons.lucide.Pin
 import com.composables.icons.lucide.PinOff
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
+import com.composables.icons.lucide.SquareTerminal
 import com.composables.icons.lucide.Settings
 import com.composables.icons.lucide.SearchX
 import com.composables.icons.lucide.SquarePen
@@ -413,14 +415,22 @@ private fun MainHeader(onSearch: () -> Unit) {
 }
 
 @Composable
-internal fun SubpageHeader(title: String, onBack: () -> Unit) {
+internal fun SubpageHeader(title: String, onBack: () -> Unit, actions: @Composable RowScope.() -> Unit = {}) {
     Row(
         Modifier.fillMaxWidth().padding(start = 12.dp, end = 16.dp, top = 16.dp, bottom = 16.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         IconButton(Lucide.ArrowLeft, contentDescription = "Back", onClick = onBack, tint = Theme[colors][text])
-        Text(title, style = Theme[typography][heading], color = Theme[colors][text])
+        Text(
+            title,
+            style = Theme[typography][heading],
+            color = Theme[colors][text],
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+        actions()
     }
 }
 
@@ -707,6 +717,7 @@ internal fun SessionActionsSheet(
     onExport: ((SessionSummary) -> Unit)? = null,
     onCopyId: ((SessionSummary) -> Unit)? = null,
     onUsage: ((SessionSummary) -> Unit)? = null,
+    onProcesses: ((SessionSummary) -> Unit)? = null,
 ) {
     // Keep the last target while the sheet animates out.
     var shown by remember { mutableStateOf(session) }
@@ -723,6 +734,7 @@ internal fun SessionActionsSheet(
         SheetAction("Rename", Lucide.Pencil, act(onRename))
         SheetAction(if (s.pinned) "Unpin" else "Pin", if (s.pinned) Lucide.PinOff else Lucide.Pin, act(onTogglePinned))
         onUsage?.let { SheetAction("Usage and cost", Lucide.Gauge, act(it)) }
+        onProcesses?.let { SheetAction("Background processes", Lucide.SquareTerminal, act(it)) }
         onExport?.let { SheetAction("Export as Markdown", Lucide.Download, act(it)) }
         onCopyId?.let { SheetAction("Copy session ID", Lucide.Copy, act(it)) }
         SheetAction(if (s.archived) "Unarchive" else "Archive", if (s.archived) Lucide.ArchiveRestore else Lucide.Archive, act(onToggleArchived))

@@ -2,10 +2,12 @@ package dev.hermeskotlin.core.cron
 
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.ApiResult
+import dev.hermeskotlin.core.network.HermesJson
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.sessions.SessionSummary
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.engine.mock.toByteArray
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
@@ -75,5 +77,78 @@ class CronApiTest {
 
         assertEquals(HttpMethod.Post, method)
         assertTrue(job.paused)
+    }
+
+    @Test
+    fun createPostsTheDraftAndReturnsTheJob() = runTest {
+        var body: String? = null
+        val api = CronApi(createHttpClient(MockEngine { request ->
+            assertEquals(HttpMethod.Post, request.method)
+            assertEquals("/api/cron/jobs", request.url.encodedPath)
+            body = request.body.toByteArray().decodeToString()
+            respond(
+                """{"id":"b2","name":"Briefing","prompt":"Brief me","schedule":{"kind":"cron","expr":"0 9 * * *","display":"0 9 * * *"},
+                   "schedule_display":"0 9 * * *","state":"scheduled","enabled":true,"deliver":"telegram"}""",
+                HttpStatusCode.OK, json,
+            )
+        }))
+
+        val job = assertIs<ApiResult.Success<CronJob>>(
+            api.create(url, CronJobDraft(name = "Briefing", prompt = "Brief me", schedule = "0 9 * * *", deliver = "telegram")),
+        ).value
+
+        assertEquals("""{"name":"Briefing","prompt":"Brief me","schedule":"0 9 * * *","deliver":"telegram"}""", body)
+        assertEquals("b2", job.id)
+        assertEquals("0 9 * * *", job.editableSchedule)
+        assertEquals("telegram", job.deliver)
+    }
+
+    @Test
+    fun updateSendsOnlyTheChangesAndSurfacesABadSchedule() = runTest {
+        var body: String? = null
+        val api = CronApi(createHttpClient(MockEngine { request ->
+            assertEquals(HttpMethod.Put, request.method)
+            assertEquals("/api/cron/jobs/a1", request.url.encodedPath)
+            body = request.body.toByteArray().decodeToString()
+            respond("""{"detail":"Invalid schedule 'sometimes'"}""", HttpStatusCode.BadRequest, json)
+        }))
+
+        val result = api.update(url, "a1", mapOf("schedule" to "sometimes"))
+
+        assertEquals("""{"updates":{"schedule":"sometimes"}}""", body)
+        assertEquals("Invalid schedule 'sometimes'", assertIs<ApiResult.Failed>(result).message)
+    }
+
+    @Test
+    fun deleteAndDeliveryTargets() = runTest {
+        val api = CronApi(createHttpClient(MockEngine { request ->
+            when (request.url.encodedPath) {
+                "/api/cron/jobs/a1" -> {
+                    assertEquals(HttpMethod.Delete, request.method)
+                    respond("""{"ok":true}""", HttpStatusCode.OK, json)
+                }
+                else -> respond(
+                    """{"targets":[{"id":"local","name":"Local (save only)","home_target_set":true,"home_env_var":null},
+                       {"id":"telegram","name":"Telegram","home_target_set":false,"home_env_var":"TELEGRAM_HOME_CHANNEL"}]}""",
+                    HttpStatusCode.OK, json,
+                )
+            }
+        }))
+
+        assertIs<ApiResult.Success<Unit>>(api.delete(url, "a1"))
+        val targets = assertIs<ApiResult.Success<List<DeliveryTarget>>>(api.deliveryTargets(url)).value
+        assertEquals(listOf("local", "telegram"), targets.map { it.id })
+        assertFalse(targets[1].homeTargetSet)
+    }
+
+    @Test
+    fun editableScheduleFromEachShape() {
+        fun job(schedule: String, display: String) =
+            HermesJson.decodeFromString<CronJob>("""{"id":"x","schedule":$schedule,"schedule_display":"$display"}""")
+
+        assertEquals("every 90m", job("""{"kind":"interval","minutes":90}""", "every 90m").editableSchedule)
+        assertEquals("", job("""{"kind":"once","run_at":"2026-10-04T09:00:00+03:00"}""", "once at 2026-10-04 09:00").editableSchedule)
+        // A legacy job that stored the schedule as a plain string still loads.
+        assertEquals("0 7 * * *", job("\"0 7 * * *\"", "0 7 * * *").editableSchedule)
     }
 }
