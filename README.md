@@ -43,6 +43,7 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [x] `TextField` password mode (masked, show/hide toggle)
 - [x] `BottomSheet` with `SheetHeader`/`SheetAction` rows, `Dialog`, `IconButton` (plain or filled), pill `Button`, `Chip`, `SidebarLayout` (drawer on phones, docked and collapsible on wide screens)
 - [x] `MarkdownText` (themed GFM via multiplatform-markdown-renderer core, no Material) and `CopyButton`
+- [x] `Switch` and `SegmentedControl`; a pure black dark scheme (`PureBlack`)
 - [ ] Menu, toast, chat bubble, tool card, approval card
 - [ ] Theme picker (system / light / dark), optional Hermes-style accent presets
 

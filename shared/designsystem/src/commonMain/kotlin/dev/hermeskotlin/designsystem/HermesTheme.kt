@@ -27,9 +27,12 @@ private object Palette {
 
 private val baseText = TextStyle(fontFamily = FontFamily.Default)
 
+/** Dark with true black backgrounds, for OLED screens. */
+val PureBlack = ColorScheme("pure_black")
+
 /**
  * The app theme. Light/dark follow the system unless a [ColorScheme] is passed:
- * `HermesTheme(ColorScheme.Dark) { ... }`.
+ * `HermesTheme(ColorScheme.Dark) { ... }`, or [PureBlack].
  */
 val HermesTheme = buildThemeV2 {
     name = "HermesTheme"
@@ -82,6 +85,29 @@ val HermesTheme = buildThemeV2 {
             surface to Palette.NightCard,
             surfaceElevated to Palette.NightElevated,
             input to Color(0xFF111113),
+            text to Palette.Snow,
+            textSecondary to Palette.Snow.copy(alpha = 0.72f),
+            textTertiary to Palette.Snow.copy(alpha = 0.5f),
+            accent to Palette.BlueDark,
+            onAccent to Color.White,
+            accentSoft to Color(0xFF15213A),
+            stroke to Palette.Snow.copy(alpha = 0.08f),
+            strokeStrong to Palette.Snow.copy(alpha = 0.18f),
+            danger to Color(0xFFE75E78),
+            success to Color(0xFF55A583),
+            warning to Color(0xFFD9A15A),
+        )
+        defaultContentColor = Palette.Snow
+        defaultIndication = rememberColoredIndication(Palette.Snow)
+        defaultTextSelectionColors = TextSelectionColors(Palette.BlueDark, Palette.BlueDark.copy(alpha = 0.35f))
+    }
+
+    colorScheme(PureBlack) {
+        properties[colors] = mapOf(
+            background to Color.Black,
+            surface to Color.Black,
+            surfaceElevated to Palette.NightCard,
+            input to Palette.Night,
             text to Palette.Snow,
             textSecondary to Palette.Snow.copy(alpha = 0.72f),
             textTertiary to Palette.Snow.copy(alpha = 0.5f),
