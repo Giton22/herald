@@ -165,6 +165,10 @@ fun ChatScreen(
     onNewChat: () -> Unit,
     /** The open chat's options; null until it exists on the gateway. */
     onOpenMenu: (() -> Unit)?,
+    /** Opens another stored chat by id and title (`/resume`, `/branch`). */
+    onOpenChat: (String, String?) -> Unit,
+    /** Switches profile (`/profile`); null is the gateway's launch profile. */
+    onSwitchProfile: (String?) -> Unit,
     viewModel: ChatViewModel = koinViewModel(),
 ) {
     LaunchedEffect(target) { viewModel.open(target) }
@@ -191,6 +195,8 @@ fun ChatScreen(
                 ChatRequest.NewChat -> onNewChat()
                 ChatRequest.PickModel -> modelsOpen = true
                 ChatRequest.BrowseSessions -> onOpenSidebar()
+                is ChatRequest.OpenChat -> onOpenChat(request.storedSessionId, request.title)
+                is ChatRequest.SwitchProfile -> onSwitchProfile(request.profile)
             }
         }
     }

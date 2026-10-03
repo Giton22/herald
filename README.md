@@ -152,7 +152,7 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [ ] Voice mode toggle and status (`voice.toggle`, `voice.status`)
 
 ### Slash commands & composer
-- [x] Slash command catalog and autocomplete (`commands.catalog`, `complete.slash`, `slash.exec`, `command.dispatch`; skills, `/compress`, `/status`, `/new`, `/model`)
+- [x] Slash command catalog and autocomplete (`commands.catalog`, `complete.slash`, `slash.exec`, `command.dispatch`; skills, plus Desktop's own `/new`, `/model`, `/resume`, `/stop`, `/compress`, `/status`, `/btw`, `/reasoning`, `/yolo`, `/title`, `/branch`, `/profile`, `/handoff`)
 - [ ] Background prompts and BTW side questions (`prompt.background`, `prompt.btw`, `background.complete`, `btw.complete`)
 - [ ] Message reactions (`message.react`)
 - [ ] Undo, branch and fork sessions (`session.undo`, `session.branch`)

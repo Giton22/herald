@@ -164,6 +164,8 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
             onOpenSidebar = { scope.launch { sidebar.toggle() } },
             onNewChat = app::newChat,
             onOpenMenu = openSessionId?.let { { menuOpen = true } },
+            onOpenChat = { id, title -> app.openSession(id, title ?: "Untitled session") },
+            onSwitchProfile = app::switchProfile,
             viewModel = chat,
         )
     }

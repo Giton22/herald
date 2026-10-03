@@ -21,6 +21,10 @@ import dev.hermeskotlin.core.models.ModelOption
 import dev.hermeskotlin.core.models.ModelsApi
 import dev.hermeskotlin.core.chat.ModelSwitch
 import dev.hermeskotlin.core.chat.OutgoingAttachment
+import dev.hermeskotlin.core.network.errorMessage
+import dev.hermeskotlin.core.profiles.ProfilesApi
+import dev.hermeskotlin.core.sessions.SessionsApi
+import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.slash.SlashApi
 import dev.hermeskotlin.core.slash.SlashCatalog
 import dev.hermeskotlin.core.slash.SlashCommand
@@ -64,7 +68,15 @@ data class ModelPickerState(
 data class PendingSwitch(val model: ModelOption, val message: String)
 
 /** Something a slash command asks of the screen around the chat. */
-enum class ChatRequest { NewChat, PickModel, BrowseSessions }
+sealed interface ChatRequest {
+    data object NewChat : ChatRequest
+    data object PickModel : ChatRequest
+    data object BrowseSessions : ChatRequest
+    data class OpenChat(val storedSessionId: String, val title: String?) : ChatRequest
+
+    /** [profile] null is the gateway's launch profile. */
+    data class SwitchProfile(val profile: String?) : ChatRequest
+}
 
 /**
  * Identifies what the chat screen shows: a stored session, or a new chat (`storedSessionId == null`),
@@ -91,6 +103,9 @@ class ChatViewModel(
     private val models: ModelsApi,
     private val media: MediaApi,
     private val slashApi: SlashApi,
+    private val sessions: SessionsApi,
+    private val profiles: ProfilesApi,
+    private val settings: SettingsStore,
 ) : ViewModel() {
 
     val composer = TextFieldState()
@@ -276,20 +291,77 @@ class ChatViewModel(
     /** A command typed in the composer: answered here when this app has its own control for it, else run on the gateway. */
     private fun runCommand(chat: ChatSession, command: SlashCommand) {
         viewModelScope.launch {
+            val arg = command.arg
+            suspend fun onGateway() = chat.runCommand(command)?.let { text ->
+                if (composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
+            }
             when (val route = SlashRoute.of(command.name, catalog())) {
                 SlashRoute.NewChat -> _requests.send(ChatRequest.NewChat)
-                SlashRoute.PickModel -> _requests.send(ChatRequest.PickModel)
-                SlashRoute.BrowseSessions -> _requests.send(ChatRequest.BrowseSessions)
-                SlashRoute.Stop -> chat.interrupt()
+                // Like Desktop: bare opens the picker, `/model <name>` is for the gateway to parse.
+                SlashRoute.PickModel -> if (arg.isEmpty()) _requests.send(ChatRequest.PickModel) else onGateway()
+                SlashRoute.BrowseSessions -> if (arg.isEmpty()) _requests.send(ChatRequest.BrowseSessions) else resume(chat, arg)
+                SlashRoute.Stop -> chat.stopEverything()
                 SlashRoute.Help -> chat.showCommandOutput("/help", helpText(catalog()))
-                SlashRoute.Compress -> chat.compress(command.arg)
+                SlashRoute.Compress -> chat.compress(arg)
                 SlashRoute.Status -> chat.status()
-                is SlashRoute.Unavailable -> chat.showCommandOutput("/${command.name}", route.message, failed = true)
-                SlashRoute.Gateway -> chat.runCommand(command)?.let { text ->
-                    if (composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
+                SlashRoute.Aside -> chat.askAside(arg)
+                SlashRoute.Reasoning -> when (chat.reasoning(arg)) {
+                    // The gateway's display words drive this app's own Thinking toggle too.
+                    "show" -> settings.update { it.copy(showReasoning = true) }
+                    "hide" -> settings.update { it.copy(showReasoning = false) }
                 }
+                SlashRoute.Yolo -> chat.toggleYolo()
+                // Bare `/title` reports the title, which the gateway's command does.
+                SlashRoute.Title -> if (arg.isEmpty()) onGateway() else chat.retitle(arg)
+                SlashRoute.Branch -> {
+                    val count = arg.toIntOrNull()
+                    if (arg.isNotEmpty() && (count == null || count < 1)) {
+                        chat.showCommandOutput("/branch", "Usage: /branch [how many messages to keep]", failed = true)
+                    } else {
+                        chat.branch(count)?.let { (id, title) -> _requests.send(ChatRequest.OpenChat(id, title)) }
+                    }
+                }
+                SlashRoute.Profile -> profile(chat, arg)
+                SlashRoute.Handoff -> chat.handoff(arg)
+                is SlashRoute.Unavailable -> chat.showCommandOutput("/${command.name}", route.message, failed = true)
+                SlashRoute.Gateway -> onGateway()
             }
         }
+    }
+
+    /** `/resume <words>`: opens the best match among this profile's chats. */
+    private suspend fun resume(chat: ChatSession, query: String) {
+        val target = target ?: return
+        when (val result = sessions.search(target.gateway.gatewayUrl, query, limit = 1, profile = target.profile)) {
+            is ApiResult.Success -> result.value.firstOrNull()?.let { _requests.send(ChatRequest.OpenChat(it.id, it.displayTitle)) }
+                ?: chat.showCommandOutput("/resume", "No chat matches “$query”.", failed = true)
+            else -> chat.showCommandOutput("/resume", result.errorMessage ?: "Couldn't search the chats.", failed = true)
+        }
+    }
+
+    /** `/profile [name]`: names the current profile, or switches to another (its chats, memory and model). */
+    private suspend fun profile(chat: ChatSession, name: String) {
+        val target = target ?: return
+        val roster = (profiles.roster(target.gateway.gatewayUrl) as? ApiResult.Success)?.value
+            ?: return chat.showCommandOutput("/profile", "Couldn't load the gateway's profiles.", failed = true)
+        val current = roster.profiles.find { it.name == (target.profile ?: roster.launch) }
+        if (name.isEmpty()) {
+            val others = roster.profiles.filter { it != current }.map { it.name }
+            chat.showCommandOutput(
+                "/profile",
+                "Profile: ${current?.label ?: target.profile ?: roster.launch}" +
+                    if (others.isEmpty()) "" else "\nAlso on this gateway: ${others.joinToString(", ")}",
+            )
+            return
+        }
+        val match = roster.profiles.find { it.name.equals(name, ignoreCase = true) }
+            ?: return chat.showCommandOutput(
+                "/profile",
+                "No profile named “$name”. This gateway has: ${roster.profiles.joinToString(", ") { it.name }}",
+                failed = true,
+            )
+        if (match == current) return chat.showCommandOutput("/profile", "Already in ${match.label}.")
+        _requests.send(ChatRequest.SwitchProfile(match.name.takeIf { it != roster.launch }))
     }
 
     private fun helpText(catalog: SlashCatalog?): String {
