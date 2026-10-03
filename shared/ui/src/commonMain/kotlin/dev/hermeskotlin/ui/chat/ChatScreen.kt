@@ -87,6 +87,7 @@ import dev.hermeskotlin.core.chat.Attachment
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.OutgoingAttachment
+import dev.hermeskotlin.core.chat.extractReplyMedia
 import dev.hermeskotlin.core.chat.ToolActivity
 import dev.hermeskotlin.core.chat.TurnOutcome
 import dev.hermeskotlin.core.connection.ConnectionState
@@ -121,6 +122,7 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
 import dev.hermeskotlin.ui.LocalAppSettings
 import dev.hermeskotlin.ui.components.EmptyState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -140,6 +142,14 @@ fun ChatScreen(
     val attachmentError = viewModel.attachmentError.collectAsStateWithLifecycle().value
     var modelsOpen by remember { mutableStateOf(false) }
     var attachOpen by remember { mutableStateOf(false) }
+    var viewing by remember { mutableStateOf<ViewerImage?>(null) }
+    var notice by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(notice) {
+        if (notice != null) {
+            delay(2_500)
+            notice = null
+        }
+    }
     val attachmentPicker = rememberAttachmentPicker(onPicked = viewModel::addAttachments, onError = viewModel::showAttachmentError)
 
     Box(
@@ -169,7 +179,11 @@ fun ChatScreen(
                             Button("Try again", onClick = viewModel::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                         }
                     state.messages.isEmpty() -> Greeting()
-                    else -> CompositionLocalProvider(LocalGatewayImages provides viewModel::gatewayImage) {
+                    else -> CompositionLocalProvider(
+                        LocalMediaLoader provides viewModel::loadMedia,
+                        LocalOpenImage provides { viewing = it },
+                        LocalNotice provides { notice = it },
+                    ) {
                         Messages(state.messages)
                     }
                 }
@@ -181,6 +195,7 @@ fun ChatScreen(
             state.error?.let { Banner(it, actionLabel = null, onAction = viewModel::dismissError) }
             attachmentError?.let { Banner(it, actionLabel = null, onAction = viewModel::dismissAttachmentError) }
             AnimatedVisibility(visible = state.running && state.status != null) { StatusLine(state.status.orEmpty()) }
+            AnimatedVisibility(visible = notice != null) { NoticeLine(notice.orEmpty()) }
 
             if (state.inputRequests.isNotEmpty()) {
                 InputRequestPanel(state.inputRequests, connected, onAnswer = viewModel::answer)
@@ -203,6 +218,11 @@ fun ChatScreen(
     }
 
     AttachSheet(visible = attachOpen, onDismiss = { attachOpen = false }, picker = attachmentPicker)
+    viewing?.let { image ->
+        CompositionLocalProvider(LocalMediaLoader provides viewModel::loadMedia) {
+            ImageViewer(image, onDismiss = { viewing = null })
+        }
+    }
     ModelSheet(
         visible = modelsOpen,
         onDismiss = { modelsOpen = false },
@@ -368,14 +388,17 @@ private fun AssistantReply(message: ChatMessage.Assistant) {
     val settings = LocalAppSettings.current
     val showReasoning = settings.showReasoning && message.reasoning.isNotBlank()
     val showTools = settings.showToolActivity && message.tools.isNotEmpty()
+    // Pictures and files the reply delivered show as themselves, not as Markdown a renderer can't load.
+    val (text, media) = remember(message.text) { extractReplyMedia(message.text) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         if (showReasoning) Reasoning(message.reasoning, live = message.streaming && message.text.isEmpty())
         if (showTools) Tools(message.tools)
         when {
-            message.text.isNotBlank() -> SelectionContainer { MarkdownText(message.text, streaming = message.streaming) }
+            text.isNotBlank() -> SelectionContainer { MarkdownText(text, streaming = message.streaming) }
             // One activity cue at a time: live reasoning and running tools already show their own.
-            message.streaming && !showReasoning && !(showTools && message.tools.any { it.running }) -> Thinking()
+            message.streaming && media.isEmpty() && !showReasoning && !(showTools && message.tools.any { it.running }) -> Thinking()
         }
+        if (media.isNotEmpty()) ReplyMediaList(media)
         when (message.outcome) {
             TurnOutcome.Error -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 UnstyledIcon(Lucide.CircleAlert, contentDescription = null, tint = Theme[colors][danger], modifier = Modifier.size(16.dp))
@@ -384,7 +407,7 @@ private fun AssistantReply(message: ChatMessage.Assistant) {
             TurnOutcome.Interrupted -> Text("Stopped", style = Theme[typography][caption], color = Theme[colors][textTertiary])
             else -> Unit
         }
-        if (!message.streaming && message.text.isNotBlank()) CopyButton(message.text)
+        if (!message.streaming && text.isNotBlank()) CopyButton(text)
     }
 }
 
@@ -531,6 +554,22 @@ private fun StatusLine(status: String) {
             color = Theme[colors][textTertiary],
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
+        )
+    }
+}
+
+/** A passing message, like where a file was saved. */
+@Composable
+private fun NoticeLine(text: String) {
+    Box(Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+        Text(
+            text,
+            style = Theme[typography][bodySmall],
+            color = Theme[colors][textColor],
+            modifier = Modifier
+                .background(Theme[colors][surfaceElevated], RoundedCornerShape(20.dp))
+                .border(1.dp, Theme[colors][stroke], RoundedCornerShape(20.dp))
+                .padding(horizontal = 16.dp, vertical = 8.dp),
         )
     }
 }

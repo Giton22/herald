@@ -35,6 +35,9 @@ class MediaApi(private val client: HttpClient) {
         return if (isImage) image(url, path) else download
     }
 
+    /** A reply's picture from the web (`![alt](https://...)`). */
+    suspend fun remote(url: String): ApiResult<ByteArray> = apiCall { client.get(url) }.map { it.body<ByteArray>() }
+
     /** The image's bytes, decoded from the `data_url` the gateway answers with (media folders only). */
     @OptIn(ExperimentalEncodingApi::class)
     suspend fun image(url: GatewayUrl, path: String): ApiResult<ByteArray> = apiCall {

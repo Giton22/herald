@@ -23,6 +23,8 @@ import dev.hermeskotlin.core.chat.ModelSwitch
 import dev.hermeskotlin.core.chat.OutgoingAttachment
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlin.io.encoding.Base64
+import kotlin.io.encoding.ExperimentalEncodingApi
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -153,16 +155,26 @@ class ChatViewModel(
         viewModelScope.launch { chat.setFast(on) }
     }
 
-    private val gatewayImages = mutableMapOf<String, ByteArray?>()
+    private val mediaCache = mutableMapOf<String, ByteArray>()
 
-    /** An image a stored prompt refers to (`@image:<path>`), fetched once per path; null when unavailable. */
-    suspend fun gatewayImage(path: String): ByteArray? {
-        if (path in gatewayImages) return gatewayImages[path]
-        val gateway = target?.gateway?.gatewayUrl ?: return null
-        val bytes = (media.image(gateway, path) as? ApiResult.Success)?.value
-        if (gatewayImages.size >= MAX_CACHED_IMAGES) gatewayImages.remove(gatewayImages.keys.first())
-        gatewayImages[path] = bytes
-        return bytes
+    /**
+     * The bytes behind a picture or file the chat shows: a gateway path (`@image:` in a stored prompt,
+     * `MEDIA:` in a reply), a web URL or a `data:` URL. Cached per source; null when it can't be had.
+     */
+    @OptIn(ExperimentalEncodingApi::class)
+    suspend fun loadMedia(source: String): ByteArray? {
+        mediaCache[source]?.let { return it }
+        val result = when {
+            source.startsWith("data:") -> runCatching { Base64.decode(source.substringAfter("base64,")) }.getOrNull()
+            source.startsWith("http://") || source.startsWith("https://") -> (media.remote(source) as? ApiResult.Success)?.value
+            else -> {
+                val gateway = target?.gateway?.gatewayUrl ?: return null
+                (media.file(gateway, source.removePrefix("file://")) as? ApiResult.Success)?.value
+            }
+        } ?: return null
+        if (mediaCache.size >= MAX_CACHED_MEDIA) mediaCache.remove(mediaCache.keys.first())
+        mediaCache[source] = result
+        return result
     }
 
     /** Adds picked files to the composer tray, up to [OutgoingAttachment.MAX_COUNT]. */
@@ -210,6 +222,6 @@ class ChatViewModel(
 
     private companion object {
         /** Full-size gateway photos are a few hundred KB each; keep a screenful or two. */
-        const val MAX_CACHED_IMAGES = 24
+        const val MAX_CACHED_MEDIA = 24
     }
 }

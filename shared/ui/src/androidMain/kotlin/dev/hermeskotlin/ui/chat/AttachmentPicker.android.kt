@@ -96,9 +96,9 @@ actual fun rememberAttachmentPicker(
 }
 
 @Composable
-actual fun rememberImageBitmap(bytes: ByteArray): ImageBitmap? = remember(bytes) {
-    // Tiles are small; a full-size gateway photo is sampled down rather than decoded whole.
-    decodeUpright(bytes, THUMBNAIL_EDGE)?.asImageBitmap()
+actual fun rememberImageBitmap(bytes: ByteArray, maxEdge: Int): ImageBitmap? = remember(bytes, maxEdge) {
+    // A full-size photo is sampled down to what the view needs rather than decoded whole.
+    decodeUpright(bytes, maxEdge)?.asImageBitmap()
 }
 
 /** Reads one picked item: photos are upright, at most [MAX_EDGE] px and JPEG; anything else is sent as is. */

@@ -3,6 +3,7 @@ package dev.hermeskotlin.ui.chat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -18,7 +19,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
-import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -82,13 +82,11 @@ internal fun ComposerTray(attachments: List<OutgoingAttachment>, onRemove: (Stri
     }
 }
 
-/** Fetches a gateway-side image by path (see `ChatViewModel.gatewayImage`); null when unavailable. */
-internal val LocalGatewayImages = staticCompositionLocalOf<suspend (String) -> ByteArray?> { { null } }
-
-/** What went out with a prompt, above its bubble. */
+/** What went out with a prompt, above its bubble; pictures open full size. */
 @Composable
 internal fun SentAttachments(attachments: List<ShownAttachment>) {
-    val load = LocalGatewayImages.current
+    val load = LocalMediaLoader.current
+    val open = LocalOpenImage.current
     FlowRow(
         Modifier.padding(start = 56.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
@@ -99,7 +97,14 @@ internal fun SentAttachments(attachments: List<ShownAttachment>) {
             val bytes by produceState(attachment.thumbnail, attachment.gatewayPath) {
                 if (value == null) attachment.gatewayPath?.let { value = load(it) }
             }
-            AttachmentTile(attachment.name, attachment.kind, bytes, size = 96.dp)
+            val viewable = attachment.kind == AttachmentKind.Image && bytes != null
+            Box(
+                Modifier.clip(RoundedCornerShape(14.dp)).clickable(enabled = viewable) {
+                    open(ViewerImage(attachment.name, source = attachment.gatewayPath, bytes = attachment.original))
+                },
+            ) {
+                AttachmentTile(attachment.name, attachment.kind, bytes, size = 96.dp)
+            }
         }
     }
 }

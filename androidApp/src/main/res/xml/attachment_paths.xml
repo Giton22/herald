@@ -2,4 +2,6 @@
 <paths>
     <!-- Camera captures for the composer; deleted once read. -->
     <cache-path name="camera" path="camera/" />
+    <!-- Pictures and files from the chat handed to the share sheet. -->
+    <cache-path name="shared" path="shared/" />
 </paths>

@@ -23,6 +23,6 @@ expect fun rememberAttachmentPicker(
     onError: (String) -> Unit,
 ): AttachmentPicker
 
-/** Decodes an encoded image (a thumbnail), or null when it can't be read. */
+/** Decodes an encoded image, sampled down to about [maxEdge] px on its long side; null when it can't be read. */
 @Composable
-expect fun rememberImageBitmap(bytes: ByteArray): ImageBitmap?
+expect fun rememberImageBitmap(bytes: ByteArray, maxEdge: Int = 320): ImageBitmap?
