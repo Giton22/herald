@@ -632,6 +632,46 @@ class ChatSession(
         }
     }
 
+    /** Stops one running subagent (`subagent.interrupt`); its `subagent.complete` follows. */
+    suspend fun stopSubagent(subagentId: String) {
+        val client = connectedClient() ?: return
+        val runtimeId = _state.value.runtimeSessionId ?: return
+        try {
+            val result = client.request(
+                "subagent.interrupt",
+                buildJsonObject {
+                    put("session_id", runtimeId)
+                    put("subagent_id", subagentId)
+                },
+            ) as? JsonObject
+            // Already over: nothing will say so, so stop showing it as running.
+            if (result.boolean("found") == false) {
+                _state.update { state ->
+                    state.copy(subagents = state.subagents.map {
+                        if (it.id == subagentId && it.status.live) it.copy(status = SubagentStatus.Interrupted) else it
+                    })
+                }
+            }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _state.update { it.copy(error = e.message ?: "Couldn't stop the subagent.") }
+        }
+    }
+
+    /** Subagents already running when this chat attached (`subagent.list`); their events only cover what comes next. */
+    private suspend fun refreshSubagents(client: JsonRpcClient, runtimeId: String) {
+        val result = try {
+            client.request("subagent.list", buildJsonObject { put("session_id", runtimeId) }) as? JsonObject
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null // an older gateway without the method; live events still show new ones
+        } ?: return
+        val snapshots = result["subagents"].asObjectList()
+        if (snapshots.isNotEmpty()) _state.update { it.withSubagentSnapshots(snapshots) }
+    }
+
     /**
      * Switches this chat's model. A new chat only remembers the pick for `session.create`; a live one
      * switches at once, or at the next turn when one is running. Pricey models ask to [confirm] first.
@@ -818,7 +858,8 @@ class ChatSession(
     }
 
     private suspend fun runCatchingAttach(client: JsonRpcClient): Boolean = try {
-        attach(client)
+        val runtimeId = attach(client)
+        scope.launch { refreshSubagents(client, runtimeId) }
         true
     } catch (e: CancellationException) {
         throw e

@@ -43,7 +43,7 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
                 detail = payload.string("context") ?: payload.string("preview"),
                 running = true,
                 input = ToolDetails.input(payload?.get("args"), payload.string("args_text")),
-            )
+            ).let { if (it.name == DELEGATE_TOOL) it.copy(tasks = delegatedTasks(payload?.get("args"), null)) else it }
             withOpenReply { reply -> reply.copy(tools = reply.tools.filterNot { it.id == id } + tool) }
                 .copy(running = true, thinkingFrame = null)
         }
@@ -61,6 +61,11 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
                         output = ToolDetails.output(payload?.get("result"), payload.string("result_text")),
                         diff = payload.string("inline_diff")?.takeIf { d -> d.isNotBlank() },
                         failed = ToolDetails.failed(payload?.get("result")),
+                        tasks = if (it.name != DELEGATE_TOOL) it.tasks else delegatedTasks(
+                            args = payload?.get("args"),
+                            result = payload?.get("result") ?: payload?.get("result_text") ?: JsonPrimitive(""),
+                            knownGoals = it.tasks.map { task -> task.goal },
+                        ),
                     )
                 })
             }
@@ -91,6 +96,8 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
         "session.info" -> withInfo(payload).copy(title = payload.string("title")?.takeIf { it.isNotBlank() } ?: title)
         "btw.complete" -> answerAside(payload)
         "todo.updated" -> withTodos(TodoList.parse(payload))
+        "subagent.spawn_requested", "subagent.start", "subagent.progress", "subagent.thinking", "subagent.tool", "subagent.complete" ->
+            withSubagentEvent(event.type, payload)
         else -> this
     }
 }
@@ -266,6 +273,7 @@ fun historyToMessages(rows: List<SessionMessage>): List<ChatMessage> {
                         input = ToolDetails.input(call.arguments),
                         output = ToolDetails.output(result),
                         failed = ToolDetails.failed(result),
+                        tasks = if (call.name == DELEGATE_TOOL) delegatedTasks(call.arguments, result) else emptyList(),
                     )
                 }
                 val reasoning = row.reasoning.orEmpty()

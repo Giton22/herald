@@ -21,6 +21,8 @@ data class ToolActivity(
     val failed: Boolean = false,
     /** Its output was scanned and looked like a prompt injection or a leaked secret. */
     val risk: ToolRisk? = null,
+    /** For `delegate_task`: the tasks it handed out to subagents. */
+    val tasks: List<DelegatedTask> = emptyList(),
 )
 
 /** Why a tool's output was flagged (`tool.output_risk`): the scanner's finding ids. Advisory; nothing was blocked. */
@@ -124,6 +126,8 @@ data class ChatState(
     val todos: TodoList? = null,
     /** [todos] was written by the turn running now, rather than kept from an earlier one. */
     val todosLive: Boolean = false,
+    /** Subagents seen on this device, nested ones included; see [subagentRows]. */
+    val subagents: List<Subagent> = emptyList(),
     /** The part of the running turn's reply shown before a mid-turn correction; the turn continues below it. */
     val correctedReplyKey: String? = null,
     /** Source of unique keys for messages created on this device. */
