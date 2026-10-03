@@ -170,6 +170,57 @@ class ChatSessionTest {
     }
 
     @Test
+    fun aCorrectionMidTurnSplitsTheReplyAroundIt() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.resume" to """{"session_id":"rt1","running":false}""",
+                "prompt.submit" to """{"status":"redirected","text":"in French"}""",
+            ),
+        )
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        transport.push(event("message.start", "rt1"))
+        transport.push(event("message.delta", "rt1", """{"text":"Hello there"}"""))
+        chat.state.first { s -> (s.messages.last() as? ChatMessage.Assistant)?.text == "Hello there" }
+
+        assertTrue(chat.send("in French"))
+        transport.push(event("message.delta", "rt1", """{"text":"Bonjour"}"""))
+        transport.push(event("message.complete", "rt1", """{"text":"Hello thereBonjour","status":"complete"}"""))
+
+        val done = chat.state.first { !it.running }
+        assertEquals(listOf("hello", "Hi! What next?", "Hello there", "in French", "Bonjour"), done.messages.map { it.textOf() })
+        assertFalse(assertIs<ChatMessage.User>(done.messages[3]).queued)
+    }
+
+    @Test
+    fun queueingMidTurnAsksForTheNextTurn() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.resume" to """{"session_id":"rt1","running":false}""",
+                "prompt.submit" to """{"status":"queued"}""",
+            ),
+        )
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        transport.push(event("message.start", "rt1"))
+        transport.push(event("message.delta", "rt1", """{"text":"Working"}"""))
+        chat.state.first { s -> (s.messages.last() as? ChatMessage.Assistant)?.text == "Working" }
+
+        assertTrue(chat.send("then the tests", queue = true))
+
+        val submit = transport.sent.value.first { it.isCall("prompt.submit") }
+        assertEquals("true", submit.param("queued"))
+        val state = chat.state.value
+        assertTrue(assertIs<ChatMessage.User>(state.messages.last()).queued)
+        // The reply keeps streaming above the queued prompt.
+        assertTrue(assertIs<ChatMessage.Assistant>(state.messages[state.messages.lastIndex - 1]).streaming)
+    }
+
+    @Test
     fun sendWhileOfflineReportsAndLeavesNoBubble() = runTest {
         val connection = GatewayConnection(
             AuthApi(client(), PersistentCookiesStorage(InMemoryKeyValueStore())),

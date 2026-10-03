@@ -95,8 +95,16 @@ class ChatSession(
      * Sends a prompt with any [attachments], creating or attaching the live session first and uploading
      * the attachments to it before `prompt.submit`. Returns false if it was not accepted. The bubble
      * shows [display] instead of the text when given (a skill's body is for the model, not the chat).
+     *
+     * Mid-turn, the gateway folds text into the running turn (Desktop's stop-and-correct) unless [queue]
+     * asks for it to run as the next turn instead.
      */
-    suspend fun send(text: String, attachments: List<OutgoingAttachment> = emptyList(), display: String? = null): Boolean {
+    suspend fun send(
+        text: String,
+        attachments: List<OutgoingAttachment> = emptyList(),
+        display: String? = null,
+        queue: Boolean = false,
+    ): Boolean {
         val trimmed = text.trim()
         if (trimmed.isEmpty() && attachments.isEmpty()) return false
         // Desktop's fallback, so an image-only prompt still asks something.
@@ -128,17 +136,20 @@ class ChatSession(
                     put("session_id", runtimeId)
                     // Like Desktop: the file references first, then what was typed.
                     put("text", (refs + visible).filter { it.isNotEmpty() }.joinToString("\n\n"))
+                    if (queue) put("queued", true)
                 },
             ) as? JsonObject
             rowExists = true
-            val queued = result.string("status") == "queued"
+            val status = result.string("status")
             // Steering or redirecting folds the text into the running turn instead of starting one.
-            if (result.string("status") !in TURN_STARTING_STATUSES) ownTurnsPending = (ownTurnsPending - 1).coerceAtLeast(0)
+            if (status !in TURN_STARTING_STATUSES) ownTurnsPending = (ownTurnsPending - 1).coerceAtLeast(0)
             _state.update { state ->
-                state.copy(
+                val sent = state.copy(
                     running = true,
-                    messages = state.messages.updateUser(key) { it.copy(pending = false, queued = queued) },
+                    messages = state.messages.updateUser(key) { it.copy(pending = false, queued = status == "queued") },
                 )
+                // What streamed before the correction stays above it; the rest of the turn continues below.
+                if (status in CORRECTION_STATUSES) sent.sealReplyBefore(key) else sent
             }
             true
         } catch (e: CancellationException) {
@@ -879,6 +890,9 @@ class ChatSession(
         /** `prompt.submit` statuses that start (or queue) a turn of their own. */
         val TURN_STARTING_STATUSES = setOf("streaming", "queued")
 
+        /** `prompt.submit` statuses for text folded into the running turn (busy mode interrupt or steer). */
+        val CORRECTION_STATUSES = setOf("redirected", "steered")
+
         const val MAX_UNCLAIMED = 8
 
         /** Uploads of several MB over a phone link take a while. */
@@ -927,6 +941,24 @@ private fun List<InputRequest>.plusNew(more: List<InputRequest>): List<InputRequ
 
 private fun List<ChatMessage>.updateUser(key: String, change: (ChatMessage.User) -> ChatMessage.User): List<ChatMessage> =
     map { if (it is ChatMessage.User && it.key == key) change(it) else it }
+
+/**
+ * Closes the reply streaming above the prompt [key] so the turn's later output opens a new one below
+ * it; a reply that had shown nothing yet goes away.
+ */
+internal fun ChatState.sealReplyBefore(key: String): ChatState {
+    val prompt = messages.indexOfFirst { it.key == key }
+    val open = messages.indexOfLast { it is ChatMessage.Assistant && it.streaming }
+    if (prompt < 0 || open !in 0 until prompt) return this
+    val reply = messages[open] as ChatMessage.Assistant
+    if (reply.text.isBlank() && reply.reasoning.isBlank() && reply.tools.isEmpty()) {
+        return copy(messages = messages.toMutableList().apply { removeAt(open) })
+    }
+    return copy(
+        messages = messages.toMutableList().apply { set(open, reply.copy(streaming = false)) },
+        correctedReplyKey = reply.key,
+    )
+}
 
 /** Messages the stored transcript can't contain yet: the streaming reply and prompts still being sent. */
 private val ChatMessage.isLocalOnly: Boolean

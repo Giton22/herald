@@ -36,7 +36,7 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
         }
         "tool.complete" -> {
             val id = payload.string("tool_id") ?: return this
-            withOpenReply { reply ->
+            val finish = { reply: ChatMessage.Assistant ->
                 reply.copy(tools = reply.tools.map {
                     if (it.id != id) it else it.copy(
                         running = false,
@@ -44,6 +44,13 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
                         durationSeconds = payload.double("duration_s"),
                     )
                 })
+            }
+            // A correction mid-turn closes the reply a tool started in, so look for the tool first.
+            val owner = messages.indexOfLast { it is ChatMessage.Assistant && it.tools.any { tool -> tool.id == id } }
+            if (owner >= 0) {
+                copy(messages = messages.toMutableList().apply { set(owner, finish(get(owner) as ChatMessage.Assistant)) })
+            } else {
+                withOpenReply(finish)
             }
         }
         "message.complete" -> complete(payload)
@@ -101,10 +108,26 @@ private fun ChatState.complete(payload: JsonObject?): ChatState {
         else -> TurnOutcome.Complete
     }
     val error = payload.string("error") ?: payload.string("failure_reason")
-    val finalText = payload.string("text").orEmpty()
-    val finalReasoning = payload.string("reasoning").orEmpty()
+    // The turn is over, so no tool runs on, including in a part a correction closed early.
+    val messages = messages.map { message ->
+        if (message is ChatMessage.Assistant && message.tools.any { it.running }) {
+            message.copy(tools = message.tools.map { it.copy(running = false) })
+        } else {
+            message
+        }
+    }
+    // After a correction, the part above it was already shown and the final text repeats it.
+    val shown = (messages.find { it.key == correctedReplyKey } as? ChatMessage.Assistant)?.text?.takeIf { it.isNotBlank() }
+    val finalText = payload.string("text").orEmpty().let { text ->
+        if (shown != null && text.startsWith(shown)) text.removePrefix(shown).trim() else text
+    }
+    val finalReasoning = payload.string("reasoning").orEmpty().takeIf { correctedReplyKey == null }.orEmpty()
     val index = messages.openReplyIndex().takeIf { it >= 0 }
-        ?: if (finalText.isBlank() && error == null) return copy(running = false, status = null, thinkingFrame = null) else messages.size
+        ?: if (finalText.isBlank() && error == null) {
+            return copy(running = false, status = null, thinkingFrame = null, messages = messages, correctedReplyKey = null)
+        } else {
+            messages.size
+        }
     val base = messages.getOrNull(index) as? ChatMessage.Assistant ?: ChatMessage.Assistant(key = "live-$keySeq")
     val reply = base.copy(
         // Prefer what streamed (it includes interim segments); fall back to the final text for
@@ -125,7 +148,7 @@ private fun ChatState.complete(payload: JsonObject?): ChatState {
             else -> set(index, reply)
         }
     }
-    return copy(running = false, status = null, thinkingFrame = null, messages = updated, keySeq = keySeq + 1)
+    return copy(running = false, status = null, thinkingFrame = null, messages = updated, keySeq = keySeq + 1, correctedReplyKey = null)
 }
 
 /** The reply still streaming. Not necessarily last: a prompt queued mid-turn sits after it. */
