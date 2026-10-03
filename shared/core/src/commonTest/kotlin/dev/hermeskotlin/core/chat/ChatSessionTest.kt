@@ -16,6 +16,7 @@ import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -56,6 +57,8 @@ class ChatSessionTest {
                 val id = message["id"] ?: return@forEach
                 val method = message["method"]?.jsonPrimitive?.contentOrNull ?: return@forEach
                 val canned = results[method] ?: "{}"
+                // "silent" never answers, like a gateway that stopped responding.
+                if (canned == SILENT) return@forEach
                 // "error:<code>" answers with a JSON-RPC error instead.
                 transport.push(
                     if (canned.startsWith("error:")) {
@@ -405,6 +408,28 @@ class ChatSessionTest {
         assertTrue(chat.state.value.messages.isEmpty())
     }
 
+    @Test
+    fun aSubmitTheGatewayNeverAnswersFailsTheSendCleanly() = runTest {
+        val (chat, _) = newChat(backgroundScope, mapOf("prompt.submit" to SILENT))
+
+        val outcome = runCatching { chat.send("hello") }
+
+        assertEquals(false, outcome.getOrNull(), "send threw ${outcome.exceptionOrNull()} instead of returning false")
+        assertTrue(chat.state.value.messages.isEmpty(), "left behind ${chat.state.value.messages}")
+    }
+
+    @Test
+    fun aDropAfterTheSubmitWentOutIsNotReportedAsUnsent() = runTest {
+        val (chat, transport) = newChat(backgroundScope, mapOf("prompt.submit" to SILENT))
+
+        val sending = backgroundScope.async { chat.send("deploy it") }
+        transport.awaitSent { it.isCall("prompt.submit") }
+        // The gateway has the prompt and may be running it; only its reply is lost.
+        transport.serverClose(1006)
+
+        assertTrue(sending.await(), "the prompt reached the gateway, but send reported it unsent and handed the text back to resend")
+    }
+
     private suspend fun newChat(scope: CoroutineScope, results: Map<String, String>): Pair<ChatSession, FakeTransport> {
         val (connection, transport) = setup(scope, mapOf("session.create" to """{"session_id":"rt9","info":{}}""") + results)
         connection.state.first { it is ConnectionState.Connected }
@@ -504,5 +529,9 @@ class ChatSessionTest {
 
         assertEquals("stored-2" to "Greeting #2", chat.branch(null))
         assertEquals("rt1", transport.sent.value.first { it.isCall("session.branch_whole") }.param("session_id"))
+    }
+
+    private companion object {
+        const val SILENT = "silent"
     }
 }
