@@ -123,6 +123,7 @@ import dev.hermeskotlin.ui.PlatformBackHandler
 import dev.hermeskotlin.ui.components.ConnectionLine
 import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.relativeTime
+import dev.hermeskotlin.ui.update.UpdateBanner
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -216,6 +217,9 @@ fun SessionsSidebar(
                     onBack = { viewModel.setFilter(SessionListFilter.Recent) },
                 )
                 else -> MainHeader(onSearch = { searchOpen = true })
+            }
+            if (!searchOpen && state.filter == SessionListFilter.Recent) {
+                UpdateBanner(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp))
             }
 
             Box(Modifier.weight(1f).fillMaxWidth()) {

@@ -52,6 +52,8 @@ data class AppSettings(
     val notifyRequests: Boolean = true,
     /** Keep the gateway connection up in the background, so turns started on other devices notify too. */
     val stayConnected: Boolean = false,
+    /** Ask GitHub, where the app is published, whether a newer release is out. */
+    val checkForUpdates: Boolean = true,
 )
 
 /**

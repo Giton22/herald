@@ -56,6 +56,7 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.LocalAppVersion
 import dev.hermeskotlin.ui.PlatformBackHandler
 import dev.hermeskotlin.ui.sessions.SubpageHeader
+import dev.hermeskotlin.ui.update.UpdateBanner
 import org.koin.compose.viewmodel.koinViewModel
 
 /** App preferences, the signed-in account and version info, as one page over the home screen. */
@@ -187,6 +188,14 @@ fun SettingsScreen(
 
                 Section("About") {
                     InfoRow("App version", LocalAppVersion.current ?: "Unknown")
+                    Divider()
+                    SwitchRow(
+                        title = "Check for updates",
+                        detail = "Asks GitHub, where the app is released, whether there's a newer version. Nothing else is sent.",
+                        checked = settings.checkForUpdates,
+                        onCheckedChange = { on -> viewModel.update { it.copy(checkForUpdates = on) } },
+                    )
+                    UpdateBanner(Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                     Divider()
                     InfoRow("Gateway", info.version?.let { "Hermes $it" } ?: "Checking…")
                 }

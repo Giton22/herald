@@ -41,6 +41,8 @@ import dev.hermeskotlin.ui.sessions.ChatMenu
 import dev.hermeskotlin.ui.sessions.SessionsSidebar
 import dev.hermeskotlin.ui.settings.SettingsScreen
 import dev.hermeskotlin.ui.signin.SignInScreen
+import dev.hermeskotlin.ui.update.LocalUpdateOffer
+import dev.hermeskotlin.ui.update.rememberUpdateOffer
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
@@ -55,9 +57,10 @@ val LocalAppVersion = staticCompositionLocalOf<String?> { null }
 /**
  * Root composable shared by every platform. Koin must be started by the platform host first.
  * [onDarkTheme] tells the host which theme is showing, e.g. to color the system bar icons.
+ * [releasesRepo] is the GitHub `owner/name` the build was released from, to look for newer releases.
  */
 @Composable
-fun App(appVersion: String? = null, onDarkTheme: (Boolean) -> Unit = {}) {
+fun App(appVersion: String? = null, releasesRepo: String? = null, onDarkTheme: (Boolean) -> Unit = {}) {
     // Nothing is drawn until the stored settings are read, so the first frame has the right theme.
     val settings = koinInject<SettingsStore>().settings.collectAsStateWithLifecycle().value ?: return
     val dark = when (settings.theme) {
@@ -76,6 +79,7 @@ fun App(appVersion: String? = null, onDarkTheme: (Boolean) -> Unit = {}) {
         CompositionLocalProvider(
             LocalAppSettings provides settings,
             LocalAppVersion provides appVersion,
+            LocalUpdateOffer provides rememberUpdateOffer(releasesRepo, appVersion, settings.checkForUpdates),
             LocalDensity provides Density(density.density, density.fontScale * settings.textSize.scale),
         ) { Routes() }
     }

@@ -18,6 +18,7 @@ import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.rpc.openGatewaySocket
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.slash.SlashApi
+import dev.hermeskotlin.core.update.UpdateChecker
 import dev.hermeskotlin.core.journey.JourneyApi
 import dev.hermeskotlin.core.pet.PetApi
 import dev.hermeskotlin.core.voice.AudioApi
@@ -60,4 +61,6 @@ val coreModule = module {
     single { JourneyApi(get()) }
     single { AudioApi(get()) }
     single { MediaApi(get()) }
+    // Its own client: GitHub gets no gateway cookies and no redirect rules meant for the dashboard.
+    single { UpdateChecker(createHttpClient(), get()) }
 }
