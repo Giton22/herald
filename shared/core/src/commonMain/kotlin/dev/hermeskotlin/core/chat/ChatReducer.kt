@@ -139,7 +139,8 @@ fun historyToMessages(rows: List<SessionMessage>): List<ChatMessage> {
         val key = row.id?.let { "row-$it" } ?: "h$index"
         when (row.role) {
             "user" -> {
-                val (refs, text) = splitAttachmentRefs(row.text.trim(), key)
+                val raw = row.text.trim()
+                val (refs, text) = skillInvocationText(raw)?.let { emptyList<ShownAttachment>() to it } ?: splitAttachmentRefs(raw, key)
                 val attachments = List(row.imageCount) { ShownAttachment("$key-i$it", "Image", AttachmentKind.Image) } + refs
                 if (text.isNotEmpty() || attachments.isNotEmpty()) messages += ChatMessage.User(key, text, attachments = attachments)
             }

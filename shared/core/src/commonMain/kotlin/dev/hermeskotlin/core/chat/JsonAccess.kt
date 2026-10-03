@@ -5,6 +5,7 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
+import kotlinx.serialization.json.intOrNull
 
 /** Lenient field reads for gateway payloads: a missing or wrongly typed field is null, never an exception. */
 internal fun JsonObject?.string(key: String): String? = (this?.get(key) as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
@@ -12,3 +13,5 @@ internal fun JsonObject?.string(key: String): String? = (this?.get(key) as? Json
 internal fun JsonObject?.boolean(key: String): Boolean? = (this?.get(key) as? JsonPrimitive)?.booleanOrNull
 
 internal fun JsonObject?.double(key: String): Double? = (this?.get(key) as? JsonPrimitive)?.doubleOrNull
+
+internal fun JsonObject?.int(key: String): Int? = (this?.get(key) as? JsonPrimitive)?.intOrNull

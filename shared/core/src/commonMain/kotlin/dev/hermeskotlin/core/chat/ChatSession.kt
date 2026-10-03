@@ -8,9 +8,13 @@ import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.rpc.JsonRpcClient
 import dev.hermeskotlin.core.rpc.RpcException
 import dev.hermeskotlin.core.sessions.SessionsApi
+import dev.hermeskotlin.core.slash.SlashCommand
+import dev.hermeskotlin.core.slash.SlashResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -85,9 +89,10 @@ class ChatSession(
 
     /**
      * Sends a prompt with any [attachments], creating or attaching the live session first and uploading
-     * the attachments to it before `prompt.submit`. Returns false if it was not accepted.
+     * the attachments to it before `prompt.submit`. Returns false if it was not accepted. The bubble
+     * shows [display] instead of the text when given (a skill's body is for the model, not the chat).
      */
-    suspend fun send(text: String, attachments: List<OutgoingAttachment> = emptyList()): Boolean {
+    suspend fun send(text: String, attachments: List<OutgoingAttachment> = emptyList(), display: String? = null): Boolean {
         val trimmed = text.trim()
         if (trimmed.isEmpty() && attachments.isEmpty()) return false
         // Desktop's fallback, so an image-only prompt still asks something.
@@ -95,7 +100,7 @@ class ChatSession(
         val key = "local-${_state.value.keySeq}"
         _state.update {
             it.copy(
-                messages = it.messages + ChatMessage.User(key, visible, pending = true, attachments = attachments.map { a -> a.toShown() }),
+                messages = it.messages + ChatMessage.User(key, display ?: visible, pending = true, attachments = attachments.map { a -> a.toShown() }),
                 keySeq = it.keySeq + 1,
                 error = null,
             )
@@ -219,6 +224,162 @@ class ChatSession(
             }
         }
     }
+
+    /**
+     * Runs [command] on the gateway the way Desktop does: `slash.exec` first (built-ins, quick and
+     * plugin commands), then `command.dispatch` for what the slash worker won't take (skills, bundles).
+     * Output shows under the command in the chat. Returns text to put back in the composer (`/undo`).
+     */
+    suspend fun runCommand(command: SlashCommand): String? {
+        val key = addCommand("/${command.name}")
+        val client = connectedClient() ?: return finishCommand(key, NOT_CONNECTED, failed = true).let { null }
+        val runtimeId = try {
+            ensureAttached(client)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            finishCommand(key, e.message ?: "Couldn't open the session.", failed = true)
+            return null
+        }
+        var execError: Exception? = null
+        val exec = try {
+            val reply = client.request(
+                "slash.exec",
+                buildJsonObject {
+                    put("session_id", runtimeId)
+                    put("command", command.line)
+                },
+                timeoutMs = COMMAND_TIMEOUT_MS,
+            ) as? JsonObject
+            SlashResult.parse(reply) ?: SlashResult.Output("")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            execError = e
+            null
+        }
+        val result = exec ?: try {
+            SlashResult.parse(
+                client.request(
+                    "command.dispatch",
+                    buildJsonObject {
+                        put("session_id", runtimeId)
+                        put("name", command.name)
+                        if (command.arg.isNotEmpty()) put("arg", command.arg)
+                    },
+                    timeoutMs = COMMAND_TIMEOUT_MS,
+                ) as? JsonObject,
+            ) ?: SlashResult.Output("The gateway's answer to /${command.name} couldn't be read.")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // "Not a quick/plugin/skill command" only means the fallback had nothing either; the worker's
+            // failure (a timeout, a crash) is the one worth showing.
+            val routingNoise = NOT_DISPATCHABLE.containsMatchIn(e.message.orEmpty())
+            val shown = if (routingNoise && execError != null) execError else e
+            finishCommand(key, shown.message ?: "/${command.name} failed.", failed = true)
+            return null
+        }
+        return when (result) {
+            is SlashResult.Output -> {
+                val text = result.text.ifBlank { "Done." }
+                finishCommand(key, result.warning?.let { "$it\n\n$text" } ?: text)
+                null
+            }
+            is SlashResult.Alias -> {
+                removeMessage(key)
+                runCommand(SlashCommand(result.target.lowercase(), command.arg))
+            }
+            is SlashResult.Send -> {
+                result.notice?.takeIf { it.isNotBlank() }?.let { finishCommand(key, it.trim()) } ?: removeMessage(key)
+                val display = result.display?.takeIf { it.isNotBlank() } ?: skillInvocationText(result.message) ?: "/${command.line}"
+                send(result.message, display = display)
+                null
+            }
+            is SlashResult.Prefill -> {
+                result.notice?.takeIf { it.isNotBlank() }?.let { finishCommand(key, it.trim()) } ?: removeMessage(key)
+                result.message
+            }
+        }
+    }
+
+    /** `/compress`: summarizes older turns through `session.compress` (the slash worker times out on it). */
+    suspend fun compress(focus: String) = runOnGateway("/compress", COMPRESS_TIMEOUT_MS) { client, runtimeId ->
+        val result = client.request(
+            "session.compress",
+            buildJsonObject {
+                put("session_id", runtimeId)
+                if (focus.isNotBlank()) put("focus_topic", focus.trim())
+            },
+            timeoutMs = COMPRESS_TIMEOUT_MS,
+        ) as? JsonObject
+        if (result.boolean("compressed") == false) return@runOnGateway result.string("message") ?: "Nothing to compress yet."
+        scope.launch { loadHistory() }
+        val before = result.int("before_messages")
+        val after = result.int("after_messages")
+        val beforeTokens = result.int("before_tokens")
+        val afterTokens = result.int("after_tokens")
+        buildString {
+            append("Compressed")
+            if (before != null && after != null) append(": $before → $after messages")
+            if (beforeTokens != null && afterTokens != null) append(", about $beforeTokens → $afterTokens tokens")
+            append('.')
+        }
+    }
+
+    /** `/status`: the session report from `session.status`. */
+    suspend fun status() = runOnGateway("/status") { client, runtimeId ->
+        val result = client.request("session.status", buildJsonObject { put("session_id", runtimeId) }) as? JsonObject
+        result.string("output") ?: "No status."
+    }
+
+    /** Shows [text] under [command] at once, for commands this client answers itself. */
+    fun showCommandOutput(command: String, text: String, failed: Boolean = false) {
+        finishCommand(addCommand(command), text, failed)
+    }
+
+    private suspend fun runOnGateway(
+        command: String,
+        timeoutMs: Long = COMMAND_TIMEOUT_MS,
+        call: suspend (JsonRpcClient, String) -> String,
+    ) {
+        val key = addCommand(command)
+        val client = connectedClient() ?: return finishCommand(key, NOT_CONNECTED, failed = true)
+        try {
+            val output = withTimeout(timeoutMs + 5_000) { call(client, ensureAttached(client)) }
+            finishCommand(key, output)
+        } catch (e: TimeoutCancellationException) {
+            finishCommand(key, "$command took too long to answer.", failed = true)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            finishCommand(key, e.message ?: "$command failed.", failed = true)
+        }
+    }
+
+    private fun addCommand(command: String): String {
+        var key = ""
+        _state.update {
+            key = "cmd-${it.keySeq}"
+            it.copy(messages = it.messages + ChatMessage.Command(key, command), keySeq = it.keySeq + 1, error = null)
+        }
+        return key
+    }
+
+    private fun finishCommand(key: String, output: String, failed: Boolean = false) = _state.update { state ->
+        state.copy(
+            messages = state.messages.map {
+                if (it is ChatMessage.Command && it.key == key) {
+                    // The slash worker prints for a terminal; its colour codes mean nothing here.
+                    it.copy(output = output.replace(ANSI_ESCAPE, "").trimEnd(), running = false, failed = failed)
+                } else {
+                    it
+                }
+            },
+        )
+    }
+
+    private fun removeMessage(key: String) = _state.update { state -> state.copy(messages = state.messages.filterNot { it.key == key }) }
 
     /** Asks the gateway to stop the running turn; `message.complete {status: interrupted}` follows. */
     suspend fun interrupt() {
@@ -519,6 +680,19 @@ class ChatSession(
         const val UPLOAD_TIMEOUT_MS = 120_000L
 
         const val PDF_RENDER_UNAVAILABLE = 5028
+
+        const val NOT_CONNECTED = "Not connected to the gateway."
+
+        val ANSI_ESCAPE = Regex("""\u001B\[[0-9;?]*[ -/]*[@-~]""")
+
+        /** The slash worker can be slow to start (it loads the agent and its MCP servers). */
+        const val COMMAND_TIMEOUT_MS = 60_000L
+
+        /** Compressing calls the model to summarize; a long chat takes a while. */
+        const val COMPRESS_TIMEOUT_MS = 180_000L
+
+        /** `command.dispatch`'s "not a quick/plugin/bundle/skill command" (older gateways lack "bundle/"). */
+        val NOT_DISPATCHABLE = Regex("""not a quick/plugin/(?:bundle/)?skill command""", RegexOption.IGNORE_CASE)
     }
 }
 
@@ -544,4 +718,5 @@ private val ChatMessage.isLocalOnly: Boolean
     get() = when (this) {
         is ChatMessage.Assistant -> streaming
         is ChatMessage.User -> pending
+        is ChatMessage.Command -> true
     }

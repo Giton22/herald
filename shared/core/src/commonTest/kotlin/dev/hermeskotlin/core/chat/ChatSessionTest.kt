@@ -8,6 +8,7 @@ import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.rpc.FakeTransport
 import dev.hermeskotlin.core.sessions.SessionsApi
+import dev.hermeskotlin.core.slash.SlashCommand
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -70,6 +71,7 @@ class ChatSessionTest {
     private fun ChatMessage.textOf() = when (this) {
         is ChatMessage.User -> text
         is ChatMessage.Assistant -> text
+        is ChatMessage.Command -> output
     }
 
     private fun JsonObject.isCall(method: String) = this["method"]?.jsonPrimitive?.contentOrNull == method
@@ -349,5 +351,61 @@ class ChatSessionTest {
         val detach = transport.awaitSent { it.isCall("image.detach") }
         assertEquals("/tmp/upload_1.jpg", detach.param("path"))
         assertTrue(chat.state.value.messages.isEmpty())
+    }
+
+    private suspend fun newChat(scope: CoroutineScope, results: Map<String, String>): Pair<ChatSession, FakeTransport> {
+        val (connection, transport) = setup(scope, mapOf("session.create" to """{"session_id":"rt9","info":{}}""") + results)
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), scope)
+        chat.start()
+        return chat to transport
+    }
+
+    @Test
+    fun aCommandShowsWhatTheSlashWorkerPrinted() = runTest {
+        val (chat, transport) = newChat(backgroundScope, mapOf("slash.exec" to """{"output":"Context: 12% used\n"}"""))
+
+        assertEquals(null, chat.runCommand(SlashCommand("context", "")))
+
+        assertEquals("context", transport.sent.value.first { it.isCall("slash.exec") }.param("command"))
+        val shown = assertIs<ChatMessage.Command>(chat.state.value.messages.single())
+        assertEquals("/context", shown.command)
+        assertEquals("Context: 12% used", shown.output)
+        assertFalse(shown.running)
+        // Output alone doesn't make a conversation worth reopening.
+        assertFalse(chat.state.value.hasConversation)
+    }
+
+    @Test
+    fun aSkillTheWorkerRefusesIsDispatchedAndSentShowingTheInvocation() = runTest {
+        val (chat, transport) = newChat(
+            backgroundScope,
+            mapOf(
+                "slash.exec" to "error:4018",
+                "command.dispatch" to """{"type":"skill","name":"work","message":"[IMPORTANT: skill body]","display":"/work fix the leak"}""",
+                "prompt.submit" to """{"status":"streaming"}""",
+            ),
+        )
+
+        chat.runCommand(SlashCommand("work", "fix the leak"))
+
+        val dispatch = transport.sent.value.first { it.isCall("command.dispatch") }
+        assertEquals("work", dispatch.param("name"))
+        assertEquals("fix the leak", dispatch.param("arg"))
+        assertEquals("[IMPORTANT: skill body]", transport.sent.value.first { it.isCall("prompt.submit") }.param("text"))
+        val user = assertIs<ChatMessage.User>(chat.state.value.messages.single())
+        assertEquals("/work fix the leak", user.text)
+    }
+
+    @Test
+    fun aPrefillHandsTheTextBackAndAFailureExplainsItself() = runTest {
+        val (chat, _) = newChat(backgroundScope, mapOf("slash.exec" to """{"type":"prefill","message":"my last prompt"}"""))
+        assertEquals("my last prompt", chat.runCommand(SlashCommand("undo", "")))
+        assertTrue(chat.state.value.messages.isEmpty())
+
+        val (failing, _) = newChat(backgroundScope, mapOf("slash.exec" to "error:5030", "command.dispatch" to "error:4018"))
+        failing.runCommand(SlashCommand("usage", ""))
+        val shown = assertIs<ChatMessage.Command>(failing.state.value.messages.single())
+        assertTrue(shown.failed)
     }
 }

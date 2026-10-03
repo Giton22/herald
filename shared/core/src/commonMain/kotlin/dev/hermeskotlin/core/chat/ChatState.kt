@@ -35,6 +35,18 @@ sealed interface ChatMessage {
         val outcome: TurnOutcome? = null,
         val error: String? = null,
     ) : ChatMessage
+
+    /**
+     * A slash command and what it printed, shown on this device only (the transcript never holds it).
+     * [running] until the gateway answers; [failed] when [output] is an error.
+     */
+    data class Command(
+        override val key: String,
+        val command: String,
+        val output: String = "",
+        val running: Boolean = true,
+        val failed: Boolean = false,
+    ) : ChatMessage
 }
 
 sealed interface Attachment {
@@ -77,4 +89,7 @@ data class ChatState(
     val keySeq: Int = 0,
 ) {
     val runtimeSessionId: String? get() = (attachment as? Attachment.Attached)?.runtimeSessionId
+
+    /** Prompts or replies exist, so the stored row does too; command output alone doesn't make one. */
+    val hasConversation: Boolean get() = messages.any { it !is ChatMessage.Command }
 }
