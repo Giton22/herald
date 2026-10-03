@@ -371,6 +371,21 @@ class ChatSession(
         }
     }
 
+    /** What fills the context window now (`session.context_breakdown`); null before the first prompt or offline. */
+    suspend fun contextBreakdown(): ContextBreakdown? {
+        val client = connectedClient() ?: return null
+        val runtimeId = _state.value.runtimeSessionId ?: return null
+        return try {
+            ContextBreakdown.parse(
+                client.request("session.context_breakdown", buildJsonObject { put("session_id", runtimeId) }) as? JsonObject,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+    }
+
     /** `/stop`: stops the reply, then the background processes the agent left running (`process.stop`). */
     suspend fun stopEverything() = runOnGateway("/stop") { client, runtimeId ->
         val lines = mutableListOf<String>()

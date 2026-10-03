@@ -163,7 +163,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Undo and branch from the composer (`/undo` hands the last prompt back; `/branch` → `session.branch_whole` / `session.branch`)
 - [ ] Undo and branch from a message (buttons on a turn instead of slash commands)
 - [x] Context compression (`/compress` → `session.compress`)
-- [ ] Context breakdown (`session.context_breakdown`)
+- [x] Context breakdown in the usage sheet (`session.context_breakdown`): the window split by system prompt, tools, skills, memory, conversation and the rest, plus the files read in
 
 ### Agents & processes
 - [x] Subagent tree and live progress (`subagent.*`, `subagent.list`, `subagent.interrupt`; saved `spawn_tree.*` snapshots not used)
