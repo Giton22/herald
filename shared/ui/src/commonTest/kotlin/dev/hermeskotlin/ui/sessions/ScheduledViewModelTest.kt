@@ -99,4 +99,43 @@ class ScheduledViewModelTest {
         assertTrue(created.isEmpty())
         assertTrue("deleted" in vm.state.value.editor?.error.orEmpty())
     }
+
+    @Test
+    fun aSaveThatFinishesAfterTheFormClosedLeavesThePageAlone() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        val gate = CompletableDeferred<Unit>().also { createGate = it }
+        vm.fillNewJob()
+        vm.saveJob()
+
+        // Back out of the form and open another job while the create is still in flight.
+        vm.closeEditor()
+        vm.openJob("a1")
+        gate.complete(Unit)
+
+        val state = vm.state.first { it.message != null }
+        assertEquals("a1", state.openJobId)
+        assertNull(state.editor)
+        assertEquals("Job scheduled", state.message)
+        assertTrue(state.jobs.any { it.id == "n1" })
+    }
+
+    @Test
+    fun aSaveThatFailsAfterTheFormClosedSaysSo() = runTest(dispatcher) {
+        createStatus = HttpStatusCode.ServiceUnavailable
+        val vm = viewModel()
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        val gate = CompletableDeferred<Unit>().also { createGate = it }
+        vm.fillNewJob()
+        vm.saveJob()
+
+        vm.closeEditor()
+        gate.complete(Unit)
+
+        val message = vm.state.first { it.message != null }.message!!
+        assertTrue(message.startsWith("Couldn't save the job"), message)
+        assertTrue("Gateway is busy" in message, message)
+    }
 }

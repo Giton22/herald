@@ -78,6 +78,9 @@ class ScheduledViewModel(
     private var gateway: SavedGateway? = null
     private var runsJob: Job? = null
 
+    /** Counts the times the form opened or closed, so a save that outlives its form can tell. */
+    private var editorGeneration = 0
+
     init {
         observeServerChanges()
     }
@@ -85,6 +88,7 @@ class ScheduledViewModel(
     fun bind(gateway: SavedGateway) {
         if (this.gateway == gateway) return
         this.gateway = gateway
+        editorGeneration++
         _state.value = ScheduledUiState()
         refresh()
     }
@@ -136,6 +140,7 @@ class ScheduledViewModel(
         name.setTextAndPlaceCursorAtEnd("")
         prompt.setTextAndPlaceCursorAtEnd("")
         schedule.setTextAndPlaceCursorAtEnd("")
+        editorGeneration++
         _state.update { it.copy(editor = JobEditor()) }
         loadDeliveryTargets()
     }
@@ -145,11 +150,15 @@ class ScheduledViewModel(
         name.setTextAndPlaceCursorAtEnd(job.name)
         prompt.setTextAndPlaceCursorAtEnd(job.prompt)
         schedule.setTextAndPlaceCursorAtEnd(job.editableSchedule)
+        editorGeneration++
         _state.update { it.copy(editor = JobEditor(jobId = job.id, deliver = job.deliver ?: LOCAL_DELIVERY.id)) }
         loadDeliveryTargets()
     }
 
-    fun closeEditor() = _state.update { it.copy(editor = null) }
+    fun closeEditor() {
+        editorGeneration++
+        _state.update { it.copy(editor = null) }
+    }
 
     fun setSchedule(text: String) = schedule.setTextAndPlaceCursorAtEnd(text)
 
@@ -179,6 +188,8 @@ class ScheduledViewModel(
             return
         }
         _state.update { it.copy(editor = editor.copy(saving = true, error = null)) }
+        val savedTo = gateway
+        val generation = editorGeneration
         viewModelScope.launch {
             val result = if (existing == null) {
                 api.create(url, draft)
@@ -191,26 +202,43 @@ class ScheduledViewModel(
                 }
                 if (changes.isEmpty()) ApiResult.Success(existing) else api.update(url, existing.id, changes)
             }
+            // Signed in to a different gateway since; this result belongs to the old one.
+            if (gateway != savedTo) return@launch
+            // The form was closed or reopened while saving: report the outcome, but leave the page alone.
+            val formOpen = generation == editorGeneration
             _state.update { state ->
                 when (result) {
                     is ApiResult.Success -> {
                         val saved = result.value
                         val known = state.jobs.any { it.id == saved.id }
+                        val jobs = if (known) state.jobs.map { if (it.id == saved.id) saved else it } else listOf(saved) + state.jobs
+                        val message = if (existing == null) "Job scheduled" else "Job saved"
+                        if (formOpen) {
+                            state.copy(
+                                editor = null,
+                                jobs = jobs,
+                                openJobId = saved.id,
+                                runs = if (state.openJobId == saved.id) state.runs else emptyList(),
+                                message = message,
+                            )
+                        } else {
+                            state.copy(jobs = jobs, message = message)
+                        }
+                    }
+                    else -> if (formOpen) {
                         state.copy(
-                            editor = null,
-                            jobs = if (known) state.jobs.map { if (it.id == saved.id) saved else it } else listOf(saved) + state.jobs,
-                            openJobId = saved.id,
-                            runs = if (state.openJobId == saved.id) state.runs else emptyList(),
-                            message = if (existing == null) "Job scheduled" else "Job saved",
+                            editor = state.editor?.copy(saving = false, error = result.errorMessage),
+                            sessionExpired = result == ApiResult.SessionExpired,
+                        )
+                    } else {
+                        state.copy(
+                            message = listOfNotNull("Couldn't save the job", result.errorMessage).joinToString(": "),
+                            sessionExpired = result == ApiResult.SessionExpired,
                         )
                     }
-                    else -> state.copy(
-                        editor = state.editor?.copy(saving = false, error = result.errorMessage),
-                        sessionExpired = result == ApiResult.SessionExpired,
-                    )
                 }
             }
-            (result as? ApiResult.Success)?.value?.let { if (existing == null) loadRuns(it.id) }
+            if (formOpen) (result as? ApiResult.Success)?.value?.let { if (existing == null) loadRuns(it.id) }
         }
     }
 
