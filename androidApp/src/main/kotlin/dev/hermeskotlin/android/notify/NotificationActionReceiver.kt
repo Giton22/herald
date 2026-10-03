@@ -11,6 +11,7 @@ import dev.hermeskotlin.core.chat.InputAnswers
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
+import dev.hermeskotlin.core.settings.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
@@ -26,6 +27,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
     private val connection: GatewayConnection by inject()
     private val notifications: ChatNotifications by inject()
     private val scope: CoroutineScope by inject()
+    private val settings: SettingsStore by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -43,6 +45,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         val text = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(KEY_TEXT)?.toString()?.trim()
         when (intent.action) {
             ACTION_STOP -> session?.interrupt()
+            ACTION_DISCONNECT -> settings.update { it.copy(stayConnected = false) }
             ACTION_APPROVE -> {
                 val choice = ApprovalChoice.fromWire(intent.getStringExtra(EXTRA_CHOICE).orEmpty()) ?: return
                 answer(session, intent.getStringExtra(EXTRA_REQUEST_ID) ?: return) { InputAnswers.approval(choice) }
@@ -100,6 +103,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         const val ACTION_APPROVE = "dev.hermeskotlin.action.APPROVE"
         const val ACTION_CLARIFY = "dev.hermeskotlin.action.CLARIFY"
         const val ACTION_REPLY = "dev.hermeskotlin.action.REPLY"
+        const val ACTION_DISCONNECT = "dev.hermeskotlin.action.DISCONNECT"
 
         const val EXTRA_REQUEST_ID = "request_id"
         const val EXTRA_CHOICE = "choice"

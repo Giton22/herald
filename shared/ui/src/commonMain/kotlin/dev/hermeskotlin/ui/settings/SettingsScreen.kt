@@ -141,6 +141,14 @@ fun SettingsScreen(
                         checked = settings.notifyReplies,
                         onCheckedChange = { on -> viewModel.update { it.copy(notifyReplies = on) } },
                     )
+                    Divider()
+                    SwitchRow(
+                        title = "Stay connected",
+                        detail = "Also catch turns started on other devices, like Hermes Desktop. " +
+                            "Keeps a quiet notification and uses more battery.",
+                        checked = settings.stayConnected,
+                        onCheckedChange = { on -> viewModel.update { it.copy(stayConnected = on) } },
+                    )
                 }
 
                 Section("Account") {

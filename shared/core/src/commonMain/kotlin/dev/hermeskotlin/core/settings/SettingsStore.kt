@@ -35,6 +35,8 @@ data class AppSettings(
     val notifyReplies: Boolean = true,
     /** Notify when the agent waits on an approval or a question while the app is in the background. */
     val notifyRequests: Boolean = true,
+    /** Keep the gateway connection up in the background, so turns started on other devices notify too. */
+    val stayConnected: Boolean = false,
 )
 
 /**

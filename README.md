@@ -172,6 +172,7 @@ The protocol notes are in [docs/hermes-protocol-research.md](docs/hermes-protoco
 - [x] Local notifications: approval waiting, run finished
 - [x] Answer from the notification: approve/deny, clarify answers, inline reply to a finished turn
 - [x] Notification toggles in Settings; permission asked on the first turn
+- [x] Stay connected: keeps the socket up in the background (quiet notification) so turns started on other devices reach the open chat
 - [ ] Gateway-pushed `notification.show`
 - [ ] Notifications for chats other than the open one
 - [ ] ntfy integration as a push channel without Google services (Hermes ntfy platform adapter)

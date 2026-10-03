@@ -9,29 +9,31 @@ import android.util.Log
 import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import dev.hermeskotlin.core.chat.ChatHost
+import dev.hermeskotlin.core.connection.GatewayConnection
 import org.koin.android.ext.android.inject
 
 /**
- * Keeps the process in the foreground while a turn runs, so Android doesn't freeze the gateway socket
- * when the app is in the background. Its notification is kept current by [ChatNotifier].
+ * Keeps the process in the foreground while a turn runs (or all the time with Stay connected), so
+ * Android doesn't cut the gateway socket when the app is in the background. Its notification is kept
+ * current by [ChatNotifier].
+ *
+ * A special-use service: data sync, the closest standard type, is capped at six hours a day.
  */
 class ChatService : Service() {
 
     private val host: ChatHost by inject()
     private val notifications: ChatNotifications by inject()
+    private val connection: GatewayConnection by inject()
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         ServiceCompat.startForeground(
             this,
             ChatNotifications.WORKING_ID,
-            notifications.working(host.session.value?.state?.value),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC,
+            notifications.working(host.session.value?.state?.value, connection.state.value),
+            ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
         )
         return START_NOT_STICKY
     }
-
-    // Android 15 caps data-sync services at six hours a day; a turn that long carries on unprotected.
-    override fun onTimeout(startId: Int, fgsType: Int) = stopSelf()
 
     override fun onBind(intent: Intent?): IBinder? = null
 

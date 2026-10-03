@@ -6,6 +6,7 @@ import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatSession
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.TurnOutcome
+import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
 import kotlinx.coroutines.CoroutineScope
@@ -16,8 +17,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlin.reflect.KClass
 
 /**
  * Turns the open chat's state into Android notifications: the foreground [ChatService] while a turn
@@ -32,6 +33,7 @@ class ChatNotifier(
     private val settings: SettingsStore,
     private val visibility: AppVisibility,
     private val notifications: ChatNotifications,
+    private val connection: GatewayConnection,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var serviceStarted = false
@@ -52,12 +54,13 @@ class ChatNotifier(
         var previous: ChatState? = null
         try {
             launch { keepWorkingNotificationCurrent(session) }
-            combine(session.state, visibility.visible, ::Pair).collect { (state, visible) ->
-                val prefs = settings.settings.value ?: AppSettings()
+            combine(session.state, visibility.visible, settings.settings, ::Triple).collect { (state, visible, stored) ->
+                val prefs = stored ?: AppSettings()
 
-                // Visible counts as a chance to start it: Android refuses from the background.
-                if (state.running && !serviceStarted) serviceStarted = ChatService.start(context)
-                if (!state.running) stopService()
+                // Each change is a chance to start it: Android refuses while the app is in the background.
+                val wanted = state.running || prefs.stayConnected
+                if (wanted && !serviceStarted) serviceStarted = ChatService.start(context)
+                if (!wanted) stopService()
 
                 for (request in state.inputRequests) {
                     if (!notified.add(request.id)) continue
@@ -89,14 +92,13 @@ class ChatNotifier(
 
     /** Status lines can change several times a second; Android drops updates past a few per second. */
     private suspend fun keepWorkingNotificationCurrent(session: ChatSession) {
-        session.state
-            .map { state ->
-                val tool = (state.messages.lastOrNull() as? ChatMessage.Assistant)?.tools?.lastOrNull { it.running }
-                WorkingKey(state.title, state.status, state.inputRequests.size, tool?.id)
-            }
+        combine(session.state, connection.state) { state, connectionState ->
+            val tool = (state.messages.lastOrNull() as? ChatMessage.Assistant)?.tools?.lastOrNull { it.running }
+            WorkingKey(state.running, state.title, state.status, state.inputRequests.size, tool?.id, connectionState::class)
+        }
             .distinctUntilChanged()
             .collect {
-                if (serviceStarted) notifications.postWorking(session.state.value)
+                if (serviceStarted) notifications.postWorking(session.state.value, connection.state.value)
                 delay(1_000)
             }
     }
@@ -107,5 +109,12 @@ class ChatNotifier(
         ChatService.stop(context)
     }
 
-    private data class WorkingKey(val title: String?, val status: String?, val waiting: Int, val toolId: String?)
+    private data class WorkingKey(
+        val running: Boolean,
+        val title: String?,
+        val status: String?,
+        val waiting: Int,
+        val toolId: String?,
+        val connection: KClass<*>,
+    )
 }

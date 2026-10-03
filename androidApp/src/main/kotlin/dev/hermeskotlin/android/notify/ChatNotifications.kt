@@ -16,6 +16,7 @@ import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.chat.ApprovalChoice
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.InputRequest
+import dev.hermeskotlin.core.connection.ConnectionState
 
 /** Builds and posts every notification the app shows; the actions land in [NotificationActionReceiver]. */
 class ChatNotifications(private val context: Context) {
@@ -28,6 +29,11 @@ class ChatNotifications(private val context: Context) {
                 NotificationChannelCompat.Builder(CHANNEL_WORKING, NotificationManagerCompat.IMPORTANCE_LOW)
                     .setName("Running turns")
                     .setDescription("Shown while the agent works, so the connection stays up in the background.")
+                    .setShowBadge(false)
+                    .build(),
+                NotificationChannelCompat.Builder(CHANNEL_CONNECTION, NotificationManagerCompat.IMPORTANCE_MIN)
+                    .setName("Background connection")
+                    .setDescription("Shown while Stay connected keeps the gateway connection up.")
                     .setShowBadge(false)
                     .build(),
                 NotificationChannelCompat.Builder(CHANNEL_REQUESTS, NotificationManagerCompat.IMPORTANCE_HIGH)
@@ -48,8 +54,12 @@ class ChatNotifications(private val context: Context) {
                 ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
             )
 
-    /** The ongoing notification of [ChatService]: what the agent is doing, with a Stop button. */
-    fun working(state: ChatState?): Notification {
+    /**
+     * The ongoing notification of [ChatService]: what the agent is doing, with a Stop button, or a
+     * quiet connection line between turns when Stay connected keeps the service up.
+     */
+    fun working(state: ChatState?, connection: ConnectionState): Notification {
+        if (state?.running != true) return connected(state, connection)
         val waiting = state?.inputRequests?.isNotEmpty() == true
         val runningTool = state?.messages?.lastOrNull()
             ?.let { it as? dev.hermeskotlin.core.chat.ChatMessage.Assistant }
@@ -81,7 +91,24 @@ class ChatNotifications(private val context: Context) {
             .build()
     }
 
-    fun postWorking(state: ChatState?) = post(null, WORKING_ID, working(state))
+    fun postWorking(state: ChatState?, connection: ConnectionState) = post(null, WORKING_ID, working(state, connection))
+
+    private fun connected(state: ChatState?, connection: ConnectionState): Notification {
+        val title = when (connection) {
+            is ConnectionState.Connected -> "Connected to Hermes"
+            is ConnectionState.Connecting, is ConnectionState.Reconnecting -> "Reconnecting to Hermes…"
+            else -> "Not connected to Hermes"
+        }
+        return base(CHANNEL_CONNECTION)
+            .setContentTitle(title)
+            .setContentText(state?.title?.takeIf { it.isNotBlank() }?.let { "Following $it" } ?: "Waiting for turns from any device")
+            .setOngoing(true)
+            .setSilent(true)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_DEFERRED)
+            .addAction(0, "Turn off", action(NotificationActionReceiver.ACTION_DISCONNECT, "disconnect"))
+            .build()
+    }
 
     /** A question the agent is blocked on, answerable in place when it fits a notification. */
     fun postRequest(title: String?, request: InputRequest) {
@@ -202,6 +229,7 @@ class ChatNotifications(private val context: Context) {
         const val REQUEST_ID = 3
 
         private const val CHANNEL_WORKING = "working"
+        private const val CHANNEL_CONNECTION = "connection"
         private const val CHANNEL_REQUESTS = "requests"
         private const val CHANNEL_REPLIES = "replies"
         private const val MAX_PREVIEW = 2_000
