@@ -114,6 +114,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Completion details: duration, error flag, output preview, diffs (`tool.complete`)
 - [x] Output-risk warnings (`tool.output_risk`)
 - [x] Todo list updates (`todo.updated`)
+- [x] One live status above the composer while a turn runs: the current action in plain words (waiting on you, the running tool, the plan step, the gateway status, else thinking) with the plan count; the status text, tool and plan fold beneath it, and the reply keeps only folded "Used … tools" and "Reasoning" rows
 
 ### 6. Interactive requests (server → client)
 - [x] **Approval** panel for dangerous commands, with choices `once`, `session`, `always` (confirmed first), `deny` filtered by the gateway's `choices` / `allow_session`, `allow_permanent` and `smart_denied`. The command wraps, with "Show full command" and "Copy command"; each permission says where and how long it applies, the broader ones in their own section; taps are ignored for a moment after it appears; and the panel keeps a Stop for the running task
