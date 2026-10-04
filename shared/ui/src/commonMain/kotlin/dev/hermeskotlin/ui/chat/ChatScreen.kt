@@ -19,6 +19,7 @@ import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -758,8 +759,9 @@ private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String
         }
         val usage = message.usage?.takeIf { settings.showUsage && !message.streaming }
         if ((!message.streaming && text.isNotBlank()) || usage != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (!message.streaming && text.isNotBlank()) CopyButton(text)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                // Its padding trimmed off the start and top, the icon lines up with the reply and sits close under it.
+                if (!message.streaming && text.isNotBlank()) CopyButton(text, Modifier.trimStartTop(start = 8.dp, top = 4.dp))
                 usage?.let {
                     Text(
                         "${compactCount(it.input)} in · ${compactCount(it.output)} out",
@@ -1369,4 +1371,15 @@ private fun ModelPill(state: ChatState, picker: ModelPickerState, onClick: () ->
             UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
         }
     }
+}
+
+/**
+ * Lays the element out [start] and [top] smaller, drawn up and to the left by as much: empty padding inside
+ * it stops pushing it away from its neighbours, while it still takes taps over its whole size.
+ */
+private fun Modifier.trimStartTop(start: Dp, top: Dp) = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    val dx = start.roundToPx()
+    val dy = top.roundToPx()
+    layout(placeable.width - dx, placeable.height - dy) { placeable.place(-dx, -dy) }
 }

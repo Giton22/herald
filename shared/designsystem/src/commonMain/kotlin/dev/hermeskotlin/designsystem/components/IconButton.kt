@@ -9,6 +9,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.composeunstyled.UnstyledButton
 import com.composeunstyled.UnstyledIcon
@@ -30,6 +31,7 @@ fun IconButton(
     tint: Color = Theme[colors][textSecondary],
     /** Fill behind the icon; transparent for toolbar use, the accent for a primary action like Send. */
     containerColor: Color = Color.Transparent,
+    iconSize: Dp = 20.dp,
 ) {
     UnstyledButton(
         onClick = onClick,
@@ -37,6 +39,6 @@ fun IconButton(
         modifier = modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusMedium])).background(containerColor).alpha(if (enabled) 1f else 0.45f),
         indication = rememberColoredIndication(tint),
     ) {
-        UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(20.dp))
+        UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(iconSize))
     }
 }
