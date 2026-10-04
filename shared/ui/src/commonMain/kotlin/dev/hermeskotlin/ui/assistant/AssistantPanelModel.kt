@@ -93,6 +93,10 @@ class AssistantPanelModel(
     private val _circling = MutableStateFlow(false)
     val circling: StateFlow<Boolean> = _circling.asStateFlow()
 
+    /** The part the user circled, waiting to go with the next question. */
+    private val _circledPart = MutableStateFlow<ScreenContext?>(null)
+    val circledPart: StateFlow<ScreenContext?> = _circledPart.asStateFlow()
+
     /** Counts call-ups, so what happens on each one (listening) happens again on the next. */
     private val _shows = MutableStateFlow(0)
     val shows: StateFlow<Int> = _shows.asStateFlow()
@@ -131,6 +135,7 @@ class AssistantPanelModel(
         composer.clearText()
         _includeScreen.value = false
         _circling.value = false
+        _circledPart.value = null
         _screen.value = ScreenCapture(pending = listOf(expectText, expectScreenshot).count { it })
         // The last call-up's chat goes on in the sessions list; an unused one is simply kept.
         if (_session.value?.state?.value?.hasConversation == true) newChat()
@@ -139,6 +144,18 @@ class AssistantPanelModel(
 
     /** Back after stepping aside (for Android's microphone prompt): the same chat and screen, listening again. */
     fun resume() = _shows.update { it + 1 }
+
+    private var listenedOn = -1
+
+    /**
+     * True once per call-up: whether to start listening now. The panel's content comes and goes within one
+     * (circling replaces it), and coming back from circling must not start listening, which sends.
+     */
+    fun claimListening(show: Int): Boolean {
+        if (show == listenedOn) return false
+        listenedOn = show
+        return true
+    }
 
     fun onScreenText(app: String?, items: List<ScreenItem>) = _screen.update {
         it.copy(app = app ?: it.app, items = items, pending = (it.pending - 1).coerceAtLeast(0))
@@ -153,21 +170,33 @@ class AssistantPanelModel(
         _includeScreen.value = include
     }
 
-    /** Sends what was typed; the first prompt takes the screen along unless the user dropped it. */
+    /**
+     * Sends what was typed with what the user chose to show: a circled part, else (on the first
+     * question) the whole screen if they added it.
+     */
     fun send() {
         val text = composer.text.toString().trim()
         val session = _session.value ?: return
         val first = !session.state.value.hasConversation
-        if (text.isEmpty() && !(first && _includeScreen.value)) return
+        val circled = _circledPart.value
+        val wholeScreen = circled == null && first && _includeScreen.value
+        if (text.isEmpty() && circled == null && !wholeScreen) return
         composer.clearText()
         scope.launch {
-            val attachments = if (first && _includeScreen.value) awaitScreen().toAttachments() else emptyList()
-            // A screen alone still asks something.
-            val prompt = text.ifEmpty { if (attachments.isNotEmpty()) SCREEN_ONLY_PROMPT else return@launch }
+            val attachments = when {
+                circled != null -> circled.toAttachments()
+                wholeScreen -> awaitScreen().toAttachments()
+                else -> emptyList()
+            }
+            // What was shown alone still asks something.
+            val prompt = text.ifEmpty { if (circled != null) CIRCLED_PROMPT else if (attachments.isNotEmpty()) SCREEN_ONLY_PROMPT else return@launch }
             val sent = session.send(prompt, attachments)
-            // Not sent: the words go back where they were typed, and the screen stays for the retry.
+            // Not sent: the words go back where they were typed, and what was shown stays for the retry.
             if (!sent && composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
-            if (sent) _includeScreen.value = false
+            if (sent) {
+                _includeScreen.value = false
+                if (_circledPart.value === circled) _circledPart.value = null
+            }
         }
     }
 
@@ -183,24 +212,25 @@ class AssistantPanelModel(
     }
 
     /**
-     * Asks about what the user circled, at once, as Circle to Search does: the circled part cut from the
-     * full screenshot and the text inside it, with whatever was typed, else "What's this?".
+     * Holds what the user circled for the next question: the part cut from the full screenshot and the
+     * text inside it. Nothing goes out until they send; it takes the whole screen's place.
      */
     fun circled(region: ScreenRegion) {
         _circling.value = false
-        val session = _session.value ?: return
+        _includeScreen.value = false
         val capture = _screen.value
-        val typed = composer.text.toString().trim()
-        composer.clearText()
+        val lines = capture.items.inside(region).map { it.text }
+        // Held at once with its text; the picture follows when cut, unless the user moved on meanwhile.
+        val held = ScreenContext(capture.app, lines, null, circled = true)
+        _circledPart.value = held
         scope.launch {
             val crop = cropper.crop(region)
-            val lines = capture.items.inside(region).map { it.text }
-            val context = ScreenContext(capture.app, lines, crop, circled = true)
-            val sent = session.send(typed.ifEmpty { CIRCLED_PROMPT }, context.toAttachments())
-            if (!sent && composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(typed)
-            // The whole screen has been asked about in part; offering it again would be noise.
-            if (sent) _includeScreen.value = false
+            _circledPart.update { if (it === held) ScreenContext(capture.app, lines, crop, circled = true) else it }
         }
+    }
+
+    fun dropCircled() {
+        _circledPart.value = null
     }
 
     /** Dictates into the composer and sends what was said, as an assistant does. */

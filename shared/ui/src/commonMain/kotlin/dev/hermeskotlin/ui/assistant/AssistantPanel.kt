@@ -234,7 +234,7 @@ private fun ColumnScope.Ready(model: AssistantPanelModel, microphoneAllowed: Boo
 
     // Calling the assistant up is asking to talk: listen straight away, on every call-up, when the app may.
     LaunchedEffect(model, shows, microphoneAllowed) {
-        if (microphoneAllowed && !state.hasConversation && !dictation.active) model.toggleDictation()
+        if (microphoneAllowed && !state.hasConversation && !dictation.active && model.claimListening(shows)) model.toggleDictation()
     }
 
     val messages = state.messages.filter { it is ChatMessage.User || it is ChatMessage.Assistant }
@@ -267,12 +267,17 @@ private fun ColumnScope.Ready(model: AssistantPanelModel, microphoneAllowed: Boo
         InputRequestPanel(state.inputRequests, connected, onAnswer = model::answer, onStop = model::stop.takeIf { state.running })
         return
     }
-    if (!state.hasConversation) ScreenChip(screen, included = includeScreen, onIncluded = model::setIncludeScreen, onCircle = model::startCircling)
+    val circled by model.circledPart.collectAsState()
+    when {
+        circled != null -> CircledChip(circled!!, onCircleAgain = model::startCircling, onRemove = model::dropCircled)
+        !state.hasConversation -> ScreenChip(screen, included = includeScreen, onIncluded = model::setIncludeScreen, onCircle = model::startCircling)
+    }
     Composer(
         model = model,
         state = state,
         connected = connected,
-        includeScreen = includeScreen,
+        includeScreen = includeScreen && !state.hasConversation,
+        circled = circled != null,
         canDictate = microphoneAllowed,
         dictation = dictation,
         onAllowMicrophone = onAllowMicrophone,
@@ -352,12 +357,49 @@ private fun ScreenChip(screen: ScreenCapture, included: Boolean, onIncluded: (Bo
     }
 }
 
+/** The part the user circled, held for their question: the crop as it is, to circle again or drop. */
+@Composable
+private fun CircledChip(part: ScreenContext, onCircleAgain: () -> Unit, onRemove: () -> Unit) {
+    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    Row(
+        Modifier
+            .padding(end = 8.dp, bottom = 8.dp)
+            .clip(shape)
+            .background(Theme[colors][accentSoft], shape)
+            .border(1.dp, Theme[colors][accent], shape)
+            .padding(start = 6.dp, top = 6.dp, bottom = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        val crop = part.screenshot?.let { rememberImageBitmap(it, maxEdge = 320) }
+        Box(Modifier.heightIn(max = 56.dp).width(96.dp), contentAlignment = Alignment.Center) {
+            // Whole, not cropped again: a wide strip should still read as the strip that was circled.
+            if (crop != null) {
+                Image(crop, contentDescription = "What you circled", contentScale = ContentScale.Fit, modifier = Modifier.clip(RoundedCornerShape(Theme[radii][radiusMedium])))
+            } else {
+                Spinner(Modifier.size(16.dp))
+            }
+        }
+        Column(Modifier.weight(1f, fill = false)) {
+            Text("Circled", style = Theme[typography][label], color = Theme[colors][textColor])
+            part.app?.let {
+                Text(it, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        IconButton(Lucide.LassoSelect, contentDescription = "Circle again", onClick = onCircleAgain)
+        IconButton(Lucide.X, contentDescription = "Remove what you circled", onClick = onRemove)
+    }
+}
+
 @Composable
 private fun Composer(
     model: AssistantPanelModel,
     state: ChatState,
     connected: Boolean,
+    /** The whole screen goes with the next question. */
     includeScreen: Boolean,
+    /** A circled part goes with the next question. */
+    circled: Boolean,
     canDictate: Boolean,
     dictation: DictationState,
     onAllowMicrophone: () -> Unit,
@@ -391,6 +433,7 @@ private fun Composer(
                             dictation.recording -> "Listening…"
                             dictation.transcribing -> "Writing down what you said…"
                             !connected -> "Connecting to Hermes…"
+                            circled -> "Ask about what you circled"
                             state.hasConversation -> "Ask a follow-up"
                             includeScreen -> "Ask about your screen"
                             else -> "Ask Hermes"
@@ -410,7 +453,8 @@ private fun Composer(
         if (state.running && !hasText) {
             SendButton(SendIcon.Stop, onClick = model::stop, enabled = connected)
         } else {
-            SendButton(SendIcon.Send, onClick = model::send, enabled = connected && (hasText || (includeScreen && !state.hasConversation)))
+            // Something shown is sendable alone: it asks "What's this?" or about the screen.
+            SendButton(SendIcon.Send, onClick = model::send, enabled = connected && (hasText || circled || includeScreen))
         }
     }
 }
