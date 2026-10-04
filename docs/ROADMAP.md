@@ -86,6 +86,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Rename, pin, archive and delete (`PATCH`/`DELETE /api/sessions/{id}`), with optimistic updates that roll back on error
 - [x] Chat options (⋮ beside new chat) for the open chat: rename, pin, export as Markdown, copy session ID, archive, delete
 - [x] Floating see-through composer over the conversation
+- [x] Reading back stays put while a reply streams below; the jump arrow then reads "New reply"
 - [x] Live list updates (`sessions.changed`, `session.title` → refetch; also refetch after reconnect)
 - [ ] Live per-session status in the list (`session.info`, `session.active_list`)
 - [x] Search sessions by title, session id and message text from the sidebar search button (`GET /api/sessions/search`, debounced, with match snippet)
@@ -113,6 +114,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Completion details: duration, error flag, output preview, diffs (`tool.complete`)
 - [x] Output-risk warnings (`tool.output_risk`)
 - [x] Todo list updates (`todo.updated`)
+- [x] One live status above the composer while a turn runs: the current action in plain words (waiting on you, the running tool, the plan step, the gateway status, else thinking) with the plan count; the status text, tool and plan fold beneath it, and the reply keeps only folded "Used … tools" and "Reasoning" rows
 
 ### 6. Interactive requests (server → client)
 - [x] **Approval** panel for dangerous commands, with choices `once`, `session`, `always` (confirmed first), `deny` filtered by the gateway's `choices` / `allow_session`, `allow_permanent` and `smart_denied`. The command wraps, with "Show full command" and "Copy command"; each permission says where and how long it applies, the broader ones in their own section; taps are ignored for a moment after it appears; and the panel keeps a Stop for the running task
@@ -150,6 +152,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 
 ### Voice
 - [x] Dictation into the composer (phone mic → `POST /api/audio/transcribe`)
+- [x] An empty chat offers "Attach a file" and "Dictate" under the wordmark
 - [x] Voice chat: listen, transcribe, send, read the reply aloud (`/api/audio/speak`, `tts-lease`), say "stop" to end; `/voice`
 - [ ] Talk over the reply to interrupt it (barge-in) and speak while the reply streams (`/api/audio/speak-stream`)
 - [ ] Live voice mode (`/api/audio/voice-live/*`)

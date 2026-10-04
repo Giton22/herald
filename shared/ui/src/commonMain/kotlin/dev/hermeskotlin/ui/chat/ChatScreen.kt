@@ -53,6 +53,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.lazy.LazyListLayoutInfo
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
@@ -132,6 +137,8 @@ import dev.hermeskotlin.core.chat.OutgoingAttachment
 import dev.hermeskotlin.core.chat.SendCheck
 import dev.hermeskotlin.core.chat.extractReplyMedia
 import dev.hermeskotlin.core.chat.ToolActivity
+import dev.hermeskotlin.core.chat.TodoList
+import dev.hermeskotlin.core.chat.TodoStatus
 import dev.hermeskotlin.core.chat.TurnOutcome
 import dev.hermeskotlin.core.chat.compactCount
 import dev.hermeskotlin.core.connection.ConnectionState
@@ -154,6 +161,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.composables.icons.lucide.AudioLines
 import com.composables.icons.lucide.Mic
+import com.composables.icons.lucide.Paperclip
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
@@ -441,7 +449,6 @@ internal fun ChatView(
                         ) {
                             Messages(
                                 state.messages,
-                                state.thinkingFrame,
                                 bottomInset = dockInset,
                                 actions = actions,
                                 connected = connected,
@@ -455,7 +462,7 @@ internal fun ChatView(
                                 EmptyState(Lucide.CloudOff, "Couldn't load the conversation", state.historyError.orEmpty()) {
                                     Button("Try again", onClick = actions::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                                 }
-                            else -> Greeting()
+                            else -> Greeting(onAttach = onAttach, onDictate = onDictate, connected = connected, dictation = dictation, canAttach = attachments.size < OutgoingAttachment.MAX_COUNT)
                         }
                     }
                 }
@@ -528,9 +535,12 @@ private fun ColumnScope.Dock(
     attachmentError?.let { Banner(it, actionLabel = null, onAction = actions::dismissAttachmentError) }
     voiceChat.error?.let { Banner(it, actionLabel = null, onAction = actions::dismissVoiceChatError) }
     dictation.error?.let { Banner(it, actionLabel = null, onAction = actions::dismissDictationError) }
-    AnimatedVisibility(visible = state.running && state.status != null) { StatusLine(state.status.orEmpty()) }
     AnimatedVisibility(visible = notice != null) { NoticeLine(notice.orEmpty()) }
-    TodoPanel(state.todos, live = state.todosLive, hazeState = hazeState)
+    // One place says what's happening: the current action, with the status text and plan folded beneath.
+    AnimatedVisibility(visible = state.running, enter = fadeIn(), exit = fadeOut()) {
+        ProgressPanel(currentAction(state), state.status, state.runningTool(), state.livePlan(), hazeState)
+    }
+    if (!state.running) TodoPanel(state.todos, live = state.todosLive, hazeState = hazeState)
 
     if (state.inputRequests.isNotEmpty()) {
         InputRequestPanel(state.inputRequests, connected, onAnswer = actions::answer, onStop = actions::interrupt.takeIf { state.running })
@@ -629,19 +639,46 @@ private fun BarButton(icon: ImageVector, contentDescription: String, onClick: ()
 
 /** An empty chat is titled with the app's name in heavy spaced capitals stretched to the column. */
 @Composable
-private fun Greeting() {
+private fun Greeting(onAttach: () -> Unit, onDictate: () -> Unit, connected: Boolean, dictation: DictationState, canAttach: Boolean) {
     // Blue on light; near-white on dark, where the blue at this size glares.
     val color = if (Theme[colors][background].luminance() < 0.5f) Theme[colors][textColor].copy(alpha = 0.9f) else Theme[colors][accent]
     Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-        BasicText(
-            "HERALD",
-            style = Theme[typography][wordmark].copy(textAlign = TextAlign.Center),
-            color = { color },
-            maxLines = 1,
-            autoSize = TextAutoSize.StepBased(minFontSize = 28.sp, maxFontSize = 72.sp, stepSize = 1.sp),
-            modifier = Modifier.fillMaxWidth().padding(bottom = 48.dp),
-        )
+        Column(
+            Modifier.fillMaxWidth().padding(bottom = 48.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+        ) {
+            BasicText(
+                "HERALD",
+                style = Theme[typography][wordmark].copy(textAlign = TextAlign.Center),
+                color = { color },
+                maxLines = 1,
+                autoSize = TextAutoSize.StepBased(minFontSize = 28.sp, maxFontSize = 72.sp, stepSize = 1.sp),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            // Other ways to begin than typing, named rather than left to the composer's icons.
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button("Attach a file", onClick = onAttach, variant = ButtonVariant.Outline, leadingIcon = Lucide.Paperclip, enabled = canAttach, pill = true)
+                // Tracks the composer's mic: while recording the same tap finishes it.
+                Button(
+                    dictateLabel(dictation),
+                    onClick = onDictate,
+                    variant = ButtonVariant.Outline,
+                    leadingIcon = if (dictation.recording) Lucide.Square else Lucide.Mic,
+                    enabled = connected,
+                    loading = dictation.transcribing,
+                    pill = true,
+                )
+            }
+        }
     }
+}
+
+/** What the empty chat's dictation pill says for [state]. */
+internal fun dictateLabel(state: DictationState): String = when {
+    state.transcribing -> "Transcribing…"
+    state.recording -> "Finish dictating"
+    else -> "Dictate"
 }
 
 /** Hermes Desktop's composer lines (`composer.newSessionPlaceholders` / `followUpPlaceholders`). */
@@ -668,7 +705,6 @@ private val FOLLOW_UP_PROMPTS = listOf(
 @Composable
 private fun Messages(
     messages: List<ChatMessage>,
-    thinkingFrame: String?,
     bottomInset: Dp,
     actions: ChatActions,
     connected: Boolean,
@@ -680,21 +716,44 @@ private fun Messages(
     ConfirmChange(confirm, canChange, lastPrompt, actions, onDismiss = { confirm = null })
     // Edit and branch only show while the chat can change; each asks before it does anything.
     fun ask(change: MessageChange, key: String): (() -> Unit)? = if (canChange) ({ confirm = change to key }) else null
-    // Reversed layout keeps the newest message pinned to the bottom while a reply streams in.
-    val listState = rememberLazyListState()
+    // Laid out top-down and opened at the end. A list holds its place by the top of what's on screen, so a reply
+    // growing below the lines being read leaves them where they are; following the bottom is done here instead.
+    val listState = rememberLazyListState(messages.lastIndex.coerceAtLeast(0), LIST_END)
     val scope = rememberCoroutineScope()
-    val newest = messages.lastOrNull()?.key
-    LaunchedEffect(newest) { if (listState.firstVisibleItemIndex <= 1) listState.animateScrollToItem(0) }
-    val awayFromBottom by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 600 } }
+    val newest = messages.lastOrNull()
+    val awayFromBottom by remember { derivedStateOf { listState.layoutInfo.hiddenBelow() > 600 } }
+    // Following while the reader sits right at the end; where they drag to decides whether it carries on.
+    var pinned by remember { mutableStateOf(true) }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.layoutInfo }.collect { info ->
+            when (followStep(pinned, info.hiddenBelow(), listState.isScrollInProgress)) {
+                FollowStep.Unpin -> pinned = false
+                FollowStep.Pin -> pinned = true
+                FollowStep.ScrollToEnd -> listState.scrollToItem(info.totalItemsCount - 1, LIST_END)
+                FollowStep.None -> Unit
+            }
+        }
+    }
+    // A prompt just sent is always shown, wherever the reader was.
+    LaunchedEffect(newest?.key) {
+        if (newest is ChatMessage.User) {
+            pinned = true
+            listState.scrollToItem(messages.lastIndex, LIST_END)
+        }
+    }
+    // What the bottom held when the reader last saw it; anything since is new to them.
+    val tail = messages.lastOrNull()?.let { it.key to it.contentSize() }
+    var seenTail by remember { mutableStateOf(tail) }
+    LaunchedEffect(awayFromBottom, tail) { if (!awayFromBottom) seenTail = tail }
+    val newBelow = awayFromBottom && tail != seenTail
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
-            reverseLayout = true,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp + bottomInset),
             verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.Bottom),
         ) {
-            items(messages.asReversed(), key = { it.key }) { message ->
+            items(messages, key = { it.key }) { message ->
                 when (message) {
                     is ChatMessage.User -> UserBubble(
                         message,
@@ -707,7 +766,6 @@ private fun Messages(
                     )
                     is ChatMessage.Assistant -> AssistantReply(
                         message,
-                        thinkingFrame.takeIf { message.streaming },
                         onBranch = ask(MessageChange.Branch, message.key),
                         last = message.key == lastReply,
                     )
@@ -722,19 +780,85 @@ private fun Messages(
             exit = fadeOut() + scaleOut(),
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp + bottomInset),
         ) {
+            val shape = RoundedCornerShape(Theme[radii][radiusMedium])
             UnstyledButton(
-                onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                onClick = {
+                    scope.launch {
+                        listState.animateToEnd()
+                        pinned = true
+                    }
+                },
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
-                    .background(Theme[colors][surfaceElevated])
-                    .border(1.dp, Theme[colors][strokeStrong], RoundedCornerShape(Theme[radii][radiusMedium])),
+                    .heightIn(min = 40.dp)
+                    .widthIn(min = 40.dp)
+                    .clip(shape)
+                    .background(if (newBelow) Theme[colors][accent] else Theme[colors][surfaceElevated])
+                    .border(1.dp, if (newBelow) Theme[colors][accent] else Theme[colors][strokeStrong], shape)
+                    .animateContentSize(),
                 indication = rememberColoredIndication(Theme[colors][textColor]),
             ) {
-                UnstyledIcon(Lucide.ArrowDown, contentDescription = "Jump to latest", tint = Theme[colors][textColor], modifier = Modifier.size(18.dp))
+                // Says "New reply" when something arrived below, not only by the arrow.
+                val tint = if (newBelow) Theme[colors][onAccent] else Theme[colors][textColor]
+                Row(
+                    Modifier.padding(horizontal = if (newBelow) 14.dp else 11.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    UnstyledIcon(
+                        Lucide.ArrowDown,
+                        contentDescription = if (newBelow) null else "Jump to latest",
+                        tint = tint,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    if (newBelow) Text("New reply", style = Theme[typography][label], color = tint)
+                }
             }
         }
     }
+}
+
+/** A scroll offset past any message: the list stops it at the end of the last one. */
+private const val LIST_END = 1_000_000
+
+/** How far the end of the conversation lies below the visible area, in pixels (0 when it's in view). */
+private fun LazyListLayoutInfo.hiddenBelow(): Int {
+    val last = visibleItemsInfo.lastOrNull() ?: return 0
+    if (last.index < totalItemsCount - 1) return Int.MAX_VALUE
+    return (last.offset + last.size - (viewportEndOffset - afterContentPadding)).coerceAtLeast(0)
+}
+
+internal enum class FollowStep { None, Pin, Unpin, ScrollToEnd }
+
+/**
+ * What to do after the list was laid out again. While the reader scrolls, ending up at the end pins the list
+ * and leaving it unpins; otherwise a pinned list whose end moved out of view (a reply grew, the composer
+ * grew) is scrolled back to it.
+ */
+internal fun followStep(pinned: Boolean, hiddenBelow: Int, readerScrolling: Boolean): FollowStep = when {
+    readerScrolling -> when {
+        hiddenBelow <= 1 && !pinned -> FollowStep.Pin
+        hiddenBelow > 1 && pinned -> FollowStep.Unpin
+        else -> FollowStep.None
+    }
+    pinned && hiddenBelow > 0 -> FollowStep.ScrollToEnd
+    else -> FollowStep.None
+}
+
+/** Glides to the end of the conversation, then settles exactly there in case the reply grew on the way. */
+private suspend fun LazyListState.animateToEnd() {
+    val last = layoutInfo.totalItemsCount - 1
+    if (last < 0) return
+    if (layoutInfo.visibleItemsInfo.none { it.index == last }) animateScrollToItem(last)
+    layoutInfo.hiddenBelow().takeIf { it in 1..<Int.MAX_VALUE }?.let { animateScrollBy(it.toFloat()) }
+    scrollToItem(last, LIST_END)
+}
+
+/** How much a message holds, so a reply growing at the bottom counts as new content. */
+private fun ChatMessage.contentSize(): Int = when (this) {
+    is ChatMessage.User -> text.length
+    is ChatMessage.Assistant -> text.length + reasoning.length + tools.size
+    is ChatMessage.Command -> output.length
+    is ChatMessage.Notice -> text.length
 }
 
 /** Tells apart the ways the link can be down: none, being re-made, or needing a new sign-in. */
@@ -917,7 +1041,6 @@ private fun ConfirmChange(
 @Composable
 private fun AssistantReply(
     message: ChatMessage.Assistant,
-    thinkingFrame: String?,
     onBranch: (() -> Unit)?,
     /** The newest reply, which comments call "your last reply". */
     last: Boolean,
@@ -928,25 +1051,22 @@ private fun AssistantReply(
     // Pictures and files the reply delivered show as themselves, not as Markdown a renderer can't load.
     val (text, media) = remember(message.text) { extractReplyMedia(message.text) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (showReasoning) Reasoning(message.reasoning, live = message.streaming && message.text.isEmpty(), thinkingFrame)
+        // What's happening now is said once, above the composer; the reply keeps only what it's made of.
+        if (showReasoning) Reasoning(message.reasoning)
         if (showTools) Tools(message.tools, message.key)
         // Shown whatever the tool-activity setting: the work happens out of sight, in other agents.
         message.tools.filter { it.name == "delegate_task" }.forEach { DelegationCard(it) }
-        when {
-            text.isNotBlank() -> {
-                // Named the way the agent will know it: the newest reply, or an older one by its first words.
-                val source = remember(message.key, text, last) {
-                    CommentSource(
-                        messageKey = message.key,
-                        label = if (last) LAST_REPLY else "your earlier reply that starts “${openingWords(text)}”",
-                        markdown = text,
-                    )
-                }
-                // Not while it streams: the text and its blocks are still changing under the selection.
-                CommentableSelection(source.takeUnless { message.streaming }) { MarkdownText(text, streaming = message.streaming) }
+        if (text.isNotBlank()) {
+            // Named the way the agent will know it: the newest reply, or an older one by its first words.
+            val source = remember(message.key, text, last) {
+                CommentSource(
+                    messageKey = message.key,
+                    label = if (last) LAST_REPLY else "your earlier reply that starts “${openingWords(text)}”",
+                    markdown = text,
+                )
             }
-            // One activity cue at a time: live reasoning and running tools already show their own.
-            message.streaming && media.isEmpty() && !showReasoning && !(showTools && message.tools.any { it.running }) -> Thinking(thinkingFrame)
+            // Not while it streams: the text and its blocks are still changing under the selection.
+            CommentableSelection(source.takeUnless { message.streaming }) { MarkdownText(text, streaming = message.streaming) }
         }
         if (media.isNotEmpty()) ReplyMediaList(media)
         when (message.outcome) {
@@ -1134,19 +1254,13 @@ private fun Disclosure(
     }
 }
 
+/** The reply's reasoning, folded; live progress is the dock's to show. */
 @Composable
-private fun Reasoning(text: String, live: Boolean, thinkingFrame: String?) {
+private fun Reasoning(text: String) {
     var expanded by remember { mutableStateOf(false) }
     Disclosure(
-        icon = {
-            if (live) {
-                Spinner(Modifier.size(14.dp))
-            } else {
-                UnstyledIcon(Lucide.Brain, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp))
-            }
-        },
-        // While live, the agent's own spinner frame ("(⌐■_■) formulating...") rather than a fixed word.
-        label = if (live) thinkingFrame ?: "Thinking…" else "Thought it through",
+        icon = { UnstyledIcon(Lucide.Brain, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp)) },
+        label = "Reasoning",
         expanded = expanded,
         onToggle = { expanded = !expanded },
     ) {
@@ -1154,24 +1268,14 @@ private fun Reasoning(text: String, live: Boolean, thinkingFrame: String?) {
     }
 }
 
+/** The tools the reply used, folded; the one running now is named above the composer instead. */
 @Composable
 private fun Tools(tools: List<ToolActivity>, messageKey: String) {
     var expanded by remember { mutableStateOf(false) }
-    val running = tools.lastOrNull { it.running }
     val names = tools.map { it.name }.distinct()
-    val label = when {
-        running != null -> running.detail?.lineSequence()?.firstOrNull()?.let { "${running.name} · $it" } ?: "Running ${running.name}"
-        names.size <= 2 -> "Used ${names.joinToString(" and ")}"
-        else -> "Used ${tools.size} tools"
-    }
+    val label = if (names.size <= 2) "Used ${names.joinToString(" and ")}" else "Used ${tools.size} tools"
     Disclosure(
-        icon = {
-            if (running != null) {
-                Spinner(Modifier.size(14.dp))
-            } else {
-                UnstyledIcon(Lucide.Wrench, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp))
-            }
-        },
+        icon = { UnstyledIcon(Lucide.Wrench, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp)) },
         label = label,
         expanded = expanded,
         onToggle = { expanded = !expanded },
@@ -1182,40 +1286,37 @@ private fun Tools(tools: List<ToolActivity>, messageKey: String) {
     }
 }
 
-@Composable
-private fun Thinking(thinkingFrame: String?) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Spinner(Modifier.size(14.dp))
-        Text(
-            thinkingFrame ?: "Thinking…",
-            style = Theme[typography][bodySmall],
-            color = Theme[colors][textTertiary],
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+/** The tool the running turn is in the middle of, if any. Its reply isn't always last: a queued prompt sits after it. */
+private fun ChatState.runningTool(): ToolActivity? =
+    (messages.lastOrNull { it is ChatMessage.Assistant && it.streaming } as? ChatMessage.Assistant)?.tools?.lastOrNull { it.running }
+
+/** This turn's plan; one left over from an earlier turn isn't what's happening now. */
+private fun ChatState.livePlan(): TodoList? = todos?.takeIf { todosLive }
+
+/**
+ * The one line that says what the agent is doing now, most specific first: waiting on the user, a tool
+ * at work, the plan's step in hand, the gateway's status text, else thinking.
+ */
+internal fun currentAction(state: ChatState): String {
+    if (state.inputRequests.isNotEmpty()) return "Waiting for your answer"
+    state.runningTool()?.let { tool ->
+        val detail = tool.detail?.lineSequence()?.firstOrNull()?.takeIf { it.isNotBlank() }
+        return if (detail != null) "${tool.name.toolVerb()}: $detail" else tool.name.toolVerb()
     }
+    state.livePlan()?.items?.firstOrNull { it.status == TodoStatus.InProgress }?.let { return it.content }
+    state.status?.takeIf { it.isNotBlank() }?.let { return it }
+    return state.thinkingFrame ?: "Thinking…"
 }
 
-@Composable
-private fun StatusLine(status: String) {
-    // Backed so it stays legible over the conversation scrolling beneath the dock.
-    Row(
-        Modifier
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .background(Theme[colors][background].copy(alpha = 0.85f), RoundedCornerShape(Theme[radii][radiusMedium]))
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Spinner(Modifier.size(12.dp))
-        Text(
-            status,
-            style = Theme[typography][caption],
-            color = Theme[colors][textTertiary],
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
+/** "terminal" reads as "Running a command", and so on; other tools as "Using <name>". */
+private fun String.toolVerb(): String = when (this) {
+    "terminal", "shell", "bash" -> "Running a command"
+    "read_file", "file_read" -> "Reading a file"
+    "write_file", "patch", "edit_file" -> "Editing a file"
+    "web_search", "search" -> "Searching the web"
+    "web_extract", "browser", "fetch" -> "Reading a web page"
+    "delegate_task" -> "Working with subagents"
+    else -> "Using ${replace('_', ' ')}"
 }
 
 /** A passing message, like where a file was saved. */
