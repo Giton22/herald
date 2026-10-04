@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.os.Bundle
+import android.provider.Settings
 import android.view.View
 import android.view.WindowManager
 import android.service.voice.VoiceInteractionSession
@@ -96,6 +97,7 @@ class HeraldAssistSession(context: Context) :
                 microphoneAllowed = microphone.value,
                 onOpenHerald = ::openInHerald,
                 onAllowMicrophone = ::askForMicrophone,
+                onOpenScreenSettings = ::openScreenSettings,
                 onClose = ::hide,
             )
         }
@@ -172,6 +174,12 @@ class HeraldAssistSession(context: Context) :
     private fun askForMicrophone() {
         hide()
         context.startActivity(Intent(context, MicrophonePermissionActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
+
+    /** The digital assistant settings, where "Use screen and app data" lets the screen through. */
+    private fun openScreenSettings() {
+        context.startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        hide()
     }
 
     /** Herald, on the panel's chat once it has one; also where the microphone is allowed. */

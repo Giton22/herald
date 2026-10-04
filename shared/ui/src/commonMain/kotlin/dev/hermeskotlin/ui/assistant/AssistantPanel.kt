@@ -119,6 +119,8 @@ fun AssistantPanel(
     microphoneAllowed: Boolean,
     onOpenHerald: (storedSessionId: String?) -> Unit,
     onAllowMicrophone: () -> Unit,
+    /** The system's assistant settings, where the screen is shared with the assistant or not. */
+    onOpenScreenSettings: () -> Unit,
     onClose: () -> Unit,
 ) {
     val settings = koinInject<SettingsStore>().settings.collectAsState().value ?: return
@@ -155,7 +157,7 @@ fun AssistantPanel(
                     MessengerEdge(model, Modifier.fillMaxSize())
                 } else {
                     MessengerEdge(model, Modifier.fillMaxSize())
-                    Card(model, microphoneAllowed, onOpenHerald, onAllowMicrophone, onClose)
+                    Card(model, microphoneAllowed, onOpenHerald, onAllowMicrophone, onOpenScreenSettings, onClose)
                 }
             }
         }
@@ -168,6 +170,7 @@ private fun Card(
     microphoneAllowed: Boolean,
     onOpenHerald: (String?) -> Unit,
     onAllowMicrophone: () -> Unit,
+    onOpenScreenSettings: () -> Unit,
     onClose: () -> Unit,
 ) {
     val phase by model.phase.collectAsState()
@@ -199,7 +202,7 @@ private fun Card(
             when (phase) {
                 AssistantPhase.Loading -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { Spinner() }
                 AssistantPhase.SignedOut -> SignedOut(onOpenHerald = { onOpenHerald(null) })
-                AssistantPhase.Ready -> Ready(model, microphoneAllowed, onAllowMicrophone)
+                AssistantPhase.Ready -> Ready(model, microphoneAllowed, onAllowMicrophone, onOpenScreenSettings)
             }
         }
     }
@@ -228,7 +231,12 @@ private fun SignedOut(onOpenHerald: () -> Unit) {
 }
 
 @Composable
-private fun ColumnScope.Ready(model: AssistantPanelModel, microphoneAllowed: Boolean, onAllowMicrophone: () -> Unit) {
+private fun ColumnScope.Ready(
+    model: AssistantPanelModel,
+    microphoneAllowed: Boolean,
+    onAllowMicrophone: () -> Unit,
+    onOpenScreenSettings: () -> Unit,
+) {
     val session by model.session.collectAsState()
     val state by (session?.state ?: remember { emptyFlow() }).collectAsState(ChatState())
     val connection by model.connectionState.collectAsState()
@@ -276,6 +284,7 @@ private fun ColumnScope.Ready(model: AssistantPanelModel, microphoneAllowed: Boo
     val circled by model.circledPart.collectAsState()
     when {
         circled != null -> CircledChip(circled!!, onCircleAgain = model::startCircling, onRemove = model::dropCircled)
+        !state.hasConversation && screen.missed -> ScreenUnavailable(onOpenScreenSettings)
         !state.hasConversation -> ScreenChip(screen, included = includeScreen, onIncluded = model::setIncludeScreen, onCircle = model::startCircling)
     }
     Composer(
@@ -360,6 +369,40 @@ private fun ScreenChip(screen: ScreenCapture, included: Boolean, onIncluded: (Bo
                 Button("Circle", onClick = onCircle, variant = ButtonVariant.Ghost, size = ButtonSize.Small, leadingIcon = Lucide.LassoSelect)
             }
         }
+    }
+}
+
+/**
+ * Android said the screen was coming and sent none of it: the assistant settings don't share the screen.
+ * Says so and where to change it, instead of a chip that waits forever.
+ */
+@Composable
+private fun ScreenUnavailable(onOpenSettings: () -> Unit) {
+    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    Row(
+        Modifier
+            .padding(end = 8.dp, bottom = 8.dp)
+            .clip(shape)
+            .background(Theme[colors][surface], shape)
+            .border(1.dp, Theme[colors][stroke], shape)
+            .padding(start = 6.dp, top = 6.dp, bottom = 6.dp, end = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(width = 28.dp, height = 44.dp), contentAlignment = Alignment.Center) {
+            UnstyledIcon(Lucide.ScanText, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(18.dp))
+        }
+        Column(Modifier.weight(1f, fill = false)) {
+            Text("Herald can't see the screen", style = Theme[typography][label], color = Theme[colors][textColor])
+            Text(
+                "Turn on \"Use screen and app data\"",
+                style = Theme[typography][caption],
+                color = Theme[colors][textTertiary],
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Button("Settings", onClick = onOpenSettings, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
     }
 }
 
