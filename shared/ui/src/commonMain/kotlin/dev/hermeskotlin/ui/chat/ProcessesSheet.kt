@@ -130,8 +130,19 @@ fun ProcessesSheet(
     onDismiss: () -> Unit,
 ) {
     LaunchedEffect(visible) { if (visible) onStart() else controller.stop() }
-    val state = controller.state.collectAsStateWithLifecycle().value
-    var expanded by remember { mutableStateOf<String?>(null) }
+    ProcessesSheetView(visible, controller.state.collectAsStateWithLifecycle().value, onKill, onDismiss)
+}
+
+/** The processes sheet's layout, apart from its controller, so previews can draw it from sample data. */
+@Composable
+internal fun ProcessesSheetView(
+    visible: Boolean,
+    state: ProcessesState,
+    onKill: (BackgroundProcess) -> Unit,
+    onDismiss: () -> Unit,
+    initiallyExpanded: String? = null,
+) {
+    var expanded by remember { mutableStateOf(initiallyExpanded) }
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         val processes = state.processes
         val running = processes?.count { it.running } ?: 0

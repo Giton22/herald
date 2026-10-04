@@ -95,7 +95,16 @@ internal fun ScheduledPage(
 
     Column(Modifier.fillMaxSize()) {
         if (state.editor != null) {
-            JobEditorPage(state.editor, viewModel, state.deliveryTargets, onClose = viewModel::closeEditor)
+            JobEditorPage(
+                state.editor,
+                prompt = viewModel.prompt,
+                schedule = viewModel.schedule,
+                name = viewModel.name,
+                deliveryTargets = state.deliveryTargets,
+                onSetDeliver = viewModel::setDeliver,
+                onSave = viewModel::saveJob,
+                onClose = viewModel::closeEditor,
+            )
         } else if (job == null) {
             SubpageHeader("Scheduled", onBack = onBack) {
                 IconButton(Lucide.Plus, contentDescription = "New job", onClick = viewModel::newJob, tint = Theme[colors][text])

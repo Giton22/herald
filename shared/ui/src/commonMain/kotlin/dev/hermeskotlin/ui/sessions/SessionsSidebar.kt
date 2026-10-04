@@ -418,7 +418,13 @@ fun SessionsSidebar(
  * bottom bar as [SessionsSidebar], with nothing to load or act on.
  */
 @Composable
-internal fun SessionsSidebarSample(sessions: List<SessionSummary>, selectedId: String?, userLabel: String) {
+internal fun SessionsSidebarSample(
+    sessions: List<SessionSummary>,
+    selectedId: String?,
+    userLabel: String,
+    statuses: Map<String, RowStatus> = emptyMap(),
+    drafts: Set<String> = emptySet(),
+) {
     Box(
         Modifier
             .fillMaxSize()
@@ -427,7 +433,25 @@ internal fun SessionsSidebarSample(sessions: List<SessionSummary>, selectedId: S
         Column(Modifier.fillMaxSize()) {
             MainHeader(onSearch = {})
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                SessionList(sessions, selectedId, onOpen = {}, onActions = {}, sectioned = true) {
+                SessionList(
+                    sessions,
+                    selectedId,
+                    onOpen = {},
+                    onActions = {},
+                    statuses = statuses,
+                    drafts = drafts,
+                    sectioned = true,
+                    status = {
+                        item(key = "filters") {
+                            AttentionFilters(
+                                selected = AttentionFilter.All,
+                                running = sessions.count { statuses[it.id]?.running == true },
+                                needsAttention = sessions.count { statuses[it.id]?.needsAttention == true },
+                                onSelect = {},
+                            )
+                        }
+                    },
+                ) {
                     item(key = "nav") {
                         Column(Modifier.padding(bottom = 4.dp)) {
                             NavRow(Lucide.CalendarClock, "Scheduled jobs") {}

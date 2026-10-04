@@ -17,8 +17,13 @@ import dev.hermeskotlin.core.chat.ToolActivity
 import dev.hermeskotlin.core.chat.TurnUsage
 import dev.hermeskotlin.core.slash.SlashSuggestion
 import dev.hermeskotlin.ui.chat.ChatActions
+import dev.hermeskotlin.core.chat.Waiting
 import dev.hermeskotlin.ui.chat.CommentSource
+import dev.hermeskotlin.ui.chat.LAST_REPLY
+import dev.hermeskotlin.ui.chat.PendingComment
 import dev.hermeskotlin.ui.chat.SelectionAnchor
+import dev.hermeskotlin.ui.chat.newComment
+import dev.hermeskotlin.ui.sessions.RowStatus
 import dev.hermeskotlin.ui.voice.VoiceChatState
 import dev.hermeskotlin.ui.voice.VoicePhase
 import dev.hermeskotlin.core.sessions.SessionSummary
@@ -35,6 +40,7 @@ internal object ChatSamples {
     const val PLACEHOLDER = "Send a follow-up"
 
     private val connected = ChatState(
+        storedSessionId = "s1",
         title = TITLE,
         model = "claude-sonnet-5-5",
         provider = "anthropic",
@@ -106,6 +112,31 @@ internal object ChatSamples {
             ChatMessage.User("u2", "Run the backup now.", check = SendCheck.NotReceived),
             ChatMessage.User("u3", "And mail me the report when it's done.", check = SendCheck.Unknown),
         ),
+    )
+
+    /** [reply] after an earlier exchange, long enough to scroll back up through. */
+    val longChat: ChatState = connected.copy(
+        messages = listOf(
+            ChatMessage.User("e1", "Is the NAS healthy? It felt slow last week."),
+            ChatMessage.Assistant(
+                key = "e2",
+                text = """
+                    Both drives pass their **SMART** checks, and the pool is healthy. The slowness lines up with
+                    the nightly backup: it now runs past 7 am, when the photo sync starts too.
+
+                    - **Drive 1:** 0 reallocated sectors, 31 °C
+                    - **Drive 2:** 0 reallocated sectors, 33 °C
+                    - **Pool:** online, last scrub found nothing
+
+                    If the backup keeps running long, the share may be close to full. Want me to look?
+                """.trimIndent(),
+            ),
+            ChatMessage.User("e3", "Not now. Remind me which share the photos go to?"),
+            ChatMessage.Assistant(
+                key = "e4",
+                text = "Photos sync to `nas:/backup/photos`, mounted at `/mnt/nas/photos`. The backup copies the same share every night at 2 am.",
+            ),
+        ) + reply.messages,
     )
 
     /** A turn still running, with the agent's plan pinned above the composer. */
@@ -246,6 +277,30 @@ internal object ChatSamples {
             SessionSummary("s7", "Compare two NAS drives", lastActive = ago(60 * 24 * 2)),
             SessionSummary("s8", "Explain this Python traceback", lastActive = ago(60 * 24 * 4)),
             SessionSummary("s9", "Set up a Grafana dashboard", lastActive = ago(60 * 24 * 6)),
+        )
+    }
+
+    /** What the sidebar says about some of [sessions]: one running, two waiting on the user, one unread. */
+    val sessionStatuses = mapOf(
+        "s1" to RowStatus(running = true),
+        "s2" to RowStatus(waiting = Waiting.Approval),
+        "s3" to RowStatus(unread = true),
+        "s4" to RowStatus(waiting = Waiting.Question),
+    )
+
+    /** Chats in [sessions] holding unsent text. */
+    val sessionDrafts = setOf("s5")
+
+    /** Two comments on [reply]'s answer, waiting in the composer with their notes. */
+    fun comments(): List<PendingComment> {
+        val source = CommentSource(messageKey = answer.key, label = LAST_REPLY, markdown = answer.text)
+        fun on(block: String, words: String, id: Long, note: String): PendingComment {
+            val start = block.indexOf(words)
+            return newComment(id, source, SelectionAnchor(listOf(block), 0, start, 0, start + words.length), note)
+        }
+        return listOf(
+            on("It now keeps the last 14 snapshots and removes older ones after each run.", "last 14 snapshots", 1, "Make it 30, I want a month to go back to."),
+            on("Tonight's run will free about 1.3 TB. Want me to run it now instead?", "run it now", 2, "Yes, and mail me the report."),
         )
     }
 
