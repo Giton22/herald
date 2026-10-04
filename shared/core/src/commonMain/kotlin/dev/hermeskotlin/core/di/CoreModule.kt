@@ -2,7 +2,11 @@ package dev.hermeskotlin.core.di
 
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
+import dev.hermeskotlin.core.chat.AttentionTracker
 import dev.hermeskotlin.core.chat.ChatHost
+import dev.hermeskotlin.core.chat.ChatLinks
+import dev.hermeskotlin.core.sessions.SeenStore
+import io.ktor.util.date.getTimeMillis
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.chat.ToolRiskStore
 import dev.hermeskotlin.core.capabilities.CapabilitiesApi
@@ -62,6 +66,9 @@ val coreModule = module {
     }
     single { ToolRiskStore(get()) }
     single { ChatHost(get(), get(), get(), get()) }
+    single(createdAtStart = true) { AttentionTracker(get(), get(), get()) }
+    single { SeenStore(get()) { getTimeMillis() / 1000.0 } }
+    single { ChatLinks() }
     single { ModelsApi(get()) }
     single { SlashApi(get()) }
     single { PetApi(get()) }

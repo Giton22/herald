@@ -68,7 +68,7 @@ class ChatNotifier(
                     notified.clear()
                 } else if (prefs.notifyRequests) {
                     for (request in state.inputRequests) {
-                        if (request.id !in notified && notifications.postRequest(state.title, request)) notified.add(request.id)
+                        if (request.id !in notified && notifications.postRequest(state.storedSessionId, state.title, request)) notified.add(request.id)
                     }
                 }
                 val open = state.inputRequests.mapTo(HashSet()) { it.id }
