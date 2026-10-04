@@ -100,4 +100,38 @@ class ConnectionCheckTest {
         assertTrue(reachFix(GatewayUrl.parse("192.168.1.20:9119")).contains("same Wi-Fi"))
         assertTrue(reachFix(GatewayUrl.parse("https://hermes.example.com")).contains("certificate"))
     }
+
+    @Test
+    fun aLoopbackAddressIsCalledOutAsThisPhone() {
+        listOf("localhost:9119", "127.0.0.1:9119", "http://[::1]:9119").forEach {
+            val fix = reachFix(GatewayUrl.parse(it))
+            assertTrue(fix.contains("points at this phone"), "$it: $fix")
+        }
+    }
+
+    @Test
+    fun httpsOnAPrivateNameGetsTheCertificateFix() {
+        assertTrue(reachFix(GatewayUrl.parse("https://hermes.lan")).contains("certificate"))
+        assertTrue(reachFix(GatewayUrl.parse("https://hermes.tail1234.ts.net")).contains("Tailscale"))
+    }
+
+    @Test
+    fun aFailedProbeSkipsTheLaterStages() {
+        val results = ProbeResult.Unreachable(url, "Connection refused").serverOnlyResults()
+
+        assertIs<StageResult.Failed>(results[CheckStage.Server])
+        assertIs<StageResult.Skipped>(results[CheckStage.SignIn])
+        assertIs<StageResult.Skipped>(results[CheckStage.Live])
+    }
+
+    @Test
+    fun aReachableProbeLeavesTheLaterStagesToSignIn() = runTest {
+        val probe = GatewayProbe(
+            createHttpClient(MockEngine { respond("""{"version":"0.42.0","auth_required":true,"auth_providers":["basic"]}""", HttpStatusCode.OK, json) }),
+        )
+        val results = probe.probe(url).serverOnlyResults()
+
+        assertEquals(setOf(CheckStage.Server), results.keys)
+        assertIs<StageResult.Passed>(results[CheckStage.Server])
+    }
 }

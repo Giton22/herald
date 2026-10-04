@@ -58,8 +58,8 @@ class ConnectionCheck(
         }
         val server = server(url).also { record(CheckStage.Server, it) }
         if (server !is StageResult.Passed) {
-            record(CheckStage.SignIn, StageResult.Skipped("Needs server access first."))
-            record(CheckStage.Live, StageResult.Skipped("Needs server access first."))
+            record(CheckStage.SignIn, NEEDS_SERVER)
+            record(CheckStage.Live, NEEDS_SERVER)
             return ConnectionReport(results.toMap())
         }
         val signIn = signIn(url).also { record(CheckStage.SignIn, it) }
@@ -147,14 +147,28 @@ fun ProbeResult.toStageResult(): StageResult = when (this) {
     is ProbeResult.Unreachable -> StageResult.Failed("Can't reach $url: $reason", reachFix(url))
 }
 
-/** What to do when nothing answers, by the kind of address: Tailscale, the local network, or HTTPS. */
+/**
+ * Every stage the probe alone can settle: server access, and when that fails, the later stages as
+ * skipped. A passed server leaves sign-in and the live connection out, since they need a sign-in.
+ */
+fun ProbeResult.serverOnlyResults(): Map<CheckStage, StageResult> {
+    val server = toStageResult()
+    if (server is StageResult.Passed) return mapOf(CheckStage.Server to server)
+    return mapOf(CheckStage.Server to server, CheckStage.SignIn to NEEDS_SERVER, CheckStage.Live to NEEDS_SERVER)
+}
+
+private val NEEDS_SERVER = StageResult.Skipped("Needs server access first.")
+
+/** What to do when nothing answers, by the kind of address: this phone, Tailscale, HTTPS, or the local network. */
 fun reachFix(url: GatewayUrl): String {
-    val host = url.host.lowercase()
+    val host = url.host.lowercase().trim('[', ']')
+    val loopback = host == "localhost" || host.endsWith(".localhost") || host.startsWith("127.") || host == "::1"
     val tailscale = host.endsWith(".ts.net") || host.split('.').let { o -> o.size == 4 && o[0] == "100" && (o[1].toIntOrNull() ?: 0) in 64..127 }
     return when {
+        loopback -> "This address points at this phone, not the server. Use the server's local network or Tailscale address instead."
         tailscale -> "Turn on Tailscale on this phone, and check that the server is online in the same tailnet."
-        isPrivateHost(host) -> "Join the same Wi-Fi or network as the server, and start the dashboard with --host 0.0.0.0 so other devices can reach it."
         Url(url.value).protocol == URLProtocol.HTTPS -> "Check that the domain points to the server, its certificate is valid, and the proxy forwards to the dashboard."
+        isPrivateHost(host) -> "Join the same Wi-Fi or network as the server, and start the dashboard with --host 0.0.0.0 so other devices can reach it."
         else -> "Check the address and port, and that the server is reachable from this phone."
     }
 }
