@@ -430,7 +430,7 @@ internal fun ChatView(
                                 EmptyState(Lucide.CloudOff, "Couldn't load the conversation", state.historyError.orEmpty()) {
                                     Button("Try again", onClick = actions::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                                 }
-                            else -> Greeting(onAttach = onAttach, onDictate = onDictate, connected = connected)
+                            else -> Greeting(onAttach = onAttach, onDictate = onDictate, connected = connected, dictation = dictation)
                         }
                     }
                 }
@@ -595,7 +595,7 @@ private fun BarButton(icon: ImageVector, contentDescription: String, onClick: ()
 
 /** An empty chat is titled with the app's name in heavy spaced capitals stretched to the column. */
 @Composable
-private fun Greeting(onAttach: () -> Unit, onDictate: () -> Unit, connected: Boolean) {
+private fun Greeting(onAttach: () -> Unit, onDictate: () -> Unit, connected: Boolean, dictation: DictationState) {
     // Blue on light; near-white on dark, where the blue at this size glares.
     val color = if (Theme[colors][background].luminance() < 0.5f) Theme[colors][textColor].copy(alpha = 0.9f) else Theme[colors][accent]
     Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
@@ -615,10 +615,26 @@ private fun Greeting(onAttach: () -> Unit, onDictate: () -> Unit, connected: Boo
             // Other ways to begin than typing, named rather than left to the composer's icons.
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                 Button("Attach a file", onClick = onAttach, variant = ButtonVariant.Outline, leadingIcon = Lucide.Paperclip, pill = true)
-                Button("Dictate", onClick = onDictate, variant = ButtonVariant.Outline, leadingIcon = Lucide.Mic, enabled = connected, pill = true)
+                // Tracks the composer's mic: while recording the same tap finishes it.
+                Button(
+                    dictateLabel(dictation),
+                    onClick = onDictate,
+                    variant = ButtonVariant.Outline,
+                    leadingIcon = if (dictation.recording) Lucide.Square else Lucide.Mic,
+                    enabled = connected,
+                    loading = dictation.transcribing,
+                    pill = true,
+                )
             }
         }
     }
+}
+
+/** What the empty chat's dictation pill says for [state]. */
+internal fun dictateLabel(state: DictationState): String = when {
+    state.transcribing -> "Transcribing…"
+    state.recording -> "Finish dictating"
+    else -> "Dictate"
 }
 
 /** Hermes Desktop's composer lines (`composer.newSessionPlaceholders` / `followUpPlaceholders`). */
