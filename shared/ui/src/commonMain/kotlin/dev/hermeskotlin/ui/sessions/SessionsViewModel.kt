@@ -6,7 +6,17 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.AuthUser
+import dev.hermeskotlin.core.chat.AttentionTracker
 import dev.hermeskotlin.core.chat.LastChatStore
+import dev.hermeskotlin.core.chat.Waiting
+import dev.hermeskotlin.core.sessions.SeenChats
+import dev.hermeskotlin.core.sessions.SeenStore
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.stateIn
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
@@ -49,19 +59,56 @@ data class SessionsUiState(
     val sessionExpired: Boolean = false,
 )
 
+/** The recent list narrowed to what's running, or to chats waiting on the user or with a reply not yet read. */
+enum class AttentionFilter(val label: String) {
+    All("All"),
+    Running("Running"),
+    NeedsAttention("Needs attention"),
+}
+
+/** What a row says about its chat besides the title, in words. */
+data class RowStatus(val waiting: Waiting? = null, val unread: Boolean = false) {
+    val needsAttention: Boolean get() = waiting != null || unread
+}
+
 /**
  * Stored-session browser: list (REST, paged), search, and row actions. Refetches when the gateway
  * broadcasts `sessions.changed` / `session.title`, and after each reconnect (events may have been missed).
+ * Marks chats waiting on the user ([AttentionTracker]) and ones with a reply not yet read ([SeenStore]).
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class SessionsViewModel(
     private val api: SessionsApi,
     private val auth: AuthApi,
     private val connection: GatewayConnection,
     private val lastChats: LastChatStore,
     private val profiles: ProfilesApi,
+    attention: AttentionTracker,
+    private val seenStore: SeenStore,
 ) : ViewModel() {
 
     val connectionState: StateFlow<ConnectionState> = connection.state
+
+    private val bound = MutableStateFlow<Pair<GatewayUrl, String?>?>(null)
+
+    private val _attentionFilter = MutableStateFlow(AttentionFilter.All)
+    val attentionFilter: StateFlow<AttentionFilter> = _attentionFilter.asStateFlow()
+
+    private val seen: StateFlow<SeenChats?> = bound
+        .flatMapLatest { scope -> scope?.let { (url, profile) -> seenStore.seen(url, profile) } ?: flowOf(null) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    private val waiting = attention.waiting
+
+    fun setAttentionFilter(filter: AttentionFilter) {
+        _attentionFilter.value = filter
+    }
+
+    /** The user has looked at [session] as it is now: its reply is read. */
+    fun markSeen(session: SessionSummary) {
+        val (url, profile) = bound.value ?: return
+        viewModelScope.launch { seenStore.markSeen(url, session, profile) }
+    }
 
     private val _user = MutableStateFlow<AuthUser?>(null)
     val user: StateFlow<AuthUser?> = _user.asStateFlow()
@@ -73,6 +120,13 @@ class SessionsViewModel(
 
     private val _state = MutableStateFlow(SessionsUiState())
     val state: StateFlow<SessionsUiState> = _state.asStateFlow()
+
+    /** Each listed chat's status by id; chats with nothing to say are left out. */
+    val statuses: StateFlow<Map<String, RowStatus>> = combine(_state, waiting, seen) { state, waiting, seen ->
+        (state.sessions + state.searchResults.orEmpty()).mapNotNull { session ->
+            RowStatus(waiting[session.id], seen?.isUnread(session) == true).takeIf { it.needsAttention }?.let { session.id to it }
+        }.toMap()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
     val query = TextFieldState()
 
@@ -93,6 +147,7 @@ class SessionsViewModel(
         val newGateway = this.gateway != gateway
         this.gateway = gateway
         this.profile = profile
+        bound.value = gateway.gatewayUrl to profile
         _state.value = SessionsUiState()
         load(refresh = false)
         if (newGateway) {
