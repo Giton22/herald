@@ -114,7 +114,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Todo list updates (`todo.updated`)
 
 ### 6. Interactive requests (server → client)
-- [x] **Approval** panel for dangerous commands, with choices `once`, `session`, `always` (confirmed first), `deny` filtered by the gateway's `choices` / `allow_session`, `allow_permanent` and `smart_denied`
+- [x] **Approval** panel for dangerous commands, with choices `once`, `session`, `always` (confirmed first), `deny` filtered by the gateway's `choices` / `allow_session`, `allow_permanent` and `smart_denied`. The command wraps, with "Show full command" and "Copy command"; each permission says where and how long it applies, the broader ones in their own section; taps are ignored for a moment after it appears; and the panel keeps a Stop for the running task
 - [x] Requests withdrawn or answered elsewhere (`request.cancel`, turn end) and restored after reconnect (`open_requests`)
 - [x] **Clarify**: single or batch questions, choices, multi-select and free text
 - [x] **Sudo** password prompt (masked)

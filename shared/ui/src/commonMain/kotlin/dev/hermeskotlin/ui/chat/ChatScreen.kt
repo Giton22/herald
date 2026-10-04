@@ -467,7 +467,7 @@ private fun ColumnScope.Dock(
     TodoPanel(state.todos, live = state.todosLive, hazeState = hazeState)
 
     if (state.inputRequests.isNotEmpty()) {
-        InputRequestPanel(state.inputRequests, connected, onAnswer = actions::answer)
+        InputRequestPanel(state.inputRequests, connected, onAnswer = actions::answer, onStop = actions::interrupt.takeIf { state.running })
     } else if (voiceChat.phase != VoicePhase.Off) {
         VoicePanel(
             hazeState = hazeState,
