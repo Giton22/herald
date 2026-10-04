@@ -160,17 +160,18 @@ import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
-import dev.hermeskotlin.designsystem.components.BottomSheet
 import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import dev.hermeskotlin.designsystem.components.CopyButton
 import dev.hermeskotlin.designsystem.components.Dialog
+import dev.hermeskotlin.designsystem.components.DropdownMenu
 import dev.hermeskotlin.designsystem.components.IconButton
-import dev.hermeskotlin.designsystem.components.SheetAction
-import dev.hermeskotlin.designsystem.components.SheetHeader
+import dev.hermeskotlin.designsystem.components.MenuAction
 import dev.hermeskotlin.designsystem.components.plainTextClipEntry
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalHapticFeedback
 import com.composables.icons.lucide.Copy
-import com.composables.icons.lucide.Ellipsis
 import com.composables.icons.lucide.GitBranch
 import com.composables.icons.lucide.Pencil
 import dev.hermeskotlin.designsystem.components.MarkdownText
@@ -630,15 +631,11 @@ private fun Messages(
     connected: Boolean,
     canChange: Boolean,
 ) {
-    var menuFor by remember { mutableStateOf<ChatMessage?>(null) }
+    var confirm by remember { mutableStateOf<Pair<MessageChange, String>?>(null) }
+    ConfirmChange(confirm, actions, onDismiss = { confirm = null })
     val lastPrompt = messages.lastOrNull { it is ChatMessage.User }?.key
-    MessageMenu(
-        message = menuFor,
-        isLastPrompt = menuFor?.key == lastPrompt,
-        canChange = canChange,
-        actions = actions,
-        onDismiss = { menuFor = null },
-    )
+    // Edit and branch only show while the chat can change; each asks before it does anything.
+    fun ask(change: MessageChange, key: String): (() -> Unit)? = if (canChange) ({ confirm = change to key }) else null
     // Reversed layout keeps the newest message pinned to the bottom while a reply streams in.
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -659,9 +656,16 @@ private fun Messages(
                         message,
                         actions,
                         connected,
-                        onMore = { menuFor = message }.takeIf { !message.pending && message.check == null },
+                        // Not while the prompt is still on its way or its delivery is in doubt.
+                        onEdit = ask(MessageChange.EditLastPrompt, message.key)
+                            .takeIf { message.key == lastPrompt && !message.pending && message.check == null },
+                        onBranch = ask(MessageChange.Branch, message.key).takeIf { !message.pending && message.check == null },
                     )
-                    is ChatMessage.Assistant -> AssistantReply(message, thinkingFrame.takeIf { message.streaming }, onMore = { menuFor = message })
+                    is ChatMessage.Assistant -> AssistantReply(
+                        message,
+                        thinkingFrame.takeIf { message.streaming },
+                        onBranch = ask(MessageChange.Branch, message.key),
+                    )
                     is ChatMessage.Command -> CommandOutput(message)
                     is ChatMessage.Notice -> NoticeLine(message)
                 }
@@ -697,21 +701,61 @@ private fun connectionLabel(state: ConnectionState): String = when (state) {
 
 /** Desktop's turn marker: the prompt in a full-width box with a tinted fill and outline; replies run bare beneath. */
 @Composable
-private fun UserBubble(message: ChatMessage.User, actions: ChatActions, connected: Boolean, onMore: (() -> Unit)?) {
+private fun UserBubble(
+    message: ChatMessage.User,
+    actions: ChatActions,
+    connected: Boolean,
+    onEdit: (() -> Unit)?,
+    onBranch: (() -> Unit)?,
+) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    val clipboard = LocalClipboard.current
+    val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    var menuOpen by remember { mutableStateOf(false) }
+    val hasMenu = message.text.isNotBlank() || onEdit != null || onBranch != null
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .alpha(if (message.pending || message.check == SendCheck.Checking) 0.6f else 1f)
-                .background(Theme[colors][userBubble], shape)
-                .border(1.dp, Theme[colors][userBubbleStroke], shape)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        // A long press opens the prompt's actions just under it; the text itself isn't selectable, Copy is in there.
+        DropdownMenu(
+            expanded = menuOpen,
+            onExpandedChange = { menuOpen = it },
+            items = {
+                if (message.text.isNotBlank()) {
+                    MenuAction("Copy", Lucide.Copy, onClick = {
+                        menuOpen = false
+                        scope.launch { clipboard.setClipEntry(plainTextClipEntry(message.text)) }
+                    })
+                }
+                onEdit?.let { MenuAction("Edit last prompt", Lucide.Pencil, onClick = { menuOpen = false; it() }) }
+                onBranch?.let { MenuAction("Branch from here", Lucide.GitBranch, onClick = { menuOpen = false; it() }) }
+            },
         ) {
-            if (message.attachments.isNotEmpty()) SentAttachments(message.attachments)
-            if (message.text.isNotEmpty()) SelectionContainer {
-                Text(message.text, style = Theme[typography][body], color = Theme[colors][textColor])
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .alpha(if (message.pending || message.check == SendCheck.Checking) 0.6f else 1f)
+                    .clip(shape)
+                    .background(Theme[colors][userBubble], shape)
+                    .border(1.dp, Theme[colors][userBubbleStroke], shape)
+                    .then(
+                        if (hasMenu) {
+                            Modifier.combinedClickable(
+                                onClick = {},
+                                onLongClick = {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    menuOpen = true
+                                },
+                                onLongClickLabel = "Message actions",
+                                interactionSource = null,
+                                indication = rememberColoredIndication(Theme[colors][textColor]),
+                            )
+                        } else Modifier,
+                    )
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (message.attachments.isNotEmpty()) SentAttachments(message.attachments)
+                if (message.text.isNotEmpty()) Text(message.text, style = Theme[typography][body], color = Theme[colors][textColor])
             }
         }
         if (message.queued) {
@@ -722,9 +766,6 @@ private fun UserBubble(message: ChatMessage.User, actions: ChatActions, connecte
             SendCheck.Unknown -> UnsettledActions("May not have reached Hermes", message.key, mayHaveArrived = true, actions, connected)
             SendCheck.NotReceived -> UnsettledActions("Hermes didn't get this", message.key, mayHaveArrived = false, actions, connected)
             null -> {}
-        }
-        if (onMore != null) {
-            IconButton(Lucide.Ellipsis, contentDescription = "Message actions", onClick = onMore, modifier = Modifier.align(Alignment.End))
         }
     }
 }
@@ -766,55 +807,15 @@ private fun UnsettledActions(label: String, key: String, mayHaveArrived: Boolean
     )
 }
 
-/** What can be done with a message without typing a command: copy it, edit the last prompt, or branch. */
+/** The two message actions that change the conversation, so they ask first. */
 private enum class MessageChange { EditLastPrompt, Branch }
 
-/**
- * A message's actions. Copy happens at once; the two that change the conversation explain what they do,
- * and whether a task starts, before they do it.
- */
+/** Says what an edit or a branch does, and that no task starts, before doing it. */
 @Composable
-private fun MessageMenu(message: ChatMessage?, isLastPrompt: Boolean, canChange: Boolean, actions: ChatActions, onDismiss: () -> Unit) {
-    val clipboard = LocalClipboard.current
-    val scope = rememberCoroutineScope()
-    var confirm by remember { mutableStateOf<Pair<MessageChange, String>?>(null) }
-    val text = when (message) {
-        is ChatMessage.User -> message.text
-        is ChatMessage.Assistant -> remember(message.text) { extractReplyMedia(message.text).first }
-        else -> ""
-    }
-    BottomSheet(visible = message != null, onDismiss = onDismiss) {
-        SheetHeader(if (message is ChatMessage.User) "Your message" else "Hermes's reply", subtitle = text.lineSequence().firstOrNull()?.take(80))
-        if (text.isNotBlank()) {
-            SheetAction("Copy", Lucide.Copy, onClick = {
-                scope.launch { clipboard.setClipEntry(plainTextClipEntry(text)) }
-                onDismiss()
-            })
-        }
-        if (message != null && canChange) {
-            if (message is ChatMessage.User && isLastPrompt) {
-                SheetAction("Edit last prompt", Lucide.Pencil, onClick = {
-                    confirm = MessageChange.EditLastPrompt to message.key
-                    onDismiss()
-                })
-            }
-            SheetAction("Branch from here", Lucide.GitBranch, onClick = {
-                confirm = MessageChange.Branch to message.key
-                onDismiss()
-            })
-        } else if (message != null) {
-            Text(
-                "Editing and branching become available once the task has finished.",
-                style = Theme[typography][bodySmall],
-                color = Theme[colors][textTertiary],
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
-            )
-        }
-    }
-    val pending = confirm
+private fun ConfirmChange(pending: Pair<MessageChange, String>?, actions: ChatActions, onDismiss: () -> Unit) {
     Dialog(
         visible = pending != null,
-        onDismissRequest = { confirm = null },
+        onDismissRequest = onDismiss,
         title = if (pending?.first == MessageChange.Branch) "Branch from here?" else "Edit your last prompt?",
         message = if (pending?.first == MessageChange.Branch) {
             "Copies this chat up to this message into a new chat and opens it. This chat stays as it is. " +
@@ -824,9 +825,9 @@ private fun MessageMenu(message: ChatMessage?, isLastPrompt: Boolean, canChange:
                 "No task starts until you send it again."
         },
         actions = {
-            Button("Cancel", onClick = { confirm = null }, variant = ButtonVariant.Ghost)
+            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost)
             Button(if (pending?.first == MessageChange.Branch) "Branch" else "Edit", onClick = {
-                confirm = null
+                onDismiss()
                 when (pending?.first) {
                     MessageChange.Branch -> actions.branchFrom(pending.second)
                     MessageChange.EditLastPrompt -> actions.editLastPrompt()
@@ -838,7 +839,7 @@ private fun MessageMenu(message: ChatMessage?, isLastPrompt: Boolean, canChange:
 }
 
 @Composable
-private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String?, onMore: () -> Unit) {
+private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String?, onBranch: (() -> Unit)?) {
     val settings = LocalAppSettings.current
     val showReasoning = settings.showReasoning && message.reasoning.isNotBlank()
     val showTools = settings.showToolActivity && message.tools.isNotEmpty()
@@ -875,7 +876,9 @@ private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String
                 if (!message.streaming && text.isNotBlank()) {
                     // Their padding trimmed off the start and top, the icons line up with the reply and sit close under it.
                     CopyButton(text, Modifier.trimStartTop(start = 8.dp, top = 4.dp))
-                    IconButton(Lucide.Ellipsis, contentDescription = "Message actions", onClick = onMore, modifier = Modifier.trimStartTop(start = 0.dp, top = 4.dp))
+                    onBranch?.let {
+                        IconButton(Lucide.GitBranch, contentDescription = "Branch from here", onClick = it, modifier = Modifier.trimStartTop(start = 0.dp, top = 4.dp))
+                    }
                 }
                 usage?.let {
                     Text(
