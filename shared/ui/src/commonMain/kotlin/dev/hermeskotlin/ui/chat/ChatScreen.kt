@@ -413,8 +413,7 @@ internal fun ChatView(
                                 bottomInset = dockInset,
                                 actions = actions,
                                 connected = connected,
-                                // Edit and branch change a stored chat, and not while a task is still writing to it.
-                                canChange = state.storedSessionId != null && !state.running && connected,
+                                canChange = state.canChangeChat(connected),
                             )
                         }
                     } else Box(Modifier.fillMaxSize().padding(bottom = dockInset)) {
@@ -632,8 +631,8 @@ private fun Messages(
     canChange: Boolean,
 ) {
     var confirm by remember { mutableStateOf<Pair<MessageChange, String>?>(null) }
-    ConfirmChange(confirm, actions, onDismiss = { confirm = null })
     val lastPrompt = messages.lastOrNull { it is ChatMessage.User }?.key
+    ConfirmChange(confirm, canChange, lastPrompt, actions, onDismiss = { confirm = null })
     // Edit and branch only show while the chat can change; each asks before it does anything.
     fun ask(change: MessageChange, key: String): (() -> Unit)? = if (canChange) ({ confirm = change to key }) else null
     // Reversed layout keeps the newest message pinned to the bottom while a reply streams in.
@@ -810,14 +809,29 @@ private fun UnsettledActions(label: String, key: String, mayHaveArrived: Boolean
 /** The two message actions that change the conversation, so they ask first. */
 private enum class MessageChange { EditLastPrompt, Branch }
 
-/** Says what an edit or a branch does, and that no task starts, before doing it. */
+/**
+ * Says what an edit or a branch does, and that no task starts, before doing it. Closes itself if the chat stops
+ * [allowing][canChange] it while open, or another prompt becomes the last one to edit.
+ */
 @Composable
-private fun ConfirmChange(pending: Pair<MessageChange, String>?, actions: ChatActions, onDismiss: () -> Unit) {
+private fun ConfirmChange(
+    pending: Pair<MessageChange, String>?,
+    canChange: Boolean,
+    lastPrompt: String?,
+    actions: ChatActions,
+    onDismiss: () -> Unit,
+) {
+    val stale = pending != null &&
+        (!canChange || (pending.first == MessageChange.EditLastPrompt && pending.second != lastPrompt))
+    LaunchedEffect(stale) { if (stale) onDismiss() }
+    // Keeps its words while it fades out, after [pending] has already gone.
+    var shown by remember { mutableStateOf(pending) }
+    if (pending != null) shown = pending
     Dialog(
         visible = pending != null,
         onDismissRequest = onDismiss,
-        title = if (pending?.first == MessageChange.Branch) "Branch from here?" else "Edit your last prompt?",
-        message = if (pending?.first == MessageChange.Branch) {
+        title = if (shown?.first == MessageChange.Branch) "Branch from here?" else "Edit your last prompt?",
+        message = if (shown?.first == MessageChange.Branch) {
             "Copies this chat up to this message into a new chat and opens it. This chat stays as it is. " +
                 "No task starts until you send something in the new chat."
         } else {
@@ -826,11 +840,11 @@ private fun ConfirmChange(pending: Pair<MessageChange, String>?, actions: ChatAc
         },
         actions = {
             Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost)
-            Button(if (pending?.first == MessageChange.Branch) "Branch" else "Edit", onClick = {
+            Button(if (shown?.first == MessageChange.Branch) "Branch" else "Edit", onClick = {
                 onDismiss()
                 when (pending?.first) {
                     MessageChange.Branch -> actions.branchFrom(pending.second)
-                    MessageChange.EditLastPrompt -> actions.editLastPrompt()
+                    MessageChange.EditLastPrompt -> actions.editLastPrompt(pending.second)
                     null -> {}
                 }
             })

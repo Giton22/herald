@@ -620,8 +620,12 @@ class ChatViewModel(
         }
     }
 
-    override fun editLastPrompt() {
+    override fun editLastPrompt(key: String) {
         val chat = session.value ?: return
+        val state = state.value
+        // Asked for in a dialog that may have stayed open: /undo takes whatever turn is last now.
+        if (!state.canChangeChat(connectionState.value is ConnectionState.Connected)) return
+        if (state.messages.lastOrNull { it is ChatMessage.User }?.key != key) return
         val undo = SlashCommand.parse("/undo") ?: return
         viewModelScope.launch {
             val text = chat.runCommand(undo) ?: return@launch
@@ -633,6 +637,7 @@ class ChatViewModel(
 
     override fun branchFrom(key: String) {
         val chat = session.value ?: return
+        if (!state.value.canChangeChat(connectionState.value is ConnectionState.Connected)) return
         val messages = state.value.messages
         val index = messages.indexOfFirst { it.key == key }
         if (index < 0) return
