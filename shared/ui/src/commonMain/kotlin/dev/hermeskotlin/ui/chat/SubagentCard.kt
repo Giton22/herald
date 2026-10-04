@@ -58,6 +58,7 @@ import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.designsystem.components.MinTouchTarget
 
 /** The chat's subagents and a way to stop one, for the delegation cards in its replies. */
 internal class SubagentContext(val subagents: List<Subagent>, val onStop: (String) -> Unit)
@@ -126,7 +127,7 @@ private fun SubagentRowView(row: SubagentRow, onStop: (String) -> Unit) {
             row.subagentId?.let { id ->
                 UnstyledButton(
                     onClick = { onStop(id) },
-                    modifier = Modifier.size(28.dp).clip(RoundedCornerShape(Theme[radii][radiusSmall])),
+                    modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusSmall])),
                 ) {
                     UnstyledIcon(Lucide.Square, contentDescription = "Stop this subagent", tint = Theme[colors][textSecondary], modifier = Modifier.size(12.dp))
                 }

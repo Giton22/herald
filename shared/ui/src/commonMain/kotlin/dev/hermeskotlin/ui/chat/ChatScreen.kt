@@ -156,6 +156,7 @@ import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
+import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import dev.hermeskotlin.designsystem.components.CopyButton
 import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.components.MarkdownText
@@ -550,7 +551,7 @@ private fun BarButton(icon: ImageVector, contentDescription: String, onClick: ()
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(Theme[radii][radiusMedium])).alpha(if (enabled) 1f else 0.35f),
+        modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusMedium])).alpha(if (enabled) 1f else 0.35f),
         indication = rememberColoredIndication(Theme[colors][textColor]),
     ) {
         UnstyledIcon(icon, contentDescription = contentDescription, tint = Theme[colors][textSecondary], modifier = Modifier.size(20.dp))
@@ -1056,9 +1057,9 @@ private fun Composer(
             )
         }
         Row(
-            Modifier.fillMaxWidth().padding(top = 10.dp),
+            Modifier.fillMaxWidth().padding(top = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            // The buttons are full 48dp targets, which already space their icons apart.
         ) {
             ComposerButton(
                 icon = Lucide.Plus,
@@ -1104,7 +1105,7 @@ private fun ComposerButton(icon: ImageVector, contentDescription: String, onClic
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(40.dp).clip(RoundedCornerShape(Theme[radii][radiusMedium])),
+        modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusMedium])),
         indication = rememberColoredIndication(tint),
     ) {
         UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(22.dp))
@@ -1113,7 +1114,10 @@ private fun ComposerButton(icon: ImageVector, contentDescription: String, onClic
 
 private enum class SendIcon { Send, Stop, Voice }
 
-/** Desktop's round send: a disc in the text colour (white on dark) with the icon cut in the page colour. */
+/**
+ * Desktop's round send: a disc in the text colour (white on dark) with the icon cut in the page colour.
+ * The disc stays 40dp; the button around it takes taps over the full [MinTouchTarget].
+ */
 @Composable
 private fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
     val fill = if (enabled) Theme[colors][textColor] else Theme[colors][textColor].copy(alpha = 0.12f)
@@ -1121,23 +1125,25 @@ private fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(40.dp).clip(CircleShape).background(fill),
+        modifier = Modifier.size(MinTouchTarget).clip(CircleShape),
         indication = rememberColoredIndication(tint),
     ) {
-        UnstyledIcon(
-            when (icon) {
-                SendIcon.Send -> Lucide.ArrowUp
-                SendIcon.Stop -> Lucide.Square
-                SendIcon.Voice -> Lucide.AudioLines
-            },
-            contentDescription = when (icon) {
-                SendIcon.Send -> "Send"
-                SendIcon.Stop -> "Stop"
-                SendIcon.Voice -> "Start a voice chat"
-            },
-            tint = tint,
-            modifier = Modifier.size(if (icon == SendIcon.Stop) 16.dp else 20.dp),
-        )
+        Box(Modifier.size(40.dp).clip(CircleShape).background(fill), contentAlignment = Alignment.Center) {
+            UnstyledIcon(
+                when (icon) {
+                    SendIcon.Send -> Lucide.ArrowUp
+                    SendIcon.Stop -> Lucide.Square
+                    SendIcon.Voice -> Lucide.AudioLines
+                },
+                contentDescription = when (icon) {
+                    SendIcon.Send -> "Send"
+                    SendIcon.Stop -> "Stop"
+                    SendIcon.Voice -> "Start a voice chat"
+                },
+                tint = tint,
+                modifier = Modifier.size(if (icon == SendIcon.Stop) 16.dp else 20.dp),
+            )
+        }
     }
 }
 
@@ -1145,7 +1151,7 @@ private fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
 @Composable
 private fun DictationButton(state: DictationState, onClick: () -> Unit, enabled: Boolean) {
     if (state.transcribing) {
-        Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
+        Box(Modifier.size(MinTouchTarget), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
         return
     }
     val recording = state.recording
@@ -1158,7 +1164,7 @@ private fun DictationButton(state: DictationState, onClick: () -> Unit, enabled:
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier
-            .size(40.dp)
+            .size(MinTouchTarget)
             .clip(CircleShape)
             .then(if (recording) Modifier.border(2.dp, tint.copy(alpha = 0.25f + 0.75f * state.level), CircleShape) else Modifier),
         indication = rememberColoredIndication(tint),
