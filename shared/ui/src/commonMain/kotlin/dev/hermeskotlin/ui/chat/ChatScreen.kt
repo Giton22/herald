@@ -134,6 +134,7 @@ import dev.hermeskotlin.core.chat.OutgoingAttachment
 import dev.hermeskotlin.core.chat.SendCheck
 import dev.hermeskotlin.core.chat.extractReplyMedia
 import dev.hermeskotlin.core.chat.ToolActivity
+import dev.hermeskotlin.core.chat.TodoList
 import dev.hermeskotlin.core.chat.TodoStatus
 import dev.hermeskotlin.core.chat.TurnOutcome
 import dev.hermeskotlin.core.chat.compactCount
@@ -496,7 +497,7 @@ private fun ColumnScope.Dock(
     AnimatedVisibility(visible = notice != null) { NoticeLine(notice.orEmpty()) }
     // One place says what's happening: the current action, with the status text and plan folded beneath.
     AnimatedVisibility(visible = state.running, enter = fadeIn(), exit = fadeOut()) {
-        ProgressPanel(currentAction(state), state.status, state.runningTool(), state.todos, hazeState)
+        ProgressPanel(currentAction(state), state.status, state.runningTool(), state.livePlan(), hazeState)
     }
     if (!state.running) TodoPanel(state.todos, live = state.todosLive, hazeState = hazeState)
 
@@ -1175,6 +1176,9 @@ private fun Tools(tools: List<ToolActivity>) {
 private fun ChatState.runningTool(): ToolActivity? =
     (messages.lastOrNull { it is ChatMessage.Assistant && it.streaming } as? ChatMessage.Assistant)?.tools?.lastOrNull { it.running }
 
+/** This turn's plan; one left over from an earlier turn isn't what's happening now. */
+private fun ChatState.livePlan(): TodoList? = todos?.takeIf { todosLive }
+
 /**
  * The one line that says what the agent is doing now, most specific first: waiting on the user, a tool
  * at work, the plan's step in hand, the gateway's status text, else thinking.
@@ -1185,7 +1189,7 @@ internal fun currentAction(state: ChatState): String {
         val detail = tool.detail?.lineSequence()?.firstOrNull()?.takeIf { it.isNotBlank() }
         return if (detail != null) "${tool.name.toolVerb()}: $detail" else tool.name.toolVerb()
     }
-    state.todos?.items?.firstOrNull { it.status == TodoStatus.InProgress }?.let { return it.content }
+    state.livePlan()?.items?.firstOrNull { it.status == TodoStatus.InProgress }?.let { return it.content }
     state.status?.takeIf { it.isNotBlank() }?.let { return it }
     return state.thinkingFrame ?: "Thinking…"
 }

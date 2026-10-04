@@ -24,6 +24,7 @@ class CurrentActionTest {
         running = true,
         status = status,
         todos = todos,
+        todosLive = todos != null,
         messages = listOf(ChatMessage.Assistant("a1", streaming = true, tools = listOfNotNull(tool))),
     )
 
@@ -47,6 +48,14 @@ class CurrentActionTest {
         assertEquals("Measure storage growth", currentAction(running(todos = plan, status = "musing…")))
         assertEquals("musing…", currentAction(running(status = "musing…")))
         assertEquals("Thinking…", currentAction(running()))
+    }
+
+    @Test
+    fun aPlanLeftFromAnEarlierTurnIsNotTheStepInHand() {
+        // Stopped mid-plan, then asked something else: that turn hasn't planned anything.
+        val state = running(todos = plan, status = "musing…").copy(todosLive = false)
+
+        assertEquals("musing…", currentAction(state))
     }
 
     @Test
