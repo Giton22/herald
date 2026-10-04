@@ -433,7 +433,6 @@ internal fun ChatView(
             val dockInset = with(LocalDensity.current) { dockHeight.toDp() }
             // Reading back up the chat folds the composer to one line; nearing the end opens it again.
             val composerFold = remember { ComposerFold() }
-            val composerBusy = actions.composer.text.isNotBlank() || attachments.isNotEmpty() || comments.isNotEmpty() || dictation.active
             // The list keeps the open composer's height below the last message, so folding it doesn't move the end
             // and undo the fold; only the jump button and the pet follow the composer's real height.
             var composerShrink by remember { mutableIntStateOf(0) }
@@ -512,7 +511,6 @@ internal fun ChatView(
                         onCommentFocused = { focusComment = null },
                         composerFocus = composerFocus,
                         composerFold = composerFold,
-                        composerBusy = composerBusy,
                         onComposerShrink = { composerShrink = it },
                         onOpenModels = onOpenModels,
                         onAttach = onAttach,
@@ -554,7 +552,6 @@ private fun ColumnScope.Dock(
     onCommentFocused: () -> Unit,
     composerFocus: FocusRequester,
     composerFold: ComposerFold,
-    composerBusy: Boolean,
     onComposerShrink: (Int) -> Unit,
     onOpenModels: () -> Unit,
     onAttach: () -> Unit,
@@ -605,7 +602,6 @@ private fun ColumnScope.Dock(
             onCommentFocused = onCommentFocused,
             focus = composerFocus,
             fold = composerFold,
-            busy = composerBusy,
             onShrink = onComposerShrink,
             onOpenModels = onOpenModels,
             onAttach = onAttach,
@@ -1517,8 +1513,6 @@ private fun Composer(
     focus: FocusRequester,
     /** How near the end the reader is, which folds the composer to one line away from it. */
     fold: ComposerFold,
-    /** Something is being written: text, attachments, comments or a dictation. Keeps the composer open. */
-    busy: Boolean,
     /** How many px shorter than open the composer stands right now. */
     onShrink: (Int) -> Unit,
     onOpenModels: () -> Unit,
@@ -1546,7 +1540,9 @@ private fun Composer(
     // How open the composer stands, 1 open to 0 folded to a line. It tracks the scroll as it goes, and springs
     // across when a tap, the keyboard or a draft holds it open or lets go.
     val open = remember { Animatable(1f) }
-    val busyNow by rememberUpdatedState(busy)
+    // Something being written keeps it open: worked out here, where the text is read anyway, not in ChatView,
+    // which would then recompose on every keystroke.
+    val busyNow by rememberUpdatedState(hasText || dictation.active)
     val range = with(LocalDensity.current) { FOLD_RANGE.toPx() }
     LaunchedEffect(fold, range) {
         snapshotFlow {
