@@ -115,6 +115,29 @@ internal fun parseReview(text: String): SentReview? {
     return SentReview(comments, before = text.substring(0, open).trim(), after = text.substring(close + CLOSE.length).trim())
 }
 
+/**
+ * Sent [texts] taken back: their comments as cards again, in order, and what was typed around them, without
+ * the markup. Ids come from [nextId].
+ */
+internal fun unsend(texts: List<String>, nextId: () -> Long): Pair<List<PendingComment>, String> {
+    val reviews = texts.map { it to parseReview(it) }
+    val comments = reviews.flatMap { (_, review) -> review?.comments.orEmpty() }.map { sent ->
+        PendingComment(
+            id = nextId(),
+            source = CommentSource(messageKey = "", label = sent.on),
+            quote = sent.quote.substringAfter('«').substringBefore('»'),
+            where = sent.where,
+            context = sent.quote.takeUnless { it.startsWith('«') && it.endsWith('»') },
+            highlights = emptyList(),
+            note = sent.note,
+        )
+    }
+    val typed = reviews.flatMap { (text, review) -> review?.let { listOf(it.before, it.after) } ?: listOf(text) }
+        .filter(String::isNotBlank)
+        .joinToString("\n\n")
+    return comments to typed
+}
+
 /** Where in the text the selection is, when that has a name. */
 private fun whereOf(source: CommentSource, anchor: SelectionAnchor): String? {
     val block = anchor.blocks[anchor.startBlock]

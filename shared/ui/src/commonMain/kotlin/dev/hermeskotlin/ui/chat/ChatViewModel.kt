@@ -661,7 +661,7 @@ class ChatViewModel(
             val dropped = chat.interrupt().filter { it.isNotBlank() }
             if (dropped.isEmpty()) return@launch
             val typed = composer.text.toString()
-            composer.setTextAndPlaceCursorAtEnd((dropped + typed).filter { it.isNotBlank() }.joinToString("\n\n"))
+            composer.setTextAndPlaceCursorAtEnd(listOf(takeComments(dropped), typed).filter { it.isNotBlank() }.joinToString("\n\n"))
         }
     }
 
@@ -673,9 +673,10 @@ class ChatViewModel(
         if (state.messages.lastOrNull { it is ChatMessage.User }?.key != key) return
         val undo = SlashCommand.parse("/undo") ?: return
         viewModelScope.launch {
-            val text = chat.runCommand(undo) ?: return@launch
+            val text = takeComments(listOf(chat.runCommand(undo) ?: return@launch))
             // Whatever was being typed stays, after the prompt that comes back.
             val typed = composer.text.toString()
+            if (text.isBlank()) return@launch
             composer.setTextAndPlaceCursorAtEnd(if (typed.isBlank()) text else "$text\n\n$typed")
         }
     }
@@ -727,25 +728,19 @@ class ChatViewModel(
      * back to the tray as cards, not as their markup.
      */
     private fun giveBack(text: String) {
-        val review = parseReview(text)
-        if (review != null) {
-            _comments.update { tray ->
-                review.comments.map { sent ->
-                    PendingComment(
-                        id = ++lastCommentId,
-                        source = CommentSource(messageKey = "", label = sent.on),
-                        quote = sent.quote.substringAfter('«').substringBefore('»'),
-                        where = sent.where,
-                        context = sent.quote.takeUnless { it.startsWith('«') && it.endsWith('»') },
-                        highlights = emptyList(),
-                        note = sent.note,
-                    )
-                } + tray
-            }
-        }
-        val typed = review?.let { listOf(it.before, it.after).filter(String::isNotBlank).joinToString("\n\n") } ?: text
+        val typed = takeComments(listOf(text))
         if (typed.isBlank()) return
         composer.setTextAndPlaceCursorAtEnd(if (composer.text.isBlank()) typed else "$typed\n\n${composer.text}")
+    }
+
+    /**
+     * Moves the comments in sent [texts] back to the tray as cards, ahead of those waiting, and returns what
+     * was typed around them, so no prompt comes back to the composer as its markup.
+     */
+    private fun takeComments(texts: List<String>): String {
+        val (back, typed) = unsend(texts) { ++lastCommentId }
+        if (back.isNotEmpty()) _comments.update { back + it }
+        return typed
     }
 
     override fun retry() {

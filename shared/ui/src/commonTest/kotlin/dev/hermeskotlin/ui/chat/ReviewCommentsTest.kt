@@ -112,6 +112,19 @@ class ReviewCommentsTest {
     }
 
     @Test
+    fun takenBackPromptsGiveTheirCommentsBackAsCardsNotMarkup() {
+        val first = formatReview(listOf(newComment(1, reply, select(3, "retry"), note = "Backoff?")), "Thanks!")
+        val second = formatReview(listOf(newComment(2, reply, select(6, "retryLimit"))), "")
+        var id = 10L
+        val (comments, typed) = unsend(listOf(first, "Also log it.", second)) { ++id }
+        assertEquals("Thanks!\n\nAlso log it.", typed)
+        assertEquals(listOf("retry", "retryLimit"), comments.map { it.quote })
+        assertEquals(listOf(11L, 12L), comments.map { it.id })
+        assertEquals("Backoff?", comments.first().note.text.toString())
+        assertEquals(first, formatReview(comments.take(1), typed.substringBefore("\n\n")))
+    }
+
+    @Test
     fun ordinaryTextHasNoReview() {
         assertNull(parseReview("Just a prompt about <comments> in HTML."))
     }
