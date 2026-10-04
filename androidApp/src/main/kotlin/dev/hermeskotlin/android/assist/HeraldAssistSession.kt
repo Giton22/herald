@@ -11,6 +11,7 @@ import android.os.Bundle
 import android.view.View
 import android.view.WindowManager
 import android.service.voice.VoiceInteractionSession
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.platform.ComposeView
 import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.core.content.ContextCompat
@@ -58,6 +59,7 @@ class HeraldAssistSession(context: Context) :
     private val store = ViewModelStore()
     private val work = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private lateinit var model: AssistantPanelModel
+    private val microphone = mutableStateOf(false)
 
     override val lifecycle: Lifecycle get() = lifecycleRegistry
     override val savedStateRegistry: SavedStateRegistry get() = savedState.savedStateRegistry
@@ -84,8 +86,9 @@ class HeraldAssistSession(context: Context) :
         setContent {
             AssistantPanel(
                 model = model,
-                microphoneAllowed = microphoneAllowed(),
+                microphoneAllowed = microphone.value,
                 onOpenHerald = ::openInHerald,
+                onAllowMicrophone = ::askForMicrophone,
                 onClose = ::hide,
             )
         }
@@ -93,10 +96,16 @@ class HeraldAssistSession(context: Context) :
 
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)
-        model.begin(
-            expectText = showFlags and SHOW_WITH_ASSIST != 0,
-            expectScreenshot = showFlags and SHOW_WITH_SCREENSHOT != 0,
-        )
+        // Read on every show: it may have just been allowed, which is why the panel came back.
+        microphone.value = microphoneAllowed()
+        if (args?.getBoolean(HeraldAssistService.EXTRA_RESUME) == true) {
+            model.resume()
+        } else {
+            model.begin(
+                expectText = showFlags and SHOW_WITH_ASSIST != 0,
+                expectScreenshot = showFlags and SHOW_WITH_SCREENSHOT != 0,
+            )
+        }
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_RESUME)
     }
 
@@ -138,6 +147,12 @@ class HeraldAssistSession(context: Context) :
 
     private fun microphoneAllowed() =
         ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+
+    /** Android's prompt opens below the assistant's window, so the panel steps aside; it comes back once allowed. */
+    private fun askForMicrophone() {
+        hide()
+        context.startActivity(Intent(context, MicrophonePermissionActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+    }
 
     /** Herald, on the panel's chat once it has one; also where the microphone is allowed. */
     private fun openInHerald(storedSessionId: String?) {

@@ -63,6 +63,15 @@
             android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION" />
 
+        <!-- Shows the microphone prompt for the assistant panel, which can't; invisible and kept out of Herald's task. -->
+        <activity
+            android:name=".assist.MicrophonePermissionActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
         <service
             android:name=".assist.HeraldRecognitionService"
             android:exported="true">

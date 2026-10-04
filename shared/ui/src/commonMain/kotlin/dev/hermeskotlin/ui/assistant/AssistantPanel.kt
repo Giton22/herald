@@ -111,9 +111,10 @@ import org.koin.compose.koinInject
 @Composable
 fun AssistantPanel(
     model: AssistantPanelModel,
-    /** Whether the app may record; without it the microphone sends the user to Herald to allow it. */
+    /** Whether the app may record; without it the microphone asks first ([onAllowMicrophone]). */
     microphoneAllowed: Boolean,
     onOpenHerald: (storedSessionId: String?) -> Unit,
+    onAllowMicrophone: () -> Unit,
     onClose: () -> Unit,
 ) {
     val settings = koinInject<SettingsStore>().settings.collectAsState().value ?: return
@@ -141,7 +142,7 @@ fun AssistantPanel(
                 contentAlignment = Alignment.BottomCenter,
             ) {
                 MessengerEdge(model, Modifier.fillMaxSize())
-                Card(model, microphoneAllowed, onOpenHerald, onClose)
+                Card(model, microphoneAllowed, onOpenHerald, onAllowMicrophone, onClose)
             }
         }
     }
@@ -152,6 +153,7 @@ private fun Card(
     model: AssistantPanelModel,
     microphoneAllowed: Boolean,
     onOpenHerald: (String?) -> Unit,
+    onAllowMicrophone: () -> Unit,
     onClose: () -> Unit,
 ) {
     val phase by model.phase.collectAsState()
@@ -175,7 +177,7 @@ private fun Card(
             when (phase) {
                 AssistantPhase.Loading -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { Spinner() }
                 AssistantPhase.SignedOut -> SignedOut(onOpenHerald = { onOpenHerald(null) })
-                AssistantPhase.Ready -> Ready(model, microphoneAllowed, onOpenHerald)
+                AssistantPhase.Ready -> Ready(model, microphoneAllowed, onAllowMicrophone)
             }
         }
     }
@@ -203,7 +205,7 @@ private fun SignedOut(onOpenHerald: () -> Unit) {
 }
 
 @Composable
-private fun ColumnScope.Ready(model: AssistantPanelModel, microphoneAllowed: Boolean, onOpenHerald: (String?) -> Unit) {
+private fun ColumnScope.Ready(model: AssistantPanelModel, microphoneAllowed: Boolean, onAllowMicrophone: () -> Unit) {
     val session by model.session.collectAsState()
     val state by (session?.state ?: remember { emptyFlow() }).collectAsState(ChatState())
     val connection by model.connectionState.collectAsState()
@@ -211,9 +213,10 @@ private fun ColumnScope.Ready(model: AssistantPanelModel, microphoneAllowed: Boo
     val includeScreen by model.includeScreen.collectAsState()
     val dictation by model.voice.dictation.collectAsState()
     val connected = connection is ConnectionState.Connected
+    val shows by model.shows.collectAsState()
 
-    // Calling the assistant up is asking to talk: listen straight away when the app may.
-    LaunchedEffect(model, microphoneAllowed) {
+    // Calling the assistant up is asking to talk: listen straight away, on every call-up, when the app may.
+    LaunchedEffect(model, shows, microphoneAllowed) {
         if (microphoneAllowed && !state.hasConversation && !dictation.active) model.toggleDictation()
     }
 
@@ -255,7 +258,7 @@ private fun ColumnScope.Ready(model: AssistantPanelModel, microphoneAllowed: Boo
         includeScreen = includeScreen,
         canDictate = microphoneAllowed,
         dictation = dictation,
-        onAllowMicrophone = { onOpenHerald(null) },
+        onAllowMicrophone = onAllowMicrophone,
     )
 }
 

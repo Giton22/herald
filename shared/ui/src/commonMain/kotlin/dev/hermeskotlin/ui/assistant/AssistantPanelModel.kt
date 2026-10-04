@@ -80,6 +80,10 @@ class AssistantPanelModel(
     private val _includeScreen = MutableStateFlow(false)
     val includeScreen: StateFlow<Boolean> = _includeScreen.asStateFlow()
 
+    /** Counts call-ups, so what happens on each one (listening) happens again on the next. */
+    private val _shows = MutableStateFlow(0)
+    val shows: StateFlow<Int> = _shows.asStateFlow()
+
     val composer = TextFieldState()
     val voice = VoiceController(audio, recorder, player, scope, appScope)
 
@@ -116,7 +120,11 @@ class AssistantPanelModel(
         _screen.value = ScreenCapture(pending = listOf(expectText, expectScreenshot).count { it })
         // The last call-up's chat goes on in the sessions list; an unused one is simply kept.
         if (_session.value?.state?.value?.hasConversation == true) newChat()
+        _shows.update { it + 1 }
     }
+
+    /** Back after stepping aside (for Android's microphone prompt): the same chat and screen, listening again. */
+    fun resume() = _shows.update { it + 1 }
 
     fun onScreenText(app: String?, lines: List<String>) = _screen.update {
         it.copy(app = app ?: it.app, lines = lines, pending = (it.pending - 1).coerceAtLeast(0))

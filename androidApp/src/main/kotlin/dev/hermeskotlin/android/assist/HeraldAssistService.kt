@@ -15,7 +15,33 @@ import android.speech.SpeechRecognizer
  * service bound while Herald is the assistant, and it has nothing to listen for (hotwords are for
  * preinstalled assistants).
  */
-class HeraldAssistService : VoiceInteractionService()
+class HeraldAssistService : VoiceInteractionService() {
+
+    override fun onReady() {
+        super.onReady()
+        running = this
+    }
+
+    override fun onShutdown() {
+        if (running === this) running = null
+        super.onShutdown()
+    }
+
+    companion object {
+        private var running: HeraldAssistService? = null
+
+        /** Set on a show that picks the panel up where it left off, rather than a new call-up. */
+        const val EXTRA_RESUME = "resume"
+
+        /**
+         * Brings the panel back as it was, e.g. once the microphone was allowed. No new capture: the
+         * screen now would be Android's prompt, not the one the user called the assistant up on.
+         */
+        fun reopen() {
+            running?.showSession(Bundle().apply { putBoolean(EXTRA_RESUME, true) }, 0)
+        }
+    }
+}
 
 class HeraldAssistSessionService : VoiceInteractionSessionService() {
     override fun onNewSession(args: Bundle?): VoiceInteractionSession = HeraldAssistSession(this)
