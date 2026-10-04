@@ -7,6 +7,8 @@ import dev.hermeskotlin.core.chat.ContextCategory
 import dev.hermeskotlin.core.chat.ContextFile
 import dev.hermeskotlin.core.chat.SessionUsage
 import dev.hermeskotlin.core.cron.DeliveryTarget
+import dev.hermeskotlin.core.gateway.CheckStage
+import dev.hermeskotlin.core.gateway.StageResult
 import dev.hermeskotlin.core.insights.ModelUsage
 import dev.hermeskotlin.core.insights.SkillUsage
 import dev.hermeskotlin.core.insights.SkillsBlock
@@ -156,6 +158,16 @@ internal object PageSamples {
                 exitCode = 0,
                 output = "Testing has begun.\nPlease wait 255 minutes for test to complete.",
             ),
+        ),
+    )
+
+    /** Settings → Check connection, where the server and sign-in pass but the live link doesn't. */
+    val connectionCheck = mapOf(
+        CheckStage.Server to StageResult.Passed("Hermes 0.9.0 answered at hermes.example.ts.net."),
+        CheckStage.SignIn to StageResult.Passed("Signed in as Alex Morgan."),
+        CheckStage.Live to StageResult.Failed(
+            problem = "The chat connection was refused at /api/ws.",
+            fix = "Your proxy must pass WebSocket upgrades: forward the Upgrade and Connection headers to the dashboard.",
         ),
     )
 }

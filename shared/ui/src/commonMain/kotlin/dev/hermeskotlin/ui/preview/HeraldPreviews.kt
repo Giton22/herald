@@ -1,6 +1,19 @@
 package dev.hermeskotlin.ui.preview
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.ui.unit.dp
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.RefreshCw
+import dev.hermeskotlin.designsystem.components.BottomSheet
+import dev.hermeskotlin.designsystem.components.Button
+import dev.hermeskotlin.designsystem.components.ButtonVariant
+import dev.hermeskotlin.designsystem.components.SheetHeader
+import dev.hermeskotlin.ui.chat.PendingComment
+import dev.hermeskotlin.ui.connect.ConnectionChecklist
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
@@ -58,6 +71,10 @@ enum class PreviewScene(val label: String) {
     JobEditor("A new scheduled job"),
     Usage("Usage and context"),
     Processes("Background processes"),
+    Comments("Comments on a reply"),
+    MidTask("Typing while a task runs"),
+    ConnectionCheck("The connection check"),
+    LongChat("A chat to scroll back through"),
 }
 
 /** One scene full-screen in the app theme: Android Studio previews and the debug screenshot gallery both use it. */
@@ -76,8 +93,17 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true) {
                 PreviewScene.Voice -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.listening)
                 PreviewScene.NewChat -> SampleChat(ChatSamples.empty, placeholder = "What are we building?")
                 PreviewScene.Sidebar -> OpenSidebar {
-                    SessionsSidebarSample(ChatSamples.sessions(), selectedId = "s1", userLabel = ChatSamples.USER)
+                    SessionsSidebarSample(
+                        ChatSamples.sessions(),
+                        selectedId = "s1",
+                        userLabel = ChatSamples.USER,
+                        statuses = ChatSamples.sessionStatuses,
+                        drafts = ChatSamples.sessionDrafts,
+                    )
                 }
+                PreviewScene.Comments -> SampleChat(ChatSamples.reply, comments = remember { ChatSamples.comments() })
+                PreviewScene.LongChat -> SampleChat(ChatSamples.longChat)
+                PreviewScene.MidTask ->SampleChat(ChatSamples.working, composerText = "Also check the photos share")
                 PreviewScene.Insights -> OpenSidebar {
                     SidebarPage { InsightsView(PageSamples.insights(), onBack = {}, onSelectPeriod = {}, onRetry = {}) }
                 }
@@ -115,6 +141,24 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true) {
                     onSignOut = {},
                     onChangeGateway = {},
                 )
+                PreviewScene.ConnectionCheck -> Box(Modifier.fillMaxSize()) {
+                    SettingsView(
+                        settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light),
+                        info = GatewayInfo(userLabel = ChatSamples.USER, version = "0.9.0"),
+                        gatewayUrl = "https://hermes.example.ts.net",
+                        onUpdate = {},
+                        onBack = {},
+                        onSignOut = {},
+                        onChangeGateway = {},
+                    )
+                    BottomSheet(visible = true, onDismiss = {}) {
+                        SheetHeader("Check connection", subtitle = "Each stage is tested on its own.")
+                        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            ConnectionChecklist(PageSamples.connectionCheck, running = false)
+                            Button("Check again", onClick = {}, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw, modifier = Modifier.fillMaxWidth())
+                        }
+                    }
+                }
             }
         }
     }
@@ -151,6 +195,8 @@ private fun SampleChat(
     state: ChatState,
     voiceChat: VoiceChatState = VoiceChatState(),
     placeholder: String = ChatSamples.PLACEHOLDER,
+    comments: List<PendingComment> = emptyList(),
+    composerText: String = "",
 ) {
     ChatView(
         title = state.title ?: "New chat",
@@ -159,13 +205,14 @@ private fun SampleChat(
         connected = true,
         attachments = emptyList(),
         attachmentError = null,
+        comments = comments,
         voiceChat = voiceChat,
         dictation = DictationState(),
         suggestions = emptyList(),
         sprite = null,
         placeholder = placeholder,
         notice = null,
-        actions = PreviewChatActions(),
+        actions = remember(composerText) { PreviewChatActions(composerText) },
         onOpenSidebar = {},
         onNewChat = {},
         onOpenMenu = {},
