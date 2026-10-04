@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.aspectRatio
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -104,23 +106,28 @@ internal fun SentAttachments(attachments: List<ShownAttachment>) {
                     open(ViewerImage(attachment.name, source = attachment.gatewayPath, bytes = attachment.original))
                 },
             ) {
-                AttachmentTile(attachment.name, attachment.kind, bytes, size = 96.dp)
+                AttachmentTile(attachment.name, attachment.kind, bytes, size = 96.dp, keepShape = true)
             }
         }
     }
 }
 
-/** A photo thumbnail, or for files (and history images without bytes) an icon card with the name. */
+/**
+ * A photo thumbnail, or for files (and history images without bytes) an icon card with the name. With
+ * [keepShape] the photo is [size] tall and as wide as its shape makes it (a wide strip stays a strip),
+ * trimmed only past [MAX_TILE_RATIO]; otherwise it's a [size] square.
+ */
 @Composable
-private fun AttachmentTile(name: String, kind: AttachmentKind, thumbnail: ByteArray?, size: Dp) {
+private fun AttachmentTile(name: String, kind: AttachmentKind, thumbnail: ByteArray?, size: Dp, keepShape: Boolean = false) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
     val bitmap = thumbnail?.let { rememberImageBitmap(it) }
     if (bitmap != null) {
+        val ratio = if (keepShape) (bitmap.width.toFloat() / bitmap.height).coerceIn(1 / MAX_TILE_RATIO, MAX_TILE_RATIO) else 1f
         Image(
             bitmap = bitmap,
             contentDescription = name,
             contentScale = ContentScale.Crop,
-            modifier = Modifier.size(size).clip(shape).border(1.dp, Theme[colors][stroke], shape),
+            modifier = Modifier.height(size).aspectRatio(ratio).clip(shape).border(1.dp, Theme[colors][stroke], shape),
         )
         return
     }
@@ -141,6 +148,9 @@ private fun AttachmentTile(name: String, kind: AttachmentKind, thumbnail: ByteAr
         }
     }
 }
+
+/** How far from square a sent photo's tile goes before it's trimmed: a 3:1 strip, or a 1:3 tall one. */
+private const val MAX_TILE_RATIO = 3f
 
 private val AttachmentKind.icon: ImageVector
     get() = when (this) {

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Herald as the digital assistant: the session shows the panel; the recognizer is the stub Android requires. -->
+<voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="dev.hermeskotlin.android.assist.HeraldAssistSessionService"
+    android:recognitionService="dev.hermeskotlin.android.assist.HeraldRecognitionService"
+    android:supportsAssist="true" />
