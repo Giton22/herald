@@ -152,6 +152,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 
 ### Voice
 - [x] Dictation into the composer (phone mic → `POST /api/audio/transcribe`)
+- [x] An empty chat offers "Attach a file" and "Dictate" under the wordmark
 - [x] Voice chat: listen, transcribe, send, read the reply aloud (`/api/audio/speak`, `tts-lease`), say "stop" to end; `/voice`
 - [ ] Talk over the reply to interrupt it (barge-in) and speak while the reply streams (`/api/audio/speak-stream`)
 - [ ] Live voice mode (`/api/audio/voice-live/*`)
