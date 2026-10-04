@@ -1780,14 +1780,14 @@ private fun ComposerButton(icon: ImageVector, contentDescription: String, onClic
     }
 }
 
-private enum class SendIcon { Send, Stop }
+internal enum class SendIcon { Send, Stop }
 
 /**
  * Desktop's round send: a disc in the text colour (white on dark) with the icon cut in the page colour.
  * The disc stays 40dp; the button around it takes taps over the full [MinTouchTarget].
  */
 @Composable
-private fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
+internal fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
     val fill = if (enabled) Theme[colors][textColor] else Theme[colors][textColor].copy(alpha = 0.12f)
     val tint = if (enabled) Theme[colors][background] else Theme[colors][textTertiary]
     UnstyledButton(
@@ -1815,7 +1815,7 @@ private fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
 
 /** The composer's microphone: tap to dictate, tap again to finish; the ring follows your voice. */
 @Composable
-private fun DictationButton(state: DictationState, onClick: () -> Unit, enabled: Boolean) {
+internal fun DictationButton(state: DictationState, onClick: () -> Unit, enabled: Boolean) {
     if (state.transcribing) {
         Box(Modifier.size(MinTouchTarget), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
         return
