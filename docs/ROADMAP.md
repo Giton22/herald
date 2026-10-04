@@ -160,6 +160,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] BTW side questions (`/btw` → `prompt.btw`, answered in place by `btw.complete`)
 - [ ] Background prompts (`prompt.background`, `background.complete`)
 - [ ] Message reactions (`message.react`)
+- [x] Drafts: each chat keeps its unsent text (stored, survives a restart) and picked files (in memory) when you switch chats; the session list marks it "Draft"
 - [x] Undo and branch from the composer (`/undo` hands the last prompt back; `/branch` → `session.branch_whole` / `session.branch`)
 - [ ] Undo and branch from a message (buttons on a turn instead of slash commands)
 - [x] Context compression (`/compress` → `session.compress`)
