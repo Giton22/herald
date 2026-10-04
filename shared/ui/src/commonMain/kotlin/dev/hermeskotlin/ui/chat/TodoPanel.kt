@@ -11,6 +11,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -51,6 +52,7 @@ import dev.chrisbanes.haze.blur.hazeBlur
 import dev.hermeskotlin.core.chat.TodoItem
 import dev.hermeskotlin.core.chat.TodoList
 import dev.hermeskotlin.core.chat.TodoStatus
+import dev.hermeskotlin.core.chat.ToolActivity
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.colors
@@ -103,24 +105,7 @@ fun TodoPanel(todos: TodoList?, live: Boolean, hazeState: HazeState) {
 private fun Panel(todos: TodoList, live: Boolean, hazeState: HazeState) {
     // Open while the agent works through it, folded once it's a past plan.
     var expanded by remember(live) { mutableStateOf(live) }
-    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
-    val page = Theme[colors][background]
-    val frosted = remember(page) {
-        HazeBlurStyle {
-            blurEnabled(true)
-            blurRadius(20.dp)
-            backgroundColor(page)
-        }
-    }
-    Column(
-        Modifier
-            .padding(start = 12.dp, end = 12.dp, top = 6.dp)
-            .fillMaxWidth()
-            .clip(shape)
-            .hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)
-            .background(Theme[colors][surfaceElevated].copy(alpha = 0.85f))
-            .border(1.dp, Theme[colors][strokeStrong], shape),
-    ) {
+    FrostedPanel(hazeState) {
         val current = todos.items.firstOrNull { it.status == TodoStatus.InProgress }
         Row(
             Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(horizontal = 14.dp, vertical = 10.dp),
@@ -161,6 +146,97 @@ private fun Panel(todos: TodoList, live: Boolean, hazeState: HazeState) {
             }
         }
     }
+}
+
+/**
+ * What a running turn is doing, in one line above the composer: [action] with a spinner, and the plan's
+ * count when there is one. The technical details stay folded underneath until asked for: the gateway's
+ * status text, the tool and what it was given, and the plan step by step.
+ */
+@Composable
+fun ProgressPanel(action: String, status: String?, tool: ToolActivity?, todos: TodoList?, hazeState: HazeState) {
+    var expanded by remember { mutableStateOf(false) }
+    val plan = todos?.takeIf { it.items.isNotEmpty() }
+    val statusDetail = status?.takeIf { it.isNotBlank() && it != action }
+    val toolDetail = tool?.let { t -> listOfNotNull(t.name, t.detail?.takeIf { it.isNotBlank() }).joinToString(": ") }
+    val hasDetails = statusDetail != null || toolDetail != null || plan != null
+    FrostedPanel(hazeState) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .then(if (hasDetails) Modifier.clickable { expanded = !expanded } else Modifier)
+                .padding(horizontal = 14.dp, vertical = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Spinner(Modifier.size(14.dp))
+            Text(
+                action,
+                style = Theme[typography][bodySmall],
+                color = Theme[colors][text],
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f),
+            )
+            plan?.let { Text("${it.done}/${it.total}", style = Theme[typography][label], color = Theme[colors][textSecondary]) }
+            if (hasDetails) {
+                UnstyledIcon(
+                    if (expanded) Lucide.ChevronDown else Lucide.ChevronUp,
+                    contentDescription = if (expanded) "Hide details" else "Show details",
+                    tint = Theme[colors][textTertiary],
+                    modifier = Modifier.size(16.dp),
+                )
+            }
+        }
+        AnimatedVisibility(visible = expanded && hasDetails) {
+            Column(
+                Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp),
+            ) {
+                statusDetail?.let { DetailLine("Status", it) }
+                toolDetail?.let { DetailLine("Tool", it) }
+                plan?.let { list ->
+                    Text("Tasks ${list.done}/${list.total}", style = Theme[typography][label], color = Theme[colors][textSecondary])
+                    list.tree().forEach { (item, depth) -> TodoRow(item, depth, live = true) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DetailLine(name: String, value: String) {
+    Text(
+        "$name: $value",
+        style = Theme[typography][bodySmall],
+        color = Theme[colors][textSecondary],
+        maxLines = 3,
+        overflow = TextOverflow.Ellipsis,
+    )
+}
+
+/** The dock's frosted card, shared by the progress line and the plan. */
+@Composable
+private fun FrostedPanel(hazeState: HazeState, content: @Composable ColumnScope.() -> Unit) {
+    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
+    val page = Theme[colors][background]
+    val frosted = remember(page) {
+        HazeBlurStyle {
+            blurEnabled(true)
+            blurRadius(20.dp)
+            backgroundColor(page)
+        }
+    }
+    Column(
+        Modifier
+            .padding(start = 12.dp, end = 12.dp, top = 6.dp)
+            .fillMaxWidth()
+            .clip(shape)
+            .hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)
+            .background(Theme[colors][surfaceElevated].copy(alpha = 0.85f))
+            .border(1.dp, Theme[colors][strokeStrong], shape),
+        content = content,
+    )
 }
 
 @Composable

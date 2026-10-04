@@ -1,5 +1,6 @@
 package dev.hermeskotlin.core.rpc
 
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
@@ -73,6 +74,26 @@ class JsonRpcClientTest {
         val error = assertFailsWith<RpcTimeoutException> { client.request("prompt.submit", timeoutMs = 1_000) }
 
         assertEquals("prompt.submit", error.method)
+        pump.cancel()
+    }
+
+    @Test
+    fun aHeartbeatTimeoutFailsWaitingCallsAsALostLinkNotACancellation() = runTest {
+        val transport = FakeTransport(dead = true)
+        val client = JsonRpcClient(transport, clock = { testScheduler.currentTime })
+        val pump = launch { runCatching { client.run() } }
+        transport.push(FakeTransport.READY)
+        client.ready.await()
+
+        // Nothing comes in any more, so the heartbeat gives up long before this call would time out.
+        val call = async { runCatching { client.request("slash.exec", timeoutMs = 600_000) }.exceptionOrNull() }
+        transport.awaitSent { it["method"]?.jsonPrimitive?.str() == "slash.exec" }
+
+        val error = call.await()
+        assertTrue(error != null && error !is CancellationException, "failed with $error")
+        // And the dead client turns new calls away at once, the same way.
+        val next = runCatching { client.request("command.dispatch", timeoutMs = 600_000) }.exceptionOrNull()
+        assertEquals(error, next)
         pump.cancel()
     }
 
