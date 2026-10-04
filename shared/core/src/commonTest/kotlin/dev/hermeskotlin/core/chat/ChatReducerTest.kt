@@ -16,6 +16,26 @@ class ChatReducerTest {
     private fun ChatState.apply(vararg events: GatewayEvent) = events.fold(this) { state, e -> state.reduce(e) }
 
     @Test
+    fun theNextTurnReleasesTheOldestQueuedPrompt() {
+        val running = ChatState(
+            running = true,
+            messages = listOf(
+                ChatMessage.User("u1", "write it"),
+                ChatMessage.Assistant("a1", "Writing", streaming = true),
+                ChatMessage.User("q1", "then test", queued = true),
+                ChatMessage.User("q2", "then ship", queued = true),
+            ),
+        )
+        // A start while the reply streams belongs to that turn; the queue keeps waiting.
+        val still = running.apply(event("message.start"))
+        assertEquals(listOf(true, true), still.messages.filterIsInstance<ChatMessage.User>().drop(1).map { it.queued })
+
+        val next = still.apply(event("message.complete", """{"text":"Written","status":"complete"}"""), event("message.start"))
+        assertEquals(listOf(false, true), next.messages.filterIsInstance<ChatMessage.User>().drop(1).map { it.queued })
+        assertTrue(assertIs<ChatMessage.Assistant>(next.messages.last()).streaming)
+    }
+
+    @Test
     fun streamedTurnBuildsOneReplyWithTools() {
         val state = ChatState(messages = listOf(ChatMessage.User("u", "list files"))).apply(
             event("message.start"),

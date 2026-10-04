@@ -1176,7 +1176,8 @@ internal fun ChatState.sealReplyBefore(key: String): ChatState {
 private val ChatMessage.isLocalOnly: Boolean
     get() = when (this) {
         is ChatMessage.Assistant -> streaming || warning != null
-        is ChatMessage.User -> pending || check != null
+        // A queued prompt isn't in the transcript until its turn starts.
+        is ChatMessage.User -> pending || queued || check != null
         is ChatMessage.Notice -> !stored
         is ChatMessage.Command -> true
     }
