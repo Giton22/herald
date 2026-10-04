@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.chat.ChatHost
+import dev.hermeskotlin.core.chat.ChatLinks
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
@@ -14,6 +15,8 @@ import dev.hermeskotlin.ui.chat.ChatTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 sealed interface Route {
@@ -35,6 +38,7 @@ class AppViewModel(
     private val lastChats: LastChatStore,
     private val host: ChatHost,
     private val profiles: ProfileStore,
+    private val links: ChatLinks,
 ) : ViewModel() {
 
     private val _route = MutableStateFlow<Route>(Route.Loading)
@@ -55,6 +59,16 @@ class AppViewModel(
             connection.state.collect { state ->
                 if (state is ConnectionState.SessionExpired) onSessionExpired()
             }
+        }
+        // A tapped notification names its chat; open it once signed in (it waits through Loading).
+        viewModelScope.launch {
+            combine(links.pending, _route) { link, route -> link?.takeIf { route is Route.Chat } }
+                .filterNotNull()
+                .collect { link ->
+                    links.consume(link)
+                    val open = (_route.value as? Route.Chat)?.target?.storedSessionId
+                    if (open != link.storedSessionId) openSession(link.storedSessionId, link.title ?: "Chat")
+                }
         }
     }
 

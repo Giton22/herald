@@ -28,6 +28,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ChatSessionTest {
@@ -38,11 +39,21 @@ class ChatSessionTest {
     private var history = """{"session_id":"stored-1","messages":[
         {"id":1,"role":"user","content":"hello"},{"id":2,"role":"assistant","content":"Hi! What next?"}]}"""
 
+    /** The transcript can't be read while this is set. */
+    private var historyFails = false
+
+    /** The stored row doesn't exist yet while this is set, as for a new chat before its first prompt. */
+    private var historyMissing = false
+
     private fun client() = createHttpClient(
         MockEngine { request ->
             when (request.url.encodedPath) {
                 "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
-                "/api/sessions/stored-1/messages" -> respond(history, HttpStatusCode.OK, json)
+                "/api/sessions/stored-1/messages" -> when {
+                    historyFails -> respond("{}", HttpStatusCode.InternalServerError, json)
+                    historyMissing -> respond("{}", HttpStatusCode.NotFound, json)
+                    else -> respond(history, HttpStatusCode.OK, json)
+                }
                 else -> error("unexpected ${request.url}")
             }
         },
@@ -94,6 +105,24 @@ class ChatSessionTest {
         connection.start(url)
         transport.push(FakeTransport.READY)
         return connection to transport
+    }
+
+    /** Like [setup], but every connect opens a fresh transport, so a dropped link comes back; the latest is last. */
+    private fun reconnectingSetup(scope: CoroutineScope, results: Map<String, String>): Pair<GatewayConnection, List<FakeTransport>> {
+        val transports = mutableListOf<FakeTransport>()
+        val connection = GatewayConnection(
+            AuthApi(client(), PersistentCookiesStorage(InMemoryKeyValueStore())),
+            { _, _ ->
+                FakeTransport().also {
+                    transports += it
+                    scope.serve(it, results)
+                    it.push(FakeTransport.READY)
+                }
+            },
+            scope,
+        )
+        connection.start(url)
+        return connection to transports
     }
 
     @Test
@@ -222,6 +251,31 @@ class ChatSessionTest {
         assertTrue(assertIs<ChatMessage.User>(state.messages.last()).queued)
         // The reply keeps streaming above the queued prompt.
         assertTrue(assertIs<ChatMessage.Assistant>(state.messages[state.messages.lastIndex - 1]).streaming)
+    }
+
+    @Test
+    fun stoppingDropsTheQueuedPromptsAndHandsThemBack() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.resume" to """{"session_id":"rt1","running":false}""",
+                "prompt.submit" to """{"status":"queued"}""",
+                "session.interrupt" to """{"status":"interrupted"}""",
+            ),
+        )
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        transport.push(event("message.start", "rt1"))
+        transport.push(event("message.delta", "rt1", """{"text":"Working"}"""))
+        chat.state.first { s -> (s.messages.last() as? ChatMessage.Assistant)?.text == "Working" }
+        assertTrue(chat.send("then the tests", queue = true))
+        assertTrue(chat.send("and the docs", queue = true))
+
+        // The gateway clears its queue on interrupt, so nothing would ever send these.
+        assertEquals(listOf("then the tests", "and the docs"), chat.interrupt())
+        assertTrue(transport.sent.value.any { it.isCall("session.interrupt") })
+        assertEquals(listOf("hello", "Hi! What next?", "Working"), chat.state.value.messages.map { it.textOf() })
     }
 
     @Test
@@ -487,6 +541,181 @@ class ChatSessionTest {
         assertFalse(bubble.pending)
     }
 
+    /** A resumed chat whose prompt went out and lost its reply while the transcript couldn't be read. */
+    private suspend fun unsettledSend(scope: CoroutineScope, text: String): ChatSession {
+        val (chat, transport) = resumedChat(scope, mapOf("prompt.submit" to SILENT))
+        historyFails = true
+        val sending = scope.async { chat.send(text) }
+        transport.awaitSent { it.isCall("prompt.submit") }
+        transport.serverClose(1006)
+        assertFalse(sending.await())
+        assertEquals(SendCheck.Unknown, (chat.state.value.messages.last() as ChatMessage.User).check)
+        historyFails = false
+        return chat
+    }
+
+    @Test
+    fun checkingDeliveryLaterSettlesAPromptTheTranscriptHas() = runTest {
+        val chat = unsettledSend(backgroundScope, "deploy it")
+        history = history.replace("]}", """,{"id":3,"role":"user","content":"deploy it"}]}""")
+
+        chat.checkDelivery(chat.state.value.messages.last().key)
+
+        val messages = chat.state.value.messages
+        assertEquals(listOf("hello", "Hi! What next?", "deploy it"), messages.map { it.textOf() })
+        assertEquals("row-3", messages.last().key)
+    }
+
+    @Test
+    fun checkingDeliveryLaterMarksAMissingPromptSafeToResend() = runTest {
+        val chat = unsettledSend(backgroundScope, "deploy it")
+        val key = chat.state.value.messages.last().key
+
+        chat.checkDelivery(key)
+
+        assertEquals(SendCheck.NotReceived, (chat.state.value.messages.last() as ChatMessage.User).check)
+        assertEquals("deploy it", chat.takeBack(key))
+        assertEquals(listOf("hello", "Hi! What next?"), chat.state.value.messages.map { it.textOf() })
+    }
+
+    @Test
+    fun checkingDeliveryWithoutATranscriptKeepsItUnknown() = runTest {
+        val chat = unsettledSend(backgroundScope, "deploy it")
+        historyFails = true
+
+        chat.checkDelivery(chat.state.value.messages.last().key)
+
+        assertEquals(SendCheck.Unknown, (chat.state.value.messages.last() as ChatMessage.User).check)
+        assertTrue(chat.state.value.error!!.contains("check"))
+    }
+
+    @Test
+    fun aCheckDoesNotTakeAnEarlierPromptWithTheSameTextForAMissingOne() = runTest {
+        // "hello" is already the transcript's first prompt; this one never arrived.
+        val chat = unsettledSend(backgroundScope, "hello")
+        val key = chat.state.value.messages.last().key
+
+        chat.checkDelivery(key)
+
+        val bubble = assertIs<ChatMessage.User>(chat.state.value.messages.last(), "the missing prompt's bubble was settled away by the earlier one")
+        assertEquals(key, bubble.key)
+        assertEquals(SendCheck.NotReceived, bubble.check)
+    }
+
+    @Test
+    fun aMissingCorrectionStaysUnknownWhileItsTurnRuns() = runTest {
+        val (chat, transport) = resumedChat(
+            backgroundScope,
+            mapOf("session.resume" to """{"session_id":"rt1","running":true}""", "prompt.submit" to SILENT),
+        )
+        val sending = backgroundScope.async { chat.submit("also check the logs") }
+        transport.awaitSent { it.isCall("prompt.submit") }
+        transport.serverClose(1006)
+        assertEquals(SendOutcome.Unsettled, sending.await())
+
+        chat.checkDelivery(chat.state.value.messages.last().key)
+
+        // Folded into the running turn, it's only written once the turn takes it in.
+        assertEquals(SendCheck.Unknown, (chat.state.value.messages.last() as ChatMessage.User).check)
+        assertTrue(chat.state.value.error!!.contains("turn ends"))
+    }
+
+    @Test
+    fun aNewChatsLostFirstPromptIsFoundMissing() = runTest {
+        val (chat, transport) = newChat(
+            backgroundScope,
+            mapOf("session.create" to """{"session_id":"rt9","stored_session_id":"stored-1","info":{}}""", "prompt.submit" to SILENT),
+        )
+        historyFails = true
+        val sending = backgroundScope.async { chat.submit("deploy it") }
+        transport.awaitSent { it.isCall("prompt.submit") }
+        transport.serverClose(1006)
+        assertEquals(SendOutcome.Unsettled, sending.await())
+        // The row only appears with a first prompt that arrived.
+        historyFails = false
+        historyMissing = true
+
+        chat.checkDelivery(chat.state.value.messages.single().key)
+
+        assertEquals(SendCheck.NotReceived, (chat.state.value.messages.single() as ChatMessage.User).check)
+    }
+
+    @Test
+    fun aNewChatsFirstPromptFoundLaterResumesItsRowOnReconnect() = runTest {
+        val (connection, transports) = reconnectingSetup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-1","info":{}}""",
+                "session.resume" to """{"session_id":"rt9","running":false}""",
+                "prompt.submit" to SILENT,
+            ),
+        )
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        historyFails = true
+        val sending = backgroundScope.async { chat.submit("deploy it") }
+        transports.last().awaitSent { it.isCall("prompt.submit") }
+        transports.last().serverClose(1006)
+        assertEquals(SendOutcome.Unsettled, sending.await())
+        historyFails = false
+        history = """{"session_id":"stored-1","messages":[{"id":1,"role":"user","content":"deploy it"}]}"""
+
+        chat.checkDelivery(chat.state.value.messages.single().key)
+        assertEquals("row-1", chat.state.value.messages.single().key)
+        val dropped = transports.last()
+        dropped.serverClose(1006)
+
+        // The row exists now, so the next link resumes it rather than waiting to create one.
+        chat.state.first { it.runtimeSessionId != null && transports.last() !== dropped }
+        assertTrue(transports.last().sent.value.any { it.isCall("session.resume") })
+    }
+
+    @Test
+    fun resendingASkillSendsItsBodyAgainShowingTheCommand() = runTest {
+        val results = mutableMapOf(
+            "session.resume" to """{"session_id":"rt1","running":false}""",
+            "prompt.submit" to SILENT,
+        )
+        val (connection, transports) = reconnectingSetup(backgroundScope, results)
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        historyFails = true
+        val sending = backgroundScope.async { chat.submit("[IMPORTANT: skill body]", display = "/spike go") }
+        transports.last().awaitSent { it.isCall("prompt.submit") }
+        val first = transports.last()
+        first.serverClose(1006)
+        assertEquals(SendOutcome.Unsettled, sending.await())
+        historyFails = false
+        results["prompt.submit"] = """{"status":"streaming"}"""
+        chat.state.first { it.runtimeSessionId == "rt1" && transports.last() !== first }
+
+        assertNull(chat.resend(chat.state.value.messages.last().key))
+
+        val resent = transports.last { it !== first }.awaitSent { it.isCall("prompt.submit") }
+        assertEquals("[IMPORTANT: skill body]", resent.param("text"))
+        assertEquals("/spike go", chat.state.value.messages.last().textOf())
+    }
+
+    @Test
+    fun aResendThatNeverArrivesHandsItsTextBack() = runTest {
+        val chat = unsettledSend(backgroundScope, "deploy it")
+        val key = chat.state.value.messages.last().key
+
+        // The link is gone, so it doesn't go out at all.
+        assertEquals("deploy it", chat.resend(key))
+        assertEquals(listOf("hello", "Hi! What next?"), chat.state.value.messages.map { it.textOf() })
+    }
+
+    @Test
+    fun onlyAnUnsettledPromptCanBeTakenBack() = runTest {
+        val (chat, _) = resumedChat(backgroundScope, emptyMap())
+
+        assertNull(chat.takeBack(chat.state.value.messages.first().key))
+        assertEquals(2, chat.state.value.messages.size)
+    }
+
     private suspend fun newChat(scope: CoroutineScope, results: Map<String, String>): Pair<ChatSession, FakeTransport> {
         val (connection, transport) = setup(scope, mapOf("session.create" to """{"session_id":"rt9","info":{}}""") + results)
         connection.state.first { it is ConnectionState.Connected }
@@ -529,6 +758,17 @@ class ChatSessionTest {
         assertEquals("[IMPORTANT: skill body]", transport.sent.value.first { it.isCall("prompt.submit") }.param("text"))
         val user = assertIs<ChatMessage.User>(chat.state.value.messages.single())
         assertEquals("/work fix the leak", user.text)
+    }
+
+    @Test
+    fun anUndoShowsTheTranscriptWithoutTheUndoneTurn() = runTest {
+        val (chat, _) = resumedChat(backgroundScope, mapOf("slash.exec" to """{"type":"prefill","message":"hello"}"""))
+        // The gateway took the last turn off the stored transcript.
+        history = """{"session_id":"stored-1","messages":[]}"""
+
+        assertEquals("hello", chat.runCommand(SlashCommand("undo", "")))
+
+        assertTrue(chat.state.value.messages.isEmpty(), "still showing ${chat.state.value.messages}")
     }
 
     @Test
