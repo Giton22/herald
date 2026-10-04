@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.chat.BackgroundProcess
 import dev.hermeskotlin.core.chat.ChatHost
+import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatSession
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.InputRequest
@@ -558,6 +559,31 @@ class ChatViewModel(
     override fun interrupt() {
         val chat = session.value ?: return
         viewModelScope.launch { chat.interrupt() }
+    }
+
+    override fun editLastPrompt() {
+        val chat = session.value ?: return
+        val undo = SlashCommand.parse("/undo") ?: return
+        viewModelScope.launch {
+            val text = chat.runCommand(undo) ?: return@launch
+            // Whatever was being typed stays, after the prompt that comes back.
+            val typed = composer.text.toString()
+            composer.setTextAndPlaceCursorAtEnd(if (typed.isBlank()) text else "$text\n\n$typed")
+        }
+    }
+
+    override fun branchFrom(key: String) {
+        val chat = session.value ?: return
+        val messages = state.value.messages
+        val index = messages.indexOfFirst { it.key == key }
+        if (index < 0) return
+        // The gateway keeps the first N user and assistant rows that have text, so count those.
+        val count = messages.take(index + 1).count {
+            (it is ChatMessage.User && it.text.isNotBlank()) || (it is ChatMessage.Assistant && it.text.isNotBlank())
+        }
+        viewModelScope.launch {
+            chat.branch(count)?.let { (id, title) -> _requests.send(ChatRequest.OpenChat(id, title)) }
+        }
     }
 
     override fun stopSubagent(subagentId: String) {

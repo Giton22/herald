@@ -156,8 +156,18 @@ import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
+import dev.hermeskotlin.designsystem.components.BottomSheet
 import dev.hermeskotlin.designsystem.components.CopyButton
+import dev.hermeskotlin.designsystem.components.Dialog
 import dev.hermeskotlin.designsystem.components.IconButton
+import dev.hermeskotlin.designsystem.components.SheetAction
+import dev.hermeskotlin.designsystem.components.SheetHeader
+import dev.hermeskotlin.designsystem.components.plainTextClipEntry
+import androidx.compose.ui.platform.LocalClipboard
+import com.composables.icons.lucide.Copy
+import com.composables.icons.lucide.Ellipsis
+import com.composables.icons.lucide.GitBranch
+import com.composables.icons.lucide.Pencil
 import dev.hermeskotlin.designsystem.components.MarkdownText
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.components.Surface
@@ -388,7 +398,14 @@ internal fun ChatView(
                             LocalNotice provides onNotice,
                             LocalSubagents provides SubagentContext(state.subagents, actions::stopSubagent),
                         ) {
-                            Messages(state.messages, state.thinkingFrame, bottomInset = dockInset)
+                            Messages(
+                                state.messages,
+                                state.thinkingFrame,
+                                bottomInset = dockInset,
+                                actions = actions,
+                                // Edit and branch change a stored chat, and not while a task is still writing to it.
+                                canChange = state.storedSessionId != null && !state.running && connected,
+                            )
                         }
                     } else Box(Modifier.fillMaxSize().padding(bottom = dockInset)) {
                         when {
@@ -596,7 +613,16 @@ private val FOLLOW_UP_PROMPTS = listOf(
 )
 
 @Composable
-private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottomInset: Dp) {
+private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottomInset: Dp, actions: ChatActions, canChange: Boolean) {
+    var menuFor by remember { mutableStateOf<ChatMessage?>(null) }
+    val lastPrompt = messages.lastOrNull { it is ChatMessage.User }?.key
+    MessageMenu(
+        message = menuFor,
+        isLastPrompt = menuFor?.key == lastPrompt,
+        canChange = canChange,
+        actions = actions,
+        onDismiss = { menuFor = null },
+    )
     // Reversed layout keeps the newest message pinned to the bottom while a reply streams in.
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -613,8 +639,8 @@ private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottom
         ) {
             items(messages.asReversed(), key = { it.key }) { message ->
                 when (message) {
-                    is ChatMessage.User -> UserBubble(message)
-                    is ChatMessage.Assistant -> AssistantReply(message, thinkingFrame.takeIf { message.streaming })
+                    is ChatMessage.User -> UserBubble(message, onMore = { menuFor = message }.takeIf { !message.pending && message.check == null })
+                    is ChatMessage.Assistant -> AssistantReply(message, thinkingFrame.takeIf { message.streaming }, onMore = { menuFor = message })
                     is ChatMessage.Command -> CommandOutput(message)
                     is ChatMessage.Notice -> NoticeLine(message)
                 }
@@ -643,9 +669,9 @@ private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottom
 
 /** Desktop's turn marker: the prompt in a full-width box with a tinted fill and outline; replies run bare beneath. */
 @Composable
-private fun UserBubble(message: ChatMessage.User) {
+private fun UserBubble(message: ChatMessage.User, onMore: (() -> Unit)?) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -668,11 +694,83 @@ private fun UserBubble(message: ChatMessage.User) {
             SendCheck.Unknown -> Text("May not have reached Hermes", style = Theme[typography][caption], color = Theme[colors][textTertiary])
             null -> {}
         }
+        if (onMore != null) IconButton(Lucide.Ellipsis, contentDescription = "Message actions", onClick = onMore)
     }
 }
 
+/** What can be done with a message without typing a command: copy it, edit the last prompt, or branch. */
+private enum class MessageChange { EditLastPrompt, Branch }
+
+/**
+ * A message's actions. Copy happens at once; the two that change the conversation explain what they do,
+ * and whether a task starts, before they do it.
+ */
 @Composable
-private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String?) {
+private fun MessageMenu(message: ChatMessage?, isLastPrompt: Boolean, canChange: Boolean, actions: ChatActions, onDismiss: () -> Unit) {
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    var confirm by remember { mutableStateOf<Pair<MessageChange, String>?>(null) }
+    val text = when (message) {
+        is ChatMessage.User -> message.text
+        is ChatMessage.Assistant -> remember(message.text) { extractReplyMedia(message.text).first }
+        else -> ""
+    }
+    BottomSheet(visible = message != null, onDismiss = onDismiss) {
+        SheetHeader(if (message is ChatMessage.User) "Your message" else "Hermes's reply", subtitle = text.lineSequence().firstOrNull()?.take(80))
+        if (text.isNotBlank()) {
+            SheetAction("Copy", Lucide.Copy, onClick = {
+                scope.launch { clipboard.setClipEntry(plainTextClipEntry(text)) }
+                onDismiss()
+            })
+        }
+        if (message != null && canChange) {
+            if (message is ChatMessage.User && isLastPrompt) {
+                SheetAction("Edit last prompt", Lucide.Pencil, onClick = {
+                    confirm = MessageChange.EditLastPrompt to message.key
+                    onDismiss()
+                })
+            }
+            SheetAction("Branch from here", Lucide.GitBranch, onClick = {
+                confirm = MessageChange.Branch to message.key
+                onDismiss()
+            })
+        } else if (message != null) {
+            Text(
+                "Editing and branching become available once the task has finished.",
+                style = Theme[typography][bodySmall],
+                color = Theme[colors][textTertiary],
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
+            )
+        }
+    }
+    val pending = confirm
+    Dialog(
+        visible = pending != null,
+        onDismissRequest = { confirm = null },
+        title = if (pending?.first == MessageChange.Branch) "Branch from here?" else "Edit your last prompt?",
+        message = if (pending?.first == MessageChange.Branch) {
+            "Copies this chat up to this message into a new chat and opens it. This chat stays as it is. " +
+                "No task starts until you send something in the new chat."
+        } else {
+            "Takes your last message and Hermes's reply to it off this chat and puts the message back in the composer. " +
+                "No task starts until you send it again."
+        },
+        actions = {
+            Button("Cancel", onClick = { confirm = null }, variant = ButtonVariant.Ghost)
+            Button(if (pending?.first == MessageChange.Branch) "Branch" else "Edit", onClick = {
+                confirm = null
+                when (pending?.first) {
+                    MessageChange.Branch -> actions.branchFrom(pending.second)
+                    MessageChange.EditLastPrompt -> actions.editLastPrompt()
+                    null -> {}
+                }
+            })
+        },
+    )
+}
+
+@Composable
+private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String?, onMore: () -> Unit) {
     val settings = LocalAppSettings.current
     val showReasoning = settings.showReasoning && message.reasoning.isNotBlank()
     val showTools = settings.showToolActivity && message.tools.isNotEmpty()
@@ -706,7 +804,10 @@ private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String
         val usage = message.usage?.takeIf { settings.showUsage && !message.streaming }
         if ((!message.streaming && text.isNotBlank()) || usage != null) {
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (!message.streaming && text.isNotBlank()) CopyButton(text)
+                if (!message.streaming && text.isNotBlank()) {
+                    CopyButton(text)
+                    IconButton(Lucide.Ellipsis, contentDescription = "Message actions", onClick = onMore)
+                }
                 usage?.let {
                     Text(
                         "${compactCount(it.input)} in · ${compactCount(it.output)} out",

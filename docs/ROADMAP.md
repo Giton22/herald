@@ -161,7 +161,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [ ] Background prompts (`prompt.background`, `background.complete`)
 - [ ] Message reactions (`message.react`)
 - [x] Undo and branch from the composer (`/undo` hands the last prompt back; `/branch` → `session.branch_whole` / `session.branch`)
-- [ ] Undo and branch from a message (buttons on a turn instead of slash commands)
+- [x] Undo and branch from a message: a ⋯ menu on each message with Copy, Edit last prompt (`/undo`, then the transcript reloads) and Branch from here (`session.branch` with the message's position), each change explained before it happens
 - [x] Context compression (`/compress` → `session.compress`)
 - [x] Context breakdown in the usage sheet (`session.context_breakdown`): the window split by system prompt, tools, skills, memory, conversation and the rest, plus the files read in
 

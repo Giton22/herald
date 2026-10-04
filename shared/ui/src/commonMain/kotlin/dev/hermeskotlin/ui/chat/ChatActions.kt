@@ -29,6 +29,12 @@ interface ChatActions {
 
     fun stopSubagent(subagentId: String)
 
+    /** `/undo`: takes the last prompt and its reply off the chat and puts the prompt back in the composer. */
+    fun editLastPrompt()
+
+    /** Copies the chat up to message [key] into a new chat (`session.branch`) and opens it. */
+    fun branchFrom(key: String)
+
     fun retry()
 
     fun dismissError()
