@@ -217,7 +217,7 @@ class ChatViewModel(
         viewModelScope.launch {
             snapshotFlow { composer.text.toString() }
                 .debounce(DRAFT_SAVE_DEBOUNCE_MS)
-                .collect { text -> draftOf?.let { saveDraft(it, text) } }
+                .collect { text -> draftOf?.let { saveDraft(it, draftChat(it), text) } }
         }
     }
 
@@ -227,8 +227,14 @@ class ChatViewModel(
     private fun trayKey(target: ChatTarget, chat: String?) =
         "${target.gateway.gatewayUrl}#${target.profile.orEmpty()}#${chat ?: DraftStore.NEW_CHAT}"
 
-    private suspend fun saveDraft(target: ChatTarget, text: String) =
-        drafts.set(target.gateway.gatewayUrl, draftChat(target), text, target.profile)
+    /**
+     * Saves [text] as the draft of [target]'s chat. Once a new chat has its stored session, the draft
+     * typed before it moves there, so it doesn't come back in the next new chat.
+     */
+    private suspend fun saveDraft(target: ChatTarget, chat: String?, text: String) {
+        if (chat != null && target.storedSessionId == null) drafts.set(target.gateway.gatewayUrl, null, "", target.profile)
+        drafts.set(target.gateway.gatewayUrl, chat, text, target.profile)
+    }
 
     /** Puts the open chat's text and files aside before another chat takes the composer. */
     private fun stashDraft() {
@@ -238,7 +244,7 @@ class ChatViewModel(
         val chat = draftChat(open)
         val tray = _attachments.value
         if (tray.isEmpty()) trays.remove(trayKey(open, chat)) else trays[trayKey(open, chat)] = tray
-        viewModelScope.launch { drafts.set(open.gateway.gatewayUrl, chat, text, open.profile) }
+        viewModelScope.launch { saveDraft(open, chat, text) }
     }
 
     private fun restoreDraft(target: ChatTarget) {
