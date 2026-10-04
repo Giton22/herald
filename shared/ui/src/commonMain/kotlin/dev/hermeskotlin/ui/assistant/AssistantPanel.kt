@@ -91,6 +91,7 @@ import dev.hermeskotlin.ui.chat.DictationButton
 import dev.hermeskotlin.ui.chat.InputRequestPanel
 import dev.hermeskotlin.ui.chat.SendButton
 import dev.hermeskotlin.ui.chat.SendIcon
+import dev.hermeskotlin.ui.chat.SentAttachments
 import dev.hermeskotlin.ui.chat.currentAction
 import dev.hermeskotlin.ui.chat.rememberImageBitmap
 import dev.hermeskotlin.ui.voice.DictationState
@@ -134,6 +135,7 @@ fun AssistantPanel(
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose),
                 contentAlignment = Alignment.BottomCenter,
             ) {
+                MessengerEdge(model, Modifier.fillMaxSize())
                 Card(model, microphoneAllowed, onOpenHerald, onClose)
             }
         }
@@ -222,7 +224,7 @@ private fun ColumnScope.Ready(model: AssistantPanelModel, microphoneAllowed: Boo
         ) {
             messages.forEach { message ->
                 when (message) {
-                    is ChatMessage.User -> Prompt(message.text)
+                    is ChatMessage.User -> Prompt(message)
                     is ChatMessage.Assistant -> if (message.text.isNotBlank()) MarkdownText(message.text, streaming = message.streaming)
                     else -> Unit
                 }
@@ -252,13 +254,14 @@ private fun ColumnScope.Ready(model: AssistantPanelModel, microphoneAllowed: Boo
     )
 }
 
-/** The user's prompt, small and boxed like the app's bubbles. */
+/** The user's prompt, boxed like the app's bubbles, with the screen it took along above it. */
 @Composable
-private fun Prompt(text: String) {
+private fun Prompt(message: ChatMessage.User) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
-    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.CenterEnd) {
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        if (message.attachments.isNotEmpty()) SentAttachments(message.attachments)
         Text(
-            text,
+            message.text,
             style = Theme[typography][body],
             color = Theme[colors][textColor],
             modifier = Modifier
