@@ -19,6 +19,7 @@ import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -102,6 +103,9 @@ import com.composables.icons.lucide.ListEnd
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PanelLeft
+import com.composables.icons.lucide.Pencil
+import com.composables.icons.lucide.RotateCw
+import com.composables.icons.lucide.SearchCheck
 import com.composables.icons.lucide.TriangleAlert
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.RefreshCw
@@ -157,6 +161,7 @@ import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.BottomSheet
+import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import dev.hermeskotlin.designsystem.components.CopyButton
 import dev.hermeskotlin.designsystem.components.Dialog
 import dev.hermeskotlin.designsystem.components.IconButton
@@ -261,6 +266,7 @@ fun ChatScreen(
         state = state,
         picker = picker,
         connected = connected,
+        connectionLabel = connectionLabel(connection),
         attachments = attachments,
         attachmentError = attachmentError,
         voiceChat = viewModel.voice.chat.collectAsStateWithLifecycle().value,
@@ -345,6 +351,8 @@ internal fun ChatView(
     state: ChatState,
     picker: ModelPickerState,
     connected: Boolean,
+    /** Which way the link is down, shown under the title while not [connected]. */
+    connectionLabel: String = "No connection",
     attachments: List<OutgoingAttachment>,
     attachmentError: String?,
     voiceChat: VoiceChatState,
@@ -376,7 +384,7 @@ internal fun ChatView(
             TopBar(
                 title = title,
                 subtitle = when {
-                    !connected -> "Offline · reconnecting"
+                    !connected -> connectionLabel
                     state.attachment is Attachment.Attaching -> "Opening…"
                     else -> null
                 },
@@ -403,6 +411,7 @@ internal fun ChatView(
                                 state.thinkingFrame,
                                 bottomInset = dockInset,
                                 actions = actions,
+                                connected = connected,
                                 // Edit and branch change a stored chat, and not while a task is still writing to it.
                                 canChange = state.storedSessionId != null && !state.running && connected,
                             )
@@ -484,7 +493,7 @@ private fun ColumnScope.Dock(
     TodoPanel(state.todos, live = state.todosLive, hazeState = hazeState)
 
     if (state.inputRequests.isNotEmpty()) {
-        InputRequestPanel(state.inputRequests, connected, onAnswer = actions::answer)
+        InputRequestPanel(state.inputRequests, connected, onAnswer = actions::answer, onStop = actions::interrupt.takeIf { state.running })
     } else if (voiceChat.phase != VoicePhase.Off) {
         VoicePanel(
             hazeState = hazeState,
@@ -567,7 +576,7 @@ private fun BarButton(icon: ImageVector, contentDescription: String, onClick: ()
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(Theme[radii][radiusMedium])).alpha(if (enabled) 1f else 0.35f),
+        modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusMedium])).alpha(if (enabled) 1f else 0.35f),
         indication = rememberColoredIndication(Theme[colors][textColor]),
     ) {
         UnstyledIcon(icon, contentDescription = contentDescription, tint = Theme[colors][textSecondary], modifier = Modifier.size(20.dp))
@@ -613,7 +622,14 @@ private val FOLLOW_UP_PROMPTS = listOf(
 )
 
 @Composable
-private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottomInset: Dp, actions: ChatActions, canChange: Boolean) {
+private fun Messages(
+    messages: List<ChatMessage>,
+    thinkingFrame: String?,
+    bottomInset: Dp,
+    actions: ChatActions,
+    connected: Boolean,
+    canChange: Boolean,
+) {
     var menuFor by remember { mutableStateOf<ChatMessage?>(null) }
     val lastPrompt = messages.lastOrNull { it is ChatMessage.User }?.key
     MessageMenu(
@@ -639,7 +655,12 @@ private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottom
         ) {
             items(messages.asReversed(), key = { it.key }) { message ->
                 when (message) {
-                    is ChatMessage.User -> UserBubble(message, onMore = { menuFor = message }.takeIf { !message.pending && message.check == null })
+                    is ChatMessage.User -> UserBubble(
+                        message,
+                        actions,
+                        connected,
+                        onMore = { menuFor = message }.takeIf { !message.pending && message.check == null },
+                    )
                     is ChatMessage.Assistant -> AssistantReply(message, thinkingFrame.takeIf { message.streaming }, onMore = { menuFor = message })
                     is ChatMessage.Command -> CommandOutput(message)
                     is ChatMessage.Notice -> NoticeLine(message)
@@ -667,11 +688,18 @@ private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottom
     }
 }
 
+/** Tells apart the ways the link can be down: none, being re-made, or needing a new sign-in. */
+private fun connectionLabel(state: ConnectionState): String = when (state) {
+    is ConnectionState.Connecting, is ConnectionState.Reconnecting -> "No connection · connecting again…"
+    ConnectionState.SessionExpired -> "Signed out · sign in again"
+    is ConnectionState.Failed, ConnectionState.Idle, is ConnectionState.Connected -> "No connection"
+}
+
 /** Desktop's turn marker: the prompt in a full-width box with a tinted fill and outline; replies run bare beneath. */
 @Composable
-private fun UserBubble(message: ChatMessage.User, onMore: (() -> Unit)?) {
+private fun UserBubble(message: ChatMessage.User, actions: ChatActions, connected: Boolean, onMore: (() -> Unit)?) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Column(
             Modifier
                 .fillMaxWidth()
@@ -687,15 +715,55 @@ private fun UserBubble(message: ChatMessage.User, onMore: (() -> Unit)?) {
             }
         }
         if (message.queued) {
-            Text("Queued · runs after the current turn", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+            Text("Queued · sends after this task", style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }
         when (message.check) {
             SendCheck.Checking -> Text("Checking whether Hermes got this…", style = Theme[typography][caption], color = Theme[colors][textTertiary])
-            SendCheck.Unknown -> Text("May not have reached Hermes", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+            SendCheck.Unknown -> UnsettledActions("May not have reached Hermes", message.key, mayHaveArrived = true, actions, connected)
+            SendCheck.NotReceived -> UnsettledActions("Hermes didn't get this", message.key, mayHaveArrived = false, actions, connected)
             null -> {}
         }
-        if (onMore != null) IconButton(Lucide.Ellipsis, contentDescription = "Message actions", onClick = onMore)
+        if (onMore != null) {
+            IconButton(Lucide.Ellipsis, contentDescription = "Message actions", onClick = onMore, modifier = Modifier.align(Alignment.End))
+        }
     }
+}
+
+/**
+ * What to do with a prompt that lost its reply: check the transcript again, resend it, or take it back to
+ * edit. Nothing is resent on its own; when it [mayHaveArrived], Resend first warns it could run twice.
+ */
+@Composable
+private fun UnsettledActions(label: String, key: String, mayHaveArrived: Boolean, actions: ChatActions, connected: Boolean) {
+    var confirmResend by remember(key) { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(label, style = Theme[typography][caption], color = Theme[colors][textTertiary])
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (mayHaveArrived) {
+                Button("Check delivery", onClick = { actions.checkDelivery(key) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small, leadingIcon = Lucide.SearchCheck)
+            }
+            Button(
+                "Resend",
+                onClick = { if (mayHaveArrived) confirmResend = true else actions.resend(key) },
+                variant = ButtonVariant.Ghost,
+                size = ButtonSize.Small,
+                leadingIcon = Lucide.RotateCw,
+                enabled = connected,
+            )
+            Button("Edit", onClick = { actions.editMessage(key) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small, leadingIcon = Lucide.Pencil)
+        }
+    }
+    Dialog(
+        visible = confirmResend,
+        onDismissRequest = { confirmResend = false },
+        title = "Resend this message?",
+        message = "Hermes may already have it. If it does, resending makes Hermes get the same request twice and run it again. " +
+            "Check delivery first to be sure.",
+        actions = {
+            Button("Cancel", onClick = { confirmResend = false }, variant = ButtonVariant.Ghost)
+            Button("Resend", onClick = { confirmResend = false; actions.resend(key) })
+        },
+    )
 }
 
 /** What can be done with a message without typing a command: copy it, edit the last prompt, or branch. */
@@ -803,10 +871,11 @@ private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String
         }
         val usage = message.usage?.takeIf { settings.showUsage && !message.streaming }
         if ((!message.streaming && text.isNotBlank()) || usage != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (!message.streaming && text.isNotBlank()) {
-                    CopyButton(text)
-                    IconButton(Lucide.Ellipsis, contentDescription = "Message actions", onClick = onMore)
+                    // Their padding trimmed off the start and top, the icons line up with the reply and sit close under it.
+                    CopyButton(text, Modifier.trimStartTop(start = 8.dp, top = 4.dp))
+                    IconButton(Lucide.Ellipsis, contentDescription = "Message actions", onClick = onMore, modifier = Modifier.trimStartTop(start = 0.dp, top = 4.dp))
                 }
                 usage?.let {
                     Text(
@@ -1085,8 +1154,9 @@ private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit) 
 }
 
 /**
- * Desktop's composer stood up for a phone: a flat outlined box, the text on top; beneath it a plain +,
- * the model and thinking level as quiet text, and the round send (or stop) button.
+ * Desktop's composer stood up for a phone: a flat outlined box, the text on top; beneath it +, dictation
+ * and voice chat, the model and thinking level as quiet text, and the round send button, which is Stop
+ * for as long as a task runs. A message typed mid-task gets its own "Send now" / "Send after" choices.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -1156,10 +1226,20 @@ private fun Composer(
                 },
             )
         }
+        // Mid-turn, a message either joins the running task or waits for it; both say which.
+        if (state.running && hasText) {
+            MidTaskSend(
+                // The same test send() makes: with attachments, slash text goes out as a prompt, not a command.
+                command = attachments.isEmpty() && SlashCommand.parse(actions.composer.text.toString().trim()) != null,
+                enabled = connected,
+                onSendNow = { actions.send() },
+                onSendAfter = { actions.send(queue = true) },
+            )
+        }
         Row(
-            Modifier.fillMaxWidth().padding(top = 10.dp),
+            Modifier.fillMaxWidth().padding(top = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            // The buttons are full 48dp targets, which already space their icons apart.
         ) {
             ComposerButton(
                 icon = Lucide.Plus,
@@ -1168,33 +1248,57 @@ private fun Composer(
                 enabled = attachments.size < OutgoingAttachment.MAX_COUNT,
             )
             DictationButton(dictation, onClick = onDictate, enabled = connected)
+            ComposerButton(
+                icon = Lucide.AudioLines,
+                contentDescription = "Start a voice chat",
+                onClick = onVoiceChat,
+                enabled = connected && !state.running && !dictation.active,
+            )
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { ModelPill(state, picker, onClick = onOpenModels) }
-            // Mid-turn, send corrects the running turn; this holds the message for the next one instead.
-            if (state.running && hasText && !SlashCommand.looksLikeCommand(actions.composer.text.toString())) {
-                ComposerButton(
-                    icon = Lucide.ListEnd,
-                    contentDescription = "Send after this turn",
-                    onClick = { actions.send(queue = true) },
-                    enabled = connected,
+            // The round button keeps one job per state: Stop for the whole task, even while you type.
+            if (state.running) {
+                SendButton(SendIcon.Stop, onClick = actions::interrupt, enabled = connected)
+            } else {
+                SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected && hasText)
+            }
+        }
+    }
+}
+
+/**
+ * The choices for a message typed while a task runs: "Send now" adds it to the task in progress, "Send after
+ * this task" holds it for the next turn. A slash command runs at once, so it only gets "Send now".
+ */
+@Composable
+private fun MidTaskSend(command: Boolean, enabled: Boolean, onSendNow: () -> Unit, onSendAfter: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 2.dp, top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                "Send now",
+                onClick = onSendNow,
+                variant = ButtonVariant.Secondary,
+                size = ButtonSize.Small,
+                leadingIcon = Lucide.ArrowUp,
+                enabled = enabled,
+                pill = true,
+            )
+            if (!command) {
+                Button(
+                    "Send after this task",
+                    onClick = onSendAfter,
+                    variant = ButtonVariant.Outline,
+                    size = ButtonSize.Small,
+                    leadingIcon = Lucide.ListEnd,
+                    enabled = enabled,
+                    pill = true,
                 )
             }
-            val stop = state.running && !hasText
-            // An empty composer offers a voice chat in the send button's place, as phone assistants do.
-            val voice = !stop && !hasText && !dictation.active
-            SendButton(
-                icon = when {
-                    stop -> SendIcon.Stop
-                    voice -> SendIcon.Voice
-                    else -> SendIcon.Send
-                },
-                onClick = when {
-                    stop -> actions::interrupt
-                    voice -> onVoiceChat
-                    else -> { { actions.send() } }
-                },
-                enabled = connected && (stop || hasText || voice),
-            )
         }
+        Text(
+            if (command) "Commands run right away." else "Send now changes the task in progress.",
+            style = Theme[typography][caption],
+            color = Theme[colors][textTertiary],
+        )
     }
 }
 
@@ -1205,16 +1309,19 @@ private fun ComposerButton(icon: ImageVector, contentDescription: String, onClic
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(40.dp).clip(RoundedCornerShape(Theme[radii][radiusMedium])),
+        modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusMedium])),
         indication = rememberColoredIndication(tint),
     ) {
         UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(22.dp))
     }
 }
 
-private enum class SendIcon { Send, Stop, Voice }
+private enum class SendIcon { Send, Stop }
 
-/** Desktop's round send: a disc in the text colour (white on dark) with the icon cut in the page colour. */
+/**
+ * Desktop's round send: a disc in the text colour (white on dark) with the icon cut in the page colour.
+ * The disc stays 40dp; the button around it takes taps over the full [MinTouchTarget].
+ */
 @Composable
 private fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
     val fill = if (enabled) Theme[colors][textColor] else Theme[colors][textColor].copy(alpha = 0.12f)
@@ -1222,23 +1329,23 @@ private fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(40.dp).clip(CircleShape).background(fill),
+        modifier = Modifier.size(MinTouchTarget).clip(CircleShape),
         indication = rememberColoredIndication(tint),
     ) {
-        UnstyledIcon(
-            when (icon) {
-                SendIcon.Send -> Lucide.ArrowUp
-                SendIcon.Stop -> Lucide.Square
-                SendIcon.Voice -> Lucide.AudioLines
-            },
-            contentDescription = when (icon) {
-                SendIcon.Send -> "Send"
-                SendIcon.Stop -> "Stop"
-                SendIcon.Voice -> "Start a voice chat"
-            },
-            tint = tint,
-            modifier = Modifier.size(if (icon == SendIcon.Stop) 16.dp else 20.dp),
-        )
+        Box(Modifier.size(40.dp).clip(CircleShape).background(fill), contentAlignment = Alignment.Center) {
+            UnstyledIcon(
+                when (icon) {
+                    SendIcon.Send -> Lucide.ArrowUp
+                    SendIcon.Stop -> Lucide.Square
+                },
+                contentDescription = when (icon) {
+                    SendIcon.Send -> "Send"
+                    SendIcon.Stop -> "Stop the task"
+                },
+                tint = tint,
+                modifier = Modifier.size(if (icon == SendIcon.Stop) 16.dp else 20.dp),
+            )
+        }
     }
 }
 
@@ -1246,7 +1353,7 @@ private fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
 @Composable
 private fun DictationButton(state: DictationState, onClick: () -> Unit, enabled: Boolean) {
     if (state.transcribing) {
-        Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
+        Box(Modifier.size(MinTouchTarget), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
         return
     }
     val recording = state.recording
@@ -1259,7 +1366,7 @@ private fun DictationButton(state: DictationState, onClick: () -> Unit, enabled:
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier
-            .size(40.dp)
+            .size(MinTouchTarget)
             .clip(CircleShape)
             .then(if (recording) Modifier.border(2.dp, tint.copy(alpha = 0.25f + 0.75f * state.level), CircleShape) else Modifier),
         indication = rememberColoredIndication(tint),
@@ -1379,4 +1486,15 @@ private fun ModelPill(state: ChatState, picker: ModelPickerState, onClick: () ->
             UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
         }
     }
+}
+
+/**
+ * Lays the element out [start] and [top] smaller, drawn up and to the left by as much: empty padding inside
+ * it stops pushing it away from its neighbours, while it still takes taps over its whole size.
+ */
+private fun Modifier.trimStartTop(start: Dp, top: Dp) = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    val dx = start.roundToPx()
+    val dy = top.roundToPx()
+    layout(placeable.width - dx, placeable.height - dy) { placeable.place(-dx, -dy) }
 }

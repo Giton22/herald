@@ -3,7 +3,11 @@ package dev.hermeskotlin.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.auth.AuthApi
+import dev.hermeskotlin.core.gateway.CheckStage
+import dev.hermeskotlin.core.gateway.ConnectionCheck
 import dev.hermeskotlin.core.gateway.GatewayProbe
+import dev.hermeskotlin.core.gateway.StageResult
+import kotlinx.coroutines.Job
 import dev.hermeskotlin.core.gateway.ProbeResult
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.ApiResult
@@ -21,11 +25,30 @@ import kotlinx.coroutines.launch
 /** Who is signed in where, for the Settings account and about sections. */
 data class GatewayInfo(val userLabel: String? = null, val version: String? = null)
 
+/** "Check connection": the stages done so far, and whether it's still going. */
+data class ConnectionCheckState(val results: Map<CheckStage, StageResult> = emptyMap(), val running: Boolean = false)
+
 class SettingsViewModel(
     private val store: SettingsStore,
     private val auth: AuthApi,
     private val probe: GatewayProbe,
+    private val connectionCheck: ConnectionCheck,
 ) : ViewModel() {
+
+    private val _check = MutableStateFlow(ConnectionCheckState())
+    val check: StateFlow<ConnectionCheckState> = _check.asStateFlow()
+    private var checkJob: Job? = null
+
+    /** Tests server access, sign-in and the live connection one after another. */
+    fun runConnectionCheck() {
+        val url = bound?.gatewayUrl ?: return
+        checkJob?.cancel()
+        _check.value = ConnectionCheckState(running = true)
+        checkJob = viewModelScope.launch {
+            val report = connectionCheck.run(url) { partial -> _check.value = ConnectionCheckState(partial.results, running = true) }
+            _check.value = ConnectionCheckState(report.results, running = false)
+        }
+    }
 
     val settings: StateFlow<AppSettings> =
         store.settings.filterNotNull().stateIn(viewModelScope, SharingStarted.Eagerly, store.settings.value ?: AppSettings())

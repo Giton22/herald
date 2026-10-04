@@ -14,7 +14,7 @@ import kotlinx.serialization.json.contentOrNull
 fun ChatState.reduce(event: GatewayEvent): ChatState {
     val payload = event.payload as? JsonObject
     return when (event.type) {
-        "message.start" -> withOpenReply { it }.copy(
+        "message.start" -> releaseQueued().withOpenReply { it }.copy(
             running = true,
             error = null,
             // A new turn hasn't planned yet; the last plan is from before (a correction keeps its turn's plan).
@@ -226,6 +226,17 @@ private fun ChatState.endTurn(messages: List<ChatMessage>, finalUsage: SessionUs
 
 /** The reply still streaming. Not necessarily last: a prompt queued mid-turn sits after it. */
 private fun List<ChatMessage>.openReplyIndex(): Int = indexOfLast { it is ChatMessage.Assistant && it.streaming }
+
+/**
+ * A turn starting with no reply open is the gateway running what it queued: the oldest waiting prompt
+ * goes first. With a reply still streaming, the start belongs to that turn and the queue keeps waiting.
+ */
+private fun ChatState.releaseQueued(): ChatState {
+    if (messages.openReplyIndex() >= 0) return this
+    val index = messages.indexOfFirst { it is ChatMessage.User && it.queued }
+    if (index < 0) return this
+    return copy(messages = messages.toMutableList().apply { set(index, (get(index) as ChatMessage.User).copy(queued = false)) })
+}
 
 /** Applies [change] to the reply being streamed, or opens a new one at the end. */
 private fun ChatState.withOpenReply(change: (ChatMessage.Assistant) -> ChatMessage.Assistant): ChatState {

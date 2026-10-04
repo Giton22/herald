@@ -178,6 +178,9 @@ fun CopyButton(text: String, modifier: Modifier = Modifier) {
                 copied = true
             }
         },
-        modifier = modifier.size(36.dp),
+        // Smaller than MinTouchTarget so it sits under the text; it stands alone, so Compose still stretches its taps to 48dp.
+        modifier = modifier.size(32.dp),
+        tint = Theme[colors][textTertiary],
+        iconSize = 16.dp,
     )
 }

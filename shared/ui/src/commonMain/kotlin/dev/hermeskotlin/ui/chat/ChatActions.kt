@@ -35,6 +35,15 @@ interface ChatActions {
     /** Copies the chat up to message [key] into a new chat (`session.branch`) and opens it. */
     fun branchFrom(key: String)
 
+    /** Looks in the transcript again for a prompt whose delivery is unknown. */
+    fun checkDelivery(key: String)
+
+    /** Sends an unsettled prompt again (the screen warns first when it may already have arrived). */
+    fun resend(key: String)
+
+    /** Takes an unsettled prompt back into the composer to change it. */
+    fun editMessage(key: String)
+
     fun retry()
 
     fun dismissError()

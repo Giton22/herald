@@ -7,6 +7,7 @@ import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.DelegatedTask
 import dev.hermeskotlin.core.chat.InputRequest
+import dev.hermeskotlin.core.chat.SendCheck
 import dev.hermeskotlin.core.chat.Subagent
 import dev.hermeskotlin.core.chat.SubagentStatus
 import dev.hermeskotlin.core.chat.TodoItem
@@ -95,6 +96,16 @@ internal object ChatSamples {
     /** A finished turn: reasoning, tools, a diff and a Markdown answer. */
     val reply: ChatState = connected.copy(messages = listOf(ask, answer))
 
+    /** Two prompts that lost their reply: one the transcript couldn't settle, one it found missing. */
+    val undelivered: ChatState = connected.copy(
+        messages = listOf(
+            ask,
+            answer,
+            ChatMessage.User("u2", "Run the backup now.", check = SendCheck.NotReceived),
+            ChatMessage.User("u3", "And mail me the report when it's done.", check = SendCheck.Unknown),
+        ),
+    )
+
     /** A turn still running, with the agent's plan pinned above the composer. */
     val working: ChatState = connected.copy(
         messages = listOf(
@@ -133,6 +144,22 @@ internal object ChatSamples {
                 choices = listOf(ApprovalChoice.Once, ApprovalChoice.Session, ApprovalChoice.Always, ApprovalChoice.Deny),
             ),
         ),
+    )
+
+    private val approvalRequest = approval.inputRequests.single() as InputRequest.Approval
+
+    /** A command too long to show whole: it wraps past the preview and offers "Show full command". */
+    val longApproval: ChatState = approval.copy(
+        inputRequests = listOf(
+            approvalRequest.copy(
+                command = (1..6).joinToString(" ", prefix = "rm -rf ") { "/srv/backup/snapshots/2026-0$it-01/incremental" },
+            ),
+        ),
+    )
+
+    /** A gateway that names neither the tool nor the purpose. */
+    val bareApproval: ChatState = approval.copy(
+        inputRequests = listOf(approvalRequest.copy(toolName = "", description = "")),
     )
 
     private val delegation = ToolActivity(
@@ -235,6 +262,9 @@ internal class PreviewChatActions(text: String = "") : ChatActions {
     override fun stopSubagent(subagentId: String) = Unit
     override fun editLastPrompt() = Unit
     override fun branchFrom(key: String) = Unit
+    override fun checkDelivery(key: String) = Unit
+    override fun resend(key: String) = Unit
+    override fun editMessage(key: String) = Unit
     override fun retry() = Unit
     override fun dismissError() = Unit
     override fun dismissAttachmentError() = Unit
