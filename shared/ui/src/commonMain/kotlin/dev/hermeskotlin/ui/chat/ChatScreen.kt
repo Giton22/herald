@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.layout
@@ -66,6 +68,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
+import androidx.compose.foundation.text.input.placeCursorAtEnd
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
@@ -398,6 +401,15 @@ internal fun ChatView(
             val dockInset = with(LocalDensity.current) { dockHeight.toDp() }
             // What scrolls under the composer is captured here and frosted behind it.
             val hazeState = rememberHazeState()
+            // Commenting on a piece of a reply quotes it into the composer, so only while the composer shows.
+            val composerFocus = remember { FocusRequester() }
+            val onComment: ((String) -> Unit)? = if (state.inputRequests.isEmpty() && voiceChat.phase == VoicePhase.Off) { selection ->
+                actions.composer.edit {
+                    replace(0, length, withCommentQuote(toString(), selection))
+                    placeCursorAtEnd()
+                }
+                composerFocus.requestFocus()
+            } else null
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
                     if (state.historyLoaded && state.messages.isNotEmpty()) {
@@ -414,6 +426,7 @@ internal fun ChatView(
                                 actions = actions,
                                 connected = connected,
                                 canChange = state.canChangeChat(connected),
+                                onComment = onComment,
                             )
                         }
                     } else Box(Modifier.fillMaxSize().padding(bottom = dockInset)) {
@@ -441,6 +454,7 @@ internal fun ChatView(
                         dictation = dictation,
                         suggestions = suggestions,
                         notice = notice,
+                        composerFocus = composerFocus,
                         onOpenModels = onOpenModels,
                         onAttach = onAttach,
                         onDictate = onDictate,
@@ -476,6 +490,7 @@ private fun ColumnScope.Dock(
     dictation: DictationState,
     suggestions: List<SlashSuggestion>,
     notice: String?,
+    composerFocus: FocusRequester,
     onOpenModels: () -> Unit,
     onAttach: () -> Unit,
     onDictate: () -> Unit,
@@ -517,6 +532,7 @@ private fun ColumnScope.Dock(
             connected = connected,
             attachments = attachments,
             dictation = dictation,
+            focus = composerFocus,
             onOpenModels = onOpenModels,
             onAttach = onAttach,
             onDictate = onDictate,
@@ -629,6 +645,7 @@ private fun Messages(
     actions: ChatActions,
     connected: Boolean,
     canChange: Boolean,
+    onComment: ((String) -> Unit)?,
 ) {
     var confirm by remember { mutableStateOf<Pair<MessageChange, String>?>(null) }
     val lastPrompt = messages.lastOrNull { it is ChatMessage.User }?.key
@@ -664,6 +681,7 @@ private fun Messages(
                         message,
                         thinkingFrame.takeIf { message.streaming },
                         onBranch = ask(MessageChange.Branch, message.key),
+                        onComment = onComment,
                     )
                     is ChatMessage.Command -> CommandOutput(message)
                     is ChatMessage.Notice -> NoticeLine(message)
@@ -853,7 +871,12 @@ private fun ConfirmChange(
 }
 
 @Composable
-private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String?, onBranch: (() -> Unit)?) {
+private fun AssistantReply(
+    message: ChatMessage.Assistant,
+    thinkingFrame: String?,
+    onBranch: (() -> Unit)?,
+    onComment: ((String) -> Unit)?,
+) {
     val settings = LocalAppSettings.current
     val showReasoning = settings.showReasoning && message.reasoning.isNotBlank()
     val showTools = settings.showToolActivity && message.tools.isNotEmpty()
@@ -865,7 +888,7 @@ private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String
         // Shown whatever the tool-activity setting: the work happens out of sight, in other agents.
         message.tools.filter { it.name == "delegate_task" }.forEach { DelegationCard(it) }
         when {
-            text.isNotBlank() -> SelectionContainer { MarkdownText(text, streaming = message.streaming) }
+            text.isNotBlank() -> CommentableSelection(onComment) { MarkdownText(text, streaming = message.streaming) }
             // One activity cue at a time: live reasoning and running tools already show their own.
             message.streaming && media.isEmpty() && !showReasoning && !(showTools && message.tools.any { it.running }) -> Thinking(thinkingFrame)
         }
@@ -1186,6 +1209,7 @@ private fun Composer(
     connected: Boolean,
     attachments: List<OutgoingAttachment>,
     dictation: DictationState,
+    focus: FocusRequester,
     onOpenModels: () -> Unit,
     onAttach: () -> Unit,
     onDictate: () -> Unit,
@@ -1231,7 +1255,7 @@ private fun Composer(
             selectionColors = LocalTextSelectionColors.current,
             lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 8),
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            modifier = Modifier.fillMaxWidth().heightIn(min = 28.dp).padding(horizontal = 12.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 28.dp).padding(horizontal = 12.dp).focusRequester(focus),
         ) {
             TextInput(
                 placeholder = {

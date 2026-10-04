@@ -165,6 +165,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Drafts: each chat keeps its unsent text (stored, survives a restart) and picked files (in memory) when you switch chats; the session list marks it "Draft"
 - [x] Undo and branch from the composer (`/undo` hands the last prompt back; `/branch` → `session.branch_whole` / `session.branch`)
 - [x] Undo and branch from a message: a ⋯ menu on each message with Copy, Edit last prompt (`/undo`, then the transcript reloads) and Branch from here (`session.branch` with the message's position), each change explained before it happens
+- [x] Comment on part of a reply: select text in a reply and pick Comment; it goes into the composer as a Markdown quote with room for your note, and several stack into one message (the clipboard is left alone)
 - [x] Context compression (`/compress` → `session.compress`)
 - [x] Context breakdown in the usage sheet (`session.context_breakdown`): the window split by system prompt, tools, skills, memory, conversation and the rest, plus the files read in
 
