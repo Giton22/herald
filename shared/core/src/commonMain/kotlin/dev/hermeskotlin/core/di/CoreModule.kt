@@ -3,6 +3,7 @@ package dev.hermeskotlin.core.di
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.chat.ChatHost
+import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.chat.ToolRiskStore
 import dev.hermeskotlin.core.capabilities.CapabilitiesApi
@@ -49,6 +50,7 @@ val coreModule = module {
     single { CapabilitiesApi(get()) }
     single { InsightsApi(get()) }
     single { LastChatStore(get()) }
+    single { DraftStore(get()) }
     single { ProfilesApi(get()) }
     single { ProfileStore(get()) }
     single { SettingsStore(get(), get()) }
