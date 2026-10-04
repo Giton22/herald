@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -49,6 +48,9 @@ import dev.hermeskotlin.designsystem.caption
 import dev.hermeskotlin.designsystem.code
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.CopyButton
+import dev.hermeskotlin.designsystem.components.LocalTextHighlights
+import dev.hermeskotlin.designsystem.components.highlightColor
+import dev.hermeskotlin.designsystem.components.withHighlights
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.label
@@ -67,7 +69,12 @@ import dev.hermeskotlin.designsystem.warning
  * was given and what came back, or the edit it made.
  */
 @Composable
-internal fun ToolRow(tool: ToolActivity) {
+internal fun ToolRow(tool: ToolActivity, messageKey: String? = null) {
+    // The input, changes and output can each be commented on, named after the call so the agent finds it.
+    fun source(part: String) = messageKey?.let {
+        val what = tool.detail?.lineSequence()?.firstOrNull()?.trim()?.takeIf { d -> d.isNotEmpty() }?.let { d -> " (“${d.take(80)}”)" }.orEmpty()
+        CommentSource(it, "the $part of your ${tool.name} tool call$what", code = true)
+    }
     val hasDetails = tool.input != null || tool.output != null || tool.diff != null || tool.risk != null
     var expanded by remember(tool.id) { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -128,9 +135,9 @@ internal fun ToolRow(tool: ToolActivity) {
         AnimatedVisibility(visible = expanded) {
             Column(Modifier.padding(start = 24.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 tool.risk?.let { RiskNote(it) }
-                tool.input?.let { Block("Input", it) }
-                tool.diff?.let { Block("Changes", it, diff = true) }
-                tool.output?.let { Block(if (tool.failed) "Error" else "Output", it) }
+                tool.input?.let { Block("Input", it, source = source("input")) }
+                tool.diff?.let { Block("Changes", it, diff = true, source = source("changes")) }
+                tool.output?.let { Block(if (tool.failed) "Error" else "Output", it, source = source(if (tool.failed) "error" else "output")) }
                 if (tool.running && tool.output == null) {
                     Text("Still running…", style = Theme[typography][caption], color = Theme[colors][textTertiary])
                 }
@@ -168,7 +175,7 @@ private fun RiskNote(risk: ToolRisk) {
 
 /** A titled, scrollable box of monospaced text with a copy button. */
 @Composable
-private fun Block(title: String, content: String, diff: Boolean = false) {
+private fun Block(title: String, content: String, diff: Boolean = false, source: CommentSource? = null) {
     val shape = RoundedCornerShape(Theme[radii][radiusSmall])
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -186,9 +193,9 @@ private fun Block(title: String, content: String, diff: Boolean = false) {
                 .horizontalScroll(rememberScrollState())
                 .padding(10.dp),
         ) {
-            SelectionContainer {
+            CommentableSelection(source) {
                 BasicText(
-                    if (diff) diffText(content) else AnnotatedString(content),
+                    (if (diff) diffText(content) else AnnotatedString(content)).withHighlights(LocalTextHighlights.current, highlightColor()),
                     style = Theme[typography][code].copy(color = Theme[colors][text]),
                     softWrap = false,
                 )

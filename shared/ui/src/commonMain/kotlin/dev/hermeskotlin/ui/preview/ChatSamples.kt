@@ -17,6 +17,8 @@ import dev.hermeskotlin.core.chat.ToolActivity
 import dev.hermeskotlin.core.chat.TurnUsage
 import dev.hermeskotlin.core.slash.SlashSuggestion
 import dev.hermeskotlin.ui.chat.ChatActions
+import dev.hermeskotlin.ui.chat.CommentSource
+import dev.hermeskotlin.ui.chat.SelectionAnchor
 import dev.hermeskotlin.ui.voice.VoiceChatState
 import dev.hermeskotlin.ui.voice.VoicePhase
 import dev.hermeskotlin.core.sessions.SessionSummary
@@ -256,6 +258,10 @@ internal class PreviewChatActions(text: String = "") : ChatActions {
     override fun send(queue: Boolean) = Unit
     override fun interrupt() = Unit
     override fun removeAttachment(id: String) = Unit
+    override fun addComment(source: CommentSource, anchor: SelectionAnchor) = 0L
+    override fun removeComment(id: Long) = Unit
+    override fun explain(source: CommentSource, anchor: SelectionAnchor) = Unit
+    override fun askAside(source: CommentSource, anchor: SelectionAnchor) = Unit
     override fun answer(request: InputRequest, result: JsonObject) = Unit
     override fun pickSuggestion(suggestion: SlashSuggestion) = Unit
     override suspend fun loadMedia(source: String): ByteArray? = null

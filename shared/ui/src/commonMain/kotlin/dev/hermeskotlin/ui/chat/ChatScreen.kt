@@ -17,6 +17,8 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.layout
@@ -72,7 +74,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -88,6 +89,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -109,6 +111,7 @@ import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PanelLeft
 import com.composables.icons.lucide.Pencil
+import com.composables.icons.lucide.MessageSquare
 import com.composables.icons.lucide.RotateCw
 import com.composables.icons.lucide.SearchCheck
 import com.composables.icons.lucide.TriangleAlert
@@ -182,7 +185,10 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.GitBranch
 import com.composables.icons.lucide.Pencil
+import dev.hermeskotlin.designsystem.components.LocalTextHighlights
 import dev.hermeskotlin.designsystem.components.MarkdownText
+import dev.hermeskotlin.designsystem.components.highlightColor
+import dev.hermeskotlin.designsystem.components.withHighlights
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.components.Surface
 import dev.hermeskotlin.designsystem.danger
@@ -278,6 +284,7 @@ fun ChatScreen(
         connectionLabel = connectionLabel(connection),
         attachments = attachments,
         attachmentError = attachmentError,
+        comments = viewModel.comments.collectAsStateWithLifecycle().value,
         voiceChat = viewModel.voice.chat.collectAsStateWithLifecycle().value,
         dictation = viewModel.voice.dictation.collectAsStateWithLifecycle().value,
         suggestions = viewModel.suggestions.collectAsStateWithLifecycle().value,
@@ -364,6 +371,8 @@ internal fun ChatView(
     connectionLabel: String = "No connection",
     attachments: List<OutgoingAttachment>,
     attachmentError: String?,
+    /** Comments on parts of the chat, waiting for the next send. */
+    comments: List<PendingComment> = emptyList(),
     voiceChat: VoiceChatState,
     dictation: DictationState,
     suggestions: List<SlashSuggestion>,
@@ -406,6 +415,28 @@ internal fun ChatView(
             val dockInset = with(LocalDensity.current) { dockHeight.toDp() }
             // What scrolls under the composer is captured here and frosted behind it.
             val hazeState = rememberHazeState()
+            // Comments wait in the composer, so the selection menus offer them only while it shows.
+            val composerFocus = remember { FocusRequester() }
+            var focusComment by remember { mutableStateOf<Long?>(null) }
+            val composerShown = state.inputRequests.isEmpty() && voiceChat.phase == VoicePhase.Off
+            val commentHost = remember(comments, actions, composerShown) {
+                if (!composerShown) return@remember null
+                object : CommentHost {
+                    override fun onSelection(action: SelectionAction, source: CommentSource, anchor: SelectionAnchor) {
+                        when (action) {
+                            SelectionAction.Comment -> focusComment = actions.addComment(source, anchor)
+                            SelectionAction.Explain -> actions.explain(source, anchor)
+                            SelectionAction.AskAside -> {
+                                actions.askAside(source, anchor)
+                                composerFocus.requestFocus()
+                            }
+                        }
+                    }
+
+                    override fun highlights(messageKey: String) =
+                        comments.filter { it.source.messageKey == messageKey }.flatMap { it.highlights }
+                }
+            }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
                     if (state.historyLoaded && state.messages.isNotEmpty()) {
@@ -414,6 +445,7 @@ internal fun ChatView(
                             LocalOpenImage provides onViewImage,
                             LocalNotice provides onNotice,
                             LocalSubagents provides SubagentContext(state.subagents, actions::stopSubagent),
+                            LocalCommentHost provides commentHost,
                         ) {
                             Messages(
                                 state.messages,
@@ -448,6 +480,10 @@ internal fun ChatView(
                         dictation = dictation,
                         suggestions = suggestions,
                         notice = notice,
+                        comments = comments,
+                        focusComment = focusComment,
+                        onCommentFocused = { focusComment = null },
+                        composerFocus = composerFocus,
                         onOpenModels = onOpenModels,
                         onAttach = onAttach,
                         onDictate = onDictate,
@@ -483,6 +519,10 @@ private fun ColumnScope.Dock(
     dictation: DictationState,
     suggestions: List<SlashSuggestion>,
     notice: String?,
+    comments: List<PendingComment>,
+    focusComment: Long?,
+    onCommentFocused: () -> Unit,
+    composerFocus: FocusRequester,
     onOpenModels: () -> Unit,
     onAttach: () -> Unit,
     onDictate: () -> Unit,
@@ -527,6 +567,10 @@ private fun ColumnScope.Dock(
             connected = connected,
             attachments = attachments,
             dictation = dictation,
+            comments = comments,
+            focusComment = focusComment,
+            onCommentFocused = onCommentFocused,
+            focus = composerFocus,
             onOpenModels = onOpenModels,
             onAttach = onAttach,
             onDictate = onDictate,
@@ -668,6 +712,7 @@ private fun Messages(
 ) {
     var confirm by remember { mutableStateOf<Pair<MessageChange, String>?>(null) }
     val lastPrompt = messages.lastOrNull { it is ChatMessage.User }?.key
+    val lastReply = messages.lastOrNull { it is ChatMessage.Assistant && it.text.isNotBlank() }?.key
     ConfirmChange(confirm, canChange, lastPrompt, actions, onDismiss = { confirm = null })
     // Edit and branch only show while the chat can change; each asks before it does anything.
     fun ask(change: MessageChange, key: String): (() -> Unit)? = if (canChange) ({ confirm = change to key }) else null
@@ -719,7 +764,11 @@ private fun Messages(
                             .takeIf { message.key == lastPrompt && !message.pending && message.check == null },
                         onBranch = ask(MessageChange.Branch, message.key).takeIf { !message.pending && message.check == null },
                     )
-                    is ChatMessage.Assistant -> AssistantReply(message, onBranch = ask(MessageChange.Branch, message.key))
+                    is ChatMessage.Assistant -> AssistantReply(
+                        message,
+                        onBranch = ask(MessageChange.Branch, message.key),
+                        last = message.key == lastReply,
+                    )
                     is ChatMessage.Command -> CommandOutput(message)
                     is ChatMessage.Notice -> NoticeLine(message)
                 }
@@ -834,6 +883,8 @@ private fun UserBubble(
     val scope = rememberCoroutineScope()
     var menuOpen by remember { mutableStateOf(false) }
     val hasMenu = message.text.isNotBlank() || onEdit != null || onBranch != null
+    val review = remember(message.text) { parseReview(message.text) }
+    val commentHost = LocalCommentHost.current
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         // A long press opens the prompt's actions just under it; the text itself isn't selectable, Copy is in there.
         DropdownMenu(
@@ -844,6 +895,17 @@ private fun UserBubble(
                     MenuAction("Copy", Lucide.Copy, onClick = {
                         menuOpen = false
                         scope.launch { clipboard.setClipEntry(plainTextClipEntry(message.text)) }
+                    })
+                }
+                // The prompt isn't selectable, so its comment is on all of it.
+                if (commentHost != null && review == null && message.text.isNotBlank() && !message.pending) {
+                    MenuAction("Comment", Lucide.MessageSquare, onClick = {
+                        menuOpen = false
+                        commentHost.onSelection(
+                            SelectionAction.Comment,
+                            CommentSource(message.key, "my message that starts “${openingWords(message.text)}”"),
+                            SelectionAnchor.whole(message.text),
+                        )
                     })
                 }
                 onEdit?.let { MenuAction("Edit last prompt", Lucide.Pencil, onClick = { menuOpen = false; it() }) }
@@ -875,7 +937,10 @@ private fun UserBubble(
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (message.attachments.isNotEmpty()) SentAttachments(message.attachments)
-                if (message.text.isNotEmpty()) Text(message.text, style = Theme[typography][body], color = Theme[colors][textColor])
+                when {
+                    review != null -> SentReviewContent(review)
+                    message.text.isNotEmpty() -> Text(message.text, style = Theme[typography][body], color = Theme[colors][textColor])
+                }
             }
         }
         if (message.queued) {
@@ -974,7 +1039,12 @@ private fun ConfirmChange(
 }
 
 @Composable
-private fun AssistantReply(message: ChatMessage.Assistant, onBranch: (() -> Unit)?) {
+private fun AssistantReply(
+    message: ChatMessage.Assistant,
+    onBranch: (() -> Unit)?,
+    /** The newest reply, which comments call "your last reply". */
+    last: Boolean,
+) {
     val settings = LocalAppSettings.current
     val showReasoning = settings.showReasoning && message.reasoning.isNotBlank()
     val showTools = settings.showToolActivity && message.tools.isNotEmpty()
@@ -983,10 +1053,21 @@ private fun AssistantReply(message: ChatMessage.Assistant, onBranch: (() -> Unit
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         // What's happening now is said once, above the composer; the reply keeps only what it's made of.
         if (showReasoning) Reasoning(message.reasoning)
-        if (showTools) Tools(message.tools)
+        if (showTools) Tools(message.tools, message.key)
         // Shown whatever the tool-activity setting: the work happens out of sight, in other agents.
         message.tools.filter { it.name == "delegate_task" }.forEach { DelegationCard(it) }
-        if (text.isNotBlank()) SelectionContainer { MarkdownText(text, streaming = message.streaming) }
+        if (text.isNotBlank()) {
+            // Named the way the agent will know it: the newest reply, or an older one by its first words.
+            val source = remember(message.key, text, last) {
+                CommentSource(
+                    messageKey = message.key,
+                    label = if (last) LAST_REPLY else "your earlier reply that starts “${openingWords(text)}”",
+                    markdown = text,
+                )
+            }
+            // Not while it streams: the text and its blocks are still changing under the selection.
+            CommentableSelection(source.takeUnless { message.streaming }) { MarkdownText(text, streaming = message.streaming) }
+        }
         if (media.isNotEmpty()) ReplyMediaList(media)
         when (message.outcome) {
             TurnOutcome.Error -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -1059,12 +1140,17 @@ private fun CommandOutput(message: ChatMessage.Command) {
             )
             if (message.running) Spinner(Modifier.size(12.dp))
         }
-        if (message.output.isNotEmpty()) SelectionContainer {
-            Text(
-                message.output,
-                style = Theme[typography][code].copy(fontSize = 12.sp, lineHeight = 18.sp),
-                color = if (message.failed) Theme[colors][danger] else Theme[colors][textColor],
-            )
+        if (message.output.isNotEmpty()) {
+            val source = remember(message.key, message.command) {
+                CommentSource(message.key, "the output of `${message.command}`", code = true)
+            }
+            CommentableSelection(source.takeUnless { message.running }) {
+                Text(
+                    AnnotatedString(message.output).withHighlights(LocalTextHighlights.current, highlightColor()),
+                    style = Theme[typography][code].copy(fontSize = 12.sp, lineHeight = 18.sp),
+                    color = if (message.failed) Theme[colors][danger] else Theme[colors][textColor],
+                )
+            }
         }
     }
 }
@@ -1184,7 +1270,7 @@ private fun Reasoning(text: String) {
 
 /** The tools the reply used, folded; the one running now is named above the composer instead. */
 @Composable
-private fun Tools(tools: List<ToolActivity>) {
+private fun Tools(tools: List<ToolActivity>, messageKey: String) {
     var expanded by remember { mutableStateOf(false) }
     val names = tools.map { it.name }.distinct()
     val label = if (names.size <= 2) "Used ${names.joinToString(" and ")}" else "Used ${tools.size} tools"
@@ -1195,7 +1281,7 @@ private fun Tools(tools: List<ToolActivity>) {
         onToggle = { expanded = !expanded },
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            tools.forEach { ToolRow(it) }
+            tools.forEach { ToolRow(it, messageKey) }
         }
     }
 }
@@ -1285,13 +1371,17 @@ private fun Composer(
     connected: Boolean,
     attachments: List<OutgoingAttachment>,
     dictation: DictationState,
+    comments: List<PendingComment>,
+    focusComment: Long?,
+    onCommentFocused: () -> Unit,
+    focus: FocusRequester,
     onOpenModels: () -> Unit,
     onAttach: () -> Unit,
     onDictate: () -> Unit,
     onVoiceChat: () -> Unit,
 ) {
-    // Attachments alone are sendable: the gateway gets Desktop's image prompt or the file references.
-    val hasText = actions.composer.text.isNotBlank() || attachments.isNotEmpty()
+    // Attachments or comments alone are sendable: the gateway gets Desktop's image prompt or the file references.
+    val hasText = actions.composer.text.isNotBlank() || attachments.isNotEmpty() || comments.isNotEmpty()
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     val page = Theme[colors][background]
     val frosted = remember(page) {
@@ -1318,8 +1408,11 @@ private fun Composer(
             .background(Theme[colors][surface].copy(alpha = 0.55f))
             .border(1.dp, if (focused) Theme[colors][textTertiary] else Theme[colors][strokeStrong], shape)
             .onFocusChanged { focused = it.hasFocus }
-            .padding(start = 4.dp, end = 6.dp, top = if (attachments.isEmpty()) 14.dp else 8.dp, bottom = 6.dp),
+            .padding(start = 4.dp, end = 6.dp, top = if (attachments.isEmpty() && comments.isEmpty()) 14.dp else 8.dp, bottom = 6.dp),
     ) {
+        if (comments.isNotEmpty()) {
+            CommentTray(comments, focusComment = focusComment, onFocused = onCommentFocused, onRemove = actions::removeComment)
+        }
         if (attachments.isNotEmpty()) ComposerTray(attachments, onRemove = actions::removeAttachment)
         UnstyledTextField(
             state = actions.composer,
@@ -1330,12 +1423,16 @@ private fun Composer(
             selectionColors = LocalTextSelectionColors.current,
             lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 8),
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            modifier = Modifier.fillMaxWidth().heightIn(min = 28.dp).padding(horizontal = 12.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 28.dp).padding(horizontal = 12.dp).focusRequester(focus),
         ) {
             TextInput(
                 placeholder = {
                     Text(
-                        if (connected) placeholder else "Reconnecting to Hermes…",
+                        when {
+                            !connected -> "Reconnecting to Hermes…"
+                            comments.isNotEmpty() -> "Anything else? (optional)"
+                            else -> placeholder
+                        },
                         style = Theme[typography][body],
                         color = Theme[colors][textTertiary],
                     )
