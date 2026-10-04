@@ -98,6 +98,15 @@ internal fun splitAttachmentRefs(text: String, keyPrefix: String): Pair<List<Sho
         }
         false
     }
+    // With files and images together, the images' directives come last, after the pasted context
+    // (session_history.py); only the closing run of lines, never one inside a pasted file.
+    if (footer != null) {
+        text.lines().asReversed().map { it.trim() }.takeWhile { it.isEmpty() || REF_LINE.matches(it) }.asReversed().forEach { line ->
+            val match = REF_LINE.matchEntire(line)?.takeIf { it.groupValues[1] == "image" } ?: return@forEach
+            val path = match.groupValues[2].ifEmpty { match.groupValues[3] }
+            attachments += ShownAttachment("$keyPrefix-i${attachments.size}", path.substringAfterLast('/'), AttachmentKind.Image, gatewayPath = path)
+        }
+    }
     if (attachments.isEmpty() && footer == null) return emptyList<ShownAttachment>() to text
     return attachments to kept.joinToString("\n").trim()
 }

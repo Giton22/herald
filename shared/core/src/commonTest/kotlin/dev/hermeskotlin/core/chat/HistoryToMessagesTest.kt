@@ -79,6 +79,23 @@ class HistoryToMessagesTest {
         )
         val expanded = messages[3] as ChatMessage.User
         assertEquals("What is on this list", expanded.text)
+        // The gateway appends the images' directives after the pasted context (session_history.py).
+        val both = historyToMessages(
+            listOf(
+                SessionMessage(
+                    id = 5,
+                    role = "user",
+                    content = JsonPrimitive(
+                        "@file:attachments/screen.txt\n\nWhat's this?\n\n--- Attached Context ---\n\n" +
+                            "📄 @file:attachments/screen.txt (40 tokens)\n```\n@image:not/a/directive.jpg\n```\n" +
+                            "@image:/opt/data/images/upload_2.jpg",
+                    ),
+                ),
+            ),
+        ).single() as ChatMessage.User
+        assertEquals("What's this?", both.text)
+        assertEquals(listOf("screen.txt", "upload_2.jpg"), both.attachments.map { it.name })
+        assertEquals("/opt/data/images/upload_2.jpg", both.attachments.last().gatewayPath)
         assertEquals(listOf("notes.txt"), expanded.attachments.map { it.name })
         val stored = messages[2] as ChatMessage.User
         assertEquals("Describe this", stored.text)
