@@ -51,6 +51,11 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.lazy.LazyListLayoutInfo
+import androidx.compose.foundation.lazy.LazyListState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
@@ -635,21 +640,44 @@ private fun Messages(
     ConfirmChange(confirm, canChange, lastPrompt, actions, onDismiss = { confirm = null })
     // Edit and branch only show while the chat can change; each asks before it does anything.
     fun ask(change: MessageChange, key: String): (() -> Unit)? = if (canChange) ({ confirm = change to key }) else null
-    // Reversed layout keeps the newest message pinned to the bottom while a reply streams in.
-    val listState = rememberLazyListState()
+    // Laid out top-down and opened at the end. A list holds its place by the top of what's on screen, so a reply
+    // growing below the lines being read leaves them where they are; following the bottom is done here instead.
+    val listState = rememberLazyListState(messages.lastIndex.coerceAtLeast(0), LIST_END)
     val scope = rememberCoroutineScope()
-    val newest = messages.lastOrNull()?.key
-    LaunchedEffect(newest) { if (listState.firstVisibleItemIndex <= 1) listState.animateScrollToItem(0) }
-    val awayFromBottom by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 600 } }
+    val newest = messages.lastOrNull()
+    val awayFromBottom by remember { derivedStateOf { listState.layoutInfo.hiddenBelow() > 600 } }
+    // Following while the reader sits right at the end; where they drag to decides whether it carries on.
+    var pinned by remember { mutableStateOf(true) }
+    LaunchedEffect(listState) {
+        snapshotFlow { listState.layoutInfo }.collect { info ->
+            when (followStep(pinned, info.hiddenBelow(), listState.isScrollInProgress)) {
+                FollowStep.Unpin -> pinned = false
+                FollowStep.Pin -> pinned = true
+                FollowStep.ScrollToEnd -> listState.scrollToItem(info.totalItemsCount - 1, LIST_END)
+                FollowStep.None -> Unit
+            }
+        }
+    }
+    // A prompt just sent is always shown, wherever the reader was.
+    LaunchedEffect(newest?.key) {
+        if (newest is ChatMessage.User) {
+            pinned = true
+            listState.scrollToItem(messages.lastIndex, LIST_END)
+        }
+    }
+    // What the bottom held when the reader last saw it; anything since is new to them.
+    val tail = messages.lastOrNull()?.let { it.key to it.contentSize() }
+    var seenTail by remember { mutableStateOf(tail) }
+    LaunchedEffect(awayFromBottom, tail) { if (!awayFromBottom) seenTail = tail }
+    val newBelow = awayFromBottom && tail != seenTail
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
-            reverseLayout = true,
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp + bottomInset),
             verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.Bottom),
         ) {
-            items(messages.asReversed(), key = { it.key }) { message ->
+            items(messages, key = { it.key }) { message ->
                 when (message) {
                     is ChatMessage.User -> UserBubble(
                         message,
@@ -676,19 +704,85 @@ private fun Messages(
             exit = fadeOut() + scaleOut(),
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp + bottomInset),
         ) {
+            val shape = RoundedCornerShape(Theme[radii][radiusMedium])
             UnstyledButton(
-                onClick = { scope.launch { listState.animateScrollToItem(0) } },
+                onClick = {
+                    scope.launch {
+                        listState.animateToEnd()
+                        pinned = true
+                    }
+                },
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
-                    .background(Theme[colors][surfaceElevated])
-                    .border(1.dp, Theme[colors][strokeStrong], RoundedCornerShape(Theme[radii][radiusMedium])),
+                    .heightIn(min = 40.dp)
+                    .widthIn(min = 40.dp)
+                    .clip(shape)
+                    .background(if (newBelow) Theme[colors][accent] else Theme[colors][surfaceElevated])
+                    .border(1.dp, if (newBelow) Theme[colors][accent] else Theme[colors][strokeStrong], shape)
+                    .animateContentSize(),
                 indication = rememberColoredIndication(Theme[colors][textColor]),
             ) {
-                UnstyledIcon(Lucide.ArrowDown, contentDescription = "Jump to latest", tint = Theme[colors][textColor], modifier = Modifier.size(18.dp))
+                // Says "New reply" when something arrived below, not only by the arrow.
+                val tint = if (newBelow) Theme[colors][onAccent] else Theme[colors][textColor]
+                Row(
+                    Modifier.padding(horizontal = if (newBelow) 14.dp else 11.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    UnstyledIcon(
+                        Lucide.ArrowDown,
+                        contentDescription = if (newBelow) null else "Jump to latest",
+                        tint = tint,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    if (newBelow) Text("New reply", style = Theme[typography][label], color = tint)
+                }
             }
         }
     }
+}
+
+/** A scroll offset past any message: the list stops it at the end of the last one. */
+private const val LIST_END = 1_000_000
+
+/** How far the end of the conversation lies below the visible area, in pixels (0 when it's in view). */
+private fun LazyListLayoutInfo.hiddenBelow(): Int {
+    val last = visibleItemsInfo.lastOrNull() ?: return 0
+    if (last.index < totalItemsCount - 1) return Int.MAX_VALUE
+    return (last.offset + last.size - (viewportEndOffset - afterContentPadding)).coerceAtLeast(0)
+}
+
+internal enum class FollowStep { None, Pin, Unpin, ScrollToEnd }
+
+/**
+ * What to do after the list was laid out again. While the reader scrolls, ending up at the end pins the list
+ * and leaving it unpins; otherwise a pinned list whose end moved out of view (a reply grew, the composer
+ * grew) is scrolled back to it.
+ */
+internal fun followStep(pinned: Boolean, hiddenBelow: Int, readerScrolling: Boolean): FollowStep = when {
+    readerScrolling -> when {
+        hiddenBelow <= 1 && !pinned -> FollowStep.Pin
+        hiddenBelow > 1 && pinned -> FollowStep.Unpin
+        else -> FollowStep.None
+    }
+    pinned && hiddenBelow > 0 -> FollowStep.ScrollToEnd
+    else -> FollowStep.None
+}
+
+/** Glides to the end of the conversation, then settles exactly there in case the reply grew on the way. */
+private suspend fun LazyListState.animateToEnd() {
+    val last = layoutInfo.totalItemsCount - 1
+    if (last < 0) return
+    if (layoutInfo.visibleItemsInfo.none { it.index == last }) animateScrollToItem(last)
+    layoutInfo.hiddenBelow().takeIf { it in 1..<Int.MAX_VALUE }?.let { animateScrollBy(it.toFloat()) }
+    scrollToItem(last, LIST_END)
+}
+
+/** How much a message holds, so a reply growing at the bottom counts as new content. */
+private fun ChatMessage.contentSize(): Int = when (this) {
+    is ChatMessage.User -> text.length
+    is ChatMessage.Assistant -> text.length + reasoning.length + tools.size
+    is ChatMessage.Command -> output.length
+    is ChatMessage.Notice -> text.length
 }
 
 /** Tells apart the ways the link can be down: none, being re-made, or needing a new sign-in. */

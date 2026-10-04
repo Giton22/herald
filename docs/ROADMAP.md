@@ -86,6 +86,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Rename, pin, archive and delete (`PATCH`/`DELETE /api/sessions/{id}`), with optimistic updates that roll back on error
 - [x] Chat options (⋮ beside new chat) for the open chat: rename, pin, export as Markdown, copy session ID, archive, delete
 - [x] Floating see-through composer over the conversation
+- [x] Reading back stays put while a reply streams below; the jump arrow then reads "New reply"
 - [x] Live list updates (`sessions.changed`, `session.title` → refetch; also refetch after reconnect)
 - [ ] Live per-session status in the list (`session.info`, `session.active_list`)
 - [x] Search sessions by title, session id and message text from the sidebar search button (`GET /api/sessions/search`, debounced, with match snippet)
