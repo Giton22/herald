@@ -44,6 +44,7 @@ import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -96,7 +97,7 @@ fun UpdateBanner(modifier: Modifier = Modifier) {
                     color = Theme[colors][textSecondary],
                 )
             }
-            UnstyledButton(onClick = offer.onDismiss, modifier = Modifier.size(32.dp).clip(RoundedCornerShape(Theme[radii][radiusSmall]))) {
+            UnstyledButton(onClick = offer.onDismiss, modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusSmall]))) {
                 UnstyledIcon(Lucide.X, contentDescription = "Not now", tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
             }
         }

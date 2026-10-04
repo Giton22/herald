@@ -19,6 +19,7 @@ import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -159,6 +160,7 @@ import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
+import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import dev.hermeskotlin.designsystem.components.CopyButton
 import dev.hermeskotlin.designsystem.components.Dialog
 import dev.hermeskotlin.designsystem.components.IconButton
@@ -557,7 +559,7 @@ private fun BarButton(icon: ImageVector, contentDescription: String, onClick: ()
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(44.dp).clip(RoundedCornerShape(Theme[radii][radiusMedium])).alpha(if (enabled) 1f else 0.35f),
+        modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusMedium])).alpha(if (enabled) 1f else 0.35f),
         indication = rememberColoredIndication(Theme[colors][textColor]),
     ) {
         UnstyledIcon(icon, contentDescription = contentDescription, tint = Theme[colors][textSecondary], modifier = Modifier.size(20.dp))
@@ -757,8 +759,9 @@ private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String
         }
         val usage = message.usage?.takeIf { settings.showUsage && !message.streaming }
         if ((!message.streaming && text.isNotBlank()) || usage != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (!message.streaming && text.isNotBlank()) CopyButton(text)
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                // Its padding trimmed off the start and top, the icon lines up with the reply and sits close under it.
+                if (!message.streaming && text.isNotBlank()) CopyButton(text, Modifier.trimStartTop(start = 8.dp, top = 4.dp))
                 usage?.let {
                     Text(
                         "${compactCount(it.input)} in · ${compactCount(it.output)} out",
@@ -1119,9 +1122,9 @@ private fun Composer(
             )
         }
         Row(
-            Modifier.fillMaxWidth().padding(top = 10.dp),
+            Modifier.fillMaxWidth().padding(top = 6.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            // The buttons are full 48dp targets, which already space their icons apart.
         ) {
             ComposerButton(
                 icon = Lucide.Plus,
@@ -1191,7 +1194,7 @@ private fun ComposerButton(icon: ImageVector, contentDescription: String, onClic
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(40.dp).clip(RoundedCornerShape(Theme[radii][radiusMedium])),
+        modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusMedium])),
         indication = rememberColoredIndication(tint),
     ) {
         UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(22.dp))
@@ -1200,7 +1203,10 @@ private fun ComposerButton(icon: ImageVector, contentDescription: String, onClic
 
 private enum class SendIcon { Send, Stop }
 
-/** Desktop's round send: a disc in the text colour (white on dark) with the icon cut in the page colour. */
+/**
+ * Desktop's round send: a disc in the text colour (white on dark) with the icon cut in the page colour.
+ * The disc stays 40dp; the button around it takes taps over the full [MinTouchTarget].
+ */
 @Composable
 private fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
     val fill = if (enabled) Theme[colors][textColor] else Theme[colors][textColor].copy(alpha = 0.12f)
@@ -1208,21 +1214,23 @@ private fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(40.dp).clip(CircleShape).background(fill),
+        modifier = Modifier.size(MinTouchTarget).clip(CircleShape),
         indication = rememberColoredIndication(tint),
     ) {
-        UnstyledIcon(
-            when (icon) {
-                SendIcon.Send -> Lucide.ArrowUp
-                SendIcon.Stop -> Lucide.Square
-            },
-            contentDescription = when (icon) {
-                SendIcon.Send -> "Send"
-                SendIcon.Stop -> "Stop the task"
-            },
-            tint = tint,
-            modifier = Modifier.size(if (icon == SendIcon.Stop) 16.dp else 20.dp),
-        )
+        Box(Modifier.size(40.dp).clip(CircleShape).background(fill), contentAlignment = Alignment.Center) {
+            UnstyledIcon(
+                when (icon) {
+                    SendIcon.Send -> Lucide.ArrowUp
+                    SendIcon.Stop -> Lucide.Square
+                },
+                contentDescription = when (icon) {
+                    SendIcon.Send -> "Send"
+                    SendIcon.Stop -> "Stop the task"
+                },
+                tint = tint,
+                modifier = Modifier.size(if (icon == SendIcon.Stop) 16.dp else 20.dp),
+            )
+        }
     }
 }
 
@@ -1230,7 +1238,7 @@ private fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
 @Composable
 private fun DictationButton(state: DictationState, onClick: () -> Unit, enabled: Boolean) {
     if (state.transcribing) {
-        Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
+        Box(Modifier.size(MinTouchTarget), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
         return
     }
     val recording = state.recording
@@ -1243,7 +1251,7 @@ private fun DictationButton(state: DictationState, onClick: () -> Unit, enabled:
         onClick = onClick,
         enabled = enabled,
         modifier = Modifier
-            .size(40.dp)
+            .size(MinTouchTarget)
             .clip(CircleShape)
             .then(if (recording) Modifier.border(2.dp, tint.copy(alpha = 0.25f + 0.75f * state.level), CircleShape) else Modifier),
         indication = rememberColoredIndication(tint),
@@ -1363,4 +1371,15 @@ private fun ModelPill(state: ChatState, picker: ModelPickerState, onClick: () ->
             UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
         }
     }
+}
+
+/**
+ * Lays the element out [start] and [top] smaller, drawn up and to the left by as much: empty padding inside
+ * it stops pushing it away from its neighbours, while it still takes taps over its whole size.
+ */
+private fun Modifier.trimStartTop(start: Dp, top: Dp) = layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    val dx = start.roundToPx()
+    val dy = top.roundToPx()
+    layout(placeable.width - dx, placeable.height - dy) { placeable.place(-dx, -dy) }
 }

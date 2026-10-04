@@ -103,6 +103,7 @@ import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.Dialog
 import dev.hermeskotlin.designsystem.components.IconButton
+import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import dev.hermeskotlin.designsystem.components.SheetAction
 import dev.hermeskotlin.designsystem.components.SheetHeader
 import dev.hermeskotlin.designsystem.components.Spinner
@@ -471,12 +472,12 @@ private fun SearchHeader(viewModel: SessionsViewModel, onClose: () -> Unit) {
     }
 }
 
-/** A 44dp square icon button with no fill. */
+/** A 48dp square icon button with no fill. */
 @Composable
 private fun SquareButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(44.dp)
+            .size(MinTouchTarget)
             .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
             .clickable(onClickLabel = contentDescription, onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -491,7 +492,7 @@ private fun NavRow(icon: ImageVector, label: String, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = 44.dp)
+            .heightIn(min = MinTouchTarget)
             .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp),
@@ -660,7 +661,7 @@ internal fun SessionRow(
     Column(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = 44.dp)
+            .heightIn(min = MinTouchTarget)
             .clip(shape)
             .then(if (selected) Modifier.background(Theme[colors][accentSoft], shape) else Modifier)
             .combinedClickable(
