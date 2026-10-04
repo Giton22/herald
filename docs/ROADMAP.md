@@ -100,7 +100,8 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Reasoning/thinking blocks, collapsible (`reasoning.delta`, `thinking.delta`, `reasoning.available`)
 - [x] Stop a running turn (`session.interrupt`): the Send button turns into Stop while a turn runs
 - [x] Prompts sent from another client (Desktop, CLI, messaging) show up live: a turn this client didn't start refetches the transcript at its start and end, since the gateway streams only the reply
-- [x] Steer a running turn: a message sent mid-turn corrects it, the queue button holds it for the next turn, `/steer` injects a note (`prompt.submit` busy modes, `session.steer`)
+- [x] Steer a running turn: a message typed mid-turn offers labelled "Send now" (corrects the task) and "Send after this task" (holds it for the next turn) while Stop stays in place; `/steer` injects a note (`prompt.submit` busy modes, `session.steer`)
+- [x] Voice chat has its own composer button instead of sharing the send button
 - [x] Token usage per turn (live turns) and per session with cost, context window and account limits (`session.usage`, `MessageCompletePayload.usage`, `GET /api/sessions/{id}`)
 - [x] Error banner and live status line (`error`, `status.update`, failed turns)
 - [x] Notices and warnings (`notice`, `MessageCompletePayload.warning`)
