@@ -34,10 +34,20 @@ import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.Lucide
 import com.composeunstyled.Text
 import com.composeunstyled.theme.Theme
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.buildAnnotatedString
+import com.mikepenz.markdown.annotator.annotatorSettings
+import com.mikepenz.markdown.annotator.buildMarkdownAnnotatedString
+import com.mikepenz.markdown.compose.LocalMarkdownTypography
 import com.mikepenz.markdown.compose.Markdown
 import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.compose.elements.MarkdownCodeBlock
 import com.mikepenz.markdown.compose.elements.MarkdownCodeFence
+import com.mikepenz.markdown.compose.elements.MarkdownParagraph
+import com.mikepenz.markdown.compose.elements.MarkdownText as LibraryMarkdownText
+import dev.hermeskotlin.designsystem.warning
+import org.intellij.markdown.ast.ASTNode
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.platform.UriHandler
@@ -102,6 +112,7 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier, streaming: Boolean
         markdownComponents(
             codeFence = { MarkdownCodeFence(it.content, it.node, block = { code, language, style -> CodeBlock(code, language, style) }) },
             codeBlock = { MarkdownCodeBlock(it.content, it.node, block = { code, language, style -> CodeBlock(code, language, style) }) },
+            paragraph = { HighlightedParagraph(it.content, it.node) },
         )
     }
     val parentUris = LocalUriHandler.current
@@ -132,8 +143,37 @@ private class WebLinksOnly(private val parent: UriHandler) : UriHandler {
     }
 }
 
+/** The library's paragraph, with the [LocalTextHighlights] that fall in it marked. */
+@Composable
+private fun HighlightedParagraph(content: String, node: ASTNode) {
+    val highlights = LocalTextHighlights.current
+    if (highlights.isEmpty()) {
+        MarkdownParagraph(content, node)
+        return
+    }
+    val style = LocalMarkdownTypography.current.paragraph
+    val settings = annotatorSettings()
+    val color = highlightColor()
+    val text = remember(content, node, style, settings, highlights, color) {
+        buildAnnotatedString {
+            pushStyle(style.toSpanStyle())
+            buildMarkdownAnnotatedString(content, node, settings)
+            pop()
+        }.withHighlights(highlights, color)
+    }
+    LibraryMarkdownText(text, node, style = style)
+}
+
+/** The highlighter under text a comment is about. */
+@Composable
+fun highlightColor(): Color = Theme[colors][warning].copy(alpha = 0.3f)
+
 @Composable
 private fun CodeBlock(code: String, language: String?, style: TextStyle) {
+    val highlights = LocalTextHighlights.current
+    val color = highlightColor()
+    val shown = code.trimEnd('\n')
+    val text = remember(shown, highlights, color) { AnnotatedString(shown).withHighlights(highlights, color) }
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
     Column(
         Modifier
@@ -152,7 +192,7 @@ private fun CodeBlock(code: String, language: String?, style: TextStyle) {
             CopyButton(code)
         }
         Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
-            BasicText(code.trimEnd('\n'), style = style, softWrap = false)
+            BasicText(text, style = style, softWrap = false)
         }
     }
 }
