@@ -745,17 +745,29 @@ class ChatSession(
 
     private fun removeMessage(key: String) = _state.update { state -> state.copy(messages = state.messages.filterNot { it.key == key }) }
 
-    /** Asks the gateway to stop the running turn; `message.complete {status: interrupted}` follows. */
-    suspend fun interrupt() {
-        val client = connectedClient() ?: return
-        val runtimeId = _state.value.runtimeSessionId ?: return
+    /**
+     * Asks the gateway to stop the running turn; `message.complete {status: interrupted}` follows. The
+     * gateway drops the prompts queued behind the turn too, so their bubbles go and their text comes back,
+     * in order, for the composer.
+     */
+    suspend fun interrupt(): List<String> {
+        val client = connectedClient() ?: return emptyList()
+        val runtimeId = _state.value.runtimeSessionId ?: return emptyList()
         try {
             client.request("session.interrupt", buildJsonObject { put("session_id", runtimeId) })
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             _state.update { it.copy(error = e.message ?: "Couldn't stop the turn.") }
+            return emptyList()
         }
+        var dropped = emptyList<String>()
+        _state.update { state ->
+            val (queued, kept) = state.messages.partition { it is ChatMessage.User && it.queued }
+            dropped = queued.map { (it as ChatMessage.User).text }
+            state.copy(messages = kept)
+        }
+        return dropped
     }
 
     /** Stops one running subagent (`subagent.interrupt`); its `subagent.complete` follows. */
