@@ -146,6 +146,22 @@ internal object ChatSamples {
         ),
     )
 
+    private val approvalRequest = approval.inputRequests.single() as InputRequest.Approval
+
+    /** A command too long to show whole: it wraps past the preview and offers "Show full command". */
+    val longApproval: ChatState = approval.copy(
+        inputRequests = listOf(
+            approvalRequest.copy(
+                command = (1..6).joinToString(" ", prefix = "rm -rf ") { "/srv/backup/snapshots/2026-0$it-01/incremental" },
+            ),
+        ),
+    )
+
+    /** A gateway that names neither the tool nor the purpose. */
+    val bareApproval: ChatState = approval.copy(
+        inputRequests = listOf(approvalRequest.copy(toolName = "", description = "")),
+    )
+
     private val delegation = ToolActivity(
         id = "d1",
         name = "delegate_task",

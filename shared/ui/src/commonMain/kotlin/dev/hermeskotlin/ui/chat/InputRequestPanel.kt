@@ -3,10 +3,10 @@ package dev.hermeskotlin.ui.chat
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -14,12 +14,15 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -29,11 +32,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.composables.icons.lucide.Check
+import com.composables.icons.lucide.ChevronDown
+import com.composables.icons.lucide.ChevronUp
 import com.composables.icons.lucide.Circle
 import com.composables.icons.lucide.CircleCheck
+import com.composables.icons.lucide.CircleStop
+import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.KeyRound
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageCircleQuestion
@@ -61,6 +71,7 @@ import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.Dialog
 import dev.hermeskotlin.designsystem.components.Surface
 import dev.hermeskotlin.designsystem.components.TextField
+import dev.hermeskotlin.designsystem.components.plainTextClipEntry
 import dev.hermeskotlin.designsystem.heading
 import dev.hermeskotlin.designsystem.input
 import dev.hermeskotlin.designsystem.radii
@@ -71,18 +82,22 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 
 /**
  * Takes the composer's place while the agent waits on a person: the oldest open request first, the
  * rest queued behind it. Answering sends one response; another client answering first makes the
- * gateway withdraw the request, and the panel moves on.
+ * gateway withdraw the request, and the panel moves on. [onStop] keeps the task's Stop within reach
+ * while the composer is hidden.
  */
 @Composable
 internal fun InputRequestPanel(
     requests: List<InputRequest>,
     connected: Boolean,
     onAnswer: (InputRequest, JsonObject) -> Unit,
+    onStop: (() -> Unit)? = null,
 ) {
     val request = requests.firstOrNull() ?: return
     Surface(
@@ -95,66 +110,157 @@ internal fun InputRequestPanel(
         ) {
             val more = (requests.size - 1).takeIf { it > 0 }?.let { "+$it more" }
             when (request) {
-                is InputRequest.Approval -> ApprovalContent(request, more, connected) { onAnswer(request, it) }
-                is InputRequest.Clarify -> ClarifyContent(request, more, connected) { onAnswer(request, it) }
-                is InputRequest.Secret -> SecretContent(request, more, connected) { onAnswer(request, it) }
+                is InputRequest.Approval -> ApprovalContent(request, more, connected, onStop.takeIf { connected }) { onAnswer(request, it) }
+                is InputRequest.Clarify -> ClarifyContent(request, more, connected, onStop.takeIf { connected }) { onAnswer(request, it) }
+                is InputRequest.Secret -> SecretContent(request, more, connected, onStop.takeIf { connected }) { onAnswer(request, it) }
             }
         }
     }
 }
 
 @Composable
-private fun Header(icon: ImageVector, tint: Color, title: String, trailing: String?) {
+private fun Header(icon: ImageVector, tint: Color, title: String, trailing: String?, onStop: (() -> Unit)? = null) {
     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
         UnstyledIcon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
         Text(title, style = Theme[typography][heading], color = Theme[colors][textColor], modifier = Modifier.weight(1f))
         if (trailing != null) Text(trailing, style = Theme[typography][caption], color = Theme[colors][textTertiary])
+        if (onStop != null) {
+            Button("Stop task", onClick = onStop, variant = ButtonVariant.Ghost, size = ButtonSize.Small, leadingIcon = Lucide.CircleStop)
+        }
     }
 }
 
+/** A broader permission: what it allows and for how long, the whole row the button. */
+@Composable
+private fun WiderChoice(title: String, detail: String, enabled: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .border(1.dp, Theme[colors][stroke], shape)
+            .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
+            .heightIn(min = 48.dp)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text(title, style = Theme[typography][bodySmall], color = if (enabled) Theme[colors][textColor] else Theme[colors][textTertiary])
+        Text(detail, style = Theme[typography][caption], color = Theme[colors][textTertiary])
+    }
+}
+
+/** A command that wraps past this many lines shows its start until "Show full command". */
+private const val COMMAND_PREVIEW_LINES = 4
+
+/** How long a new approval ignores taps, so one aimed at the composer it replaced doesn't answer it. */
+private const val APPROVAL_ARM_DELAY_MS = 700L
+
+/**
+ * The exact command, wrapped so nothing hides off to the side. A long one shows its first lines until
+ * "Show full command"; Copy takes all of it either way.
+ */
 @Composable
 private fun CommandBlock(command: String) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
-    Text(
-        command,
-        style = Theme[typography][code],
-        color = Theme[colors][textColor],
-        maxLines = 10,
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(Theme[colors][background], shape)
-            .border(1.dp, Theme[colors][stroke], shape)
-            .horizontalScroll(rememberScrollState())
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-    )
+    // Long means it wraps past the preview, measured as laid out, so a wider screen can take it back;
+    // once open it stays offered to close.
+    var long by remember(command) { mutableStateOf(false) }
+    var full by remember(command) { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        BasicText(
+            command,
+            style = Theme[typography][code].copy(color = Theme[colors][textColor]),
+            maxLines = if (full) Int.MAX_VALUE else COMMAND_PREVIEW_LINES,
+            overflow = TextOverflow.Ellipsis,
+            onTextLayout = { if (!full) long = it.hasVisualOverflow },
+            modifier = Modifier
+                .fillMaxWidth()
+                .clip(shape)
+                .background(Theme[colors][background], shape)
+                .border(1.dp, Theme[colors][stroke], shape)
+                .padding(horizontal = 12.dp, vertical = 10.dp),
+        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            if (long) {
+                Button(
+                    if (full) "Show less" else "Show full command",
+                    onClick = { full = !full },
+                    variant = ButtonVariant.Ghost,
+                    size = ButtonSize.Small,
+                    leadingIcon = if (full) Lucide.ChevronUp else Lucide.ChevronDown,
+                )
+            }
+            Spacer(Modifier.weight(1f))
+            CommandCopy(command)
+        }
+    }
 }
 
 @Composable
-private fun ApprovalContent(request: InputRequest.Approval, more: String?, connected: Boolean, answer: (JsonObject) -> Unit) {
+private fun CommandCopy(command: String) {
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    var copied by remember(command) { mutableStateOf(false) }
+    LaunchedEffect(copied) {
+        if (copied) {
+            delay(1_500)
+            copied = false
+        }
+    }
+    Button(
+        if (copied) "Copied" else "Copy command",
+        onClick = {
+            scope.launch { clipboard.setClipEntry(plainTextClipEntry(command)) }
+            copied = true
+        },
+        variant = ButtonVariant.Ghost,
+        size = ButtonSize.Small,
+        leadingIcon = if (copied) Lucide.Check else Lucide.Copy,
+    )
+}
+
+/** The tool and purpose ahead of the command, each only when the gateway named it; null when neither. */
+internal fun approvalIntro(request: InputRequest.Approval): String? {
+    val tool = request.toolName?.takeIf { it.isNotBlank() }?.let { "Hermes wants to run this with $it." }
+    val purpose = request.description.takeIf { it.isNotBlank() }?.replaceFirstChar { it.uppercase() }
+    return listOfNotNull(tool, purpose).joinToString(" ").ifEmpty { null }
+}
+
+@Composable
+private fun ApprovalContent(request: InputRequest.Approval, more: String?, connected: Boolean, onStop: (() -> Unit)?, answer: (JsonObject) -> Unit) {
     var confirmAlways by remember(request.id) { mutableStateOf(false) }
     val choose = { choice: ApprovalChoice -> answer(InputAnswers.approval(choice)) }
-
-    Header(Lucide.ShieldAlert, Theme[colors][warning], "Allow this command?", more)
-    if (request.description.isNotBlank()) {
-        Text(request.description.replaceFirstChar { it.uppercase() }, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
+    // The panel lands where the composer was; a tap meant for the text field mustn't answer it.
+    var armed by remember(request.id) { mutableStateOf(false) }
+    LaunchedEffect(request.id) {
+        delay(APPROVAL_ARM_DELAY_MS)
+        armed = true
     }
+    val ready = connected && armed
+
+    Header(Lucide.ShieldAlert, Theme[colors][warning], "Allow this command?", more, onStop)
+    approvalIntro(request)?.let { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary]) }
     if (request.command.isNotBlank()) CommandBlock(request.command)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button("Deny", onClick = { choose(ApprovalChoice.Deny) }, variant = ButtonVariant.Outline, enabled = connected, modifier = Modifier.weight(1f))
-        Button("Allow once", onClick = { choose(ApprovalChoice.Once) }, enabled = connected, modifier = Modifier.weight(1f))
+        Button("Deny", onClick = { choose(ApprovalChoice.Deny) }, variant = ButtonVariant.Outline, enabled = ready, modifier = Modifier.weight(1f))
+        Button("Allow once", onClick = { choose(ApprovalChoice.Once) }, enabled = ready, modifier = Modifier.weight(1f))
     }
+    Text("Allow once runs only this command, this time.", style = Theme[typography][caption], color = Theme[colors][textTertiary])
     val wider = request.choices.filter { it == ApprovalChoice.Session || it == ApprovalChoice.Always }
     if (wider.isNotEmpty()) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Broader permissions", style = Theme[typography][caption], color = Theme[colors][textTertiary])
             wider.forEach { choice ->
-                Button(
-                    if (choice == ApprovalChoice.Session) "Allow for this chat" else "Always allow",
-                    onClick = { if (choice == ApprovalChoice.Always) confirmAlways = true else choose(choice) },
-                    variant = ButtonVariant.Ghost,
-                    size = ButtonSize.Small,
-                    enabled = connected,
-                    modifier = Modifier.weight(1f),
+                val session = choice == ApprovalChoice.Session
+                WiderChoice(
+                    title = if (session) "Allow for this chat" else "Always allow",
+                    detail = if (session) {
+                        "Commands like this run without asking again, in this chat only, until it ends."
+                    } else {
+                        "Commands like this run without asking again, in every chat, until you remove the rule from the gateway's config."
+                    },
+                    enabled = ready,
+                    onClick = { if (session) choose(choice) else confirmAlways = true },
                 )
             }
         }
@@ -173,7 +279,7 @@ private fun ApprovalContent(request: InputRequest.Approval, more: String?, conne
 }
 
 @Composable
-private fun ClarifyContent(request: InputRequest.Clarify, more: String?, connected: Boolean, answer: (JsonObject) -> Unit) {
+private fun ClarifyContent(request: InputRequest.Clarify, more: String?, connected: Boolean, onStop: (() -> Unit)?, answer: (JsonObject) -> Unit) {
     val questions = request.questions
     var index by remember(request.id) { mutableStateOf(0) }
     val picked = remember(request.id) { questions.map { mutableStateListOf<String>() } }
@@ -189,7 +295,7 @@ private fun ClarifyContent(request: InputRequest.Clarify, more: String?, connect
     }
 
     val counter = if (questions.size > 1) "${index + 1} of ${questions.size}" else more
-    Header(Lucide.MessageCircleQuestion, Theme[colors][accent], "Hermes asks", counter)
+    Header(Lucide.MessageCircleQuestion, Theme[colors][accent], "Hermes asks", counter, onStop)
     Text(question.question, style = Theme[typography][body], color = Theme[colors][textColor])
     if (question.choices.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -261,12 +367,12 @@ private fun ChoiceRow(choice: String, question: ClarifyQuestion, selected: Boole
 }
 
 @Composable
-private fun SecretContent(request: InputRequest.Secret, more: String?, connected: Boolean, answer: (JsonObject) -> Unit) {
+private fun SecretContent(request: InputRequest.Secret, more: String?, connected: Boolean, onStop: (() -> Unit)?, answer: (JsonObject) -> Unit) {
     val value = remember(request.id) { TextFieldState() }
     val sudo = request.kind == InputRequest.Secret.Kind.Sudo
     val submit = { if (value.text.isNotEmpty()) answer(InputAnswers.value(value.text.toString())) }
 
-    Header(Lucide.KeyRound, Theme[colors][warning], if (sudo) "Sudo password needed" else "Secret needed", more)
+    Header(Lucide.KeyRound, Theme[colors][warning], if (sudo) "Sudo password needed" else "Secret needed", more, onStop)
     if (sudo) {
         Text("To run this command as root:", style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
         request.command?.takeIf { it.isNotBlank() }?.let { CommandBlock(it) }

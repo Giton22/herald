@@ -254,6 +254,31 @@ class ChatSessionTest {
     }
 
     @Test
+    fun stoppingDropsTheQueuedPromptsAndHandsThemBack() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.resume" to """{"session_id":"rt1","running":false}""",
+                "prompt.submit" to """{"status":"queued"}""",
+                "session.interrupt" to """{"status":"interrupted"}""",
+            ),
+        )
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        transport.push(event("message.start", "rt1"))
+        transport.push(event("message.delta", "rt1", """{"text":"Working"}"""))
+        chat.state.first { s -> (s.messages.last() as? ChatMessage.Assistant)?.text == "Working" }
+        assertTrue(chat.send("then the tests", queue = true))
+        assertTrue(chat.send("and the docs", queue = true))
+
+        // The gateway clears its queue on interrupt, so nothing would ever send these.
+        assertEquals(listOf("then the tests", "and the docs"), chat.interrupt())
+        assertTrue(transport.sent.value.any { it.isCall("session.interrupt") })
+        assertEquals(listOf("hello", "Hi! What next?", "Working"), chat.state.value.messages.map { it.textOf() })
+    }
+
+    @Test
     fun sendWhileOfflineReportsAndLeavesNoBubble() = runTest {
         val connection = GatewayConnection(
             AuthApi(client(), PersistentCookiesStorage(InMemoryKeyValueStore())),
