@@ -28,8 +28,7 @@ import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.gateway.CheckStage
 import dev.hermeskotlin.core.gateway.ProbeResult
 import dev.hermeskotlin.core.gateway.SavedGateway
-import dev.hermeskotlin.core.gateway.reachFix
-import dev.hermeskotlin.core.gateway.toStageResult
+import dev.hermeskotlin.core.gateway.serverOnlyResults
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.code
 import dev.hermeskotlin.designsystem.HeraldMark
@@ -101,22 +100,29 @@ fun ConnectScreen(
             modifier = Modifier.fillMaxWidth(),
         )
 
-        result?.let { ResultCard(it) }
+        if (result is ProbeResult.Reachable) ResultCard(result)
 
         // Each stage is tested on its own: a reachable server says nothing yet about the sign-in or chat.
+        // A failed server carries its problem and fix here, so there's no separate result card for it.
         result?.let {
             Surface(Modifier.fillMaxWidth()) {
-                ConnectionChecklist(
-                    results = mapOf(CheckStage.Server to it.toStageResult()),
-                    running = false,
-                    modifier = Modifier.padding(16.dp),
-                    pendingNote = { stage ->
-                        when (stage) {
-                            CheckStage.SignIn -> "Tested when you sign in, next."
-                            else -> "Tested after sign-in: the chat shows whether it connects, and Settings → Check connection tests it on its own."
-                        }
-                    },
-                )
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    ConnectionChecklist(
+                        results = it.serverOnlyResults(),
+                        running = false,
+                        pendingNote = { stage ->
+                            when {
+                                !signInReady -> "Needs a username and password sign-in, which this dashboard doesn't offer yet."
+                                stage == CheckStage.SignIn -> "Tested when you sign in, next."
+                                else -> "Tested after sign-in: the chat shows whether it connects, and Settings → Check connection tests it on its own."
+                            }
+                        },
+                    )
+                    if (it is ProbeResult.Unreachable) {
+                        Hint("If the dashboard isn't running yet, run this on the server:")
+                        CodeLine("hermes dashboard --host 0.0.0.0 --port 9119 --no-open")
+                    }
+                }
             }
         }
 
@@ -146,29 +152,10 @@ fun ConnectScreen(
 private const val PASSWORD_PROVIDER = "basic"
 
 @Composable
-private fun ResultCard(result: ProbeResult) {
+private fun ResultCard(result: ProbeResult.Reachable) {
     Surface(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            when (result) {
-                is ProbeResult.Reachable -> ReachableContent(result)
-                is ProbeResult.NotHermes -> {
-                    StatusDot(Status.Error, "Not a Hermes dashboard")
-                    Hint(
-                        buildString {
-                            append("Something answered at ${result.url}")
-                            result.httpStatus?.let { append(" (HTTP $it)") }
-                            append(", but not a Hermes dashboard. The dashboard listens on port 9119 by default.")
-                        },
-                    )
-                }
-                is ProbeResult.Unreachable -> {
-                    StatusDot(Status.Error, "Can't reach ${result.url}")
-                    Hint(result.reason)
-                    Text("What to do: ${reachFix(result.url)}", style = Theme[typography][bodySmall], color = Theme[colors][text])
-                    Hint("If the dashboard isn't running yet, run this on the server:")
-                    CodeLine("hermes dashboard --host 0.0.0.0 --port 9119 --no-open")
-                }
-            }
+            ReachableContent(result)
         }
     }
 }
