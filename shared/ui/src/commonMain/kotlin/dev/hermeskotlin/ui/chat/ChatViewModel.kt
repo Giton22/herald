@@ -9,6 +9,7 @@ import dev.hermeskotlin.core.chat.BackgroundProcess
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatSession
 import dev.hermeskotlin.core.chat.ChatState
+import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.chat.LastChat
 import dev.hermeskotlin.core.chat.LastChatStore
@@ -112,13 +113,15 @@ data class ChatTarget(
 /**
  * Shows the [ChatSession] the app-wide [ChatHost] has open; opening another target replaces it.
  * Remembers the open chat in [LastChatStore] so the next launch returns to it: a stored session once
- * it has messages, or nothing while a new chat is still empty.
+ * it has messages, or nothing while a new chat is still empty. Each chat keeps its own unsent text in
+ * [DraftStore] and its picked files in memory, so switching chats loses neither.
  */
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class ChatViewModel(
     connection: GatewayConnection,
     private val host: ChatHost,
     private val lastChats: LastChatStore,
+    private val drafts: DraftStore,
     private val models: ModelsApi,
     private val media: MediaApi,
     private val slashApi: SlashApi,
@@ -167,6 +170,12 @@ class ChatViewModel(
     /** Files waiting in the composer for the next send. */
     val attachments: StateFlow<List<OutgoingAttachment>> = _attachments.asStateFlow()
 
+    /** Files picked in chats that aren't open, by [trayKey]; they live as long as the app does. */
+    private val trays = mutableMapOf<String, List<OutgoingAttachment>>()
+
+    /** The chat whose draft the composer holds; null while it's being restored, so nothing is saved over it. */
+    private var draftOf: ChatTarget? = null
+
     private val _attachmentError = MutableStateFlow<String?>(null)
     val attachmentError: StateFlow<String?> = _attachmentError.asStateFlow()
 
@@ -205,15 +214,57 @@ class ChatViewModel(
                 .filterNotNull()
                 .collect { last -> target?.let { lastChats.set(it.gateway.gatewayUrl, last, it.profile) } }
         }
+        viewModelScope.launch {
+            snapshotFlow { composer.text.toString() }
+                .debounce(DRAFT_SAVE_DEBOUNCE_MS)
+                .collect { text -> draftOf?.let { saveDraft(it, draftChat(it), text) } }
+        }
+    }
+
+    /** The chat a draft belongs to: its stored session, which a new chat gets with its first reply. */
+    private fun draftChat(target: ChatTarget): String? = state.value.storedSessionId ?: target.storedSessionId
+
+    private fun trayKey(target: ChatTarget, chat: String?) =
+        "${target.gateway.gatewayUrl}#${target.profile.orEmpty()}#${chat ?: DraftStore.NEW_CHAT}"
+
+    /**
+     * Saves [text] as the draft of [target]'s chat. Once a new chat has its stored session, the draft
+     * typed before it moves there, so it doesn't come back in the next new chat.
+     */
+    private suspend fun saveDraft(target: ChatTarget, chat: String?, text: String) {
+        if (chat != null && target.storedSessionId == null) drafts.set(target.gateway.gatewayUrl, null, "", target.profile)
+        drafts.set(target.gateway.gatewayUrl, chat, text, target.profile)
+    }
+
+    /** Puts the open chat's text and files aside before another chat takes the composer. */
+    private fun stashDraft() {
+        val open = draftOf ?: return
+        draftOf = null
+        val text = composer.text.toString()
+        val chat = draftChat(open)
+        val tray = _attachments.value
+        if (tray.isEmpty()) trays.remove(trayKey(open, chat)) else trays[trayKey(open, chat)] = tray
+        viewModelScope.launch { saveDraft(open, chat, text) }
+    }
+
+    private fun restoreDraft(target: ChatTarget) {
+        _attachments.value = trays.remove(trayKey(target, target.storedSessionId)).orEmpty()
+        viewModelScope.launch {
+            val text = drafts.get(target.gateway.gatewayUrl, target.storedSessionId, target.profile)
+            if (this@ChatViewModel.target != target) return@launch
+            if (text != null && composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
+            draftOf = target
+        }
     }
 
     fun open(target: ChatTarget) {
         if (this.target == target) return
+        stashDraft()
         this.target = target
         // A voice chat belongs to the chat it started in.
         voice.stopAll()
         composer.clearText()
-        _attachments.value = emptyList()
+        restoreDraft(target)
         _attachmentError.value = null
         if (target.storedSessionId == null) viewModelScope.launch { lastChats.set(target.gateway.gatewayUrl, null, target.profile) }
         session.value = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title, target.profile)
@@ -594,5 +645,8 @@ class ChatViewModel(
 
         /** Typing pauses this long before asking the gateway for matches. */
         const val COMPLETION_DEBOUNCE_MS = 120L
+
+        /** Typing pauses this long before the draft is written to storage. */
+        const val DRAFT_SAVE_DEBOUNCE_MS = 400L
     }
 }
