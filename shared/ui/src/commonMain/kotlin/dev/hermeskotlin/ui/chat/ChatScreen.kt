@@ -125,6 +125,7 @@ import dev.hermeskotlin.core.chat.OutgoingAttachment
 import dev.hermeskotlin.core.chat.SendCheck
 import dev.hermeskotlin.core.chat.extractReplyMedia
 import dev.hermeskotlin.core.chat.ToolActivity
+import dev.hermeskotlin.core.chat.TodoStatus
 import dev.hermeskotlin.core.chat.TurnOutcome
 import dev.hermeskotlin.core.chat.compactCount
 import dev.hermeskotlin.core.connection.ConnectionState
@@ -388,7 +389,7 @@ internal fun ChatView(
                             LocalNotice provides onNotice,
                             LocalSubagents provides SubagentContext(state.subagents, actions::stopSubagent),
                         ) {
-                            Messages(state.messages, state.thinkingFrame, bottomInset = dockInset)
+                            Messages(state.messages, bottomInset = dockInset)
                         }
                     } else Box(Modifier.fillMaxSize().padding(bottom = dockInset)) {
                         when {
@@ -462,9 +463,12 @@ private fun ColumnScope.Dock(
     attachmentError?.let { Banner(it, actionLabel = null, onAction = actions::dismissAttachmentError) }
     voiceChat.error?.let { Banner(it, actionLabel = null, onAction = actions::dismissVoiceChatError) }
     dictation.error?.let { Banner(it, actionLabel = null, onAction = actions::dismissDictationError) }
-    AnimatedVisibility(visible = state.running && state.status != null) { StatusLine(state.status.orEmpty()) }
     AnimatedVisibility(visible = notice != null) { NoticeLine(notice.orEmpty()) }
-    TodoPanel(state.todos, live = state.todosLive, hazeState = hazeState)
+    // One place says what's happening: the current action, with the status text and plan folded beneath.
+    AnimatedVisibility(visible = state.running, enter = fadeIn(), exit = fadeOut()) {
+        ProgressPanel(currentAction(state), state.status, state.runningTool(), state.todos, hazeState)
+    }
+    if (!state.running) TodoPanel(state.todos, live = state.todosLive, hazeState = hazeState)
 
     if (state.inputRequests.isNotEmpty()) {
         InputRequestPanel(state.inputRequests, connected, onAnswer = actions::answer)
@@ -596,7 +600,7 @@ private val FOLLOW_UP_PROMPTS = listOf(
 )
 
 @Composable
-private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottomInset: Dp) {
+private fun Messages(messages: List<ChatMessage>, bottomInset: Dp) {
     // Reversed layout keeps the newest message pinned to the bottom while a reply streams in.
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -614,7 +618,7 @@ private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottom
             items(messages.asReversed(), key = { it.key }) { message ->
                 when (message) {
                     is ChatMessage.User -> UserBubble(message)
-                    is ChatMessage.Assistant -> AssistantReply(message, thinkingFrame.takeIf { message.streaming })
+                    is ChatMessage.Assistant -> AssistantReply(message)
                     is ChatMessage.Command -> CommandOutput(message)
                     is ChatMessage.Notice -> NoticeLine(message)
                 }
@@ -672,22 +676,19 @@ private fun UserBubble(message: ChatMessage.User) {
 }
 
 @Composable
-private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String?) {
+private fun AssistantReply(message: ChatMessage.Assistant) {
     val settings = LocalAppSettings.current
     val showReasoning = settings.showReasoning && message.reasoning.isNotBlank()
     val showTools = settings.showToolActivity && message.tools.isNotEmpty()
     // Pictures and files the reply delivered show as themselves, not as Markdown a renderer can't load.
     val (text, media) = remember(message.text) { extractReplyMedia(message.text) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        if (showReasoning) Reasoning(message.reasoning, live = message.streaming && message.text.isEmpty(), thinkingFrame)
+        // What's happening now is said once, above the composer; the reply keeps only what it's made of.
+        if (showReasoning) Reasoning(message.reasoning)
         if (showTools) Tools(message.tools)
         // Shown whatever the tool-activity setting: the work happens out of sight, in other agents.
         message.tools.filter { it.name == "delegate_task" }.forEach { DelegationCard(it) }
-        when {
-            text.isNotBlank() -> SelectionContainer { MarkdownText(text, streaming = message.streaming) }
-            // One activity cue at a time: live reasoning and running tools already show their own.
-            message.streaming && media.isEmpty() && !showReasoning && !(showTools && message.tools.any { it.running }) -> Thinking(thinkingFrame)
-        }
+        if (text.isNotBlank()) SelectionContainer { MarkdownText(text, streaming = message.streaming) }
         if (media.isNotEmpty()) ReplyMediaList(media)
         when (message.outcome) {
             TurnOutcome.Error -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -863,19 +864,13 @@ private fun Disclosure(
     }
 }
 
+/** The reply's reasoning, folded; live progress is the dock's to show. */
 @Composable
-private fun Reasoning(text: String, live: Boolean, thinkingFrame: String?) {
+private fun Reasoning(text: String) {
     var expanded by remember { mutableStateOf(false) }
     Disclosure(
-        icon = {
-            if (live) {
-                Spinner(Modifier.size(14.dp))
-            } else {
-                UnstyledIcon(Lucide.Brain, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp))
-            }
-        },
-        // While live, the agent's own spinner frame ("(⌐■_■) formulating...") rather than a fixed word.
-        label = if (live) thinkingFrame ?: "Thinking…" else "Thought it through",
+        icon = { UnstyledIcon(Lucide.Brain, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp)) },
+        label = "Reasoning",
         expanded = expanded,
         onToggle = { expanded = !expanded },
     ) {
@@ -883,24 +878,14 @@ private fun Reasoning(text: String, live: Boolean, thinkingFrame: String?) {
     }
 }
 
+/** The tools the reply used, folded; the one running now is named above the composer instead. */
 @Composable
 private fun Tools(tools: List<ToolActivity>) {
     var expanded by remember { mutableStateOf(false) }
-    val running = tools.lastOrNull { it.running }
     val names = tools.map { it.name }.distinct()
-    val label = when {
-        running != null -> running.detail?.lineSequence()?.firstOrNull()?.let { "${running.name} · $it" } ?: "Running ${running.name}"
-        names.size <= 2 -> "Used ${names.joinToString(" and ")}"
-        else -> "Used ${tools.size} tools"
-    }
+    val label = if (names.size <= 2) "Used ${names.joinToString(" and ")}" else "Used ${tools.size} tools"
     Disclosure(
-        icon = {
-            if (running != null) {
-                Spinner(Modifier.size(14.dp))
-            } else {
-                UnstyledIcon(Lucide.Wrench, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp))
-            }
-        },
+        icon = { UnstyledIcon(Lucide.Wrench, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp)) },
         label = label,
         expanded = expanded,
         onToggle = { expanded = !expanded },
@@ -911,40 +896,34 @@ private fun Tools(tools: List<ToolActivity>) {
     }
 }
 
-@Composable
-private fun Thinking(thinkingFrame: String?) {
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-        Spinner(Modifier.size(14.dp))
-        Text(
-            thinkingFrame ?: "Thinking…",
-            style = Theme[typography][bodySmall],
-            color = Theme[colors][textTertiary],
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
+/** The tool the running turn is in the middle of, if any. */
+private fun ChatState.runningTool(): ToolActivity? =
+    (messages.lastOrNull() as? ChatMessage.Assistant)?.tools?.lastOrNull { it.running }
+
+/**
+ * The one line that says what the agent is doing now, most specific first: waiting on the user, a tool
+ * at work, the plan's step in hand, the gateway's status text, else thinking.
+ */
+internal fun currentAction(state: ChatState): String {
+    if (state.inputRequests.isNotEmpty()) return "Waiting for your answer"
+    state.runningTool()?.let { tool ->
+        val detail = tool.detail?.lineSequence()?.firstOrNull()?.takeIf { it.isNotBlank() }
+        return if (detail != null) "${tool.name.toolVerb()}: $detail" else tool.name.toolVerb()
     }
+    state.todos?.items?.firstOrNull { it.status == TodoStatus.InProgress }?.let { return it.content }
+    state.status?.takeIf { it.isNotBlank() }?.let { return it }
+    return state.thinkingFrame ?: "Thinking…"
 }
 
-@Composable
-private fun StatusLine(status: String) {
-    // Backed so it stays legible over the conversation scrolling beneath the dock.
-    Row(
-        Modifier
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .background(Theme[colors][background].copy(alpha = 0.85f), RoundedCornerShape(Theme[radii][radiusMedium]))
-            .padding(horizontal = 8.dp, vertical = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Spinner(Modifier.size(12.dp))
-        Text(
-            status,
-            style = Theme[typography][caption],
-            color = Theme[colors][textTertiary],
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
+/** "terminal" reads as "Running a command", and so on; other tools as "Using <name>". */
+private fun String.toolVerb(): String = when (this) {
+    "terminal", "shell", "bash" -> "Running a command"
+    "read_file", "file_read" -> "Reading a file"
+    "write_file", "patch", "edit_file" -> "Editing a file"
+    "web_search", "search" -> "Searching the web"
+    "web_extract", "browser", "fetch" -> "Reading a web page"
+    "delegate_task" -> "Working with subagents"
+    else -> "Using ${replace('_', ' ')}"
 }
 
 /** A passing message, like where a file was saved. */
