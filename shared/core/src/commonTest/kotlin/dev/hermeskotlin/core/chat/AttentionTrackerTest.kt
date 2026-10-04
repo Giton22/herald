@@ -99,4 +99,21 @@ class AttentionTrackerTest {
         transport.push(event("message.complete", "rt1", """{"text":"done","status":"complete"}"""))
         tracker.waiting.first { it.isEmpty() }
     }
+
+    @Test
+    fun aChatStopsRunningWhenItsTurnEndsEvenAfterLeavingIt() = runTest {
+        val (host, tracker, transport) = setup(backgroundScope)
+        // The resume says a turn is running (see serve).
+        host.open(url, "stored-1", null).state.first { it.runtimeSessionId == "rt1" }
+        tracker.running.first { it["stored-1"] == true }
+
+        host.open(url, "stored-2", null).state.first { it.runtimeSessionId == "rt2" }
+        assertEquals(true, tracker.running.value["stored-1"])
+
+        transport.push(event("message.complete", "rt1", """{"text":"done","status":"complete"}"""))
+        tracker.running.first { it["stored-1"] == false }
+
+        transport.push(event("message.start", "rt1"))
+        tracker.running.first { it["stored-1"] == true }
+    }
 }

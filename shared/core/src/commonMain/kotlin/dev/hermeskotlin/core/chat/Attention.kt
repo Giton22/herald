@@ -60,6 +60,22 @@ class AttentionTracker(connection: GatewayConnection, host: ChatHost, scope: Cor
         }
     }.stateIn(scope, SharingStarted.Eagerly, emptyMap())
 
+    /** Whether a turn is running, by runtime session id, from each `message.start` and `message.complete`. */
+    private val turns = MutableStateFlow<Map<String, Boolean>>(emptyMap())
+
+    /**
+     * Whether each chat this phone has heard from has a turn running, by stored session id. A chat it
+     * hasn't heard from is left out: the list's `is_active` can't stand in, since the gateway keeps it set
+     * while a session stays loaded, long after its turn ends. The open chat speaks for itself, turns
+     * started elsewhere included.
+     */
+    val running: StateFlow<Map<String, Boolean>> = combine(links, turns, open) { links, turns, open ->
+        buildMap {
+            turns.forEach { (runtimeId, running) -> links[runtimeId]?.let { put(it, running) } }
+            open?.storedSessionId?.let { put(it, open.running) }
+        }
+    }.stateIn(scope, SharingStarted.Eagerly, emptyMap())
+
     init {
         scope.launch {
             connection.serverRequests.collect { request ->
@@ -75,8 +91,10 @@ class AttentionTracker(connection: GatewayConnection, host: ChatHost, scope: Cor
                         val id = (event.payload as? JsonObject).string("id") ?: (event.payload as? JsonObject).string("request_id")
                         if (id != null) requests.update { it - id }
                     }
+                    "message.start" -> event.sessionId?.let { runtimeId -> turns.update { it + (runtimeId to true) } }
                     // Nothing can still wait once the turn is over.
                     "message.complete" -> event.sessionId?.let { runtimeId ->
+                        turns.update { it + (runtimeId to false) }
                         requests.update { all -> all.filterValues { it.first != runtimeId } }
                     }
                 }
@@ -90,6 +108,10 @@ class AttentionTracker(connection: GatewayConnection, host: ChatHost, scope: Cor
                 val storedId = state?.storedSessionId
                 if (runtimeId != null && storedId != null && links.value[runtimeId] != storedId) {
                     links.update { it + (runtimeId to storedId) }
+                }
+                // Kept for after the user leaves it: the open chat knows, from its resume, of turns begun elsewhere.
+                if (runtimeId != null && state.running != turns.value[runtimeId]) {
+                    turns.update { it + (runtimeId to state.running) }
                 }
                 // Gone from the chat still open means answered here (or elsewhere): it no longer waits.
                 // Switching chats isn't an answer, so only the same chat's requests are compared.

@@ -269,7 +269,7 @@ fun SessionsSidebar(
                     state.filter == SessionListFilter.Recent -> SessionList(
                         sessions = when (attentionFilter) {
                             AttentionFilter.All -> state.sessions
-                            AttentionFilter.Running -> state.sessions.filter { it.isActive }
+                            AttentionFilter.Running -> state.sessions.filter { statuses[it.id]?.running == true }
                             AttentionFilter.NeedsAttention -> state.sessions.filter { statuses[it.id]?.needsAttention == true }
                         },
                         selectedId = selectedId,
@@ -286,7 +286,7 @@ fun SessionsSidebar(
                                 item(key = "filters") {
                                     AttentionFilters(
                                         selected = attentionFilter,
-                                        running = state.sessions.count { it.isActive },
+                                        running = state.sessions.count { statuses[it.id]?.running == true },
                                         needsAttention = state.sessions.count { statuses[it.id]?.needsAttention == true },
                                         onSelect = viewModel::setAttentionFilter,
                                     )
@@ -300,7 +300,7 @@ fun SessionsSidebar(
                                 state.sessions.isEmpty() -> item(key = "empty") {
                                     ListNotice("Your conversations will show up here.")
                                 }
-                                attentionFilter == AttentionFilter.Running && state.sessions.none { it.isActive } -> item(key = "none-running") {
+                                attentionFilter == AttentionFilter.Running && state.sessions.none { statuses[it.id]?.running == true } -> item(key = "none-running") {
                                     ListNotice("Nothing is running right now.")
                                 }
                                 attentionFilter == AttentionFilter.NeedsAttention && state.sessions.none { statuses[it.id]?.needsAttention == true } ->
@@ -688,8 +688,8 @@ private fun ListLabel(text: String) {
 }
 
 /**
- * Desktop's session row: a status dot, the title and its age. The dot lights up while the session is
- * running; [draft] adds a "Draft" label for unsent text. Long-press for actions.
+ * Desktop's session row: a status dot, the title and its age. The dot lights up while a turn is
+ * running ([RowStatus.running]); [draft] adds a "Draft" label for unsent text. Long-press for actions.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -722,7 +722,7 @@ internal fun SessionRow(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(
                 Modifier.size(6.dp).background(
-                    if (session.isActive) Theme[colors][success] else Theme[colors][strokeStrong],
+                    if (status?.running == true) Theme[colors][success] else Theme[colors][strokeStrong],
                     CircleShape,
                 ),
             )
@@ -747,7 +747,7 @@ internal fun SessionRow(
         // Said in words as well as by the dot's colour.
         val labels = buildList {
             status?.waiting?.let { add(it.label to Theme[colors][warning]) }
-            if (session.isActive) add("Running" to Theme[colors][success])
+            if (status?.running == true) add("Running" to Theme[colors][success])
             if (status?.unread == true) add("New reply" to Theme[colors][accent])
         }
         if (labels.isNotEmpty()) {

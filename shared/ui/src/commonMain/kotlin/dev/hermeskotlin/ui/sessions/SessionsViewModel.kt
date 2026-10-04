@@ -67,8 +67,8 @@ enum class AttentionFilter(val label: String) {
     NeedsAttention("Needs attention"),
 }
 
-/** What a row says about its chat besides the title, in words. */
-data class RowStatus(val waiting: Waiting? = null, val unread: Boolean = false) {
+/** What a row says about its chat besides the title, in words. [running]: a turn is going right now. */
+data class RowStatus(val waiting: Waiting? = null, val unread: Boolean = false, val running: Boolean = false) {
     val needsAttention: Boolean get() = waiting != null || unread
 }
 
@@ -101,6 +101,7 @@ class SessionsViewModel(
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
     private val waiting = attention.waiting
+    private val running = attention.running
 
     fun setAttentionFilter(filter: AttentionFilter) {
         _attentionFilter.value = filter
@@ -124,9 +125,10 @@ class SessionsViewModel(
     val state: StateFlow<SessionsUiState> = _state.asStateFlow()
 
     /** Each listed chat's status by id; chats with nothing to say are left out. */
-    val statuses: StateFlow<Map<String, RowStatus>> = combine(_state, waiting, seen) { state, waiting, seen ->
+    val statuses: StateFlow<Map<String, RowStatus>> = combine(_state, waiting, seen, running) { state, waiting, seen, running ->
         (state.sessions + state.searchResults.orEmpty()).mapNotNull { session ->
-            RowStatus(waiting[session.id], seen?.isUnread(session) == true).takeIf { it.needsAttention }?.let { session.id to it }
+            RowStatus(waiting[session.id], seen?.isUnread(session) == true, running[session.id] == true)
+                .takeIf { it.needsAttention || it.running }?.let { session.id to it }
         }.toMap()
     }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
 
