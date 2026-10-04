@@ -49,6 +49,20 @@ enum class SendCheck {
     NotReceived,
 }
 
+/** How a send ended. */
+enum class SendOutcome {
+    Sent,
+
+    /** It never reached Hermes; the bubble is gone, so the text should go back to the composer. */
+    NotSent,
+
+    /** It went out without a reply and its bubble stays, marked by a [SendCheck], to check or resend from. */
+    Unsettled,
+}
+
+/** What went out for a bubble marked by a [SendCheck]: [text] as sent, [display] as shown. */
+internal class UnsettledPrompt(val text: String, val display: String?, val startsTurn: Boolean)
+
 sealed interface ChatMessage {
     val key: String
 
