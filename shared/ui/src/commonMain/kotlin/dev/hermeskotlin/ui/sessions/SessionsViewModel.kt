@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.AuthUser
+import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
@@ -18,10 +19,15 @@ import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.sessions.SessionListFilter
 import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.core.sessions.SessionsApi
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
@@ -59,6 +65,7 @@ class SessionsViewModel(
     private val connection: GatewayConnection,
     private val lastChats: LastChatStore,
     private val profiles: ProfilesApi,
+    private val drafts: DraftStore,
 ) : ViewModel() {
 
     val connectionState: StateFlow<ConnectionState> = connection.state
@@ -82,6 +89,14 @@ class SessionsViewModel(
     private var profile: String? = null
     private var loadJob: Job? = null
 
+    private val bound = MutableStateFlow<Pair<GatewayUrl, String?>?>(null)
+
+    /** Sessions with unsent text in their composer, marked "Draft" in the list. */
+    @OptIn(ExperimentalCoroutinesApi::class)
+    val draftChats: StateFlow<Set<String>> = bound
+        .flatMapLatest { scope -> scope?.let { (url, profile) -> drafts.chatsWithDrafts(url, profile) } ?: flowOf(emptySet()) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
+
     init {
         observeServerChanges()
         observeSearch()
@@ -93,6 +108,7 @@ class SessionsViewModel(
         val newGateway = this.gateway != gateway
         this.gateway = gateway
         this.profile = profile
+        bound.value = gateway.gatewayUrl to profile
         _state.value = SessionsUiState()
         load(refresh = false)
         if (newGateway) {
