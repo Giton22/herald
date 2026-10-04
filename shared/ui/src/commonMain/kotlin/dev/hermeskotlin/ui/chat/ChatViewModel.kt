@@ -608,7 +608,13 @@ class ChatViewModel(
 
     override fun interrupt() {
         val chat = session.value ?: return
-        viewModelScope.launch { chat.interrupt() }
+        viewModelScope.launch {
+            // Stop drops what was queued behind the task; hand it back rather than lose it.
+            val dropped = chat.interrupt().filter { it.isNotBlank() }
+            if (dropped.isEmpty()) return@launch
+            val typed = composer.text.toString()
+            composer.setTextAndPlaceCursorAtEnd((dropped + typed).filter { it.isNotBlank() }.joinToString("\n\n"))
+        }
     }
 
     override fun stopSubagent(subagentId: String) {

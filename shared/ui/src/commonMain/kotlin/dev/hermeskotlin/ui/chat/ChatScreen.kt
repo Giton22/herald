@@ -661,7 +661,7 @@ private fun UserBubble(message: ChatMessage.User) {
             }
         }
         if (message.queued) {
-            Text("Queued · runs after the current turn", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+            Text("Queued · sends after this task", style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }
         when (message.check) {
             SendCheck.Checking -> Text("Checking whether Hermes got this…", style = Theme[typography][caption], color = Theme[colors][textTertiary])
@@ -984,8 +984,9 @@ private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit) 
 }
 
 /**
- * Desktop's composer stood up for a phone: a flat outlined box, the text on top; beneath it a plain +,
- * the model and thinking level as quiet text, and the round send (or stop) button.
+ * Desktop's composer stood up for a phone: a flat outlined box, the text on top; beneath it +, dictation
+ * and voice chat, the model and thinking level as quiet text, and the round send button, which is Stop
+ * for as long as a task runs. A message typed mid-task gets its own "Send now" / "Send after" choices.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -1055,6 +1056,16 @@ private fun Composer(
                 },
             )
         }
+        // Mid-turn, a message either joins the running task or waits for it; both say which.
+        if (state.running && hasText) {
+            MidTaskSend(
+                // The same test send() makes: with attachments, slash text goes out as a prompt, not a command.
+                command = attachments.isEmpty() && SlashCommand.parse(actions.composer.text.toString().trim()) != null,
+                enabled = connected,
+                onSendNow = { actions.send() },
+                onSendAfter = { actions.send(queue = true) },
+            )
+        }
         Row(
             Modifier.fillMaxWidth().padding(top = 10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -1067,33 +1078,57 @@ private fun Composer(
                 enabled = attachments.size < OutgoingAttachment.MAX_COUNT,
             )
             DictationButton(dictation, onClick = onDictate, enabled = connected)
+            ComposerButton(
+                icon = Lucide.AudioLines,
+                contentDescription = "Start a voice chat",
+                onClick = onVoiceChat,
+                enabled = connected && !state.running && !dictation.active,
+            )
             Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { ModelPill(state, picker, onClick = onOpenModels) }
-            // Mid-turn, send corrects the running turn; this holds the message for the next one instead.
-            if (state.running && hasText && !SlashCommand.looksLikeCommand(actions.composer.text.toString())) {
-                ComposerButton(
-                    icon = Lucide.ListEnd,
-                    contentDescription = "Send after this turn",
-                    onClick = { actions.send(queue = true) },
-                    enabled = connected,
+            // The round button keeps one job per state: Stop for the whole task, even while you type.
+            if (state.running) {
+                SendButton(SendIcon.Stop, onClick = actions::interrupt, enabled = connected)
+            } else {
+                SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected && hasText)
+            }
+        }
+    }
+}
+
+/**
+ * The choices for a message typed while a task runs: "Send now" adds it to the task in progress, "Send after
+ * this task" holds it for the next turn. A slash command runs at once, so it only gets "Send now".
+ */
+@Composable
+private fun MidTaskSend(command: Boolean, enabled: Boolean, onSendNow: () -> Unit, onSendAfter: () -> Unit) {
+    Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 2.dp, top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                "Send now",
+                onClick = onSendNow,
+                variant = ButtonVariant.Secondary,
+                size = ButtonSize.Small,
+                leadingIcon = Lucide.ArrowUp,
+                enabled = enabled,
+                pill = true,
+            )
+            if (!command) {
+                Button(
+                    "Send after this task",
+                    onClick = onSendAfter,
+                    variant = ButtonVariant.Outline,
+                    size = ButtonSize.Small,
+                    leadingIcon = Lucide.ListEnd,
+                    enabled = enabled,
+                    pill = true,
                 )
             }
-            val stop = state.running && !hasText
-            // An empty composer offers a voice chat in the send button's place, as phone assistants do.
-            val voice = !stop && !hasText && !dictation.active
-            SendButton(
-                icon = when {
-                    stop -> SendIcon.Stop
-                    voice -> SendIcon.Voice
-                    else -> SendIcon.Send
-                },
-                onClick = when {
-                    stop -> actions::interrupt
-                    voice -> onVoiceChat
-                    else -> { { actions.send() } }
-                },
-                enabled = connected && (stop || hasText || voice),
-            )
         }
+        Text(
+            if (command) "Commands run right away." else "Send now changes the task in progress.",
+            style = Theme[typography][caption],
+            color = Theme[colors][textTertiary],
+        )
     }
 }
 
@@ -1111,7 +1146,7 @@ private fun ComposerButton(icon: ImageVector, contentDescription: String, onClic
     }
 }
 
-private enum class SendIcon { Send, Stop, Voice }
+private enum class SendIcon { Send, Stop }
 
 /** Desktop's round send: a disc in the text colour (white on dark) with the icon cut in the page colour. */
 @Composable
@@ -1128,12 +1163,10 @@ private fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
             when (icon) {
                 SendIcon.Send -> Lucide.ArrowUp
                 SendIcon.Stop -> Lucide.Square
-                SendIcon.Voice -> Lucide.AudioLines
             },
             contentDescription = when (icon) {
                 SendIcon.Send -> "Send"
-                SendIcon.Stop -> "Stop"
-                SendIcon.Voice -> "Start a voice chat"
+                SendIcon.Stop -> "Stop the task"
             },
             tint = tint,
             modifier = Modifier.size(if (icon == SendIcon.Stop) 16.dp else 20.dp),
