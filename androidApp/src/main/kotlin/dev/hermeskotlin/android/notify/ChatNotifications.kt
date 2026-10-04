@@ -76,7 +76,7 @@ class ChatNotifications(private val context: Context) {
             runningTool != null -> runningTool.name.take(CHIP_LENGTH)
             else -> "Working"
         }
-        return base(CHANNEL_WORKING)
+        return base(CHANNEL_WORKING, state?.storedSessionId, state?.title)
             .setContentTitle(state?.title?.takeIf { it.isNotBlank() } ?: "Hermes is working")
             .setContentText(text)
             .setOngoing(true)
@@ -115,8 +115,8 @@ class ChatNotifications(private val context: Context) {
      * asks for an unlock first: from a locked phone, Approve would run a command for whoever holds it.
      * False when Herald may not post notifications.
      */
-    fun postRequest(title: String?, request: InputRequest): Boolean {
-        val builder = base(CHANNEL_REQUESTS)
+    fun postRequest(storedSessionId: String?, title: String?, request: InputRequest): Boolean {
+        val builder = base(CHANNEL_REQUESTS, storedSessionId, title)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setSubText(title)
@@ -174,7 +174,7 @@ class ChatNotifications(private val context: Context) {
     fun postReply(storedSessionId: String, title: String?, text: String, failed: Boolean) {
         val preview = text.toPlainText().take(MAX_PREVIEW).ifBlank { if (failed) "The turn failed." else "Done." }
         val input = RemoteInput.Builder(NotificationActionReceiver.KEY_TEXT).setLabel("Message Hermes").build()
-        val notification = base(CHANNEL_REPLIES)
+        val notification = base(CHANNEL_REPLIES, storedSessionId, title)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setContentTitle(if (failed) "Turn failed" else title?.takeIf { it.isNotBlank() } ?: "Hermes replied")
             .setContentText(preview)
@@ -206,10 +206,11 @@ class ChatNotifications(private val context: Context) {
         manager.activeNotifications.filter { it.id != WORKING_ID }.forEach { manager.cancel(it.tag, it.id) }
     }
 
-    private fun base(channel: String) = NotificationCompat.Builder(context, channel)
+    /** Tapping it opens Herald on [storedSessionId]'s chat, when the notification is about one. */
+    private fun base(channel: String, storedSessionId: String? = null, title: String? = null) = NotificationCompat.Builder(context, channel)
         .setSmallIcon(R.drawable.ic_notification)
         .setColor(ContextCompat.getColor(context, R.color.notification_accent))
-        .setContentIntent(openApp())
+        .setContentIntent(openApp(storedSessionId, title))
         .setAutoCancel(true)
 
     @SuppressLint("MissingPermission") // canPost checks it.
@@ -218,10 +219,17 @@ class ChatNotifications(private val context: Context) {
         return canPost
     }
 
-    private fun openApp(): PendingIntent {
+    private fun openApp(storedSessionId: String?, title: String?): PendingIntent {
         val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)!!
             .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-        return PendingIntent.getActivity(context, 0, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+        if (storedSessionId != null) {
+            intent.putExtra(EXTRA_OPEN_SESSION, storedSessionId).putExtra(EXTRA_OPEN_TITLE, title)
+            // Delivered to the running activity (onNewIntent) rather than just bringing its task forward.
+            intent.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        // One per chat: a shared request code would let the latest chat's extras overwrite the others'.
+        val requestCode = storedSessionId?.hashCode() ?: 0
+        return PendingIntent.getActivity(context, requestCode, intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
     }
 
     private fun action(name: String, key: String, mutable: Boolean = false, extras: Intent.() -> Unit = {}): PendingIntent {
@@ -234,6 +242,10 @@ class ChatNotifications(private val context: Context) {
         const val WORKING_ID = 1
         const val REPLY_ID = 2
         const val REQUEST_ID = 3
+
+        /** On the launch intent of a notification about a chat: that chat's stored session id, and its title. */
+        const val EXTRA_OPEN_SESSION = "open_session_id"
+        const val EXTRA_OPEN_TITLE = "open_session_title"
 
         private const val CHANNEL_WORKING = "working"
         private const val CHANNEL_CONNECTION = "connection"

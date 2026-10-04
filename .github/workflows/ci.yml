@@ -1,4 +1,6 @@
-# Tests and a debug build for every push and pull request. No secrets are used here.
+# Tests and a debug build for every push and pull request.
+# The only secret is GRADLE_ENCRYPTION_KEY (`openssl rand -base64 16`), which lets the configuration
+# cache be saved between runs. Without it (forks, or before it's set) the build still works, just slower.
 name: CI
 
 on:
@@ -27,6 +29,8 @@ jobs:
           java-version: "25"
 
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
       - name: Test and build
         run: ./gradlew --no-daemon :shared:core:testAndroidHostTest :shared:ui:testAndroidHostTest :androidApp:assembleDebug

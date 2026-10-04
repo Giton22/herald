@@ -57,7 +57,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Transparent access-token refresh using the refresh-token cookie (done by the server), and re-login when the session expires
 - [ ] Legacy static session-token mode (`X-Hermes-Session-Token`, `?token=`)
 - [x] WS ticket mint (`POST /api/auth/ws-ticket`)
-- [ ] Test-connection button that checks both the HTTP and WebSocket legs (🚧 HTTP leg done)
+- [x] Connection check by stage, each with its own fix: server access (`/api/status`), sign-in (`/api/auth/me`) and the live connection (WS ticket, `/api/ws`, `gateway.ready`). The connect screen tests the server and explains local network, Tailscale and HTTPS addresses; Settings → Check connection runs all three
 - [x] Warning when a gateway would be reached over plain `http://` on a public address
 - [x] Clear error messages for 401, 429, WS close 4401 (bad ticket) and 4403 (Host/peer guard). Note: the server rejects these before the upgrade, so they arrive as an HTTP 403 handshake failure
 - [x] Sign out (server-side revoke + local cookie wipe), and "use a different gateway"
@@ -86,12 +86,14 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Rename, pin, archive and delete (`PATCH`/`DELETE /api/sessions/{id}`), with optimistic updates that roll back on error
 - [x] Chat options (⋮ beside new chat) for the open chat: rename, pin, export as Markdown, copy session ID, archive, delete
 - [x] Floating see-through composer over the conversation
+- [x] Reading back stays put while a reply streams below; the jump arrow then reads "New reply"
 - [x] Live list updates (`sessions.changed`, `session.title` → refetch; also refetch after reconnect)
 - [ ] Live per-session status in the list (`session.info`, `session.active_list`)
 - [x] Search sessions by title, session id and message text from the sidebar search button (`GET /api/sessions/search`, debounced, with match snippet)
 
 ### 4. Chat
 - [x] Send a prompt (`prompt.submit`); prompts sent mid-turn are marked queued; unsent text returns to the composer
+- [x] A prompt that lost its reply offers Check delivery (reads the transcript again), Resend (warns first that Hermes may get it twice) and Edit; nothing resends on its own. The chat's title line tells no connection, connecting again and signed out apart
 - [x] Streaming assistant text (`message.start`, `message.delta`, `message.complete`), including outcome (complete / stopped / error)
 - [x] Interim commentary (`message.interim`), folded into the reply
 - [x] Markdown rendering (GFM: lists, tables, links, code blocks with language label and copy button; copy whole reply); only web and mail links open
@@ -100,7 +102,8 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Reasoning/thinking blocks, collapsible (`reasoning.delta`, `thinking.delta`, `reasoning.available`)
 - [x] Stop a running turn (`session.interrupt`): the Send button turns into Stop while a turn runs
 - [x] Prompts sent from another client (Desktop, CLI, messaging) show up live: a turn this client didn't start refetches the transcript at its start and end, since the gateway streams only the reply
-- [x] Steer a running turn: a message sent mid-turn corrects it, the queue button holds it for the next turn, `/steer` injects a note (`prompt.submit` busy modes, `session.steer`)
+- [x] Steer a running turn: a message typed mid-turn offers labelled "Send now" (corrects the task) and "Send after this task" (holds it for the next turn) while Stop stays in place; `/steer` injects a note (`prompt.submit` busy modes, `session.steer`)
+- [x] Voice chat has its own composer button instead of sharing the send button
 - [x] Token usage per turn (live turns) and per session with cost, context window and account limits (`session.usage`, `MessageCompletePayload.usage`, `GET /api/sessions/{id}`)
 - [x] Error banner and live status line (`error`, `status.update`, failed turns)
 - [x] Notices and warnings (`notice`, `MessageCompletePayload.warning`)
@@ -114,7 +117,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] One live status above the composer while a turn runs: the current action in plain words (waiting on you, the running tool, the plan step, the gateway status, else thinking) with the plan count; the status text, tool and plan fold beneath it, and the reply keeps only folded "Used … tools" and "Reasoning" rows
 
 ### 6. Interactive requests (server → client)
-- [x] **Approval** panel for dangerous commands, with choices `once`, `session`, `always` (confirmed first), `deny` filtered by the gateway's `choices` / `allow_session`, `allow_permanent` and `smart_denied`
+- [x] **Approval** panel for dangerous commands, with choices `once`, `session`, `always` (confirmed first), `deny` filtered by the gateway's `choices` / `allow_session`, `allow_permanent` and `smart_denied`. The command wraps, with "Show full command" and "Copy command"; each permission says where and how long it applies, the broader ones in their own section; taps are ignored for a moment after it appears; and the panel keeps a Stop for the running task
 - [x] Requests withdrawn or answered elsewhere (`request.cancel`, turn end) and restored after reconnect (`open_requests`)
 - [x] **Clarify**: single or batch questions, choices, multi-select and free text
 - [x] **Sudo** password prompt (masked)
@@ -161,8 +164,9 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] BTW side questions (`/btw` → `prompt.btw`, answered in place by `btw.complete`)
 - [ ] Background prompts (`prompt.background`, `background.complete`)
 - [ ] Message reactions (`message.react`)
+- [x] Drafts: each chat keeps its unsent text (stored, survives a restart) and picked files (in memory) when you switch chats; the session list marks it "Draft"
 - [x] Undo and branch from the composer (`/undo` hands the last prompt back; `/branch` → `session.branch_whole` / `session.branch`)
-- [ ] Undo and branch from a message (buttons on a turn instead of slash commands)
+- [x] Undo and branch from a message: a ⋯ menu on each message with Copy, Edit last prompt (`/undo`, then the transcript reloads) and Branch from here (`session.branch` with the message's position), each change explained before it happens
 - [x] Context compression (`/compress` → `session.compress`)
 - [x] Context breakdown in the usage sheet (`session.context_breakdown`): the window split by system prompt, tools, skills, memory, conversation and the rest, plus the files read in
 
@@ -184,7 +188,8 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 ### Notifications & background
 - [x] Foreground service that keeps the WS alive during long runs
 - [x] Live Update while a turn runs (Android 16 status-bar chip): current tool or status, Stop button
-- [x] Local notifications: approval waiting, run finished
+- [x] Local notifications: approval waiting, run finished; tapping one opens its chat
+- [x] Session list filters All / Running / Needs attention, with text labels for a waiting approval or question (tracked across chats this phone has opened), "Running" and "New reply" (read state kept per gateway and profile)
 - [x] Answer from the notification: approve/deny, clarify answers, inline reply to a finished turn (each asks for an unlock first)
 - [x] Notification toggles in Settings; permission asked on the first turn
 - [x] Stay connected: keeps the socket up in the background (quiet notification) so turns started on other devices reach the open chat
@@ -199,6 +204,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [ ] Gateway API server "lite" mode (`:8642`, static bearer key, Runs API + SSE)
 
 ### Platforms & polish
+- [x] 48dp touch targets (`MinTouchTarget`) on icon buttons, the composer, the top bar and the sidebar rows, without enlarging the icons
 - [ ] Tablet and foldable adaptive layout (list and detail side by side)
 - [ ] Home-screen widget and Quick Settings tile
 - [ ] Offline cache of sessions and messages
