@@ -1171,9 +1171,9 @@ private fun Tools(tools: List<ToolActivity>) {
     }
 }
 
-/** The tool the running turn is in the middle of, if any. */
+/** The tool the running turn is in the middle of, if any. Its reply isn't always last: a queued prompt sits after it. */
 private fun ChatState.runningTool(): ToolActivity? =
-    (messages.lastOrNull() as? ChatMessage.Assistant)?.tools?.lastOrNull { it.running }
+    (messages.lastOrNull { it is ChatMessage.Assistant && it.streaming } as? ChatMessage.Assistant)?.tools?.lastOrNull { it.running }
 
 /**
  * The one line that says what the agent is doing now, most specific first: waiting on the user, a tool

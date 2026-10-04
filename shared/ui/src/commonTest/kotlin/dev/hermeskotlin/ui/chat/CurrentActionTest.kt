@@ -35,6 +35,14 @@ class CurrentActionTest {
     }
 
     @Test
+    fun aPromptQueuedBehindTheReplyDoesNotHideItsTool() {
+        val tool = ToolActivity("t1", "terminal", detail = "sleep 25", running = true)
+        val state = running(tool, plan).let { it.copy(messages = it.messages + ChatMessage.User("u2", "Then say hi", queued = true)) }
+
+        assertEquals("Running a command: sleep 25", currentAction(state))
+    }
+
+    @Test
     fun withoutAToolThePlanStepThenTheStatusThenThinking() {
         assertEquals("Measure storage growth", currentAction(running(todos = plan, status = "musing…")))
         assertEquals("musing…", currentAction(running(status = "musing…")))
