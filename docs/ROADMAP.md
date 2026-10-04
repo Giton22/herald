@@ -92,6 +92,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 
 ### 4. Chat
 - [x] Send a prompt (`prompt.submit`); prompts sent mid-turn are marked queued; unsent text returns to the composer
+- [x] A prompt that lost its reply offers Check delivery (reads the transcript again), Resend (warns first that Hermes may get it twice) and Edit; nothing resends on its own. The chat's title line tells no connection, connecting again and signed out apart
 - [x] Streaming assistant text (`message.start`, `message.delta`, `message.complete`), including outcome (complete / stopped / error)
 - [x] Interim commentary (`message.interim`), folded into the reply
 - [x] Markdown rendering (GFM: lists, tables, links, code blocks with language label and copy button; copy whole reply); only web and mail links open

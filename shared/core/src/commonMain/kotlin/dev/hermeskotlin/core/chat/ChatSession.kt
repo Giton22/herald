@@ -75,6 +75,9 @@ class ChatSession(
     private var foreignTurn = false
     private var jobs: List<Job> = emptyList()
 
+    /** What went out for each bubble marked by a [SendCheck], by key: a skill's bubble shows less than was sent. */
+    private val unsettled = mutableMapOf<String, UnsettledPrompt>()
+
     /**
      * Requests for a runtime id we don't know yet: one can land between the gateway answering
      * `session.resume`/`session.create` and us reading that reply. Claimed once the id is known.
@@ -112,9 +115,17 @@ class ChatSession(
         attachments: List<OutgoingAttachment> = emptyList(),
         display: String? = null,
         queue: Boolean = false,
-    ): Boolean {
+    ): Boolean = submit(text, attachments, display, queue) == SendOutcome.Sent
+
+    /** [send], telling a prompt that's gone apart from one whose bubble stays [SendOutcome.Unsettled]. */
+    suspend fun submit(
+        text: String,
+        attachments: List<OutgoingAttachment> = emptyList(),
+        display: String? = null,
+        queue: Boolean = false,
+    ): SendOutcome {
         val trimmed = text.trim()
-        if (trimmed.isEmpty() && attachments.isEmpty()) return false
+        if (trimmed.isEmpty() && attachments.isEmpty()) return SendOutcome.NotSent
         // Desktop's fallback, so an image-only prompt still asks something.
         val visible = trimmed.ifEmpty { if (attachments.any { it.kind != AttachmentKind.File }) IMAGE_ONLY_PROMPT else "" }
         val key = "local-${_state.value.keySeq}"
@@ -167,7 +178,7 @@ class ChatSession(
                 // What streamed before the correction stays above it; the rest of the turn continues below.
                 if (status in CORRECTION_STATUSES) sent.sealReplyBefore(key) else sent
             }
-            true
+            SendOutcome.Sent
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -175,7 +186,9 @@ class ChatSession(
             // An error reply is the gateway turning it down; anything else after it went out is no verdict.
             if (submitted && e !is RpcException) {
                 val arrived = if (startsTurn) findInTranscript(visible, key, promptsBefore) else null
-                return settleUnanswered(key, arrived) { detach(uploadClient, uploadRuntimeId, queuedImages) }
+                return settleUnanswered(key, arrived, UnsettledPrompt(text, display, startsTurn)) {
+                    detach(uploadClient, uploadRuntimeId, queuedImages)
+                }
             }
             detach(uploadClient, uploadRuntimeId, queuedImages)
             _state.update { state ->
@@ -185,7 +198,7 @@ class ChatSession(
                     messages = state.messages.filterNot { it.key == key },
                 )
             }
-            false
+            SendOutcome.NotSent
         }
     }
 
@@ -194,7 +207,12 @@ class ChatSession(
      * sent, and the stored rows take over. Missing from it: the caller gets the text back as for any
      * failure. Can't tell: the bubble stays, marked, so a resend is made knowing it may already be running.
      */
-    private suspend fun settleUnanswered(key: String, arrived: Boolean?, takeBack: suspend () -> Unit): Boolean {
+    private suspend fun settleUnanswered(
+        key: String,
+        arrived: Boolean?,
+        prompt: UnsettledPrompt,
+        takeBack: suspend () -> Unit,
+    ): SendOutcome {
         when (arrived) {
             true -> {
                 rowExists = true
@@ -210,14 +228,87 @@ class ChatSession(
                     )
                 }
             }
-            null -> _state.update { state ->
+            null -> {
+                unsettled[key] = prompt
+                _state.update { state ->
+                    state.copy(
+                        error = "Lost the connection while sending. Check that it isn't running before you send it again.",
+                        messages = state.messages.updateUser(key) { it.copy(pending = false, check = SendCheck.Unknown) },
+                    )
+                }
+            }
+        }
+        return when (arrived) {
+            true -> SendOutcome.Sent
+            false -> SendOutcome.NotSent
+            null -> SendOutcome.Unsettled
+        }
+    }
+
+    /**
+     * Looks for the unsettled prompt [key] in the stored transcript again, when the user asks. Found: it
+     * counts as sent. Missing: marked [SendCheck.NotReceived], safe to resend. Still can't tell: it stays
+     * [SendCheck.Unknown]. Never sends anything itself.
+     */
+    suspend fun checkDelivery(key: String) {
+        val bubble = _state.value.messages.firstOrNull { it.key == key } as? ChatMessage.User ?: return
+        if (bubble.check == null || bubble.check == SendCheck.Checking) return
+        // Reloaded first only when it never loaded, since the count below needs it: a reload settles any
+        // prompt whose text the transcript has anywhere, an earlier one alike, so it can't be the check.
+        if (_state.value.historyError != null) loadHistory()
+        val messages = _state.value.messages
+        val index = messages.indexOfFirst { it.key == key }
+        if (index < 0) return run { unsettled.remove(key) }
+        val before = _state.value.takeIf { it.historyError == null }?.let {
+            messages.take(index).count { m -> m is ChatMessage.User && !m.pending && m.check == null }
+        }
+        val arrived = findInTranscript(bubble.text, key, before)
+        // A correction or a queued prompt is written only once the turn takes it in, so mid-turn a miss proves nothing.
+        val mayBeWaiting = arrived == false && unsettled[key]?.startsTurn == false && _state.value.running
+        when {
+            arrived == true -> {
+                rowExists = true
+                unsettled.remove(key)
+                _state.update { it.copy(error = null, messages = it.messages.updateUser(key) { u -> u.copy(check = null) }) }
+                loadHistory()
+            }
+            arrived == false && !mayBeWaiting ->
+                _state.update { it.copy(error = null, messages = it.messages.updateUser(key) { u -> u.copy(check = SendCheck.NotReceived) }) }
+            else -> _state.update { state ->
                 state.copy(
-                    error = "Lost the connection while sending. Check that it isn't running before you send it again.",
-                    messages = state.messages.updateUser(key) { it.copy(pending = false, check = SendCheck.Unknown) },
+                    error = if (mayBeWaiting) {
+                        "Hermes may still be holding it for the running turn. Check again once the turn ends."
+                    } else {
+                        "Couldn't read the conversation to check. Try again once connected."
+                    },
+                    messages = state.messages.updateUser(key) { it.copy(check = SendCheck.Unknown) },
                 )
             }
         }
-        return arrived == true
+    }
+
+    /**
+     * Removes the unsettled prompt [key] (one marked by a [SendCheck]) and hands back its text as shown, to
+     * edit; null for any other message.
+     */
+    fun takeBack(key: String): String? {
+        val message = _state.value.messages.firstOrNull { it.key == key } as? ChatMessage.User ?: return null
+        if (message.check == null || message.check == SendCheck.Checking) return null
+        unsettled.remove(key)
+        _state.update { state -> state.copy(messages = state.messages.filterNot { it.key == key }) }
+        return message.text
+    }
+
+    /**
+     * Sends the unsettled prompt [key] again as it first went out (a skill's full body, not the command its
+     * bubble shows), in place of its bubble. Returns the text shown to give back to the composer when it
+     * didn't go and no bubble kept it; null otherwise.
+     */
+    suspend fun resend(key: String): String? {
+        val prompt = unsettled[key]
+        val shown = takeBack(key) ?: return null
+        val outcome = submit(prompt?.text ?: shown, display = prompt?.display)
+        return shown.takeIf { outcome == SendOutcome.NotSent }
     }
 
     /**
@@ -237,7 +328,8 @@ class ChatSession(
                 is ApiResult.Success -> {
                     read = true
                     val prompts = historyToMessages(result.value.messages).filterIsInstance<ChatMessage.User>()
-                    if (prompts.size > before && prompts.last().text.contains(visible)) return true
+                    // Any prompt past the ones shown before it: later prompts may follow it by a later check.
+                    if (prompts.drop(before).any { it.text.contains(visible) }) return true
                 }
                 // A new chat's stored row only appears with its first prompt.
                 is ApiResult.Failed -> if (result.status == 404 && !rowExists) read = true

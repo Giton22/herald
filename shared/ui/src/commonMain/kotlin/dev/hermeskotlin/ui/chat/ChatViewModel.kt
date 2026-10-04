@@ -23,6 +23,7 @@ import dev.hermeskotlin.core.models.ModelOption
 import dev.hermeskotlin.core.models.ModelsApi
 import dev.hermeskotlin.core.chat.ModelSwitch
 import dev.hermeskotlin.core.chat.OutgoingAttachment
+import dev.hermeskotlin.core.chat.SendOutcome
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.sessions.SessionsApi
@@ -598,9 +599,10 @@ class ChatViewModel(
         composer.clearText()
         _attachments.value = emptyList()
         viewModelScope.launch {
-            // Give everything back if it never reached the gateway, so nothing typed or picked is lost.
-            if (!chat.send(text, attachments, queue = queue)) {
-                if (composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
+            // Give everything back if it never reached the gateway, so nothing typed or picked is lost. One
+            // that may have arrived keeps its bubble to resend from instead, so it isn't in two places.
+            if (chat.submit(text, attachments, queue = queue) == SendOutcome.NotSent) {
+                giveBack(text)
                 _attachments.update { attachments + it }
             }
         }
@@ -625,6 +627,28 @@ class ChatViewModel(
     override fun answer(request: InputRequest, result: JsonObject) {
         val chat = session.value ?: return
         viewModelScope.launch { chat.answer(request, result) }
+    }
+
+    override fun checkDelivery(key: String) {
+        val chat = session.value ?: return
+        viewModelScope.launch { chat.checkDelivery(key) }
+    }
+
+    override fun resend(key: String) {
+        val chat = session.value ?: return
+        viewModelScope.launch {
+            // Not sent again after all: the text waits in the composer like any failed send.
+            chat.resend(key)?.let(::giveBack)
+        }
+    }
+
+    override fun editMessage(key: String) {
+        session.value?.takeBack(key)?.let(::giveBack)
+    }
+
+    /** Puts [text] back in the composer, ahead of anything typed since, which stays. */
+    private fun giveBack(text: String) {
+        composer.setTextAndPlaceCursorAtEnd(if (composer.text.isBlank()) text else "$text\n\n${composer.text}")
     }
 
     override fun retry() {

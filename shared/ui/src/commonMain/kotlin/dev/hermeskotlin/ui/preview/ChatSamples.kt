@@ -7,6 +7,7 @@ import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.DelegatedTask
 import dev.hermeskotlin.core.chat.InputRequest
+import dev.hermeskotlin.core.chat.SendCheck
 import dev.hermeskotlin.core.chat.Subagent
 import dev.hermeskotlin.core.chat.SubagentStatus
 import dev.hermeskotlin.core.chat.TodoItem
@@ -94,6 +95,16 @@ internal object ChatSamples {
 
     /** A finished turn: reasoning, tools, a diff and a Markdown answer. */
     val reply: ChatState = connected.copy(messages = listOf(ask, answer))
+
+    /** Two prompts that lost their reply: one the transcript couldn't settle, one it found missing. */
+    val undelivered: ChatState = connected.copy(
+        messages = listOf(
+            ask,
+            answer,
+            ChatMessage.User("u2", "Run the backup now.", check = SendCheck.NotReceived),
+            ChatMessage.User("u3", "And mail me the report when it's done.", check = SendCheck.Unknown),
+        ),
+    )
 
     /** A turn still running, with the agent's plan pinned above the composer. */
     val working: ChatState = connected.copy(
@@ -249,6 +260,9 @@ internal class PreviewChatActions(text: String = "") : ChatActions {
     override fun pickSuggestion(suggestion: SlashSuggestion) = Unit
     override suspend fun loadMedia(source: String): ByteArray? = null
     override fun stopSubagent(subagentId: String) = Unit
+    override fun checkDelivery(key: String) = Unit
+    override fun resend(key: String) = Unit
+    override fun editMessage(key: String) = Unit
     override fun retry() = Unit
     override fun dismissError() = Unit
     override fun dismissAttachmentError() = Unit

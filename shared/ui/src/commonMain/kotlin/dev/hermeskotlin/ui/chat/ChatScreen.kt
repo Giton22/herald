@@ -102,6 +102,9 @@ import com.composables.icons.lucide.ListEnd
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PanelLeft
+import com.composables.icons.lucide.Pencil
+import com.composables.icons.lucide.RotateCw
+import com.composables.icons.lucide.SearchCheck
 import com.composables.icons.lucide.TriangleAlert
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.RefreshCw
@@ -157,6 +160,7 @@ import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.CopyButton
+import dev.hermeskotlin.designsystem.components.Dialog
 import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.components.MarkdownText
 import dev.hermeskotlin.designsystem.components.Spinner
@@ -251,6 +255,7 @@ fun ChatScreen(
         state = state,
         picker = picker,
         connected = connected,
+        connectionLabel = connectionLabel(connection),
         attachments = attachments,
         attachmentError = attachmentError,
         voiceChat = viewModel.voice.chat.collectAsStateWithLifecycle().value,
@@ -335,6 +340,8 @@ internal fun ChatView(
     state: ChatState,
     picker: ModelPickerState,
     connected: Boolean,
+    /** Which way the link is down, shown under the title while not [connected]. */
+    connectionLabel: String = "No connection",
     attachments: List<OutgoingAttachment>,
     attachmentError: String?,
     voiceChat: VoiceChatState,
@@ -366,7 +373,7 @@ internal fun ChatView(
             TopBar(
                 title = title,
                 subtitle = when {
-                    !connected -> "Offline · reconnecting"
+                    !connected -> connectionLabel
                     state.attachment is Attachment.Attaching -> "Opening…"
                     else -> null
                 },
@@ -388,7 +395,7 @@ internal fun ChatView(
                             LocalNotice provides onNotice,
                             LocalSubagents provides SubagentContext(state.subagents, actions::stopSubagent),
                         ) {
-                            Messages(state.messages, state.thinkingFrame, bottomInset = dockInset)
+                            Messages(state.messages, state.thinkingFrame, bottomInset = dockInset, actions = actions, connected = connected)
                         }
                     } else Box(Modifier.fillMaxSize().padding(bottom = dockInset)) {
                         when {
@@ -596,7 +603,7 @@ private val FOLLOW_UP_PROMPTS = listOf(
 )
 
 @Composable
-private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottomInset: Dp) {
+private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottomInset: Dp, actions: ChatActions, connected: Boolean) {
     // Reversed layout keeps the newest message pinned to the bottom while a reply streams in.
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -613,7 +620,7 @@ private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottom
         ) {
             items(messages.asReversed(), key = { it.key }) { message ->
                 when (message) {
-                    is ChatMessage.User -> UserBubble(message)
+                    is ChatMessage.User -> UserBubble(message, actions, connected)
                     is ChatMessage.Assistant -> AssistantReply(message, thinkingFrame.takeIf { message.streaming })
                     is ChatMessage.Command -> CommandOutput(message)
                     is ChatMessage.Notice -> NoticeLine(message)
@@ -641,9 +648,16 @@ private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottom
     }
 }
 
+/** Tells apart the ways the link can be down: none, being re-made, or needing a new sign-in. */
+private fun connectionLabel(state: ConnectionState): String = when (state) {
+    is ConnectionState.Connecting, is ConnectionState.Reconnecting -> "No connection · connecting again…"
+    ConnectionState.SessionExpired -> "Signed out · sign in again"
+    is ConnectionState.Failed, ConnectionState.Idle, is ConnectionState.Connected -> "No connection"
+}
+
 /** Desktop's turn marker: the prompt in a full-width box with a tinted fill and outline; replies run bare beneath. */
 @Composable
-private fun UserBubble(message: ChatMessage.User) {
+private fun UserBubble(message: ChatMessage.User, actions: ChatActions, connected: Boolean) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Column(
@@ -665,10 +679,48 @@ private fun UserBubble(message: ChatMessage.User) {
         }
         when (message.check) {
             SendCheck.Checking -> Text("Checking whether Hermes got this…", style = Theme[typography][caption], color = Theme[colors][textTertiary])
-            SendCheck.Unknown -> Text("May not have reached Hermes", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+            SendCheck.Unknown -> UnsettledActions("May not have reached Hermes", message.key, mayHaveArrived = true, actions, connected)
+            SendCheck.NotReceived -> UnsettledActions("Hermes didn't get this", message.key, mayHaveArrived = false, actions, connected)
             null -> {}
         }
     }
+}
+
+/**
+ * What to do with a prompt that lost its reply: check the transcript again, resend it, or take it back to
+ * edit. Nothing is resent on its own; when it [mayHaveArrived], Resend first warns it could run twice.
+ */
+@Composable
+private fun UnsettledActions(label: String, key: String, mayHaveArrived: Boolean, actions: ChatActions, connected: Boolean) {
+    var confirmResend by remember(key) { mutableStateOf(false) }
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(label, style = Theme[typography][caption], color = Theme[colors][textTertiary])
+        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            if (mayHaveArrived) {
+                Button("Check delivery", onClick = { actions.checkDelivery(key) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small, leadingIcon = Lucide.SearchCheck)
+            }
+            Button(
+                "Resend",
+                onClick = { if (mayHaveArrived) confirmResend = true else actions.resend(key) },
+                variant = ButtonVariant.Ghost,
+                size = ButtonSize.Small,
+                leadingIcon = Lucide.RotateCw,
+                enabled = connected,
+            )
+            Button("Edit", onClick = { actions.editMessage(key) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small, leadingIcon = Lucide.Pencil)
+        }
+    }
+    Dialog(
+        visible = confirmResend,
+        onDismissRequest = { confirmResend = false },
+        title = "Resend this message?",
+        message = "Hermes may already have it. If it does, resending makes Hermes get the same request twice and run it again. " +
+            "Check delivery first to be sure.",
+        actions = {
+            Button("Cancel", onClick = { confirmResend = false }, variant = ButtonVariant.Ghost)
+            Button("Resend", onClick = { confirmResend = false; actions.resend(key) })
+        },
+    )
 }
 
 @Composable
