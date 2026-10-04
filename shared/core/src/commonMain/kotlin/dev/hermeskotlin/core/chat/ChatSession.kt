@@ -392,6 +392,8 @@ class ChatSession(
             }
             is SlashResult.Prefill -> {
                 result.notice?.takeIf { it.isNotBlank() }?.let { finishCommand(key, it.trim()) } ?: removeMessage(key)
+                // `/undo` took turns off the stored transcript; show it without them.
+                if (rowExists) loadHistory()
                 result.message
             }
         }
