@@ -19,7 +19,7 @@ import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.textSecondary
 
-/** A 40dp square, icon-only button for toolbars and rows. [contentDescription] is required for accessibility. */
+/** A 48dp square ([MinTouchTarget]), icon-only button for toolbars and rows. [contentDescription] is required for accessibility. */
 @Composable
 fun IconButton(
     icon: ImageVector,
@@ -34,7 +34,7 @@ fun IconButton(
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = modifier.size(40.dp).clip(RoundedCornerShape(Theme[radii][radiusMedium])).background(containerColor).alpha(if (enabled) 1f else 0.45f),
+        modifier = modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusMedium])).background(containerColor).alpha(if (enabled) 1f else 0.45f),
         indication = rememberColoredIndication(tint),
     ) {
         UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(20.dp))

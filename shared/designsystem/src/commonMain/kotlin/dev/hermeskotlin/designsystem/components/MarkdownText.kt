@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -178,6 +177,6 @@ fun CopyButton(text: String, modifier: Modifier = Modifier) {
                 copied = true
             }
         },
-        modifier = modifier.size(36.dp),
+        modifier = modifier,
     )
 }
