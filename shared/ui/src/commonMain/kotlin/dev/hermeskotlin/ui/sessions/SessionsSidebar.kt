@@ -275,7 +275,9 @@ fun SessionsSidebar(
                         selectedId = selectedId,
                         onOpen = open,
                         onActions = rowActions,
-                        canLoadMore = state.canLoadMore,
+                        // A filtered list stays short, so the end is always in sight: paging on would
+                        // fetch the whole history. What's running or waiting is recent anyway.
+                        canLoadMore = state.canLoadMore && attentionFilter == AttentionFilter.All,
                         loadingMore = state.loadingMore,
                         onLoadMore = viewModel::loadMore,
                         statuses = statuses,
