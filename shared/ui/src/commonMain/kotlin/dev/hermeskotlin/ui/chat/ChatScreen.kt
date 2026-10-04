@@ -163,7 +163,17 @@ import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import dev.hermeskotlin.designsystem.components.CopyButton
 import dev.hermeskotlin.designsystem.components.Dialog
+import dev.hermeskotlin.designsystem.components.DropdownMenu
 import dev.hermeskotlin.designsystem.components.IconButton
+import dev.hermeskotlin.designsystem.components.MenuAction
+import dev.hermeskotlin.designsystem.components.plainTextClipEntry
+import androidx.compose.foundation.combinedClickable
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalClipboard
+import androidx.compose.ui.platform.LocalHapticFeedback
+import com.composables.icons.lucide.Copy
+import com.composables.icons.lucide.GitBranch
+import com.composables.icons.lucide.Pencil
 import dev.hermeskotlin.designsystem.components.MarkdownText
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.components.Surface
@@ -397,7 +407,14 @@ internal fun ChatView(
                             LocalNotice provides onNotice,
                             LocalSubagents provides SubagentContext(state.subagents, actions::stopSubagent),
                         ) {
-                            Messages(state.messages, state.thinkingFrame, bottomInset = dockInset, actions = actions, connected = connected)
+                            Messages(
+                                state.messages,
+                                state.thinkingFrame,
+                                bottomInset = dockInset,
+                                actions = actions,
+                                connected = connected,
+                                canChange = state.canChangeChat(connected),
+                            )
                         }
                     } else Box(Modifier.fillMaxSize().padding(bottom = dockInset)) {
                         when {
@@ -605,7 +622,19 @@ private val FOLLOW_UP_PROMPTS = listOf(
 )
 
 @Composable
-private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottomInset: Dp, actions: ChatActions, connected: Boolean) {
+private fun Messages(
+    messages: List<ChatMessage>,
+    thinkingFrame: String?,
+    bottomInset: Dp,
+    actions: ChatActions,
+    connected: Boolean,
+    canChange: Boolean,
+) {
+    var confirm by remember { mutableStateOf<Pair<MessageChange, String>?>(null) }
+    val lastPrompt = messages.lastOrNull { it is ChatMessage.User }?.key
+    ConfirmChange(confirm, canChange, lastPrompt, actions, onDismiss = { confirm = null })
+    // Edit and branch only show while the chat can change; each asks before it does anything.
+    fun ask(change: MessageChange, key: String): (() -> Unit)? = if (canChange) ({ confirm = change to key }) else null
     // Reversed layout keeps the newest message pinned to the bottom while a reply streams in.
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
@@ -622,8 +651,20 @@ private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottom
         ) {
             items(messages.asReversed(), key = { it.key }) { message ->
                 when (message) {
-                    is ChatMessage.User -> UserBubble(message, actions, connected)
-                    is ChatMessage.Assistant -> AssistantReply(message, thinkingFrame.takeIf { message.streaming })
+                    is ChatMessage.User -> UserBubble(
+                        message,
+                        actions,
+                        connected,
+                        // Not while the prompt is still on its way or its delivery is in doubt.
+                        onEdit = ask(MessageChange.EditLastPrompt, message.key)
+                            .takeIf { message.key == lastPrompt && !message.pending && message.check == null },
+                        onBranch = ask(MessageChange.Branch, message.key).takeIf { !message.pending && message.check == null },
+                    )
+                    is ChatMessage.Assistant -> AssistantReply(
+                        message,
+                        thinkingFrame.takeIf { message.streaming },
+                        onBranch = ask(MessageChange.Branch, message.key),
+                    )
                     is ChatMessage.Command -> CommandOutput(message)
                     is ChatMessage.Notice -> NoticeLine(message)
                 }
@@ -659,21 +700,61 @@ private fun connectionLabel(state: ConnectionState): String = when (state) {
 
 /** Desktop's turn marker: the prompt in a full-width box with a tinted fill and outline; replies run bare beneath. */
 @Composable
-private fun UserBubble(message: ChatMessage.User, actions: ChatActions, connected: Boolean) {
+private fun UserBubble(
+    message: ChatMessage.User,
+    actions: ChatActions,
+    connected: Boolean,
+    onEdit: (() -> Unit)?,
+    onBranch: (() -> Unit)?,
+) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    val clipboard = LocalClipboard.current
+    val haptics = LocalHapticFeedback.current
+    val scope = rememberCoroutineScope()
+    var menuOpen by remember { mutableStateOf(false) }
+    val hasMenu = message.text.isNotBlank() || onEdit != null || onBranch != null
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .alpha(if (message.pending || message.check == SendCheck.Checking) 0.6f else 1f)
-                .background(Theme[colors][userBubble], shape)
-                .border(1.dp, Theme[colors][userBubbleStroke], shape)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
+        // A long press opens the prompt's actions just under it; the text itself isn't selectable, Copy is in there.
+        DropdownMenu(
+            expanded = menuOpen,
+            onExpandedChange = { menuOpen = it },
+            items = {
+                if (message.text.isNotBlank()) {
+                    MenuAction("Copy", Lucide.Copy, onClick = {
+                        menuOpen = false
+                        scope.launch { clipboard.setClipEntry(plainTextClipEntry(message.text)) }
+                    })
+                }
+                onEdit?.let { MenuAction("Edit last prompt", Lucide.Pencil, onClick = { menuOpen = false; it() }) }
+                onBranch?.let { MenuAction("Branch from here", Lucide.GitBranch, onClick = { menuOpen = false; it() }) }
+            },
         ) {
-            if (message.attachments.isNotEmpty()) SentAttachments(message.attachments)
-            if (message.text.isNotEmpty()) SelectionContainer {
-                Text(message.text, style = Theme[typography][body], color = Theme[colors][textColor])
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .alpha(if (message.pending || message.check == SendCheck.Checking) 0.6f else 1f)
+                    .clip(shape)
+                    .background(Theme[colors][userBubble], shape)
+                    .border(1.dp, Theme[colors][userBubbleStroke], shape)
+                    .then(
+                        if (hasMenu) {
+                            Modifier.combinedClickable(
+                                onClick = {},
+                                onLongClick = {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    menuOpen = true
+                                },
+                                onLongClickLabel = "Message actions",
+                                interactionSource = null,
+                                indication = rememberColoredIndication(Theme[colors][textColor]),
+                            )
+                        } else Modifier,
+                    )
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (message.attachments.isNotEmpty()) SentAttachments(message.attachments)
+                if (message.text.isNotEmpty()) Text(message.text, style = Theme[typography][body], color = Theme[colors][textColor])
             }
         }
         if (message.queued) {
@@ -725,8 +806,54 @@ private fun UnsettledActions(label: String, key: String, mayHaveArrived: Boolean
     )
 }
 
+/** The two message actions that change the conversation, so they ask first. */
+private enum class MessageChange { EditLastPrompt, Branch }
+
+/**
+ * Says what an edit or a branch does, and that no task starts, before doing it. Closes itself if the chat stops
+ * [allowing][canChange] it while open, or another prompt becomes the last one to edit.
+ */
 @Composable
-private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String?) {
+private fun ConfirmChange(
+    pending: Pair<MessageChange, String>?,
+    canChange: Boolean,
+    lastPrompt: String?,
+    actions: ChatActions,
+    onDismiss: () -> Unit,
+) {
+    val stale = pending != null &&
+        (!canChange || (pending.first == MessageChange.EditLastPrompt && pending.second != lastPrompt))
+    LaunchedEffect(stale) { if (stale) onDismiss() }
+    // Keeps its words while it fades out, after [pending] has already gone.
+    var shown by remember { mutableStateOf(pending) }
+    if (pending != null) shown = pending
+    Dialog(
+        visible = pending != null,
+        onDismissRequest = onDismiss,
+        title = if (shown?.first == MessageChange.Branch) "Branch from here?" else "Edit your last prompt?",
+        message = if (shown?.first == MessageChange.Branch) {
+            "Copies this chat up to this message into a new chat and opens it. This chat stays as it is. " +
+                "No task starts until you send something in the new chat."
+        } else {
+            "Takes your last message and Hermes's reply to it off this chat and puts the message back in the composer. " +
+                "No task starts until you send it again."
+        },
+        actions = {
+            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost)
+            Button(if (shown?.first == MessageChange.Branch) "Branch" else "Edit", onClick = {
+                onDismiss()
+                when (pending?.first) {
+                    MessageChange.Branch -> actions.branchFrom(pending.second)
+                    MessageChange.EditLastPrompt -> actions.editLastPrompt(pending.second)
+                    null -> {}
+                }
+            })
+        },
+    )
+}
+
+@Composable
+private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String?, onBranch: (() -> Unit)?) {
     val settings = LocalAppSettings.current
     val showReasoning = settings.showReasoning && message.reasoning.isNotBlank()
     val showTools = settings.showToolActivity && message.tools.isNotEmpty()
@@ -760,8 +887,13 @@ private fun AssistantReply(message: ChatMessage.Assistant, thinkingFrame: String
         val usage = message.usage?.takeIf { settings.showUsage && !message.streaming }
         if ((!message.streaming && text.isNotBlank()) || usage != null) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                // Its padding trimmed off the start and top, the icon lines up with the reply and sits close under it.
-                if (!message.streaming && text.isNotBlank()) CopyButton(text, Modifier.trimStartTop(start = 8.dp, top = 4.dp))
+                if (!message.streaming && text.isNotBlank()) {
+                    // Their padding trimmed off the start and top, the icons line up with the reply and sit close under it.
+                    CopyButton(text, Modifier.trimStartTop(start = 8.dp, top = 4.dp))
+                    onBranch?.let {
+                        IconButton(Lucide.GitBranch, contentDescription = "Branch from here", onClick = it, modifier = Modifier.trimStartTop(start = 0.dp, top = 4.dp))
+                    }
+                }
                 usage?.let {
                     Text(
                         "${compactCount(it.input)} in · ${compactCount(it.output)} out",

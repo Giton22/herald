@@ -761,6 +761,17 @@ class ChatSessionTest {
     }
 
     @Test
+    fun anUndoShowsTheTranscriptWithoutTheUndoneTurn() = runTest {
+        val (chat, _) = resumedChat(backgroundScope, mapOf("slash.exec" to """{"type":"prefill","message":"hello"}"""))
+        // The gateway took the last turn off the stored transcript.
+        history = """{"session_id":"stored-1","messages":[]}"""
+
+        assertEquals("hello", chat.runCommand(SlashCommand("undo", "")))
+
+        assertTrue(chat.state.value.messages.isEmpty(), "still showing ${chat.state.value.messages}")
+    }
+
+    @Test
     fun aPrefillHandsTheTextBackAndAFailureExplainsItself() = runTest {
         val (chat, _) = newChat(backgroundScope, mapOf("slash.exec" to """{"type":"prefill","message":"my last prompt"}"""))
         assertEquals("my last prompt", chat.runCommand(SlashCommand("undo", "")))

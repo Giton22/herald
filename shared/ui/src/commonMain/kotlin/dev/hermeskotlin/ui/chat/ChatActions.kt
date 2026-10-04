@@ -1,6 +1,8 @@
 package dev.hermeskotlin.ui.chat
 
 import androidx.compose.foundation.text.input.TextFieldState
+import dev.hermeskotlin.core.chat.ChatMessage
+import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.slash.SlashSuggestion
 import kotlinx.serialization.json.JsonObject
@@ -29,6 +31,15 @@ interface ChatActions {
 
     fun stopSubagent(subagentId: String)
 
+    /**
+     * `/undo`: takes the last prompt and its reply off the chat and puts the prompt back in the composer.
+     * Does nothing unless prompt [key] is still the last one and the chat [can change][canChangeChat].
+     */
+    fun editLastPrompt(key: String)
+
+    /** Copies the chat up to message [key] into a new chat (`session.branch`) and opens it, if it [can change][canChangeChat]. */
+    fun branchFrom(key: String)
+
     /** Looks in the transcript again for a prompt whose delivery is unknown. */
     fun checkDelivery(key: String)
 
@@ -52,3 +63,12 @@ interface ChatActions {
 
     fun dismissDictationError()
 }
+
+/**
+ * Whether editing the last prompt or branching may run now: on a stored chat, while [connected], with no task
+ * writing to it and no command still waiting on its answer (a second `/undo` would take another turn).
+ * A `/btw` side question doesn't count; it leaves the transcript alone.
+ */
+internal fun ChatState.canChangeChat(connected: Boolean): Boolean =
+    storedSessionId != null && !running && connected &&
+        messages.none { it is ChatMessage.Command && it.running && it.taskId == null }
