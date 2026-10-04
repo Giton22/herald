@@ -1059,7 +1059,8 @@ private fun Composer(
         // Mid-turn, a message either joins the running task or waits for it; both say which.
         if (state.running && hasText) {
             MidTaskSend(
-                command = SlashCommand.looksLikeCommand(actions.composer.text.toString()),
+                // The same test send() makes: with attachments, slash text goes out as a prompt, not a command.
+                command = attachments.isEmpty() && SlashCommand.parse(actions.composer.text.toString().trim()) != null,
                 enabled = connected,
                 onSendNow = { actions.send() },
                 onSendAfter = { actions.send(queue = true) },
