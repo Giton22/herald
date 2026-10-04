@@ -57,7 +57,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Transparent access-token refresh using the refresh-token cookie (done by the server), and re-login when the session expires
 - [ ] Legacy static session-token mode (`X-Hermes-Session-Token`, `?token=`)
 - [x] WS ticket mint (`POST /api/auth/ws-ticket`)
-- [ ] Test-connection button that checks both the HTTP and WebSocket legs (🚧 HTTP leg done)
+- [x] Connection check by stage, each with its own fix: server access (`/api/status`), sign-in (`/api/auth/me`) and the live connection (WS ticket, `/api/ws`, `gateway.ready`). The connect screen tests the server and explains local network, Tailscale and HTTPS addresses; Settings → Check connection runs all three
 - [x] Warning when a gateway would be reached over plain `http://` on a public address
 - [x] Clear error messages for 401, 429, WS close 4401 (bad ticket) and 4403 (Host/peer guard). Note: the server rejects these before the upgrade, so they arrive as an HTTP 403 handshake failure
 - [x] Sign out (server-side revoke + local cookie wipe), and "use a different gateway"
