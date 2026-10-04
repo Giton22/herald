@@ -21,7 +21,8 @@ class ScreenContext(
      * file the gateway expands into the prompt. The text says what it is, since the model sees it cold.
      */
     fun toAttachments(): List<OutgoingAttachment> = buildList {
-        screenshot?.let { add(OutgoingAttachment("screen-shot", SCREENSHOT_NAME, "image/jpeg", it)) }
+        // Already a small JPEG, so it is its own thumbnail.
+        screenshot?.let { add(OutgoingAttachment("screen-shot", SCREENSHOT_NAME, "image/jpeg", it, thumbnail = it)) }
         screenText()?.let { add(OutgoingAttachment("screen-text", TEXT_NAME, "text/plain", it.encodeToByteArray())) }
     }
 
