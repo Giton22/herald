@@ -158,6 +158,7 @@ fun SessionsSidebar(
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
     val user by viewModel.user.collectAsStateWithLifecycle()
     val roster by viewModel.roster.collectAsStateWithLifecycle()
+    val drafts by viewModel.draftChats.collectAsStateWithLifecycle()
     var profilesOpen by remember { mutableStateOf(false) }
 
     var searchOpen by remember { mutableStateOf(false) }
@@ -252,7 +253,7 @@ fun SessionsSidebar(
                     searchResults != null -> when {
                         state.searching && searchResults.isEmpty() -> CenteredSpinner()
                         searchResults.isEmpty() -> EmptyState(Lucide.SearchX, "No matches", "Search looks at titles, session ids and message text.")
-                        else -> SessionList(searchResults, selectedId, open, rowActions, showSnippets = true)
+                        else -> SessionList(searchResults, selectedId, open, rowActions, showSnippets = true, drafts = drafts)
                     }
                     state.filter == SessionListFilter.Recent -> SessionList(
                         sessions = state.sessions,
@@ -262,6 +263,7 @@ fun SessionsSidebar(
                         canLoadMore = state.canLoadMore,
                         loadingMore = state.loadingMore,
                         onLoadMore = viewModel::loadMore,
+                        drafts = drafts,
                         sectioned = true,
                         status = {
                             when {
@@ -298,6 +300,7 @@ fun SessionsSidebar(
                         canLoadMore = state.canLoadMore,
                         loadingMore = state.loadingMore,
                         onLoadMore = viewModel::loadMore,
+                        drafts = drafts,
                     )
                 }
             }
@@ -582,6 +585,8 @@ private fun SessionList(
     canLoadMore: Boolean = false,
     loadingMore: Boolean = false,
     onLoadMore: () -> Unit = {},
+    /** Sessions with unsent text, marked "Draft". */
+    drafts: Set<String> = emptySet(),
     /** Group under "PINNED" and "SESSIONS" labels, Desktop's sidebar sections. */
     sectioned: Boolean = false,
     /** Loading, error or empty notices, shown under the "SESSIONS" label. */
@@ -612,6 +617,7 @@ private fun SessionList(
                 session,
                 selected = session.id == selectedId,
                 showSnippet = showSnippets,
+                draft = session.id in drafts,
                 onClick = { onOpen(session) },
                 onActions = { onActions(session) },
             )
@@ -639,7 +645,7 @@ private fun ListLabel(text: String) {
 
 /**
  * Desktop's session row: a status dot, the title and its age. The dot lights up while the session is
- * running. Long-press for actions.
+ * running; [draft] adds a "Draft" label for unsent text. Long-press for actions.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -647,6 +653,7 @@ internal fun SessionRow(
     session: SessionSummary,
     selected: Boolean,
     showSnippet: Boolean,
+    draft: Boolean = false,
     onClick: () -> Unit,
     onActions: () -> Unit,
 ) {
@@ -684,6 +691,9 @@ internal fun SessionRow(
             )
             if (session.pinned) {
                 UnstyledIcon(Lucide.Pin, contentDescription = "Pinned", tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
+            }
+            if (draft) {
+                Text("Draft", style = Theme[typography][caption], color = Theme[colors][accent], maxLines = 1)
             }
             if (!showSnippet) {
                 Text(relativeTime(session.activityAt), style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)

@@ -25,6 +25,9 @@ enum class PreviewScene(val label: String) {
     Reply("A finished reply"),
     Working("A turn at work"),
     Approval("An approval"),
+    LongApproval("An approval for a long command"),
+    BareApproval("An approval with no tool or purpose"),
+    Undelivered("Messages that lost their reply"),
     Subagents("Subagents"),
     Voice("Voice chat"),
     NewChat("A new chat"),
@@ -41,6 +44,9 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true) {
                 PreviewScene.Reply -> SampleChat(ChatSamples.reply)
                 PreviewScene.Working -> SampleChat(ChatSamples.working)
                 PreviewScene.Approval -> SampleChat(ChatSamples.approval)
+                PreviewScene.LongApproval -> SampleChat(ChatSamples.longApproval)
+                PreviewScene.BareApproval -> SampleChat(ChatSamples.bareApproval)
+                PreviewScene.Undelivered -> SampleChat(ChatSamples.undelivered)
                 PreviewScene.Subagents -> SampleChat(ChatSamples.subagents)
                 PreviewScene.Voice -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.listening)
                 PreviewScene.NewChat -> SampleChat(ChatSamples.empty, placeholder = "What are we building?")
