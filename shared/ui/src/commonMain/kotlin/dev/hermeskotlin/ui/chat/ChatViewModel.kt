@@ -570,6 +570,25 @@ class ChatViewModel(
         viewModelScope.launch { chat.answer(request, result) }
     }
 
+    override fun checkDelivery(key: String) {
+        val chat = session.value ?: return
+        viewModelScope.launch { chat.checkDelivery(key) }
+    }
+
+    override fun resend(key: String) {
+        val chat = session.value ?: return
+        val text = chat.takeBack(key) ?: return
+        viewModelScope.launch {
+            // Not sent again after all: the text waits in the composer like any failed send.
+            if (!chat.send(text) && composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
+        }
+    }
+
+    override fun editMessage(key: String) {
+        val text = session.value?.takeBack(key) ?: return
+        composer.setTextAndPlaceCursorAtEnd(if (composer.text.isBlank()) text else "$text\n\n${composer.text}")
+    }
+
     override fun retry() {
         session.value?.retry()
     }
