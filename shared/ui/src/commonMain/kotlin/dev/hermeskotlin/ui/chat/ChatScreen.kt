@@ -21,7 +21,10 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.unit.Constraints
+import kotlin.math.roundToInt
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -87,6 +90,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.AnnotatedString
@@ -642,6 +647,8 @@ private fun BarButton(icon: ImageVector, contentDescription: String, onClick: ()
 private fun Greeting(onAttach: () -> Unit, onDictate: () -> Unit, connected: Boolean, dictation: DictationState, canAttach: Boolean) {
     // Blue on light; near-white on dark, where the blue at this size glares.
     val color = if (Theme[colors][background].luminance() < 0.5f) Theme[colors][textColor].copy(alpha = 0.9f) else Theme[colors][accent]
+    // The lettering's ink width in px, so the pills below can share its edges.
+    var wordmarkInk by remember { mutableIntStateOf(0) }
     Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
         Column(
             Modifier.fillMaxWidth().padding(bottom = 48.dp),
@@ -654,22 +661,58 @@ private fun Greeting(onAttach: () -> Unit, onDictate: () -> Unit, connected: Boo
                 color = { color },
                 maxLines = 1,
                 autoSize = TextAutoSize.StepBased(minFontSize = 28.sp, maxFontSize = 72.sp, stepSize = 1.sp),
+                onTextLayout = { layout ->
+                    // Letter spacing pads half a gap outside the H and the D; leave it out.
+                    val style = layout.layoutInput.style
+                    val spacing = with(layout.layoutInput.density) { style.letterSpacing.value * style.fontSize.toPx() }
+                    wordmarkInk = (layout.getLineRight(0) - layout.getLineLeft(0) - spacing).roundToInt()
+                },
                 modifier = Modifier.fillMaxWidth(),
             )
             // Other ways to begin than typing, named rather than left to the composer's icons.
-            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button("Attach a file", onClick = onAttach, variant = ButtonVariant.Outline, leadingIcon = Lucide.Paperclip, enabled = canAttach, pill = true)
+            SplitCapsule(
+                spanPx = wordmarkInk,
+                start = { Button("Attach", onClick = onAttach, variant = ButtonVariant.Ghost, leadingIcon = Lucide.Paperclip, enabled = canAttach) },
+            ) {
                 // Tracks the composer's mic: while recording the same tap finishes it.
                 Button(
                     dictateLabel(dictation),
                     onClick = onDictate,
-                    variant = ButtonVariant.Outline,
+                    variant = ButtonVariant.Ghost,
                     leadingIcon = if (dictation.recording) Lucide.Square else Lucide.Mic,
                     enabled = connected,
                     loading = dictation.transcribing,
-                    pill = true,
                 )
             }
+        }
+    }
+}
+
+/**
+ * One outlined capsule [spanPx] wide, split down the middle into equal halves for [start] and [end]; a half whose
+ * label needs more widens both rather than being clipped.
+ */
+@Composable
+private fun SplitCapsule(spanPx: Int, start: @Composable () -> Unit, end: @Composable () -> Unit) {
+    val shape = RoundedCornerShape(percent = 50)
+    val line = Theme[colors][strokeStrong]
+    Layout(
+        contents = listOf(start, end),
+        modifier = Modifier
+            .clip(shape)
+            .border(1.dp, line, shape)
+            .drawWithContent {
+                drawContent()
+                drawLine(line,Offset(size.width / 2, 0f), Offset(size.width / 2, size.height), strokeWidth = 1.dp.toPx())
+            },
+    ) { (startMeasurables, endMeasurables), constraints ->
+        val measurables = startMeasurables + endMeasurables
+        val natural = measurables.maxOfOrNull { it.maxIntrinsicWidth(constraints.maxHeight) } ?: 0
+        val half = maxOf(natural, spanPx / 2).coerceAtMost(constraints.maxWidth / 2)
+        val placeables = measurables.map { it.measure(Constraints(minWidth = half, maxWidth = half, maxHeight = constraints.maxHeight)) }
+        val height = placeables.maxOfOrNull { it.height } ?: 0
+        layout(half * 2, height) {
+            placeables.forEachIndexed { i, p -> p.placeRelative(i * half, (height - p.height) / 2) }
         }
     }
 }
