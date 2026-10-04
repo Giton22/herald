@@ -9,6 +9,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
@@ -16,12 +19,17 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.ArrowRight
+import com.composables.icons.lucide.ChevronUp
+import com.composables.icons.lucide.CircleHelp
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PlugZap
 import com.composeunstyled.Text
 import com.composeunstyled.theme.Theme
+import dev.hermeskotlin.core.gateway.CheckStage
 import dev.hermeskotlin.core.gateway.ProbeResult
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.gateway.reachFix
+import dev.hermeskotlin.core.gateway.toStageResult
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.code
 import dev.hermeskotlin.designsystem.HeraldMark
@@ -71,6 +79,16 @@ fun ConnectScreen(
             onKeyboardAction = { viewModel.testConnection() },
         )
 
+        var guideOpen by remember { mutableStateOf(false) }
+        Button(
+            text = if (guideOpen) "Hide address help" else "Which address do I use?",
+            onClick = { guideOpen = !guideOpen },
+            variant = ButtonVariant.Ghost,
+            size = ButtonSize.Small,
+            leadingIcon = if (guideOpen) Lucide.ChevronUp else Lucide.CircleHelp,
+        )
+        if (guideOpen) AddressGuide(Modifier.padding(horizontal = 4.dp))
+
         val result = state.result
         val signInReady = result is ProbeResult.Reachable && result.status.authRequired && result.status.supportsPasswordLogin
         Button(
@@ -84,6 +102,23 @@ fun ConnectScreen(
         )
 
         result?.let { ResultCard(it) }
+
+        // Each stage is tested on its own: a reachable server says nothing yet about the sign-in or chat.
+        result?.let {
+            Surface(Modifier.fillMaxWidth()) {
+                ConnectionChecklist(
+                    results = mapOf(CheckStage.Server to it.toStageResult()),
+                    running = false,
+                    modifier = Modifier.padding(16.dp),
+                    pendingNote = { stage ->
+                        when (stage) {
+                            CheckStage.SignIn -> "Tested when you sign in, next."
+                            else -> "Tested after sign-in: the chat shows whether it connects, and Settings → Check connection tests it on its own."
+                        }
+                    },
+                )
+            }
+        }
 
         if (result is ProbeResult.Reachable && result.url.isExposed) {
             Text(
@@ -129,7 +164,8 @@ private fun ResultCard(result: ProbeResult) {
                 is ProbeResult.Unreachable -> {
                     StatusDot(Status.Error, "Can't reach ${result.url}")
                     Hint(result.reason)
-                    Hint("On the server, run:")
+                    Text("What to do: ${reachFix(result.url)}", style = Theme[typography][bodySmall], color = Theme[colors][text])
+                    Hint("If the dashboard isn't running yet, run this on the server:")
                     CodeLine("hermes dashboard --host 0.0.0.0 --port 9119 --no-open")
                 }
             }
