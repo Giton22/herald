@@ -2,8 +2,11 @@ package dev.hermeskotlin.ui.sessions
 
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
+import dev.hermeskotlin.core.chat.AttentionTracker
+import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.LastChatStore
+import dev.hermeskotlin.core.sessions.SeenStore
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.createHttpClient
@@ -60,7 +63,12 @@ class SessionsViewModelTest {
         val client = createHttpClient(engine, cookies)
         val auth = AuthApi(client, cookies)
         val connection = GatewayConnection(auth, { _, _ -> error("not connecting in tests") }, CoroutineScope(dispatcher))
-        return SessionsViewModel(SessionsApi(client), auth, connection, LastChatStore(InMemoryKeyValueStore()), ProfilesApi(client), DraftStore(InMemoryKeyValueStore()))
+        val scope = CoroutineScope(dispatcher)
+        val attention = AttentionTracker(connection, ChatHost(connection, SessionsApi(client), scope), scope)
+        return SessionsViewModel(
+            SessionsApi(client), auth, connection, LastChatStore(InMemoryKeyValueStore()), ProfilesApi(client),
+            attention, SeenStore(InMemoryKeyValueStore()) { 0.0 }, DraftStore(InMemoryKeyValueStore()),
+        )
     }
 
     /** The mock engine completes on Ktor's own dispatcher, so wait on state rather than the test scheduler. */

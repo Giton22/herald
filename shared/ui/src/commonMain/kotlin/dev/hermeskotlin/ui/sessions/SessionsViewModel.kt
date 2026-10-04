@@ -6,8 +6,13 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.AuthUser
+import dev.hermeskotlin.core.chat.AttentionTracker
 import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.LastChatStore
+import dev.hermeskotlin.core.chat.Waiting
+import dev.hermeskotlin.core.sessions.SeenChats
+import dev.hermeskotlin.core.sessions.SeenStore
+import kotlinx.coroutines.flow.combine
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
@@ -55,20 +60,58 @@ data class SessionsUiState(
     val sessionExpired: Boolean = false,
 )
 
+/** The recent list narrowed to what's running, or to chats waiting on the user or with a reply not yet read. */
+enum class AttentionFilter(val label: String) {
+    All("All"),
+    Running("Running"),
+    NeedsAttention("Needs attention"),
+}
+
+/** What a row says about its chat besides the title, in words. [running]: a turn is going right now. */
+data class RowStatus(val waiting: Waiting? = null, val unread: Boolean = false, val running: Boolean = false) {
+    val needsAttention: Boolean get() = waiting != null || unread
+}
+
 /**
  * Stored-session browser: list (REST, paged), search, and row actions. Refetches when the gateway
  * broadcasts `sessions.changed` / `session.title`, and after each reconnect (events may have been missed).
+ * Marks chats waiting on the user ([AttentionTracker]) and ones with a reply not yet read ([SeenStore]).
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class SessionsViewModel(
     private val api: SessionsApi,
     private val auth: AuthApi,
     private val connection: GatewayConnection,
     private val lastChats: LastChatStore,
     private val profiles: ProfilesApi,
+    attention: AttentionTracker,
+    private val seenStore: SeenStore,
     private val drafts: DraftStore,
 ) : ViewModel() {
 
     val connectionState: StateFlow<ConnectionState> = connection.state
+
+    private val bound = MutableStateFlow<Pair<GatewayUrl, String?>?>(null)
+
+    private val _attentionFilter = MutableStateFlow(AttentionFilter.All)
+    val attentionFilter: StateFlow<AttentionFilter> = _attentionFilter.asStateFlow()
+
+    private val seen: StateFlow<SeenChats?> = bound
+        .flatMapLatest { scope -> scope?.let { (url, profile) -> seenStore.seen(url, profile) } ?: flowOf(null) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, null)
+
+    private val waiting = attention.waiting
+    private val running = attention.running
+
+    fun setAttentionFilter(filter: AttentionFilter) {
+        _attentionFilter.value = filter
+    }
+
+    /** The user has looked at [session] as it is now: its reply is read. */
+    fun markSeen(session: SessionSummary) {
+        val (url, profile) = bound.value ?: return
+        viewModelScope.launch { seenStore.markSeen(url, session, profile) }
+    }
 
     private val _user = MutableStateFlow<AuthUser?>(null)
     val user: StateFlow<AuthUser?> = _user.asStateFlow()
@@ -81,6 +124,14 @@ class SessionsViewModel(
     private val _state = MutableStateFlow(SessionsUiState())
     val state: StateFlow<SessionsUiState> = _state.asStateFlow()
 
+    /** Each listed chat's status by id; chats with nothing to say are left out. */
+    val statuses: StateFlow<Map<String, RowStatus>> = combine(_state, waiting, seen, running) { state, waiting, seen, running ->
+        (state.sessions + state.searchResults.orEmpty()).mapNotNull { session ->
+            RowStatus(waiting[session.id], seen?.isUnread(session) == true, running[session.id] == true)
+                .takeIf { it.needsAttention || it.running }?.let { session.id to it }
+        }.toMap()
+    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+
     val query = TextFieldState()
 
     private var gateway: SavedGateway? = null
@@ -89,10 +140,7 @@ class SessionsViewModel(
     private var profile: String? = null
     private var loadJob: Job? = null
 
-    private val bound = MutableStateFlow<Pair<GatewayUrl, String?>?>(null)
-
     /** Sessions with unsent text in their composer, marked "Draft" in the list. */
-    @OptIn(ExperimentalCoroutinesApi::class)
     val draftChats: StateFlow<Set<String>> = bound
         .flatMapLatest { scope -> scope?.let { (url, profile) -> drafts.chatsWithDrafts(url, profile) } ?: flowOf(emptySet()) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())

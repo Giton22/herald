@@ -1,6 +1,7 @@
 package dev.hermeskotlin.android
 
 import android.Manifest
+import android.content.Intent
 import android.content.pm.PackageManager
 import android.graphics.Color
 import android.os.Build
@@ -13,7 +14,9 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.lifecycle.lifecycleScope
+import dev.hermeskotlin.android.notify.ChatNotifications
 import dev.hermeskotlin.core.chat.ChatHost
+import dev.hermeskotlin.core.chat.ChatLinks
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.ui.App
@@ -31,6 +34,7 @@ class MainActivity : ComponentActivity() {
 
     private val host: ChatHost by inject()
     private val connection: GatewayConnection by inject()
+    private val links: ChatLinks by inject()
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -38,12 +42,26 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         if (windowPrefs.contains(KEY_DARK)) applyWindowTheme(windowPrefs.getBoolean(KEY_DARK, false))
         askForNotificationsOnFirstTurn()
+        if (savedInstanceState == null) openLinkedChat(intent)
         setContent {
             App(appVersion = BuildConfig.VERSION_NAME, releasesRepo = BuildConfig.RELEASES_REPO, onDarkTheme = { dark ->
                 applyWindowTheme(dark)
                 windowPrefs.edit { putBoolean(KEY_DARK, dark) }
             })
         }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        openLinkedChat(intent)
+    }
+
+    /** A tapped notification about a chat opens that chat, not just the last one. */
+    private fun openLinkedChat(intent: Intent?) {
+        val sessionId = intent?.getStringExtra(ChatNotifications.EXTRA_OPEN_SESSION) ?: return
+        links.open(sessionId, intent.getStringExtra(ChatNotifications.EXTRA_OPEN_TITLE))
+        // Handled once: a recreated activity must not jump back to it.
+        intent.removeExtra(ChatNotifications.EXTRA_OPEN_SESSION)
     }
 
     override fun onStart() {

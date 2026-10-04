@@ -3,6 +3,10 @@ package dev.hermeskotlin.ui.sessions
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import dev.hermeskotlin.designsystem.components.Chip
+import dev.hermeskotlin.ui.LocalAppSettings
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -158,6 +162,9 @@ fun SessionsSidebar(
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
     val user by viewModel.user.collectAsStateWithLifecycle()
     val roster by viewModel.roster.collectAsStateWithLifecycle()
+    val statuses by viewModel.statuses.collectAsStateWithLifecycle()
+    val attentionFilter by viewModel.attentionFilter.collectAsStateWithLifecycle()
+    val stayConnected = LocalAppSettings.current.stayConnected
     val drafts by viewModel.draftChats.collectAsStateWithLifecycle()
     var profilesOpen by remember { mutableStateOf(false) }
 
@@ -200,9 +207,13 @@ fun SessionsSidebar(
     }
 
     val open: (SessionSummary) -> Unit = {
+        viewModel.markSeen(it)
         onOpenSession(it)
         if (searchOpen) closeSearch()
     }
+    // The open chat is being read, so whatever it has said is seen.
+    val openSession = state.sessions.firstOrNull { it.id == selectedId }
+    LaunchedEffect(openSession) { openSession?.let(viewModel::markSeen) }
     val rowActions: (SessionSummary) -> Unit = { actionTarget = it }
 
     Box(
@@ -253,19 +264,36 @@ fun SessionsSidebar(
                     searchResults != null -> when {
                         state.searching && searchResults.isEmpty() -> CenteredSpinner()
                         searchResults.isEmpty() -> EmptyState(Lucide.SearchX, "No matches", "Search looks at titles, session ids and message text.")
-                        else -> SessionList(searchResults, selectedId, open, rowActions, showSnippets = true, drafts = drafts)
+                        else -> SessionList(searchResults, selectedId, open, rowActions, showSnippets = true, statuses = statuses, drafts = drafts)
                     }
                     state.filter == SessionListFilter.Recent -> SessionList(
-                        sessions = state.sessions,
+                        sessions = when (attentionFilter) {
+                            AttentionFilter.All -> state.sessions
+                            AttentionFilter.Running -> state.sessions.filter { statuses[it.id]?.running == true }
+                            AttentionFilter.NeedsAttention -> state.sessions.filter { statuses[it.id]?.needsAttention == true }
+                        },
                         selectedId = selectedId,
                         onOpen = open,
                         onActions = rowActions,
-                        canLoadMore = state.canLoadMore,
+                        // A filtered list stays short, so the end is always in sight: paging on would
+                        // fetch the whole history. What's running or waiting is recent anyway.
+                        canLoadMore = state.canLoadMore && attentionFilter == AttentionFilter.All,
                         loadingMore = state.loadingMore,
                         onLoadMore = viewModel::loadMore,
+                        statuses = statuses,
                         drafts = drafts,
                         sectioned = true,
                         status = {
+                            if (!state.loading && state.error == null && state.sessions.isNotEmpty()) {
+                                item(key = "filters") {
+                                    AttentionFilters(
+                                        selected = attentionFilter,
+                                        running = state.sessions.count { statuses[it.id]?.running == true },
+                                        needsAttention = state.sessions.count { statuses[it.id]?.needsAttention == true },
+                                        onSelect = viewModel::setAttentionFilter,
+                                    )
+                                }
+                            }
                             when {
                                 state.loading -> item(key = "loading") { ListSpinner() }
                                 state.error != null -> item(key = "error") {
@@ -273,6 +301,21 @@ fun SessionsSidebar(
                                 }
                                 state.sessions.isEmpty() -> item(key = "empty") {
                                     ListNotice("Your conversations will show up here.")
+                                }
+                                attentionFilter == AttentionFilter.Running && state.sessions.none { statuses[it.id]?.running == true } -> item(key = "none-running") {
+                                    ListNotice("Nothing is running right now.")
+                                }
+                                attentionFilter == AttentionFilter.NeedsAttention && state.sessions.none { statuses[it.id]?.needsAttention == true } ->
+                                    item(key = "none-waiting") { ListNotice("Nothing needs you right now.") }
+                            }
+                            if (attentionFilter == AttentionFilter.NeedsAttention && !stayConnected) {
+                                item(key = "stay-connected") {
+                                    ListNotice(
+                                        "While Herald is closed, it only hears about the chat you had open. " +
+                                            "Turn on Stay connected to be notified about every chat.",
+                                        action = "Open Settings",
+                                        onAction = onOpenSettings,
+                                    )
                                 }
                             }
                         },
@@ -585,6 +628,8 @@ private fun SessionList(
     canLoadMore: Boolean = false,
     loadingMore: Boolean = false,
     onLoadMore: () -> Unit = {},
+    /** What each row says besides its title: waiting on the user, or an unread reply. */
+    statuses: Map<String, RowStatus> = emptyMap(),
     /** Sessions with unsent text, marked "Draft". */
     drafts: Set<String> = emptySet(),
     /** Group under "PINNED" and "SESSIONS" labels, Desktop's sidebar sections. */
@@ -617,6 +662,7 @@ private fun SessionList(
                 session,
                 selected = session.id == selectedId,
                 showSnippet = showSnippets,
+                status = statuses[session.id],
                 draft = session.id in drafts,
                 onClick = { onOpen(session) },
                 onActions = { onActions(session) },
@@ -644,8 +690,8 @@ private fun ListLabel(text: String) {
 }
 
 /**
- * Desktop's session row: a status dot, the title and its age. The dot lights up while the session is
- * running; [draft] adds a "Draft" label for unsent text. Long-press for actions.
+ * Desktop's session row: a status dot, the title and its age. The dot lights up while a turn is
+ * running ([RowStatus.running]); [draft] adds a "Draft" label for unsent text. Long-press for actions.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -653,6 +699,7 @@ internal fun SessionRow(
     session: SessionSummary,
     selected: Boolean,
     showSnippet: Boolean,
+    status: RowStatus? = null,
     draft: Boolean = false,
     onClick: () -> Unit,
     onActions: () -> Unit,
@@ -677,7 +724,7 @@ internal fun SessionRow(
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Box(
                 Modifier.size(6.dp).background(
-                    if (session.isActive) Theme[colors][success] else Theme[colors][strokeStrong],
+                    if (status?.running == true) Theme[colors][success] else Theme[colors][strokeStrong],
                     CircleShape,
                 ),
             )
@@ -699,6 +746,17 @@ internal fun SessionRow(
                 Text(relativeTime(session.activityAt), style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
             }
         }
+        // Said in words as well as by the dot's colour.
+        val labels = buildList {
+            status?.waiting?.let { add(it.label to Theme[colors][warning]) }
+            if (status?.running == true) add("Running" to Theme[colors][success])
+            if (status?.unread == true) add("New reply" to Theme[colors][accent])
+        }
+        if (labels.isNotEmpty()) {
+            Row(Modifier.padding(start = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                labels.forEach { (label, color) -> Text(label, style = Theme[typography][caption], color = color, maxLines = 1) }
+            }
+        }
         if (showSnippet) {
             val detail = session.snippet?.replace('\n', ' ')?.takeIf { it.isNotBlank() } ?: relativeTime(session.activityAt)
             if (detail.isNotEmpty()) {
@@ -718,6 +776,28 @@ internal fun SessionRow(
 @Composable
 internal fun ListSpinner() {
     Box(Modifier.fillMaxWidth().padding(16.dp), contentAlignment = Alignment.Center) { Spinner(Modifier.size(20.dp)) }
+}
+
+/** All / Running / Needs attention over the recent list, with how many each holds. */
+@Composable
+private fun AttentionFilters(selected: AttentionFilter, running: Int, needsAttention: Int, onSelect: (AttentionFilter) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        AttentionFilter.entries.forEach { filter ->
+            val count = when (filter) {
+                AttentionFilter.All -> null
+                AttentionFilter.Running -> running
+                AttentionFilter.NeedsAttention -> needsAttention
+            }
+            Chip(
+                text = if (count != null && count > 0) "${filter.label} · $count" else filter.label,
+                selected = filter == selected,
+                onClick = { onSelect(filter) },
+            )
+        }
+    }
 }
 
 @Composable

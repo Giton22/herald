@@ -186,7 +186,8 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 ### Notifications & background
 - [x] Foreground service that keeps the WS alive during long runs
 - [x] Live Update while a turn runs (Android 16 status-bar chip): current tool or status, Stop button
-- [x] Local notifications: approval waiting, run finished
+- [x] Local notifications: approval waiting, run finished; tapping one opens its chat
+- [x] Session list filters All / Running / Needs attention, with text labels for a waiting approval or question (tracked across chats this phone has opened), "Running" and "New reply" (read state kept per gateway and profile)
 - [x] Answer from the notification: approve/deny, clarify answers, inline reply to a finished turn (each asks for an unlock first)
 - [x] Notification toggles in Settings; permission asked on the first turn
 - [x] Stay connected: keeps the socket up in the background (quiet notification) so turns started on other devices reach the open chat
