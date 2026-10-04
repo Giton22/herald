@@ -198,6 +198,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [ ] Gateway API server "lite" mode (`:8642`, static bearer key, Runs API + SSE)
 
 ### Platforms & polish
+- [x] 48dp touch targets (`MinTouchTarget`) on icon buttons, the composer, the top bar and the sidebar rows, without enlarging the icons
 - [ ] Tablet and foldable adaptive layout (list and detail side by side)
 - [ ] Home-screen widget and Quick Settings tile
 - [ ] Offline cache of sessions and messages
