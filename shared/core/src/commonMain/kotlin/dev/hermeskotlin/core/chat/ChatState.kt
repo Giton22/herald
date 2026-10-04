@@ -44,6 +44,9 @@ enum class SendCheck {
 
     /** The transcript couldn't tell: it may be running, so it shouldn't simply be sent again. */
     Unknown,
+
+    /** A later check found it missing from the transcript: Hermes never got it, so it's safe to resend. */
+    NotReceived,
 }
 
 sealed interface ChatMessage {

@@ -221,6 +221,49 @@ class ChatSession(
     }
 
     /**
+     * Looks for the unsettled prompt [key] in the stored transcript again, when the user asks. Found: it
+     * counts as sent. Missing: marked [SendCheck.NotReceived], safe to resend. Still can't tell: it stays
+     * [SendCheck.Unknown]. Never sends anything itself.
+     */
+    suspend fun checkDelivery(key: String) {
+        val unsettled = _state.value.messages.firstOrNull { it.key == key } as? ChatMessage.User ?: return
+        if (unsettled.check == null || unsettled.check == SendCheck.Checking) return
+        // A fresh transcript settles a prompt that arrived, and the count below needs it loaded.
+        _state.update { it.copy(messages = it.messages.updateUser(key) { u -> u.copy(check = SendCheck.Checking) }) }
+        loadHistory()
+        val messages = _state.value.messages
+        val index = messages.indexOfFirst { it.key == key }
+        val message = messages.getOrNull(index) as? ChatMessage.User ?: return
+        val before = _state.value.takeIf { it.historyError == null }?.let {
+            messages.take(index).count { m -> m is ChatMessage.User && !m.pending && m.check == null }
+        }
+        when (findInTranscript(message.text, key, before)) {
+            true -> {
+                _state.update { it.copy(error = null, messages = it.messages.updateUser(key) { u -> u.copy(check = null) }) }
+                loadHistory()
+            }
+            false -> _state.update { it.copy(error = null, messages = it.messages.updateUser(key) { u -> u.copy(check = SendCheck.NotReceived) }) }
+            null -> _state.update { state ->
+                state.copy(
+                    error = "Couldn't read the conversation to check. Try again once connected.",
+                    messages = state.messages.updateUser(key) { it.copy(check = SendCheck.Unknown) },
+                )
+            }
+        }
+    }
+
+    /**
+     * Removes the unsettled prompt [key] (one marked by a [SendCheck]) and hands back its text, to resend
+     * or edit; null for any other message.
+     */
+    fun takeBack(key: String): String? {
+        val message = _state.value.messages.firstOrNull { it.key == key } as? ChatMessage.User ?: return null
+        if (message.check == null || message.check == SendCheck.Checking) return null
+        _state.update { state -> state.copy(messages = state.messages.filterNot { it.key == key }) }
+        return message.text
+    }
+
+    /**
      * Whether the transcript has a prompt more than the [before] shown ahead of the send, the latest being
      * [visible], while bubble [key] says it's being checked. Counted, not matched by key: an own prompt's
      * bubble keeps its local key, so its stored row always looks new. The gateway writes the prompt as the
@@ -237,7 +280,8 @@ class ChatSession(
                 is ApiResult.Success -> {
                     read = true
                     val prompts = historyToMessages(result.value.messages).filterIsInstance<ChatMessage.User>()
-                    if (prompts.size > before && prompts.last().text.contains(visible)) return true
+                    // Any prompt past the ones shown before it: later prompts may follow it by a later check.
+                    if (prompts.drop(before).any { it.text.contains(visible) }) return true
                 }
                 // A new chat's stored row only appears with its first prompt.
                 is ApiResult.Failed -> if (result.status == 404 && !rowExists) read = true

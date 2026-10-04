@@ -28,6 +28,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ChatSessionTest {
@@ -38,11 +39,15 @@ class ChatSessionTest {
     private var history = """{"session_id":"stored-1","messages":[
         {"id":1,"role":"user","content":"hello"},{"id":2,"role":"assistant","content":"Hi! What next?"}]}"""
 
+    /** The transcript can't be read while this is set. */
+    private var historyFails = false
+
     private fun client() = createHttpClient(
         MockEngine { request ->
             when (request.url.encodedPath) {
                 "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
-                "/api/sessions/stored-1/messages" -> respond(history, HttpStatusCode.OK, json)
+                "/api/sessions/stored-1/messages" ->
+                    if (historyFails) respond("{}", HttpStatusCode.InternalServerError, json) else respond(history, HttpStatusCode.OK, json)
                 else -> error("unexpected ${request.url}")
             }
         },
@@ -485,6 +490,62 @@ class ChatSessionTest {
         val bubble = assertIs<ChatMessage.User>(chat.state.value.messages.single())
         assertEquals(SendCheck.Unknown, bubble.check)
         assertFalse(bubble.pending)
+    }
+
+    /** A resumed chat whose prompt went out and lost its reply while the transcript couldn't be read. */
+    private suspend fun unsettledSend(scope: CoroutineScope, text: String): ChatSession {
+        val (chat, transport) = resumedChat(scope, mapOf("prompt.submit" to SILENT))
+        historyFails = true
+        val sending = scope.async { chat.send(text) }
+        transport.awaitSent { it.isCall("prompt.submit") }
+        transport.serverClose(1006)
+        assertFalse(sending.await())
+        assertEquals(SendCheck.Unknown, (chat.state.value.messages.last() as ChatMessage.User).check)
+        historyFails = false
+        return chat
+    }
+
+    @Test
+    fun checkingDeliveryLaterSettlesAPromptTheTranscriptHas() = runTest {
+        val chat = unsettledSend(backgroundScope, "deploy it")
+        history = history.replace("]}", """,{"id":3,"role":"user","content":"deploy it"}]}""")
+
+        chat.checkDelivery(chat.state.value.messages.last().key)
+
+        val messages = chat.state.value.messages
+        assertEquals(listOf("hello", "Hi! What next?", "deploy it"), messages.map { it.textOf() })
+        assertEquals("row-3", messages.last().key)
+    }
+
+    @Test
+    fun checkingDeliveryLaterMarksAMissingPromptSafeToResend() = runTest {
+        val chat = unsettledSend(backgroundScope, "deploy it")
+        val key = chat.state.value.messages.last().key
+
+        chat.checkDelivery(key)
+
+        assertEquals(SendCheck.NotReceived, (chat.state.value.messages.last() as ChatMessage.User).check)
+        assertEquals("deploy it", chat.takeBack(key))
+        assertEquals(listOf("hello", "Hi! What next?"), chat.state.value.messages.map { it.textOf() })
+    }
+
+    @Test
+    fun checkingDeliveryWithoutATranscriptKeepsItUnknown() = runTest {
+        val chat = unsettledSend(backgroundScope, "deploy it")
+        historyFails = true
+
+        chat.checkDelivery(chat.state.value.messages.last().key)
+
+        assertEquals(SendCheck.Unknown, (chat.state.value.messages.last() as ChatMessage.User).check)
+        assertTrue(chat.state.value.error!!.contains("check"))
+    }
+
+    @Test
+    fun onlyAnUnsettledPromptCanBeTakenBack() = runTest {
+        val (chat, _) = resumedChat(backgroundScope, emptyMap())
+
+        assertNull(chat.takeBack(chat.state.value.messages.first().key))
+        assertEquals(2, chat.state.value.messages.size)
     }
 
     private suspend fun newChat(scope: CoroutineScope, results: Map<String, String>): Pair<ChatSession, FakeTransport> {
