@@ -430,7 +430,7 @@ internal fun ChatView(
                                 EmptyState(Lucide.CloudOff, "Couldn't load the conversation", state.historyError.orEmpty()) {
                                     Button("Try again", onClick = actions::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                                 }
-                            else -> Greeting(onAttach = onAttach, onDictate = onDictate, connected = connected, dictation = dictation)
+                            else -> Greeting(onAttach = onAttach, onDictate = onDictate, connected = connected, dictation = dictation, canAttach = attachments.size < OutgoingAttachment.MAX_COUNT)
                         }
                     }
                 }
@@ -595,7 +595,7 @@ private fun BarButton(icon: ImageVector, contentDescription: String, onClick: ()
 
 /** An empty chat is titled with the app's name in heavy spaced capitals stretched to the column. */
 @Composable
-private fun Greeting(onAttach: () -> Unit, onDictate: () -> Unit, connected: Boolean, dictation: DictationState) {
+private fun Greeting(onAttach: () -> Unit, onDictate: () -> Unit, connected: Boolean, dictation: DictationState, canAttach: Boolean) {
     // Blue on light; near-white on dark, where the blue at this size glares.
     val color = if (Theme[colors][background].luminance() < 0.5f) Theme[colors][textColor].copy(alpha = 0.9f) else Theme[colors][accent]
     Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
@@ -614,7 +614,7 @@ private fun Greeting(onAttach: () -> Unit, onDictate: () -> Unit, connected: Boo
             )
             // Other ways to begin than typing, named rather than left to the composer's icons.
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Button("Attach a file", onClick = onAttach, variant = ButtonVariant.Outline, leadingIcon = Lucide.Paperclip, pill = true)
+                Button("Attach a file", onClick = onAttach, variant = ButtonVariant.Outline, leadingIcon = Lucide.Paperclip, enabled = canAttach, pill = true)
                 // Tracks the composer's mic: while recording the same tap finishes it.
                 Button(
                     dictateLabel(dictation),
