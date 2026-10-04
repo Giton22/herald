@@ -8,6 +8,14 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
+    <!-- The assistant names the app it was called up over; apps are hidden from Herald unless it says which it looks up. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
+    </queries>
+
     <!--
         Self-hosted gateways are commonly plain HTTP on a LAN or Tailnet, so cleartext is allowed;
         the Connect screen warns when http:// points at a public address (GatewayUrl.isExposed).
