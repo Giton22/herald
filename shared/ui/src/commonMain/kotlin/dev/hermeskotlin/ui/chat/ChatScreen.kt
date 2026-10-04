@@ -147,6 +147,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.composables.icons.lucide.AudioLines
 import com.composables.icons.lucide.Mic
+import com.composables.icons.lucide.Paperclip
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
@@ -397,7 +398,7 @@ internal fun ChatView(
                                 EmptyState(Lucide.CloudOff, "Couldn't load the conversation", state.historyError.orEmpty()) {
                                     Button("Try again", onClick = actions::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                                 }
-                            else -> Greeting()
+                            else -> Greeting(onAttach = onAttach, onDictate = onDictate, connected = connected)
                         }
                     }
                 }
@@ -559,18 +560,29 @@ private fun BarButton(icon: ImageVector, contentDescription: String, onClick: ()
 
 /** An empty chat is titled with the app's name in heavy spaced capitals stretched to the column. */
 @Composable
-private fun Greeting() {
+private fun Greeting(onAttach: () -> Unit, onDictate: () -> Unit, connected: Boolean) {
     // Blue on light; near-white on dark, where the blue at this size glares.
     val color = if (Theme[colors][background].luminance() < 0.5f) Theme[colors][textColor].copy(alpha = 0.9f) else Theme[colors][accent]
     Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-        BasicText(
-            "HERALD",
-            style = Theme[typography][wordmark].copy(textAlign = TextAlign.Center),
-            color = { color },
-            maxLines = 1,
-            autoSize = TextAutoSize.StepBased(minFontSize = 28.sp, maxFontSize = 72.sp, stepSize = 1.sp),
-            modifier = Modifier.fillMaxWidth().padding(bottom = 48.dp),
-        )
+        Column(
+            Modifier.fillMaxWidth().padding(bottom = 48.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(24.dp),
+        ) {
+            BasicText(
+                "HERALD",
+                style = Theme[typography][wordmark].copy(textAlign = TextAlign.Center),
+                color = { color },
+                maxLines = 1,
+                autoSize = TextAutoSize.StepBased(minFontSize = 28.sp, maxFontSize = 72.sp, stepSize = 1.sp),
+                modifier = Modifier.fillMaxWidth(),
+            )
+            // Other ways to begin than typing, named rather than left to the composer's icons.
+            Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Button("Attach a file", onClick = onAttach, variant = ButtonVariant.Outline, leadingIcon = Lucide.Paperclip, pill = true)
+                Button("Dictate", onClick = onDictate, variant = ButtonVariant.Outline, leadingIcon = Lucide.Mic, enabled = connected, pill = true)
+            }
+        }
     }
 }
 
