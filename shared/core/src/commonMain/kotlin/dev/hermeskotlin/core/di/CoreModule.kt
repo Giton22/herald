@@ -3,12 +3,14 @@ package dev.hermeskotlin.core.di
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.chat.ChatHost
+import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.chat.ToolRiskStore
 import dev.hermeskotlin.core.capabilities.CapabilitiesApi
 import dev.hermeskotlin.core.cron.CronApi
 import dev.hermeskotlin.core.insights.InsightsApi
 import dev.hermeskotlin.core.connection.GatewayConnection
+import dev.hermeskotlin.core.gateway.ConnectionCheck
 import dev.hermeskotlin.core.gateway.GatewayProbe
 import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.media.MediaApi
@@ -42,6 +44,10 @@ val coreModule = module {
     single { PersistentCookiesStorage(get()) }
     single { createHttpClient(cookies = get<PersistentCookiesStorage>()) }
     single { GatewayProbe(get()) }
+    single {
+        val client = get<HttpClient>()
+        ConnectionCheck(get(), get(), openSocket = { url, ticket -> client.openGatewaySocket(url, ticket) })
+    }
     single { AuthApi(get(), get()) }
     single { GatewayRepository(get()) }
     single { SessionsApi(get()) }
@@ -49,6 +55,7 @@ val coreModule = module {
     single { CapabilitiesApi(get()) }
     single { InsightsApi(get()) }
     single { LastChatStore(get()) }
+    single { DraftStore(get()) }
     single { ProfilesApi(get()) }
     single { ProfileStore(get()) }
     single { SettingsStore(get(), get()) }
