@@ -23,6 +23,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -30,9 +33,11 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.composables.icons.lucide.Activity
 import com.composables.icons.lucide.ArrowLeftRight
 import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.RefreshCw
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
@@ -45,7 +50,11 @@ import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.colors
+import dev.hermeskotlin.designsystem.components.BottomSheet
+import dev.hermeskotlin.designsystem.components.Button
+import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.SegmentedControl
+import dev.hermeskotlin.designsystem.components.SheetHeader
 import dev.hermeskotlin.designsystem.components.Surface
 import dev.hermeskotlin.designsystem.components.Switch
 import dev.hermeskotlin.designsystem.label
@@ -56,6 +65,7 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.LocalAppVersion
 import dev.hermeskotlin.ui.PlatformBackHandler
+import dev.hermeskotlin.ui.connect.ConnectionChecklist
 import dev.hermeskotlin.ui.sessions.SubpageHeader
 import dev.hermeskotlin.ui.update.UpdateBanner
 import org.koin.compose.viewmodel.koinViewModel
@@ -71,9 +81,31 @@ fun SettingsScreen(
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val info by viewModel.gateway.collectAsStateWithLifecycle()
+    val check by viewModel.check.collectAsStateWithLifecycle()
+    var checkOpen by remember { mutableStateOf(false) }
     LaunchedEffect(gateway) { viewModel.bind(gateway) }
-    PlatformBackHandler(enabled = true, onBack = onBack)
-    SettingsView(settings, info, gateway.url, viewModel::update, onBack, onSignOut, onChangeGateway)
+    PlatformBackHandler(enabled = !checkOpen, onBack = onBack)
+    SettingsView(
+        settings, info, gateway.url, viewModel::update, onBack, onSignOut, onChangeGateway,
+        onCheckConnection = {
+            checkOpen = true
+            viewModel.runConnectionCheck()
+        },
+    )
+    BottomSheet(visible = checkOpen, onDismiss = { checkOpen = false }) {
+        SheetHeader("Check connection", subtitle = "Each stage is tested on its own.")
+        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            ConnectionChecklist(check.results, running = check.running)
+            Button(
+                if (check.running) "Checking…" else "Check again",
+                onClick = viewModel::runConnectionCheck,
+                variant = ButtonVariant.Secondary,
+                loading = check.running,
+                leadingIcon = Lucide.RefreshCw,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+    }
 }
 
 /** The settings page itself, stateless so previews can draw it. */
@@ -86,6 +118,7 @@ internal fun SettingsView(
     onBack: () -> Unit,
     onSignOut: () -> Unit,
     onChangeGateway: () -> Unit,
+    onCheckConnection: () -> Unit = {},
 ) {
     Box(
         Modifier
@@ -194,6 +227,8 @@ internal fun SettingsView(
 
                 Section("Account") {
                     InfoRow(info.userLabel ?: "Signed in", gatewayUrl)
+                    Divider()
+                    ActionRow("Check connection", Lucide.Activity, onCheckConnection)
                     Divider()
                     ActionRow("Sign out", Lucide.LogOut, onSignOut)
                     Divider()

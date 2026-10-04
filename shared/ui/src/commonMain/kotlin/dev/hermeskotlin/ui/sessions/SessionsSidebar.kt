@@ -107,6 +107,7 @@ import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.Dialog
 import dev.hermeskotlin.designsystem.components.IconButton
+import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import dev.hermeskotlin.designsystem.components.SheetAction
 import dev.hermeskotlin.designsystem.components.SheetHeader
 import dev.hermeskotlin.designsystem.components.Spinner
@@ -164,6 +165,7 @@ fun SessionsSidebar(
     val statuses by viewModel.statuses.collectAsStateWithLifecycle()
     val attentionFilter by viewModel.attentionFilter.collectAsStateWithLifecycle()
     val stayConnected = LocalAppSettings.current.stayConnected
+    val drafts by viewModel.draftChats.collectAsStateWithLifecycle()
     var profilesOpen by remember { mutableStateOf(false) }
 
     var searchOpen by remember { mutableStateOf(false) }
@@ -262,7 +264,7 @@ fun SessionsSidebar(
                     searchResults != null -> when {
                         state.searching && searchResults.isEmpty() -> CenteredSpinner()
                         searchResults.isEmpty() -> EmptyState(Lucide.SearchX, "No matches", "Search looks at titles, session ids and message text.")
-                        else -> SessionList(searchResults, selectedId, open, rowActions, showSnippets = true, statuses = statuses)
+                        else -> SessionList(searchResults, selectedId, open, rowActions, showSnippets = true, statuses = statuses, drafts = drafts)
                     }
                     state.filter == SessionListFilter.Recent -> SessionList(
                         sessions = when (attentionFilter) {
@@ -277,6 +279,7 @@ fun SessionsSidebar(
                         loadingMore = state.loadingMore,
                         onLoadMore = viewModel::loadMore,
                         statuses = statuses,
+                        drafts = drafts,
                         sectioned = true,
                         status = {
                             if (!state.loading && state.error == null && state.sessions.isNotEmpty()) {
@@ -338,6 +341,7 @@ fun SessionsSidebar(
                         canLoadMore = state.canLoadMore,
                         loadingMore = state.loadingMore,
                         onLoadMore = viewModel::loadMore,
+                        drafts = drafts,
                     )
                 }
             }
@@ -509,12 +513,12 @@ private fun SearchHeader(viewModel: SessionsViewModel, onClose: () -> Unit) {
     }
 }
 
-/** A 44dp square icon button with no fill. */
+/** A 48dp square icon button with no fill. */
 @Composable
 private fun SquareButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit) {
     Box(
         Modifier
-            .size(44.dp)
+            .size(MinTouchTarget)
             .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
             .clickable(onClickLabel = contentDescription, onClick = onClick),
         contentAlignment = Alignment.Center,
@@ -529,7 +533,7 @@ private fun NavRow(icon: ImageVector, label: String, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = 44.dp)
+            .heightIn(min = MinTouchTarget)
             .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
             .clickable(onClick = onClick)
             .padding(horizontal = 12.dp),
@@ -624,6 +628,8 @@ private fun SessionList(
     onLoadMore: () -> Unit = {},
     /** What each row says besides its title: waiting on the user, or an unread reply. */
     statuses: Map<String, RowStatus> = emptyMap(),
+    /** Sessions with unsent text, marked "Draft". */
+    drafts: Set<String> = emptySet(),
     /** Group under "PINNED" and "SESSIONS" labels, Desktop's sidebar sections. */
     sectioned: Boolean = false,
     /** Loading, error or empty notices, shown under the "SESSIONS" label. */
@@ -655,6 +661,7 @@ private fun SessionList(
                 selected = session.id == selectedId,
                 showSnippet = showSnippets,
                 status = statuses[session.id],
+                draft = session.id in drafts,
                 onClick = { onOpen(session) },
                 onActions = { onActions(session) },
             )
@@ -682,7 +689,7 @@ private fun ListLabel(text: String) {
 
 /**
  * Desktop's session row: a status dot, the title and its age. The dot lights up while the session is
- * running. Long-press for actions.
+ * running; [draft] adds a "Draft" label for unsent text. Long-press for actions.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -691,6 +698,7 @@ internal fun SessionRow(
     selected: Boolean,
     showSnippet: Boolean,
     status: RowStatus? = null,
+    draft: Boolean = false,
     onClick: () -> Unit,
     onActions: () -> Unit,
 ) {
@@ -698,7 +706,7 @@ internal fun SessionRow(
     Column(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = 44.dp)
+            .heightIn(min = MinTouchTarget)
             .clip(shape)
             .then(if (selected) Modifier.background(Theme[colors][accentSoft], shape) else Modifier)
             .combinedClickable(
@@ -728,6 +736,9 @@ internal fun SessionRow(
             )
             if (session.pinned) {
                 UnstyledIcon(Lucide.Pin, contentDescription = "Pinned", tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
+            }
+            if (draft) {
+                Text("Draft", style = Theme[typography][caption], color = Theme[colors][accent], maxLines = 1)
             }
             if (!showSnippet) {
                 Text(relativeTime(session.activityAt), style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)

@@ -4,6 +4,7 @@ import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.chat.AttentionTracker
 import dev.hermeskotlin.core.chat.ChatHost
+import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.sessions.SeenStore
 import dev.hermeskotlin.core.connection.GatewayConnection
@@ -66,7 +67,7 @@ class SessionsViewModelTest {
         val attention = AttentionTracker(connection, ChatHost(connection, SessionsApi(client), scope), scope)
         return SessionsViewModel(
             SessionsApi(client), auth, connection, LastChatStore(InMemoryKeyValueStore()), ProfilesApi(client),
-            attention, SeenStore(InMemoryKeyValueStore()) { 0.0 },
+            attention, SeenStore(InMemoryKeyValueStore()) { 0.0 }, DraftStore(InMemoryKeyValueStore()),
         )
     }
 

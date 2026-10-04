@@ -7,16 +7,12 @@ import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.AuthUser
 import dev.hermeskotlin.core.chat.AttentionTracker
+import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.chat.Waiting
 import dev.hermeskotlin.core.sessions.SeenChats
 import dev.hermeskotlin.core.sessions.SeenStore
-import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.flatMapLatest
-import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.stateIn
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
@@ -28,10 +24,15 @@ import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.sessions.SessionListFilter
 import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.core.sessions.SessionsApi
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
@@ -85,6 +86,7 @@ class SessionsViewModel(
     private val profiles: ProfilesApi,
     attention: AttentionTracker,
     private val seenStore: SeenStore,
+    private val drafts: DraftStore,
 ) : ViewModel() {
 
     val connectionState: StateFlow<ConnectionState> = connection.state
@@ -135,6 +137,11 @@ class SessionsViewModel(
     /** The profile whose sessions are listed; null is the gateway's launch profile. */
     private var profile: String? = null
     private var loadJob: Job? = null
+
+    /** Sessions with unsent text in their composer, marked "Draft" in the list. */
+    val draftChats: StateFlow<Set<String>> = bound
+        .flatMapLatest { scope -> scope?.let { (url, profile) -> drafts.chatsWithDrafts(url, profile) } ?: flowOf(emptySet()) }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     init {
         observeServerChanges()
