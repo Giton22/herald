@@ -69,6 +69,11 @@ import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.Button
+import dev.hermeskotlin.designsystem.components.ButtonSize
+import dev.hermeskotlin.designsystem.components.ButtonVariant
+import dev.hermeskotlin.designsystem.accentSoft
+import androidx.compose.ui.semantics.Role
+import com.composables.icons.lucide.Plus
 import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.components.MarkdownText
 import dev.hermeskotlin.designsystem.components.Spinner
@@ -242,7 +247,7 @@ private fun ColumnScope.Ready(model: AssistantPanelModel, microphoneAllowed: Boo
         InputRequestPanel(state.inputRequests, connected, onAnswer = model::answer, onStop = model::stop.takeIf { state.running })
         return
     }
-    if (includeScreen && !state.hasConversation) ScreenChip(screen, onRemove = { model.setIncludeScreen(false) })
+    if (!state.hasConversation) ScreenChip(screen, included = includeScreen, onIncluded = model::setIncludeScreen)
     Composer(
         model = model,
         state = state,
@@ -273,9 +278,12 @@ private fun Prompt(message: ChatMessage.User) {
     }
 }
 
-/** What goes along with the first question: the screenshot's thumbnail and the app it came from. */
+/**
+ * The screen, offered for the first question: the panel asks whether to include it and sends it only
+ * once the user says yes. Shows the screenshot's thumbnail and the app it came from either way.
+ */
 @Composable
-private fun ScreenChip(screen: ScreenCapture, onRemove: () -> Unit) {
+private fun ScreenChip(screen: ScreenCapture, included: Boolean, onIncluded: (Boolean) -> Unit) {
     val context = screen.context
     if (context.isEmpty && screen.pending == 0) return
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
@@ -283,9 +291,10 @@ private fun ScreenChip(screen: ScreenCapture, onRemove: () -> Unit) {
         Modifier
             .padding(end = 8.dp, bottom = 8.dp)
             .clip(shape)
-            .background(Theme[colors][surface], shape)
-            .border(1.dp, Theme[colors][stroke], shape)
-            .padding(start = 6.dp, top = 6.dp, bottom = 6.dp),
+            .background(if (included) Theme[colors][accentSoft] else Theme[colors][surface], shape)
+            .border(1.dp, if (included) Theme[colors][accent] else Theme[colors][stroke], shape)
+            .clickable(role = Role.Checkbox, onClickLabel = if (included) "Leave the screen out" else "Include the screen") { onIncluded(!included) }
+            .padding(start = 6.dp, top = 6.dp, bottom = 6.dp, end = if (included) 0.dp else 6.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -298,7 +307,7 @@ private fun ScreenChip(screen: ScreenCapture, onRemove: () -> Unit) {
             }
         }
         Column(Modifier.weight(1f, fill = false)) {
-            Text("This screen", style = Theme[typography][label], color = Theme[colors][textColor])
+            Text(if (included) "This screen" else "Include this screen?", style = Theme[typography][label], color = Theme[colors][textColor])
             Text(
                 when {
                     screen.pending > 0 && context.isEmpty -> "Reading the screen…"
@@ -311,7 +320,11 @@ private fun ScreenChip(screen: ScreenCapture, onRemove: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        IconButton(Lucide.X, contentDescription = "Don't include the screen", onClick = onRemove)
+        if (included) {
+            IconButton(Lucide.X, contentDescription = "Leave the screen out", onClick = { onIncluded(false) })
+        } else {
+            Button("Add", onClick = { onIncluded(true) }, variant = ButtonVariant.Secondary, size = ButtonSize.Small, leadingIcon = Lucide.Plus)
+        }
     }
 }
 
@@ -355,7 +368,8 @@ private fun Composer(
                             dictation.transcribing -> "Writing down what you said…"
                             !connected -> "Connecting to Hermes…"
                             state.hasConversation -> "Ask a follow-up"
-                            else -> "Ask about your screen"
+                            includeScreen -> "Ask about your screen"
+                            else -> "Ask Hermes"
                         },
                         style = Theme[typography][body],
                         color = Theme[colors][textTertiary],

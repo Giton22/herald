@@ -73,8 +73,11 @@ class AssistantPanelModel(
     private val _screen = MutableStateFlow(ScreenCapture())
     val screen: StateFlow<ScreenCapture> = _screen.asStateFlow()
 
-    /** Whether the next prompt takes the screen along; the user can drop it before asking. */
-    private val _includeScreen = MutableStateFlow(true)
+    /**
+     * Whether the next prompt takes the screen along. Off until the user asks for it: most questions
+     * aren't about the screen, and what's on it can be private.
+     */
+    private val _includeScreen = MutableStateFlow(false)
     val includeScreen: StateFlow<Boolean> = _includeScreen.asStateFlow()
 
     val composer = TextFieldState()
@@ -109,7 +112,7 @@ class AssistantPanelModel(
     fun begin(expectText: Boolean, expectScreenshot: Boolean) {
         voice.cancelDictation()
         composer.clearText()
-        _includeScreen.value = true
+        _includeScreen.value = false
         _screen.value = ScreenCapture(pending = listOf(expectText, expectScreenshot).count { it })
         // The last call-up's chat goes on in the sessions list; an unused one is simply kept.
         if (_session.value?.state?.value?.hasConversation == true) newChat()
