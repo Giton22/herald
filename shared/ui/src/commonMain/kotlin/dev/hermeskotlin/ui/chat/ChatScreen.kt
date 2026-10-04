@@ -19,7 +19,12 @@ import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.withFrameNanos
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.runtime.Stable
+import kotlinx.coroutines.flow.collectLatest
+import kotlin.math.abs
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
 import androidx.compose.ui.input.nestedscroll.nestedScroll
@@ -426,10 +431,9 @@ internal fun ChatView(
             // The composer floats over the conversation, which scrolls on beneath it; its height pads the list.
             var dockHeight by remember { mutableIntStateOf(0) }
             val dockInset = with(LocalDensity.current) { dockHeight.toDp() }
-            // Reading back up the chat folds the composer to one line; at the end, or tapped, it opens again.
-            var readingBack by remember { mutableStateOf(false) }
-            val composerIdle = actions.composer.text.isBlank() && attachments.isEmpty() && comments.isEmpty() && !dictation.active
-            val composerCollapsed = readingBack && composerIdle && state.messages.isNotEmpty()
+            // Reading back up the chat folds the composer to one line; nearing the end opens it again.
+            val composerFold = remember { ComposerFold() }
+            val composerBusy = actions.composer.text.isNotBlank() || attachments.isNotEmpty() || comments.isNotEmpty() || dictation.active
             // The list keeps the open composer's height below the last message, so folding it doesn't move the end
             // and undo the fold; only the jump button and the pet follow the composer's real height.
             var composerShrink by remember { mutableIntStateOf(0) }
@@ -472,7 +476,7 @@ internal fun ChatView(
                                 state.messages,
                                 bottomInset = listInset,
                                 controlsInset = dockInset,
-                                onReadingBack = { readingBack = it },
+                                fold = composerFold,
                                 actions = actions,
                                 connected = connected,
                                 canChange = state.canChangeChat(connected),
@@ -507,8 +511,8 @@ internal fun ChatView(
                         focusComment = focusComment,
                         onCommentFocused = { focusComment = null },
                         composerFocus = composerFocus,
-                        composerCollapsed = composerCollapsed,
-                        onExpandComposer = { readingBack = false },
+                        composerFold = composerFold,
+                        composerBusy = composerBusy,
                         onComposerShrink = { composerShrink = it },
                         onOpenModels = onOpenModels,
                         onAttach = onAttach,
@@ -549,8 +553,8 @@ private fun ColumnScope.Dock(
     focusComment: Long?,
     onCommentFocused: () -> Unit,
     composerFocus: FocusRequester,
-    composerCollapsed: Boolean,
-    onExpandComposer: () -> Unit,
+    composerFold: ComposerFold,
+    composerBusy: Boolean,
     onComposerShrink: (Int) -> Unit,
     onOpenModels: () -> Unit,
     onAttach: () -> Unit,
@@ -600,8 +604,8 @@ private fun ColumnScope.Dock(
             focusComment = focusComment,
             onCommentFocused = onCommentFocused,
             focus = composerFocus,
-            collapse = composerCollapsed,
-            onExpand = onExpandComposer,
+            fold = composerFold,
+            busy = composerBusy,
             onShrink = onComposerShrink,
             onOpenModels = onOpenModels,
             onAttach = onAttach,
@@ -778,8 +782,8 @@ private fun Messages(
     bottomInset: Dp,
     /** How high the dock really stands, for what floats just above it. */
     controlsInset: Dp,
-    /** True once the reader scrolls back up through the chat, false again when they reach its end. */
-    onReadingBack: (Boolean) -> Unit,
+    /** Folds the composer by how near the reader is to the end. */
+    fold: ComposerFold,
     actions: ChatActions,
     connected: Boolean,
     canChange: Boolean,
@@ -808,11 +812,17 @@ private fun Messages(
             }
         }
     }
-    // Back at the end is where the composer opens again.
-    val reportReadingBack by rememberUpdatedState(onReadingBack)
-    LaunchedEffect(pinned) { if (pinned) reportReadingBack(false) }
+    // The composer folds by how near the end the list stands; scrolling back up lets go of one opened by a tap.
+    DisposableEffect(listState, fold) {
+        fold.list = listState
+        onDispose {
+            fold.list = null
+            fold.heldOpen = false
+        }
+    }
+    LaunchedEffect(fold) { snapshotFlow { pinned }.collect { fold.following = it } }
     val readBackTravel = with(LocalDensity.current) { READ_BACK_TRAVEL.toPx() }
-    val readBack = remember(readBackTravel) { ReadBackDetector(readBackTravel) { reportReadingBack(true) } }
+    val readBack = remember(readBackTravel, fold) { ReadBackDetector(readBackTravel) { fold.heldOpen = false } }
     // A prompt just sent is always shown, wherever the reader was.
     LaunchedEffect(newest?.key) {
         if (newest is ChatMessage.User) {
@@ -896,8 +906,37 @@ private fun Messages(
     }
 }
 
-/** How far the reader scrolls back up through the chat before the composer folds away. */
+/** How far the reader scrolls back up through the chat before a composer opened by a tap folds again. */
 private val READ_BACK_TRAVEL = 48.dp
+
+/** Over how much of the chat's end the composer goes from folded to open. */
+private val FOLD_RANGE = 160.dp
+
+/**
+ * How far the composer is open. Scroll-linked: fully open with the end of the chat in view, folding over the
+ * [FOLD_RANGE] above it and folded beyond; a tap on the folded line holds it open until the reader scrolls back up.
+ */
+@Stable
+internal class ComposerFold {
+    /** The conversation while it's on screen; none (an empty chat) leaves the composer open. */
+    var list: LazyListState? by mutableStateOf(null)
+
+    /** The list is following the end; a reply growing there never folds the composer between two frames. */
+    var following: Boolean by mutableStateOf(true)
+
+    var heldOpen: Boolean by mutableStateOf(false)
+
+    /** 1 with the end in view, down to 0 once it lies [range] px or more below. */
+    fun nearEnd(range: Float): Float {
+        val list = list ?: return 1f
+        if (following) return 1f
+        return foldFor(list.layoutInfo.hiddenBelow(), range)
+    }
+}
+
+/** How open the composer stands with the chat's end [hiddenBelow] px out of view: 1 at the end, 0 past [range]. */
+internal fun foldFor(hiddenBelow: Int, range: Float): Float =
+    if (hiddenBelow == Int.MAX_VALUE) 0f else (1f - hiddenBelow / range).coerceIn(0f, 1f)
 
 /**
  * Tells when the reader scrolls back up through the chat: [travel] px of the list actually moving towards older
@@ -1476,9 +1515,10 @@ private fun Composer(
     focusComment: Long?,
     onCommentFocused: () -> Unit,
     focus: FocusRequester,
-    /** Fold to one line, as the reader went back up the chat; ignored while the field has focus. */
-    collapse: Boolean,
-    onExpand: () -> Unit,
+    /** How near the end the reader is, which folds the composer to one line away from it. */
+    fold: ComposerFold,
+    /** Something is being written: text, attachments, comments or a dictation. Keeps the composer open. */
+    busy: Boolean,
     /** How many px shorter than open the composer stands right now. */
     onShrink: (Int) -> Unit,
     onOpenModels: () -> Unit,
@@ -1503,123 +1543,140 @@ private fun Composer(
     val imeVisible = WindowInsets.isImeVisible
     val focusManager = LocalFocusManager.current
     LaunchedEffect(imeVisible) { if (!imeVisible && focused) focusManager.clearFocus() }
-    val collapsed = collapse && !focused
-    // The open height, kept while folded, so the dock can report how much it gave back.
-    var openHeight by remember { mutableIntStateOf(0) }
+    // How open the composer stands, 1 open to 0 folded to a line. It tracks the scroll as it goes, and springs
+    // across when a tap, the keyboard or a draft holds it open or lets go.
+    val open = remember { Animatable(1f) }
+    val busyNow by rememberUpdatedState(busy)
+    val range = with(LocalDensity.current) { FOLD_RANGE.toPx() }
+    LaunchedEffect(fold, range) {
+        snapshotFlow {
+            val nearEnd = fold.nearEnd(range)
+            nearEnd to if (fold.heldOpen || focused || busyNow) 1f else nearEnd
+        }.collectLatest { (nearEnd, target) ->
+            // At the end it's open anyway; scrolling up from there folds it again.
+            if (nearEnd >= 1f) fold.heldOpen = false
+            if (abs(target - open.value) > 0.2f) open.animateTo(target, spring(stiffness = Spring.StiffnessMediumLow)) else open.snapTo(target)
+        }
+    }
+    // The open height while folded, so the dock can report how much it gave back.
+    val openHeight = remember { IntArray(1) }
     DisposableEffect(Unit) { onDispose { onShrink(0) } }
-    // Tapping the folded line means writing: the field takes focus once it's back.
-    var focusOnOpen by remember { mutableStateOf(false) }
-    Box(
-        Modifier
+    Layout(
+        contents = listOf(
+            {
+                Column(
+                    Modifier.padding(start = 4.dp, end = 6.dp, top = if (attachments.isEmpty() && comments.isEmpty()) 14.dp else 8.dp, bottom = 6.dp),
+                ) {
+                    if (comments.isNotEmpty()) {
+                        CommentTray(comments, focusComment = focusComment, onFocused = onCommentFocused, onRemove = actions::removeComment)
+                    }
+                    if (attachments.isNotEmpty()) ComposerTray(attachments, onRemove = actions::removeAttachment)
+                    UnstyledTextField(
+                        state = actions.composer,
+                        textStyle = Theme[typography][body],
+                        textColor = Theme[colors][textColor],
+                        cursorBrush = SolidColor(Theme[colors][accent]),
+                        // UnstyledTextField defaults to unspecified colors, which hides the selection and its handles.
+                        selectionColors = LocalTextSelectionColors.current,
+                        lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 8),
+                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 28.dp).padding(horizontal = 12.dp).focusRequester(focus),
+                    ) {
+                        TextInput(
+                            placeholder = {
+                                Text(
+                                    when {
+                                        !connected -> "Reconnecting to Hermes…"
+                                        comments.isNotEmpty() -> "Anything else? (optional)"
+                                        else -> placeholder
+                                    },
+                                    style = Theme[typography][body],
+                                    color = Theme[colors][textTertiary],
+                                )
+                            },
+                        )
+                    }
+                    // Mid-turn, a message either joins the running task or waits for it; both say which.
+                    if (state.running && hasText) {
+                        MidTaskSend(
+                            // The same test send() makes: with attachments, slash text goes out as a prompt, not a command.
+                            command = attachments.isEmpty() && SlashCommand.parse(actions.composer.text.toString().trim()) != null,
+                            enabled = connected,
+                            onSendNow = { actions.send() },
+                            onSendAfter = { actions.send(queue = true) },
+                        )
+                    }
+                    Row(
+                        Modifier.fillMaxWidth().padding(top = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        // The buttons are full 48dp targets, which already space their icons apart.
+                    ) {
+                        ComposerButton(
+                            icon = Lucide.Plus,
+                            contentDescription = "Add photos or files",
+                            onClick = onAttach,
+                            enabled = attachments.size < OutgoingAttachment.MAX_COUNT,
+                        )
+                        DictationButton(dictation, onClick = onDictate, enabled = connected)
+                        ComposerButton(
+                            icon = Lucide.AudioLines,
+                            contentDescription = "Start a voice chat",
+                            onClick = onVoiceChat,
+                            enabled = connected && !state.running && !dictation.active,
+                        )
+                        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { ModelPill(state, picker, onClick = onOpenModels) }
+                        // The round button keeps one job per state: Stop for the whole task, even while you type.
+                        if (state.running) {
+                            SendButton(SendIcon.Stop, onClick = actions::interrupt, enabled = connected)
+                        } else {
+                            SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected && hasText)
+                        }
+                    }
+                }
+            },
+            {
+                FoldedComposer(
+                    placeholder = if (connected) placeholder else "Reconnecting to Hermes…",
+                    state = state,
+                    connected = connected,
+                    dictation = dictation,
+                    canAttach = attachments.size < OutgoingAttachment.MAX_COUNT,
+                    onOpen = {
+                        // Tapping the line means writing: open, and the field (laid out all along) takes focus.
+                        fold.heldOpen = true
+                        focus.requestFocus()
+                    },
+                    onStop = actions::interrupt,
+                    onAttach = onAttach,
+                    onDictate = onDictate,
+                    onVoiceChat = onVoiceChat,
+                )
+            },
+        ),
+        modifier = Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
             .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)
-            .onSizeChanged {
-                if (!collapsed) openHeight = it.height
-                onShrink((openHeight - it.height).coerceAtLeast(0))
-            }
+            .onSizeChanged { onShrink((openHeight[0] - it.height).coerceAtLeast(0)) }
             .clip(shape)
             // Frosted: the conversation beneath is blurred, then tinted so the text on top stays clear.
             .hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)
             .background(Theme[colors][surface].copy(alpha = 0.55f))
             .border(1.dp, if (focused) Theme[colors][textTertiary] else Theme[colors][strokeStrong], shape)
-            .onFocusChanged { focused = it.hasFocus }
-            .animateContentSize(),
-    ) {
-        if (collapsed) {
-            FoldedComposer(
-                placeholder = if (connected) placeholder else "Reconnecting to Hermes…",
-                state = state,
-                connected = connected,
-                dictation = dictation,
-                canAttach = attachments.size < OutgoingAttachment.MAX_COUNT,
-                onOpen = {
-                    focusOnOpen = true
-                    onExpand()
-                },
-                onStop = actions::interrupt,
-                onAttach = onAttach,
-                onDictate = onDictate,
-                onVoiceChat = onVoiceChat,
-            )
-        } else {
-            LaunchedEffect(Unit) {
-                if (focusOnOpen) {
-                    focusOnOpen = false
-                    // After the frame that lays the field out, so its requester is attached.
-                    withFrameNanos {}
-                    focus.requestFocus()
-                }
-            }
-            Column(
-                Modifier.padding(start = 4.dp, end = 6.dp, top = if (attachments.isEmpty() && comments.isEmpty()) 14.dp else 8.dp, bottom = 6.dp),
-            ) {
-                if (comments.isNotEmpty()) {
-                    CommentTray(comments, focusComment = focusComment, onFocused = onCommentFocused, onRemove = actions::removeComment)
-                }
-                if (attachments.isNotEmpty()) ComposerTray(attachments, onRemove = actions::removeAttachment)
-                UnstyledTextField(
-                    state = actions.composer,
-                    textStyle = Theme[typography][body],
-                    textColor = Theme[colors][textColor],
-                    cursorBrush = SolidColor(Theme[colors][accent]),
-                    // UnstyledTextField defaults to unspecified colors, which hides the selection and its handles.
-                    selectionColors = LocalTextSelectionColors.current,
-                    lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 8),
-                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                    modifier = Modifier.fillMaxWidth().heightIn(min = 28.dp).padding(horizontal = 12.dp).focusRequester(focus),
-                ) {
-                    TextInput(
-                        placeholder = {
-                            Text(
-                                when {
-                                    !connected -> "Reconnecting to Hermes…"
-                                    comments.isNotEmpty() -> "Anything else? (optional)"
-                                    else -> placeholder
-                                },
-                                style = Theme[typography][body],
-                                color = Theme[colors][textTertiary],
-                            )
-                        },
-                    )
-                }
-                // Mid-turn, a message either joins the running task or waits for it; both say which.
-                if (state.running && hasText) {
-                    MidTaskSend(
-                        // The same test send() makes: with attachments, slash text goes out as a prompt, not a command.
-                        command = attachments.isEmpty() && SlashCommand.parse(actions.composer.text.toString().trim()) != null,
-                        enabled = connected,
-                        onSendNow = { actions.send() },
-                        onSendAfter = { actions.send(queue = true) },
-                    )
-                }
-                Row(
-                    Modifier.fillMaxWidth().padding(top = 6.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    // The buttons are full 48dp targets, which already space their icons apart.
-                ) {
-                    ComposerButton(
-                        icon = Lucide.Plus,
-                        contentDescription = "Add photos or files",
-                        onClick = onAttach,
-                        enabled = attachments.size < OutgoingAttachment.MAX_COUNT,
-                    )
-                    DictationButton(dictation, onClick = onDictate, enabled = connected)
-                    ComposerButton(
-                        icon = Lucide.AudioLines,
-                        contentDescription = "Start a voice chat",
-                        onClick = onVoiceChat,
-                        enabled = connected && !state.running && !dictation.active,
-                    )
-                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { ModelPill(state, picker, onClick = onOpenModels) }
-                    // The round button keeps one job per state: Stop for the whole task, even while you type.
-                    if (state.running) {
-                        SendButton(SendIcon.Stop, onClick = actions::interrupt, enabled = connected)
-                    } else {
-                        SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected && hasText)
-                    }
-                }
-            }
+            .onFocusChanged { focused = it.hasFocus },
+    ) { (openMeasurables, lineMeasurables), constraints ->
+        val loose = constraints.copy(minHeight = 0)
+        val full = openMeasurables.first().measure(loose)
+        val line = lineMeasurables.first().measure(loose)
+        openHeight[0] = full.height
+        val progress = open.value
+        val height = (line.height + (full.height - line.height) * progress).roundToInt()
+        // Both sit on the bottom edge, so + stays put while the field folds away above it. One fades out before
+        // the other fades in, so their buttons never show on top of each other.
+        layout(constraints.maxWidth, height) {
+            full.placeWithLayer(0, height - full.height) { alpha = ((progress - 0.5f) / 0.5f).coerceIn(0f, 1f) }
+            // On top, taking the taps, until the composer is half open.
+            if (progress < 0.5f) line.placeWithLayer(0, height - line.height) { alpha = (1f - progress / 0.4f).coerceIn(0f, 1f) }
         }
     }
 }

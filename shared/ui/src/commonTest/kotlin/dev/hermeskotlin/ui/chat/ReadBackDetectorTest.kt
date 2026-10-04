@@ -29,6 +29,15 @@ class ReadBackDetectorTest {
     }
 
     @Test
+    fun theComposerOpensAsTheEndComesNear() {
+        assertEquals(1f, foldFor(hiddenBelow = 0, range = 200f))
+        assertEquals(0.5f, foldFor(hiddenBelow = 100, range = 200f))
+        assertEquals(0f, foldFor(hiddenBelow = 500, range = 200f))
+        // The last message not even laid out: far from the end.
+        assertEquals(0f, foldFor(hiddenBelow = Int.MAX_VALUE, range = 200f))
+    }
+
+    @Test
     fun aDragThatDoesNotMoveTheListDoesNotCount() {
         // Pulling down at the top of the chat: nothing consumed.
         repeat(5) { detector.onPostScroll(Offset.Zero, Offset(0f, 50f), NestedScrollSource.UserInput) }
