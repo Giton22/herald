@@ -162,7 +162,8 @@ private const val APPROVAL_ARM_DELAY_MS = 700L
 @Composable
 private fun CommandBlock(command: String) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
-    // Long means it wrapped past the preview, measured as laid out; once open it stays offered to close.
+    // Long means it wraps past the preview, measured as laid out, so a wider screen can take it back;
+    // once open it stays offered to close.
     var long by remember(command) { mutableStateOf(false) }
     var full by remember(command) { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -171,7 +172,7 @@ private fun CommandBlock(command: String) {
             style = Theme[typography][code].copy(color = Theme[colors][textColor]),
             maxLines = if (full) Int.MAX_VALUE else COMMAND_PREVIEW_LINES,
             overflow = TextOverflow.Ellipsis,
-            onTextLayout = { if (it.hasVisualOverflow) long = true },
+            onTextLayout = { if (!full) long = it.hasVisualOverflow },
             modifier = Modifier
                 .fillMaxWidth()
                 .clip(shape)
@@ -218,6 +219,13 @@ private fun CommandCopy(command: String) {
     )
 }
 
+/** The tool and purpose ahead of the command, each only when the gateway named it; null when neither. */
+internal fun approvalIntro(request: InputRequest.Approval): String? {
+    val tool = request.toolName?.takeIf { it.isNotBlank() }?.let { "Hermes wants to run this with $it." }
+    val purpose = request.description.takeIf { it.isNotBlank() }?.replaceFirstChar { it.uppercase() }
+    return listOfNotNull(tool, purpose).joinToString(" ").ifEmpty { null }
+}
+
 @Composable
 private fun ApprovalContent(request: InputRequest.Approval, more: String?, connected: Boolean, onStop: (() -> Unit)?, answer: (JsonObject) -> Unit) {
     var confirmAlways by remember(request.id) { mutableStateOf(false) }
@@ -231,12 +239,7 @@ private fun ApprovalContent(request: InputRequest.Approval, more: String?, conne
     val ready = connected && armed
 
     Header(Lucide.ShieldAlert, Theme[colors][warning], "Allow this command?", more, onStop)
-    val purpose = request.description.takeIf { it.isNotBlank() }?.replaceFirstChar { it.uppercase() }
-    Text(
-        listOfNotNull(request.toolName?.let { "Hermes wants to run this with $it." }, purpose).joinToString(" "),
-        style = Theme[typography][bodySmall],
-        color = Theme[colors][textSecondary],
-    )
+    approvalIntro(request)?.let { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary]) }
     if (request.command.isNotBlank()) CommandBlock(request.command)
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button("Deny", onClick = { choose(ApprovalChoice.Deny) }, variant = ButtonVariant.Outline, enabled = ready, modifier = Modifier.weight(1f))
