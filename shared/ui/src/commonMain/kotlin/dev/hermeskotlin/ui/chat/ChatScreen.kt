@@ -17,6 +17,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
@@ -418,6 +426,14 @@ internal fun ChatView(
             // The composer floats over the conversation, which scrolls on beneath it; its height pads the list.
             var dockHeight by remember { mutableIntStateOf(0) }
             val dockInset = with(LocalDensity.current) { dockHeight.toDp() }
+            // Reading back up the chat folds the composer to one line; at the end, or tapped, it opens again.
+            var readingBack by remember { mutableStateOf(false) }
+            val composerIdle = actions.composer.text.isBlank() && attachments.isEmpty() && comments.isEmpty() && !dictation.active
+            val composerCollapsed = readingBack && composerIdle && state.messages.isNotEmpty()
+            // The list keeps the open composer's height below the last message, so folding it doesn't move the end
+            // and undo the fold; only the jump button and the pet follow the composer's real height.
+            var composerShrink by remember { mutableIntStateOf(0) }
+            val listInset = with(LocalDensity.current) { (dockHeight + composerShrink).toDp() }
             // What scrolls under the composer is captured here and frosted behind it.
             val hazeState = rememberHazeState()
             // Comments wait in the composer, so the selection menus offer them only while it shows.
@@ -454,7 +470,9 @@ internal fun ChatView(
                         ) {
                             Messages(
                                 state.messages,
-                                bottomInset = dockInset,
+                                bottomInset = listInset,
+                                controlsInset = dockInset,
+                                onReadingBack = { readingBack = it },
                                 actions = actions,
                                 connected = connected,
                                 canChange = state.canChangeChat(connected),
@@ -489,6 +507,9 @@ internal fun ChatView(
                         focusComment = focusComment,
                         onCommentFocused = { focusComment = null },
                         composerFocus = composerFocus,
+                        composerCollapsed = composerCollapsed,
+                        onExpandComposer = { readingBack = false },
+                        onComposerShrink = { composerShrink = it },
                         onOpenModels = onOpenModels,
                         onAttach = onAttach,
                         onDictate = onDictate,
@@ -528,6 +549,9 @@ private fun ColumnScope.Dock(
     focusComment: Long?,
     onCommentFocused: () -> Unit,
     composerFocus: FocusRequester,
+    composerCollapsed: Boolean,
+    onExpandComposer: () -> Unit,
+    onComposerShrink: (Int) -> Unit,
     onOpenModels: () -> Unit,
     onAttach: () -> Unit,
     onDictate: () -> Unit,
@@ -576,6 +600,9 @@ private fun ColumnScope.Dock(
             focusComment = focusComment,
             onCommentFocused = onCommentFocused,
             focus = composerFocus,
+            collapse = composerCollapsed,
+            onExpand = onExpandComposer,
+            onShrink = onComposerShrink,
             onOpenModels = onOpenModels,
             onAttach = onAttach,
             onDictate = onDictate,
@@ -749,6 +776,10 @@ private val FOLLOW_UP_PROMPTS = listOf(
 private fun Messages(
     messages: List<ChatMessage>,
     bottomInset: Dp,
+    /** How high the dock really stands, for what floats just above it. */
+    controlsInset: Dp,
+    /** True once the reader scrolls back up through the chat, false again when they reach its end. */
+    onReadingBack: (Boolean) -> Unit,
     actions: ChatActions,
     connected: Boolean,
     canChange: Boolean,
@@ -777,6 +808,11 @@ private fun Messages(
             }
         }
     }
+    // Back at the end is where the composer opens again.
+    val reportReadingBack by rememberUpdatedState(onReadingBack)
+    LaunchedEffect(pinned) { if (pinned) reportReadingBack(false) }
+    val readBackTravel = with(LocalDensity.current) { READ_BACK_TRAVEL.toPx() }
+    val readBack = remember(readBackTravel) { ReadBackDetector(readBackTravel) { reportReadingBack(true) } }
     // A prompt just sent is always shown, wherever the reader was.
     LaunchedEffect(newest?.key) {
         if (newest is ChatMessage.User) {
@@ -792,7 +828,7 @@ private fun Messages(
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
-            modifier = Modifier.fillMaxSize(),
+            modifier = Modifier.fillMaxSize().nestedScroll(readBack),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp + bottomInset),
             verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.Bottom),
         ) {
@@ -821,7 +857,7 @@ private fun Messages(
             visible = awayFromBottom,
             enter = fadeIn() + scaleIn(),
             exit = fadeOut() + scaleOut(),
-            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp + bottomInset),
+            modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp + controlsInset),
         ) {
             val shape = RoundedCornerShape(Theme[radii][radiusMedium])
             UnstyledButton(
@@ -857,6 +893,28 @@ private fun Messages(
                 }
             }
         }
+    }
+}
+
+/** How far the reader scrolls back up through the chat before the composer folds away. */
+private val READ_BACK_TRAVEL = 48.dp
+
+/**
+ * Tells when the reader scrolls back up through the chat: [travel] px of the list actually moving towards older
+ * messages, by a drag or the fling after it, calls [onReadBack]. Any move towards the end starts the count over,
+ * and the list's own following never counts, as it doesn't pass through nested scrolling.
+ */
+internal class ReadBackDetector(private val travel: Float, private val onReadBack: () -> Unit) : NestedScrollConnection {
+    private var moved = 0f
+
+    override fun onPostScroll(consumed: Offset, available: Offset, source: NestedScrollSource): Offset {
+        // A positive delta pulls the content down, bringing older messages into view.
+        moved = if (consumed.y > 0f) moved + consumed.y else 0f
+        if (moved >= travel) {
+            moved = 0f
+            onReadBack()
+        }
+        return Offset.Zero
     }
 }
 
@@ -1418,6 +1476,11 @@ private fun Composer(
     focusComment: Long?,
     onCommentFocused: () -> Unit,
     focus: FocusRequester,
+    /** Fold to one line, as the reader went back up the chat; ignored while the field has focus. */
+    collapse: Boolean,
+    onExpand: () -> Unit,
+    /** How many px shorter than open the composer stands right now. */
+    onShrink: (Int) -> Unit,
     onOpenModels: () -> Unit,
     onAttach: () -> Unit,
     onDictate: () -> Unit,
@@ -1440,83 +1503,175 @@ private fun Composer(
     val imeVisible = WindowInsets.isImeVisible
     val focusManager = LocalFocusManager.current
     LaunchedEffect(imeVisible) { if (!imeVisible && focused) focusManager.clearFocus() }
-    Column(
+    val collapsed = collapse && !focused
+    // The open height, kept while folded, so the dock can report how much it gave back.
+    var openHeight by remember { mutableIntStateOf(0) }
+    DisposableEffect(Unit) { onDispose { onShrink(0) } }
+    // Tapping the folded line means writing: the field takes focus once it's back.
+    var focusOnOpen by remember { mutableStateOf(false) }
+    Box(
         Modifier
             .fillMaxWidth()
             .navigationBarsPadding()
             .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)
+            .onSizeChanged {
+                if (!collapsed) openHeight = it.height
+                onShrink((openHeight - it.height).coerceAtLeast(0))
+            }
             .clip(shape)
             // Frosted: the conversation beneath is blurred, then tinted so the text on top stays clear.
             .hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)
             .background(Theme[colors][surface].copy(alpha = 0.55f))
             .border(1.dp, if (focused) Theme[colors][textTertiary] else Theme[colors][strokeStrong], shape)
             .onFocusChanged { focused = it.hasFocus }
-            .padding(start = 4.dp, end = 6.dp, top = if (attachments.isEmpty() && comments.isEmpty()) 14.dp else 8.dp, bottom = 6.dp),
+            .animateContentSize(),
     ) {
-        if (comments.isNotEmpty()) {
-            CommentTray(comments, focusComment = focusComment, onFocused = onCommentFocused, onRemove = actions::removeComment)
-        }
-        if (attachments.isNotEmpty()) ComposerTray(attachments, onRemove = actions::removeAttachment)
-        UnstyledTextField(
-            state = actions.composer,
-            textStyle = Theme[typography][body],
-            textColor = Theme[colors][textColor],
-            cursorBrush = SolidColor(Theme[colors][accent]),
-            // UnstyledTextField defaults to unspecified colors, which hides the selection and its handles.
-            selectionColors = LocalTextSelectionColors.current,
-            lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 8),
-            keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            modifier = Modifier.fillMaxWidth().heightIn(min = 28.dp).padding(horizontal = 12.dp).focusRequester(focus),
-        ) {
-            TextInput(
-                placeholder = {
-                    Text(
-                        when {
-                            !connected -> "Reconnecting to Hermes…"
-                            comments.isNotEmpty() -> "Anything else? (optional)"
-                            else -> placeholder
-                        },
-                        style = Theme[typography][body],
-                        color = Theme[colors][textTertiary],
-                    )
+        if (collapsed) {
+            FoldedComposer(
+                placeholder = if (connected) placeholder else "Reconnecting to Hermes…",
+                state = state,
+                connected = connected,
+                dictation = dictation,
+                canAttach = attachments.size < OutgoingAttachment.MAX_COUNT,
+                onOpen = {
+                    focusOnOpen = true
+                    onExpand()
                 },
+                onStop = actions::interrupt,
+                onAttach = onAttach,
+                onDictate = onDictate,
+                onVoiceChat = onVoiceChat,
             )
+        } else {
+            LaunchedEffect(Unit) {
+                if (focusOnOpen) {
+                    focusOnOpen = false
+                    // After the frame that lays the field out, so its requester is attached.
+                    withFrameNanos {}
+                    focus.requestFocus()
+                }
+            }
+            Column(
+                Modifier.padding(start = 4.dp, end = 6.dp, top = if (attachments.isEmpty() && comments.isEmpty()) 14.dp else 8.dp, bottom = 6.dp),
+            ) {
+                if (comments.isNotEmpty()) {
+                    CommentTray(comments, focusComment = focusComment, onFocused = onCommentFocused, onRemove = actions::removeComment)
+                }
+                if (attachments.isNotEmpty()) ComposerTray(attachments, onRemove = actions::removeAttachment)
+                UnstyledTextField(
+                    state = actions.composer,
+                    textStyle = Theme[typography][body],
+                    textColor = Theme[colors][textColor],
+                    cursorBrush = SolidColor(Theme[colors][accent]),
+                    // UnstyledTextField defaults to unspecified colors, which hides the selection and its handles.
+                    selectionColors = LocalTextSelectionColors.current,
+                    lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 8),
+                    keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+                    modifier = Modifier.fillMaxWidth().heightIn(min = 28.dp).padding(horizontal = 12.dp).focusRequester(focus),
+                ) {
+                    TextInput(
+                        placeholder = {
+                            Text(
+                                when {
+                                    !connected -> "Reconnecting to Hermes…"
+                                    comments.isNotEmpty() -> "Anything else? (optional)"
+                                    else -> placeholder
+                                },
+                                style = Theme[typography][body],
+                                color = Theme[colors][textTertiary],
+                            )
+                        },
+                    )
+                }
+                // Mid-turn, a message either joins the running task or waits for it; both say which.
+                if (state.running && hasText) {
+                    MidTaskSend(
+                        // The same test send() makes: with attachments, slash text goes out as a prompt, not a command.
+                        command = attachments.isEmpty() && SlashCommand.parse(actions.composer.text.toString().trim()) != null,
+                        enabled = connected,
+                        onSendNow = { actions.send() },
+                        onSendAfter = { actions.send(queue = true) },
+                    )
+                }
+                Row(
+                    Modifier.fillMaxWidth().padding(top = 6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    // The buttons are full 48dp targets, which already space their icons apart.
+                ) {
+                    ComposerButton(
+                        icon = Lucide.Plus,
+                        contentDescription = "Add photos or files",
+                        onClick = onAttach,
+                        enabled = attachments.size < OutgoingAttachment.MAX_COUNT,
+                    )
+                    DictationButton(dictation, onClick = onDictate, enabled = connected)
+                    ComposerButton(
+                        icon = Lucide.AudioLines,
+                        contentDescription = "Start a voice chat",
+                        onClick = onVoiceChat,
+                        enabled = connected && !state.running && !dictation.active,
+                    )
+                    Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { ModelPill(state, picker, onClick = onOpenModels) }
+                    // The round button keeps one job per state: Stop for the whole task, even while you type.
+                    if (state.running) {
+                        SendButton(SendIcon.Stop, onClick = actions::interrupt, enabled = connected)
+                    } else {
+                        SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected && hasText)
+                    }
+                }
+            }
         }
-        // Mid-turn, a message either joins the running task or waits for it; both say which.
-        if (state.running && hasText) {
-            MidTaskSend(
-                // The same test send() makes: with attachments, slash text goes out as a prompt, not a command.
-                command = attachments.isEmpty() && SlashCommand.parse(actions.composer.text.toString().trim()) != null,
-                enabled = connected,
-                onSendNow = { actions.send() },
-                onSendAfter = { actions.send(queue = true) },
-            )
-        }
-        Row(
-            Modifier.fillMaxWidth().padding(top = 6.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            // The buttons are full 48dp targets, which already space their icons apart.
+    }
+}
+
+/**
+ * The composer folded to one line while reading back, as ChatGPT does: + on the left, the placeholder to tap
+ * and start writing, dictation, and Stop while a task runs or voice chat otherwise. The model and the field
+ * come back with the rest when it opens.
+ */
+@Composable
+private fun FoldedComposer(
+    placeholder: String,
+    state: ChatState,
+    connected: Boolean,
+    dictation: DictationState,
+    canAttach: Boolean,
+    onOpen: () -> Unit,
+    onStop: () -> Unit,
+    onAttach: () -> Unit,
+    onDictate: () -> Unit,
+    onVoiceChat: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ComposerButton(icon = Lucide.Plus, contentDescription = "Add photos or files", onClick = onAttach, enabled = canAttach)
+        UnstyledButton(
+            onClick = onOpen,
+            modifier = Modifier.weight(1f).heightIn(min = MinTouchTarget).semantics { contentDescription = "Write a message" },
+            indication = null,
         ) {
-            ComposerButton(
-                icon = Lucide.Plus,
-                contentDescription = "Add photos or files",
-                onClick = onAttach,
-                enabled = attachments.size < OutgoingAttachment.MAX_COUNT,
-            )
-            DictationButton(dictation, onClick = onDictate, enabled = connected)
+            Box(Modifier.fillMaxWidth().padding(horizontal = 4.dp), contentAlignment = Alignment.CenterStart) {
+                Text(
+                    placeholder,
+                    style = Theme[typography][body],
+                    color = Theme[colors][textTertiary],
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        DictationButton(dictation, onClick = onDictate, enabled = connected)
+        if (state.running) {
+            SendButton(SendIcon.Stop, onClick = onStop, enabled = connected)
+        } else {
             ComposerButton(
                 icon = Lucide.AudioLines,
                 contentDescription = "Start a voice chat",
                 onClick = onVoiceChat,
-                enabled = connected && !state.running && !dictation.active,
+                enabled = connected && !dictation.active,
             )
-            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { ModelPill(state, picker, onClick = onOpenModels) }
-            // The round button keeps one job per state: Stop for the whole task, even while you type.
-            if (state.running) {
-                SendButton(SendIcon.Stop, onClick = actions::interrupt, enabled = connected)
-            } else {
-                SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected && hasText)
-            }
         }
     }
 }
