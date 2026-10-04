@@ -13,6 +13,8 @@ class ScreenContext(
     val lines: List<String>,
     /** JPEG bytes. */
     val screenshot: ByteArray?,
+    /** Only the part the user circled: [screenshot] is that crop and [lines] the text inside it. */
+    val circled: Boolean = false,
 ) {
     val isEmpty: Boolean get() = lines.isEmpty() && screenshot == null
 
@@ -22,7 +24,9 @@ class ScreenContext(
      */
     fun toAttachments(): List<OutgoingAttachment> = buildList {
         // Already a small JPEG, so it is its own thumbnail.
-        screenshot?.let { add(OutgoingAttachment("screen-shot", SCREENSHOT_NAME, "image/jpeg", it, thumbnail = it)) }
+        screenshot?.let {
+            add(OutgoingAttachment("screen-shot", if (circled) CIRCLED_NAME else SCREENSHOT_NAME, "image/jpeg", it, thumbnail = it))
+        }
         screenText()?.let { add(OutgoingAttachment("screen-text", TEXT_NAME, "text/plain", it.encodeToByteArray())) }
     }
 
@@ -31,10 +35,16 @@ class ScreenContext(
         val kept = keptLines()
         if (kept.isEmpty()) return null
         return buildString {
-            append("Text on the user's phone screen")
+            append(if (circled) "Text inside the part of the user's phone screen they circled" else "Text on the user's phone screen")
             app?.let { append(" in ").append(it) }
             append(" when they asked. ")
-            append(if (screenshot != null) "A screenshot of the same screen is attached." else "There is no screenshot.")
+            append(
+                when {
+                    screenshot == null -> "There is no screenshot."
+                    circled -> "An image of the circled part is attached."
+                    else -> "A screenshot of the same screen is attached."
+                },
+            )
             append("\n\n")
             var size = length
             for ((index, line) in kept.withIndex()) {
@@ -61,6 +71,7 @@ class ScreenContext(
 
     companion object {
         const val SCREENSHOT_NAME = "screen.jpg"
+        const val CIRCLED_NAME = "circled.jpg"
         const val TEXT_NAME = "screen.txt"
 
         /** A long feed or document is cut here: the model gets the screenshot for the rest. */

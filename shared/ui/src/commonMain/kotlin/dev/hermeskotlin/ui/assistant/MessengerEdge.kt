@@ -100,7 +100,7 @@ internal fun MessengerEdge(model: AssistantPanelModel, modifier: Modifier = Modi
         val stops = Array(STOPS + 1) { i ->
             val t = i / STOPS.toFloat()
             val lit = trailIntensity(t, heads, TAIL) * glow
-            val color = if (lit > 0.6f) lerp(Bright, Head, (lit - 0.6f) / 0.4f) else lerp(Nous, Bright, lit / 0.6f)
+            val color = if (lit > 0.6f) lerp(EdgeBright, EdgeHead, (lit - 0.6f) / 0.4f) else lerp(Nous, EdgeBright, lit / 0.6f)
             t to color.copy(alpha = (rim + (1f - rim) * lit).coerceIn(0f, 1f))
         }
         val brush = Brush.sweepGradient(*stops, center = center)
@@ -114,8 +114,9 @@ internal fun MessengerEdge(model: AssistantPanelModel, modifier: Modifier = Modi
 }
 
 private val Nous = Color(0xFF0053FD)
-private val Bright = Color(0xFF4A84FE)
-private val Head = Color(0xFFD6E4FF)
+/** The trail's light blue and its near-white head; the circling stroke is drawn in the same light. */
+internal val EdgeBright = Color(0xFF4A84FE)
+internal val EdgeHead = Color(0xFFD6E4FF)
 private const val STOPS = 72
 private const val TAIL = 0.32f
 private val CORNER = 36.dp

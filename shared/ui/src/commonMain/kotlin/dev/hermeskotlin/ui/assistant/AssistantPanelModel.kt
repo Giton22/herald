@@ -37,11 +37,19 @@ enum class AssistantPhase { Loading, SignedOut, Ready }
  */
 data class ScreenCapture(
     val app: String? = null,
-    val lines: List<String> = emptyList(),
+    val items: List<ScreenItem> = emptyList(),
     val screenshot: ByteArray? = null,
     val pending: Int = 0,
 ) {
-    val context: ScreenContext get() = ScreenContext(app, lines, screenshot)
+    val context: ScreenContext get() = ScreenContext(app, items.map { it.text }, screenshot)
+}
+
+/**
+ * Cuts [region] (display pixels) out of the screenshot the platform handed over, at full resolution,
+ * as a JPEG; null when there's no screenshot to cut from.
+ */
+fun interface ScreenCropper {
+    suspend fun crop(region: ScreenRegion): ByteArray?
 }
 
 /**
@@ -61,6 +69,7 @@ class AssistantPanelModel(
     recorder: VoiceRecorder,
     player: SpeechPlayer,
     appScope: CoroutineScope,
+    private val cropper: ScreenCropper = ScreenCropper { null },
 ) {
     private val scope = CoroutineScope(appScope.coroutineContext + SupervisorJob(appScope.coroutineContext[Job]))
 
@@ -79,6 +88,10 @@ class AssistantPanelModel(
      */
     private val _includeScreen = MutableStateFlow(false)
     val includeScreen: StateFlow<Boolean> = _includeScreen.asStateFlow()
+
+    /** Whether the user is circling part of the frozen screen to ask about it. */
+    private val _circling = MutableStateFlow(false)
+    val circling: StateFlow<Boolean> = _circling.asStateFlow()
 
     /** Counts call-ups, so what happens on each one (listening) happens again on the next. */
     private val _shows = MutableStateFlow(0)
@@ -117,6 +130,7 @@ class AssistantPanelModel(
         voice.cancelDictation()
         composer.clearText()
         _includeScreen.value = false
+        _circling.value = false
         _screen.value = ScreenCapture(pending = listOf(expectText, expectScreenshot).count { it })
         // The last call-up's chat goes on in the sessions list; an unused one is simply kept.
         if (_session.value?.state?.value?.hasConversation == true) newChat()
@@ -126,8 +140,8 @@ class AssistantPanelModel(
     /** Back after stepping aside (for Android's microphone prompt): the same chat and screen, listening again. */
     fun resume() = _shows.update { it + 1 }
 
-    fun onScreenText(app: String?, lines: List<String>) = _screen.update {
-        it.copy(app = app ?: it.app, lines = lines, pending = (it.pending - 1).coerceAtLeast(0))
+    fun onScreenText(app: String?, items: List<ScreenItem>) = _screen.update {
+        it.copy(app = app ?: it.app, items = items, pending = (it.pending - 1).coerceAtLeast(0))
     }
 
     /** [jpeg] null: the platform had no screenshot to give (a secure window, or the setting is off). */
@@ -153,6 +167,38 @@ class AssistantPanelModel(
             val sent = session.send(prompt, attachments)
             // Not sent: the words go back where they were typed, and the screen stays for the retry.
             if (!sent && composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
+            if (sent) _includeScreen.value = false
+        }
+    }
+
+    /** Freezes the screen for circling; only with a screenshot, since that is what gets circled. */
+    fun startCircling() {
+        if (_screen.value.screenshot == null) return
+        voice.cancelDictation()
+        _circling.value = true
+    }
+
+    fun cancelCircling() {
+        _circling.value = false
+    }
+
+    /**
+     * Asks about what the user circled, at once, as Circle to Search does: the circled part cut from the
+     * full screenshot and the text inside it, with whatever was typed, else "What's this?".
+     */
+    fun circled(region: ScreenRegion) {
+        _circling.value = false
+        val session = _session.value ?: return
+        val capture = _screen.value
+        val typed = composer.text.toString().trim()
+        composer.clearText()
+        scope.launch {
+            val crop = cropper.crop(region)
+            val lines = capture.items.inside(region).map { it.text }
+            val context = ScreenContext(capture.app, lines, crop, circled = true)
+            val sent = session.send(typed.ifEmpty { CIRCLED_PROMPT }, context.toAttachments())
+            if (!sent && composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(typed)
+            // The whole screen has been asked about in part; offering it again would be noise.
             if (sent) _includeScreen.value = false
         }
     }
@@ -204,6 +250,7 @@ class AssistantPanelModel(
 
     companion object {
         const val SCREEN_ONLY_PROMPT = "What's on my screen?"
+        const val CIRCLED_PROMPT = "What's this?"
         private const val SCREEN_WAIT_MS = 2_000L
     }
 }

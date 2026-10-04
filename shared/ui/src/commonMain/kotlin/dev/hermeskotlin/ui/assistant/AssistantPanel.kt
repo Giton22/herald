@@ -74,6 +74,7 @@ import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.accentSoft
 import androidx.compose.ui.semantics.Role
 import com.composables.icons.lucide.Plus
+import com.composables.icons.lucide.LassoSelect
 import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.components.MarkdownText
 import dev.hermeskotlin.designsystem.components.Spinner
@@ -141,8 +142,15 @@ fun AssistantPanel(
                     .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClose),
                 contentAlignment = Alignment.BottomCenter,
             ) {
-                MessengerEdge(model, Modifier.fillMaxSize())
-                Card(model, microphoneAllowed, onOpenHerald, onAllowMicrophone, onClose)
+                val circling by model.circling.collectAsState()
+                if (circling) {
+                    val screen by model.screen.collectAsState()
+                    CircleOverlay(screen, onCircled = model::circled, onCancel = model::cancelCircling)
+                    MessengerEdge(model, Modifier.fillMaxSize())
+                } else {
+                    MessengerEdge(model, Modifier.fillMaxSize())
+                    Card(model, microphoneAllowed, onOpenHerald, onAllowMicrophone, onClose)
+                }
             }
         }
     }
@@ -173,7 +181,15 @@ private fun Card(
                 .imePadding()
                 .padding(start = 16.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
         ) {
-            Header(onOpenHerald = { onOpenHerald(model.storedSessionId()) }, onClose = onClose)
+            // Before the first question the screen chip offers circling; after it, the header does.
+            val session by model.session.collectAsState()
+            val talking by (session?.state ?: remember { emptyFlow() }).collectAsState(ChatState())
+            val screen by model.screen.collectAsState()
+            Header(
+                onCircle = model::startCircling.takeIf { screen.screenshot != null && talking.hasConversation },
+                onOpenHerald = { onOpenHerald(model.storedSessionId()) },
+                onClose = onClose,
+            )
             when (phase) {
                 AssistantPhase.Loading -> Box(Modifier.fillMaxWidth().padding(24.dp), contentAlignment = Alignment.Center) { Spinner() }
                 AssistantPhase.SignedOut -> SignedOut(onOpenHerald = { onOpenHerald(null) })
@@ -184,9 +200,10 @@ private fun Card(
 }
 
 @Composable
-private fun Header(onOpenHerald: () -> Unit, onClose: () -> Unit) {
+private fun Header(onCircle: (() -> Unit)?, onOpenHerald: () -> Unit, onClose: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text("Herald", style = Theme[typography][label], color = Theme[colors][textSecondary], modifier = Modifier.weight(1f))
+        onCircle?.let { IconButton(Lucide.LassoSelect, contentDescription = "Circle part of the screen", onClick = it) }
         IconButton(Lucide.Maximize2, contentDescription = "Open in Herald", onClick = onOpenHerald)
         IconButton(Lucide.X, contentDescription = "Close", onClick = onClose)
     }
@@ -250,7 +267,7 @@ private fun ColumnScope.Ready(model: AssistantPanelModel, microphoneAllowed: Boo
         InputRequestPanel(state.inputRequests, connected, onAnswer = model::answer, onStop = model::stop.takeIf { state.running })
         return
     }
-    if (!state.hasConversation) ScreenChip(screen, included = includeScreen, onIncluded = model::setIncludeScreen)
+    if (!state.hasConversation) ScreenChip(screen, included = includeScreen, onIncluded = model::setIncludeScreen, onCircle = model::startCircling)
     Composer(
         model = model,
         state = state,
@@ -286,7 +303,7 @@ private fun Prompt(message: ChatMessage.User) {
  * once the user says yes. Shows the screenshot's thumbnail and the app it came from either way.
  */
 @Composable
-private fun ScreenChip(screen: ScreenCapture, included: Boolean, onIncluded: (Boolean) -> Unit) {
+private fun ScreenChip(screen: ScreenCapture, included: Boolean, onIncluded: (Boolean) -> Unit, onCircle: () -> Unit) {
     val context = screen.context
     if (context.isEmpty && screen.pending == 0) return
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
@@ -327,6 +344,10 @@ private fun ScreenChip(screen: ScreenCapture, included: Boolean, onIncluded: (Bo
             IconButton(Lucide.X, contentDescription = "Leave the screen out", onClick = { onIncluded(false) })
         } else {
             Button("Add", onClick = { onIncluded(true) }, variant = ButtonVariant.Secondary, size = ButtonSize.Small, leadingIcon = Lucide.Plus)
+            // Or just a part of it: circle what to ask about.
+            if (screen.screenshot != null) {
+                Button("Circle", onClick = onCircle, variant = ButtonVariant.Ghost, size = ButtonSize.Small, leadingIcon = Lucide.LassoSelect)
+            }
         }
     }
 }

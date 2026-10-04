@@ -36,6 +36,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.get
 
@@ -61,6 +62,9 @@ class HeraldAssistSession(context: Context) :
     private lateinit var model: AssistantPanelModel
     private val microphone = mutableStateOf(false)
 
+    /** This call-up's screenshot at full size, to cut circled parts from. */
+    @Volatile private var screenshot: Bitmap? = null
+
     override val lifecycle: Lifecycle get() = lifecycleRegistry
     override val savedStateRegistry: SavedStateRegistry get() = savedState.savedStateRegistry
     override val viewModelStore: ViewModelStore get() = store
@@ -69,7 +73,10 @@ class HeraldAssistSession(context: Context) :
         super.onCreate()
         savedState.performRestore(null)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
-        model = AssistantPanelModel(get(), get(), get(), get(), get(), get(), get(), get(), get())
+        // Circled parts are cut from the full-size screenshot, not the smaller copy the panel shows.
+        model = AssistantPanelModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) { region ->
+            screenshot?.let { shot -> withContext(Dispatchers.Default) { runCatching { ScreenReader.crop(shot, region) }.getOrNull() } }
+        }
         // Edge to edge, so the panel sits on the navigation bar and rides up with the keyboard.
         window.window?.let { w ->
             WindowCompat.setDecorFitsSystemWindows(w, false)
@@ -101,6 +108,7 @@ class HeraldAssistSession(context: Context) :
         if (args?.getBoolean(HeraldAssistService.EXTRA_RESUME) == true) {
             model.resume()
         } else {
+            screenshot = null
             model.begin(
                 expectText = showFlags and SHOW_WITH_ASSIST != 0,
                 expectScreenshot = showFlags and SHOW_WITH_SCREENSHOT != 0,
@@ -124,17 +132,23 @@ class HeraldAssistSession(context: Context) :
         }
         // Walking the structure fetches it from the other app, which can take a moment.
         work.launch {
-            val lines = runCatching { ScreenReader.lines(structure) }.getOrDefault(emptyList())
-            model.onScreenText(ScreenReader.appName(structure, context.packageManager), lines)
+            val items = runCatching { ScreenReader.items(structure) }.getOrDefault(emptyList())
+            model.onScreenText(ScreenReader.appName(structure, context.packageManager), items)
         }
     }
 
     override fun onHandleScreenshot(screenshot: Bitmap?) {
+        this.screenshot = screenshot
         if (screenshot == null) {
             model.onScreenshot(null)
             return
         }
         work.launch { model.onScreenshot(runCatching { ScreenReader.jpeg(screenshot) }.getOrNull()) }
+    }
+
+    /** Back leaves circling first, then closes the panel as usual. */
+    override fun onBackPressed() {
+        if (model.circling.value) model.cancelCircling() else super.onBackPressed()
     }
 
     override fun onDestroy() {
