@@ -45,6 +45,32 @@
             android:name=".notify.NotificationActionReceiver"
             android:exported="false" />
 
+        <!-- Herald as the phone's digital assistant: the assist gesture opens a panel over the current app. -->
+        <service
+            android:name=".assist.HeraldAssistService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/assist_service" />
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".assist.HeraldAssistSessionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
+
+        <service
+            android:name=".assist.HeraldRecognitionService"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
+        </service>
+
         <!-- Lets the camera app write a photo for the composer into our cache (AttachmentPicker). -->
         <provider
             android:name="androidx.core.content.FileProvider"
