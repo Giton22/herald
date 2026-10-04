@@ -22,6 +22,17 @@ interface ChatActions {
 
     fun removeAttachment(id: String)
 
+    /** Adds a comment on [anchor]'s selection to the next send; returns its id. */
+    fun addComment(source: CommentSource, anchor: SelectionAnchor): Long
+
+    fun removeComment(id: Long)
+
+    /** Asks the agent to explain the selection: at once when nothing else waits to go out, else as a comment. */
+    fun explain(source: CommentSource, anchor: SelectionAnchor)
+
+    /** Starts a `/btw` side question about the selection in the composer. */
+    fun askAside(source: CommentSource, anchor: SelectionAnchor)
+
     fun answer(request: InputRequest, result: JsonObject)
 
     fun pickSuggestion(suggestion: SlashSuggestion)

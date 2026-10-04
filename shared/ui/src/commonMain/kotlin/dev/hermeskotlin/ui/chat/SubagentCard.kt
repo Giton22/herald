@@ -11,7 +11,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
@@ -138,7 +137,7 @@ private fun SubagentRowView(row: SubagentRow, onStop: (String) -> Unit) {
                 if (row.activity.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text("Activity", style = Theme[typography][caption], color = Theme[colors][textSecondary])
-                        SelectionContainer {
+                        CommentableSelection(CommentSource(row.key, "the activity of the subagent working on “${row.goal.take(80)}”", code = true)) {
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 row.activity.forEach { line ->
                                     Text(line, style = Theme[typography][code], color = Theme[colors][textSecondary])
@@ -150,7 +149,7 @@ private fun SubagentRowView(row: SubagentRow, onStop: (String) -> Unit) {
                 row.summary?.let { summary ->
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text(if (row.status == SubagentStatus.Failed) "What went wrong" else "Result", style = Theme[typography][caption], color = Theme[colors][textSecondary])
-                        SelectionContainer {
+                        CommentableSelection(CommentSource(row.key, "the result of the subagent working on “${row.goal.take(80)}”")) {
                             Text(summary, style = Theme[typography][bodySmall], color = if (row.status == SubagentStatus.Failed) Theme[colors][danger] else Theme[colors][text])
                         }
                     }

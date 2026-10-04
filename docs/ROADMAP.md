@@ -165,7 +165,8 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Drafts: each chat keeps its unsent text (stored, survives a restart) and picked files (in memory) when you switch chats; the session list marks it "Draft"
 - [x] Undo and branch from the composer (`/undo` hands the last prompt back; `/branch` → `session.branch_whole` / `session.branch`)
 - [x] Undo and branch from a message: a ⋯ menu on each message with Copy, Edit last prompt (`/undo`, then the transcript reloads) and Branch from here (`session.branch` with the message's position), each change explained before it happens
-- [x] Comment on part of a reply: select text in a reply and pick Comment; it goes into the composer as a Markdown quote with room for your note, and several stack into one message (the clipboard is left alone)
+- [x] Comment on part of a reply: select text and pick Comment; a numbered card with a note waits above the composer and the text stays highlighted. Each comment names its place (the reply, list item, code block line, tool or command output) and quotes the sentence or line around the selection, so a repeated word is still found; they go out together in one message, shown as cards in the sent bubble. Also on a prompt (its long-press menu), tool and command output and subagent results
+- [x] Explain (asks at once when nothing else is waiting) and Ask aside (a `/btw` about the selection) in the same selection menu
 - [x] Context compression (`/compress` → `session.compress`)
 - [x] Context breakdown in the usage sheet (`session.context_breakdown`): the window split by system prompt, tools, skills, memory, conversation and the rest, plus the files read in
 

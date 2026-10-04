@@ -175,6 +175,15 @@ class ChatViewModel(
     /** Files picked in chats that aren't open, by [trayKey]; they live as long as the app does. */
     private val trays = mutableMapOf<String, List<OutgoingAttachment>>()
 
+    private val _comments = MutableStateFlow<List<PendingComment>>(emptyList())
+
+    /** Comments on parts of the chat, waiting in the composer for the next send. */
+    val comments: StateFlow<List<PendingComment>> = _comments.asStateFlow()
+
+    /** Comments left in chats that aren't open, by [trayKey], like [trays]. */
+    private val commentTrays = mutableMapOf<String, List<PendingComment>>()
+    private var lastCommentId = 0L
+
     /** The chat whose draft the composer holds; null while it's being restored, so nothing is saved over it. */
     private var draftOf: ChatTarget? = null
 
@@ -246,11 +255,14 @@ class ChatViewModel(
         val chat = draftChat(open)
         val tray = _attachments.value
         if (tray.isEmpty()) trays.remove(trayKey(open, chat)) else trays[trayKey(open, chat)] = tray
+        val comments = _comments.value
+        if (comments.isEmpty()) commentTrays.remove(trayKey(open, chat)) else commentTrays[trayKey(open, chat)] = comments
         viewModelScope.launch { saveDraft(open, chat, text) }
     }
 
     private fun restoreDraft(target: ChatTarget) {
         _attachments.value = trays.remove(trayKey(target, target.storedSessionId)).orEmpty()
+        _comments.value = commentTrays.remove(trayKey(target, target.storedSessionId)).orEmpty()
         viewModelScope.launch {
             val text = drafts.get(target.gateway.gatewayUrl, target.storedSessionId, target.profile)
             if (this@ChatViewModel.target != target) return@launch
@@ -394,6 +406,35 @@ class ChatViewModel(
     }
 
     override fun removeAttachment(id: String) = _attachments.update { tray -> tray.filterNot { it.id == id } }
+
+    override fun addComment(source: CommentSource, anchor: SelectionAnchor): Long {
+        val comment = newComment(++lastCommentId, source, anchor)
+        _comments.update { it + comment }
+        return comment.id
+    }
+
+    override fun removeComment(id: Long) = _comments.update { tray -> tray.filterNot { it.id == id } }
+
+    override fun explain(source: CommentSource, anchor: SelectionAnchor) {
+        val chat = session.value
+        val idle = chat != null && !state.value.running && connectionState.value is ConnectionState.Connected
+        // One tap asks right away, unless it would sweep up a message being put together.
+        if (idle && _comments.value.isEmpty() && composer.text.isBlank() && _attachments.value.isEmpty()) {
+            val comment = newComment(++lastCommentId, source, anchor, note = EXPLAIN_NOTE)
+            viewModelScope.launch {
+                if (chat.submit(formatReview(listOf(comment), ""), emptyList(), queue = false) == SendOutcome.NotSent) {
+                    _comments.update { listOf(comment) + it }
+                }
+            }
+        } else {
+            _comments.update { it + newComment(++lastCommentId, source, anchor, note = EXPLAIN_NOTE) }
+        }
+    }
+
+    override fun askAside(source: CommentSource, anchor: SelectionAnchor) {
+        val quote = anchor.text.replace(Regex("""\s+"""), " ").trim().let { if (it.length > ASIDE_QUOTE_MAX) it.take(ASIDE_QUOTE_MAX).trimEnd() + "…" else it }
+        composer.setTextAndPlaceCursorAtEnd("/btw About “$quote” in ${source.label}: ")
+    }
 
     fun showAttachmentError(message: String) = _attachmentError.update { message }
 
@@ -588,9 +629,10 @@ class ChatViewModel(
         val chat = session.value ?: return
         val text = composer.text.toString()
         val attachments = _attachments.value
-        if (text.isBlank() && attachments.isEmpty()) return
+        val comments = _comments.value
+        if (text.isBlank() && attachments.isEmpty() && comments.isEmpty()) return
         val command = SlashCommand.parse(text.trim())
-        // Commands run at once either way; they never become a turn to queue.
+        // Commands run at once either way; they never become a turn to queue. Waiting comments stay for the next prompt.
         if (command != null && attachments.isEmpty()) {
             if (command.name.isEmpty()) return
             composer.clearText()
@@ -599,12 +641,15 @@ class ChatViewModel(
         }
         composer.clearText()
         _attachments.value = emptyList()
+        _comments.value = emptyList()
+        val outgoing = if (comments.isEmpty()) text else formatReview(comments, text)
         viewModelScope.launch {
             // Give everything back if it never reached the gateway, so nothing typed or picked is lost. One
             // that may have arrived keeps its bubble to resend from instead, so it isn't in two places.
-            if (chat.submit(text, attachments, queue = queue) == SendOutcome.NotSent) {
+            if (chat.submit(outgoing, attachments, queue = queue) == SendOutcome.NotSent) {
                 giveBack(text)
                 _attachments.update { attachments + it }
+                _comments.update { comments + it }
             }
         }
     }
@@ -677,9 +722,30 @@ class ChatViewModel(
         session.value?.takeBack(key)?.let(::giveBack)
     }
 
-    /** Puts [text] back in the composer, ahead of anything typed since, which stays. */
+    /**
+     * Puts [text] back in the composer, ahead of anything typed since, which stays. Comments it carries go
+     * back to the tray as cards, not as their markup.
+     */
     private fun giveBack(text: String) {
-        composer.setTextAndPlaceCursorAtEnd(if (composer.text.isBlank()) text else "$text\n\n${composer.text}")
+        val review = parseReview(text)
+        if (review != null) {
+            _comments.update { tray ->
+                review.comments.map { sent ->
+                    PendingComment(
+                        id = ++lastCommentId,
+                        source = CommentSource(messageKey = "", label = sent.on),
+                        quote = sent.quote.substringAfter('«').substringBefore('»'),
+                        where = sent.where,
+                        context = sent.quote.takeUnless { it.startsWith('«') && it.endsWith('»') },
+                        highlights = emptyList(),
+                        note = sent.note,
+                    )
+                } + tray
+            }
+        }
+        val typed = review?.let { listOf(it.before, it.after).filter(String::isNotBlank).joinToString("\n\n") } ?: text
+        if (typed.isBlank()) return
+        composer.setTextAndPlaceCursorAtEnd(if (composer.text.isBlank()) typed else "$typed\n\n${composer.text}")
     }
 
     override fun retry() {
@@ -709,5 +775,11 @@ class ChatViewModel(
 
         /** Typing pauses this long before the draft is written to storage. */
         const val DRAFT_SAVE_DEBOUNCE_MS = 400L
+
+        /** What Explain asks of the agent about the selection. */
+        const val EXPLAIN_NOTE = "Explain this in more detail."
+
+        /** How much of the selection a `/btw` question quotes. */
+        const val ASIDE_QUOTE_MAX = 160
     }
 }
