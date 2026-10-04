@@ -9,8 +9,11 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
 
-/** In-memory [RpcTransport]: tests push server frames and inspect what the client sent. */
-class FakeTransport : RpcTransport {
+/**
+ * In-memory [RpcTransport]: tests push server frames and inspect what the client sent. With [dead], closing
+ * from this end does nothing, like a socket whose network is gone.
+ */
+class FakeTransport(private val dead: Boolean = false) : RpcTransport {
     private val inbound = Channel<String>(Channel.UNLIMITED)
     private var closeWith: TransportClosedException? = null
     val sent = MutableStateFlow<List<JsonObject>>(emptyList())
@@ -25,7 +28,7 @@ class FakeTransport : RpcTransport {
     }
 
     override suspend fun close(code: Short, reason: String) {
-        serverClose(code, reason)
+        if (!dead) serverClose(code, reason)
     }
 
     fun push(json: String) {

@@ -2,6 +2,7 @@ package dev.hermeskotlin.core.rpc
 
 import dev.hermeskotlin.core.network.HermesJson
 import io.ktor.util.date.getTimeMillis
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -80,6 +81,9 @@ class JsonRpcClient(
     @kotlin.concurrent.Volatile private var lastInboundAt = clock()
     private var heartbeatJob: Job? = null
 
+    /** Why [run] ended; set once the link is gone for good. */
+    @kotlin.concurrent.Volatile private var closedWith: Throwable? = null
+
     private val _events = MutableSharedFlow<GatewayEvent>(extraBufferCapacity = 256)
     val events: SharedFlow<GatewayEvent> = _events.asSharedFlow()
 
@@ -104,8 +108,16 @@ class JsonRpcClient(
             }
             throw TransportClosedException(null, "stream ended")
         } catch (e: Throwable) {
-            failPending(e)
-            if (!ready.isCompleted) ready.completeExceptionally(e)
+            // The heartbeat giving up cancels this scope. Callers must see a lost link, not a cancellation:
+            // theirs would end silently and leave whatever waited on the reply spinning.
+            val failure = if (e is CancellationException) {
+                e.cause?.takeUnless { it is CancellationException } ?: TransportClosedException(null, "connection lost")
+            } else {
+                e
+            }
+            closedWith = failure
+            failPending(failure)
+            if (!ready.isCompleted) ready.completeExceptionally(failure)
             throw e
         } finally {
             heartbeatJob?.cancel()
@@ -113,6 +125,8 @@ class JsonRpcClient(
     }
 
     suspend fun request(method: String, params: JsonObject = JsonObject(emptyMap()), timeoutMs: Long = 30_000): JsonElement {
+        // Nothing will answer on a link that is gone; say so now rather than after the timeout.
+        closedWith?.let { throw it }
         val id = "c${++nextId}"
         val deferred = CompletableDeferred<JsonElement>()
         pendingMutex.withLock { pending[id] = deferred }
