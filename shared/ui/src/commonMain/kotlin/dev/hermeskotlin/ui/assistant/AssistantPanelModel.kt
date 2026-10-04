@@ -204,6 +204,8 @@ class AssistantPanelModel(
         val wholeScreen = circled == null && first && _includeScreen.value
         if (text.isEmpty() && circled == null && !wholeScreen) return
         composer.clearText()
+        // Asking moved on from whatever the microphone last missed.
+        voice.dismissDictationError()
         // Sent before its picture was cut: the question waits for the cut rather than going without it.
         val cutting = circledFull?.takeIf { it.first === circled }?.second
         scope.launch {
