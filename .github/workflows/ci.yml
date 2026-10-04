@@ -17,10 +17,7 @@ concurrency:
 
 jobs:
   build:
-    # Blacksmith's runners compile faster than GitHub's and have a free monthly allowance; bigger
-    # machines use it up faster. Release stays on GitHub's runners because it holds the signing key.
-    # To go back, set this to ubuntu-latest.
-    runs-on: blacksmith-4vcpu-ubuntu-2404
+    runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
       # Pinned to commits, not tags, so a moved tag can't change what runs here.
