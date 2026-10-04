@@ -50,6 +50,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.animation.animateContentSize
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.only
@@ -601,8 +603,28 @@ private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottom
     val listState = rememberLazyListState()
     val scope = rememberCoroutineScope()
     val newest = messages.lastOrNull()?.key
-    LaunchedEffect(newest) { if (listState.firstVisibleItemIndex <= 1) listState.animateScrollToItem(0) }
     val awayFromBottom by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 || listState.firstVisibleItemScrollOffset > 600 } }
+    // Follow new messages only from the bottom: someone reading further up stays where they are.
+    LaunchedEffect(newest) { if (!awayFromBottom) listState.animateScrollToItem(0) }
+    // The reversed list pins the newest message's bottom edge, so a reply growing while it's read would
+    // push its text up the screen. Scroll by what it grew, so the lines being read stay put.
+    val growing by remember {
+        derivedStateOf { listState.layoutInfo.visibleItemsInfo.firstOrNull { it.index == 0 }?.let { it.key to it.size } }
+    }
+    var lastGrowing by remember { mutableStateOf(growing) }
+    LaunchedEffect(growing) {
+        val (key, size) = growing ?: return@LaunchedEffect
+        val before = lastGrowing
+        lastGrowing = growing
+        if (before?.first == key && size > before.second && awayFromBottom && listState.firstVisibleItemIndex == 0) {
+            listState.scrollBy((size - before.second).toFloat())
+        }
+    }
+    // What the bottom held when the reader last saw it; anything since is new to them.
+    val tail = messages.lastOrNull()?.let { it.key to it.contentSize() }
+    var seenTail by remember { mutableStateOf(tail) }
+    LaunchedEffect(awayFromBottom, tail) { if (!awayFromBottom) seenTail = tail }
+    val newBelow = awayFromBottom && tail != seenTail
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
@@ -626,19 +648,44 @@ private fun Messages(messages: List<ChatMessage>, thinkingFrame: String?, bottom
             exit = fadeOut() + scaleOut(),
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp + bottomInset),
         ) {
+            val shape = RoundedCornerShape(Theme[radii][radiusMedium])
             UnstyledButton(
                 onClick = { scope.launch { listState.animateScrollToItem(0) } },
                 modifier = Modifier
-                    .size(40.dp)
-                    .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
-                    .background(Theme[colors][surfaceElevated])
-                    .border(1.dp, Theme[colors][strokeStrong], RoundedCornerShape(Theme[radii][radiusMedium])),
+                    .heightIn(min = 40.dp)
+                    .widthIn(min = 40.dp)
+                    .clip(shape)
+                    .background(if (newBelow) Theme[colors][accent] else Theme[colors][surfaceElevated])
+                    .border(1.dp, if (newBelow) Theme[colors][accent] else Theme[colors][strokeStrong], shape)
+                    .animateContentSize(),
                 indication = rememberColoredIndication(Theme[colors][textColor]),
             ) {
-                UnstyledIcon(Lucide.ArrowDown, contentDescription = "Jump to latest", tint = Theme[colors][textColor], modifier = Modifier.size(18.dp))
+                // Says "New reply" when something arrived below, not only by the arrow.
+                val tint = if (newBelow) Theme[colors][onAccent] else Theme[colors][textColor]
+                Row(
+                    Modifier.padding(horizontal = if (newBelow) 14.dp else 11.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    UnstyledIcon(
+                        Lucide.ArrowDown,
+                        contentDescription = if (newBelow) null else "Jump to latest",
+                        tint = tint,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    if (newBelow) Text("New reply", style = Theme[typography][label], color = tint)
+                }
             }
         }
     }
+}
+
+/** How much a message holds, so a reply growing at the bottom counts as new content. */
+private fun ChatMessage.contentSize(): Int = when (this) {
+    is ChatMessage.User -> text.length
+    is ChatMessage.Assistant -> text.length + reasoning.length + tools.size
+    is ChatMessage.Command -> output.length
+    is ChatMessage.Notice -> text.length
 }
 
 /** Desktop's turn marker: the prompt in a full-width box with a tinted fill and outline; replies run bare beneath. */
