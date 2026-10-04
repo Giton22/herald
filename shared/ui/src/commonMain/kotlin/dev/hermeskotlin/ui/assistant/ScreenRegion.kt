@@ -21,6 +21,9 @@ data class ScreenRegion(val left: Float, val top: Float, val right: Float, val b
         min(height.toFloat(), bottom + by),
     )
 
+    /** The same rectangle measured in other pixels: [x] and [y] are how many of those make one of these. */
+    fun scaled(x: Float, y: Float) = ScreenRegion(left * x, top * y, right * x, bottom * y)
+
     companion object {
         /** The box around a stroke, or null for no points. */
         fun around(points: List<Pair<Float, Float>>): ScreenRegion? {

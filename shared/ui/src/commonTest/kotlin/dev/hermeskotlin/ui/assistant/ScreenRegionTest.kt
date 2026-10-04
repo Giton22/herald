@@ -38,6 +38,13 @@ class ScreenRegionTest {
     }
 
     @Test
+    fun aCircleOnASmallerOverlayMapsOntoTheDisplay() {
+        // Drawn on a 672-wide overlay of a 1344-wide display: twice as many display pixels each way.
+        assertEquals(ScreenRegion(100f, 800f, 900f, 920f), ScreenRegion(50f, 400f, 450f, 460f).scaled(2f, 2f))
+        assertEquals(listOf("Apps", "Assistant, recent apps, default apps"), items.inside(ScreenRegion(25f, 380f, 475f, 480f).scaled(2f, 2f)).map { it.text }.filter { it != "Apps row" })
+    }
+
+    @Test
     fun aCircledScreenSaysSo() {
         val context = ScreenContext("Settings", listOf("Apps"), byteArrayOf(1), circled = true)
         assertTrue(context.screenText()!!.startsWith("Text inside the part of the user's phone screen they circled in Settings"))

@@ -126,24 +126,30 @@ class HeraldAssistSession(context: Context) :
     // The one-structure form: Android calls it for the app in front on every version Herald runs on.
     @Deprecated("Superseded by onHandleAssist(AssistState) on API 29, which calls this for the app in front")
     override fun onHandleAssist(data: Bundle?, structure: AssistStructure?, content: AssistContent?) {
+        // Taken now, on arrival: by the time the walk is done the user may have called the assistant up again.
+        val callUp = model.callUp
         if (structure == null) {
-            model.onScreenText(null, emptyList())
+            model.onScreenText(callUp, null, emptyList())
             return
         }
         // Walking the structure fetches it from the other app, which can take a moment.
         work.launch {
             val items = runCatching { ScreenReader.items(structure) }.getOrDefault(emptyList())
-            model.onScreenText(ScreenReader.appName(structure, context.packageManager), items)
+            model.onScreenText(callUp, ScreenReader.appName(structure, context.packageManager), items)
         }
     }
 
     override fun onHandleScreenshot(screenshot: Bitmap?) {
         this.screenshot = screenshot
+        val callUp = model.callUp
         if (screenshot == null) {
-            model.onScreenshot(null)
+            model.onScreenshot(callUp, null)
             return
         }
-        work.launch { model.onScreenshot(runCatching { ScreenReader.jpeg(screenshot) }.getOrNull()) }
+        work.launch {
+            val jpeg = runCatching { ScreenReader.jpeg(screenshot) }.getOrNull()
+            model.onScreenshot(callUp, jpeg, screenshot.width, screenshot.height)
+        }
     }
 
     /** Back leaves circling first, then closes the panel as usual. */

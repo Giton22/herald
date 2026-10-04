@@ -15,8 +15,11 @@ import dev.hermeskotlin.core.voice.AudioApi
 import dev.hermeskotlin.core.voice.SpeechPlayer
 import dev.hermeskotlin.core.voice.VoiceRecorder
 import dev.hermeskotlin.ui.voice.VoiceController
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,15 +36,30 @@ enum class AssistantPhase { Loading, SignedOut, Ready }
 
 /**
  * The screen as the panel holds it while the platform hands it over in parts: the text first, the
- * screenshot a moment later. [pending] counts the parts still on their way.
+ * screenshot a moment later. [pending] counts the parts still on their way; [callUp] is which call-up
+ * they belong to, so a part read for an earlier one and arriving late is turned away.
  */
 data class ScreenCapture(
     val app: String? = null,
     val items: List<ScreenItem> = emptyList(),
     val screenshot: ByteArray? = null,
     val pending: Int = 0,
+    val callUp: Int = 0,
+    /** The display's size in pixels, which [items] and circled regions are measured in; 0 when unknown. */
+    val displayWidth: Int = 0,
+    val displayHeight: Int = 0,
 ) {
     val context: ScreenContext get() = ScreenContext(app, items.map { it.text }, screenshot)
+
+    fun withText(callUp: Int, app: String?, items: List<ScreenItem>): ScreenCapture =
+        if (callUp != this.callUp) this else copy(app = app ?: this.app, items = items, pending = (pending - 1).coerceAtLeast(0))
+
+    fun withScreenshot(callUp: Int, jpeg: ByteArray?, displayWidth: Int, displayHeight: Int): ScreenCapture =
+        if (callUp != this.callUp) {
+            this
+        } else {
+            copy(screenshot = jpeg, displayWidth = displayWidth, displayHeight = displayHeight, pending = (pending - 1).coerceAtLeast(0))
+        }
 }
 
 /**
@@ -136,7 +154,8 @@ class AssistantPanelModel(
         _includeScreen.value = false
         _circling.value = false
         _circledPart.value = null
-        _screen.value = ScreenCapture(pending = listOf(expectText, expectScreenshot).count { it })
+        circledFull = null
+        _screen.value = ScreenCapture(pending = listOf(expectText, expectScreenshot).count { it }, callUp = _screen.value.callUp + 1)
         // The last call-up's chat goes on in the sessions list; an unused one is simply kept.
         if (_session.value?.state?.value?.hasConversation == true) newChat()
         _shows.update { it + 1 }
@@ -157,14 +176,17 @@ class AssistantPanelModel(
         return true
     }
 
-    fun onScreenText(app: String?, items: List<ScreenItem>) = _screen.update {
-        it.copy(app = app ?: it.app, items = items, pending = (it.pending - 1).coerceAtLeast(0))
-    }
+    /** The call-up the screen now arriving belongs to; take it when the platform hands a part over. */
+    val callUp: Int get() = _screen.value.callUp
 
-    /** [jpeg] null: the platform had no screenshot to give (a secure window, or the setting is off). */
-    fun onScreenshot(jpeg: ByteArray?) = _screen.update {
-        it.copy(screenshot = jpeg, pending = (it.pending - 1).coerceAtLeast(0))
-    }
+    fun onScreenText(callUp: Int, app: String?, items: List<ScreenItem>) = _screen.update { it.withText(callUp, app, items) }
+
+    /**
+     * [jpeg] null: the platform had no screenshot to give (a secure window, or the setting is off).
+     * [displayWidth] × [displayHeight]: the full screenshot's size, the display's.
+     */
+    fun onScreenshot(callUp: Int, jpeg: ByteArray?, displayWidth: Int = 0, displayHeight: Int = 0) =
+        _screen.update { it.withScreenshot(callUp, jpeg, displayWidth, displayHeight) }
 
     fun setIncludeScreen(include: Boolean) {
         _includeScreen.value = include
@@ -182,9 +204,12 @@ class AssistantPanelModel(
         val wholeScreen = circled == null && first && _includeScreen.value
         if (text.isEmpty() && circled == null && !wholeScreen) return
         composer.clearText()
+        // Sent before its picture was cut: the question waits for the cut rather than going without it.
+        val cutting = circledFull?.takeIf { it.first === circled }?.second
         scope.launch {
+            val part = cutting?.await() ?: circled
             val attachments = when {
-                circled != null -> circled.toAttachments()
+                part != null -> part.toAttachments()
                 wholeScreen -> awaitScreen().toAttachments()
                 else -> emptyList()
             }
@@ -195,7 +220,7 @@ class AssistantPanelModel(
             if (!sent && composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
             if (sent) {
                 _includeScreen.value = false
-                if (_circledPart.value === circled) _circledPart.value = null
+                if (_circledPart.value.let { it === circled || it === part }) _circledPart.value = null
             }
         }
     }
@@ -223,15 +248,29 @@ class AssistantPanelModel(
         // Held at once with its text; the picture follows when cut, unless the user moved on meanwhile.
         val held = ScreenContext(capture.app, lines, null, circled = true)
         _circledPart.value = held
-        scope.launch {
-            val crop = cropper.crop(region)
-            _circledPart.update { if (it === held) ScreenContext(capture.app, lines, crop, circled = true) else it }
+        val full = scope.async {
+            // A failed cut still leaves the text: the question then goes without a picture, not at all.
+            val crop = try {
+                cropper.crop(region)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                null
+            }
+            val part = ScreenContext(capture.app, lines, crop, circled = true)
+            _circledPart.update { if (it === held) part else it }
+            part
         }
+        circledFull = held to full
     }
 
     fun dropCircled() {
         _circledPart.value = null
+        circledFull = null
     }
+
+    /** The circled part held without its picture yet, and the part once the picture is cut. */
+    private var circledFull: Pair<ScreenContext, Deferred<ScreenContext>>? = null
 
     /** Dictates into the composer and sends what was said, as an assistant does. */
     fun toggleDictation() {

@@ -58,7 +58,7 @@ internal fun CircleOverlay(screen: ScreenCapture, onCircled: (ScreenRegion) -> U
     val stroke = remember { mutableStateListOf<Offset>() }
     var picked by remember { mutableStateOf<ScreenRegion?>(null) }
     val scope = rememberCoroutineScope()
-    val items by rememberUpdatedState(screen.items)
+    val capture by rememberUpdatedState(screen)
     val circled by rememberUpdatedState(onCircled)
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
@@ -83,11 +83,17 @@ internal fun CircleOverlay(screen: ScreenCapture, onCircled: (ScreenRegion) -> U
                             change.consume()
                         }
                         val box = ScreenRegion.around(stroke.map { it.x to it.y }) ?: return@awaitEachGesture
+                        // The frozen screen is stretched over this overlay, which needn't be the display's
+                        // size; the text's places and the crop are in the display's pixels.
+                        val toDisplayX = (capture.displayWidth.takeIf { it > 0 } ?: size.width).toFloat() / size.width
+                        val toDisplayY = (capture.displayHeight.takeIf { it > 0 } ?: size.height).toFloat() / size.height
                         val slop = TAP_SLOP.toPx()
                         val region = if (box.width < slop && box.height < slop) {
                             // A tap: the text under the finger, else a square around it.
                             val at = box.centerX to box.centerY
-                            items.tapped(at)?.bounds?.padded(PAD.toPx() / 2, size.width, size.height)
+                            capture.items.tapped(at.first * toDisplayX to at.second * toDisplayY)?.bounds
+                                ?.scaled(1 / toDisplayX, 1 / toDisplayY)
+                                ?.padded(PAD.toPx() / 2, size.width, size.height)
                                 ?: ScreenRegion(at.first, at.second, at.first, at.second).padded(TAP_BOX.toPx() / 2, size.width, size.height)
                         } else {
                             box.padded(PAD.toPx(), size.width, size.height)
@@ -95,7 +101,7 @@ internal fun CircleOverlay(screen: ScreenCapture, onCircled: (ScreenRegion) -> U
                         picked = region
                         scope.launch {
                             delay(HIGHLIGHT_MS)
-                            circled(region)
+                            circled(region.scaled(toDisplayX, toDisplayY))
                         }
                     }
                 },
