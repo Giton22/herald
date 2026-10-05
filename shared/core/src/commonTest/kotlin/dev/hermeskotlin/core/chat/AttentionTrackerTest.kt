@@ -170,6 +170,23 @@ class AttentionTrackerTest {
     }
 
     @Test
+    fun theNewestRequestSaysWhatAChatWaitsFor() = runTest {
+        val (host, tracker, transport) = setup(backgroundScope)
+        host.open(url, "stored-1", null).state.first { it.runtimeSessionId == "rt1" }
+        host.open(url, "stored-2", null).state.first { it.runtimeSessionId == "rt2" }
+        live = mapOf("stored-1" to "waiting")
+        val collector = backgroundScope.launch { tracker.waiting.collect {} }
+        // Desktop answers the approval (no word of that reaches this phone); the agent then asks for a password.
+        transport.push(approval("srq-1", "rt1"))
+        runCurrent()
+        transport.push("""{"jsonrpc":"2.0","id":"srq-2","method":"sudo","params":{"session_id":"rt1","command":"apt update"}}""")
+        advanceTimeBy(10_001)
+        runCurrent()
+        assertEquals(Waiting.Input, tracker.waiting.value["stored-1"])
+        collector.cancel()
+    }
+
+    @Test
     fun aNewerAnswerBeatsATurnEndThisPhoneMissed() = runTest {
         val (host, tracker, _) = setup(backgroundScope)
         // The resume says a turn is running (see serve); the phone then leaves the chat.

@@ -74,7 +74,9 @@ class AttentionTracker(
     val waiting: StateFlow<Map<String, Waiting>> = combine(links, requests, open, active.live) { links, requests, open, live ->
         val openId = open?.storedSessionId
         buildMap {
-            requests.values.forEach { (runtimeId, request, at) ->
+            // Newest first: an answer from another client sends no `request.cancel`, so an older request for the
+            // same chat may be one already answered (an approval, then the question that followed it).
+            requests.values.reversed().forEach { (runtimeId, request, at) ->
                 val storedId = links[runtimeId] ?: return@forEach
                 // Asked after the request came and not waiting: answered elsewhere while this phone missed the word.
                 val stale = live.askedAtMillis > at && live.statuses[storedId] != LiveStatus.Waiting
