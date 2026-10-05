@@ -1,9 +1,12 @@
 package dev.hermeskotlin.core.rpc
 
+import dev.hermeskotlin.core.chat.InputRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.take
+import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonPrimitive
@@ -122,17 +125,32 @@ class JsonRpcClientTest {
         val pump = launch { runCatching { client.run() } }
         val incoming = async(start = CoroutineStart.UNDISPATCHED) { client.serverRequests.first() }
 
-        transport.push("""{"jsonrpc":"2.0","id":"srq-3","method":"vault.unlock_prompt","params":{"session_id":"s1"}}""")
+        transport.push("""{"jsonrpc":"2.0","id":"srq-3","method":"tour","params":{"session_id":"s1"}}""")
         transport.push("""{"jsonrpc":"2.0","id":"srq-4","method":"approval","params":{"session_id":"s1","command":"ls"}}""")
 
         // One it can show reaches the app, unanswered until a person decides.
         assertEquals("srq-4", incoming.await().id)
-        // No reply to the vault prompt: any error settles it for every client, and Desktop can show it.
+        // No reply to the tour: any error settles it for every client, and Desktop can show it.
         val call = async { client.request("gateway.ping") }
         val id = transport.awaitSent { it["method"]?.jsonPrimitive?.str() == "gateway.ping" }["id"]!!.jsonPrimitive.str()
         transport.push("""{"jsonrpc":"2.0","id":"$id","result":{}}""")
         call.await()
         assertTrue(transport.sent.value.none { it["id"]?.jsonPrimitive?.str() in setOf("srq-3", "srq-4") })
+        pump.cancel()
+    }
+
+    @Test
+    fun vaultPromptsReachTheApp() = runTest {
+        val transport = FakeTransport()
+        val client = JsonRpcClient(transport, answers = InputRequest.METHODS::contains)
+        val pump = launch { runCatching { client.run() } }
+        val incoming = async(start = CoroutineStart.UNDISPATCHED) { client.serverRequests.take(3).toList() }
+
+        transport.push("""{"jsonrpc":"2.0","id":"srq-7","method":"vault.unlock_prompt","params":{"session_id":"s1","backend":"bitwarden"}}""")
+        transport.push("""{"jsonrpc":"2.0","id":"srq-8","method":"vault.code","params":{"session_id":"s1","site":"github.com"}}""")
+        transport.push("""{"jsonrpc":"2.0","id":"srq-9","method":"vault.save_login","params":{"session_id":"s1","origin":"https://github.com"}}""")
+
+        assertEquals(listOf("vault.unlock_prompt", "vault.code", "vault.save_login"), incoming.await().map { it.method })
         pump.cancel()
     }
 
@@ -151,9 +169,9 @@ class JsonRpcClientTest {
         ping.await()
 
         transport.push("""{"jsonrpc":"2.0","id":"srq-5","method":"preview.read","params":{"session_id":"s1"}}""")
-        transport.push("""{"jsonrpc":"2.0","id":"srq-6","method":"vault.code","params":{"session_id":"s1"}}""")
+        transport.push("""{"jsonrpc":"2.0","id":"srq-6","method":"tour","params":{"session_id":"s1"}}""")
 
-        // Declines, which leave them to Desktop (the window showing the chat, or its vault prompt); -32601
+        // Declines, which leave them to Desktop (the window showing the chat, or its tour); -32601
         // would settle them for Desktop too.
         for (id in listOf("srq-5", "srq-6")) {
             val decline = transport.awaitSent { it["id"]?.jsonPrimitive?.str() == id }

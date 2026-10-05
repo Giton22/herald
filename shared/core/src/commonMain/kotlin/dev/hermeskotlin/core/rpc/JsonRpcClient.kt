@@ -221,7 +221,7 @@ class JsonRpcClient(
 
     private suspend fun handleServerRequest(id: String, method: String, params: JsonElement?) {
         // Any error settles a request for every client, and Desktop may show what this app can't (its window
-        // bridges, vault prompts), so the rest gets the decline the gateway only counts (settling once every
+        // bridges, guided tours), so the rest gets the decline the gateway only counts (settling once every
         // client declined). A gateway that doesn't count declines would take it as the answer and cut Desktop
         // off: say nothing there.
         if (answers(method)) {

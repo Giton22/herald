@@ -3,6 +3,7 @@ package dev.hermeskotlin.core.chat
 import dev.hermeskotlin.core.network.HermesJson
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -70,5 +71,62 @@ class InputRequestTest {
 
         val secret = assertIs<InputRequest.Secret>(InputRequest.parse("srq-2", "secret", params("""{"env_var":"API_KEY","prompt":""}""")))
         assertEquals("Value for API_KEY", secret.prompt)
+    }
+
+    @Test
+    fun vaultUnlockNamesThePasswordManager() {
+        val named = assertIs<InputRequest.Secret>(
+            InputRequest.parse("srq-1", "vault.unlock_prompt", params("""{"session_id":"s","backend":"bitwarden","display_name":"Bitwarden"}""")),
+        )
+        assertEquals(InputRequest.Secret.Kind.VaultUnlock, named.kind)
+        assertEquals("Hermes needs Bitwarden unlocked to sign in for you.", named.prompt)
+
+        val backendOnly = assertIs<InputRequest.Secret>(InputRequest.parse("srq-2", "vault.unlock_prompt", params("""{"backend":"onepassword","display_name":""}""")))
+        assertEquals("Hermes needs onepassword unlocked to sign in for you.", backendOnly.prompt)
+
+        val bare = assertIs<InputRequest.Secret>(InputRequest.parse("srq-3", "vault.unlock_prompt", params("{}")))
+        assertEquals("Hermes needs your password manager unlocked to sign in for you.", bare.prompt)
+    }
+
+    @Test
+    fun vaultCodeNamesTheSiteAndHint() {
+        val full = assertIs<InputRequest.Secret>(
+            InputRequest.parse("srq-1", "vault.code", params("""{"session_id":"s","site":"github.com","hint":"Sent to your phone."}""")),
+        )
+        assertEquals(InputRequest.Secret.Kind.VaultCode, full.kind)
+        assertEquals("Enter the sign-in code for github.com. Sent to your phone.", full.prompt)
+
+        // The gateway sends an empty hint today.
+        val noHint = assertIs<InputRequest.Secret>(InputRequest.parse("srq-2", "vault.code", params("""{"site":"github.com","hint":""}""")))
+        assertEquals("Enter the sign-in code for github.com.", noHint.prompt)
+
+        val bare = assertIs<InputRequest.Secret>(InputRequest.parse("srq-3", "vault.code", params("{}")))
+        assertEquals("Enter the sign-in code.", bare.prompt)
+    }
+
+    @Test
+    fun vaultSaveLoginFallsBackToTheOrigin() {
+        val full = assertIs<InputRequest.VaultSaveLogin>(
+            InputRequest.parse("srq-1", "vault.save_login", params("""{"session_id":"s","origin":"https://github.com","site":"github.com"}""")),
+        )
+        assertEquals("github.com", full.site)
+        assertEquals("https://github.com", full.origin)
+
+        val noSite = assertIs<InputRequest.VaultSaveLogin>(InputRequest.parse("srq-2", "vault.save_login", params("""{"origin":"https://github.com"}""")))
+        assertEquals("https://github.com", noSite.site)
+        assertEquals(Waiting.Input, Waiting.of(noSite))
+    }
+
+    @Test
+    fun theVaultMethodsAreAnswered() {
+        assertTrue(listOf("vault.unlock_prompt", "vault.code", "vault.save_login").all { it in InputRequest.METHODS })
+    }
+
+    @Test
+    fun saveLoginEncodesTheLoginAsAJsonString() {
+        val answer = InputAnswers.saveLogin("ada@example.com", """pa"ss\word""")
+        val login = HermesJson.parseToJsonElement(answer["value"]!!.jsonPrimitive.content).jsonObject
+        assertEquals("ada@example.com", login["identifier"]!!.jsonPrimitive.content)
+        assertEquals("""pa"ss\word""", login["password"]!!.jsonPrimitive.content)
     }
 }

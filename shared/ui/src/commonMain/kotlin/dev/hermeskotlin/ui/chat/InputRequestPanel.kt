@@ -29,12 +29,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Check
@@ -47,6 +49,7 @@ import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.KeyRound
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageCircleQuestion
+import com.composables.icons.lucide.RectangleEllipsis
 import com.composables.icons.lucide.ShieldAlert
 import com.composables.icons.lucide.Square
 import com.composables.icons.lucide.SquareCheck
@@ -113,6 +116,7 @@ internal fun InputRequestPanel(
                 is InputRequest.Approval -> ApprovalContent(request, more, connected, onStop.takeIf { connected }) { onAnswer(request, it) }
                 is InputRequest.Clarify -> ClarifyContent(request, more, connected, onStop.takeIf { connected }) { onAnswer(request, it) }
                 is InputRequest.Secret -> SecretContent(request, more, connected, onStop.takeIf { connected }) { onAnswer(request, it) }
+                is InputRequest.VaultSaveLogin -> SaveLoginContent(request, more, connected, onStop.takeIf { connected }) { onAnswer(request, it) }
             }
         }
     }
@@ -369,11 +373,23 @@ private fun ChoiceRow(choice: String, question: ClarifyQuestion, selected: Boole
 @Composable
 private fun SecretContent(request: InputRequest.Secret, more: String?, connected: Boolean, onStop: (() -> Unit)?, answer: (JsonObject) -> Unit) {
     val value = remember(request.id) { TextFieldState() }
-    val sudo = request.kind == InputRequest.Secret.Kind.Sudo
-    val submit = { if (value.text.isNotEmpty()) answer(InputAnswers.value(value.text.toString())) }
+    val kind = request.kind
+    // The field is cleared once sent, so the value doesn't outlive the request in memory.
+    val submit = {
+        if (value.text.isNotEmpty()) {
+            answer(InputAnswers.value(value.text.toString().let { if (kind == InputRequest.Secret.Kind.VaultCode) it.trim() else it }))
+            value.clearText()
+        }
+    }
+    val title = when (kind) {
+        InputRequest.Secret.Kind.Sudo -> "Sudo password needed"
+        InputRequest.Secret.Kind.Secret -> "Secret needed"
+        InputRequest.Secret.Kind.VaultUnlock -> "Unlock your password manager"
+        InputRequest.Secret.Kind.VaultCode -> "Sign-in code needed"
+    }
 
-    Header(Lucide.KeyRound, Theme[colors][warning], if (sudo) "Sudo password needed" else "Secret needed", more, onStop)
-    if (sudo) {
+    Header(if (kind == InputRequest.Secret.Kind.VaultCode) Lucide.RectangleEllipsis else Lucide.KeyRound, Theme[colors][warning], title, more, onStop)
+    if (kind == InputRequest.Secret.Kind.Sudo) {
         Text("To run this command as root:", style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
         request.command?.takeIf { it.isNotBlank() }?.let { CommandBlock(it) }
     } else {
@@ -381,14 +397,91 @@ private fun SecretContent(request: InputRequest.Secret, more: String?, connected
     }
     TextField(
         state = value,
-        label = if (sudo) "Password" else request.envVar,
-        password = true,
-        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        label = when (kind) {
+            InputRequest.Secret.Kind.Sudo -> "Password"
+            InputRequest.Secret.Kind.Secret -> request.envVar
+            InputRequest.Secret.Kind.VaultUnlock -> "Master password"
+            InputRequest.Secret.Kind.VaultCode -> "Code"
+        },
+        // A one-time code is read off another screen, so it shows as typed.
+        password = kind != InputRequest.Secret.Kind.VaultCode,
+        keyboardOptions = if (kind == InputRequest.Secret.Kind.VaultCode) {
+            KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Done)
+        } else {
+            KeyboardOptions(imeAction = ImeAction.Done)
+        },
         onKeyboardAction = { submit() },
         supportingText = "Sent to your gateway only.",
+        contentType = ContentType.SmsOtpCode.takeIf { kind == InputRequest.Secret.Kind.VaultCode },
+    )
+    val vault = kind == InputRequest.Secret.Kind.VaultUnlock || kind == InputRequest.Secret.Kind.VaultCode
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Button(
+            if (vault) "Skip" else "Decline",
+            onClick = { answer(InputAnswers.value("")); value.clearText() },
+            variant = ButtonVariant.Outline,
+            enabled = connected,
+            modifier = Modifier.weight(1f),
+        )
+        Button(
+            when (kind) {
+                InputRequest.Secret.Kind.VaultUnlock -> "Unlock"
+                InputRequest.Secret.Kind.VaultCode -> "Send"
+                else -> "Submit"
+            },
+            onClick = submit,
+            enabled = connected && value.text.isNotEmpty(),
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
+/** A login for the page the agent is on, saved to the gateway's vault so the agent can sign in with it. */
+@Composable
+private fun SaveLoginContent(request: InputRequest.VaultSaveLogin, more: String?, connected: Boolean, onStop: (() -> Unit)?, answer: (JsonObject) -> Unit) {
+    val identifier = remember(request.id) { TextFieldState() }
+    val password = remember(request.id) { TextFieldState() }
+    val clear = {
+        identifier.clearText()
+        password.clearText()
+    }
+    val save = {
+        if (password.text.isNotEmpty()) {
+            answer(InputAnswers.saveLogin(identifier.text.toString().trim(), password.text.toString()))
+            clear()
+        }
+    }
+
+    Header(Lucide.KeyRound, Theme[colors][warning], "Save your ${request.site} login?", more, onStop)
+    Text(
+        "Hermes is on the sign-in page of ${request.origin.ifBlank { request.site }} and has no login for it. " +
+            "Save one to your gateway's vault, and Hermes signs in with it.",
+        style = Theme[typography][bodySmall],
+        color = Theme[colors][textSecondary],
+    )
+    TextField(
+        state = identifier,
+        label = "Email or username",
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, autoCorrectEnabled = false, imeAction = ImeAction.Next),
+        contentType = ContentType.Username,
+    )
+    TextField(
+        state = password,
+        label = "Password",
+        password = true,
+        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+        onKeyboardAction = { save() },
+        supportingText = "Sent to your gateway only.",
+        contentType = ContentType.Password,
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button("Decline", onClick = { answer(InputAnswers.value("")) }, variant = ButtonVariant.Outline, enabled = connected, modifier = Modifier.weight(1f))
-        Button("Submit", onClick = submit, enabled = connected && value.text.isNotEmpty(), modifier = Modifier.weight(1f))
+        Button(
+            "Don't save",
+            onClick = { answer(InputAnswers.value("")); clear() },
+            variant = ButtonVariant.Outline,
+            enabled = connected,
+            modifier = Modifier.weight(1f),
+        )
+        Button("Save", onClick = save, enabled = connected && password.text.isNotEmpty(), modifier = Modifier.weight(1f))
     }
 }
