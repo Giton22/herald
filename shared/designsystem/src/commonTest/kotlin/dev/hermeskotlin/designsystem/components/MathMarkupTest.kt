@@ -79,6 +79,31 @@ class MathMarkupTest {
     }
 
     @Test
+    fun indentedCodeIsLeftAlone() {
+        val text = "Shell:\n\n    echo \$HOME_DIR/\$USER\n\n    \$x_1\$\nDone \$y_1\$"
+        val prepared = MathMarkup.prepare(text)
+        assertTrue(prepared.startsWith("Shell:\n\n    echo \$HOME_DIR/\$USER\n\n    \$x_1\$\nDone "), prepared)
+        assertEquals(listOf(MathFormula("y_1", false)), formulas(text))
+        // Under a list item the indent is the item's, not code.
+        assertEquals(listOf(MathFormula("x_1", false)), formulas("- Item\n\n    Then \$x_1\$"))
+    }
+
+    @Test
+    fun aFenceClosesOnlyOnABareRunAtLeastAsLong() {
+        val nested = "````markdown\n```kotlin\n\$a_b\$\n```\n````\nAfter \$c_d\$"
+        assertEquals(listOf(MathFormula("c_d", false)), formulas(nested))
+        assertEquals(listOf(MathFormula("c_d", false)), formulas("```\n```kotlin\n\$a_b\$\n```\nAfter \$c_d\$"))
+    }
+
+    @Test
+    fun aStrayBacktickDoesNotHideTheNextParagraph() {
+        assertEquals(
+            listOf(MathFormula("x^2", false), MathFormula("y^2", false)),
+            formulas("Press the ` key.\n\nThen \$x^2\$ and `code` and \$y^2\$."),
+        )
+    }
+
+    @Test
     fun anUnclosedFormulaStaysTextWhileItStreams() {
         assertEquals("The sum $$\\sum_i", MathMarkup.prepare("The sum $$\\sum_i"))
         assertEquals("Let \$x^", MathMarkup.prepare("Let \$x^"))
@@ -108,8 +133,7 @@ class MathMarkupTest {
         assertTrue(MathMarkup.looksLikeMath("a < b"))
         assertFalse(MathMarkup.looksLikeMath("5 and "))
         assertFalse(MathMarkup.looksLikeMath("1,000 to "))
-        assertFalse(MathMarkup.looksLikeMath("hello world"))
-    }
+        assertFalse(MathMarkup.looksLikeMath("hello world"))    }
 
     @Test
     fun textWithoutDollarsOrBackslashesIsReturnedAsIs() {

@@ -195,38 +195,61 @@ object MathMarkup {
     private val OPERATOR_BETWEEN = Regex("""[A-Za-z0-9]\s*[=<>+\-*/|]\s*[A-Za-z0-9]""")
     private const val ASSIGNMENT_SYMBOLS = "\\_^,+-*/.=<>|[](){}"
 
-    /** Characters inside fenced code blocks and code spans, where `$` and `\` mean nothing. */
+    /** Characters inside fenced or indented code blocks and code spans, where `$` and `\` mean nothing. */
     internal fun protectedMask(chars: CharArray): BooleanArray {
         val mask = BooleanArray(chars.size)
-        // Fences: a line starting (after spaces) with ``` or ~~~ opens; the same character closes.
+        // Fences: a line starting (after spaces) with ``` or ~~~ opens; a bare run of at least as many of
+        // the same character closes ("```kotlin" inside a ```` fence is content).
         var lineStart = 0
         var fenceStart = -1
         var fenceChar = ' '
+        var fenceRun = 0
+        // Indented code: lines indented 4+ after a blank line, unless that indent belongs to a list item.
+        var previousBlank = true
+        var flatContext = true
+        var inIndentedCode = false
         while (lineStart < chars.size) {
             var lineEnd = lineStart
             while (lineEnd < chars.size && chars[lineEnd] != '\n') lineEnd++
             val next = if (lineEnd < chars.size) lineEnd + 1 else lineEnd
             var c = lineStart
-            while (c < lineEnd && chars[c].isWhitespace()) c++
+            var indent = 0
+            while (c < lineEnd && chars[c].isWhitespace()) {
+                indent += if (chars[c] == '\t') 4 - indent % 4 else 1
+                c++
+            }
+            val blank = c == lineEnd
+            if (fenceStart < 0 && !blank && indent >= 4 && (inIndentedCode || (previousBlank && flatContext))) {
+                inIndentedCode = true
+                for (k in lineStart until next) mask[k] = true
+                lineStart = next
+                previousBlank = false
+                continue
+            }
+            if (!blank) inIndentedCode = false
             val candidate = chars.getOrNull(c)
             if (candidate == '`' || candidate == '~') {
                 var run = 0
                 while (c + run < lineEnd && chars[c + run] == candidate) run++
                 if (run >= 3) {
-                    if (fenceStart >= 0 && candidate == fenceChar) {
+                    val bare = (c + run until lineEnd).all { chars[it].isWhitespace() }
+                    if (fenceStart >= 0 && candidate == fenceChar && run >= fenceRun && bare) {
                         for (k in fenceStart until next) mask[k] = true
                         fenceStart = -1
                     } else if (fenceStart < 0) {
                         fenceStart = lineStart
                         fenceChar = candidate
+                        fenceRun = run
                     }
                 }
             }
+            if (!blank && fenceStart < 0) flatContext = indent == 0 && !LIST_MARKER.containsMatchIn(chars.concatToString(c, lineEnd))
+            previousBlank = blank
             lineStart = next
         }
         // A fence still open (a reply mid-stream) runs to the end.
         if (fenceStart >= 0) for (k in fenceStart until chars.size) mask[k] = true
-        // Code spans: a run of backticks up to the next run of the same length.
+        // Code spans: a run of backticks up to the next run of the same length in the same paragraph.
         var i = 0
         while (i < chars.size) {
             if (chars[i] != '`' || mask[i]) {
@@ -237,6 +260,7 @@ object MathMarkup {
             var j = i + run
             var close = -1
             while (j < chars.size) {
+                if (chars[j] == '\n' && endsParagraph(chars, j + 1)) break
                 if (chars[j] == '`' && !mask[j]) {
                     val other = runLength(chars, j)
                     if (other == run) {
@@ -257,6 +281,18 @@ object MathMarkup {
         }
         return mask
     }
+
+    /** The line starting at [index] is blank, so a code span can't run on past it. */
+    private fun endsParagraph(chars: CharArray, index: Int): Boolean {
+        var i = index
+        while (i < chars.size && chars[i] != '\n') {
+            if (!chars[i].isWhitespace()) return false
+            i++
+        }
+        return true
+    }
+
+    private val LIST_MARKER = Regex("""^(?:[-*+]|\d{1,9}[.)])(?:\s|$)""")
 
     private fun runLength(chars: CharArray, index: Int): Int {
         var n = 0
