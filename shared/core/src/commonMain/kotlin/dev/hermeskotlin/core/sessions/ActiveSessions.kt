@@ -22,11 +22,13 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.jsonObject
+import kotlin.concurrent.Volatile
 
 /** What a live session on the gateway is doing, from `session.active_list`. */
 enum class LiveStatus {
@@ -60,14 +62,20 @@ enum class LiveStatus {
     }
 }
 
+/** One live session: its runtime id on the gateway, what it's doing, and its title (blank before it has one). */
+data class LiveSession(val runtimeId: String, val status: LiveStatus, val title: String = "")
+
 /** The gateway's live sessions by stored session id, as asked at [askedAtMillis] (epoch ms; 0 before any answer). */
-data class LiveSessions(val statuses: Map<String, LiveStatus> = emptyMap(), val askedAtMillis: Long = 0)
+data class LiveSessions(val rows: Map<String, LiveSession> = emptyMap(), val askedAtMillis: Long = 0) {
+    val statuses: Map<String, LiveStatus> get() = rows.mapValues { it.value.status }
+}
 
 /**
  * The status of every live session on the gateway, turns started on other clients included: the list's
  * Running and Needs-attention marks for chats this phone never opened. No event announces a change, so it
  * asks `session.active_list` on each connection, again shortly after an event that may mean a change, and
- * every [pollMs] while something collects [live]. It stops asking when nothing does.
+ * every [pollMs] while something collects [live] ([backgroundPollMs] while [inBackground]). It stops asking
+ * when nothing does.
  *
  * The answer covers every profile in the gateway process (the handler ignores `profile`), keyed by stored
  * id: callers match it against the chats they list. Empty while disconnected, so nothing old shows as live.
@@ -79,7 +87,21 @@ class ActiveSessions(
     private val pollMs: Long = 10_000,
     private val settleMs: Long = 500,
     private val clock: () -> Long = { getTimeMillis() },
+    private val backgroundPollMs: Long = 30_000,
 ) {
+    /** Herald is out of sight: nobody reads the list, only notifications need the statuses, so ask less often. */
+    @Volatile
+    var inBackground: Boolean = false
+        set(value) {
+            val back = field && !value
+            field = value
+            // The answer can be a slow wait old, and the watcher keeps the poll going, so nothing restarts it: ask now.
+            if (back) wakes.trySend(Unit)
+        }
+
+    /** Ends the wait between asks when Herald comes back in sight. */
+    private val wakes = Channel<Unit>(Channel.CONFLATED)
+
     val live: StateFlow<LiveSessions> = connection.state
         .map { (it as? ConnectionState.Connected)?.client }
         .distinctUntilChanged()
@@ -94,7 +116,7 @@ class ActiveSessions(
         launch { client.events.collect { if (it.type in CHANGES) nudges.trySend(Unit) } }
         while (true) {
             val askedAt = clock()
-            val statuses = try {
+            val rows = try {
                 parse(client.request("session.active_list"))
             } catch (e: CancellationException) {
                 throw e
@@ -106,8 +128,11 @@ class ActiveSessions(
                 // A timeout or a dropped reply: the last answer stands until the next ask.
                 null
             }
-            if (statuses != null) send(LiveSessions(statuses, askedAt))
-            if (withTimeoutOrNull(pollMs) { nudges.receive() } != null) {
+            if (rows != null) send(LiveSessions(rows, askedAt))
+            val nudged = withTimeoutOrNull(if (inBackground) backgroundPollMs else pollMs) {
+                select { nudges.onReceive { true }; wakes.onReceive { false } }
+            }
+            if (nudged == true) {
                 // Events come in bursts (a turn's start, its end, the list changing): ask once they settle.
                 delay(settleMs)
                 nudges.tryReceive()
@@ -115,11 +140,12 @@ class ActiveSessions(
         }
     }
 
-    private fun parse(result: JsonElement): Map<String, LiveStatus> =
+    private fun parse(result: JsonElement): Map<String, LiveSession> =
         ((result as? JsonObject)?.get("sessions") as? JsonArray).orEmpty().mapNotNull { row ->
             val obj = runCatching { row.jsonObject }.getOrNull() ?: return@mapNotNull null
             val key = obj.string("session_key")?.takeIf { it.isNotBlank() } ?: return@mapNotNull null
-            key to LiveStatus.parse(obj.string("status"))
+            val runtimeId = obj.string("id")?.takeIf { it.isNotBlank() } ?: key
+            key to LiveSession(runtimeId, LiveStatus.parse(obj.string("status")), obj.string("title").orEmpty())
         }.toMap()
 
     private companion object {

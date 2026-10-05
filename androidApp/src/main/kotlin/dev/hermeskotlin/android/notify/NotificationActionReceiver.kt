@@ -10,6 +10,7 @@ import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatSession
 import dev.hermeskotlin.core.chat.InputAnswers
 import dev.hermeskotlin.core.chat.InputRequest
+import dev.hermeskotlin.core.chat.SessionWatcher
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.push.PushSetup
@@ -21,7 +22,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import org.koin.core.component.KoinComponent
 import org.koin.core.component.inject
 
-/** The buttons and inline replies of [ChatNotifications], applied to the chat [ChatHost] has open. */
+/** The buttons and inline replies of [ChatNotifications], applied to the chat [ChatHost] has open or to one [SessionWatcher] follows. */
 class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
 
     private val host: ChatHost by inject()
@@ -30,6 +31,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
     private val scope: CoroutineScope by inject()
     private val bots: BotsApi by inject()
     private val push: PushSetup by inject()
+    private val watcher: SessionWatcher by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -79,7 +81,16 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 // Clears the inline reply's spinner; a failure posts in its place.
                 notifications.cancelReply(storedId)
                 if (session == null || session.state.value.storedSessionId != storedId) {
-                    notifications.postFailure(storedId, ChatNotifications.REPLY_ID, "That chat isn't open anymore. Open Herald to reply.")
+                    // A chat followed without being open takes the reply straight to its live session.
+                    if (storedId !in watcher.chats.value) {
+                        notifications.postFailure(storedId, ChatNotifications.REPLY_ID, "That chat isn't open anymore. Open Herald to reply.")
+                        return
+                    }
+                    awaitConnection()
+                    val sent = scope.async { watcher.reply(storedId, text) }
+                    if (withTimeoutOrNull(RECEIVER_BUDGET_MS) { sent.await() } == false) {
+                        notifications.postFailure(storedId, ChatNotifications.REPLY_ID, "Couldn't send it. Open Herald to send it again.")
+                    }
                     return
                 }
                 awaitConnection()
@@ -95,8 +106,19 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
     private suspend fun answer(session: ChatSession?, requestId: String, result: (InputRequest) -> kotlinx.serialization.json.JsonObject?) {
         val request = session?.state?.value?.inputRequests?.firstOrNull { it.id == requestId }
         if (request == null) {
-            // Answered elsewhere, or the turn is over.
-            notifications.cancelRequest(requestId)
+            // A chat that isn't open but is watched; else answered elsewhere, or the turn is over.
+            val watched = watcher.find(requestId)?.second
+            val answer = watched?.let(result)
+            if (watched == null || answer == null) {
+                notifications.cancelRequest(requestId)
+                return
+            }
+            awaitConnection()
+            if (watcher.answer(requestId, answer)) {
+                notifications.cancelRequest(requestId)
+            } else {
+                notifications.postFailure(requestId, ChatNotifications.REQUEST_ID, "Not connected to the gateway. Open Herald to answer.")
+            }
             return
         }
         val answer = result(request) ?: return

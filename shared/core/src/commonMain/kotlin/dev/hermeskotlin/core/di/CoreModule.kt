@@ -6,6 +6,7 @@ import dev.hermeskotlin.core.chat.AttentionTracker
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatLinks
 import dev.hermeskotlin.core.chat.DraftStore
+import dev.hermeskotlin.core.chat.SessionWatcher
 import dev.hermeskotlin.core.sessions.ActiveSessions
 import dev.hermeskotlin.core.sessions.SeenStore
 import io.ktor.util.date.getTimeMillis
@@ -82,6 +83,7 @@ val coreModule = module {
     single { ChatHost(get(), get(), get(), get()) }
     single { ActiveSessions(get(), get()) }
     single(createdAtStart = true) { AttentionTracker(get(), get(), get(), get()) }
+    single(createdAtStart = true) { SessionWatcher(get(), get(), get(), get(), get()) }
     single { SeenStore(get()) { getTimeMillis() / 1000.0 } }
     single { ChatLinks() }
     single { ModelsApi(get()) }

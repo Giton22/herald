@@ -130,6 +130,26 @@ class ActiveSessionsTest {
     }
 
     @Test
+    fun comingBackInSightAsksAtOnceInsteadOfAtTheEndOfTheSlowWait() = runTest {
+        val gateway = connect(backgroundScope)
+        val active = active(gateway)
+        active.inBackground = true
+        backgroundScope.launch { active.live.collect {} }
+        active.live.first { it.askedAtMillis > 0 }
+        runCurrent()
+        val before = gateway.asked
+
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals(before, gateway.asked)
+        // Something always collects now (the watcher), so nothing restarts the poll on its own.
+        active.inBackground = false
+        advanceTimeBy(1_000)
+        runCurrent()
+        assertEquals(before + 1, gateway.asked)
+    }
+
+    @Test
     fun anOldGatewayKeepsTheLastAnswerAndIsNotAskedAgain() = runTest {
         val gateway = connect(backgroundScope)
         gateway.answer = """{"sessions":[${row("a", "working")}]}"""
