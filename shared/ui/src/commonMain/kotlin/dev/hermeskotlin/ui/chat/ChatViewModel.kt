@@ -10,6 +10,7 @@ import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatSession
 import dev.hermeskotlin.core.chat.ChatState
+import dev.hermeskotlin.core.chat.ComposeDraft
 import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.chat.LastChat
@@ -30,6 +31,7 @@ import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.settings.AppSettings
+import dev.hermeskotlin.core.settings.RunningSend
 import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.core.pet.PetApi
 import dev.hermeskotlin.core.journey.JourneyApi
@@ -96,13 +98,17 @@ sealed interface ChatRequest {
     /** `/voice`: the screen asks for the microphone, then starts a voice chat. */
     data object StartVoice : ChatRequest
 
+    /** The voice shortcut: the screen asks for the microphone, then dictates into the composer. */
+    data object StartDictation : ChatRequest
+
     /** [profile] null is the gateway's launch profile. */
     data class SwitchProfile(val profile: String?) : ChatRequest
 }
 
 /**
  * Identifies what the chat screen shows: a stored session, or a new chat (`storedSessionId == null`),
- * in [profile] (null: the gateway's launch profile).
+ * in [profile] (null: the gateway's launch profile). A new chat opened from outside (share sheet,
+ * shortcut) brings its [draft].
  */
 data class ChatTarget(
     val gateway: SavedGateway,
@@ -110,6 +116,7 @@ data class ChatTarget(
     val title: String?,
     val nonce: Long = 0,
     val profile: String? = null,
+    val draft: ComposeDraft? = null,
 )
 
 /**
@@ -155,6 +162,10 @@ class ChatViewModel(
 
     override val composer = TextFieldState()
     val connectionState: StateFlow<ConnectionState> = connection.state
+
+    override val runningSend: StateFlow<RunningSend> = settings.settings
+        .map { it?.runningSend ?: RunningSend.Steer }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, settings.settings.value?.runningSend ?: RunningSend.Steer)
 
     private var target: ChatTarget? = null
     private val session = MutableStateFlow<ChatSession?>(null)
@@ -261,10 +272,13 @@ class ChatViewModel(
     }
 
     private fun restoreDraft(target: ChatTarget) {
-        _attachments.value = trays.remove(trayKey(target, target.storedSessionId)).orEmpty()
-        _comments.value = commentTrays.remove(trayKey(target, target.storedSessionId)).orEmpty()
+        // A draft brought from outside (a share, a shortcut) starts the chat clean instead: no text, files
+        // or comments left from an earlier new chat.
+        val outside = target.draft != null
+        _attachments.value = trays.remove(trayKey(target, target.storedSessionId)).takeUnless { outside }.orEmpty()
+        _comments.value = commentTrays.remove(trayKey(target, target.storedSessionId)).takeUnless { outside }.orEmpty()
         viewModelScope.launch {
-            val text = drafts.get(target.gateway.gatewayUrl, target.storedSessionId, target.profile)
+            val text = if (outside) null else drafts.get(target.gateway.gatewayUrl, target.storedSessionId, target.profile)
             if (this@ChatViewModel.target != target) return@launch
             if (text != null && composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
             draftOf = target
@@ -285,8 +299,9 @@ class ChatViewModel(
         // A voice chat belongs to the chat it started in.
         voice.stopAll()
         composer.clearText()
-        restoreDraft(target)
         _attachmentError.value = null
+        restoreDraft(target)
+        target.draft?.let(::takeDraft)
         if (target.storedSessionId == null) viewModelScope.launch { lastChats.set(target.gateway.gatewayUrl, null, target.profile) }
         session.value = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title, target.profile)
         // The catalog marks the previous chat's model; a new chat must show the profile default instead.
@@ -295,6 +310,17 @@ class ChatViewModel(
             loadModels()
             pets.bind(target.profile)
         }
+    }
+
+    /**
+     * Fills the new chat's composer with what came from outside, to look over before sending: shared
+     * text and files, or dictation started by the voice shortcut.
+     */
+    private fun takeDraft(draft: ComposeDraft) {
+        draft.text?.takeIf { it.isNotBlank() }?.let(composer::setTextAndPlaceCursorAtEnd)
+        if (draft.attachments.isNotEmpty()) addAttachments(draft.attachments)
+        draft.notice?.let(::showAttachmentError)
+        if (draft.dictate) viewModelScope.launch { _requests.send(ChatRequest.StartDictation) }
     }
 
     fun startVoiceChat() {
@@ -503,6 +529,11 @@ class ChatViewModel(
                 SlashRoute.Compress -> chat.compress(arg)
                 SlashRoute.Status -> chat.status()
                 SlashRoute.Aside -> chat.askAside(arg)
+                SlashRoute.Steer -> if (arg.isEmpty()) {
+                    chat.showCommandOutput("/steer", "Usage: /steer <note>. The running reply reads it after its current step, without stopping.")
+                } else if (chat.steer(arg) == SendOutcome.NotSent) {
+                    giveBack("/steer $arg")
+                }
                 SlashRoute.Reasoning -> when (chat.reasoning(arg)) {
                     // The gateway's display words drive this app's own Thinking toggle too.
                     "show" -> settings.update { it.copy(showReasoning = true) }
@@ -629,10 +660,11 @@ class ChatViewModel(
     }
 
     /**
-     * Sends what's in the composer. Mid-turn it corrects the running turn, unless [queue] holds it for
-     * the next one.
+     * Sends what's in the composer. Mid-turn it goes the way [mode] says, or the "While a reply is running"
+     * setting when none was picked: steered into the running turn, queued for the next, or sent once the
+     * turn is stopped. A steer can't carry files, so with attachments it queues instead.
      */
-    override fun send(queue: Boolean) {
+    override fun send(mode: RunningSend?) {
         val chat = session.value ?: return
         val text = composer.text.toString()
         val attachments = _attachments.value
@@ -650,10 +682,22 @@ class ChatViewModel(
         _attachments.value = emptyList()
         _comments.value = emptyList()
         val outgoing = if (comments.isEmpty()) text else formatReview(comments, text)
+        val running = sendModeFor(state.value.running, mode, settings.settings.value?.runningSend, attachments.isNotEmpty())
         viewModelScope.launch {
+            val outcome = when (running) {
+                null -> chat.submit(outgoing, attachments)
+                RunningSend.Steer -> chat.steer(outgoing)
+                RunningSend.Queue -> chat.submit(outgoing, attachments, queue = true)
+                RunningSend.StopAndSend -> {
+                    val result = chat.stopAndSubmit(outgoing, attachments)
+                    // The stop drops what was queued behind the task; hand it back rather than lose it.
+                    result.dropped.filter { it.isNotBlank() }.takeIf { it.isNotEmpty() }?.let { giveBack(it.joinToString("\n\n")) }
+                    result.outcome
+                }
+            }
             // Give everything back if it never reached the gateway, so nothing typed or picked is lost. One
             // that may have arrived keeps its bubble to resend from instead, so it isn't in two places.
-            if (chat.submit(outgoing, attachments, queue = queue) == SendOutcome.NotSent) {
+            if (outcome == SendOutcome.NotSent) {
                 giveBack(text)
                 _attachments.update { attachments + it }
                 _comments.update { comments + it }

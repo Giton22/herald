@@ -103,6 +103,7 @@ sealed interface SlashRoute {
     data object Compress : SlashRoute
     data object Status : SlashRoute
     data object Aside : SlashRoute
+    data object Steer : SlashRoute
     data object Reasoning : SlashRoute
     data object Yolo : SlashRoute
     data object Title : SlashRoute
@@ -152,6 +153,7 @@ sealed interface SlashRoute {
             "compress" to Compress,
             "status" to Status,
             "btw" to Aside,
+            "steer" to Steer,
             "reasoning" to Reasoning,
             "yolo" to Yolo,
             "title" to Title,

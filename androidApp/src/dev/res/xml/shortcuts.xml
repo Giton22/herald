@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- src/main/res/xml/shortcuts.xml for "Herald Dev", whose app id has the .dev suffix. Keep the two in step. -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_shortcut_new_chat"
+        android:shortcutId="new_chat"
+        android:shortcutLongLabel="@string/shortcut_new_chat"
+        android:shortcutShortLabel="@string/shortcut_new_chat">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="hermes://new-chat"
+            android:targetClass="dev.hermeskotlin.android.MainActivity"
+            android:targetPackage="dev.herald.android.dev" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_shortcut_voice"
+        android:shortcutId="new_chat_voice"
+        android:shortcutLongLabel="@string/shortcut_voice"
+        android:shortcutShortLabel="@string/shortcut_voice_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="hermes://new-chat-voice"
+            android:targetClass="dev.hermeskotlin.android.MainActivity"
+            android:targetPackage="dev.herald.android.dev" />
+    </shortcut>
+</shortcuts>

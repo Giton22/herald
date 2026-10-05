@@ -10,8 +10,9 @@ import kotlinx.serialization.json.contentOrNull
 /**
  * Folds one live session event (tui_gateway/contracts/events.py) into the chat. Events for other
  * sessions must be filtered out by the caller. Unknown event types leave the state unchanged.
+ * Events carry no time, so [now] (epoch seconds, when it arrived) stamps the reply it finishes.
  */
-fun ChatState.reduce(event: GatewayEvent): ChatState {
+fun ChatState.reduce(event: GatewayEvent, now: Double? = null): ChatState {
     val payload = event.payload as? JsonObject
     return when (event.type) {
         "message.start" -> releaseQueued().withOpenReply { it }.copy(
@@ -90,7 +91,7 @@ fun ChatState.reduce(event: GatewayEvent): ChatState {
         "notice" -> payload.string("message")?.trim()?.takeIf { it.isNotEmpty() }?.let { text ->
             copy(messages = messages + ChatMessage.Notice("notice-$keySeq", text), keySeq = keySeq + 1)
         } ?: this
-        "message.complete" -> complete(payload)
+        "message.complete" -> complete(payload, now)
         "status.update" -> copy(status = payload.string("text")?.takeIf { it.isNotBlank() })
         "error" -> copy(error = payload.string("message"))
         "session.title" -> copy(title = payload.string("title") ?: title)
@@ -163,7 +164,7 @@ private fun ChatState.appendText(chunk: String?): ChatState {
     return withOpenReply { it.copy(text = it.text + chunk) }.copy(running = true)
 }
 
-private fun ChatState.complete(payload: JsonObject?): ChatState {
+private fun ChatState.complete(payload: JsonObject?, now: Double?): ChatState {
     val outcome = when (payload.string("status")) {
         "error" -> TurnOutcome.Error
         "interrupted" -> TurnOutcome.Interrupted
@@ -200,6 +201,7 @@ private fun ChatState.complete(payload: JsonObject?): ChatState {
         error = error.takeIf { outcome == TurnOutcome.Error },
         usage = finalUsage?.let { end -> turnStartUsage?.let { end - it } }?.takeIf { it.any },
         warning = warning,
+        timestamp = now ?: base.timestamp,
     )
     // A turn that ended with nothing to show (e.g. interrupted at once) leaves no bubble, unless it failed or warns.
     val empty = reply.text.isBlank() && reply.reasoning.isBlank() && reply.tools.isEmpty() && reply.error == null && warning == null
@@ -279,7 +281,9 @@ fun historyToMessages(rows: List<SessionMessage>): List<ChatMessage> {
                 val raw = unwrapCorrection(row.text.trim())
                 val (refs, text) = skillInvocationText(raw)?.let { emptyList<ShownAttachment>() to it } ?: splitAttachmentRefs(raw, key)
                 val attachments = List(row.imageCount) { ShownAttachment("$key-i$it", "Image", AttachmentKind.Image) } + refs
-                if (text.isNotEmpty() || attachments.isNotEmpty()) messages += ChatMessage.User(key, text, attachments = attachments)
+                if (text.isNotEmpty() || attachments.isNotEmpty()) {
+                    messages += ChatMessage.User(key, text, attachments = attachments, timestamp = row.timestamp)
+                }
             }
             "assistant" -> {
                 val text = row.text.trim()
@@ -302,9 +306,11 @@ fun historyToMessages(rows: List<SessionMessage>): List<ChatMessage> {
                         text = listOf(previous.text, text).filter { it.isNotEmpty() }.joinToString("\n\n"),
                         reasoning = listOf(previous.reasoning, reasoning).filter { it.isNotEmpty() }.joinToString("\n\n"),
                         tools = previous.tools + tools,
+                        // The reply is dated by its last step, when it finished.
+                        timestamp = row.timestamp ?: previous.timestamp,
                     )
                 } else if (text.isNotEmpty() || tools.isNotEmpty()) {
-                    messages += ChatMessage.Assistant(key, text = text, reasoning = reasoning, tools = tools)
+                    messages += ChatMessage.Assistant(key, text = text, reasoning = reasoning, tools = tools, timestamp = row.timestamp)
                 }
             }
         }

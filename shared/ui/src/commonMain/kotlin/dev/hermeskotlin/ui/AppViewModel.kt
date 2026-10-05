@@ -5,6 +5,7 @@ import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatLinks
+import dev.hermeskotlin.core.chat.ComposeDraft
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
@@ -67,7 +68,11 @@ class AppViewModel(
                 .collect { link ->
                     links.consume(link)
                     val open = (_route.value as? Route.Chat)?.target?.storedSessionId
-                    if (open != link.storedSessionId) openSession(link.storedSessionId, link.title ?: "Chat")
+                    val stored = link.storedSessionId
+                    when {
+                        stored == null -> newChat(link.draft)
+                        open != stored -> openSession(stored, link.title ?: "Chat")
+                    }
                 }
         }
     }
@@ -89,9 +94,10 @@ class AppViewModel(
         _route.value = Route.Chat(ChatTarget(gateway, sessionId, title, profile = currentProfile()))
     }
 
-    fun newChat() {
+    /** A new chat in the picked profile; [draft] fills its composer (shared from another app, a shortcut). */
+    fun newChat(draft: ComposeDraft? = null) {
         val gateway = signedInGateway() ?: return
-        _route.value = Route.Chat(newChatTarget(gateway, currentProfile()))
+        _route.value = Route.Chat(newChatTarget(gateway, currentProfile()).copy(draft = draft))
     }
 
     /**
