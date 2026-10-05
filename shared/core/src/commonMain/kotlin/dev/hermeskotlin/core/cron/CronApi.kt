@@ -42,6 +42,14 @@ data class CronJob(
     @SerialName("last_run_at") val lastRunAt: String? = null,
     @SerialName("last_status") val lastStatus: String? = null,
     @SerialName("last_error") val lastError: String? = null,
+    /** The run worked but its result never reached its target (`last_status` is then `delivery_failed`). */
+    @SerialName("last_delivery_error") val lastDeliveryError: String? = null,
+    /** Why the scheduler couldn't start the last run. */
+    @SerialName("last_fire_error") val lastFireError: String? = null,
+    /** Why the scheduler paused the job by itself, when it did. */
+    @SerialName("paused_reason") val pausedReason: String? = null,
+    /** The profile whose cron store holds the job, as the cross-profile list tags it. */
+    val profile: String? = null,
     val model: String? = null,
     /** Where a run's reply goes: `local` (kept on the gateway) or a messaging platform such as `telegram`. */
     val deliver: String? = null,
@@ -51,7 +59,8 @@ data class CronJob(
      */
     val schedule: JsonElement? = null,
 ) {
-    val displayName: String get() = name.ifBlank { prompt.lineSequence().firstOrNull()?.take(50).orEmpty() }.ifBlank { id }
+    /** The job's name without a Bot Mode routine's `[bot:<profile>]` tag, else the start of its prompt. */
+    val displayName: String get() = routineTitle.ifBlank { prompt.lineSequence().firstOrNull()?.take(50).orEmpty() }.ifBlank { id }
 
     val paused: Boolean get() = state == "paused"
 
@@ -110,22 +119,28 @@ class CronApi(private val client: HttpClient) {
         client.get(url.resolve("api/cron/jobs")) { parameter("profile", "all") }
     }.map { it.body<List<CronJob>>() }
 
-    /** The sessions a job's runs produced, newest first. */
-    suspend fun runs(url: GatewayUrl, jobId: String, limit: Int = 50): ApiResult<List<SessionSummary>> = apiCall {
+    /**
+     * The sessions a job's runs produced, newest first. Here and below, [profile] names the store the job is
+     * in (the list's `profile`): a hint the gateway checks, which keeps a same-id job of another profile apart.
+     */
+    suspend fun runs(url: GatewayUrl, jobId: String, limit: Int = 50, profile: String? = null): ApiResult<List<SessionSummary>> = apiCall {
         client.get(url.resolve("api/cron/jobs/${jobId.encodeURLPathPart()}/runs")) {
             parameter("limit", limit.coerceIn(1, 100))
+            parameter("profile", profile)
         }
     }.map { it.body<RunsResponse>().runs }
 
-    suspend fun pause(url: GatewayUrl, jobId: String): ApiResult<CronJob> = action(url, jobId, "pause")
+    suspend fun pause(url: GatewayUrl, jobId: String, profile: String? = null): ApiResult<CronJob> = action(url, jobId, "pause", profile)
 
-    suspend fun resume(url: GatewayUrl, jobId: String): ApiResult<CronJob> = action(url, jobId, "resume")
+    suspend fun resume(url: GatewayUrl, jobId: String, profile: String? = null): ApiResult<CronJob> = action(url, jobId, "resume", profile)
 
     /** Runs the job now, outside its schedule. A 409 means a run is already in progress. */
-    suspend fun trigger(url: GatewayUrl, jobId: String): ApiResult<CronJob> = action(url, jobId, "trigger")
+    suspend fun trigger(url: GatewayUrl, jobId: String, profile: String? = null): ApiResult<CronJob> = action(url, jobId, "trigger", profile)
 
-    suspend fun create(url: GatewayUrl, draft: CronJobDraft): ApiResult<CronJob> = apiCall {
+    /** Adds a job to [profile]'s cron store (null: the launch profile's), where it then runs as that profile. */
+    suspend fun create(url: GatewayUrl, draft: CronJobDraft, profile: String? = null): ApiResult<CronJob> = apiCall {
         client.post(url.resolve("api/cron/jobs")) {
+            parameter("profile", profile)
             contentType(ContentType.Application.Json)
             setBody(draft)
         }
@@ -135,24 +150,25 @@ class CronApi(private val client: HttpClient) {
      * Changes only the fields in [changes] (`name`, `prompt`, `schedule`, `deliver`); the gateway
      * re-parses a new schedule and works out the next run. A bad schedule is a 400 with the reason.
      */
-    suspend fun update(url: GatewayUrl, jobId: String, changes: Map<String, String>): ApiResult<CronJob> = apiCall {
+    suspend fun update(url: GatewayUrl, jobId: String, changes: Map<String, String>, profile: String? = null): ApiResult<CronJob> = apiCall {
         client.put(url.resolve("api/cron/jobs/${jobId.encodeURLPathPart()}")) {
+            parameter("profile", profile)
             contentType(ContentType.Application.Json)
             setBody(JobUpdate(changes))
         }
     }.map { it.body<CronJob>() }
 
-    suspend fun delete(url: GatewayUrl, jobId: String): ApiResult<Unit> = apiCall {
-        client.delete(url.resolve("api/cron/jobs/${jobId.encodeURLPathPart()}"))
+    suspend fun delete(url: GatewayUrl, jobId: String, profile: String? = null): ApiResult<Unit> = apiCall {
+        client.delete(url.resolve("api/cron/jobs/${jobId.encodeURLPathPart()}")) { parameter("profile", profile) }
     }.map { }
 
-    /** `local` first, then each messaging platform the gateway is set up for. */
-    suspend fun deliveryTargets(url: GatewayUrl): ApiResult<List<DeliveryTarget>> = apiCall {
-        client.get(url.resolve("api/cron/delivery-targets"))
+    /** `local` first, then each messaging platform [profile] (null: the launch profile) is set up for. */
+    suspend fun deliveryTargets(url: GatewayUrl, profile: String? = null): ApiResult<List<DeliveryTarget>> = apiCall {
+        client.get(url.resolve("api/cron/delivery-targets")) { parameter("profile", profile) }
     }.map { it.body<DeliveryTargetsResponse>().targets }
 
-    private suspend fun action(url: GatewayUrl, jobId: String, verb: String): ApiResult<CronJob> = apiCall {
-        client.post(url.resolve("api/cron/jobs/${jobId.encodeURLPathPart()}/$verb"))
+    private suspend fun action(url: GatewayUrl, jobId: String, verb: String, profile: String?): ApiResult<CronJob> = apiCall {
+        client.post(url.resolve("api/cron/jobs/${jobId.encodeURLPathPart()}/$verb")) { parameter("profile", profile) }
     }.map { it.body<CronJob>() }
 }
 

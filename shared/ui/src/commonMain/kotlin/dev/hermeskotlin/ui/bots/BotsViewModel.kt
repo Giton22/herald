@@ -16,6 +16,10 @@ import dev.hermeskotlin.core.bots.SidebarMode
 import dev.hermeskotlin.core.bots.SidebarModeStore
 import dev.hermeskotlin.core.bots.forRoster
 import dev.hermeskotlin.core.connection.ConnectionState
+import dev.hermeskotlin.core.cron.CronApi
+import dev.hermeskotlin.core.cron.CronJob
+import dev.hermeskotlin.core.cron.isRoutineOf
+import dev.hermeskotlin.core.cron.problem
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.ApiResult
@@ -82,6 +86,7 @@ class BotsViewModel(
     private val sessions: SessionsApi,
     private val profiles: ProfilesApi,
     private val health: BotHealth,
+    private val cron: CronApi,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(BotsUiState())
@@ -89,6 +94,14 @@ class BotsViewModel(
 
     /** Bots that can't work until something is fixed, by profile: the roster's ⚠. */
     val troubles: StateFlow<Map<String, BotTrouble>> = health.troubles
+
+    private val _failingRoutines = MutableStateFlow<Map<String, CronJob>>(emptyMap())
+
+    /** Each bot's routine whose last run went wrong, by profile: a quiet routine isn't always a healthy one. */
+    val failingRoutines: StateFlow<Map<String, CronJob>> = _failingRoutines.asStateFlow()
+
+    /** When the routines were last read, in epoch ms; they're read less often than the roster. */
+    private var routinesReadAt = 0L
 
     private val _mode = MutableStateFlow(SidebarMode.Chats)
     val mode: StateFlow<SidebarMode> = _mode.asStateFlow()
@@ -126,6 +139,10 @@ class BotsViewModel(
                 .debounce(EVENT_DEBOUNCE_MS)
                 .collect { refreshNow() }
         }
+        // A job changed (the launch store's jobs only; others are read on the minute): no waiting a minute.
+        viewModelScope.launch {
+            connection.events.filter { it.type == "cron.changed" }.debounce(EVENT_DEBOUNCE_MS).collect { refreshRoutines() }
+        }
         // Chats name bots too (their messages to each other), so the roster is read once per connection
         // even while the Chats side shows. A new socket has to be asked to watch the bots again.
         viewModelScope.launch {
@@ -144,6 +161,8 @@ class BotsViewModel(
         if (gateway.value != null) health.reset()
         gateway.value = url
         _state.value = BotsUiState()
+        _failingRoutines.value = emptyMap()
+        routinesReadAt = 0L
         _avatars.value = emptyMap()
         avatarsAsked.clear()
         watched.clear()
@@ -171,6 +190,13 @@ class BotsViewModel(
     }
 
     fun dismissNotice() = _state.update { it.copy(notice = null) }
+
+    /** Reads the routines again now, e.g. after the user fixed, paused or removed one. */
+    fun refreshRoutines() {
+        val url = gateway.value ?: return
+        routinesReadAt = 0L
+        viewModelScope.launch { readRoutines(url, _state.value.all) }
+    }
 
     /**
      * Finds [bot]'s chat (starting it when the bot has never had one) and hands its stored id to [onOpened].
@@ -358,6 +384,7 @@ class BotsViewModel(
             loadAvatars(ordered)
             watch(ordered)
             health.checkOnce(ordered.map { it.name })
+            readRoutines(url, ordered)
         } catch (e: CancellationException) {
             throw e
         } catch (e: RpcException) {
@@ -366,6 +393,20 @@ class BotsViewModel(
         } catch (e: Exception) {
             _state.update { it.copy(loading = false, error = e.message ?: "Couldn't load the bots.") }
         }
+    }
+
+    /** Finds each bot's failing routine, at most once a minute; a failed read keeps what was known. */
+    private suspend fun readRoutines(url: GatewayUrl, bots: List<Bot>) {
+        val now = Clock.System.now().toEpochMilliseconds()
+        if (now - routinesReadAt < ROUTINES_EVERY_MS) return
+        routinesReadAt = now
+        val jobs = (cron.jobs(url) as? ApiResult.Success)?.value ?: return
+        if (gateway.value != url) return
+        _failingRoutines.value = bots.mapNotNull { bot ->
+            // One the user paused is set aside, not failing; one the scheduler paused over a problem says why.
+            jobs.firstOrNull { it.isRoutineOf(bot.name) && it.problem != null && (!it.paused || !it.pausedReason.isNullOrBlank()) }
+                ?.let { bot.name to it }
+        }.toMap()
     }
 
     private fun BotsUiState.regroup(ordered: List<Bot>): BotsUiState {
@@ -426,6 +467,7 @@ class BotsViewModel(
         /** The roster's fallback read, for changes that send no event; chat activity arrives as events. */
         const val POLL_MS = 30_000L
         const val EVENT_DEBOUNCE_MS = 400L
+        const val ROUTINES_EVERY_MS = 60_000L
         val UNKNOWN_METHOD = Regex("method not found|unknown method|no handler", RegexOption.IGNORE_CASE)
     }
 }

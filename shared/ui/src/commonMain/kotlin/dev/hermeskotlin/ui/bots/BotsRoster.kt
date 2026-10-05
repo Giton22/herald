@@ -34,6 +34,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.CalendarClock
 import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Plus
@@ -57,6 +58,7 @@ import com.composeunstyled.theme.Theme
 import com.composeunstyled.theme.rememberColoredIndication
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.bots.BotTrouble
+import dev.hermeskotlin.core.cron.CronJob
 import dev.hermeskotlin.core.bots.lastActivity
 import dev.hermeskotlin.core.bots.rosterPreview
 import dev.hermeskotlin.core.bots.showsPicture
@@ -112,6 +114,9 @@ interface BotActions {
 
     /** Ask the gateway again whether the bot can work, e.g. after fixing its keys elsewhere. */
     fun checkAgain(bot: Bot)
+
+    /** The bot's scheduled routines. */
+    fun routines(bot: Bot)
 }
 
 /**
@@ -132,6 +137,8 @@ fun BotsRoster(
     onDismissNotice: () -> Unit,
     /** Bots that can't work until something is fixed, by profile. */
     troubles: Map<String, BotTrouble> = emptyMap(),
+    /** Each bot's routine whose last run went wrong, by profile. */
+    failingRoutines: Map<String, CronJob> = emptyMap(),
 ) {
     var hiddenOpen by remember { mutableStateOf(false) }
     var startOver by remember { mutableStateOf<Bot?>(null) }
@@ -152,6 +159,7 @@ fun BotsRoster(
             hidden = hidden,
             showHandle = bot.label.lowercase() in sameName,
             trouble = troubles[bot.name],
+            failingRoutine = failingRoutines[bot.name],
             actions = actions,
             onStartOver = { startOver = bot },
             onDelete = { deleting = bot },
@@ -246,6 +254,7 @@ private fun BotRow(
     hidden: Boolean,
     showHandle: Boolean,
     trouble: BotTrouble?,
+    failingRoutine: CronJob?,
     actions: BotActions,
     onStartOver: () -> Unit,
     onDelete: () -> Unit,
@@ -266,6 +275,7 @@ private fun BotRow(
             MenuAction(if (hidden) "Unhide" else "Hide", if (hidden) Lucide.Eye else Lucide.EyeOff, act { actions.setHidden(bot, !hidden) })
             if (recent != null) MenuAction("Open recent session", Lucide.History, act { actions.openRecent(bot) })
             MenuAction("New chat with ${bot.label}", Lucide.MessageSquarePlus, act { actions.newChat(bot) })
+            MenuAction("Routines", Lucide.CalendarClock, act { actions.routines(bot) })
             if (bot.canonicalSession != null) MenuAction("Start fresh", Lucide.RotateCcw, act(onStartOver))
             MenuAction("Edit", Lucide.Pencil, act { actions.edit(bot) })
             MenuAction("Duplicate", Lucide.Copy, act { actions.duplicate(bot) })
@@ -321,7 +331,7 @@ private fun BotRow(
                             Text("@${bot.name}", style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
                         }
                         if (unread) Box(Modifier.size(7.dp).background(Theme[colors][accent], CircleShape))
-                        if (trouble != null) {
+                        if (trouble != null || failingRoutine != null) {
                             UnstyledIcon(
                                 Lucide.TriangleAlert,
                                 contentDescription = "Needs attention",
@@ -341,6 +351,7 @@ private fun BotRow(
                     working -> "Working…" to false
                     // What's wrong outranks the last line: a phone has no hover to say it.
                     trouble != null -> trouble.problem.hint to false
+                    failingRoutine != null -> "Routine “${failingRoutine.displayName}” didn't go through" to false
                     preview?.fromBot != null -> "${preview.fromBot}: ${preview.text}" to true
                     preview != null -> preview.text to false
                     else -> (bot.description?.takeIf { it.isNotBlank() } ?: "Say hello") to false
@@ -350,7 +361,7 @@ private fun BotRow(
                     style = Theme[typography][bodySmall].copy(fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal),
                     color = when {
                         working || thinking -> Theme[colors][success]
-                        trouble != null -> Theme[colors][warning]
+                        trouble != null || failingRoutine != null -> Theme[colors][warning]
                         else -> Theme[colors][textSecondary]
                     },
                     maxLines = 1,
