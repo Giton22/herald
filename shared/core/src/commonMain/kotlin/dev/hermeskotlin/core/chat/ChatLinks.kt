@@ -27,7 +27,11 @@ class ComposeDraft(
     val attachments: List<OutgoingAttachment> = emptyList(),
     val notice: String? = null,
     val dictate: Boolean = false,
-)
+) {
+    /** The same draft, telling [notice] first and then the notice it had. */
+    fun withNotice(notice: String) =
+        ComposeDraft(text, attachments, listOfNotNull(notice, this.notice).joinToString(" "), dictate)
+}
 
 /**
  * Hands a chat to open from outside the UI, like a tapped notification, to the screens. Only the latest
@@ -49,6 +53,11 @@ class ChatLinks {
     /** Opens a new chat that starts with [draft]. */
     fun newChat(draft: ComposeDraft = ComposeDraft()) {
         _pending.value = ChatLink(storedSessionId = null, title = null, draft = draft)
+    }
+
+    /** Opens [bot]'s permanent chat with [draft] (shared from another app) added to its composer. */
+    fun shareToBot(bot: String, draft: ComposeDraft) {
+        _pending.value = ChatLink(storedSessionId = null, title = null, draft = draft, bot = bot)
     }
 
     /** Opens what a `hermes://` [link] names. */

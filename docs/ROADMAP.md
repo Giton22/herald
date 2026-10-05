@@ -208,7 +208,8 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] @mentions: `@` in the composer offers the bots with their faces; picking inserts `@handle`
 - [x] Bot exchanges drawn as a conversation: the other bot speaking in its colour, this bot's messages to it as "To X" notes
 - [x] Needs-you inbox across bots: at the top of the roster, bots held up on an answer (approval, question, secret) first, then bots with a ⚠, then failing routines, one row each, tapping to the chat or the routines; the count on the Bots tab; a held-up bot's own row says so
-- [ ] Share-to-bot, "ask <bot>" by voice, a Settings switch for bot notifications
+- [x] Share-to-bot: bots show in the share sheet; a share opens the bot's chat with the content after what was typed there (nothing sends until you do). Shortcuts follow the roster, so a removed or renamed bot leaves the share sheet, and a share to one that's gone opens a new chat instead
+- [ ] "Ask <bot>" by voice, a Settings switch for bot notifications
 - [ ] Rooms: Desktop rooms read-only from the `hermes-bots-groups` mirror; hosted rooms (`groups.*`) to take part
 
 ### Automation & configuration

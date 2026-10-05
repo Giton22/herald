@@ -21,6 +21,8 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.core.content.pm.ShortcutManagerCompat
+import dev.hermeskotlin.android.notify.BotShortcuts
 import dev.hermeskotlin.android.notify.ChatNotifications
 import dev.hermeskotlin.core.chat.AppLink
 import dev.hermeskotlin.core.chat.ChatHost
@@ -106,8 +108,15 @@ class MainActivity : FragmentActivity() {
             return
         }
         val shared = sharedContent(this, intent)
-        if (shared != null) shareToNewChat(shared) else openLinkedChat(intent)
+        if (shared != null) share(shared, sharedToBot(intent)) else openLinkedChat(intent)
     }
+
+    /** The bot a share was aimed at from the share sheet (its conversation shortcut), or null for a new chat. */
+    private fun sharedToBot(intent: Intent): String? =
+        intent.getStringExtra(ShortcutManagerCompat.EXTRA_SHORTCUT_ID)
+            ?.takeIf { it.startsWith(BotShortcuts.ID_PREFIX) }
+            ?.removePrefix(BotShortcuts.ID_PREFIX)
+            ?.takeIf { it.isNotBlank() }
 
     private fun openHeldIntent() {
         val intent = app.heldIntent ?: return
@@ -137,16 +146,17 @@ class MainActivity : FragmentActivity() {
     }
 
     /**
-     * Shared text and files become the draft of a new chat, for the user to look over and send. The files
-     * are read through the composer's own pipeline (photos scaled down, size limits). Before sign-in the
-     * draft waits and opens once signed in.
+     * Shared text and files become a draft for the user to look over and send: in a new chat, or in
+     * [bot]'s chat when the share sheet aimed it at a bot. The files are read through the composer's own
+     * pipeline (photos scaled down, size limits). Before sign-in the draft waits and opens once signed in.
      */
-    private fun shareToNewChat(shared: SharedContent) {
+    private fun share(shared: SharedContent, bot: String?) {
         if (shared.isEmpty) return
         // The app's scope, so a rotation mid-read doesn't drop the share.
         appScope.launch {
             val (files, error) = readAttachments(applicationContext, shared.filesToAttach.map(Uri::parse))
-            links.newChat(ComposeDraft(text = shared.draftText, attachments = files, notice = error ?: shared.leftOverNotice))
+            val draft = ComposeDraft(text = shared.draftText, attachments = files, notice = error ?: shared.leftOverNotice)
+            if (bot != null) links.shareToBot(bot, draft) else links.newChat(draft)
         }
     }
 

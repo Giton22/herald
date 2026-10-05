@@ -23,11 +23,22 @@ object BotShortcuts {
         return info.id
     }
 
-    /** The launcher's list: the roster's first few bots, in its order. */
+    /**
+     * The launcher's list: the roster's first few bots, in its order. Also forgets the shortcuts of bots no
+     * longer in [bots] (removed, renamed or hidden): Android keeps a long-lived shortcut cached once a
+     * notification used it, and the share sheet would go on offering it, under its old name.
+     */
     fun publish(context: Context, bots: List<Bot>, pictures: Map<String, ByteArray>) {
         val max = ShortcutManagerCompat.getMaxShortcutCountPerActivity(context).coerceAtMost(MAX_SHORTCUTS)
         val infos = bots.take(max).mapIndexed { rank, bot -> info(context, bot, pictures[bot.name], rank) }
         runCatching { ShortcutManagerCompat.setDynamicShortcuts(context, infos) }
+        val current = bots.mapTo(HashSet()) { ID_PREFIX + it.name }
+        runCatching {
+            val stale = ShortcutManagerCompat.getShortcuts(context, ShortcutManagerCompat.FLAG_MATCH_CACHED or ShortcutManagerCompat.FLAG_MATCH_DYNAMIC)
+                .map { it.id }
+                .filter { it.startsWith(ID_PREFIX) && it !in current }
+            if (stale.isNotEmpty()) ShortcutManagerCompat.removeLongLivedShortcuts(context, stale)
+        }
     }
 
     /**
@@ -42,7 +53,7 @@ object BotShortcuts {
         .build()
 
     private fun info(context: Context, bot: Bot, picture: ByteArray?, rank: Int): ShortcutInfoCompat =
-        ShortcutInfoCompat.Builder(context, "bot:${bot.name}")
+        ShortcutInfoCompat.Builder(context, ID_PREFIX + bot.name)
             // The conversation's name and face in the shade come from here, so both are just the bot's.
             .setShortLabel(bot.label)
             .setLongLabel(bot.label)
@@ -56,6 +67,9 @@ object BotShortcuts {
 
     private const val MAX_SHORTCUTS = 4
 
-    /** Lets the share sheet offer a bot directly (share-to-bot). */
+    /** Lets the share sheet offer a bot directly (share-to-bot); the `<share-target>` in shortcuts.xml names it. */
     const val SHARE_CATEGORY = "dev.hermeskotlin.category.BOT_SHARE"
+
+    /** A bot shortcut's id is this and the bot's profile; a share through it carries the id. */
+    const val ID_PREFIX = "bot:"
 }

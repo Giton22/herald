@@ -29,6 +29,31 @@ class ChatLinksTest {
     }
 
     @Test
+    fun aShareToABotOpensItsChatWithTheDraft() {
+        val links = ChatLinks()
+        val draft = ComposeDraft(text = "look at this")
+        links.shareToBot("scribe", draft)
+        val link = assertNotNull(links.pending.value)
+        assertEquals("scribe", link.bot)
+        // The bot's chat is looked up when it opens.
+        assertNull(link.storedSessionId)
+        assertEquals(draft, link.draft)
+    }
+
+    @Test
+    fun aNoticeAddedToADraftComesFirstAndKeepsTheRest() {
+        val files = listOf(OutgoingAttachment(id = "f", name = "a.txt", mimeType = "text/plain", bytes = ByteArray(1)))
+        val draft = ComposeDraft(text = "look", attachments = files, notice = "Only the first 10 files were attached.")
+
+        val moved = draft.withNotice("Couldn't open Scribe's chat.")
+
+        assertEquals("Couldn't open Scribe's chat. Only the first 10 files were attached.", moved.notice)
+        assertEquals("look", moved.text)
+        assertEquals(files, moved.attachments)
+        assertEquals("Couldn't open Scribe's chat.", ComposeDraft(text = "look").withNotice("Couldn't open Scribe's chat.").notice)
+    }
+
+    @Test
     fun onlyTheLatestLinkIsKeptAndConsumedOnce() {
         val links = ChatLinks()
         links.newChat(ComposeDraft(text = "first"))

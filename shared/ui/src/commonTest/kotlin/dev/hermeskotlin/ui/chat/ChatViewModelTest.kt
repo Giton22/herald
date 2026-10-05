@@ -4,7 +4,9 @@ import androidx.lifecycle.ViewModelStore
 import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import dev.hermeskotlin.core.chat.ChatHost
+import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ComposeDraft
 import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.OutgoingAttachment
@@ -174,6 +176,61 @@ class ChatViewModelTest {
         vm.open(ChatTarget(gateway, null, null, nonce = 2, draft = ComposeDraft(attachments = listOf(attachment("p")))))
 
         assertEquals(listOf("p"), vm.attachments.value.map { it.id })
+    }
+
+    private val scribe = BotIdentity("scribe", "Scribe")
+
+    @Test
+    fun aShareToABotGoesAfterWhatWasTypedInItsChat() = runTest(dispatcher) {
+        val drafts = DraftStore(InMemoryKeyValueStore())
+        drafts.set(gateway.gatewayUrl, "b1", "my own note", "scribe")
+        val (vm, _) = viewModel(drafts)
+
+        vm.open(ChatTarget(gateway, "b1", "Scribe", profile = "scribe", bot = scribe, draft = ComposeDraft(text = "shared link", attachments = listOf(attachment("p")))))
+
+        assertEquals("my own note\nshared link", vm.composer.text.toString())
+        assertEquals(listOf("p"), vm.attachments.value.map { it.id })
+        assertTrue(vm.state.value.messages.none { it is ChatMessage.User })
+    }
+
+    @Test
+    fun aShareIntoTheOpenBotChatKeepsItsTextAndFiles() = runTest(dispatcher) {
+        val (vm, _) = viewModel()
+        vm.open(ChatTarget(gateway, "b1", "Scribe", profile = "scribe", bot = scribe))
+        vm.composer.setTextAndPlaceCursorAtEnd("half typed")
+        vm.addAttachments(listOf(attachment("old")))
+
+        vm.open(ChatTarget(gateway, "b1", "Scribe", profile = "scribe", bot = scribe, draft = ComposeDraft(text = "shared", attachments = listOf(attachment("p")))))
+
+        assertEquals("half typed\nshared", vm.composer.text.toString())
+        assertEquals(listOf("old", "p"), vm.attachments.value.map { it.id })
+    }
+
+    @Test
+    fun aSharedPictureAloneKeepsTheBotChatsText() = runTest(dispatcher) {
+        val drafts = DraftStore(InMemoryKeyValueStore())
+        drafts.set(gateway.gatewayUrl, "b1", "my own note", "scribe")
+        val (vm, _) = viewModel(drafts)
+
+        vm.open(ChatTarget(gateway, "b1", "Scribe", profile = "scribe", bot = scribe, draft = ComposeDraft(attachments = listOf(attachment("p")))))
+
+        assertEquals("my own note", vm.composer.text.toString())
+        assertEquals(listOf("p"), vm.attachments.value.map { it.id })
+    }
+
+    @Test
+    fun aShareThatOverfillsTheBotChatsTraySaysSo() = runTest(dispatcher) {
+        val (vm, _) = viewModel()
+        vm.open(ChatTarget(gateway, "b1", "Scribe", profile = "scribe", bot = scribe))
+        vm.addAttachments((1..3).map { attachment("old$it") })
+        val shared = (1..OutgoingAttachment.MAX_COUNT).map { attachment("f$it") }
+
+        // The share sheet sent more files than fit, and the tray already holds some.
+        vm.open(ChatTarget(gateway, "b1", "Scribe", profile = "scribe", bot = scribe, draft = ComposeDraft(attachments = shared, notice = "Only the first 10 files were attached.")))
+
+        assertEquals(OutgoingAttachment.MAX_COUNT, vm.attachments.value.size)
+        // Not "the first 10 were attached": only 7 of them were.
+        assertEquals("Up to ${OutgoingAttachment.MAX_COUNT} attachments per message.", vm.attachmentError.value)
     }
 
     @Test

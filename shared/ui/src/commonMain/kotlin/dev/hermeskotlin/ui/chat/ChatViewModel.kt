@@ -320,16 +320,29 @@ class ChatViewModel(
         viewModelScope.launch { saveDraft(open, chat, text) }
     }
 
-    private fun restoreDraft(target: ChatTarget) {
-        // A draft brought from outside (a share, a shortcut) starts the chat clean instead: no text, files
-        // or comments left from an earlier new chat.
+    /**
+     * Brings back [target]'s unsent text, files and comments. A draft brought from outside (a share, a
+     * shortcut) into a new chat starts it clean instead: nothing is left from an earlier new chat. Into a
+     * stored chat (a share to a bot) it comes after what the user had there, which stays. [typed] is the
+     * composer's text just before, for when the same chat reopens before its saved draft is written.
+     */
+    private fun restoreDraft(target: ChatTarget, typed: String?) {
         val outside = target.draft != null
-        _attachments.value = trays.remove(trayKey(target, target.storedSessionId)).takeUnless { outside }.orEmpty()
-        _comments.value = commentTrays.remove(trayKey(target, target.storedSessionId)).takeUnless { outside }.orEmpty()
+        val clean = outside && target.storedSessionId == null
+        _attachments.value = trays.remove(trayKey(target, target.storedSessionId)).takeUnless { clean }.orEmpty()
+        _comments.value = commentTrays.remove(trayKey(target, target.storedSessionId)).takeUnless { clean }.orEmpty()
         viewModelScope.launch {
-            val text = if (outside) null else drafts.get(target.gateway.gatewayUrl, target.storedSessionId, target.profile)
+            val saved = when {
+                clean -> null
+                typed != null -> typed
+                else -> drafts.get(target.gateway.gatewayUrl, target.storedSessionId, target.profile)
+            }
             if (this@ChatViewModel.target != target) return@launch
-            if (text != null && composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
+            val shared = target.draft?.text?.takeIf { it.isNotBlank() && !clean }
+            when {
+                shared != null -> composer.setTextAndPlaceCursorAtEnd(listOfNotNull(saved?.takeIf { it.isNotBlank() }, shared).joinToString("\n"))
+                saved != null && composer.text.isEmpty() -> composer.setTextAndPlaceCursorAtEnd(saved)
+            }
             draftOf = target
         }
     }
@@ -345,13 +358,15 @@ class ChatViewModel(
         }
         // An edit belongs to its chat; what was typed before it is that chat's draft.
         cancelEdit()
+        val sameChat = draftOf?.let(::draftChat)?.takeIf { it == target.storedSessionId } != null
+        val typed = composer.text.toString().takeIf { sameChat }
         stashDraft()
         this.target = target
         // A voice chat belongs to the chat it started in.
         voice.stopAll()
         composer.clearText()
         _attachmentError.value = null
-        restoreDraft(target)
+        restoreDraft(target, typed)
         target.draft?.let(::takeDraft)
         if (target.storedSessionId == null) viewModelScope.launch { lastChats.set(target.gateway.gatewayUrl, null, target.profile) }
         session.value = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title, target.profile)
@@ -364,13 +379,15 @@ class ChatViewModel(
     }
 
     /**
-     * Fills the new chat's composer with what came from outside, to look over before sending: shared
-     * text and files, or dictation started by the voice shortcut.
+     * Fills the composer with what came from outside, to look over before sending: shared text and files,
+     * or dictation started by the voice shortcut. Into a stored chat, the text waits for that chat's own
+     * draft and goes after it ([restoreDraft]); the files join its tray.
      */
     private fun takeDraft(draft: ComposeDraft) {
-        draft.text?.takeIf { it.isNotBlank() }?.let(composer::setTextAndPlaceCursorAtEnd)
-        if (draft.attachments.isNotEmpty()) addAttachments(draft.attachments)
+        if (target?.storedSessionId == null) draft.text?.takeIf { it.isNotBlank() }?.let(composer::setTextAndPlaceCursorAtEnd)
         draft.notice?.let(::showAttachmentError)
+        // After the notice: when the files overfill a tray that already held some, the tray limit is what to tell.
+        if (draft.attachments.isNotEmpty()) addAttachments(draft.attachments)
         if (draft.dictate) viewModelScope.launch { _requests.send(ChatRequest.StartDictation) }
     }
 
