@@ -214,6 +214,10 @@ class SessionsViewModel(
 
     fun dismissMessage() = _state.update { it.copy(message = null) }
 
+    /** Clears the expiry flag once a screen has acted on it; the view model outlives the screen, so
+     *  leaving it set would bounce the next mount after a fresh sign-in. */
+    fun consumeSessionExpired() = _state.update { it.copy(sessionExpired = false) }
+
     fun rename(session: SessionSummary, title: String) = mutate(
         apply = { list -> list.map { if (it.id == session.id) it.copy(title = title.ifBlank { null }) else it } },
         call = { url, profile -> api.rename(url, session.id, title.trim(), profile) },

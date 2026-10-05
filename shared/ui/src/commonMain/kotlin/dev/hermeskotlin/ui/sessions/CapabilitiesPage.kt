@@ -73,7 +73,14 @@ internal fun CapabilitiesPage(
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
-    LaunchedEffect(state.sessionExpired) { if (state.sessionExpired) onSessionExpired() }
+    // Consume before the callback: the route changes on it, and the view model outlives the screen,
+    // so a stale flag must not bounce the next mount after a fresh sign-in.
+    LaunchedEffect(state.sessionExpired) {
+        if (state.sessionExpired) {
+            viewModel.consumeSessionExpired()
+            onSessionExpired()
+        }
+    }
     LaunchedEffect(state.message) {
         if (state.message != null) {
             delay(4_000)

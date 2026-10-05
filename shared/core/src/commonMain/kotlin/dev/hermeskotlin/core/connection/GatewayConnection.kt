@@ -16,6 +16,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -119,6 +120,9 @@ class GatewayConnection(
             var connectedAt: Long? = null
             val failure: Exception = try {
                 runSession(openSocket(gateway, ticket)) { connectedAt = clock() }
+            } catch (e: TimeoutCancellationException) {
+                // The ready wait gives up as a cancellation; that is a failed attempt, not a cancelled loop.
+                e
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -162,6 +166,7 @@ class GatewayConnection(
                     }
                 }
                 failure is HeartbeatTimeoutException -> backoff(maxOf(attempt, 1), "Gateway stopped responding")
+                failure is TimeoutCancellationException -> backoff(maxOf(attempt, 1), "Gateway never said it was ready")
                 failure is TransportClosedException -> backoff(maxOf(attempt, 1), failure.reason ?: "Connection lost")
                 else -> backoff(maxOf(attempt, 1), failure.message ?: "Connection failed")
             }
