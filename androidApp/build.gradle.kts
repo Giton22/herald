@@ -54,6 +54,14 @@ android {
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
+        // "Herald Dev": a debuggable build that installs beside the real app, with its own data and sign-in,
+        // for trying work in progress on a phone without touching the installed Herald.
+        create("dev") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".dev"
+            versionNameSuffix = "-dev"
+            matchingFallbacks += listOf("debug")
+        }
     }
 }
 
@@ -61,6 +69,10 @@ dependencies {
     implementation(projects.shared.ui)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.core.ktx)
+    // Links in replies open in a Custom Tab; App lock asks through BiometricPrompt (needs a FragmentActivity).
+    implementation(libs.androidx.browser)
+    implementation(libs.androidx.biometric)
+    implementation(libs.androidx.fragment)
     implementation(libs.koin.android)
     debugImplementation(libs.compose.ui.tooling)
 }

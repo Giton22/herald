@@ -63,6 +63,8 @@ data class AppSettings(
     val stayConnected: Boolean = false,
     /** Ask GitHub, where the app is published, whether a newer release is out. */
     val checkForUpdates: Boolean = true,
+    /** Ask for a fingerprint, face or the screen lock when Herald opens, and keep it out of Recents. */
+    val appLock: Boolean = false,
 )
 
 /**
