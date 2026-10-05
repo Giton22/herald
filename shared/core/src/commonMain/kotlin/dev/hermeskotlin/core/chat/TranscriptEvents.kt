@@ -118,7 +118,8 @@ object TranscriptRows {
 
     /** The runner's stdout in one of its shapes (tools/bot_mode_dm.py, hermes_cli/subcommands/peer.py). */
     internal fun deliveryOutcome(output: String, exitFailed: Boolean): DeliveryOutcome {
-        val text = output.lineSequence().filterNot { SESSION_ID_LINE.matches(it) }.joinToString("\n").trim()
+        val text = output.lineSequence().filterNot { SESSION_ID_LINE.matches(it) }.joinToString("\n")
+            .replace(RUNNER_NOTE, "").trim()
         if (text.startsWith("{")) {
             val obj = runCatching { HermesJson.parseToJsonElement(text) as? JsonObject }.getOrNull()
             if (obj != null) {
@@ -157,6 +158,8 @@ object TranscriptRows {
     private val CRON_MIRROR = Regex("""^\[Cron delivery: ([^\]\n]+)]\n([\s\S]*)$""")
     /** The CLI runner's own lines around a reply: the session it used, and that it resumed one. */
     private val SESSION_ID_LINE = Regex("""^\s*(?:session_id:\s.*|↻ Resumed session\b.*)$""")
+    /** The CLI's note when it resumes an empty session, which lands in the middle of a delivered reply. */
+    private val RUNNER_NOTE = Regex("""\s*Session \S+ found but has no messages\. Starting fresh\.""")
     private val REPLY_FROM = Regex("""^Reply from [^:\n]+:\s*([\s\S]*)$""")
     private val DELIVERY_FAILED = Regex("""^Delivery to .+? failed \[reason: ([a-z_]+)]""")
     private val NOT_YET = Regex("""^No reply from .+ within|has its Bot Chat open|Do NOT resend|do not resend""", RegexOption.IGNORE_CASE)

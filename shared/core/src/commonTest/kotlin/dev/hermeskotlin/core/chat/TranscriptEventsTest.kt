@@ -40,6 +40,10 @@ Output:
         // A plain CLI turn prints the reply, maybe with its session id.
         assertEquals(DeliveryOutcome.Replied("Done."), outcome("session_id: 2026_x\nDone."))
         assertEquals(DeliveryOutcome.Replied("A fact."), outcome("A fact.\n\n↻ Resumed session 20261005_005623 (Bot Chat)"))
+        assertEquals(
+            DeliveryOutcome.Replied("No further action needed."),
+            outcome("No further action needed. Session 20261005023510 found but has no messages. Starting fresh."),
+        )
         assertEquals(DeliveryOutcome.NoReply, outcome(""))
         assertEquals(DeliveryOutcome.NoReply, outcome("(no reply)"))
     }

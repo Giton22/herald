@@ -84,6 +84,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
+import dev.hermeskotlin.core.bots.botLook
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -830,6 +834,8 @@ private fun Messages(
     var confirm by remember { mutableStateOf<Pair<MessageChange, String>?>(null) }
     val lastPrompt = messages.lastOrNull { it is ChatMessage.User }?.key
     val lastReply = messages.lastOrNull { it is ChatMessage.Assistant && it.text.isNotBlank() }?.key
+    val faces = LocalBotFaces.current
+    val partners = remember(messages, faces) { messages.map { exchangePartner(it, faces) } }
     ConfirmChange(confirm, canChange, lastPrompt, actions, onDismiss = { confirm = null })
     // Edit and branch only show while the chat can change; each asks before it does anything.
     fun ask(change: MessageChange, key: String): (() -> Unit)? = if (canChange) ({ confirm = change to key }) else null
@@ -881,7 +887,28 @@ private fun Messages(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp + bottomInset),
             verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.Bottom),
         ) {
-            items(messages, key = { it.key }) { message ->
+            itemsIndexed(messages, key = { _, it -> it.key }) { index, message ->
+                // Rows of one exchange with another bot are tied together by a line in that bot's colour.
+                val partner = partners.getOrNull(index)
+                val linkedAbove = partner != null && partners.getOrNull(index - 1) == partner
+                val linkedBelow = partner != null && partners.getOrNull(index + 1) == partner
+                val rail = partner?.let { name -> faces.find(name)?.let { Color(0xFF000000 or botLook(it).color.toLong()) } }
+                Box(
+                    Modifier.drawBehind {
+                        if (rail != null && (linkedAbove || linkedBelow)) {
+                            // In the list's side margin, clear of avatars and text.
+                            val x = -9.dp.toPx()
+                            val gap = 20.dp.toPx()
+                            drawLine(
+                                rail.copy(alpha = 0.55f),
+                                start = Offset(x, if (linkedAbove) -gap else 6.dp.toPx()),
+                                end = Offset(x, if (linkedBelow) size.height + gap else size.height - 6.dp.toPx()),
+                                strokeWidth = 3.dp.toPx(),
+                                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                            )
+                        }
+                    },
+                ) {
                 when (message) {
                     is ChatMessage.User -> UserBubble(
                         message,
@@ -907,6 +934,7 @@ private fun Messages(
                     is ChatMessage.Event -> TranscriptEventRow(message.event)
                     is ChatMessage.Command -> CommandOutput(message)
                     is ChatMessage.Notice -> NoticeLine(message)
+                }
                 }
             }
         }

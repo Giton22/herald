@@ -30,6 +30,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.AlarmClock
 import com.composables.icons.lucide.Bot
+import com.composables.icons.lucide.CheckCheck
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleAlert
@@ -43,6 +44,7 @@ import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import com.composables.icons.lucide.Send
+import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.DeliveryOutcome
 import dev.hermeskotlin.core.chat.ToolActivity
 import dev.hermeskotlin.core.chat.TranscriptEvent
@@ -121,8 +123,12 @@ private fun DeliveryLine(event: TranscriptEvent.Delivery) {
     val bot = remember(faces, event.target) { faces.find(event.target) }
     val who = bot?.label ?: event.target?.let { "@$it" } ?: "the other bot"
     when (val outcome = event.outcome) {
-        // Their answer is them speaking, like any message of theirs.
-        is DeliveryOutcome.Replied -> BotSays(bot, fallbackName = who, note = "replied", words = outcome.text)
+        // A receipt, not a message: what they said back to us also comes as their own message when it matters.
+        is DeliveryOutcome.Replied -> FoldedLine(
+            Lucide.CheckCheck,
+            "$who got it" + outcome.text.toPreview().takeIf { it.isNotEmpty() }?.let { " · $it" }.orEmpty(),
+            body = { MarkdownText(outcome.text) },
+        )
         DeliveryOutcome.NoReply -> FoldedLine(Lucide.MessageCircleOff, "$who read it and chose not to reply", body = null)
         is DeliveryOutcome.Waiting -> FoldedLine(
             Lucide.Hourglass,
@@ -171,6 +177,25 @@ internal fun MessagedLine(tool: ToolActivity) {
     )
 }
 
+/**
+ * The bot a row is part of an exchange with (its profile), or null for a row that isn't: another bot's
+ * message, a delivery to one, a reply to one, or a turn that messaged one.
+ */
+internal fun exchangePartner(message: ChatMessage, faces: dev.hermeskotlin.ui.bots.BotFaces): String? {
+    fun profile(name: String?) = name?.let { faces.find(it)?.name ?: it.lowercase() }
+    return when (message) {
+        is ChatMessage.Event -> when (val event = message.event) {
+            is TranscriptEvent.FromBot -> profile(event.handle ?: event.sender)
+            is TranscriptEvent.Delivery -> profile(event.target)
+            else -> null
+        }
+        is ChatMessage.Assistant -> profile(message.repliedTo)
+            ?: message.tools.firstOrNull { it.name == dev.hermeskotlin.core.chat.MESSAGE_AGENT_TOOL }
+                ?.let { tool -> profile(tool.input?.let { messageTarget(JsonPrimitive(it)) }) }
+        else -> null
+    }
+}
+
 /** [bot] speaking: its face beside a bubble tinted in its colour, its name over the first lines. */
 @Composable
 private fun BotSays(bot: Bot?, fallbackName: String, note: String?, words: String) {
@@ -210,7 +235,7 @@ private fun BotSays(bot: Bot?, fallbackName: String, note: String?, words: Strin
             when {
                 words.isBlank() -> Unit
                 open -> MarkdownText(words)
-                else -> Text(words.toPreview(), style = Theme[typography][bodySmall], color = Theme[colors][text], maxLines = 4, overflow = TextOverflow.Ellipsis)
+                else -> Text(words.toPreview(), style = Theme[typography][bodySmall], color = Theme[colors][text], maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
         }
     }
