@@ -91,7 +91,7 @@ fun SettingsScreen(
     gateway: SavedGateway,
     onBack: () -> Unit,
     onSignOut: () -> Unit,
-    onChangeGateway: () -> Unit,
+    onOpenGateways: () -> Unit,
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -110,7 +110,7 @@ fun SettingsScreen(
     LaunchedEffect(gateway) { viewModel.bind(gateway) }
     PlatformBackHandler(enabled = !checkOpen, onBack = onBack)
     SettingsView(
-        settings, info, gateway.url, viewModel::update, onBack, onSignOut, onChangeGateway,
+        settings, info, gateway.url, viewModel::update, onBack, onSignOut, onOpenGateways,
         onCheckConnection = {
             checkOpen = true
             viewModel.runConnectionCheck()
@@ -149,7 +149,7 @@ internal fun SettingsView(
     onUpdate: ((AppSettings) -> AppSettings) -> Unit,
     onBack: () -> Unit,
     onSignOut: () -> Unit,
-    onChangeGateway: () -> Unit,
+    onOpenGateways: () -> Unit,
     onCheckConnection: () -> Unit = {},
     /** The chat background, once decoded. */
     wallpaper: ImageBitmap? = null,
@@ -349,7 +349,7 @@ internal fun SettingsView(
                     Divider()
                     ActionRow("Sign out", Lucide.LogOut, onSignOut)
                     Divider()
-                    ActionRow("Use a different gateway", Lucide.ArrowLeftRight, onChangeGateway)
+                    ActionRow("Switch or add a gateway", Lucide.ArrowLeftRight, onOpenGateways)
                 }
 
                 Section("About") {
