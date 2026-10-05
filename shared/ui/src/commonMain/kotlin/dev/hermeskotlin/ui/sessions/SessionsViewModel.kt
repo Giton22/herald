@@ -37,6 +37,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
@@ -124,17 +125,28 @@ class SessionsViewModel(
     private val _state = MutableStateFlow(SessionsUiState())
     val state: StateFlow<SessionsUiState> = _state.asStateFlow()
 
+    /** Whether the list is on screen ([setVisible]): the sidebar stays composed while closed. */
+    private val visible = MutableStateFlow(false)
+
     /**
      * Each listed chat's status by id; chats with nothing to say are left out. Only listed chats get one:
-     * the gateway's live list spans every profile. Collected only while the list shows, so the gateway is
-     * asked for live statuses only then.
+     * the gateway's live list spans every profile. Worked out only while the list shows, so the gateway is
+     * asked for live statuses only then; hidden, the last statuses stand.
      */
-    val statuses: StateFlow<Map<String, RowStatus>> = combine(_state, waiting, seen, running) { state, waiting, seen, running ->
-        (state.sessions + state.searchResults.orEmpty()).mapNotNull { session ->
-            RowStatus(waiting[session.id], seen?.isUnread(session) == true, running[session.id] == true)
-                .takeIf { it.needsAttention || it.running }?.let { session.id to it }
-        }.toMap()
+    val statuses: StateFlow<Map<String, RowStatus>> = visible.flatMapLatest { shown ->
+        if (!shown) return@flatMapLatest emptyFlow()
+        combine(_state, waiting, seen, running) { state, waiting, seen, running ->
+            (state.sessions + state.searchResults.orEmpty()).mapNotNull { session ->
+                RowStatus(waiting[session.id], seen?.isUnread(session) == true, running[session.id] == true)
+                    .takeIf { it.needsAttention || it.running }?.let { session.id to it }
+            }.toMap()
+        }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_AFTER_MS), emptyMap())
+
+    /** The list is on screen (the sidebar open or docked), or no longer is. */
+    fun setVisible(shown: Boolean) {
+        visible.value = shown
+    }
 
     val query = TextFieldState()
 

@@ -34,6 +34,7 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -94,12 +95,16 @@ class SessionsViewModelTest {
             trySend("""{"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready","payload":{}}}""")
         }
 
+        /** How many times `session.active_list` was asked. */
+        var asked = 0
+
         override val incoming: Flow<String> = inbound.receiveAsFlow()
 
         override suspend fun send(text: String) {
             val message = Json.parseToJsonElement(text).jsonObject
             val id = message["id"] ?: return
             val result = if (message["method"]?.jsonPrimitive?.content == "session.active_list") {
+                asked++
                 live.entries.joinToString(",", """{"sessions":[""", "]}") { (key, status) -> """{"id":"rt-$key","session_key":"$key","status":"$status"}""" }
             } else {
                 "{}"
@@ -130,9 +135,35 @@ class SessionsViewModelTest {
         val vm = viewModel(socket = LiveGateway(mapOf("b" to "working", "a" to "idle", "elsewhere" to "waiting")))
         vm.bind(gateway)
         vm.awaitLoaded()
+        vm.setVisible(true)
         val collector = backgroundScope.launch { vm.statuses.collect {} }
         val statuses = vm.statuses.first { it.isNotEmpty() }
         assertEquals(mapOf("b" to RowStatus(running = true)), statuses)
+        collector.cancel()
+    }
+
+    @Test
+    fun theGatewayIsAskedForLiveStatusesOnlyWhileTheListShows() = runTest(dispatcher) {
+        // The sidebar stays composed, so its statuses are collected while it's closed too.
+        val socket = LiveGateway(mapOf("b" to "working"))
+        val vm = viewModel(socket = socket)
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        val collector = backgroundScope.launch { vm.statuses.collect {} }
+        advanceTimeBy(30_000)
+        assertEquals(0, socket.asked)
+
+        vm.setVisible(true)
+        assertEquals(mapOf("b" to RowStatus(running = true)), vm.statuses.first { it.isNotEmpty() })
+        assertTrue(socket.asked > 0)
+
+        // Closed again: the asking stops, and the last statuses stand.
+        vm.setVisible(false)
+        advanceTimeBy(6_000)
+        val stopped = socket.asked
+        advanceTimeBy(60_000)
+        assertEquals(stopped, socket.asked)
+        assertEquals(mapOf("b" to RowStatus(running = true)), vm.statuses.value)
         collector.cancel()
     }
 

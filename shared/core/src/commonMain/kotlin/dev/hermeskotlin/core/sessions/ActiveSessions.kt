@@ -86,8 +86,10 @@ class ActiveSessions(
         .flatMapLatest { client -> client?.let(::poll) ?: flowOf(LiveSessions()) }
         .stateIn(scope, SharingStarted.WhileSubscribed(STOP_AFTER_MS), LiveSessions())
 
+    // No empty answer first: collecting again (the sidebar opening) would blank every live mark until the
+    // gateway answers. A link dropped while collected clears them on the way (no client); otherwise the last
+    // answer stands for that moment, and its time lets newer turn events beat it.
     private fun poll(client: JsonRpcClient): Flow<LiveSessions> = channelFlow {
-        send(LiveSessions())
         val nudges = Channel<Unit>(Channel.CONFLATED)
         launch { client.events.collect { if (it.type in CHANGES) nudges.trySend(Unit) } }
         while (true) {

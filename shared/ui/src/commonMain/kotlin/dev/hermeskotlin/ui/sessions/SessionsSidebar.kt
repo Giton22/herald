@@ -185,7 +185,11 @@ fun SessionsSidebar(
     val failingRoutines by bots.failingRoutines.collectAsStateWithLifecycle()
     val needsYou by bots.needsYou.collectAsStateWithLifecycle()
     LaunchedEffect(gateway) { bots.bind(gateway.gatewayUrl) }
-    LaunchedEffect(visible) { bots.setVisible(visible) }
+    // The sidebar stays composed while closed: the live statuses (a gateway poll) are worked out only while it shows.
+    LaunchedEffect(visible) {
+        bots.setVisible(visible)
+        viewModel.setVisible(visible)
+    }
     LaunchedEffect(selectedId) { bots.setOpenSession(selectedId) }
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
     val user by viewModel.user.collectAsStateWithLifecycle()

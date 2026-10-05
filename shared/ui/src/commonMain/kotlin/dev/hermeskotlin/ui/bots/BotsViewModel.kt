@@ -47,8 +47,10 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
@@ -114,11 +116,19 @@ class BotsViewModel(
     /** When the routines were last read, in epoch ms; they're read less often than the roster. */
     private var routinesReadAt = 0L
 
-    /** The bots needing the user, most pressing first: the Needs-you section. */
-    val needsYou: StateFlow<List<NeedsYou>> =
+    /** Whether the sidebar is on screen ([setVisible]); it stays composed while closed. */
+    private val visible = MutableStateFlow(false)
+
+    /**
+     * The bots needing the user, most pressing first: the Needs-you section. Worked out only while the
+     * sidebar shows, since that asks the gateway for live statuses; hidden, the last list stands.
+     */
+    val needsYou: StateFlow<List<NeedsYou>> = visible.flatMapLatest { shown ->
+        if (!shown) return@flatMapLatest emptyFlow()
         combine(_state, attention.waiting, troubles, _failingRoutines) { state, waiting, troubles, routines ->
             needsYou(state.all, waiting, troubles, routines)
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_AFTER_MS), emptyList())
+        }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_AFTER_MS), emptyList())
 
     private val _mode = MutableStateFlow(SidebarMode.Chats)
     val mode: StateFlow<SidebarMode> = _mode.asStateFlow()
@@ -130,7 +140,6 @@ class BotsViewModel(
     private val avatarsAsked = mutableSetOf<String>()
 
     private val gateway = MutableStateFlow<GatewayUrl?>(null)
-    private val visible = MutableStateFlow(false)
 
     /** Bots whose chats the gateway was asked to watch on this connection. */
     private val watched = mutableSetOf<String>()
