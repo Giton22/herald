@@ -21,6 +21,7 @@ import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockEngineConfig
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.Cookie
 import io.ktor.http.HttpStatusCode
@@ -58,11 +59,17 @@ class AppViewModelTest {
 
     // The connection waits on its ticket for good (a retry loop would keep the test clock busy, so a missed
     // route would hang instead of time out); every other call fails, and sign-out still wipes cookies.
+    // On the test dispatcher, so no request is still finishing on another thread when a test ends.
     private val client = createHttpClient(
-        MockEngine { request ->
-            if (request.url.encodedPath.endsWith("ws-ticket")) awaitCancellation()
-            respond("", HttpStatusCode.ServiceUnavailable)
-        },
+        MockEngine(
+            MockEngineConfig().apply {
+                dispatcher = this@AppViewModelTest.dispatcher
+                addHandler { request ->
+                    if (request.url.encodedPath.endsWith("ws-ticket")) awaitCancellation()
+                    respond("", HttpStatusCode.ServiceUnavailable)
+                }
+            },
+        ),
         cookies,
     )
     private val auth = AuthApi(client, cookies)

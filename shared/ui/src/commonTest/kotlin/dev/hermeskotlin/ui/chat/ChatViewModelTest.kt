@@ -28,6 +28,7 @@ import dev.hermeskotlin.core.voice.SpokenAudio
 import dev.hermeskotlin.core.voice.VoiceActivity
 import dev.hermeskotlin.core.voice.VoiceRecorder
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockEngineConfig
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -83,7 +84,11 @@ class ChatViewModelTest {
 
     private fun viewModel(drafts: DraftStore = DraftStore(InMemoryKeyValueStore())): Pair<ChatViewModel, ChatHost> {
         val cookies = PersistentCookiesStorage(InMemoryKeyValueStore())
-        val client = createHttpClient(MockEngine { respond("{}", HttpStatusCode.OK, json) }, cookies)
+        // On the test dispatcher, so no request is still finishing on another thread when a test ends.
+        val engine = MockEngineConfig()
+        engine.dispatcher = dispatcher
+        engine.addHandler { respond("{}", HttpStatusCode.OK, json) }
+        val client = createHttpClient(MockEngine(engine), cookies)
         val connection = GatewayConnection(AuthApi(client, cookies), { _, _ -> error("not connecting in tests") }, scope)
         val sessions = SessionsApi(client)
         val chatHost = ChatHost(connection, sessions, scope)

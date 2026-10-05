@@ -5,6 +5,7 @@ import dev.hermeskotlin.core.gateway.GatewayProbe
 import dev.hermeskotlin.core.gateway.ProbeResult
 import dev.hermeskotlin.core.network.createHttpClient
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockEngineConfig
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -34,14 +35,17 @@ class ConnectViewModelTest {
     @AfterTest fun tearDown() = Dispatchers.resetMain()
 
     private fun viewModel(): ConnectViewModel {
-        val engine = MockEngine {
+        // On the test dispatcher, so no request is still finishing on another thread when a test ends.
+        val config = MockEngineConfig()
+        config.dispatcher = dispatcher
+        config.addHandler {
             respond(
                 """{"version":"0.42.0","auth_required":true,"auth_providers":["basic"]}""",
                 HttpStatusCode.OK,
                 headersOf(HttpHeaders.ContentType, "application/json"),
             )
         }
-        return ConnectViewModel(GatewayProbe(createHttpClient(engine)))
+        return ConnectViewModel(GatewayProbe(createHttpClient(MockEngine(config))))
     }
 
     /** The mock engine completes on Ktor's own dispatcher, so wait for the state instead of the test scheduler. */

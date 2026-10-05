@@ -14,6 +14,7 @@ import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockEngineConfig
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
@@ -49,7 +50,11 @@ class SessionsViewModelTest {
         listStatus: HttpStatusCode = HttpStatusCode.OK,
         total: Int = 2,
     ): SessionsViewModel {
-        val engine = MockEngine { request ->
+        // On the test dispatcher, so no request is still finishing on another thread when a test ends
+        // (and resuming onto Dispatchers.Main while the next test sets it).
+        val config = MockEngineConfig()
+        config.dispatcher = dispatcher
+        config.addHandler { request ->
             when {
                 request.url.encodedPath == "/api/sessions" -> respond(
                     """{"sessions":[{"id":"a","title":"Alpha","pinned":true},{"id":"b","title":"Beta"}],"total":$total}""",
@@ -60,7 +65,7 @@ class SessionsViewModelTest {
             }
         }
         val cookies = PersistentCookiesStorage(InMemoryKeyValueStore())
-        val client = createHttpClient(engine, cookies)
+        val client = createHttpClient(MockEngine(config), cookies)
         val auth = AuthApi(client, cookies)
         val connection = GatewayConnection(auth, { _, _ -> error("not connecting in tests") }, CoroutineScope(dispatcher))
         val scope = CoroutineScope(dispatcher)
@@ -71,7 +76,7 @@ class SessionsViewModelTest {
         )
     }
 
-    /** The mock engine completes on Ktor's own dispatcher, so wait on state rather than the test scheduler. */
+    /** Loading finishes through the HTTP client's own coroutines, so wait on state rather than the test scheduler. */
     private suspend fun SessionsViewModel.awaitLoaded() = state.first { !it.loading }
 
     @Test
