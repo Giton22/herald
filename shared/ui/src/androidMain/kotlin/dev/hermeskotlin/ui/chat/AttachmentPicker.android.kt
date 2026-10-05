@@ -138,7 +138,7 @@ private fun readAttachment(context: Context, uri: Uri, budget: Long): OutgoingAt
 }
 
 /** The whole stream, or null once it passes [limit] bytes. */
-private fun InputStream.readAtMost(limit: Long): ByteArray? {
+internal fun InputStream.readAtMost(limit: Long): ByteArray? {
     val out = ByteArrayOutputStream()
     val buffer = ByteArray(64 * 1024)
     while (true) {
@@ -150,7 +150,7 @@ private fun InputStream.readAtMost(limit: Long): ByteArray? {
 }
 
 /** Decodes at roughly [maxEdge] (sampled, so a 50 MP photo never sits in memory whole) and applies the EXIF rotation. */
-private fun decodeUpright(bytes: ByteArray, maxEdge: Int): Bitmap? {
+internal fun decodeUpright(bytes: ByteArray, maxEdge: Int): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
     if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
@@ -181,7 +181,7 @@ private fun Bitmap.scaledTo(maxEdge: Int): Bitmap {
     return Bitmap.createScaledBitmap(this, (width * scale).toInt().coerceAtLeast(1), (height * scale).toInt().coerceAtLeast(1), true)
 }
 
-private fun Bitmap.jpeg(quality: Int): ByteArray =
+internal fun Bitmap.jpeg(quality: Int): ByteArray =
     ByteArrayOutputStream().also { compress(Bitmap.CompressFormat.JPEG, quality, it) }.toByteArray()
 
 private fun ContentResolver.displayName(uri: Uri): String? = if (uri.scheme == ContentResolver.SCHEME_CONTENT) {
