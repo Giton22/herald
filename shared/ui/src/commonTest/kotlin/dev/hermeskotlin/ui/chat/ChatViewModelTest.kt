@@ -150,6 +150,19 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun aShareDoesNotPickUpFilesLeftInAnEarlierNewChat() = runTest(dispatcher) {
+        val (vm, _) = viewModel()
+        vm.open(ChatTarget(gateway, null, null, nonce = 1))
+        vm.addAttachments(listOf(attachment("old")))
+        // Another chat takes the composer; the new chat's file waits in its tray.
+        vm.open(ChatTarget(gateway, "s1", "Chat"))
+
+        vm.open(ChatTarget(gateway, null, null, nonce = 2, draft = ComposeDraft(attachments = listOf(attachment("p")))))
+
+        assertEquals(listOf("p"), vm.attachments.value.map { it.id })
+    }
+
+    @Test
     fun sharedFilesStopAtTheTrayLimit() = runTest(dispatcher) {
         val (vm, _) = viewModel()
         val many = (1..OutgoingAttachment.MAX_COUNT + 2).map { attachment("f$it") }

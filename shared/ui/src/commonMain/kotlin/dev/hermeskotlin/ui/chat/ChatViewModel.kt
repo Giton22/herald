@@ -267,11 +267,13 @@ class ChatViewModel(
     }
 
     private fun restoreDraft(target: ChatTarget) {
-        _attachments.value = trays.remove(trayKey(target, target.storedSessionId)).orEmpty()
-        _comments.value = commentTrays.remove(trayKey(target, target.storedSessionId)).orEmpty()
+        // A draft brought from outside (a share, a shortcut) starts the chat clean instead: no text, files
+        // or comments left from an earlier new chat.
+        val outside = target.draft != null
+        _attachments.value = trays.remove(trayKey(target, target.storedSessionId)).takeUnless { outside }.orEmpty()
+        _comments.value = commentTrays.remove(trayKey(target, target.storedSessionId)).takeUnless { outside }.orEmpty()
         viewModelScope.launch {
-            // A draft brought from outside (a share, a shortcut) starts the chat clean instead.
-            val text = if (target.draft != null) null else drafts.get(target.gateway.gatewayUrl, target.storedSessionId, target.profile)
+            val text = if (outside) null else drafts.get(target.gateway.gatewayUrl, target.storedSessionId, target.profile)
             if (this@ChatViewModel.target != target) return@launch
             if (text != null && composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
             draftOf = target
