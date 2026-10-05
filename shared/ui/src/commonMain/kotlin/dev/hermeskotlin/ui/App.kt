@@ -288,7 +288,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     ) {
         CompositionLocalProvider(LocalBotFaces provides faces) {
             if (openRoom != null) {
-                RoomScreen(viewModel = rooms, onBack = rooms::close)
+                RoomScreen(viewModel = rooms, onOpenSidebar = { scope.launch { sidebar.toggle() } }, onBack = rooms::close)
             } else {
                 ChatScreen(
                     target = route.target,

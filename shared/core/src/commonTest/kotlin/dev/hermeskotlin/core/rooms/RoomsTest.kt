@@ -34,7 +34,8 @@ class RoomsTest {
 
         assertEquals(4, lines.size)
         assertEquals(RoomLine.Message(1, fromUser = true, speaker = null, text = "hello everyone", eventId = "e:1"), lines[0])
-        assertEquals(RoomLine.Message(2, fromUser = false, speaker = "Ops Bot", text = "on it", eventId = "e:2"), lines[1])
+        // The member's profile comes along, for its face and color.
+        assertEquals(RoomLine.Message(2, fromUser = false, speaker = "Ops Bot", text = "on it", eventId = "e:2", profile = "ops"), lines[1])
         val failure = lines[2] as RoomLine.System
         assertTrue(failure.text.contains("scribe"))
         assertTrue(failure.text.contains("the model said no"))
@@ -46,6 +47,18 @@ class RoomsTest {
         val member = event(1, "message.member", buildJsonObject { put("text", "hi"); put("member_id", "scribe") })
         val line = roomLines(listOf(member), members).single() as RoomLine.Message
         assertEquals("scribe", line.speaker)
+    }
+
+    @Test
+    fun aMessageKeepsItsTimeAndAMemberOffTheRosterStillHasAFace() {
+        val late = RoomEvent(
+            roomId = "r1", seq = 1, eventId = "e:1", kind = "message.member", actor = RoomActor("member", "ghost"),
+            payload = buildJsonObject { put("text", "still here"); put("member_id", "ghost") }, createdAt = 1_700_000_000.0,
+        )
+        val line = roomLines(listOf(late), members).single() as RoomLine.Message
+        assertEquals(1_700_000_000.0, line.createdAt)
+        // Not on the roster any more: its id is the best guess at its profile.
+        assertEquals("ghost", line.profile)
     }
 
     @Test

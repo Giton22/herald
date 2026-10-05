@@ -89,6 +89,7 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
 import dev.hermeskotlin.ui.components.relativeTime
+import dev.hermeskotlin.ui.rooms.RoomFaces
 import dev.hermeskotlin.ui.sessions.ListNotice
 import dev.hermeskotlin.ui.sessions.ListSpinner
 import dev.hermeskotlin.ui.sessions.MessageBanner
@@ -159,6 +160,8 @@ fun BotsRoster(
     var deleting by remember { mutableStateOf<Bot?>(null) }
     // Two bots that read the same get their @handles, like Desktop's roster.
     val sameName = remember(state.all) { state.all.groupBy { it.label.lowercase() }.filterValues { it.size > 1 }.keys }
+    // A room's members are drawn with the same faces as their bots' rows.
+    val roomFaces = remember(state.all, avatars) { BotFaces(state.all, avatars) }
     val row: @Composable (Bot, Boolean) -> Unit = { bot, hidden ->
         val chat = bot.canonicalSession
         val selected = selectedId != null && chat != null && (selectedId == chat.id || selectedId == chat.openId)
@@ -210,7 +213,7 @@ fun BotsRoster(
                 if (rooms.isEmpty()) {
                     item(key = "rooms-empty") { ListNotice("No rooms yet. New room starts one with 2\u20136 bots.") }
                 } else {
-                    items(rooms, key = { "room:${it.roomId}" }) { room -> RoomRow(room, onClick = { onOpenRoom(room) }) }
+                    items(rooms, key = { "room:${it.roomId}" }) { room -> RoomRow(room, roomFaces, onClick = { onOpenRoom(room) }) }
                 }
             }
             item(key = "label") {
@@ -472,9 +475,9 @@ internal fun StartOverDialog(bot: Bot?, onDismiss: () -> Unit, onConfirm: (Bot) 
     )
 }
 
-/** One hosted room: its name, who's in it, and when it last moved. */
+/** One hosted room: its members' faces, its name, who's in it, and when it last moved. */
 @Composable
-private fun RoomRow(room: Room, onClick: () -> Unit) {
+private fun RoomRow(room: Room, faces: BotFaces, onClick: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -485,6 +488,7 @@ private fun RoomRow(room: Room, onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
+        RoomFaces(room.members, faces, size = 26.dp, max = 3)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 room.name,
@@ -508,8 +512,8 @@ private fun RoomRow(room: Room, onClick: () -> Unit) {
     }
 }
 
-/** "3 members: ops, scribe, cadence" — enough to know who's in the room at a glance. */
+/** "Ops, Scribe, Cadence": the faces show how many, the names say who. */
 private fun roomSubtitle(room: Room): String {
     if (room.members.isEmpty()) return "No members"
-    return "${room.members.size} members: ${room.members.joinToString(", ") { it.label }}"
+    return room.members.joinToString(", ") { it.label }
 }

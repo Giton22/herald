@@ -130,6 +130,10 @@ sealed interface RoomLine {
         val speaker: String?,
         val text: String,
         val eventId: String,
+        /** The speaking member's bot profile, which gives the line its face and color; null for the user. */
+        val profile: String? = null,
+        /** When it was written, in epoch seconds; null when the log didn't say. */
+        val createdAt: Double? = null,
     ) : RoomLine
 
     /** A line the gateway wrote: a failure, a stop, a rename. */
@@ -151,11 +155,23 @@ internal fun JsonObject.payloadInt(key: String): Int? = (this[key] as? JsonPrimi
  */
 fun roomLine(event: RoomEvent, members: List<RoomMember>): RoomLine? {
     fun member(memberId: String?): String = members.firstOrNull { it.memberId == memberId }?.label ?: "A member"
+    val createdAt = event.createdAt.takeIf { it > 0 }
     return when (event.kind) {
-        "message.user" -> event.payload.payloadText("text")?.takeIf { it.isNotBlank() }
-            ?.let { RoomLine.Message(event.seq, fromUser = true, speaker = null, text = it, eventId = event.eventId) }
-        "message.member" -> event.payload.payloadText("text")?.takeIf { it.isNotBlank() }
-            ?.let { RoomLine.Message(event.seq, fromUser = false, speaker = member(event.payload.payloadText("member_id")), text = it, eventId = event.eventId) }
+        "message.user" -> event.messageText?.takeIf { it.isNotBlank() }
+            ?.let { RoomLine.Message(event.seq, fromUser = true, speaker = null, text = it, eventId = event.eventId, createdAt = createdAt) }
+        "message.member" -> event.messageText?.takeIf { it.isNotBlank() }?.let { text ->
+            val memberId = event.payload.payloadText("member_id")
+            val row = members.firstOrNull { it.memberId == memberId }
+            RoomLine.Message(
+                event.seq,
+                fromUser = false,
+                speaker = member(memberId),
+                text = text,
+                eventId = event.eventId,
+                profile = row?.profile ?: memberId,
+                createdAt = createdAt,
+            )
+        }
         "turn.failed" -> {
             val error = event.payload.payloadText("error") ?: "something went wrong"
             RoomLine.System(event.seq, "${member(event.payload.payloadText("member_id"))} couldn't take their turn: $error")
