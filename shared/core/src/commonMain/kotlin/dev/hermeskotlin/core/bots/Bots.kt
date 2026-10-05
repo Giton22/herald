@@ -77,6 +77,9 @@ data class BotSession(
     /** The stored session to open: the live end of the chat. */
     val openId: String? get() = resolvedId?.takeIf { it.isNotBlank() } ?: id?.takeIf { it.isNotBlank() }
 
+    /** Whether the stored session [storedId] is this chat, by its own id or the live end of its lineage. */
+    fun isChat(storedId: String?): Boolean = storedId != null && (storedId == openId || storedId == id)
+
     val activityAt: Double? get() = lastActive ?: startedAt
 }
 

@@ -16,6 +16,7 @@ import dev.hermeskotlin.core.bots.SidebarMode
 import dev.hermeskotlin.core.bots.SidebarModeStore
 import dev.hermeskotlin.core.bots.forRoster
 import dev.hermeskotlin.core.chat.AttentionTracker
+import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.connection.ConnectionState
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -95,6 +96,7 @@ class BotsViewModel(
     private val health: BotHealth,
     private val cron: CronApi,
     private val models: ModelsApi,
+    private val host: ChatHost,
     attention: AttentionTracker,
 ) : ViewModel() {
 
@@ -317,7 +319,7 @@ class BotsViewModel(
         // Another bot's catalog (and a pick of its waiting to be confirmed) mustn't show while this one's loads.
         if (modelsOf != bot.name) _modelPicker.value = ModelPickerState()
         modelsOf = bot.name
-        _modelPicker.update { it.copy(loading = true, error = null) }
+        _modelPicker.update { it.copy(loading = true, error = null, saveError = null) }
         viewModelScope.launch {
             try {
                 val catalog = models.options(profile = bot.name)
@@ -338,15 +340,23 @@ class BotsViewModel(
      * confirmed waits in [modelPicker] until [setModel] comes again with [confirmed].
      */
     fun setModel(bot: Bot, model: ModelOption, confirmed: Boolean = false, onSaved: () -> Unit = {}) {
-        _modelPicker.update { it.copy(confirm = null) }
+        // One save at a time: a second pick while one is out would race it.
+        if (_modelPicker.value.saving) return
+        // Said in the sheet, which covers the editor and the roster's notices alike.
+        _modelPicker.update { it.copy(confirm = null, saving = true, saveError = null) }
         viewModelScope.launch {
             try {
                 val warning = api.setModel(bot.name, model.id, model.provider, confirmed)
                 if (warning != null) {
-                    _modelPicker.update { it.copy(confirm = PendingSwitch(model, warning)) }
+                    _modelPicker.update { it.copy(confirm = PendingSwitch(model, warning), saving = false) }
                     return@launch
                 }
-                _modelPicker.update { it.copy(catalog = it.catalog?.copy(currentModel = model.id, currentProvider = model.provider)) }
+                _modelPicker.update {
+                    it.copy(catalog = it.catalog?.copy(currentModel = model.id, currentProvider = model.provider), saving = false)
+                }
+                // Its Bot Chat, if open, runs it from its next turn; until then it would still show the old one.
+                host.session.value?.takeIf { bot.canonicalSession?.isChat(it.state.value.storedSessionId) == true }
+                    ?.showModel(model.id, model.provider)
                 // A model it can't use was the likeliest thing wrong with it.
                 health.recheck(bot.name)
                 refreshNow()
@@ -354,7 +364,7 @@ class BotsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(notice = "Couldn't change ${bot.label}'s model. ${e.message.orEmpty()}".trim()) }
+                _modelPicker.update { it.copy(saving = false, saveError = "Couldn't change ${bot.label}'s model. ${e.message.orEmpty()}".trim()) }
             }
         }
     }
