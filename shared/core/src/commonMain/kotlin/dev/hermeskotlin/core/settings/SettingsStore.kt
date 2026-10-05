@@ -32,6 +32,13 @@ enum class VoicePause(val millis: Long) {
     Long(3_000),
 }
 
+/**
+ * What a message sent while a reply is running does: [Steer] slips it into the running turn (the model
+ * reads it after its current tool call), [Queue] holds it for the next turn, [StopAndSend] stops the
+ * reply and sends it as a fresh turn.
+ */
+enum class RunningSend { Steer, Queue, StopAndSend }
+
 /** App-side preferences, kept on the device (not on the gateway). New fields need defaults. */
 @Serializable
 data class AppSettings(
@@ -46,6 +53,8 @@ data class AppSettings(
     /** Show the profile's pet (when the gateway has one on) above the composer. */
     val showPet: Boolean = true,
     val voicePause: VoicePause = VoicePause.Normal,
+    /** What tapping Send does while a reply is running; a long press on Send picks another for one message. */
+    val runningSend: RunningSend = RunningSend.Steer,
     /** Notify when a turn finishes while the app is in the background. */
     val notifyReplies: Boolean = true,
     /** Notify when the agent waits on an approval or a question while the app is in the background. */
