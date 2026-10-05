@@ -56,11 +56,9 @@ class MainActivity : FragmentActivity() {
     private val appScope: CoroutineScope by inject()
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
-    private val appLock get() = (application as HermesApplication).appLock
+    private val app get() = application as HermesApplication
+    private val appLock get() = app.appLock
     private val lockGate by lazy { AppLockGate(this, appLock, onUnlocked = ::openHeldIntent) }
-
-    /** A link or share that came in while App lock was locked; it opens once the user unlocks. */
-    private var heldIntent: Intent? = null
 
     /** Set when the lock closes, so the unlock prompt shows by itself once, not again after a cancel. */
     private var promptOnResume = false
@@ -104,7 +102,7 @@ class MainActivity : FragmentActivity() {
     private fun handleIntent(intent: Intent?) {
         intent ?: return
         if (appLock.locked.value) {
-            heldIntent = intent
+            app.heldIntent = intent
             return
         }
         val shared = sharedContent(this, intent)
@@ -112,8 +110,8 @@ class MainActivity : FragmentActivity() {
     }
 
     private fun openHeldIntent() {
-        val intent = heldIntent ?: return
-        heldIntent = null
+        val intent = app.heldIntent ?: return
+        app.heldIntent = null
         handleIntent(intent)
     }
 
