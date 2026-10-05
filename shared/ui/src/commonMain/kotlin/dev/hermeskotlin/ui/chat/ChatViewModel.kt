@@ -9,6 +9,7 @@ import dev.hermeskotlin.core.chat.BackgroundProcess
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatSession
+import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.ComposeDraft
 import dev.hermeskotlin.core.chat.DraftStore
@@ -154,6 +155,7 @@ class ChatViewModel(
     recorder: VoiceRecorder,
     player: SpeechPlayer,
     appScope: CoroutineScope,
+    private val bots: BotsApi,
 ) : ViewModel(), ChatActions {
 
     /** Dictation and voice chat for the open chat. */
@@ -432,9 +434,30 @@ class ChatViewModel(
     fun selectModel(model: ModelOption, confirmed: Boolean = false) {
         val chat = session.value ?: return
         _picker.update { it.copy(confirm = null) }
+        // A Bot Chat follows its bot's configuration: a model picked in it is the bot's, never pinned to the
+        // chat alone, which would leave the bot and its chat running different models (#129460).
+        target?.bot?.let { bot -> return setBotModel(chat, bot, model, confirmed) }
         viewModelScope.launch {
             val result = chat.setModel(model.id, model.provider, confirmed)
             if (result is ModelSwitch.NeedsConfirmation) _picker.update { it.copy(confirm = PendingSwitch(model, result.message)) }
+        }
+    }
+
+    private fun setBotModel(chat: ChatSession, bot: BotIdentity, model: ModelOption, confirmed: Boolean) {
+        viewModelScope.launch {
+            try {
+                val warning = bots.setModel(bot.name, model.id, model.provider, confirmed)
+                if (warning != null) {
+                    _picker.update { it.copy(confirm = PendingSwitch(model, warning)) }
+                } else {
+                    chat.showModel(model.id, model.provider)
+                    _picker.update { it.copy(catalog = it.catalog?.copy(currentModel = model.id, currentProvider = model.provider)) }
+                }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                chat.showModel(null, null, error = "Couldn't change ${bot.label}'s model. ${e.message.orEmpty()}".trim())
+            }
         }
     }
 

@@ -1,6 +1,7 @@
 package dev.hermeskotlin.ui.chat
 
 import androidx.lifecycle.ViewModelStore
+import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.chat.ChatHost
@@ -90,7 +91,7 @@ class ChatViewModelTest {
             connection, chatHost, LastChatStore(InMemoryKeyValueStore()), drafts,
             ModelsApi(connection), MediaApi(client), SlashApi(connection), sessions, ProfilesApi(client),
             SettingsStore(InMemoryKeyValueStore(), scope), PetApi(connection), JourneyApi(client), AudioApi(client),
-            NoRecorder, NoPlayer, scope,
+            NoRecorder, NoPlayer, scope, BotsApi(connection),
         )
         viewModels.put("chat", vm)
         return vm to chatHost

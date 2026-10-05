@@ -409,6 +409,8 @@ fun ChatScreen(
         },
         onSelectEffort = { viewModel.setReasoningEffort(it.wire) },
         onFast = viewModel::setFast,
+        // A Bot Chat's model is its bot's (selectModel sets it there), so say what a pick changes.
+        note = target.bot?.let { "A model picked here becomes ${it.label}'s own, for all its chats and routines." },
     )
     ModelConfirmDialog(
         pending = picker.confirm,
