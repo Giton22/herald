@@ -40,11 +40,13 @@ class NtfyClient(private val client: HttpClient) {
 
     /**
      * The messages of [topic], from just after [since] (an earlier message id; ntfy keeps them for hours) or
-     * only new ones. Ends when the stream does; the caller reconnects.
+     * all it still holds. Ends when the stream does; the caller reconnects.
      */
     fun subscribe(server: String, topic: String, since: String?): Flow<NtfyEvent> = flow {
         client.prepareGet(topicUrl(server, topic) + "/json") {
-            parameter("since", since ?: "now")
+            // The topic is this phone's alone: with no id yet, everything ntfy still holds for it is ours to read
+            // (the replay guard drops what was already shown). ntfy has no "now"; it answers 400.
+            parameter("since", since ?: "all")
             // The stream is meant to stay open; ntfy keeps it alive every ~45 s.
             timeout {
                 requestTimeoutMillis = Long.MAX_VALUE

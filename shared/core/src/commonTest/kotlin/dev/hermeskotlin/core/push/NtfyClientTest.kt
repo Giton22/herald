@@ -34,6 +34,14 @@ class NtfyClientTest {
     }
 
     @Test
+    fun aFirstReadAsksForEverythingHeld() = runTest {
+        val urls = mutableListOf<String>()
+        client("", urls).subscribe("https://ntfy.example", topic, since = null).toList()
+        // ntfy refuses since=now with a 400.
+        assertTrue(urls.single().endsWith("/$topic/json?since=all"))
+    }
+
+    @Test
     fun anEndlessLineIsRefusedNotBuffered() = runTest {
         val huge = "x".repeat(200_000)
         assertFailsWith<Exception> { client(huge).subscribe("https://ntfy.example", topic, null).toList() }

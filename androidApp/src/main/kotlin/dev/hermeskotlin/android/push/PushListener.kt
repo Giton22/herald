@@ -70,7 +70,8 @@ class PushListener(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                Log.w(TAG, "ntfy stream ended: ${e::class.simpleName}")
+                // The reason only (an HTTP status, a timeout): never the topic or a body.
+                Log.w(TAG, "ntfy stream ended: ${e::class.simpleName} ${(e as? IllegalStateException)?.message.orEmpty()}")
             }
             // A stream that lived a while was fine; one that keeps dying backs off.
             failures = if (System.currentTimeMillis() - started > HEALTHY_MS) 0 else failures + 1
