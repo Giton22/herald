@@ -11,6 +11,7 @@ import kotlinx.coroutines.flow.first
 import dev.hermeskotlin.ui.chat.BotIdentity
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatLinks
+import dev.hermeskotlin.core.chat.ComposeDraft
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
@@ -88,7 +89,8 @@ class AppViewModel(
                     val stored = link.storedSessionId
                     when {
                         bot != null -> openBotLink(bot, link.title, stored)
-                        stored != null && open != stored -> openSession(stored, link.title ?: "Chat")
+                        stored == null -> newChat(link.draft)
+                        open != stored -> openSession(stored, link.title ?: "Chat")
                     }
                 }
         }
@@ -111,9 +113,10 @@ class AppViewModel(
         _route.value = Route.Chat(ChatTarget(gateway, sessionId, title, profile = currentProfile()))
     }
 
-    fun newChat() {
+    /** A new chat in the picked profile; [draft] fills its composer (shared from another app, a shortcut). */
+    fun newChat(draft: ComposeDraft? = null) {
         val gateway = signedInGateway() ?: return
-        _route.value = Route.Chat(newChatTarget(gateway, currentProfile()))
+        _route.value = Route.Chat(newChatTarget(gateway, currentProfile()).copy(draft = draft))
     }
 
     /** Opens [bot]'s conversation [storedSessionId] that isn't its Bot Chat, in the bot's profile. */

@@ -10,6 +10,7 @@ import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatSession
 import dev.hermeskotlin.core.chat.ChatState
+import dev.hermeskotlin.core.chat.ComposeDraft
 import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.chat.LastChat
@@ -25,11 +26,15 @@ import dev.hermeskotlin.core.models.ModelsApi
 import dev.hermeskotlin.core.chat.ModelSwitch
 import dev.hermeskotlin.core.chat.OutgoingAttachment
 import dev.hermeskotlin.core.chat.SendOutcome
+import dev.hermeskotlin.core.chat.canEdit
+import dev.hermeskotlin.core.chat.promptNow
+import dev.hermeskotlin.core.chat.regenerateTarget
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.settings.AppSettings
+import dev.hermeskotlin.core.settings.RunningSend
 import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.core.pet.PetApi
 import dev.hermeskotlin.core.journey.JourneyApi
@@ -63,6 +68,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
@@ -96,13 +102,17 @@ sealed interface ChatRequest {
     /** `/voice`: the screen asks for the microphone, then starts a voice chat. */
     data object StartVoice : ChatRequest
 
+    /** The voice shortcut: the screen asks for the microphone, then dictates into the composer. */
+    data object StartDictation : ChatRequest
+
     /** [profile] null is the gateway's launch profile. */
     data class SwitchProfile(val profile: String?) : ChatRequest
 }
 
 /**
  * Identifies what the chat screen shows: a stored session, or a new chat (`storedSessionId == null`),
- * in [profile] (null: the gateway's launch profile). With [bot] it is that bot's permanent chat.
+ * in [profile] (null: the gateway's launch profile). With [bot] it is that bot's permanent chat. A new
+ * chat opened from outside (share sheet, shortcut) brings its [draft].
  */
 data class ChatTarget(
     val gateway: SavedGateway,
@@ -111,6 +121,7 @@ data class ChatTarget(
     val nonce: Long = 0,
     val profile: String? = null,
     val bot: BotIdentity? = null,
+    val draft: ComposeDraft? = null,
 )
 
 /**
@@ -163,6 +174,10 @@ class ChatViewModel(
     override val composer = TextFieldState()
     val connectionState: StateFlow<ConnectionState> = connection.state
 
+    override val runningSend: StateFlow<RunningSend> = settings.settings
+        .map { it?.runningSend ?: RunningSend.Steer }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, settings.settings.value?.runningSend ?: RunningSend.Steer)
+
     private var target: ChatTarget? = null
     private val session = MutableStateFlow<ChatSession?>(null)
 
@@ -196,6 +211,17 @@ class ChatViewModel(
 
     private val _attachmentError = MutableStateFlow<String?>(null)
     val attachmentError: StateFlow<String?> = _attachmentError.asStateFlow()
+
+    private val _editing = MutableStateFlow<String?>(null)
+
+    /** The prompt being edited in the composer; the next send replaces it and everything after it. */
+    val editing: StateFlow<String?> = _editing.asStateFlow()
+
+    /** What the composer held when the edit started, given back when it ends. */
+    private var typedBeforeEdit = ""
+
+    /** The stored row of the prompt being edited, which outlasts its key. */
+    private var editingRowId: Long? = null
 
     private val _requests = Channel<ChatRequest>(Channel.BUFFERED)
 
@@ -241,9 +267,18 @@ class ChatViewModel(
                 }
         }
         viewModelScope.launch {
+            combine(state, _editing) { chat, key -> key?.takeIf { chat.historyLoaded }?.let { it to chat.promptNow(it, editingRowId) } }
+                .filterNotNull()
+                .collect { (key, now) ->
+                    // A reload gives a prompt sent from here its stored key; it's still the same row.
+                    if (now == null) editGone() else if (now != key) _editing.value = now
+                }
+        }
+        viewModelScope.launch {
             snapshotFlow { composer.text.toString() }
                 .debounce(DRAFT_SAVE_DEBOUNCE_MS)
-                .collect { text -> draftOf?.let { saveDraft(it, draftChat(it), text) } }
+                // An edit isn't the chat's draft: the text it put aside is, and that's what a restart brings back.
+                .collect { text -> draftOf?.let { saveDraft(it, draftChat(it), if (_editing.value != null) typedBeforeEdit else text) } }
         }
     }
 
@@ -276,10 +311,13 @@ class ChatViewModel(
     }
 
     private fun restoreDraft(target: ChatTarget) {
-        _attachments.value = trays.remove(trayKey(target, target.storedSessionId)).orEmpty()
-        _comments.value = commentTrays.remove(trayKey(target, target.storedSessionId)).orEmpty()
+        // A draft brought from outside (a share, a shortcut) starts the chat clean instead: no text, files
+        // or comments left from an earlier new chat.
+        val outside = target.draft != null
+        _attachments.value = trays.remove(trayKey(target, target.storedSessionId)).takeUnless { outside }.orEmpty()
+        _comments.value = commentTrays.remove(trayKey(target, target.storedSessionId)).takeUnless { outside }.orEmpty()
         viewModelScope.launch {
-            val text = drafts.get(target.gateway.gatewayUrl, target.storedSessionId, target.profile)
+            val text = if (outside) null else drafts.get(target.gateway.gatewayUrl, target.storedSessionId, target.profile)
             if (this@ChatViewModel.target != target) return@launch
             if (text != null && composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
             draftOf = target
@@ -295,13 +333,16 @@ class ChatViewModel(
             }
             return
         }
+        // An edit belongs to its chat; what was typed before it is that chat's draft.
+        cancelEdit()
         stashDraft()
         this.target = target
         // A voice chat belongs to the chat it started in.
         voice.stopAll()
         composer.clearText()
-        restoreDraft(target)
         _attachmentError.value = null
+        restoreDraft(target)
+        target.draft?.let(::takeDraft)
         if (target.storedSessionId == null) viewModelScope.launch { lastChats.set(target.gateway.gatewayUrl, null, target.profile) }
         session.value = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title, target.profile)
         // The catalog marks the previous chat's model; a new chat must show the profile default instead.
@@ -310,6 +351,17 @@ class ChatViewModel(
             loadModels()
             pets.bind(target.profile)
         }
+    }
+
+    /**
+     * Fills the new chat's composer with what came from outside, to look over before sending: shared
+     * text and files, or dictation started by the voice shortcut.
+     */
+    private fun takeDraft(draft: ComposeDraft) {
+        draft.text?.takeIf { it.isNotBlank() }?.let(composer::setTextAndPlaceCursorAtEnd)
+        if (draft.attachments.isNotEmpty()) addAttachments(draft.attachments)
+        draft.notice?.let(::showAttachmentError)
+        if (draft.dictate) viewModelScope.launch { _requests.send(ChatRequest.StartDictation) }
     }
 
     fun startVoiceChat() {
@@ -519,6 +571,11 @@ class ChatViewModel(
                 SlashRoute.Compress -> chat.compress(arg)
                 SlashRoute.Status -> chat.status()
                 SlashRoute.Aside -> chat.askAside(arg)
+                SlashRoute.Steer -> if (arg.isEmpty()) {
+                    chat.showCommandOutput("/steer", "Usage: /steer <note>. The running reply reads it after its current step, without stopping.")
+                } else if (chat.steer(arg) == SendOutcome.NotSent) {
+                    giveBack("/steer $arg")
+                }
                 SlashRoute.Reasoning -> when (chat.reasoning(arg)) {
                     // The gateway's display words drive this app's own Thinking toggle too.
                     "show" -> settings.update { it.copy(showReasoning = true) }
@@ -650,15 +707,17 @@ class ChatViewModel(
     }
 
     /**
-     * Sends what's in the composer. Mid-turn it corrects the running turn, unless [queue] holds it for
-     * the next one.
+     * Sends what's in the composer. Mid-turn it goes the way [mode] says, or the "While a reply is running"
+     * setting when none was picked: steered into the running turn, queued for the next, or sent once the
+     * turn is stopped. A steer can't carry files, so with attachments it queues instead.
      */
-    override fun send(queue: Boolean) {
+    override fun send(mode: RunningSend?) {
         val chat = session.value ?: return
         val text = composer.text.toString()
         val attachments = _attachments.value
         val comments = _comments.value
         if (text.isBlank() && attachments.isEmpty() && comments.isEmpty()) return
+        _editing.value?.let { key -> return sendEdit(chat, key, text, comments) }
         val command = SlashCommand.parse(text.trim())
         // Commands run at once either way; they never become a turn to queue. Waiting comments stay for the next prompt.
         if (command != null && attachments.isEmpty()) {
@@ -671,10 +730,22 @@ class ChatViewModel(
         _attachments.value = emptyList()
         _comments.value = emptyList()
         val outgoing = if (comments.isEmpty()) text else formatReview(comments, text)
+        val running = sendModeFor(state.value.running, mode, settings.settings.value?.runningSend, attachments.isNotEmpty())
         viewModelScope.launch {
+            val outcome = when (running) {
+                null -> chat.submit(outgoing, attachments)
+                RunningSend.Steer -> chat.steer(outgoing)
+                RunningSend.Queue -> chat.submit(outgoing, attachments, queue = true)
+                RunningSend.StopAndSend -> {
+                    val result = chat.stopAndSubmit(outgoing, attachments)
+                    // The stop drops what was queued behind the task; hand it back rather than lose it.
+                    result.dropped.filter { it.isNotBlank() }.takeIf { it.isNotEmpty() }?.let { giveBack(it.joinToString("\n\n")) }
+                    result.outcome
+                }
+            }
             // Give everything back if it never reached the gateway, so nothing typed or picked is lost. One
             // that may have arrived keeps its bubble to resend from instead, so it isn't in two places.
-            if (chat.submit(outgoing, attachments, queue = queue) == SendOutcome.NotSent) {
+            if (outcome == SendOutcome.NotSent) {
                 giveBack(text)
                 _attachments.update { attachments + it }
                 _comments.update { comments + it }
@@ -712,17 +783,84 @@ class ChatViewModel(
     override fun branchFrom(key: String) {
         val chat = session.value ?: return
         if (!state.value.canChangeChat(connectionState.value is ConnectionState.Connected)) return
-        val messages = state.value.messages
-        val index = messages.indexOfFirst { it.key == key }
-        if (index < 0) return
-        // The gateway keeps the first N user and assistant rows that have text, so count those.
-        val count = messages.take(index + 1).count {
-            (it is ChatMessage.User && it.text.isNotBlank()) || (it is ChatMessage.Assistant && it.text.isNotBlank())
-        }
+        if (state.value.messages.none { it.key == key }) return
         viewModelScope.launch {
+            // Counted from the first row, so the pages not scrolled back to yet are read first.
+            if (!chat.loadAllHistory()) return@launch
+            val messages = chat.state.value.messages
+            val index = messages.indexOfFirst { it.key == key }
+            if (index < 0) return@launch
+            // The gateway keeps the first N user and assistant rows that have text, so count those.
+            val count = messages.take(index + 1).count {
+                (it is ChatMessage.User && it.text.isNotBlank()) || (it is ChatMessage.Assistant && it.text.isNotBlank())
+            }
             chat.branch(count)?.let { (id, title) -> _requests.send(ChatRequest.OpenChat(id, title)) }
         }
     }
+
+    override fun regenerate(key: String) {
+        val chat = session.value ?: return
+        val state = state.value
+        // Asked for in a dialog that may have stayed open while the chat moved on.
+        if (!canRewind(state)) return
+        val prompt = state.regenerateTarget(key) ?: return
+        val text = prompt.sentText ?: return
+        viewModelScope.launch { chat.rewind(prompt.key, text) }
+    }
+
+    override fun startEdit(key: String) {
+        val state = state.value
+        if (!canRewind(state) || !state.canEdit(key)) return
+        val prompt = state.messages.firstOrNull { it.key == key } as? ChatMessage.User ?: return
+        if (_editing.value == null) typedBeforeEdit = composer.text.toString()
+        editingRowId = prompt.rowId
+        _editing.value = key
+        composer.setTextAndPlaceCursorAtEnd(prompt.text)
+    }
+
+    override fun cancelEdit() {
+        if (_editing.value == null) return
+        _editing.value = null
+        composer.setTextAndPlaceCursorAtEnd(typedBeforeEdit)
+        typedBeforeEdit = ""
+    }
+
+    /**
+     * The prompt being edited went (another client, or a regenerate above it, cut the chat): there's nothing left to
+     * replace. What was typed for it stays, ahead of the text it put aside, to send as a new message or drop.
+     */
+    private fun editGone() {
+        val edited = composer.text.toString()
+        _editing.value = null
+        composer.setTextAndPlaceCursorAtEnd(listOf(edited, typedBeforeEdit).filter { it.isNotBlank() }.joinToString("\n\n"))
+        typedBeforeEdit = ""
+    }
+
+    /**
+     * Sends the edit of prompt [key]: it and everything after it go, and [text] (with any [comments]) is sent
+     * in its place. Files waiting in the composer stay for the next send. Turned down, the edit is back as it was.
+     */
+    private fun sendEdit(chat: ChatSession, key: String, text: String, comments: List<PendingComment>) {
+        if (text.isBlank() && comments.isEmpty()) return
+        val outgoing = if (comments.isEmpty()) text else formatReview(comments, text)
+        _comments.value = emptyList()
+        cancelEdit()
+        viewModelScope.launch {
+            if (chat.rewind(key, outgoing) != SendOutcome.NotSent) return@launch
+            // The prompt is back where it was if the gateway turned the edit down; carry on editing it.
+            _comments.update { comments + it }
+            if (state.value.messages.any { it.key == key }) {
+                typedBeforeEdit = composer.text.toString()
+                _editing.value = key
+                composer.setTextAndPlaceCursorAtEnd(text)
+            } else {
+                giveBack(text)
+            }
+        }
+    }
+
+    /** Regenerate and edit change the stored transcript, so only while it [can change][canChangeChat]. */
+    private fun canRewind(state: ChatState) = state.canChangeChat(connectionState.value is ConnectionState.Connected)
 
     override fun stopSubagent(subagentId: String) {
         val chat = session.value ?: return
@@ -773,6 +911,11 @@ class ChatViewModel(
 
     override fun retry() {
         session.value?.retry()
+    }
+
+    override fun loadOlder() {
+        val chat = session.value ?: return
+        viewModelScope.launch { chat.loadOlder() }
     }
 
     override fun dismissError() {

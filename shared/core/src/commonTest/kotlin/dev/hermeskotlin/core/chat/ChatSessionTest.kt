@@ -25,6 +25,8 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -188,7 +190,9 @@ class ChatSessionTest {
             ),
         )
         connection.state.first { it is ConnectionState.Connected }
-        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        val sentAt = Instant.fromEpochSeconds(1_700_000_000)
+        val clock = object : Clock { override fun now() = sentAt }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope, clock = clock)
         chat.start()
 
         assertTrue(chat.send("  write a haiku "))
@@ -201,6 +205,8 @@ class ChatSessionTest {
         assertTrue(state.running)
         val user = assertIs<ChatMessage.User>(state.messages.single())
         assertFalse(user.pending)
+        // Dated when this device sent it.
+        assertEquals(1_700_000_000.0, user.timestamp)
     }
 
     @Test
@@ -277,6 +283,172 @@ class ChatSessionTest {
         assertEquals(listOf("then the tests", "and the docs"), chat.interrupt())
         assertTrue(transport.sent.value.any { it.isCall("session.interrupt") })
         assertEquals(listOf("hello", "Hi! What next?", "Working"), chat.state.value.messages.map { it.textOf() })
+    }
+
+    /** A chat attached as rt1 whose turn is streaming "Working". */
+    private suspend fun runningChat(scope: CoroutineScope, results: Map<String, String>): Pair<ChatSession, FakeTransport> {
+        val (connection, transport) = setup(scope, mapOf("session.resume" to """{"session_id":"rt1","running":false}""") + results)
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), scope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        transport.push(event("message.start", "rt1"))
+        transport.push(event("message.delta", "rt1", """{"text":"Working"}"""))
+        chat.state.first { s -> (s.messages.last() as? ChatMessage.Assistant)?.text == "Working" }
+        return chat to transport
+    }
+
+    @Test
+    fun steeringGoesThroughSessionSteerIntoTheRunningTurn() = runTest {
+        val (chat, transport) = runningChat(backgroundScope, mapOf("session.steer" to """{"status":"queued","text":"use tabs"}"""))
+
+        assertEquals(SendOutcome.Sent, chat.steer(" use tabs "))
+
+        val steer = transport.sent.value.single { it.isCall("session.steer") }
+        assertEquals("rt1", steer.param("session_id"))
+        assertEquals("use tabs", steer.param("text"))
+        assertTrue(transport.sent.value.none { it.isCall("prompt.submit") || it.isCall("slash.exec") })
+        transport.push(event("message.delta", "rt1", """{"text":"Switching to tabs"}"""))
+        val live = chat.state.first { s -> (s.messages.last() as? ChatMessage.Assistant)?.text == "Switching to tabs" }
+        // What streamed before it stays above the steer; the turn goes on below it.
+        assertEquals(listOf("hello", "Hi! What next?", "Working", "use tabs", "Switching to tabs"), live.messages.map { it.textOf() })
+        val bubble = assertIs<ChatMessage.User>(live.messages[3])
+        assertFalse(bubble.pending)
+        assertFalse(bubble.queued)
+        assertTrue(live.running)
+    }
+
+    @Test
+    fun aRejectedSteerRunsAsTheNextPrompt() = runTest {
+        val (chat, transport) = runningChat(
+            backgroundScope,
+            mapOf("session.steer" to """{"status":"rejected","text":"use tabs"}""", "prompt.submit" to """{"status":"queued"}"""),
+        )
+
+        assertEquals(SendOutcome.Sent, chat.steer("use tabs"))
+
+        val submit = transport.sent.value.single { it.isCall("prompt.submit") }
+        assertEquals("use tabs", submit.param("text"))
+        assertEquals("true", submit.param("queued"))
+        val prompts = chat.state.value.messages.filterIsInstance<ChatMessage.User>().filter { it.text == "use tabs" }
+        assertTrue(prompts.single().queued)
+    }
+
+    @Test
+    fun aGatewayThatCannotSteerGetsAPlainPrompt() = runTest {
+        val (chat, transport) = runningChat(
+            backgroundScope,
+            mapOf("session.steer" to "error:-32601", "prompt.submit" to """{"status":"steered"}"""),
+        )
+
+        assertEquals(SendOutcome.Sent, chat.steer("use tabs"))
+
+        // No queued flag: the gateway's own busy mode folds it into the turn, as before session.steer.
+        val submit = transport.sent.value.single { it.isCall("prompt.submit") }
+        assertNull(submit.param("queued"))
+        assertEquals(1, chat.state.value.messages.count { it is ChatMessage.User && it.text == "use tabs" })
+    }
+
+    @Test
+    fun aSteerTheGatewayRefusesComesBack() = runTest {
+        val (chat, transport) = runningChat(backgroundScope, mapOf("session.steer" to "error:5000"))
+
+        assertEquals(SendOutcome.NotSent, chat.steer("use tabs"))
+
+        assertTrue(transport.sent.value.none { it.isCall("prompt.submit") })
+        assertTrue(chat.state.value.messages.none { it is ChatMessage.User && it.text == "use tabs" })
+        assertTrue(chat.state.value.error != null)
+    }
+
+    @Test
+    fun aSteerThatWentOutWithoutAReplyStaysAsUnknown() = runTest {
+        val (chat, transport) = runningChat(backgroundScope, mapOf("session.steer" to SILENT))
+
+        val steering = backgroundScope.async { chat.steer("use tabs") }
+        transport.awaitSent { it.isCall("session.steer") }
+        transport.serverClose(1006)
+
+        // The agent may have read it: not handed back to send twice, but kept, marked, to check or resend.
+        assertEquals(SendOutcome.Unsettled, steering.await())
+        val bubble = assertIs<ChatMessage.User>(chat.state.value.messages.single { it is ChatMessage.User && it.text == "use tabs" })
+        assertEquals(SendCheck.Unknown, bubble.check)
+        assertFalse(bubble.pending)
+    }
+
+    @Test
+    fun steeringWithNothingRunningJustSends() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf("session.resume" to """{"session_id":"rt1","running":false}""", "prompt.submit" to """{"status":"streaming"}"""),
+        )
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+
+        assertEquals(SendOutcome.Sent, chat.steer("use tabs"))
+
+        assertTrue(transport.sent.value.none { it.isCall("session.steer") })
+        assertEquals("use tabs", transport.sent.value.single { it.isCall("prompt.submit") }.param("text"))
+    }
+
+    @Test
+    fun stopAndSendStopsTheTurnWaitsForItThenSends() = runTest {
+        val (chat, transport) = runningChat(
+            backgroundScope,
+            mapOf("session.interrupt" to """{"status":"interrupted"}""", "prompt.submit" to """{"status":"streaming"}"""),
+        )
+
+        val result = async { chat.stopAndSubmit("do the docs instead") }
+        transport.awaitSent { it.isCall("session.interrupt") }
+        // Nothing goes out until the stopped turn has ended.
+        assertTrue(transport.sent.value.none { it.isCall("prompt.submit") })
+        transport.push(event("message.complete", "rt1", """{"text":"Working","status":"interrupted"}"""))
+
+        assertEquals(SendOutcome.Sent, result.await().outcome)
+        val methods = transport.sent.value.mapNotNull { it["method"]?.jsonPrimitive?.contentOrNull }
+        assertTrue(methods.indexOf("session.interrupt") < methods.indexOf("prompt.submit"))
+        val submit = transport.sent.value.single { it.isCall("prompt.submit") }
+        assertEquals("do the docs instead", submit.param("text"))
+        // A fresh turn, not a follow-up held behind the stopped one.
+        assertNull(submit.param("queued"))
+        assertTrue(chat.state.value.running)
+    }
+
+    @Test
+    fun stopAndSendHandsBackWhatTheStopDropped() = runTest {
+        val (chat, transport) = runningChat(
+            backgroundScope,
+            mapOf("session.interrupt" to """{"status":"interrupted"}""", "prompt.submit" to """{"status":"queued"}"""),
+        )
+        assertTrue(chat.send("then the tests", queue = true))
+
+        val result = async { chat.stopAndSubmit("do the docs instead") }
+        transport.awaitSent { it.isCall("session.interrupt") }
+        transport.push(event("message.complete", "rt1", """{"text":"Working","status":"interrupted"}"""))
+
+        assertEquals(listOf("then the tests"), result.await().dropped)
+    }
+
+    @Test
+    fun stopAndSendQueuesBehindATurnThatWontEnd() = runTest {
+        val (chat, transport) = runningChat(
+            backgroundScope,
+            mapOf("session.interrupt" to """{"status":"interrupted"}""", "prompt.submit" to """{"status":"queued"}"""),
+        )
+
+        // No message.complete ever comes: it still goes, held for after the turn rather than folded into it.
+        assertEquals(SendOutcome.Sent, chat.stopAndSubmit("do the docs instead").outcome)
+
+        assertEquals("true", transport.sent.value.single { it.isCall("prompt.submit") }.param("queued"))
+    }
+
+    @Test
+    fun stopAndSendThatCannotStopSendsNothing() = runTest {
+        val (chat, transport) = runningChat(backgroundScope, mapOf("session.interrupt" to "error:5019"))
+
+        assertEquals(SendOutcome.NotSent, chat.stopAndSubmit("do the docs instead").outcome)
+
+        assertTrue(transport.sent.value.none { it.isCall("prompt.submit") })
+        assertTrue(chat.state.value.error != null)
     }
 
     @Test
@@ -827,6 +999,135 @@ class ChatSessionTest {
 
         assertEquals("stored-2" to "Greeting #2", chat.branch(null))
         assertEquals("rt1", transport.sent.value.first { it.isCall("session.branch_whole") }.param("session_id"))
+    }
+
+    private val threeTurns = """{"session_id":"stored-1","messages":[
+        {"id":1,"role":"user","content":"one"},{"id":2,"role":"assistant","content":"First"},
+        {"id":3,"role":"user","content":"two"},{"id":4,"role":"assistant","content":"Second"},
+        {"id":5,"role":"user","content":"three"},{"id":6,"role":"assistant","content":"Third"}]}"""
+
+    @Test
+    fun regeneratingCutsAtThePromptsRowAndEndsOnTheStoredTranscript() = runTest {
+        history = threeTurns
+        val (chat, transport) = resumedChat(backgroundScope, mapOf("prompt.submit" to """{"status":"streaming","user_row_id":7}"""))
+
+        assertEquals(SendOutcome.Sent, chat.rewind("row-3", "two"))
+
+        val submit = transport.sent.value.first { it.isCall("prompt.submit") }
+        assertEquals("rt1", submit.param("session_id"))
+        assertEquals("two", submit.param("text"))
+        assertEquals("3", submit.param("truncate_before_row_id"))
+        assertEquals("true", submit.param("confirm_truncate"))
+        assertEquals("true", submit.param("confirm_empty_truncate"))
+        val cut = chat.state.value
+        assertTrue(cut.running)
+        assertEquals(listOf("one", "First", "two"), cut.messages.map { it.textOf() })
+        val prompt = assertIs<ChatMessage.User>(cut.messages.last())
+        assertEquals(7L, prompt.rowId)
+        assertFalse(prompt.pending)
+
+        // The gateway's transcript after the turn: the cut, then the new exchange.
+        history = """{"session_id":"stored-1","messages":[
+            {"id":1,"role":"user","content":"one"},{"id":2,"role":"assistant","content":"First"},
+            {"id":7,"role":"user","content":"two"},{"id":8,"role":"assistant","content":"Second, again"}]}"""
+        transport.push(event("message.start", "rt1"))
+        transport.push(event("message.delta", "rt1", """{"text":"Second, again"}"""))
+        transport.push(event("message.complete", "rt1", """{"text":"Second, again","status":"complete"}"""))
+
+        val done = chat.state.first { s -> !s.running && s.messages.lastOrNull()?.key == "row-8" }
+        assertEquals(listOf("row-1", "row-2", "row-7", "row-8"), done.messages.map { it.key })
+    }
+
+    @Test
+    fun editingTheFirstPromptEmptiesTheChatBeforeTheNewOne() = runTest {
+        history = threeTurns
+        val (chat, transport) = resumedChat(backgroundScope, mapOf("prompt.submit" to """{"status":"streaming","user_row_id":7}"""))
+
+        assertEquals(SendOutcome.Sent, chat.rewind("row-1", "  uno "))
+
+        val submit = transport.sent.value.first { it.isCall("prompt.submit") }
+        assertEquals("uno", submit.param("text"))
+        assertEquals("1", submit.param("truncate_before_row_id"))
+        val prompt = assertIs<ChatMessage.User>(chat.state.value.messages.single())
+        assertEquals("uno", prompt.text)
+        assertEquals("uno", prompt.sentText)
+    }
+
+    @Test
+    fun aBusyGatewayLeavesTheChatAsItWas() = runTest {
+        history = threeTurns
+        val (chat, _) = resumedChat(backgroundScope, mapOf("prompt.submit" to "error:4009"))
+        val before = chat.state.value.messages
+
+        assertEquals(SendOutcome.NotSent, chat.rewind("row-3", "two"))
+
+        assertEquals(before, chat.state.value.messages)
+        assertTrue(chat.state.value.error!!.contains("Wait"))
+        assertFalse(chat.state.value.running)
+    }
+
+    @Test
+    fun aRowTheGatewayCantPlaceShowsItsTranscriptAgain() = runTest {
+        history = threeTurns
+        val (chat, _) = resumedChat(backgroundScope, mapOf("prompt.submit" to "error:4018"))
+        // Another client cut the chat meanwhile.
+        history = """{"session_id":"stored-1","messages":[{"id":1,"role":"user","content":"one"},{"id":2,"role":"assistant","content":"First"}]}"""
+
+        assertEquals(SendOutcome.NotSent, chat.rewind("row-3", "two"))
+
+        assertEquals(listOf("row-1", "row-2"), chat.state.value.messages.map { it.key })
+        assertTrue(chat.state.value.error!!.contains("can't be changed"))
+    }
+
+    @Test
+    fun aLostAnswerAsksTheTranscriptWhetherTheRewindWent() = runTest {
+        history = threeTurns
+        val (chat, transport) = resumedChat(backgroundScope, mapOf("prompt.submit" to SILENT))
+
+        val rewinding = backgroundScope.async { chat.rewind("row-5", "three") }
+        transport.awaitSent { it.isCall("prompt.submit") }
+        history = history.replace("""{"id":5,"role":"user","content":"three"},{"id":6,"role":"assistant","content":"Third"}""", """{"id":7,"role":"user","content":"three"}""")
+        transport.serverClose(1006)
+
+        assertEquals(SendOutcome.Sent, rewinding.await())
+        assertEquals(listOf("row-1", "row-2", "row-3", "row-4", "row-7"), chat.state.value.messages.map { it.key })
+    }
+
+    @Test
+    fun nothingRewindsWithoutAStoredRowOrMidTurn() = runTest {
+        val (chat, transport) = newChat(backgroundScope, mapOf("prompt.submit" to """{"status":"streaming"}"""))
+        assertTrue(chat.send("no row yet"))
+        val key = chat.state.value.messages.single().key
+
+        // No row id came back, and a turn is running besides.
+        assertEquals(SendOutcome.NotSent, chat.rewind(key, "again"))
+
+        assertEquals(1, transport.sent.value.count { it.isCall("prompt.submit") })
+    }
+
+    @Test
+    fun aRewindMidTurnSaysWhyItDidntGo() = runTest {
+        history = threeTurns
+        val (chat, transport) = resumedChat(backgroundScope, mapOf("prompt.submit" to """{"status":"streaming","user_row_id":7}"""))
+        // Another client starts a turn while an edit waits in the composer.
+        transport.push(event("message.start", "rt1"))
+        chat.state.first { it.running }
+
+        assertEquals(SendOutcome.NotSent, chat.rewind("row-3", "two, edited"))
+
+        assertTrue(chat.state.value.error!!.contains("Wait"))
+        assertEquals(0, transport.sent.value.count { it.isCall("prompt.submit") })
+    }
+
+    @Test
+    fun aSentPromptKeepsTheRowItWasWrittenTo() = runTest {
+        val (chat, _) = resumedChat(backgroundScope, mapOf("prompt.submit" to """{"status":"streaming","user_row_id":9}"""))
+
+        assertTrue(chat.send(" plain words "))
+
+        val prompt = assertIs<ChatMessage.User>(chat.state.value.messages.last())
+        assertEquals(9L, prompt.rowId)
+        assertEquals("plain words", prompt.sentText)
     }
 
     private companion object {

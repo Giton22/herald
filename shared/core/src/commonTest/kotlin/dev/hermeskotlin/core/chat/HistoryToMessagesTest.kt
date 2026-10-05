@@ -38,11 +38,27 @@ class HistoryToMessagesTest {
 
         assertEquals(
             listOf(
-                ChatMessage.User("row-1", "list files"),
+                ChatMessage.User("row-1", "list files", rowId = 1, sentText = "list files"),
                 ChatMessage.Assistant("row-2", text = "There is one file.", tools = listOf(ToolActivity("c-terminal", "terminal", output = "a.txt"))),
             ),
             messages,
         )
+    }
+
+    @Test
+    fun promptsKeepTheirTimeAndAMergedReplyTakesItsLastStepsTime() {
+        val messages = historyToMessages(
+            listOf(
+                SessionMessage(id = 1, role = "user", content = JsonPrimitive("list files"), timestamp = 1_000.0),
+                SessionMessage(id = 2, role = "assistant", content = JsonPrimitive(""), toolCalls = toolCall("terminal"), timestamp = 1_002.0),
+                SessionMessage(id = 3, role = "tool", content = JsonPrimitive("a.txt"), toolCallId = "c-terminal", timestamp = 1_003.0),
+                SessionMessage(id = 4, role = "assistant", content = JsonPrimitive("One file."), timestamp = 1_009.5),
+                // A step stored without a time leaves the reply dated by the one before.
+                SessionMessage(id = 5, role = "assistant", content = JsonPrimitive("Done.")),
+            ),
+        )
+        assertEquals(1_000.0, (messages[0] as ChatMessage.User).timestamp)
+        assertEquals(1_009.5, (messages[1] as ChatMessage.Assistant).timestamp)
     }
 
     @Test
@@ -108,5 +124,38 @@ class HistoryToMessagesTest {
         assertEquals("summarise both", files.text)
         assertEquals(listOf("notes.txt", "my spec.pdf"), files.attachments.map { it.name })
         assertEquals(listOf(AttachmentKind.File, AttachmentKind.Pdf), files.attachments.map { it.kind })
+    }
+
+    @Test
+    fun onlyPromptsTheLiveAgentHoldsCanBeCutAt() {
+        val rows = Json.decodeFromString<List<SessionMessage>>(
+            """[
+            {"id":1,"session_id":"old","role":"user","content":"before the compression","active":0},
+            {"id":2,"session_id":"old","role":"assistant","content":"ok","active":0},
+            {"id":3,"session_id":"tip","role":"user","content":"summarized","active":0,"compacted":1},
+            {"id":4,"session_id":"tip","role":"user","content":"now","active":1,"compacted":0}
+            ]""",
+        )
+
+        val prompts = historyToMessages(rows, liveSessionId = "tip").filterIsInstance<ChatMessage.User>()
+
+        assertEquals(listOf(null, null, 4L), prompts.map { it.rowId })
+        // An ancestor's row stays out even when it reads as active.
+        val ancestor = SessionMessage(id = 9, role = "user", content = JsonPrimitive("hi"), sessionId = "old")
+        assertEquals(null, (historyToMessages(listOf(ancestor), liveSessionId = "tip").single() as ChatMessage.User).rowId)
+    }
+
+    @Test
+    fun whatWentOutIsKeptUnlessFilesRodeAlong() {
+        val messages = historyToMessages(
+            listOf(
+                SessionMessage(id = 1, role = "user", content = JsonPrimitive("plain")),
+                SessionMessage(id = 2, role = "user", content = JsonPrimitive("@file:notes.txt\n\nread it")),
+            ),
+        ).filterIsInstance<ChatMessage.User>()
+
+        assertEquals("plain", messages[0].sentText)
+        assertEquals(1L, messages[0].rowId)
+        assertEquals(null, messages[1].sentText)
     }
 }

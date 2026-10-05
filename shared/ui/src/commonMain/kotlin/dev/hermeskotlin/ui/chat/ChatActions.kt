@@ -4,8 +4,14 @@ import androidx.compose.foundation.text.input.TextFieldState
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.InputRequest
+import dev.hermeskotlin.core.settings.RunningSend
 import dev.hermeskotlin.core.slash.SlashSuggestion
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.JsonObject
+
+private val DefaultRunningSend: StateFlow<RunningSend> = MutableStateFlow(RunningSend.Steer).asStateFlow()
 
 /**
  * What the chat's layout ([ChatView]) asks of whatever runs the chat: [ChatViewModel] in the app,
@@ -15,8 +21,14 @@ interface ChatActions {
     /** What's being typed. */
     val composer: TextFieldState
 
-    /** Sends the composer; mid-turn it corrects the running turn, unless [queue] holds it for the next one. */
-    fun send(queue: Boolean = false)
+    /**
+     * Sends the composer. Mid-turn it goes the way [mode] says (steered in, queued, or sent after a stop),
+     * or as [runningSend] says when no mode was picked for this message.
+     */
+    fun send(mode: RunningSend? = null)
+
+    /** What Send does while a reply runs, from Settings. */
+    val runningSend: StateFlow<RunningSend> get() = DefaultRunningSend
 
     fun interrupt()
 
@@ -51,6 +63,17 @@ interface ChatActions {
     /** Copies the chat up to message [key] into a new chat (`session.branch`) and opens it, if it [can change][canChangeChat]. */
     fun branchFrom(key: String)
 
+    /** Drops reply [key] and everything after it and sends the prompt it answered again, if the chat [can change][canChangeChat]. */
+    fun regenerate(key: String)
+
+    /**
+     * Puts prompt [key] in the composer to change it; the next send replaces it and everything after it.
+     * What was being typed waits and comes back when the edit is sent or [cancelled][cancelEdit].
+     */
+    fun startEdit(key: String)
+
+    fun cancelEdit()
+
     /** Looks in the transcript again for a prompt whose delivery is unknown. */
     fun checkDelivery(key: String)
 
@@ -61,6 +84,9 @@ interface ChatActions {
     fun editMessage(key: String)
 
     fun retry()
+
+    /** Loads the page of the conversation before what's shown, as the reader scrolls to the top. */
+    fun loadOlder() {}
 
     fun dismissError()
 

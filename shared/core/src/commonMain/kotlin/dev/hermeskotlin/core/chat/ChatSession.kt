@@ -5,9 +5,11 @@ import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
+import dev.hermeskotlin.core.rpc.GatewayEvent
 import dev.hermeskotlin.core.rpc.JsonRpcClient
 import dev.hermeskotlin.core.rpc.RpcException
 import dev.hermeskotlin.core.rpc.RpcTimeoutException
+import dev.hermeskotlin.core.sessions.SessionMessage
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.slash.SlashCommand
 import dev.hermeskotlin.core.slash.SlashResult
@@ -17,7 +19,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.first
 import dev.hermeskotlin.core.models.ReasoningEffort
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.TimeSource
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -42,8 +47,11 @@ import kotlinx.serialization.json.put
  * `session.resume {omit_messages}` attaches a live runtime session, and the turn streams in as events.
  * A new chat ([initialStoredId] null) is created with `session.create` on the first send.
  *
- * Re-attaches after every reconnect (runtime ids belong to the socket) and refetches the transcript,
- * since a turn may have finished while we were away.
+ * Re-attaches after every reconnect (runtime ids belong to the socket). What happened while we were away is
+ * replayed from the gateway's event ring (`session.events.since`) when it still holds it; otherwise the
+ * transcript is refetched, since a turn may have finished meanwhile.
+ *
+ * The transcript loads a page at a time: the newest on opening, older ones through [loadOlder].
  *
  * [profile] names the Hermes profile the chat belongs to (null: the gateway's launch profile). Only
  * create, resume and REST calls carry it; the gateway scopes the rest by the runtime session.
@@ -58,7 +66,11 @@ class ChatSession(
     private val profile: String? = null,
     /** Where flagged tool output is remembered, since the transcript forgets it. */
     private val risks: ToolRiskStore? = null,
+    /** Dates what this device sends and sees finish; live events carry no time of their own. */
+    private val clock: Clock = Clock.System,
 ) {
+    private fun nowSeconds(): Double = clock.now().toEpochMilliseconds() / 1000.0
+
     private val _state = MutableStateFlow(ChatState(storedSessionId = initialStoredId, title = initialTitle))
     val state: StateFlow<ChatState> = _state.asStateFlow()
 
@@ -73,6 +85,9 @@ class ChatSession(
      */
     private var ownTurnsPending = 0
     private var foreignTurn = false
+
+    /** A [rewind] cut the transcript; the stored rows replace the live copy once its turn ends. */
+    private var rewound = false
     private var jobs: List<Job> = emptyList()
 
     /** What went out for each bubble marked by a [SendCheck], by key: a skill's bubble shows less than was sent. */
@@ -83,6 +98,33 @@ class ChatSession(
      * `session.resume`/`session.create` and us reading that reply. Claimed once the id is known.
      */
     private val unclaimed = ArrayDeque<Pair<String, InputRequest>>()
+
+    /** The stored rows loaded so far, oldest first: the newest page and any older ones scrolled back to. */
+    private var rows: List<SessionMessage> = emptyList()
+
+    /** The session the newest page was read from; prompts stored under an older one can't be cut at. */
+    private var rowsSessionId: String? = null
+
+    /** Rows an older page found already loaded, as the transcript grew since: the next one reads past them. */
+    private var olderSkew = 0
+    private val historyMutex = Mutex()
+
+    /**
+     * Where the event stream stands, to pick it up after a drop: the seq of the last event applied, the runtime
+     * session it counts in and the gateway run (`replay_epoch`) numbering it. Null seq: nothing to resume from.
+     */
+    private var lastSeq: Long? = null
+    private var seqRuntime: String? = null
+    private var seqEpoch: String? = null
+
+    /** Live events held back while the gap before them is filled; null when nothing is being caught up. */
+    private var held: MutableList<GatewayEvent>? = null
+
+    /** Orders applying events, holding them and filling gaps, which run on different threads. Never held across I/O. */
+    private val streamMutex = Mutex()
+
+    /** The running turn's reply so far as the last `session.resume` had it, for when the gap can't be filled. */
+    private var inflightText: String? = null
 
     fun start() {
         if (jobs.isNotEmpty()) return
@@ -131,7 +173,13 @@ class ChatSession(
         val key = "local-${_state.value.keySeq}"
         _state.update {
             it.copy(
-                messages = it.messages + ChatMessage.User(key, display ?: visible, pending = true, attachments = attachments.map { a -> a.toShown() }),
+                messages = it.messages + ChatMessage.User(
+                    key,
+                    display ?: visible,
+                    pending = true,
+                    attachments = attachments.map { a -> a.toShown() },
+                    timestamp = nowSeconds(),
+                ),
                 keySeq = it.keySeq + 1,
                 error = null,
             )
@@ -170,10 +218,15 @@ class ChatSession(
             val status = result.string("status")
             // Steering or redirecting folds the text into the running turn instead of starting one.
             if (status !in TURN_STARTING_STATUSES) ownTurnsPending = (ownTurnsPending - 1).coerceAtLeast(0)
+            // The row written for it, so it can be regenerated or edited before the transcript is read again.
+            val rowId = result.long("user_row_id")
+            val sentText = visible.takeIf { attachments.isEmpty() && display == null && it.isNotEmpty() }
             _state.update { state ->
                 val sent = state.copy(
                     running = true,
-                    messages = state.messages.updateUser(key) { it.copy(pending = false, queued = status == "queued") },
+                    messages = state.messages.updateUser(key) {
+                        it.copy(pending = false, queued = status == "queued", rowId = rowId, sentText = sentText)
+                    },
                 )
                 // What streamed before the correction stays above it; the rest of the turn continues below.
                 if (status in CORRECTION_STATUSES) sent.sealReplyBefore(key) else sent
@@ -312,6 +365,101 @@ class ChatSession(
     }
 
     /**
+     * Rewinds the chat to prompt [key] and sends [text] in its place: a regenerate sends the prompt's own text
+     * again, an edit a new one. The prompt and everything after it go, here and on the gateway, in one
+     * `prompt.submit` that cuts the stored transcript before the prompt's row, as Desktop's rewind does. Only
+     * between turns, and only for a prompt with a stored row ([ChatMessage.User.rowId]).
+     *
+     * Refused (busy, or the gateway can't find the row any more): nothing changed, and [SendOutcome.NotSent].
+     * When the link drops before the answer, the stored transcript says whether it went.
+     */
+    suspend fun rewind(key: String, text: String): SendOutcome {
+        val trimmed = text.trim()
+        val before = _state.value
+        val index = before.messages.indexOfFirst { it.key == key }
+        val rowId = (before.messages.getOrNull(index) as? ChatMessage.User)?.rowId
+        if (trimmed.isEmpty() || rowId == null) return SendOutcome.NotSent
+        // The gateway won't cut the chat mid-turn; say so rather than leave the send doing nothing.
+        if (before.running) {
+            _state.update { it.copy(error = BUSY_MESSAGE) }
+            return SendOutcome.NotSent
+        }
+        val client = connectedClient() ?: run {
+            _state.update { it.copy(error = "$NOT_CONNECTED Try again once it reconnects.") }
+            return SendOutcome.NotSent
+        }
+        val newKey = "local-${before.keySeq}"
+        // Shown cut at once; put back as it was if the gateway turns it down.
+        _state.update {
+            it.copy(
+                messages = it.messages.take(index) + ChatMessage.User(newKey, trimmed, pending = true),
+                keySeq = it.keySeq + 1,
+                error = null,
+            )
+        }
+        ownTurnsPending++
+        var submitted = false
+        return try {
+            val runtimeId = ensureAttached(client)
+            submitted = true
+            val result = client.request(
+                "prompt.submit",
+                buildJsonObject {
+                    put("session_id", runtimeId)
+                    put("text", trimmed)
+                    put("truncate_before_row_id", rowId)
+                    put("confirm_truncate", true)
+                    // Cutting at the first prompt empties the transcript, which the gateway wants said outright.
+                    put("confirm_empty_truncate", true)
+                },
+            ) as? JsonObject
+            if (result.string("status") !in TURN_STARTING_STATUSES) ownTurnsPending = (ownTurnsPending - 1).coerceAtLeast(0)
+            // The stored rows decide once the turn is over, so what shows matches the gateway's transcript.
+            rewound = true
+            _state.update { state ->
+                state.copy(
+                    running = true,
+                    messages = state.messages.updateUser(newKey) {
+                        it.copy(pending = false, rowId = result.long("user_row_id"), sentText = trimmed)
+                    },
+                )
+            }
+            SendOutcome.Sent
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ownTurnsPending = (ownTurnsPending - 1).coerceAtLeast(0)
+            if (submitted && e !is RpcException) {
+                // No answer: the cut may have happened. The transcript shows which, and its last prompt says whether this went.
+                _state.update { state -> state.copy(messages = state.messages.filterNot { it.key == newKey }) }
+                loadHistory()
+                val arrived = _state.value.historyError == null &&
+                    (_state.value.messages.lastOrNull { it is ChatMessage.User } as? ChatMessage.User)?.text == trimmed
+                if (arrived) {
+                    rewound = true
+                    return SendOutcome.Sent
+                }
+                _state.update { it.copy(error = "Lost the connection while sending. The chat shows what Hermes has.") }
+                return SendOutcome.NotSent
+            }
+            val stale = (e as? RpcException)?.code in STALE_REWIND_CODES
+            _state.update { state ->
+                state.copy(
+                    messages = before.messages,
+                    error = when {
+                        (e as? RpcException)?.code == BUSY -> BUSY_MESSAGE
+                        stale -> "This message can't be changed any more."
+                        else -> e.message ?: "Couldn't send the message."
+                    },
+                )
+            }
+            // The gateway's transcript isn't what this chat shows; show it as it is.
+            if (stale) loadHistory()
+            SendOutcome.NotSent
+        }
+    }
+
+    /**
      * Whether the transcript has a prompt more than the [before] shown ahead of the send, the latest being
      * [visible], while bubble [key] says it's being checked. Counted, not matched by key: an own prompt's
      * bubble keeps its local key, so its stored row always looks new. The gateway writes the prompt as the
@@ -324,10 +472,12 @@ class ChatSession(
         var read = false
         repeat(DELIVERY_LOOKS) { look ->
             if (look > 0) delay(DELIVERY_LOOK_INTERVAL_MS)
-            when (val result = sessions.messages(gateway, id, profile = profile)) {
+            when (val result = sessions.messages(gateway, id, limit = HISTORY_PAGE, profile = profile)) {
                 is ApiResult.Success -> {
+                    // Counted over the same stretch as the prompts shown: the loaded rows, brought up to date.
+                    val stored = rows.afterNewestPage(result.value.messages) ?: return@repeat
                     read = true
-                    val prompts = historyToMessages(result.value.messages).filterIsInstance<ChatMessage.User>()
+                    val prompts = historyToMessages(stored).filterIsInstance<ChatMessage.User>()
                     // Any prompt past the ones shown before it: later prompts may follow it by a later check.
                     if (prompts.drop(before).any { it.text.contains(visible) }) return true
                 }
@@ -840,20 +990,92 @@ class ChatSession(
     private fun removeMessage(key: String) = _state.update { state -> state.copy(messages = state.messages.filterNot { it.key == key }) }
 
     /**
+     * Slips [text] into the running turn with `session.steer`: the agent reads it after its current tool
+     * call, without stopping. With nothing running, or when the gateway turns it down (`rejected`), it goes
+     * as the next prompt instead; a gateway that can't steer (no such method, or an agent without it) gets a
+     * plain prompt, which its busy mode folds in as before.
+     *
+     * A steer the turn ended before reading isn't lost: the gateway queues the leftover as the next prompt,
+     * and that turn shows up like one started elsewhere, its prompt pulled from the transcript.
+     */
+    suspend fun steer(text: String): SendOutcome {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return SendOutcome.NotSent
+        val client = connectedClient()
+        val runtimeId = _state.value.runtimeSessionId
+        // Offline, submit says so and hands the text back.
+        if (!_state.value.running || client == null || runtimeId == null) return submit(trimmed, queue = true)
+        val key = "local-${_state.value.keySeq}"
+        _state.update {
+            it.copy(messages = it.messages + ChatMessage.User(key, trimmed, pending = true), keySeq = it.keySeq + 1, error = null)
+        }
+        val status = try {
+            (client.request("session.steer", buildJsonObject {
+                put("session_id", runtimeId)
+                put("text", trimmed)
+            }) as? JsonObject).string("status")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: RpcException) {
+            removeMessage(key)
+            if (e.code in STEER_UNSUPPORTED) return submit(trimmed)
+            _state.update { it.copy(error = e.message.ifBlank { "Couldn't steer the reply." }) }
+            return SendOutcome.NotSent
+        } catch (e: Exception) {
+            // Out without a reply: the agent may have read it, so it isn't handed back to go twice. Like a
+            // lost correction, the bubble stays marked; a steer leaves nothing in the transcript to settle it.
+            return settleUnanswered(key, arrived = null, UnsettledPrompt(trimmed, display = null, startsTurn = false)) {}
+        }
+        if (status != STEER_ACCEPTED) {
+            // Turned down: the turn ended meanwhile, or the agent can't take it now. It runs next instead.
+            removeMessage(key)
+            return submit(trimmed, queue = true)
+        }
+        _state.update { state ->
+            // Like a correction: what streamed so far stays above it, the rest of the turn continues below.
+            state.copy(messages = state.messages.updateUser(key) { it.copy(pending = false) }).sealReplyBefore(key)
+        }
+        return SendOutcome.Sent
+    }
+
+    /**
+     * Stops the running reply (`session.interrupt`), waits for the turn to settle, then sends [text] as a
+     * fresh turn. The gateway drops the prompts queued behind the stopped turn; their text comes back in
+     * [StopAndSend.dropped]. A turn that won't settle in time gets the prompt queued behind it, so it still
+     * runs after it rather than folding into the turn it was meant to replace.
+     */
+    suspend fun stopAndSubmit(
+        text: String,
+        attachments: List<OutgoingAttachment> = emptyList(),
+        display: String? = null,
+    ): StopAndSend {
+        if (!_state.value.running) return StopAndSend(submit(text, attachments, display))
+        val dropped = interruptTurn() ?: run {
+            _state.update { it.copy(error = it.error ?: NOT_CONNECTED) }
+            return StopAndSend(SendOutcome.NotSent)
+        }
+        val settled = withTimeoutOrNull(STOP_SETTLE_TIMEOUT_MS) { _state.first { !it.running } } != null
+        return StopAndSend(submit(text, attachments, display, queue = !settled), dropped)
+    }
+
+    /**
      * Asks the gateway to stop the running turn; `message.complete {status: interrupted}` follows. The
      * gateway drops the prompts queued behind the turn too, so their bubbles go and their text comes back,
      * in order, for the composer.
      */
-    suspend fun interrupt(): List<String> {
-        val client = connectedClient() ?: return emptyList()
-        val runtimeId = _state.value.runtimeSessionId ?: return emptyList()
+    suspend fun interrupt(): List<String> = interruptTurn().orEmpty()
+
+    /** [interrupt], null when the turn couldn't be stopped (the reason is in [ChatState.error]). */
+    private suspend fun interruptTurn(): List<String>? {
+        val client = connectedClient() ?: return null
+        val runtimeId = _state.value.runtimeSessionId ?: return null
         try {
             client.request("session.interrupt", buildJsonObject { put("session_id", runtimeId) })
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             _state.update { it.copy(error = e.message ?: "Couldn't stop the turn.") }
-            return emptyList()
+            return null
         }
         var dropped = emptyList<String>()
         _state.update { state ->
@@ -1014,9 +1236,11 @@ class ChatSession(
                 return@collectLatest
             }
             if (!rowExists) return@collectLatest // a new chat attaches on first send
-            // Catch up on whatever happened while offline, or load what couldn't be read before the link came up.
-            if (attachedBefore || _state.value.historyError != null) loadHistory()
-            if (runCatchingAttach(connectionState.client)) attachedBefore = true
+            // Load what couldn't be read before the link came up; after a drop, attaching catches up.
+            if (!attachedBefore && _state.value.historyError != null) loadHistory()
+            // A chat created on this link was live too, though it never resumed: it catches up the same way.
+            val reconnected = attachedBefore || streamMutex.withLock { seqRuntime != null }
+            if (runCatchingAttach(connectionState.client, reconnected = reconnected)) attachedBefore = true
         }
     }
 
@@ -1024,31 +1248,108 @@ class ChatSession(
         connection.events.collect { event ->
             val runtimeId = _state.value.runtimeSessionId ?: return@collect
             if (event.sessionId != runtimeId) return@collect
-            _state.update { it.reduce(event) }
-            when (event.type) {
-                "tool.output_risk" -> flaggedOutput(event.payload as? JsonObject)?.let { (id, risk) ->
-                    risks?.let { scope.launch { it.remember(id, risk) } }
+            streamMutex.withLock { deliver(event) }
+        }
+    }
+
+    /**
+     * Applies a live event in order: one already applied (replayed, or sent twice) is skipped, and one past a gap
+     * waits, with those after it, while [catchUp] fills the gap. Called under [streamMutex].
+     */
+    private fun deliver(event: GatewayEvent) {
+        held?.let {
+            it += event
+            return
+        }
+        val seq = event.seq
+        val last = lastSeq
+        if (seq != null && last != null) {
+            if (seq <= last) return
+            if (seq > last + 1) {
+                held = mutableListOf(event)
+                val client = connectedClient()
+                val runtimeId = _state.value.runtimeSessionId
+                if (client != null && runtimeId != null) scope.launch { catchUp(client, runtimeId) } else held = null
+                return
+            }
+        }
+        apply(event)
+    }
+
+    /**
+     * Fills the gap after [lastSeq] from the gateway's event ring (`session.events.since`), then lets the held live
+     * events through. When the ring can't fill it (an older gateway, too long away, a restarted gateway) the chat
+     * reloads the transcript and takes the running reply as the gateway has it, as it did before replay existed.
+     */
+    private suspend fun catchUp(client: JsonRpcClient, runtimeId: String) {
+        val from = streamMutex.withLock { lastSeq }
+        val missed = if (from == null) null else try {
+            val reply = client.request(
+                "session.events.since",
+                buildJsonObject {
+                    put("session_id", runtimeId)
+                    put("last_seen", from)
+                },
+            ) as? JsonObject
+            EventReplay.parse(reply, runtimeId, from, seqEpoch)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null // method missing on an older gateway, or the link went again
+        }
+        // Read while live events stay held; the stream lock is only taken to apply.
+        if (missed == null && rowExists && _state.value.runtimeSessionId == runtimeId) loadHistory()
+        streamMutex.withLock {
+            // The link went, or another runtime took over: the next attach starts its own catch-up.
+            if (_state.value.runtimeSessionId != runtimeId) {
+                held = null
+                return
+            }
+            if (missed != null) {
+                missed.forEach(::apply)
+            } else {
+                lastSeq = null
+                val streamed = inflightText
+                if (streamed != null && _state.value.running) {
+                    _state.update { it.withInflight(streamed) }
+                } else if (!_state.value.running) {
+                    _state.update { it.withoutStaleReply() }
                 }
-                "message.start" -> if (ownTurnsPending > 0) {
-                    ownTurnsPending--
-                } else {
-                    foreignTurn = true
+            }
+            val waiting = held.orEmpty()
+            held = null
+            waiting.forEach(::deliver)
+        }
+    }
+
+    private fun apply(event: GatewayEvent) {
+        event.seq?.let { lastSeq = it }
+        val now = nowSeconds()
+        _state.update { it.reduce(event, now) }
+        when (event.type) {
+            "tool.output_risk" -> flaggedOutput(event.payload as? JsonObject)?.let { (id, risk) ->
+                risks?.let { scope.launch { it.remember(id, risk) } }
+            }
+            "message.start" -> if (ownTurnsPending > 0) {
+                ownTurnsPending--
+            } else {
+                foreignTurn = true
+                scope.launch { loadHistory() }
+            }
+            // Swap the live copy for the stored rows, which now hold the other client's prompt for sure.
+            "message.complete" -> {
+                // Nothing can still wait on a person once the turn is over; this also clears a
+                // clarify answered on another client, which gets no request.cancel.
+                _state.update { it.copy(inputRequests = emptyList()) }
+                if (foreignTurn || rewound) {
+                    foreignTurn = false
+                    rewound = false
                     scope.launch { loadHistory() }
                 }
-                // Swap the live copy for the stored rows, which now hold the other client's prompt for sure.
-                "message.complete" -> {
-                    // Nothing can still wait on a person once the turn is over; this also clears a
-                    // clarify answered on another client, which gets no request.cancel.
-                    _state.update { it.copy(inputRequests = emptyList()) }
-                    if (foreignTurn) {
-                        foreignTurn = false
-                        scope.launch { loadHistory() }
-                    }
-                }
-                "request.cancel" -> {
-                    val id = (event.payload as? JsonObject).string("id") ?: return@collect
-                    _state.update { state -> state.copy(inputRequests = state.inputRequests.filterNot { it.id == id }) }
-                }
+            }
+            "request.cancel" -> {
+                val id = (event.payload as? JsonObject).string("id") ?: return
+                _state.update { state -> state.copy(inputRequests = state.inputRequests.filterNot { it.id == id }) }
             }
         }
     }
@@ -1069,32 +1370,106 @@ class ChatSession(
     private fun claimUnclaimed(runtimeId: String): List<InputRequest> =
         unclaimed.filter { it.first == runtimeId }.map { it.second }.also { unclaimed.removeAll { it.first == runtimeId } }
 
-    private suspend fun loadHistory() {
+    /**
+     * Reads the newest page of the transcript and lays it over the loaded rows, so older pages scrolled back to
+     * stay. When it no longer meets them (many turns since), the chat starts over from the newest page.
+     */
+    private suspend fun loadHistory() = historyMutex.withLock {
         val id = _state.value.storedSessionId ?: return
-        val result = sessions.messages(gateway, id, profile = profile)
+        val result = sessions.messages(gateway, id, limit = HISTORY_PAGE, profile = profile)
         val flagged = risks?.all().orEmpty()
         when (result) {
-            is ApiResult.Success -> _state.update { state ->
-                // Keep a reply that is streaming right now; the stored rows don't have it yet. Nor do they
-                // have a correction mid-turn, or the part of the reply shown before it.
-                val corrected = state.messages.indexOfFirst { it.key == state.correctedReplyKey }
-                val live = if (corrected >= 0) {
-                    state.messages.take(corrected).filter { it.isLocalOnly } + state.messages.drop(corrected)
-                } else {
-                    state.messages.filter { it.isLocalOnly }
-                }
-                val stored = historyToMessages(result.value.messages).withRisks(flagged)
-                // A prompt sent without a reply that the transcript now has arrived after all.
-                val storedPrompts = stored.mapNotNullTo(HashSet()) { (it as? ChatMessage.User)?.text }
-                val unsettled = live.filterNot { it is ChatMessage.User && it.check != null && storedPrompts.any { p -> p.contains(it.text) } }
-                state.copy(messages = stored + unsettled, historyLoaded = true, historyError = null)
+            is ApiResult.Success -> {
+                val page = result.value.messages
+                val full = page.size >= HISTORY_PAGE
+                val joined = if (full && rows.isNotEmpty()) rows.withNewest(page.fromFirstTurn()) else null
+                val older = if (joined != null) _state.value.olderMessages else full
+                rows = joined ?: if (full) page.fromFirstTurn() else page
+                rowsSessionId = result.value.sessionId
+                olderSkew = 0
+                showRows(flagged, older)
             }
             else -> _state.update { it.copy(historyLoaded = true, historyError = result.errorMessage) }
         }
     }
 
-    private suspend fun runCatchingAttach(client: JsonRpcClient): Boolean = try {
-        val runtimeId = attach(client)
+    /**
+     * Loads the page of the transcript before the loaded rows, when there is one, as the reader nears the top.
+     * Its messages go above the ones shown, which keep their keys, so the list stays where it was.
+     */
+    suspend fun loadOlder() {
+        if (_state.value.loadingOlder) return
+        loadOlderPage(HISTORY_PAGE)
+    }
+
+    /**
+     * Loads every older page, for what needs the whole transcript (counting rows to branch at). False when a page
+     * couldn't be read.
+     */
+    suspend fun loadAllHistory(): Boolean {
+        repeat(MAX_HISTORY_PAGES) {
+            if (!_state.value.olderMessages) return true
+            if (!loadOlderPage(HISTORY_PAGE_MAX)) return false
+        }
+        return !_state.value.olderMessages
+    }
+
+    private suspend fun loadOlderPage(limit: Int): Boolean {
+        val id = _state.value.storedSessionId ?: return false
+        if (!_state.value.olderMessages) return true
+        _state.update { it.copy(loadingOlder = true) }
+        try {
+            return historyMutex.withLock {
+                // Counted back from the newest row, so it reads from just before the oldest one loaded.
+                val result = sessions.messages(gateway, id, limit = limit, profile = profile, offset = rows.size + olderSkew)
+                if (result !is ApiResult.Success) {
+                    _state.update { it.copy(error = "Couldn't load earlier messages. ${result.errorMessage}".trim()) }
+                    return@withLock false
+                }
+                val page = result.value.messages
+                val full = page.size >= limit
+                val known = rows.mapNotNullTo(HashSet()) { it.id }
+                // Rows already loaded come again when the transcript grew since: skip them, and past them next time.
+                val fresh = (if (full) page.fromFirstTurn() else page).filter { it.id == null || it.id !in known }
+                // Past only those: rows before the page's first prompt that aren't loaded yet come with the next page.
+                if (fresh.isEmpty() && full) olderSkew += page.count { it.id != null && it.id in known }
+                val shownBefore = historyToMessages(rows, rowsSessionId).mapTo(HashSet()) { it.key }
+                rows = fresh + rows
+                val flagged = risks?.all().orEmpty()
+                _state.update { state ->
+                    // The stored rows lead the list; what follows them (the live turn, local notes) stays as it is.
+                    val stored = state.messages.takeWhile { it.key in shownBefore }.size
+                    state.copy(
+                        messages = historyToMessages(rows, rowsSessionId).withRisks(flagged) + state.messages.drop(stored),
+                        olderMessages = full,
+                    )
+                }
+                true
+            }
+        } finally {
+            _state.update { it.copy(loadingOlder = false) }
+        }
+    }
+
+    /** Shows the loaded [rows] in place of the stored messages, keeping what they can't hold yet. */
+    private fun showRows(flagged: Map<String, ToolRisk>, older: Boolean) = _state.update { state ->
+        // Keep a reply that is streaming right now; the stored rows don't have it yet. Nor do they
+        // have a correction mid-turn, or the part of the reply shown before it.
+        val corrected = state.messages.indexOfFirst { it.key == state.correctedReplyKey }
+        val live = if (corrected >= 0) {
+            state.messages.take(corrected).filter { it.isLocalOnly } + state.messages.drop(corrected)
+        } else {
+            state.messages.filter { it.isLocalOnly }
+        }
+        val stored = historyToMessages(rows, rowsSessionId).withRisks(flagged)
+        // A prompt sent without a reply that the transcript now has arrived after all.
+        val storedPrompts = stored.mapNotNullTo(HashSet()) { (it as? ChatMessage.User)?.text }
+        val unsettled = live.filterNot { it is ChatMessage.User && it.check != null && storedPrompts.any { p -> p.contains(it.text) } }
+        state.copy(messages = stored + unsettled, historyLoaded = true, historyError = null, olderMessages = older)
+    }
+
+    private suspend fun runCatchingAttach(client: JsonRpcClient, reconnected: Boolean = false): Boolean = try {
+        val runtimeId = attach(client, reconnected)
         scope.launch { refreshSubagents(client, runtimeId) }
         true
     } catch (e: CancellationException) {
@@ -1109,8 +1484,12 @@ class ChatSession(
         return if (rowExists) attach(client) else create(client)
     }
 
-    /** `session.resume` the stored id; the reply's `session_id` is the runtime id events carry. */
-    private suspend fun attach(client: JsonRpcClient): String = attachMutex.withLock {
+    /**
+     * `session.resume` the stored id; the reply's `session_id` is the runtime id events carry. After a drop
+     * ([reconnected]) the same runtime picks up from the last event applied (see [catchUp]); a new one, or one
+     * with nothing to pick up from, reloads the transcript instead.
+     */
+    private suspend fun attach(client: JsonRpcClient, reconnected: Boolean = false): String = attachMutex.withLock {
         val stored = _state.value.storedSessionId ?: error("No stored session to resume")
         _state.update { it.copy(attachment = Attachment.Attaching) }
         val result = client.request(
@@ -1136,23 +1515,44 @@ class ChatSession(
                 params = snapshot["params"] as? JsonObject ?: JsonObject(emptyMap()),
             )
         }
+        val streamed = inflight.string("assistant").orEmpty()
+        val epoch = readyEpoch(client)
+        val (resumable, catchingUp) = streamMutex.withLock {
+            inflightText = streamed
+            // Seqs count per runtime session and per gateway run, so only the same of both can be picked up.
+            val resumable = reconnected && lastSeq != null && runtimeId == seqRuntime && epoch != null && epoch == seqEpoch
+            if (!resumable) lastSeq = null
+            seqRuntime = runtimeId
+            seqEpoch = epoch
+            // Held from before the state names the runtime, so no live event slips in ahead of the missed ones.
+            val catchingUp = resumable && held == null
+            if (catchingUp) held = mutableListOf()
+            resumable to catchingUp
+        }
+        if (reconnected && (!resumable || _state.value.historyError != null)) loadHistory()
         _state.update { state ->
-            var messages = state.messages
-            val streamed = inflight.string("assistant").orEmpty()
-            val hasOpenReply = messages.any { (it as? ChatMessage.Assistant)?.streaming == true }
-            if (running && !hasOpenReply) {
-                messages = messages + ChatMessage.Assistant(key = "live-${state.keySeq}", text = streamed, streaming = true)
-            }
             state.copy(
                 attachment = Attachment.Attached(runtimeId),
                 running = running,
-                messages = messages,
+                // Picking up replays the turn itself; otherwise the reply shows as far as the gateway has it,
+                // or, when the turn ended while away, as the transcript just read has it.
+                messages = when {
+                    resumable -> state.messages
+                    running -> state.withInflight(streamed).messages
+                    reconnected -> state.withoutStaleReply().messages
+                    else -> state.messages
+                },
                 inputRequests = open.plusNew(claimUnclaimed(runtimeId)),
                 keySeq = state.keySeq + 1,
             ).withInfo(result["info"] as? JsonObject).withTodos(TodoList.parse(result["todo_state"] as? JsonObject))
         }
+        if (catchingUp) scope.launch { catchUp(client, runtimeId) }
         runtimeId
     }
+
+    /** The gateway run's `replay_epoch` from [client]'s `gateway.ready`, when it is the connected one. */
+    private fun readyEpoch(client: JsonRpcClient): String? =
+        (connection.state.value as? ConnectionState.Connected)?.takeIf { it.client === client }?.ready.string("replay_epoch")
 
     /** `session.create` for a brand-new chat; its stored row appears with the first prompt. */
     private suspend fun create(client: JsonRpcClient): String = attachMutex.withLock {
@@ -1174,6 +1574,11 @@ class ChatSession(
             },
         ) as? JsonObject ?: error("Empty session.create reply")
         val runtimeId = result.string("session_id") ?: error("session.create returned no session_id")
+        streamMutex.withLock {
+            lastSeq = null
+            seqRuntime = runtimeId
+            seqEpoch = readyEpoch(client)
+        }
         _state.update {
             it.copy(
                 attachment = Attachment.Attached(runtimeId),
@@ -1204,12 +1609,35 @@ class ChatSession(
         /** `prompt.submit` statuses for text folded into the running turn (busy mode interrupt or steer). */
         val CORRECTION_STATUSES = setOf("redirected", "steered")
 
+        /** `session.steer`'s status for a steer the running turn took in. */
+        const val STEER_ACCEPTED = "queued"
+
+        /** `session.steer` errors for a gateway that can't steer: no such method, or an agent without `steer()`. */
+        val STEER_UNSUPPORTED = setOf(METHOD_NOT_FOUND, 4010)
+
+        /** How long Stop & send waits for the stopped turn's `message.complete` before queueing behind it. */
+        const val STOP_SETTLE_TIMEOUT_MS = 10_000L
+
         const val MAX_UNCLAIMED = 8
+
+        /** Bounds [loadAllHistory]: 50 pages of the dashboard's most is 25,000 rows. */
+        const val MAX_HISTORY_PAGES = 50
 
         /** Uploads of several MB over a phone link take a while. */
         const val UPLOAD_TIMEOUT_MS = 120_000L
 
         const val PDF_RENDER_UNAVAILABLE = 5028
+
+        /** The gateway's "busy": a turn is running, so nothing was cut. */
+        const val BUSY = 4009
+
+        const val BUSY_MESSAGE = "Wait for the reply to finish, then try again."
+
+        /**
+         * A rewind the gateway can't place: the row isn't in what the live agent holds (4018: compressed
+         * away, cut elsewhere), the prompt count drifted (4030), or the target was malformed (4004).
+         */
+        val STALE_REWIND_CODES = setOf(4018, 4030, 4004)
 
         const val NOT_CONNECTED = "Not connected to the gateway."
 
@@ -1240,6 +1668,9 @@ class ChatSession(
     }
 }
 
+/** How [ChatSession.stopAndSubmit] went: the send's [outcome], and the queued prompts the stop dropped, to give back. */
+data class StopAndSend(val outcome: SendOutcome, val dropped: List<String> = emptyList())
+
 /** How [ChatSession.setModel] went. */
 sealed interface ModelSwitch {
     data object Done : ModelSwitch
@@ -1253,6 +1684,36 @@ sealed interface ModelSwitch {
 
 private fun List<InputRequest>.plusNew(more: List<InputRequest>): List<InputRequest> =
     this + more.filter { new -> none { it.id == new.id } }
+
+/**
+ * The running turn's reply as the gateway has it so far ([streamed], `inflight.assistant`): it opens the reply when
+ * none is, and replaces one that missed part of it. A reply that doesn't lead into it (written since) stays.
+ */
+internal fun ChatState.withInflight(streamed: String): ChatState {
+    val open = messages.indexOfLast { it is ChatMessage.Assistant && it.streaming }
+    if (open < 0) {
+        return copy(messages = messages + ChatMessage.Assistant(key = "live-$keySeq", text = streamed, streaming = true), keySeq = keySeq + 1)
+    }
+    val reply = messages[open] as ChatMessage.Assistant
+    if (streamed.length <= reply.text.length || !streamed.startsWith(reply.text)) return this
+    return copy(messages = messages.toMutableList().apply { set(open, reply.copy(text = streamed)) })
+}
+
+/**
+ * The reply still marked streaming from a turn that ended while the link was down and couldn't be replayed. The
+ * transcript just read holds the turn, so the live copy goes; when it couldn't be read, the copy stays, closed.
+ */
+internal fun ChatState.withoutStaleReply(): ChatState {
+    if (messages.none { it is ChatMessage.Assistant && it.streaming }) return this
+    return copy(
+        messages = if (historyError == null) {
+            messages.filterNot { it is ChatMessage.Assistant && it.streaming }
+        } else {
+            messages.map { if (it is ChatMessage.Assistant && it.streaming) it.copy(streaming = false) else it }
+        },
+        correctedReplyKey = null,
+    )
+}
 
 private fun List<ChatMessage>.updateUser(key: String, change: (ChatMessage.User) -> ChatMessage.User): List<ChatMessage> =
     map { if (it is ChatMessage.User && it.key == key) change(it) else it }

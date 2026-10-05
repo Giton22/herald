@@ -16,7 +16,9 @@ import dev.hermeskotlin.core.push.PushSetup
 import dev.hermeskotlin.core.push.PushStatus
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
+import dev.hermeskotlin.core.settings.WallpaperStore
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,7 +39,16 @@ class SettingsViewModel(
     private val probe: GatewayProbe,
     private val connectionCheck: ConnectionCheck,
     private val push: PushSetup,
+    private val wallpapers: WallpaperStore,
 ) : ViewModel() {
+
+    /** The chat background's encoded image, or null when there's none (or it isn't read yet). */
+    val wallpaper: StateFlow<ByteArray?> =
+        wallpapers.wallpaper.map { it?.image }.stateIn(viewModelScope, SharingStarted.Eagerly, wallpapers.wallpaper.value?.image)
+
+    fun setWallpaper(image: ByteArray) = wallpapers.set(image)
+
+    fun removeWallpaper() = wallpapers.clear()
 
     private val _check = MutableStateFlow(ConnectionCheckState())
     val check: StateFlow<ConnectionCheckState> = _check.asStateFlow()

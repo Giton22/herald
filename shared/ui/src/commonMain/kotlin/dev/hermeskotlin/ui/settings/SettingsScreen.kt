@@ -1,6 +1,8 @@
 package dev.hermeskotlin.ui.settings
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,13 +31,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.Activity
 import com.composables.icons.lucide.ArrowLeftRight
+import com.composables.icons.lucide.Image
 import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
@@ -48,13 +55,21 @@ import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.TextSize
 import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.core.settings.VoicePause
+import dev.hermeskotlin.core.settings.RunningSend
+import dev.hermeskotlin.core.settings.WallpaperStrength
+import dev.hermeskotlin.ui.chat.label
+import dev.hermeskotlin.ui.chat.summary
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.BottomSheet
 import dev.hermeskotlin.designsystem.components.Button
+import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
+import dev.hermeskotlin.designsystem.danger
+import dev.hermeskotlin.designsystem.radii
+import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.components.SegmentedControl
 import dev.hermeskotlin.designsystem.components.SheetHeader
 import dev.hermeskotlin.designsystem.components.Surface
@@ -86,6 +101,15 @@ fun SettingsScreen(
     val check by viewModel.check.collectAsStateWithLifecycle()
     val push by viewModel.pushStatus.collectAsStateWithLifecycle()
     val pushTest by viewModel.pushTest.collectAsStateWithLifecycle()
+    val wallpaper by viewModel.wallpaper.collectAsStateWithLifecycle()
+    var wallpaperError by remember { mutableStateOf<String?>(null) }
+    val chooseWallpaper = rememberWallpaperPicker(
+        onPicked = {
+            wallpaperError = null
+            viewModel.setWallpaper(it)
+        },
+        onError = { wallpaperError = it },
+    )
     var checkOpen by remember { mutableStateOf(false) }
     LaunchedEffect(gateway) { viewModel.bind(gateway) }
     PlatformBackHandler(enabled = !checkOpen, onBack = onBack)
@@ -99,6 +123,14 @@ fun SettingsScreen(
         pushTest = pushTest,
         onPushAnywhere = viewModel::setPushAnywhere,
         onPushTest = viewModel::sendPushTest,
+        wallpaper = rememberWallpaperBitmap(wallpaper),
+        hasWallpaper = wallpaper != null,
+        wallpaperError = wallpaperError,
+        onChooseWallpaper = chooseWallpaper,
+        onRemoveWallpaper = {
+            wallpaperError = null
+            viewModel.removeWallpaper()
+        },
     )
     BottomSheet(visible = checkOpen, onDismiss = { checkOpen = false }) {
         SheetHeader("Check connection", subtitle = "Each stage is tested on its own.")
@@ -131,6 +163,12 @@ internal fun SettingsView(
     pushTest: Boolean? = null,
     onPushAnywhere: (Boolean) -> Unit = {},
     onPushTest: () -> Unit = {},
+    /** The chat background, once decoded. */
+    wallpaper: ImageBitmap? = null,
+    hasWallpaper: Boolean = wallpaper != null,
+    wallpaperError: String? = null,
+    onChooseWallpaper: () -> Unit = {},
+    onRemoveWallpaper: () -> Unit = {},
 ) {
     Box(
         Modifier
@@ -170,9 +208,59 @@ internal fun SettingsView(
                             optionLabel = { it.name },
                         )
                     }
+                    Divider()
+                    Field("Chat background", detail = "A photo behind your conversations.") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (wallpaper != null) {
+                                val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+                                Image(
+                                    wallpaper,
+                                    contentDescription = "Current chat background",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.size(width = 40.dp, height = 64.dp).clip(shape).border(1.dp, Theme[colors][stroke], shape),
+                                )
+                            }
+                            Button(
+                                if (hasWallpaper) "Change" else "Choose photo",
+                                onClick = onChooseWallpaper,
+                                variant = ButtonVariant.Secondary,
+                                size = ButtonSize.Small,
+                                leadingIcon = Lucide.Image,
+                            )
+                            if (hasWallpaper) {
+                                Button("Remove", onClick = onRemoveWallpaper, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+                            }
+                        }
+                        if (wallpaperError != null) {
+                            Text(wallpaperError, style = Theme[typography][bodySmall], color = Theme[colors][danger])
+                        }
+                    }
+                    if (hasWallpaper) {
+                        Divider()
+                        Field("Background strength", detail = "How much of the photo shows through.") {
+                            SegmentedControl(
+                                options = WallpaperStrength.entries,
+                                selected = settings.wallpaperStrength,
+                                onSelect = { strength -> onUpdate { it.copy(wallpaperStrength = strength) } },
+                                optionLabel = { it.name },
+                            )
+                        }
+                    }
                 }
 
                 Section("Chat") {
+                    Field(
+                        "While a reply is running, Send…",
+                        detail = "${settings.runningSend.summary}. Hold Send to pick another way for one message.",
+                    ) {
+                        SegmentedControl(
+                            options = RunningSend.entries,
+                            selected = settings.runningSend,
+                            onSelect = { mode -> onUpdate { it.copy(runningSend = mode) } },
+                            optionLabel = { it.label },
+                        )
+                    }
+                    Divider()
                     SwitchRow(
                         title = "Show reasoning",
                         detail = "The model's thinking, collapsed above each reply.",
@@ -192,6 +280,20 @@ internal fun SettingsView(
                         detail = "What each reply took, under it. The chat menu has the totals and cost.",
                         checked = settings.showUsage,
                         onCheckedChange = { on -> onUpdate { it.copy(showUsage = on) } },
+                    )
+                    Divider()
+                    SwitchRow(
+                        title = "Message timestamps",
+                        detail = "The time under each prompt and finished reply.",
+                        checked = settings.showTimestamps,
+                        onCheckedChange = { on -> onUpdate { it.copy(showTimestamps = on) } },
+                    )
+                    Divider()
+                    SwitchRow(
+                        title = "Wrap code lines",
+                        detail = "Long lines in code blocks wrap instead of scrolling sideways.",
+                        checked = settings.wrapCode,
+                        onCheckedChange = { on -> onUpdate { it.copy(wrapCode = on) } },
                     )
                     Divider()
                     SwitchRow(
@@ -254,6 +356,21 @@ internal fun SettingsView(
                             onPushTest,
                         )
                     }
+                }
+
+                Section("Privacy") {
+                    val canLock = deviceHasScreenLock()
+                    SwitchRow(
+                        title = "App lock",
+                        detail = if (canLock || settings.appLock) {
+                            "Ask for your fingerprint, face or screen lock when Herald opens and after a minute away. " +
+                                "Hides Herald in Recents and blocks screenshots of it. Notification actions keep working."
+                        } else {
+                            "Set a screen lock in Android's settings first."
+                        },
+                        checked = settings.appLock,
+                        onCheckedChange = { on -> if (canLock || !on) onUpdate { it.copy(appLock = on) } },
+                    )
                 }
 
                 Section("Account") {

@@ -40,13 +40,33 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- hermes://bot/<profile> opens that bot's chat, the link Hermes Desktop uses for a bot. -->
+            <!--
+                hermes://new-chat and new-chat-voice start a chat (the launcher shortcuts); session/<id> opens one;
+                bot/<profile> opens that bot's chat, the link Hermes Desktop uses for a bot.
+            -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="hermes" android:host="bot" />
+                <data android:scheme="hermes" />
+                <data android:host="new-chat" />
+                <data android:host="new-chat-voice" />
+                <data android:host="session" />
+                <data android:host="bot" />
             </intent-filter>
+            <!--
+                Text, links, pictures and files shared from other apps start a new chat with them as its draft.
+                Any type: the composer attaches any file, within its size limits.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <!-- Wakes the app after a reboot or an update, to reconnect when Stay connected is on. -->
