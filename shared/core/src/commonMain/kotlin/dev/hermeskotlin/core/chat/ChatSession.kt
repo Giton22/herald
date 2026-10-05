@@ -5,9 +5,11 @@ import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
+import dev.hermeskotlin.core.rpc.GatewayEvent
 import dev.hermeskotlin.core.rpc.JsonRpcClient
 import dev.hermeskotlin.core.rpc.RpcException
 import dev.hermeskotlin.core.rpc.RpcTimeoutException
+import dev.hermeskotlin.core.sessions.SessionMessage
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.slash.SlashCommand
 import dev.hermeskotlin.core.slash.SlashResult
@@ -42,8 +44,11 @@ import kotlinx.serialization.json.put
  * `session.resume {omit_messages}` attaches a live runtime session, and the turn streams in as events.
  * A new chat ([initialStoredId] null) is created with `session.create` on the first send.
  *
- * Re-attaches after every reconnect (runtime ids belong to the socket) and refetches the transcript,
- * since a turn may have finished while we were away.
+ * Re-attaches after every reconnect (runtime ids belong to the socket). What happened while we were away is
+ * replayed from the gateway's event ring (`session.events.since`) when it still holds it; otherwise the
+ * transcript is refetched, since a turn may have finished meanwhile.
+ *
+ * The transcript loads a page at a time: the newest on opening, older ones through [loadOlder].
  *
  * [profile] names the Hermes profile the chat belongs to (null: the gateway's launch profile). Only
  * create, resume and REST calls carry it; the gateway scopes the rest by the runtime session.
@@ -83,6 +88,30 @@ class ChatSession(
      * `session.resume`/`session.create` and us reading that reply. Claimed once the id is known.
      */
     private val unclaimed = ArrayDeque<Pair<String, InputRequest>>()
+
+    /** The stored rows loaded so far, oldest first: the newest page and any older ones scrolled back to. */
+    private var rows: List<SessionMessage> = emptyList()
+
+    /** Rows an older page found already loaded, as the transcript grew since: the next one reads past them. */
+    private var olderSkew = 0
+    private val historyMutex = Mutex()
+
+    /**
+     * Where the event stream stands, to pick it up after a drop: the seq of the last event applied, the runtime
+     * session it counts in and the gateway run (`replay_epoch`) numbering it. Null seq: nothing to resume from.
+     */
+    private var lastSeq: Long? = null
+    private var seqRuntime: String? = null
+    private var seqEpoch: String? = null
+
+    /** Live events held back while the gap before them is filled; null when nothing is being caught up. */
+    private var held: MutableList<GatewayEvent>? = null
+
+    /** Orders applying events, holding them and filling gaps, which run on different threads. Never held across I/O. */
+    private val streamMutex = Mutex()
+
+    /** The running turn's reply so far as the last `session.resume` had it, for when the gap can't be filled. */
+    private var inflightText: String? = null
 
     fun start() {
         if (jobs.isNotEmpty()) return
@@ -324,10 +353,12 @@ class ChatSession(
         var read = false
         repeat(DELIVERY_LOOKS) { look ->
             if (look > 0) delay(DELIVERY_LOOK_INTERVAL_MS)
-            when (val result = sessions.messages(gateway, id, profile = profile)) {
+            when (val result = sessions.messages(gateway, id, limit = HISTORY_PAGE, profile = profile)) {
                 is ApiResult.Success -> {
+                    // Counted over the same stretch as the prompts shown: the loaded rows, brought up to date.
+                    val stored = rows.afterNewestPage(result.value.messages) ?: return@repeat
                     read = true
-                    val prompts = historyToMessages(result.value.messages).filterIsInstance<ChatMessage.User>()
+                    val prompts = historyToMessages(stored).filterIsInstance<ChatMessage.User>()
                     // Any prompt past the ones shown before it: later prompts may follow it by a later check.
                     if (prompts.drop(before).any { it.text.contains(visible) }) return true
                 }
@@ -1014,9 +1045,9 @@ class ChatSession(
                 return@collectLatest
             }
             if (!rowExists) return@collectLatest // a new chat attaches on first send
-            // Catch up on whatever happened while offline, or load what couldn't be read before the link came up.
-            if (attachedBefore || _state.value.historyError != null) loadHistory()
-            if (runCatchingAttach(connectionState.client)) attachedBefore = true
+            // Load what couldn't be read before the link came up; after a drop, attaching catches up.
+            if (!attachedBefore && _state.value.historyError != null) loadHistory()
+            if (runCatchingAttach(connectionState.client, reconnected = attachedBefore)) attachedBefore = true
         }
     }
 
@@ -1024,31 +1055,102 @@ class ChatSession(
         connection.events.collect { event ->
             val runtimeId = _state.value.runtimeSessionId ?: return@collect
             if (event.sessionId != runtimeId) return@collect
-            _state.update { it.reduce(event) }
-            when (event.type) {
-                "tool.output_risk" -> flaggedOutput(event.payload as? JsonObject)?.let { (id, risk) ->
-                    risks?.let { scope.launch { it.remember(id, risk) } }
-                }
-                "message.start" -> if (ownTurnsPending > 0) {
-                    ownTurnsPending--
-                } else {
-                    foreignTurn = true
+            streamMutex.withLock { deliver(event) }
+        }
+    }
+
+    /**
+     * Applies a live event in order: one already applied (replayed, or sent twice) is skipped, and one past a gap
+     * waits, with those after it, while [catchUp] fills the gap. Called under [streamMutex].
+     */
+    private fun deliver(event: GatewayEvent) {
+        held?.let {
+            it += event
+            return
+        }
+        val seq = event.seq
+        val last = lastSeq
+        if (seq != null && last != null) {
+            if (seq <= last) return
+            if (seq > last + 1) {
+                held = mutableListOf(event)
+                val client = connectedClient()
+                val runtimeId = _state.value.runtimeSessionId
+                if (client != null && runtimeId != null) scope.launch { catchUp(client, runtimeId) } else held = null
+                return
+            }
+        }
+        apply(event)
+    }
+
+    /**
+     * Fills the gap after [lastSeq] from the gateway's event ring (`session.events.since`), then lets the held live
+     * events through. When the ring can't fill it (an older gateway, too long away, a restarted gateway) the chat
+     * reloads the transcript and takes the running reply as the gateway has it, as it did before replay existed.
+     */
+    private suspend fun catchUp(client: JsonRpcClient, runtimeId: String) {
+        val from = streamMutex.withLock { lastSeq }
+        val missed = if (from == null) null else try {
+            val reply = client.request(
+                "session.events.since",
+                buildJsonObject {
+                    put("session_id", runtimeId)
+                    put("last_seen", from)
+                },
+            ) as? JsonObject
+            EventReplay.parse(reply, runtimeId, from, seqEpoch)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null // method missing on an older gateway, or the link went again
+        }
+        // Read while live events stay held; the stream lock is only taken to apply.
+        if (missed == null && rowExists && _state.value.runtimeSessionId == runtimeId) loadHistory()
+        streamMutex.withLock {
+            // The link went, or another runtime took over: the next attach starts its own catch-up.
+            if (_state.value.runtimeSessionId != runtimeId) {
+                held = null
+                return
+            }
+            if (missed != null) {
+                missed.forEach(::apply)
+            } else {
+                lastSeq = null
+                val streamed = inflightText
+                if (streamed != null && _state.value.running) _state.update { it.withInflight(streamed) }
+            }
+            val waiting = held.orEmpty()
+            held = null
+            waiting.forEach(::deliver)
+        }
+    }
+
+    private fun apply(event: GatewayEvent) {
+        event.seq?.let { lastSeq = it }
+        _state.update { it.reduce(event) }
+        when (event.type) {
+            "tool.output_risk" -> flaggedOutput(event.payload as? JsonObject)?.let { (id, risk) ->
+                risks?.let { scope.launch { it.remember(id, risk) } }
+            }
+            "message.start" -> if (ownTurnsPending > 0) {
+                ownTurnsPending--
+            } else {
+                foreignTurn = true
+                scope.launch { loadHistory() }
+            }
+            // Swap the live copy for the stored rows, which now hold the other client's prompt for sure.
+            "message.complete" -> {
+                // Nothing can still wait on a person once the turn is over; this also clears a
+                // clarify answered on another client, which gets no request.cancel.
+                _state.update { it.copy(inputRequests = emptyList()) }
+                if (foreignTurn) {
+                    foreignTurn = false
                     scope.launch { loadHistory() }
                 }
-                // Swap the live copy for the stored rows, which now hold the other client's prompt for sure.
-                "message.complete" -> {
-                    // Nothing can still wait on a person once the turn is over; this also clears a
-                    // clarify answered on another client, which gets no request.cancel.
-                    _state.update { it.copy(inputRequests = emptyList()) }
-                    if (foreignTurn) {
-                        foreignTurn = false
-                        scope.launch { loadHistory() }
-                    }
-                }
-                "request.cancel" -> {
-                    val id = (event.payload as? JsonObject).string("id") ?: return@collect
-                    _state.update { state -> state.copy(inputRequests = state.inputRequests.filterNot { it.id == id }) }
-                }
+            }
+            "request.cancel" -> {
+                val id = (event.payload as? JsonObject).string("id") ?: return
+                _state.update { state -> state.copy(inputRequests = state.inputRequests.filterNot { it.id == id }) }
             }
         }
     }
@@ -1069,32 +1171,104 @@ class ChatSession(
     private fun claimUnclaimed(runtimeId: String): List<InputRequest> =
         unclaimed.filter { it.first == runtimeId }.map { it.second }.also { unclaimed.removeAll { it.first == runtimeId } }
 
-    private suspend fun loadHistory() {
+    /**
+     * Reads the newest page of the transcript and lays it over the loaded rows, so older pages scrolled back to
+     * stay. When it no longer meets them (many turns since), the chat starts over from the newest page.
+     */
+    private suspend fun loadHistory() = historyMutex.withLock {
         val id = _state.value.storedSessionId ?: return
-        val result = sessions.messages(gateway, id, profile = profile)
+        val result = sessions.messages(gateway, id, limit = HISTORY_PAGE, profile = profile)
         val flagged = risks?.all().orEmpty()
         when (result) {
-            is ApiResult.Success -> _state.update { state ->
-                // Keep a reply that is streaming right now; the stored rows don't have it yet. Nor do they
-                // have a correction mid-turn, or the part of the reply shown before it.
-                val corrected = state.messages.indexOfFirst { it.key == state.correctedReplyKey }
-                val live = if (corrected >= 0) {
-                    state.messages.take(corrected).filter { it.isLocalOnly } + state.messages.drop(corrected)
-                } else {
-                    state.messages.filter { it.isLocalOnly }
-                }
-                val stored = historyToMessages(result.value.messages).withRisks(flagged)
-                // A prompt sent without a reply that the transcript now has arrived after all.
-                val storedPrompts = stored.mapNotNullTo(HashSet()) { (it as? ChatMessage.User)?.text }
-                val unsettled = live.filterNot { it is ChatMessage.User && it.check != null && storedPrompts.any { p -> p.contains(it.text) } }
-                state.copy(messages = stored + unsettled, historyLoaded = true, historyError = null)
+            is ApiResult.Success -> {
+                val page = result.value.messages
+                val full = page.size >= HISTORY_PAGE
+                val joined = if (full && rows.isNotEmpty()) rows.withNewest(page.fromFirstTurn()) else null
+                val older = if (joined != null) _state.value.olderMessages else full
+                rows = joined ?: if (full) page.fromFirstTurn() else page
+                olderSkew = 0
+                showRows(flagged, older)
             }
             else -> _state.update { it.copy(historyLoaded = true, historyError = result.errorMessage) }
         }
     }
 
-    private suspend fun runCatchingAttach(client: JsonRpcClient): Boolean = try {
-        val runtimeId = attach(client)
+    /**
+     * Loads the page of the transcript before the loaded rows, when there is one, as the reader nears the top.
+     * Its messages go above the ones shown, which keep their keys, so the list stays where it was.
+     */
+    suspend fun loadOlder() {
+        if (_state.value.loadingOlder) return
+        loadOlderPage(HISTORY_PAGE)
+    }
+
+    /**
+     * Loads every older page, for what needs the whole transcript (counting rows to branch at). False when a page
+     * couldn't be read.
+     */
+    suspend fun loadAllHistory(): Boolean {
+        repeat(MAX_HISTORY_PAGES) {
+            if (!_state.value.olderMessages) return true
+            if (!loadOlderPage(HISTORY_PAGE_MAX)) return false
+        }
+        return !_state.value.olderMessages
+    }
+
+    private suspend fun loadOlderPage(limit: Int): Boolean {
+        val id = _state.value.storedSessionId ?: return false
+        if (!_state.value.olderMessages) return true
+        _state.update { it.copy(loadingOlder = true) }
+        try {
+            return historyMutex.withLock {
+                // Counted back from the newest row, so it reads from just before the oldest one loaded.
+                val result = sessions.messages(gateway, id, limit = limit, profile = profile, offset = rows.size + olderSkew)
+                if (result !is ApiResult.Success) {
+                    _state.update { it.copy(error = "Couldn't load earlier messages. ${result.errorMessage}".trim()) }
+                    return@withLock false
+                }
+                val page = result.value.messages
+                val full = page.size >= limit
+                val known = rows.mapNotNullTo(HashSet()) { it.id }
+                // Rows already loaded come again when the transcript grew since: skip them, and past them next time.
+                val fresh = (if (full) page.fromFirstTurn() else page).filter { it.id == null || it.id !in known }
+                if (fresh.isEmpty() && full) olderSkew += page.size
+                val shownBefore = historyToMessages(rows).mapTo(HashSet()) { it.key }
+                rows = fresh + rows
+                val flagged = risks?.all().orEmpty()
+                _state.update { state ->
+                    // The stored rows lead the list; what follows them (the live turn, local notes) stays as it is.
+                    val stored = state.messages.takeWhile { it.key in shownBefore }.size
+                    state.copy(
+                        messages = historyToMessages(rows).withRisks(flagged) + state.messages.drop(stored),
+                        olderMessages = full,
+                    )
+                }
+                true
+            }
+        } finally {
+            _state.update { it.copy(loadingOlder = false) }
+        }
+    }
+
+    /** Shows the loaded [rows] in place of the stored messages, keeping what they can't hold yet. */
+    private fun showRows(flagged: Map<String, ToolRisk>, older: Boolean) = _state.update { state ->
+        // Keep a reply that is streaming right now; the stored rows don't have it yet. Nor do they
+        // have a correction mid-turn, or the part of the reply shown before it.
+        val corrected = state.messages.indexOfFirst { it.key == state.correctedReplyKey }
+        val live = if (corrected >= 0) {
+            state.messages.take(corrected).filter { it.isLocalOnly } + state.messages.drop(corrected)
+        } else {
+            state.messages.filter { it.isLocalOnly }
+        }
+        val stored = historyToMessages(rows).withRisks(flagged)
+        // A prompt sent without a reply that the transcript now has arrived after all.
+        val storedPrompts = stored.mapNotNullTo(HashSet()) { (it as? ChatMessage.User)?.text }
+        val unsettled = live.filterNot { it is ChatMessage.User && it.check != null && storedPrompts.any { p -> p.contains(it.text) } }
+        state.copy(messages = stored + unsettled, historyLoaded = true, historyError = null, olderMessages = older)
+    }
+
+    private suspend fun runCatchingAttach(client: JsonRpcClient, reconnected: Boolean = false): Boolean = try {
+        val runtimeId = attach(client, reconnected)
         scope.launch { refreshSubagents(client, runtimeId) }
         true
     } catch (e: CancellationException) {
@@ -1109,8 +1283,12 @@ class ChatSession(
         return if (rowExists) attach(client) else create(client)
     }
 
-    /** `session.resume` the stored id; the reply's `session_id` is the runtime id events carry. */
-    private suspend fun attach(client: JsonRpcClient): String = attachMutex.withLock {
+    /**
+     * `session.resume` the stored id; the reply's `session_id` is the runtime id events carry. After a drop
+     * ([reconnected]) the same runtime picks up from the last event applied (see [catchUp]); a new one, or one
+     * with nothing to pick up from, reloads the transcript instead.
+     */
+    private suspend fun attach(client: JsonRpcClient, reconnected: Boolean = false): String = attachMutex.withLock {
         val stored = _state.value.storedSessionId ?: error("No stored session to resume")
         _state.update { it.copy(attachment = Attachment.Attaching) }
         val result = client.request(
@@ -1136,23 +1314,38 @@ class ChatSession(
                 params = snapshot["params"] as? JsonObject ?: JsonObject(emptyMap()),
             )
         }
+        val streamed = inflight.string("assistant").orEmpty()
+        val epoch = readyEpoch(client)
+        val (resumable, catchingUp) = streamMutex.withLock {
+            inflightText = streamed
+            // Seqs count per runtime session and per gateway run, so only the same of both can be picked up.
+            val resumable = reconnected && lastSeq != null && runtimeId == seqRuntime && epoch != null && epoch == seqEpoch
+            if (!resumable) lastSeq = null
+            seqRuntime = runtimeId
+            seqEpoch = epoch
+            // Held from before the state names the runtime, so no live event slips in ahead of the missed ones.
+            val catchingUp = resumable && held == null
+            if (catchingUp) held = mutableListOf()
+            resumable to catchingUp
+        }
+        if (reconnected && (!resumable || _state.value.historyError != null)) loadHistory()
         _state.update { state ->
-            var messages = state.messages
-            val streamed = inflight.string("assistant").orEmpty()
-            val hasOpenReply = messages.any { (it as? ChatMessage.Assistant)?.streaming == true }
-            if (running && !hasOpenReply) {
-                messages = messages + ChatMessage.Assistant(key = "live-${state.keySeq}", text = streamed, streaming = true)
-            }
             state.copy(
                 attachment = Attachment.Attached(runtimeId),
                 running = running,
-                messages = messages,
+                // Picking up replays the turn itself; otherwise the reply shows as far as the gateway has it.
+                messages = if (running && !resumable) state.withInflight(streamed).messages else state.messages,
                 inputRequests = open.plusNew(claimUnclaimed(runtimeId)),
                 keySeq = state.keySeq + 1,
             ).withInfo(result["info"] as? JsonObject).withTodos(TodoList.parse(result["todo_state"] as? JsonObject))
         }
+        if (catchingUp) scope.launch { catchUp(client, runtimeId) }
         runtimeId
     }
+
+    /** The gateway run's `replay_epoch` from [client]'s `gateway.ready`, when it is the connected one. */
+    private fun readyEpoch(client: JsonRpcClient): String? =
+        (connection.state.value as? ConnectionState.Connected)?.takeIf { it.client === client }?.ready.string("replay_epoch")
 
     /** `session.create` for a brand-new chat; its stored row appears with the first prompt. */
     private suspend fun create(client: JsonRpcClient): String = attachMutex.withLock {
@@ -1174,6 +1367,11 @@ class ChatSession(
             },
         ) as? JsonObject ?: error("Empty session.create reply")
         val runtimeId = result.string("session_id") ?: error("session.create returned no session_id")
+        streamMutex.withLock {
+            lastSeq = null
+            seqRuntime = runtimeId
+            seqEpoch = readyEpoch(client)
+        }
         _state.update {
             it.copy(
                 attachment = Attachment.Attached(runtimeId),
@@ -1205,6 +1403,9 @@ class ChatSession(
         val CORRECTION_STATUSES = setOf("redirected", "steered")
 
         const val MAX_UNCLAIMED = 8
+
+        /** Bounds [loadAllHistory]: 50 pages of the dashboard's most is 25,000 rows. */
+        const val MAX_HISTORY_PAGES = 50
 
         /** Uploads of several MB over a phone link take a while. */
         const val UPLOAD_TIMEOUT_MS = 120_000L
@@ -1253,6 +1454,20 @@ sealed interface ModelSwitch {
 
 private fun List<InputRequest>.plusNew(more: List<InputRequest>): List<InputRequest> =
     this + more.filter { new -> none { it.id == new.id } }
+
+/**
+ * The running turn's reply as the gateway has it so far ([streamed], `inflight.assistant`): it opens the reply when
+ * none is, and replaces one that missed part of it. A reply that doesn't lead into it (written since) stays.
+ */
+internal fun ChatState.withInflight(streamed: String): ChatState {
+    val open = messages.indexOfLast { it is ChatMessage.Assistant && it.streaming }
+    if (open < 0) {
+        return copy(messages = messages + ChatMessage.Assistant(key = "live-$keySeq", text = streamed, streaming = true), keySeq = keySeq + 1)
+    }
+    val reply = messages[open] as ChatMessage.Assistant
+    if (streamed.length <= reply.text.length || !streamed.startsWith(reply.text)) return this
+    return copy(messages = messages.toMutableList().apply { set(open, reply.copy(text = streamed)) })
+}
 
 private fun List<ChatMessage>.updateUser(key: String, change: (ChatMessage.User) -> ChatMessage.User): List<ChatMessage> =
     map { if (it is ChatMessage.User && it.key == key) change(it) else it }
