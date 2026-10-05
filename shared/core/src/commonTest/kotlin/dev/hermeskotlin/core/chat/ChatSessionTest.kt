@@ -588,6 +588,22 @@ class ChatSessionTest {
     }
 
     @Test
+    fun resumeRestoresAVaultPromptAskedWhileAway() = runTest {
+        val (connection, _) = setup(
+            backgroundScope,
+            mapOf(
+                "session.resume" to """{"session_id":"rt1","running":true,"open_requests":[{"id":"srq-9","method":"vault.unlock_prompt","params":{"session_id":"rt1","backend":"bitwarden","display_name":"Bitwarden"}}]}""",
+            ),
+        )
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        val attached = chat.state.first { it.runtimeSessionId == "rt1" }
+        val unlock = assertIs<InputRequest.Secret>(attached.inputRequests.single())
+        assertEquals(InputRequest.Secret.Kind.VaultUnlock, unlock.kind)
+    }
+
+    @Test
     fun hostReusesTheOpenStoredChatAndReplacesEverythingElse() = runTest {
         val (connection, _) = setup(backgroundScope, mapOf("session.resume" to """{"session_id":"rt1","running":false}"""))
         val host = ChatHost(connection, SessionsApi(client()), backgroundScope)

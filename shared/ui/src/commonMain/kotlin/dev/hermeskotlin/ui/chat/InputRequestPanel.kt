@@ -20,8 +20,10 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -112,11 +114,14 @@ internal fun InputRequestPanel(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             val more = (requests.size - 1).takeIf { it > 0 }?.let { "+$it more" }
-            when (request) {
-                is InputRequest.Approval -> ApprovalContent(request, more, connected, onStop.takeIf { connected }) { onAnswer(request, it) }
-                is InputRequest.Clarify -> ClarifyContent(request, more, connected, onStop.takeIf { connected }) { onAnswer(request, it) }
-                is InputRequest.Secret -> SecretContent(request, more, connected, onStop.takeIf { connected }) { onAnswer(request, it) }
-                is InputRequest.VaultSaveLogin -> SaveLoginContent(request, more, connected, onStop.takeIf { connected }) { onAnswer(request, it) }
+            // Keyed, so nothing carries over to the next request: a password shown with the eye stays hidden.
+            key(request.id) {
+                when (request) {
+                    is InputRequest.Approval -> ApprovalContent(request, more, connected, onStop.takeIf { connected }) { onAnswer(request, it) }
+                    is InputRequest.Clarify -> ClarifyContent(request, more, connected, onStop.takeIf { connected }) { onAnswer(request, it) }
+                    is InputRequest.Secret -> SecretContent(request, more, connected, onStop.takeIf { connected }) { onAnswer(request, it) }
+                    is InputRequest.VaultSaveLogin -> SaveLoginContent(request, more, connected, onStop.takeIf { connected }) { onAnswer(request, it) }
+                }
             }
         }
     }
@@ -374,13 +379,12 @@ private fun ChoiceRow(choice: String, question: ClarifyQuestion, selected: Boole
 private fun SecretContent(request: InputRequest.Secret, more: String?, connected: Boolean, onStop: (() -> Unit)?, answer: (JsonObject) -> Unit) {
     val value = remember(request.id) { TextFieldState() }
     val kind = request.kind
-    // The field is cleared once sent, so the value doesn't outlive the request in memory.
-    val submit = {
-        if (value.text.isNotEmpty()) {
-            answer(InputAnswers.value(value.text.toString().let { if (kind == InputRequest.Secret.Kind.VaultCode) it.trim() else it }))
-            value.clearText()
-        }
-    }
+    // Cleared when the request goes (answered, withdrawn or timed out), not on send: a send that fails
+    // leaves the request open, and the value must still be there to try again.
+    DisposableEffect(request.id) { onDispose { value.clearText() } }
+    // A code is sent trimmed; one that is only blanks would decline the prompt.
+    val typed = value.text.toString().let { if (kind == InputRequest.Secret.Kind.VaultCode) it.trim() else it }
+    val submit = { if (connected && typed.isNotEmpty()) answer(InputAnswers.value(typed)) }
     val title = when (kind) {
         InputRequest.Secret.Kind.Sudo -> "Sudo password needed"
         InputRequest.Secret.Kind.Secret -> "Secret needed"
@@ -418,7 +422,7 @@ private fun SecretContent(request: InputRequest.Secret, more: String?, connected
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(
             if (vault) "Skip" else "Decline",
-            onClick = { answer(InputAnswers.value("")); value.clearText() },
+            onClick = { answer(InputAnswers.value("")) },
             variant = ButtonVariant.Outline,
             enabled = connected,
             modifier = Modifier.weight(1f),
@@ -430,7 +434,7 @@ private fun SecretContent(request: InputRequest.Secret, more: String?, connected
                 else -> "Submit"
             },
             onClick = submit,
-            enabled = connected && value.text.isNotEmpty(),
+            enabled = connected && typed.isNotEmpty(),
             modifier = Modifier.weight(1f),
         )
     }
@@ -441,21 +445,24 @@ private fun SecretContent(request: InputRequest.Secret, more: String?, connected
 private fun SaveLoginContent(request: InputRequest.VaultSaveLogin, more: String?, connected: Boolean, onStop: (() -> Unit)?, answer: (JsonObject) -> Unit) {
     val identifier = remember(request.id) { TextFieldState() }
     val password = remember(request.id) { TextFieldState() }
-    val clear = {
-        identifier.clearText()
-        password.clearText()
-    }
-    val save = {
-        if (password.text.isNotEmpty()) {
-            answer(InputAnswers.saveLogin(identifier.text.toString().trim(), password.text.toString()))
-            clear()
+    // Cleared when the request goes, not on send: see SecretContent.
+    DisposableEffect(request.id) {
+        onDispose {
+            identifier.clearText()
+            password.clearText()
         }
     }
+    val save = {
+        if (connected && password.text.isNotEmpty()) {
+            answer(InputAnswers.saveLogin(identifier.text.toString().trim(), password.text.toString()))
+        }
+    }
+    val page = request.origin.ifBlank { request.site }
 
-    Header(Lucide.KeyRound, Theme[colors][warning], "Save your ${request.site} login?", more, onStop)
+    Header(Lucide.KeyRound, Theme[colors][warning], request.title, more, onStop)
     Text(
-        "Hermes is on the sign-in page of ${request.origin.ifBlank { request.site }} and has no login for it. " +
-            "Save one to your gateway's vault, and Hermes signs in with it.",
+        (if (page.isBlank()) "Hermes is on a sign-in page" else "Hermes is on the sign-in page of $page") +
+            " and has no login for it. Save one to your gateway's vault, and Hermes signs in with it.",
         style = Theme[typography][bodySmall],
         color = Theme[colors][textSecondary],
     )
@@ -477,7 +484,7 @@ private fun SaveLoginContent(request: InputRequest.VaultSaveLogin, more: String?
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(
             "Don't save",
-            onClick = { answer(InputAnswers.value("")); clear() },
+            onClick = { answer(InputAnswers.value("")) },
             variant = ButtonVariant.Outline,
             enabled = connected,
             modifier = Modifier.weight(1f),

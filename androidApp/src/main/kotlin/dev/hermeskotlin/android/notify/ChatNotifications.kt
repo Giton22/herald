@@ -149,8 +149,8 @@ class ChatNotifications(private val context: Context) {
                 )
                 .setContentText(request.command ?: request.prompt)
             is InputRequest.VaultSaveLogin -> builder
-                .setContentTitle("Save your ${request.site} login?")
-                .setContentText("Hermes has no login for ${request.site}. Open the chat to save one.")
+                .setContentTitle(request.title)
+                .setContentText("Hermes has no login for ${request.site.ifBlank { "this site" }}. Open the chat to save one.")
         }
         return post(request.id, REQUEST_ID, builder.build())
     }

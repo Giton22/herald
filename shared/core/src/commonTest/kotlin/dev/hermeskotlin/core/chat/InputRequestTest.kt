@@ -115,6 +115,10 @@ class InputRequestTest {
         val noSite = assertIs<InputRequest.VaultSaveLogin>(InputRequest.parse("srq-2", "vault.save_login", params("""{"origin":"https://github.com"}""")))
         assertEquals("https://github.com", noSite.site)
         assertEquals(Waiting.Input, Waiting.of(noSite))
+        assertEquals("Save your github.com login?", full.title)
+
+        val bare = assertIs<InputRequest.VaultSaveLogin>(InputRequest.parse("srq-3", "vault.save_login", params("{}")))
+        assertEquals("Save a login?", bare.title)
     }
 
     @Test
@@ -124,9 +128,10 @@ class InputRequestTest {
 
     @Test
     fun saveLoginEncodesTheLoginAsAJsonString() {
-        val answer = InputAnswers.saveLogin("ada@example.com", """pa"ss\word""")
+        val password = "pa\"ss\\word\nline two"
+        val answer = InputAnswers.saveLogin("ada@example.com", password)
         val login = HermesJson.parseToJsonElement(answer["value"]!!.jsonPrimitive.content).jsonObject
         assertEquals("ada@example.com", login["identifier"]!!.jsonPrimitive.content)
-        assertEquals("""pa"ss\word""", login["password"]!!.jsonPrimitive.content)
+        assertEquals(password, login["password"]!!.jsonPrimitive.content)
     }
 }

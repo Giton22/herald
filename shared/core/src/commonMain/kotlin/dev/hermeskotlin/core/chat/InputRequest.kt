@@ -83,7 +83,10 @@ sealed interface InputRequest {
         val site: String,
         /** The page's origin, e.g. `https://github.com`. */
         val origin: String,
-    ) : InputRequest
+    ) : InputRequest {
+        /** The question, without a blank where the site goes when the gateway named none. */
+        val title: String get() = if (site.isBlank()) "Save a login?" else "Save your $site login?"
+    }
 
     companion object {
         /** The methods this client answers; anything else is left for another client. */
