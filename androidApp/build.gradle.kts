@@ -48,6 +48,17 @@ android {
         buildConfig = true
     }
 
+    // CI runs lintDebug. The baseline holds the issues that were there when lint was added, so only new
+    // ones fail the build; regenerate it with :androidApp:updateLintBaseline after fixing some.
+    lint {
+        baseline = file("lint-baseline.xml")
+        abortOnError = true
+        checkReleaseBuilds = false
+        checkDependencies = true
+        // It only ever fires on the untracked local.properties that Android Studio writes on Windows.
+        disable += "PropertyEscape"
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = true
