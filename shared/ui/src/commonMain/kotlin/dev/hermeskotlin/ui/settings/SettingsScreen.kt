@@ -225,6 +225,21 @@ internal fun SettingsView(
                     )
                 }
 
+                Section("Privacy") {
+                    val canLock = deviceHasScreenLock()
+                    SwitchRow(
+                        title = "App lock",
+                        detail = if (canLock || settings.appLock) {
+                            "Ask for your fingerprint, face or screen lock when Herald opens and after a minute away. " +
+                                "Hides Herald's content in Recents. Notification actions keep working."
+                        } else {
+                            "Set a screen lock in Android's settings first."
+                        },
+                        checked = settings.appLock,
+                        onCheckedChange = { on -> if (canLock || !on) onUpdate { it.copy(appLock = on) } },
+                    )
+                }
+
                 Section("Account") {
                     InfoRow(info.userLabel ?: "Signed in", gatewayUrl)
                     Divider()
