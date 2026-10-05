@@ -112,6 +112,9 @@ class RoomsViewModel(
     /** Where the open room's log has been read to (the page cursor). */
     private var readThrough = 0
 
+    /** Counts deletes and renames that landed, so a list read from before one doesn't undo it. */
+    private var listEdits = 0
+
     /** The ids of deletes asked without an answer back, by room, so asking again is the same ask. */
     private val disbandIds = mutableMapOf<String, String>()
 
@@ -293,6 +296,7 @@ class RoomsViewModel(
             try {
                 api.disband(room.roomId, cancelId)
                 disbandIds.remove(room.roomId)
+                listEdits++
                 _state.update { state -> state.copy(rooms = state.rooms.filterNot { it.roomId == room.roomId }) }
                 if (_opened.value?.room?.roomId == room.roomId) close()
             } catch (e: CancellationException) {
@@ -310,6 +314,7 @@ class RoomsViewModel(
         viewModelScope.launch {
             try {
                 val renamed = api.rename(room.roomId, newName, eventId = newId("rename"))
+                listEdits++
                 _state.update { state -> state.copy(rooms = state.rooms.map { if (it.roomId == renamed.roomId) renamed else it }) }
                 _opened.update { open -> open?.takeIf { it.room.roomId == renamed.roomId }?.copy(room = renamed) ?: open }
                 readRoomSoon(renamed.roomId)
@@ -372,8 +377,11 @@ class RoomsViewModel(
                 return
             }
             logLimit = capabilities.maxLogLimit.coerceIn(1, PAGE)
+            val edits = listEdits
             val rooms = api.list()
             if (gateway.value != url) return
+            // A delete or rename landed while this was read: the list may predate it, so wait for the next.
+            if (listEdits != edits) return
             _state.update { it.copy(rooms = rooms, loading = false, error = null, available = true) }
         } catch (e: CancellationException) {
             throw e

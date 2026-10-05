@@ -1,7 +1,9 @@
 package dev.hermeskotlin.ui.rooms
 
 import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -47,6 +49,10 @@ internal fun RoomAskDialogs(ask: RoomAsk?, onDismiss: () -> Unit, onRename: (Roo
 @Composable
 private fun RenameRoomDialog(room: Room, visible: Boolean, onDismiss: () -> Unit, onRename: (Room, String) -> Unit) {
     val name = rememberTextFieldState(room.name)
+    // The dialog stays composed between asks: each rename starts from the room's name as it is now.
+    LaunchedEffect(room.roomId, room.name, visible) {
+        if (visible) name.setTextAndPlaceCursorAtEnd(room.name)
+    }
     val newName = name.text.toString().trim()
     Dialog(
         visible = visible,
