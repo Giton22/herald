@@ -66,11 +66,21 @@ class SessionsApi(private val client: HttpClient) {
         response.body<SearchResponse>().results.map { it.copy(snippet = it.snippet?.stripMatchMarkers()) }
     }
 
-    /** `GET /api/sessions/{id}/messages` — the newest [limit] rows, in chronological order. */
-    suspend fun messages(url: GatewayUrl, sessionId: String, limit: Int = 200, profile: String? = null): ApiResult<SessionMessagesPage> = apiCall {
+    /**
+     * `GET /api/sessions/{id}/messages` — the newest [limit] rows, in chronological order, skipping the newest
+     * [offset] (`order=latest` counts the offset back from the end, so a larger one reaches older rows).
+     */
+    suspend fun messages(
+        url: GatewayUrl,
+        sessionId: String,
+        limit: Int = 200,
+        profile: String? = null,
+        offset: Int = 0,
+    ): ApiResult<SessionMessagesPage> = apiCall {
         client.get(url.resolve("api/sessions/${sessionId.encodeURLPathPart()}/messages")) {
             profile?.let { parameter("profile", it) }
             parameter("limit", limit)
+            if (offset > 0) parameter("offset", offset)
             parameter("order", "latest")
             parameter("include_compacted", true)
         }

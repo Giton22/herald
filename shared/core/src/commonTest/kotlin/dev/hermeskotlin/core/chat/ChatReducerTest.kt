@@ -36,6 +36,19 @@ class ChatReducerTest {
     }
 
     @Test
+    fun aReplyIsDatedWhenItsTurnEnds() {
+        val streaming = ChatState(messages = listOf(ChatMessage.User("u", "hi", timestamp = 100.0)))
+            .reduce(event("message.start"), now = 101.0)
+            .reduce(event("message.delta", """{"text":"Hello"}"""), now = 102.0)
+        // No time while it streams: it isn't finished yet.
+        assertEquals(null, assertIs<ChatMessage.Assistant>(streaming.messages.last()).timestamp)
+
+        val done = streaming.reduce(event("message.complete", """{"text":"Hello","status":"complete"}"""), now = 105.0)
+        assertEquals(105.0, assertIs<ChatMessage.Assistant>(done.messages.last()).timestamp)
+        assertEquals(100.0, assertIs<ChatMessage.User>(done.messages.first()).timestamp)
+    }
+
+    @Test
     fun streamedTurnBuildsOneReplyWithTools() {
         val state = ChatState(messages = listOf(ChatMessage.User("u", "list files"))).apply(
             event("message.start"),

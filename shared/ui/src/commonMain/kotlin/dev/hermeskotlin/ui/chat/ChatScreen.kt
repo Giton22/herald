@@ -105,6 +105,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.AnnotatedString
@@ -198,6 +199,7 @@ import dev.hermeskotlin.designsystem.components.Dialog
 import dev.hermeskotlin.designsystem.components.DropdownMenu
 import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.components.MenuAction
+import dev.hermeskotlin.core.settings.RunningSend
 import dev.hermeskotlin.designsystem.components.plainTextClipEntry
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -228,6 +230,8 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
 import dev.hermeskotlin.ui.LocalAppSettings
 import dev.hermeskotlin.ui.components.EmptyState
+import dev.hermeskotlin.ui.components.messageTime
+import dev.hermeskotlin.ui.components.uses24HourClock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -293,6 +297,7 @@ fun ChatScreen(
                 ChatRequest.OpenUsage -> usageOpen = true
                 ChatRequest.OpenProcesses -> processesOpen = true
                 ChatRequest.StartVoice -> startVoiceChat()
+                ChatRequest.StartDictation -> toggleDictation()
             }
         }
     }
@@ -303,6 +308,7 @@ fun ChatScreen(
         picker = picker,
         connected = connected,
         connectionLabel = connectionLabel(connection),
+        linkStatus = linkStatus(connection),
         attachments = attachments,
         attachmentError = attachmentError,
         comments = viewModel.comments.collectAsStateWithLifecycle().value,
@@ -326,6 +332,7 @@ fun ChatScreen(
         onOpenPets = { petsOpen = true },
         onViewImage = { viewing = it },
         onNotice = { notice = it },
+        wallpaper = rememberChatWallpaper(),
     )
 
     AttachSheet(visible = attachOpen, onDismiss = { attachOpen = false }, picker = attachmentPicker)
@@ -391,6 +398,8 @@ internal fun ChatView(
     connected: Boolean,
     /** Which way the link is down, shown under the title while not [connected]. */
     connectionLabel: String = "No connection",
+    /** Shown in the chat while the link is being made again, so a reply that stopped streaming says why. */
+    linkStatus: String? = null,
     attachments: List<OutgoingAttachment>,
     attachmentError: String?,
     /** Comments on parts of the chat, waiting for the next send. */
@@ -414,6 +423,8 @@ internal fun ChatView(
     onOpenPets: () -> Unit,
     onViewImage: (ViewerImage) -> Unit,
     onNotice: (String) -> Unit,
+    /** The chat background from Settings, drawn behind the conversation (and frosted under the composer). */
+    wallpaper: ImageBitmap? = null,
 ) {
     Box(
         Modifier
@@ -469,6 +480,7 @@ internal fun ChatView(
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
+                    if (wallpaper != null) ChatWallpaper(wallpaper, LocalAppSettings.current.wallpaperStrength, Modifier.fillMaxSize())
                     if (state.historyLoaded && state.messages.isNotEmpty()) {
                         CompositionLocalProvider(
                             LocalMediaLoader provides actions::loadMedia,
@@ -479,6 +491,8 @@ internal fun ChatView(
                         ) {
                             Messages(
                                 state.messages,
+                                olderMessages = state.olderMessages,
+                                loadingOlder = state.loadingOlder,
                                 bottomInset = listInset,
                                 controlsInset = dockInset,
                                 fold = composerFold,
@@ -497,6 +511,21 @@ internal fun ChatView(
                                 }
                             else -> Greeting(onAttach = onAttach, onDictate = onDictate, connected = connected, dictation = dictation, canAttach = attachments.size < OutgoingAttachment.MAX_COUNT)
                         }
+                    }
+                }
+                // Over the top of the conversation: the link being made again, and an older page on its way.
+                var lastLinkStatus by remember { mutableStateOf("") }
+                if (linkStatus != null) lastLinkStatus = linkStatus
+                Column(
+                    Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    AnimatedVisibility(visible = linkStatus != null && state.messages.isNotEmpty(), enter = fadeIn(), exit = fadeOut()) {
+                        StatusPill(lastLinkStatus)
+                    }
+                    AnimatedVisibility(visible = state.loadingOlder, enter = fadeIn(), exit = fadeOut()) {
+                        StatusPill("Loading earlier messages…")
                     }
                 }
                 Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { dockHeight = it.height }) {
@@ -792,6 +821,9 @@ private val FOLLOW_UP_PROMPTS = listOf(
 @Composable
 private fun Messages(
     messages: List<ChatMessage>,
+    /** The conversation goes back further than [messages]; nearing the top loads the page before. */
+    olderMessages: Boolean,
+    loadingOlder: Boolean,
     bottomInset: Dp,
     /** How high the dock really stands, for what floats just above it. */
     controlsInset: Dp,
@@ -843,6 +875,11 @@ private fun Messages(
         }
     }
     LaunchedEffect(fold) { snapshotFlow { pinned }.collect { fold.following = it } }
+    // Nearing the top loads the page before. It goes in above, keyed, so the list keeps what's on screen in place.
+    val nearTop by remember { derivedStateOf { listState.firstVisibleItemIndex <= OLDER_PAGE_LEAD } }
+    LaunchedEffect(nearTop, olderMessages, loadingOlder, messages.size) {
+        if (nearTop && olderMessages && !loadingOlder) actions.loadOlder()
+    }
     val readBackTravel = with(LocalDensity.current) { READ_BACK_TRAVEL.toPx() }
     val readBack = remember(readBackTravel, fold) { ReadBackDetector(readBackTravel) { fold.heldOpen = false } }
     // A prompt just sent is always shown, wherever the reader was.
@@ -992,6 +1029,9 @@ internal class ReadBackDetector(private val travel: Float, private val onReadBac
 /** A scroll offset past any message: the list stops it at the end of the last one. */
 private const val LIST_END = 1_000_000
 
+/** How many messages from the top the page before starts loading, so it's usually in before the reader gets there. */
+private const val OLDER_PAGE_LEAD = 3
+
 /** How far the end of the conversation lies below the visible area, in pixels (0 when it's in view). */
 private fun LazyListLayoutInfo.hiddenBelow(): Int {
     val last = visibleItemsInfo.lastOrNull() ?: return 0
@@ -1038,6 +1078,36 @@ private fun connectionLabel(state: ConnectionState): String = when (state) {
     is ConnectionState.Connecting, is ConnectionState.Reconnecting -> "No connection · connecting again…"
     ConnectionState.SessionExpired -> "Signed out · sign in again"
     is ConnectionState.Failed, ConnectionState.Idle, is ConnectionState.Connected -> "No connection"
+}
+
+/**
+ * What the chat says while the link is being made again: waiting for the network when the gateway can't be reached
+ * at all, else reconnecting. Null when it's up, or down for good (the title says so then).
+ */
+internal fun linkStatus(state: ConnectionState): String? = when (state) {
+    is ConnectionState.Reconnecting -> if (state.reason.startsWith(UNREACHABLE)) "Waiting for network…" else "Reconnecting…"
+    is ConnectionState.Connecting -> if (state.attempt > 1) "Reconnecting…" else null
+    is ConnectionState.Connected, ConnectionState.Idle, ConnectionState.SessionExpired, is ConnectionState.Failed -> null
+}
+
+/** GatewayConnection's reason when the ticket request never reached the gateway (no network, or it's down). */
+private const val UNREACHABLE = "Can't reach gateway"
+
+/** A small floating line with a spinner, for something under way. */
+@Composable
+private fun StatusPill(text: String) {
+    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    Row(
+        Modifier
+            .background(Theme[colors][surfaceElevated], shape)
+            .border(1.dp, Theme[colors][strokeStrong], shape)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Spinner(Modifier.size(12.dp))
+        Text(text, style = Theme[typography][caption], color = Theme[colors][textSecondary])
+    }
 }
 
 /** Desktop's turn marker: the prompt in a full-width box with a tinted fill and outline; replies run bare beneath. */
@@ -1119,6 +1189,7 @@ private fun UserBubble(
                 }
             }
         }
+        if (!message.pending) MessageTimeLabel(message.timestamp, Modifier.align(Alignment.End))
         if (message.queued) {
             Text("Queued · sends after this task", style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }
@@ -1293,7 +1364,8 @@ private fun AssistantReply(
             }
         }
         val usage = message.usage?.takeIf { settings.showUsage && !message.streaming }
-        if ((!message.streaming && text.isNotBlank()) || usage != null) {
+        val dated = settings.showTimestamps && !message.streaming && message.timestamp != null
+        if ((!message.streaming && text.isNotBlank()) || usage != null || dated) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (!message.streaming && text.isNotBlank()) {
                     // Their padding trimmed off the start and top, the icons line up with the reply and sit close under it.
@@ -1312,9 +1384,19 @@ private fun AssistantReply(
                         color = Theme[colors][textTertiary],
                     )
                 }
+                if (dated) MessageTimeLabel(message.timestamp)
             }
         }
     }
+}
+
+/** When a prompt was sent or a reply finished, in small type; nothing when the setting is off or there's no time. */
+@Composable
+private fun MessageTimeLabel(epochSeconds: Double?, modifier: Modifier = Modifier) {
+    if (!LocalAppSettings.current.showTimestamps || epochSeconds == null) return
+    val use24Hour = uses24HourClock()
+    val label = remember(epochSeconds, use24Hour) { messageTime(epochSeconds, use24Hour) }
+    if (label.isNotEmpty()) Text(label, style = Theme[typography][caption], color = Theme[colors][textTertiary], modifier = modifier)
 }
 
 /** A session notice: a centred quiet line between the messages. */
@@ -1576,7 +1658,8 @@ private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit, 
 /**
  * Desktop's composer stood up for a phone: a flat outlined box, the text on top; beneath it +, dictation
  * and voice chat, the model and thinking level as quiet text, and the round send button, which is Stop
- * for as long as a task runs. A message typed mid-task gets its own "Send now" / "Send after" choices.
+ * for as long as a task runs. A message typed mid-task gets a Send of its own beside Stop, which steers,
+ * queues or stops and sends as Settings says; holding it picks another way for that message.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -1604,6 +1687,7 @@ private fun Composer(
 ) {
     // Attachments or comments alone are sendable: the gateway gets Desktop's image prompt or the file references.
     val hasText = actions.composer.text.isNotBlank() || attachments.isNotEmpty() || comments.isNotEmpty()
+    val runningSend by actions.runningSend.collectAsStateWithLifecycle()
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     val page = Theme[colors][background]
     val frosted = remember(page) {
@@ -1674,16 +1758,12 @@ private fun Composer(
                             },
                         )
                     }
-                    // Mid-turn, a message either joins the running task or waits for it; both say which.
-                    if (state.running && hasText) {
-                        MidTaskSend(
-                            // The same test send() makes: with attachments, slash text goes out as a prompt, not a command.
-                            command = attachments.isEmpty() && SlashCommand.parse(actions.composer.text.toString().trim()) != null,
-                            enabled = connected,
-                            onSendNow = { actions.send() },
-                            onSendAfter = { actions.send(queue = true) },
-                        )
-                    }
+                    // The same test send() makes: with attachments, slash text goes out as a prompt, not a command.
+                    val command = attachments.isEmpty() && SlashCommand.parse(actions.composer.text.toString().trim()) != null
+                    // A steer can't carry files; send() queues those instead, so say that.
+                    val runningMode = sendModeFor(running = true, picked = null, setting = runningSend, withAttachments = attachments.isNotEmpty())!!
+                    // Mid-turn, say what Send will do with the message.
+                    if (state.running && hasText) MidTaskHint(command, runningMode)
                     Row(
                         Modifier.fillMaxWidth().padding(top = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1703,8 +1783,17 @@ private fun Composer(
                             enabled = connected && !state.running && !dictation.active,
                         )
                         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { ModelPill(state, picker, onClick = onOpenModels) }
-                        // The round button keeps one job per state: Stop for the whole task, even while you type.
+                        // Stop stays for the whole task; a message typed meanwhile gets its own Send beside it.
                         if (state.running) {
+                            if (hasText) {
+                                RunningSendButton(
+                                    mode = runningMode,
+                                    // A command runs at once; there's nothing to choose.
+                                    choices = if (command) emptyList() else RunningSend.entries.filterNot { it == RunningSend.Steer && attachments.isNotEmpty() },
+                                    enabled = connected,
+                                    onSend = actions::send,
+                                )
+                            }
                             SendButton(SendIcon.Stop, onClick = actions::interrupt, enabled = connected)
                         } else {
                             SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected && hasText)
@@ -1811,40 +1900,71 @@ private fun FoldedComposer(
     }
 }
 
-/**
- * The choices for a message typed while a task runs: "Send now" adds it to the task in progress, "Send after
- * this task" holds it for the next turn. A slash command runs at once, so it only gets "Send now".
- */
+/** Says what Send does with a message typed while a task runs, and that holding it offers the other ways. */
 @Composable
-private fun MidTaskSend(command: Boolean, enabled: Boolean, onSendNow: () -> Unit, onSendAfter: () -> Unit) {
-    Column(Modifier.fillMaxWidth().padding(start = 8.dp, end = 2.dp, top = 10.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(
-                "Send now",
-                onClick = onSendNow,
-                variant = ButtonVariant.Secondary,
-                size = ButtonSize.Small,
-                leadingIcon = Lucide.ArrowUp,
-                enabled = enabled,
-                pill = true,
-            )
-            if (!command) {
-                Button(
-                    "Send after this task",
-                    onClick = onSendAfter,
-                    variant = ButtonVariant.Outline,
-                    size = ButtonSize.Small,
-                    leadingIcon = Lucide.ListEnd,
-                    enabled = enabled,
-                    pill = true,
-                )
-            }
-        }
+private fun MidTaskHint(command: Boolean, mode: RunningSend) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        if (!command) UnstyledIcon(mode.icon, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
         Text(
-            if (command) "Commands run right away." else "Send now changes the task in progress.",
+            if (command) "Commands run right away." else "Send: ${mode.summary.replaceFirstChar { it.lowercase() }}. Hold Send for other ways.",
             style = Theme[typography][caption],
             color = Theme[colors][textTertiary],
         )
+    }
+}
+
+/**
+ * Send while a task runs: a tap sends the way [mode] says (the setting), a long press opens the [choices]
+ * just above it to pick another way for this one message.
+ */
+@Composable
+private fun RunningSendButton(mode: RunningSend, choices: List<RunningSend>, enabled: Boolean, onSend: (RunningSend?) -> Unit) {
+    val haptics = LocalHapticFeedback.current
+    var menuOpen by remember { mutableStateOf(false) }
+    val fill = if (enabled) Theme[colors][textColor] else Theme[colors][textColor].copy(alpha = 0.12f)
+    val tint = if (enabled) Theme[colors][background] else Theme[colors][textTertiary]
+    DropdownMenu(
+        expanded = menuOpen,
+        onExpandedChange = { menuOpen = it },
+        // The composer sits at the bottom of the screen; the choices open upward, over the chat.
+        above = true,
+        items = {
+            choices.forEach { choice ->
+                MenuAction(choice.label, choice.icon, onClick = {
+                    menuOpen = false
+                    onSend(choice)
+                })
+            }
+        },
+    ) {
+        Box(
+            Modifier
+                .size(MinTouchTarget)
+                .clip(CircleShape)
+                .combinedClickable(
+                    enabled = enabled,
+                    onClick = { onSend(null) },
+                    onLongClick = if (choices.isEmpty()) null else {
+                        {
+                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                            menuOpen = true
+                        }
+                    },
+                    onClickLabel = if (choices.isEmpty()) "Send" else mode.label,
+                    onLongClickLabel = "Other ways to send",
+                    interactionSource = null,
+                    indication = rememberColoredIndication(tint),
+                ),
+            contentAlignment = Alignment.Center,
+        ) {
+            Box(Modifier.size(40.dp).clip(CircleShape).background(fill), contentAlignment = Alignment.Center) {
+                UnstyledIcon(Lucide.ArrowUp, contentDescription = "Send", tint = tint, modifier = Modifier.size(20.dp))
+            }
+        }
     }
 }
 

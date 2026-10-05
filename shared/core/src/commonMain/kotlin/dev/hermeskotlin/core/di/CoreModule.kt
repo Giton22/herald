@@ -40,7 +40,7 @@ import org.koin.dsl.module
 
 private const val OUTSIDE_CLIENT = "outside"
 
-/** Platform bindings: a [dev.hermeskotlin.core.storage.KeyValueStore] implementation. */
+/** Platform bindings: a [dev.hermeskotlin.core.storage.KeyValueStore] implementation and the file behind the [dev.hermeskotlin.core.settings.WallpaperStore]. */
 expect val platformModule: Module
 
 val coreModule = module {

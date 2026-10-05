@@ -63,6 +63,7 @@ import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.designsystem.HermesTheme
 import dev.hermeskotlin.designsystem.PureBlack
+import dev.hermeskotlin.designsystem.components.LocalCodeWrap
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
@@ -133,6 +134,7 @@ fun AssistantPanel(
     HermesTheme(scheme) {
         CompositionLocalProvider(
             LocalAppSettings provides settings,
+            LocalCodeWrap provides settings.wrapCode,
             LocalDensity provides Density(density.density, density.fontScale * settings.textSize.scale),
         ) {
             Box(

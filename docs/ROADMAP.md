@@ -66,11 +66,12 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Connect to `/api/ws` with subprotocols `hermes-gateway-v1` and `hermes-gateway-ticket.<t>`
 - [x] Newline-delimited JSON-RPC 2.0: requests, responses, notifications
 - [x] Wait for `gateway.ready`, then send `client.capabilities {server_requests: true}`
-- [x] Handle server→client requests (`srq-<n>`) and answer them with the matching id (unhandled ones get `-32601` right away so the agent never stalls)
+- [x] Handle server→client requests (`srq-<n>`) and answer them with the matching id (approval, clarify, sudo, secret)
+- [x] Methods the app can't show (`preview.*`, `terminal.read`, `window.read`, `tour`, `vault.*`) get the `4404` decline when the gateway counts declines (`client.capabilities` → `declines_not_shown`), so Desktop can still answer them and the agent stops waiting once every client declined; never `-32601`, which would settle them for Desktop too
 - [x] `gateway.ping` keepalive every 15 s, 45 s inbound deadline
 - [x] Automatic reconnect with backoff (fresh ticket each time)
 - [x] Re-attach (`session.resume`) and refetch the transcript after a reconnect; rebuild a running turn from `inflight`
-- [ ] Exact event replay after reconnect (`session.events.since`)
+- [x] Exact event replay after reconnect (`session.events.since`): the last applied `seq` is tracked per runtime session and the missed events go through the same reducer, overlap with live frames dropped by seq; a gap in the live stream is filled the same way. A truncated ring, another `replay_epoch` or an older gateway fall back to the transcript refetch and `inflight`. The chat shows "Reconnecting…" / "Waiting for network…" while the link is down
 - [x] Connection-state indicator in the UI (connecting, connected, retrying with countdown, refused, session expired)
 
 ### 3. Sessions
@@ -78,6 +79,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Pinned chats on top (with a pin), plus an Archived page; the chat list leaves out cron runs (`exclude_sources=cron`, like Desktop), which are reached through their job under Scheduled
 - [x] Create a new session (`session.create`) from the New chat button (chat top bar or sidebar); the stored row appears with the first prompt
 - [x] Open a session and read its stored history (`GET /api/sessions/{id}/messages`, read-only; tool steps are folded into one reply)
+- [x] Long chats load a page at a time: the newest 60 rows on opening, older pages as you scroll to the top (`order=latest` + `offset`), each starting at a prompt so no turn is cut in two; the list keeps its place. Branching loads the rest first so it counts from the first row
 - [x] Resume a session live and reply in it (`session.resume {omit_messages}` + REST history, like Desktop)
 - [x] The app opens on a chat: the one you had open last on this gateway, or a fresh one if you left on a new chat (remembered per gateway)
 - [x] Sessions live in a left sidebar: a swipe-in drawer on phones (swipe right or the panel button; swipe left, tap outside or Back to close), docked and collapsible on wide screens; the open chat is highlighted
@@ -98,11 +100,14 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Interim commentary (`message.interim`), folded into the reply
 - [x] Markdown rendering (GFM: lists, tables, links, code blocks with language label and copy button; copy whole reply); only web and mail links open
 - [x] Pictures from the web load only on a tap, without gateway cookies
-- [ ] Syntax highlighting in code blocks
+- [x] Syntax highlighting in code blocks (Highlights, cached by content; light and dark palettes); long lines scroll sideways or wrap ("Wrap code lines" setting)
+- [x] TeX math: inline `$…$` / `\(…\)` and display `$$…$$` / `\[…\]` typeset with JLaTeXMath (display formulas centered and scrollable); prices like "$5 and $10" stay text, code is left alone, and a formula that won't parse shows its source
+- [x] A small time under each prompt and finished reply ("Message timestamps" setting): the stored row's time, or when this device sent or saw it finish
 - [x] Reasoning/thinking blocks, collapsible (`reasoning.delta`, `thinking.delta`, `reasoning.available`)
 - [x] Stop a running turn (`session.interrupt`): the Send button turns into Stop while a turn runs
 - [x] Prompts sent from another client (Desktop, CLI, messaging) show up live: a turn this client didn't start refetches the transcript at its start and end, since the gateway streams only the reply
-- [x] Steer a running turn: a message typed mid-turn offers labelled "Send now" (corrects the task) and "Send after this task" (holds it for the next turn) while Stop stays in place; `/steer` injects a note (`prompt.submit` busy modes, `session.steer`)
+- [x] Send while a reply runs, three ways: Steer (`session.steer`, the agent reads it after its current step; rejected → queued as the next prompt, a gateway without steering → plain `prompt.submit`), Queue (`prompt.submit {queued}`) and Stop & send (`session.interrupt`, wait for the turn to end, then `prompt.submit`). A Send button appears beside Stop; long-press it for a dropdown to pick the way for one message. `/steer <note>` uses `session.steer` too. A steer the turn ended before reading is requeued by the gateway and shows up as the next turn
+- [x] Setting "While a reply is running, Send…": Steer (default), Queue or Stop & send
 - [x] Voice chat has its own composer button instead of sharing the send button
 - [x] Token usage per turn (live turns) and per session with cost, context window and account limits (`session.usage`, `MessageCompletePayload.usage`, `GET /api/sessions/{id}`)
 - [x] Error banner and live status line (`error`, `status.update`, failed turns)
@@ -132,6 +137,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Settings screen, opened from the account sheet
 - [x] Theme: system, light, dark, plus pure black; window and system bars follow it
 - [x] Text size on top of the system font scale
+- [x] Chat background: a photo behind the conversation (frosted under the composer), with how strongly it shows
 - [x] Show or hide reasoning and tool activity in the chat
 - [x] Account (sign out, change gateway) and about (app and gateway versions, update check)
 - [ ] Manage several saved gateways (add, edit, remove, choose primary)
@@ -148,7 +154,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Full-screen image viewer with pinch-zoom; Save (Pictures / Download `Herald`) and Share for pictures and files
 - [x] Chats open as the `desktop` surface (`source` on `session.create` / `session.resume`), so the agent knows Markdown and files render
 - [ ] Run `::preview` widgets inline (a WebView with Desktop's theme prelude)
-- [ ] Share sheet: "Send to Herald" from other apps
+- [x] Share sheet: text, links, pictures and files shared from other apps open a new chat with them as its draft (up to 10 files, through the composer's size limits); nothing sends until you do, and before sign-in the draft waits
 
 ### Voice
 - [x] Dictation into the composer (phone mic → `POST /api/audio/transcribe`)
@@ -209,6 +215,9 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 
 ### Platforms & polish
 - [x] 48dp touch targets (`MinTouchTarget`) on icon buttons, the composer, the top bar and the sidebar rows, without enlarging the icons
+- [x] Launcher shortcuts New chat and New chat with voice (starts dictating); links `hermes://new-chat`, `hermes://new-chat-voice` and `hermes://session/<id>`
+- [x] Web links in replies open in a Custom Tab in the app's colors, or the browser when there's none
+- [x] App lock (Settings → Privacy): fingerprint, face or screen lock on launch and after a minute away; content hidden in Recents
 - [ ] Tablet and foldable adaptive layout (list and detail side by side)
 - [ ] Home-screen widget and Quick Settings tile
 - [ ] Offline cache of sessions and messages

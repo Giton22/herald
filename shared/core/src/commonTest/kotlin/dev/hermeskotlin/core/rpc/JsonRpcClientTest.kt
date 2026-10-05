@@ -116,9 +116,56 @@ class JsonRpcClientTest {
     }
 
     @Test
-    fun unhandledServerRequestIsLeftForOtherClients() = runTest {
+    fun aServerRequestNothingHereCanShowIsLeftForDesktop() = runTest {
         val transport = FakeTransport()
-        val client = JsonRpcClient(transport)
+        val client = JsonRpcClient(transport, answers = { it == "approval" })
+        val pump = launch { runCatching { client.run() } }
+        val incoming = async(start = CoroutineStart.UNDISPATCHED) { client.serverRequests.first() }
+
+        transport.push("""{"jsonrpc":"2.0","id":"srq-3","method":"vault.unlock_prompt","params":{"session_id":"s1"}}""")
+        transport.push("""{"jsonrpc":"2.0","id":"srq-4","method":"approval","params":{"session_id":"s1","command":"ls"}}""")
+
+        // One it can show reaches the app, unanswered until a person decides.
+        assertEquals("srq-4", incoming.await().id)
+        // No reply to the vault prompt: any error settles it for every client, and Desktop can show it.
+        val call = async { client.request("gateway.ping") }
+        val id = transport.awaitSent { it["method"]?.jsonPrimitive?.str() == "gateway.ping" }["id"]!!.jsonPrimitive.str()
+        transport.push("""{"jsonrpc":"2.0","id":"$id","result":{}}""")
+        call.await()
+        assertTrue(transport.sent.value.none { it["id"]?.jsonPrimitive?.str() in setOf("srq-3", "srq-4") })
+        pump.cancel()
+    }
+
+    @Test
+    fun whatNothingHereCanShowIsDeclinedWhenTheGatewayCountsDeclines() = runTest {
+        val transport = FakeTransport()
+        val client = JsonRpcClient(transport, answers = { it == "approval" })
+        val pump = launch { runCatching { client.run() } }
+        transport.push(FakeTransport.READY)
+        val caps = transport.awaitSent { it["method"]?.jsonPrimitive?.str() == "client.capabilities" }
+        transport.push("""{"jsonrpc":"2.0","id":"${caps["id"]!!.jsonPrimitive.str()}","result":{"declines_not_shown":true}}""")
+        // Settle the capabilities reply before the request lands.
+        val ping = async { client.request("gateway.ping") }
+        val pingId = transport.awaitSent { it["method"]?.jsonPrimitive?.str() == "gateway.ping" }["id"]!!.jsonPrimitive.str()
+        transport.push("""{"jsonrpc":"2.0","id":"$pingId","result":{}}""")
+        ping.await()
+
+        transport.push("""{"jsonrpc":"2.0","id":"srq-5","method":"preview.read","params":{"session_id":"s1"}}""")
+        transport.push("""{"jsonrpc":"2.0","id":"srq-6","method":"vault.code","params":{"session_id":"s1"}}""")
+
+        // Declines, which leave them to Desktop (the window showing the chat, or its vault prompt); -32601
+        // would settle them for Desktop too.
+        for (id in listOf("srq-5", "srq-6")) {
+            val decline = transport.awaitSent { it["id"]?.jsonPrimitive?.str() == id }
+            assertEquals("4404", decline["error"]!!.jsonObject["code"]!!.jsonPrimitive.str())
+        }
+        pump.cancel()
+    }
+
+    @Test
+    fun aWindowOwnedRequestIsLeftAloneWhenTheGatewayDoesNotCountDeclines() = runTest {
+        val transport = FakeTransport()
+        val client = JsonRpcClient(transport, answers = { it == "approval" })
         val pump = launch { runCatching { client.run() } }
 
         transport.push("""{"jsonrpc":"2.0","id":"srq-2","method":"preview.read","params":{"session_id":"s1"}}""")
