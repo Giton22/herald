@@ -1105,6 +1105,20 @@ class ChatSessionTest {
     }
 
     @Test
+    fun aRewindMidTurnSaysWhyItDidntGo() = runTest {
+        history = threeTurns
+        val (chat, transport) = resumedChat(backgroundScope, mapOf("prompt.submit" to """{"status":"streaming","user_row_id":7}"""))
+        // Another client starts a turn while an edit waits in the composer.
+        transport.push(event("message.start", "rt1"))
+        chat.state.first { it.running }
+
+        assertEquals(SendOutcome.NotSent, chat.rewind("row-3", "two, edited"))
+
+        assertTrue(chat.state.value.error!!.contains("Wait"))
+        assertEquals(0, transport.sent.value.count { it.isCall("prompt.submit") })
+    }
+
+    @Test
     fun aSentPromptKeepsTheRowItWasWrittenTo() = runTest {
         val (chat, _) = resumedChat(backgroundScope, mapOf("prompt.submit" to """{"status":"streaming","user_row_id":9}"""))
 

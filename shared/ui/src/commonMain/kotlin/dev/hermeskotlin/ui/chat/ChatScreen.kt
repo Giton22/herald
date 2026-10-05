@@ -635,6 +635,7 @@ private fun ColumnScope.Dock(
             )
         }
         Composer(
+            editing = editing,
             hazeState = hazeState,
             actions = actions,
             placeholder = placeholder,
@@ -1684,6 +1685,8 @@ private fun Composer(
     onAttach: () -> Unit,
     onDictate: () -> Unit,
     onVoiceChat: () -> Unit,
+    /** A prompt is being edited: it can't go out mid-turn, as the gateway won't cut the chat while a task runs. */
+    editing: Boolean,
 ) {
     // Attachments or comments alone are sendable: the gateway gets Desktop's image prompt or the file references.
     val hasText = actions.composer.text.isNotBlank() || attachments.isNotEmpty() || comments.isNotEmpty()
@@ -1763,7 +1766,16 @@ private fun Composer(
                     // A steer can't carry files; send() queues those instead, so say that.
                     val runningMode = sendModeFor(running = true, picked = null, setting = runningSend, withAttachments = attachments.isNotEmpty())!!
                     // Mid-turn, say what Send will do with the message.
-                    if (state.running && hasText) MidTaskHint(command, runningMode)
+                    if (state.running && editing) {
+                        Text(
+                            "Send the edit once this reply finishes.",
+                            style = Theme[typography][caption],
+                            color = Theme[colors][textTertiary],
+                            modifier = Modifier.padding(start = 12.dp, top = 10.dp),
+                        )
+                    } else if (state.running && hasText) {
+                        MidTaskHint(command, runningMode)
+                    }
                     Row(
                         Modifier.fillMaxWidth().padding(top = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -1785,7 +1797,7 @@ private fun Composer(
                         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { ModelPill(state, picker, onClick = onOpenModels) }
                         // Stop stays for the whole task; a message typed meanwhile gets its own Send beside it.
                         if (state.running) {
-                            if (hasText) {
+                            if (hasText && !editing) {
                                 RunningSendButton(
                                     mode = runningMode,
                                     // A command runs at once; there's nothing to choose.

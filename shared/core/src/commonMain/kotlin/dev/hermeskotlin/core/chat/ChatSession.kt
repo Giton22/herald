@@ -378,7 +378,12 @@ class ChatSession(
         val before = _state.value
         val index = before.messages.indexOfFirst { it.key == key }
         val rowId = (before.messages.getOrNull(index) as? ChatMessage.User)?.rowId
-        if (trimmed.isEmpty() || rowId == null || before.running) return SendOutcome.NotSent
+        if (trimmed.isEmpty() || rowId == null) return SendOutcome.NotSent
+        // The gateway won't cut the chat mid-turn; say so rather than leave the send doing nothing.
+        if (before.running) {
+            _state.update { it.copy(error = BUSY_MESSAGE) }
+            return SendOutcome.NotSent
+        }
         val client = connectedClient() ?: run {
             _state.update { it.copy(error = "$NOT_CONNECTED Try again once it reconnects.") }
             return SendOutcome.NotSent
@@ -442,7 +447,7 @@ class ChatSession(
                 state.copy(
                     messages = before.messages,
                     error = when {
-                        (e as? RpcException)?.code == BUSY -> "Wait for the reply to finish, then try again."
+                        (e as? RpcException)?.code == BUSY -> BUSY_MESSAGE
                         stale -> "This message can't be changed any more."
                         else -> e.message ?: "Couldn't send the message."
                     },
@@ -1625,6 +1630,8 @@ class ChatSession(
 
         /** The gateway's "busy": a turn is running, so nothing was cut. */
         const val BUSY = 4009
+
+        const val BUSY_MESSAGE = "Wait for the reply to finish, then try again."
 
         /**
          * A rewind the gateway can't place: the row isn't in what the live agent holds (4018: compressed
