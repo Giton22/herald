@@ -1083,6 +1083,9 @@ class ChatSession(
             throw e
         } catch (e: Exception) {
             _state.update { it.copy(error = e.message ?: "Couldn't stop the turn.") }
+            // Turned down by the gateway, the runtime may be gone (its bot deleted mid-turn, say): asked again,
+            // a chat that still exists shows its turn as it is, and one that doesn't stops showing one.
+            if (e is RpcException) runCatchingAttach(client, reconnected = true)
             return null
         }
         var dropped = emptyList<String>()
@@ -1404,7 +1407,14 @@ class ChatSession(
                 olderSkew = 0
                 showRows(flagged, older)
             }
-            else -> _state.update { it.copy(historyLoaded = true, historyError = result.errorMessage) }
+            else -> _state.update {
+                it.copy(
+                    historyLoaded = true,
+                    historyError = result.errorMessage,
+                    // Gone from the gateway (deleted elsewhere, or with its bot): nothing of it is still running.
+                    running = it.running && !(result is ApiResult.Failed && result.status == HTTP_NOT_FOUND),
+                )
+            }
         }
     }
 
@@ -1490,7 +1500,14 @@ class ChatSession(
     } catch (e: CancellationException) {
         throw e
     } catch (e: Exception) {
-        _state.update { it.copy(attachment = Attachment.Failed(e.message ?: "Couldn't open the session.")) }
+        _state.update {
+            it.copy(
+                attachment = Attachment.Failed(e.message ?: "Couldn't open the session."),
+                // The gateway itself turned the chat down (gone with its deleted bot, say): no turn of it can be
+                // followed, so none shows as running, nor keeps "Working…" in the shade. A lost link isn't that.
+                running = it.running && e !is RpcException,
+            )
+        }
         false
     }
 
@@ -1664,6 +1681,9 @@ class ChatSession(
 
         /** JSON-RPC "method not found": the gateway predates a call. */
         const val METHOD_NOT_FOUND = -32601
+
+        /** A REST read of a session the gateway no longer has. */
+        const val HTTP_NOT_FOUND = 404
 
         /** How long a handoff may wait for the messaging service to claim it (Desktop's minute). */
         const val HANDOFF_WAIT_MS = 60_000L
