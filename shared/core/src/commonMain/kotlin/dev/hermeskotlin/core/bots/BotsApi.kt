@@ -87,7 +87,95 @@ class BotsApi(private val connection: GatewayConnection) : BotChatBackend {
      * model, titled at once so the name is claimed before anything else can take it (and the row exists
      * before the first prompt). Returns its stored id.
      */
-    override suspend fun startBotChat(profile: String): String {
+    override suspend fun startBotChat(profile: String): String = startChat(profile).second
+
+    /**
+     * Makes a new bot, Desktop's New Agent: the profile (cloning the default's configuration, sharing its
+     * keys), its look and title in `ui_meta` (which makes it a Bot Mode bot), then a check that it has a
+     * model it can use. Returns whether it does; without one it is made but can't answer yet.
+     */
+    suspend fun createBot(draft: BotDraft): BotCreated {
+        val client = client()
+        client.request(
+            "profiles.create",
+            buildJsonObject {
+                put("name", draft.profile)
+                listOf(draft.title, draft.description).filter { it.isNotBlank() }.joinToString(" — ").takeIf { it.isNotEmpty() }
+                    ?.let { put("description", it) }
+                put("clone_from", Bot.DEFAULT)
+                put("share_auth", true)
+                put("soul", draft.soul.ifBlank { composeSoul(displayNameFor(draft.profile, draft.title), draft.profile, draft.title, draft.description) })
+            },
+            timeoutMs = SLOW_MS,
+        )
+        updateMeta(draft.profile, draft.look() + mapOf("created" to JsonPrimitive(currentTimeMillis())))
+        val check = runCatching { client.request("setup.runtime_check", buildJsonObject { put("profile", draft.profile) }) as? JsonObject }.getOrNull()
+        val ok = (check?.get("ok") as? JsonPrimitive)?.booleanOrNull != false
+        return BotCreated(draft.profile, readyToChat = ok, problem = (check?.get("error") as? JsonPrimitive)?.contentOrNull)
+    }
+
+    /**
+     * Starts a just-made bot's Bot Chat with Desktop's intro, so the bot greets its owner once. Only for a
+     * bot just made: any other open must never send it (each one is a model turn in the user's name).
+     */
+    suspend fun startWithIntro(profile: String): String {
+        val (runtime, stored) = startChat(profile)
+        client().request(
+            "prompt.submit",
+            buildJsonObject {
+                put("session_id", runtime)
+                put("text", KICKOFF)
+            },
+        )
+        return stored
+    }
+
+    /** What the editor shows of a bot beyond the roster: its SOUL and description (`profiles.describe`). */
+    suspend fun describe(name: String): BotDetails {
+        val reply = client().request("profiles.describe", buildJsonObject { put("name", name) }) as? JsonObject
+        fun text(key: String) = (reply?.get(key) as? JsonPrimitive)?.contentOrNull.orEmpty()
+        return BotDetails(soul = text("soul"), description = text("description"))
+    }
+
+    /** Saves an edit: the profile's description and SOUL when they changed, and only the look fields that did. */
+    suspend fun editBot(name: String, description: String?, soul: String?, look: Map<String, JsonElement?>) {
+        if (description != null || soul != null) {
+            client().request(
+                "profiles.configure",
+                buildJsonObject {
+                    put("name", name)
+                    description?.let { put("description", it) }
+                    soul?.let { put("soul", it) }
+                },
+                timeoutMs = SLOW_MS,
+            )
+        }
+        if (look.isNotEmpty()) updateMeta(name, look)
+    }
+
+    /**
+     * Copies [bot] as a new bot named `<name>-2` (the first free number), configuration, skills, SOUL and
+     * memory included, with the same look and "(copy)" after its title. Returns the new profile.
+     */
+    suspend fun duplicate(bot: Bot, taken: Set<String>): String {
+        val name = (2..99).map { n -> bot.name.take(64 - "-$n".length) + "-$n" }.firstOrNull { it !in taken }
+            ?: throw RpcException(0, "No free name for the copy.")
+        client().request(
+            "profiles.create",
+            buildJsonObject {
+                put("name", name)
+                put("clone_from", bot.name)
+                bot.description?.takeIf { it.isNotBlank() }?.let { put("description", it) }
+            },
+            timeoutMs = SLOW_MS,
+        )
+        val look = bot.metaBlock.filterKeys { it != "created" && it != "chat" } +
+            ("title" to JsonPrimitive("${bot.label} (copy)")) + ("created" to JsonPrimitive(currentTimeMillis()))
+        updateMeta(name, look)
+        return name
+    }
+
+    private suspend fun startChat(profile: String): Pair<String, String> {
         val client = client()
         val created = client.request(
             "session.create",
@@ -118,7 +206,7 @@ class BotsApi(private val connection: GatewayConnection) : BotChatBackend {
             if (TITLE_TAKEN.containsMatchIn(e.message)) throw BotChatTakenException()
             throw e
         }
-        return stored
+        return runtime to stored
     }
 
     private suspend fun discard(client: JsonRpcClient, profile: String, runtime: String, stored: String) {
@@ -146,5 +234,13 @@ class BotsApi(private val connection: GatewayConnection) : BotChatBackend {
         private const val TERMINAL_COLUMNS = 80
         private val TITLE_TAKEN = Regex("already in use", RegexOption.IGNORE_CASE)
         private const val META_ATTEMPTS = 4
+
+        /** Making or copying a profile seeds its skills and writes files; it takes a while. */
+        private const val SLOW_MS = 120_000L
+
+        /** Desktop's first line of a new bot's chat (canonical-chat.ts `kickoffText`). */
+        const val KICKOFF = "Hey, tell me about yourself!"
+
+        private fun currentTimeMillis(): Long = kotlin.time.Clock.System.now().toEpochMilliseconds()
     }
 }
