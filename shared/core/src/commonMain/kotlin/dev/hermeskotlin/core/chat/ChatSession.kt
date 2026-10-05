@@ -63,7 +63,8 @@ class ChatSession(
     private val connection: GatewayConnection,
     private val sessions: SessionsApi,
     private val scope: CoroutineScope,
-    private val profile: String? = null,
+    /** The profile the chat runs in; null for the gateway's launch profile. */
+    val profile: String? = null,
     /** Where flagged tool output is remembered, since the transcript forgets it. */
     private val risks: ToolRiskStore? = null,
     /** Dates what this device sends and sees finish; live events carry no time of their own. */
@@ -182,6 +183,7 @@ class ChatSession(
                 ),
                 keySeq = it.keySeq + 1,
                 error = null,
+                refused = null,
             )
         }
         // Counted before submitting: the turn's message.start can arrive before the prompt.submit reply.
@@ -244,9 +246,11 @@ class ChatSession(
                 }
             }
             detach(uploadClient, uploadRuntimeId, queuedImages)
+            val refused = SessionRefusal.of(e)
             _state.update { state ->
                 state.copy(
-                    error = e.message ?: "Couldn't send the message.",
+                    error = if (refused != null) null else e.message ?: "Couldn't send the message.",
+                    refused = refused,
                     // The caller gets the text back to resend; a dead bubble would only duplicate it.
                     messages = state.messages.filterNot { it.key == key },
                 )
@@ -395,6 +399,7 @@ class ChatSession(
                 messages = it.messages.take(index) + ChatMessage.User(newKey, trimmed, pending = true),
                 keySeq = it.keySeq + 1,
                 error = null,
+                refused = null,
             )
         }
         ownTurnsPending++
@@ -443,10 +448,13 @@ class ChatSession(
                 return SendOutcome.NotSent
             }
             val stale = (e as? RpcException)?.code in STALE_REWIND_CODES
+            val refused = SessionRefusal.of(e)
             _state.update { state ->
                 state.copy(
                     messages = before.messages,
+                    refused = refused,
                     error = when {
+                        refused != null -> null
                         (e as? RpcException)?.code == BUSY -> BUSY_MESSAGE
                         stale -> "This message can't be changed any more."
                         else -> e.message ?: "Couldn't send the message."
@@ -1202,7 +1210,7 @@ class ChatSession(
         if (_state.value.attachment is Attachment.Failed) scope.launch { runCatchingAttach(client) }
     }
 
-    fun dismissError() = _state.update { it.copy(error = null) }
+    fun dismissError() = _state.update { it.copy(error = null, refused = null) }
 
     /** Shows a title set elsewhere (a REST rename) without waiting for the gateway to echo it. */
     fun showTitle(title: String?) = _state.update { it.copy(title = title) }

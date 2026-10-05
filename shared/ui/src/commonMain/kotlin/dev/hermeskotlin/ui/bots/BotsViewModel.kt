@@ -5,6 +5,8 @@ import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.bots.BotDetails
 import dev.hermeskotlin.core.bots.BotDraft
+import dev.hermeskotlin.core.bots.BotHealth
+import dev.hermeskotlin.core.bots.BotTrouble
 import dev.hermeskotlin.core.bots.displayNameFor
 import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.bots.BotChatUnavailableException
@@ -79,10 +81,14 @@ class BotsViewModel(
     private val modes: SidebarModeStore,
     private val sessions: SessionsApi,
     private val profiles: ProfilesApi,
+    private val health: BotHealth,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(BotsUiState())
     val state: StateFlow<BotsUiState> = _state.asStateFlow()
+
+    /** Bots that can't work until something is fixed, by profile: the roster's ⚠. */
+    val troubles: StateFlow<Map<String, BotTrouble>> = health.troubles
 
     private val _mode = MutableStateFlow(SidebarMode.Chats)
     val mode: StateFlow<SidebarMode> = _mode.asStateFlow()
@@ -134,6 +140,8 @@ class BotsViewModel(
 
     fun bind(url: GatewayUrl) {
         if (gateway.value == url) return
+        // Another gateway's bots are other bots, whatever their names.
+        if (gateway.value != null) health.reset()
         gateway.value = url
         _state.value = BotsUiState()
         _avatars.value = emptyMap()
@@ -188,6 +196,9 @@ class BotsViewModel(
             }
         }
     }
+
+    /** Asks the gateway again whether [bot] can work; a fix made elsewhere clears its ⚠. */
+    fun checkAgain(bot: Bot) = health.recheck(bot.name)
 
     /** Keeps [bot] at the top of the roster, or lets it go back to its place. Desktop sees it too. */
     fun setPinned(bot: Bot, pinned: Boolean) = changeMeta(bot, "pinned", JsonPrimitive(pinned))
@@ -265,6 +276,7 @@ class BotsViewModel(
         viewModelScope.launch {
             try {
                 api.editBot(bot.name, description, soul, look)
+                health.recheck(bot.name)
                 onDone()
             } catch (e: CancellationException) {
                 throw e
@@ -345,6 +357,7 @@ class BotsViewModel(
             _state.update { it.regroup(ordered).copy(loading = false, error = null, unsupported = false, unread = unread) }
             loadAvatars(ordered)
             watch(ordered)
+            health.checkOnce(ordered.map { it.name })
         } catch (e: CancellationException) {
             throw e
         } catch (e: RpcException) {

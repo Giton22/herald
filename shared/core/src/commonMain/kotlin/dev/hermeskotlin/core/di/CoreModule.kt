@@ -32,6 +32,7 @@ import dev.hermeskotlin.core.update.UpdateChecker
 import dev.hermeskotlin.core.journey.JourneyApi
 import dev.hermeskotlin.core.pet.PetApi
 import dev.hermeskotlin.core.bots.BotChats
+import dev.hermeskotlin.core.bots.BotHealth
 import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.bots.SidebarModeStore
 import dev.hermeskotlin.core.voice.AudioApi
@@ -86,6 +87,10 @@ val coreModule = module {
     single { PetApi(get()) }
     single { BotsApi(get()) }
     single { BotChats(get<BotsApi>()) }
+    single {
+        val bots = get<BotsApi>()
+        BotHealth(get(), get(), get()) { bots.runtimeCheck(it) }
+    }
     single { SidebarModeStore(get()) }
     single { JourneyApi(get()) }
     single { AudioApi(get()) }

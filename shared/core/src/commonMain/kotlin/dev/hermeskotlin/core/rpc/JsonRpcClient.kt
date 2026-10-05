@@ -19,6 +19,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
@@ -36,8 +37,11 @@ data class GatewayEvent(
     val seq: Long?,
 )
 
-/** JSON-RPC error returned by the gateway. */
-class RpcException(val code: Int, override val message: String) : Exception(message)
+/**
+ * JSON-RPC error returned by the gateway. [reason] is the machine-readable cause some errors carry in
+ * `data.reason` (`SESSION_NOT_OWNED` on a 4090, a delivery failure class), so callers needn't read prose.
+ */
+class RpcException(val code: Int, override val message: String, val reason: String? = null) : Exception(message)
 
 /**
  * No reply to [method] within its timeout. The call went out, so the gateway may still have acted on it.
@@ -180,6 +184,8 @@ class JsonRpcClient(
                         RpcException(
                             error["code"]?.jsonPrimitive?.intOrNull ?: -32000,
                             error["message"]?.jsonPrimitive?.contentOrNull ?: "RPC error",
+                            ((error["data"] as? JsonObject)?.get("reason") as? JsonPrimitive)
+                                ?.takeIf { it.isString }?.contentOrNull,
                         ),
                     )
                 } else {

@@ -171,6 +171,8 @@ data class ChatState(
     val thinkingFrame: String? = null,
     /** Session-level failure outside a turn (`error` event, failed send). */
     val error: String? = null,
+    /** The last prompt was turned away because the chat is busy elsewhere; cleared by the next send that goes. */
+    val refused: SessionRefusal? = null,
     /** Questions the agent is blocked on (approval, clarify, sudo, secret), oldest first. */
     val inputRequests: List<InputRequest> = emptyList(),
     /** The live agent's latest token totals. */
