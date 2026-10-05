@@ -59,7 +59,14 @@ data class SessionsUiState(
     /** One-off feedback for a failed row action, cleared by [SessionsViewModel.dismissMessage]. */
     val message: String? = null,
     val sessionExpired: Boolean = false,
+    /** The last archive or unarchive, which "Undo" can take back for a few seconds. */
+    val undo: ArchiveUndo? = null,
 )
+
+/** [session] as it was before it was archived (or unarchived), and where it sat in the list and the search results. */
+data class ArchiveUndo(val session: SessionSummary, val index: Int, val searchIndex: Int) {
+    val message: String get() = if (session.archived) "Unarchived" else "Archived"
+}
 
 /** The recent list narrowed to what's running, or to chats waiting on the user or with a reply not yet read. */
 enum class AttentionFilter(val label: String) {
@@ -244,11 +251,40 @@ class SessionsViewModel(
         call = { url, profile -> api.setPinned(url, session.id, !session.pinned, profile) },
     )
 
-    /** Archiving moves the row to the other filter, so it leaves the current list either way. */
-    fun toggleArchived(session: SessionSummary) = mutate(
-        apply = { list -> list.filterNot { it.id == session.id } },
-        call = { url, profile -> api.setArchived(url, session.id, !session.archived, profile) },
-    )
+    /**
+     * Archiving moves the row to the other filter, so it leaves the current list either way. Once the
+     * gateway agrees, [SessionsUiState.undo] offers to put it back.
+     */
+    fun toggleArchived(session: SessionSummary) {
+        val before = _state.value
+        val undo = ArchiveUndo(
+            session = session,
+            index = before.sessions.indexOfFirst { it.id == session.id },
+            searchIndex = before.searchResults?.indexOfFirst { it.id == session.id } ?: -1,
+        )
+        mutate(
+            apply = { list -> list.filterNot { it.id == session.id } },
+            call = { url, profile -> api.setArchived(url, session.id, !session.archived, profile) },
+            onSuccess = { _state.update { it.copy(undo = undo) } },
+        )
+    }
+
+    /** Takes the last archive or unarchive back: the row returns to where it was. */
+    fun undoArchive() {
+        val undo = _state.value.undo ?: return
+        _state.update { it.copy(undo = null) }
+        val session = undo.session
+        mutate(
+            apply = { list -> if (list.any { it.id == session.id }) list else list.withRowAt(session, undo.index) },
+            applySearch = { list -> if (undo.searchIndex < 0 || list.any { it.id == session.id }) list else list.withRowAt(session, undo.searchIndex) },
+            call = { url, profile -> api.setArchived(url, session.id, session.archived, profile) },
+        )
+    }
+
+    fun dismissUndo() = _state.update { it.copy(undo = null) }
+
+    private fun List<SessionSummary>.withRowAt(row: SessionSummary, index: Int): List<SessionSummary> =
+        if (index < 0) this else toMutableList().apply { add(index.coerceAtMost(size), row) }
 
     fun delete(session: SessionSummary) = mutate(
         apply = { list -> list.filterNot { it.id == session.id } },
@@ -261,14 +297,18 @@ class SessionsViewModel(
     private fun mutate(
         apply: (List<SessionSummary>) -> List<SessionSummary>,
         call: suspend (GatewayUrl, String?) -> ApiResult<Unit>,
+        applySearch: (List<SessionSummary>) -> List<SessionSummary> = apply,
+        onSuccess: () -> Unit = {},
     ) {
         val url = gateway?.gatewayUrl ?: return
         val profile = profile
         val before = _state.value
-        _state.update { it.copy(sessions = apply(it.sessions), searchResults = it.searchResults?.let(apply)) }
+        _state.update { it.copy(sessions = apply(it.sessions), searchResults = it.searchResults?.let(applySearch)) }
         viewModelScope.launch {
             val result = call(url, profile)
-            if (result !is ApiResult.Success) {
+            if (result is ApiResult.Success) {
+                onSuccess()
+            } else {
                 _state.update {
                     it.copy(
                         sessions = before.sessions,

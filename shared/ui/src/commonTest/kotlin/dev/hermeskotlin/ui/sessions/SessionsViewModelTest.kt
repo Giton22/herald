@@ -18,10 +18,12 @@ import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockEngineConfig
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.engine.mock.toByteArray
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import io.ktor.http.isSuccess
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -60,6 +62,9 @@ class SessionsViewModelTest {
         listStatus: HttpStatusCode = HttpStatusCode.OK,
         total: Int = 2,
         socket: RpcTransport? = null,
+        /** The body of each PATCH to a session, in order. */
+        patches: MutableList<String> = mutableListOf(),
+        patchStatus: HttpStatusCode = HttpStatusCode.OK,
     ): SessionsViewModel {
         // On the test dispatcher, so no request is still finishing on another thread when a test ends
         // (and resuming onto Dispatchers.Main while the next test sets it).
@@ -73,6 +78,10 @@ class SessionsViewModelTest {
                 )
                 request.url.encodedPath == "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
                 request.method == HttpMethod.Delete -> respond("""{"detail":"Store is busy"}""", deleteStatus, json)
+                request.method == HttpMethod.Patch -> {
+                    patches += request.body.toByteArray().decodeToString()
+                    respond(if (patchStatus.isSuccess()) "{}" else """{"detail":"Store is busy"}""", patchStatus, json)
+                }
                 else -> respond("""{"display_name":"Me"}""", HttpStatusCode.OK, json)
             }
         }
@@ -203,6 +212,36 @@ class SessionsViewModelTest {
         val state = vm.state.first { it.message != null }
         assertEquals(listOf("a", "b"), state.sessions.map { it.id })
         assertTrue("Store is busy" in state.message!!)
+    }
+
+    @Test
+    fun archivingOffersUndoWhichPutsTheRowBackWhereItWas() = runTest(dispatcher) {
+        val patches = mutableListOf<String>()
+        val vm = viewModel(patches = patches)
+        vm.bind(gateway)
+        val alpha = vm.awaitLoaded().sessions.first { it.id == "a" }
+
+        vm.toggleArchived(alpha)
+        val archived = vm.state.first { it.undo != null }
+        assertEquals(listOf("b"), archived.sessions.map { it.id })
+        assertEquals("Archived", archived.undo!!.message)
+
+        vm.undoArchive()
+        val restored = vm.state.first { patches.size == 2 }
+        assertEquals(listOf("a", "b"), restored.sessions.map { it.id })
+        assertEquals(null, restored.undo)
+        assertTrue(""""archived":true""" in patches[0], patches[0])
+        assertTrue(""""archived":false""" in patches[1], patches[1])
+    }
+
+    @Test
+    fun aFailedArchivePutsTheRowBackAndOffersNoUndo() = runTest(dispatcher) {
+        val vm = viewModel(patchStatus = HttpStatusCode.ServiceUnavailable)
+        vm.bind(gateway)
+        vm.toggleArchived(vm.awaitLoaded().sessions.first { it.id == "b" })
+        val state = vm.state.first { it.message != null }
+        assertEquals(listOf("a", "b"), state.sessions.map { it.id })
+        assertEquals(null, state.undo)
     }
 
     @Test
