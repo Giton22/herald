@@ -7,9 +7,12 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.X
 import com.composeunstyled.Text
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.designsystem.bodySmall
@@ -27,6 +30,10 @@ fun Toast(
     modifier: Modifier = Modifier,
     actionLabel: String? = null,
     onAction: () -> Unit = {},
+    /** Shows ×, for a toast that stays until it's closed (as it must while a screen reader is on). */
+    onDismiss: (() -> Unit)? = null,
+    /** What a screen reader announces instead of [message], e.g. with the chat's name. */
+    spokenMessage: String = message,
 ) {
     Surface(modifier.widthIn(max = 480.dp).semantics { liveRegion = LiveRegionMode.Polite }, elevated = true) {
         Row(
@@ -37,9 +44,13 @@ fun Toast(
                 message,
                 style = Theme[typography][bodySmall],
                 color = Theme[colors][text],
-                modifier = Modifier.weight(1f, fill = false).padding(end = 8.dp, top = 10.dp, bottom = 10.dp),
+                modifier = Modifier
+                    .weight(1f, fill = false)
+                    .padding(end = 8.dp, top = 10.dp, bottom = 10.dp)
+                    .semantics { contentDescription = spokenMessage },
             )
             if (actionLabel != null) Button(actionLabel, onClick = onAction, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            if (onDismiss != null) IconButton(Lucide.X, contentDescription = "Dismiss", onClick = onDismiss)
         }
     }
 }
