@@ -32,5 +32,15 @@ jobs:
         with:
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
 
-      - name: Test and build
-        run: ./gradlew --no-daemon :shared:core:testAndroidHostTest :shared:ui:testAndroidHostTest :androidApp:assembleDebug
+      # Lint fails on any issue that isn't in androidApp/lint-baseline.xml. --continue reports the tests and
+      # lint together instead of stopping at the first failure.
+      - name: Test, build and lint
+        run: ./gradlew --no-daemon --continue :shared:core:testAndroidHostTest :shared:designsystem:testAndroidHostTest :shared:ui:testAndroidHostTest :androidApp:assembleDebug :androidApp:lintDebug
+
+      - name: Lint report
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lint-report
+          path: androidApp/build/reports/lint-results-debug.html
+          if-no-files-found: ignore

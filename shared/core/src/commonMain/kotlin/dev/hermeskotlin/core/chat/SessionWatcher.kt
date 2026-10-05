@@ -24,6 +24,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flowOf
@@ -61,6 +62,10 @@ data class WatchedTurnEnd(val storedId: String, val title: String, val text: Str
  * attached on one socket. Skipped: the open chat (it notifies for itself) and bot chats (bot messages
  * notify through `sessions.changed`).
  *
+ * An attached socket also keeps the session loaded: the gateway unloads a session only once no socket is
+ * on it. So chats are attached only while [follow] is on, that is while something would notify for them;
+ * in sight, the list's live statuses come from [ActiveSessions] alone.
+ *
  * Works only while the socket is up: in sight, while a turn runs, or with Notifications anywhere.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -80,6 +85,21 @@ class SessionWatcher(
 
     private val _turnEnds = MutableSharedFlow<WatchedTurnEnd>(extraBufferCapacity = 16)
     val turnEnds: SharedFlow<WatchedTurnEnd> = _turnEnds.asSharedFlow()
+
+    private val _turnStarts = MutableSharedFlow<String>(extraBufferCapacity = 16)
+
+    /** A watched chat's stored id each time a turn starts there: its last reply is no longer the news. */
+    val turnStarts: SharedFlow<String> = _turnStarts.asSharedFlow()
+
+    private val following = MutableStateFlow(false)
+
+    /**
+     * Whether running chats are attached now; off until a notifier turns it on. Off, none is newly attached,
+     * and those attached stay (no detach).
+     */
+    fun follow(on: Boolean) {
+        following.value = on
+    }
 
     init {
         scope.launch {
@@ -160,7 +180,7 @@ class SessionWatcher(
         launch { client.events.collect(::onEvent) }
         // Stored ids attached (or being attached) on this socket. Only this collector touches it.
         val attached = mutableSetOf<String>()
-        active.live.collect { live ->
+        combine(active.live, following) { live, on -> live to on }.collect { (live, on) ->
             val openId = host.session.value?.state?.value?.storedSessionId
             for ((storedId, row) in live.rows) {
                 if (!row.status.running || storedId == openId || row.title == BotsApi.BOT_CHAT_TITLE) continue
@@ -170,7 +190,8 @@ class SessionWatcher(
                     attention.watched(row.runtimeId, storedId, row.status.running, emptyList())
                     if (attached.remove(old.storedId)) attached += storedId
                 }
-                if (storedId in attached || attached.size >= maxWatched) continue
+                // Read for each chat: following may stop while an earlier attach waits on its reply.
+                if (!on || !following.value || storedId in attached || attached.size >= maxWatched) continue
                 attached += storedId
                 when (attach(client, storedId, row)) {
                     Attach.Done -> Unit
@@ -234,7 +255,16 @@ class SessionWatcher(
             val requests = open + heard
             all + (storedId to chat.copy(runtimeId = runtimeId, requests = requests, arrivals = requests.associate { it.id to (chat.arrivals[it.id] ?: now) }))
         }
-        attention.watched(runtimeId, storedId, result.boolean("running") == true, open)
+        val running = result.boolean("running") == true
+        attention.watched(runtimeId, storedId, running, open)
+        // A turn that started while this socket wasn't attached (an idle chat isn't attached again).
+        if (running) _turnStarts.emit(storedId)
+        // The list showed it running, but the turn ended before the attach: its end never reaches this socket.
+        // The reply's text isn't at hand, so it's told without it.
+        else if (row.status.running) {
+            val title = _chats.value[storedId]?.title ?: row.title
+            _turnEnds.emit(WatchedTurnEnd(storedId, title, "", TurnOutcome.Complete, null))
+        }
         return Attach.Done
     }
 
@@ -258,6 +288,7 @@ class SessionWatcher(
             "session.title" -> payload.string("title")?.takeIf { it.isNotBlank() }?.let { title ->
                 _chats.update { all -> all[chat.storedId]?.let { all + (chat.storedId to it.copy(title = title)) } ?: all }
             }
+            "message.start" -> _turnStarts.emit(chat.storedId)
             "message.complete" -> {
                 // Nothing can still wait once the turn is over.
                 _chats.update { all -> all[chat.storedId]?.let { all + (chat.storedId to it.copy(requests = emptyList(), arrivals = emptyMap())) } ?: all }

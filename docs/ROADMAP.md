@@ -28,7 +28,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [ ] Coil 3 for images
 - [x] Unit tests (Ktor `MockEngine`, coroutines-test)
 - [x] CI on GitHub Actions: unit tests and a debug build on every push
-- [ ] Lint in CI
+- [x] Android lint in CI (`lintDebug`); a baseline holds the old issues, so only new ones fail the build
 - [x] Releases: a `v1.2.3` tag builds a signed APK into a draft GitHub release; the app offers newer releases
 
 ### Design system (`shared/designsystem`)

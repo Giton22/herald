@@ -8,8 +8,11 @@ import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.transformLatest
 import kotlinx.coroutines.launch
 
 /**
@@ -18,6 +21,7 @@ import kotlinx.coroutines.launch
  * for each approval or question, the reply when a turn ends, posted only while the app is out of sight and
  * only as the settings allow. The open chat and bot chats are left to their own notifiers.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class WatchNotifier(
     private val watcher: SessionWatcher,
     private val host: ChatHost,
@@ -32,6 +36,23 @@ class WatchNotifier(
     fun start() {
         scope.launch {
             visibility.visible.collect { visible -> active.inBackground = !visible }
+        }
+        scope.launch {
+            // Attaching keeps a chat loaded on the gateway until the socket closes, so only while something here
+            // would notify for it, and only once Herald has stayed out of sight a while: a quick switch to another
+            // app attaches nothing. A request asked meanwhile still comes with the attach. Read again on each
+            // change, so permission granted in system settings counts on the way back.
+            combine(visibility.visible, settings.settings) { visible, prefs ->
+                val wants = prefs ?: AppSettings()
+                !visible && (wants.notifyRequests || wants.notifyReplies) && notifications.canPost
+            }.transformLatest { on ->
+                if (on) delay(FOLLOW_AFTER_MS)
+                emit(on)
+            }.collect(watcher::follow)
+        }
+        scope.launch {
+            // A new turn there makes the last reply old news, as ChatNotifier does for the open chat.
+            watcher.turnStarts.collect(notifications::cancelReply)
         }
         scope.launch {
             // Only what was actually posted counts, as in ChatNotifier.
@@ -64,10 +85,16 @@ class WatchNotifier(
                 if (end.outcome == TurnOutcome.Interrupted || end.storedId == openChat()) return@collect
                 if (bots.botWithChat(end.storedId) != null) return@collect
                 val failed = end.outcome == TurnOutcome.Error
-                notifications.postReply(end.storedId, end.title.ifBlank { null }, if (failed) end.error ?: end.text else end.text, failed)
+                val text = (if (failed) end.error ?: end.text else end.text).ifBlank { "Finished." }
+                notifications.postReply(end.storedId, end.title.ifBlank { null }, text, failed)
             }
         }
     }
 
     private fun openChat(): String? = host.session.value?.state?.value?.storedSessionId
+
+    private companion object {
+        /** How long Herald stays out of sight before running chats are attached. */
+        const val FOLLOW_AFTER_MS = 15_000L
+    }
 }
