@@ -165,6 +165,9 @@ import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.OutgoingAttachment
 import dev.hermeskotlin.core.chat.SendCheck
+import dev.hermeskotlin.core.chat.SessionRefusal
+import com.composables.icons.lucide.Hourglass
+import com.composables.icons.lucide.MonitorSmartphone
 import dev.hermeskotlin.core.chat.extractReplyMedia
 import dev.hermeskotlin.core.chat.ToolActivity
 import dev.hermeskotlin.core.chat.TodoList
@@ -638,6 +641,17 @@ private fun ColumnScope.Dock(
         Banner(it.message, actionLabel = "Retry", onAction = actions::retry)
     }
     state.error?.let { Banner(it, actionLabel = null, onAction = actions::dismissError) }
+    // Turned away, not failed: the prompt is back in the composer, ready to go again. Once the composer is
+    // emptied there's nothing to send, so the banner can only be closed.
+    state.refused?.let { refused ->
+        val canResend = actions.composer.text.isNotBlank()
+        Banner(
+            "${refused.title}. ${refused.detail}",
+            actionLabel = "Send again".takeIf { canResend },
+            onAction = { if (canResend) actions.send(null) else actions.dismissError() },
+            icon = if (refused == SessionRefusal.OpenElsewhere) Lucide.MonitorSmartphone else Lucide.Hourglass,
+        )
+    }
     attachmentError?.let { Banner(it, actionLabel = null, onAction = actions::dismissAttachmentError) }
     voiceChat.error?.let { Banner(it, actionLabel = null, onAction = actions::dismissVoiceChatError) }
     dictation.error?.let { Banner(it, actionLabel = null, onAction = actions::dismissDictationError) }

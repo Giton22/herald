@@ -72,10 +72,13 @@ class ChatSessionTest {
                 val canned = results[method] ?: "{}"
                 // "silent" never answers, like a gateway that stopped responding.
                 if (canned == SILENT) return@forEach
-                // "error:<code>" answers with a JSON-RPC error instead.
+                // "error:<code>" answers with a JSON-RPC error instead; "error:<code>:<reason>" adds `data.reason`.
                 transport.push(
                     if (canned.startsWith("error:")) {
-                        """{"jsonrpc":"2.0","id":$id,"error":{"code":${canned.removePrefix("error:")},"message":"nope"}}"""
+                        val code = canned.removePrefix("error:").substringBefore(':')
+                        val data = canned.removePrefix("error:").substringAfter(':', "").takeIf { it.isNotEmpty() }
+                            ?.let { ""","data":{"reason":"$it"}""" }.orEmpty()
+                        """{"jsonrpc":"2.0","id":$id,"error":{"code":$code,"message":"nope"$data}}"""
                     } else {
                         """{"jsonrpc":"2.0","id":$id,"result":$canned}"""
                     },
@@ -464,6 +467,52 @@ class ChatSessionTest {
 
         assertTrue(chat.state.value.messages.isEmpty())
         assertTrue(chat.state.value.error != null)
+    }
+
+    @Test
+    fun aChatOpenElsewhereIsSaidAsSuchNotAsAnError() = runTest {
+        history = threeTurns
+        val (chat, _) = resumedChat(backgroundScope, mapOf("prompt.submit" to "error:4090:SESSION_NOT_OWNED"))
+        val before = chat.state.value.messages
+
+        assertFalse(chat.send("are you there?"))
+
+        assertEquals(SessionRefusal.OpenElsewhere, chat.state.value.refused)
+        assertNull(chat.state.value.error)
+        // Nothing went: no bubble left behind; the caller hands the text back to the composer.
+        assertEquals(before, chat.state.value.messages)
+    }
+
+    @Test
+    fun aRefusalWithoutAKnownReasonStaysAnOrdinaryError() = runTest {
+        history = threeTurns
+        val (chat, _) = resumedChat(backgroundScope, mapOf("prompt.submit" to "error:4090"))
+
+        assertFalse(chat.send("are you there?"))
+
+        assertNull(chat.state.value.refused)
+        assertEquals("nope", chat.state.value.error)
+    }
+
+    @Test
+    fun theNextSendClearsARefusal() = runTest {
+        history = threeTurns
+        // Passed to setup as is, so the answer can change mid-test.
+        val results = mutableMapOf(
+            "session.resume" to """{"session_id":"rt1","running":false}""",
+            "prompt.submit" to "error:4090:MAX_CONCURRENT_SESSIONS",
+        )
+        val (connection, _) = setup(backgroundScope, results)
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        assertFalse(chat.send("first try"))
+        assertEquals(SessionRefusal.TooManyChats, chat.state.value.refused)
+
+        results["prompt.submit"] = """{"status":"started"}"""
+        assertTrue(chat.send("second try"))
+
+        assertNull(chat.state.value.refused)
     }
 
     @Test

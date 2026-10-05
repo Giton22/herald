@@ -193,7 +193,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Messages from other bots (`Message from 🤖 …`) show as the sender's note in every chat, not as the user's prompt
 - [x] Reopens the last bot's chat on launch; roster ordered as Desktop's (pinned, then newest activity or creation)
 - [x] Transcript: delivery outcomes ("Reply from X", "Still waiting", "Couldn't reach X · why"), folded process rows, other bots' notes with their faces, replies to them folded, silence tokens hidden, routine notes, "Messaged X" for `message_agent`, failed turns; the status line of a turn woken by a reply says so
-- [ ] "Open elsewhere" (4090 `SESSION_NOT_OWNED`) as its own state
+- [x] "Open elsewhere" (4090 `SESSION_NOT_OWNED`, and the gateway's chat cap) as its own state above the composer, with Send again, in any chat
 - [x] Roster: long-press menu (Pin, Hide with a "Hidden" section, Open recent session, New chat with this bot, Start fresh), Thinking/Working, previews that name the bot that wrote, `@handle` for same names, bot face in the chat header; refresh on `sessions.changed` (bots' chats watched) with a 30 s fallback
 - [x] Start fresh: archive the Bot Chat (kept, retired) and begin an empty one, from the roster or the chat menu; the open chat follows a bot whose chat was started over elsewhere
 - [ ] ⚠ attention badge for sign-in, quota or setup failures
