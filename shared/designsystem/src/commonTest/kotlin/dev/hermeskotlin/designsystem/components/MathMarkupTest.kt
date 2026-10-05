@@ -104,6 +104,14 @@ class MathMarkupTest {
     }
 
     @Test
+    fun escapedBracketsAndParenthesesStayText() {
+        for (text in listOf("See \\[1\\] and \\[2\\] for details", "Press \\[Enter\\]", "The regex \\(foo\\) matches")) {
+            assertEquals(text, MathMarkup.prepare(text), text)
+        }
+        assertEquals(listOf(MathFormula("x", false)), formulas("Let \\(x\\) be"))
+    }
+
+    @Test
     fun anUnclosedFormulaStaysTextWhileItStreams() {
         assertEquals("The sum $$\\sum_i", MathMarkup.prepare("The sum $$\\sum_i"))
         assertEquals("Let \$x^", MathMarkup.prepare("Let \$x^"))
@@ -133,7 +141,11 @@ class MathMarkupTest {
         assertTrue(MathMarkup.looksLikeMath("a < b"))
         assertFalse(MathMarkup.looksLikeMath("5 and "))
         assertFalse(MathMarkup.looksLikeMath("1,000 to "))
-        assertFalse(MathMarkup.looksLikeMath("hello world"))    }
+        assertFalse(MathMarkup.looksLikeMath("hello world"))
+        // Shell variables in prose: "$HOME_DIR/$USER".
+        assertFalse(MathMarkup.looksLikeMath("HOME_DIR/"))
+        assertEquals("Set \$HOME_DIR/\$USER/bin", MathMarkup.prepare("Set \$HOME_DIR/\$USER/bin"))
+    }
 
     @Test
     fun textWithoutDollarsOrBackslashesIsReturnedAsIs() {

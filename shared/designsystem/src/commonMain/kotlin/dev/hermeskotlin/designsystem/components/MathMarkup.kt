@@ -100,7 +100,10 @@ object MathMarkup {
         if (isEscaped(chars, index)) return null
         var i = index + 2
         while (i < chars.size) {
-            if (matches(chars, i, closer, protected) && !isEscaped(chars, i)) return i to 2
+            if (matches(chars, i, closer, protected) && !isEscaped(chars, i)) {
+                // `\[` is also Markdown's escaped bracket: "\[1\]" is a citation, not math.
+                return if (closer == "$$" || looksLikeMath(chars.concatToString(index + 2, i))) i to 2 else null
+            }
             i++
         }
         return null
@@ -113,7 +116,8 @@ object MathMarkup {
             var i = index + 2
             while (i < chars.size && chars[i] != '\n') {
                 if (matches(chars, i, "\\)", protected) && !isEscaped(chars, i)) {
-                    return if (chars.concatToString(index + 2, i).isNotBlank()) Triple(2, i, 2) else null
+                    // Like `\[`, `\(` is also an escaped parenthesis: "\(foo\)" stays text.
+                    return if (looksLikeMath(chars.concatToString(index + 2, i))) Triple(2, i, 2) else null
                 }
                 i++
             }
@@ -162,6 +166,8 @@ object MathMarkup {
     internal fun looksLikeMath(value: String): Boolean {
         val trimmed = value.trim()
         if (trimmed.isEmpty()) return false
+        // A formula doesn't end mid-operation; "$HOME_DIR/$USER" is two shell variables.
+        if (trimmed.last() in "/=,") return false
         if (SINGLE_SYMBOL.matches(trimmed)) return true
         if (looksLikeAssignment(trimmed)) return true
         // A bare numeric tuple is math; a bare number (a price) is not.
