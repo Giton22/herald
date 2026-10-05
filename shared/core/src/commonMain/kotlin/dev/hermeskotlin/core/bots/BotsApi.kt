@@ -192,6 +192,31 @@ class BotsApi(private val connection: GatewayConnection) : BotChatBackend {
     }
 
     /**
+     * Sets the model [profile] runs ([provider]'s [model]): the bot's own, which every chat following its
+     * configuration picks up, its Bot Chat included. The gateway may want a pick confirmed first (a costly
+     * or data-sharing model): then nothing is written and its warning comes back, to send again with
+     * [confirmed] once the user agrees. Null when it was saved.
+     */
+    suspend fun setModel(profile: String, model: String, provider: String, confirmed: Boolean = false): String? {
+        val reply = client().request(
+            "profiles.configure",
+            buildJsonObject {
+                put("name", profile)
+                put("model", model)
+                put("provider", provider)
+                if (confirmed) put("confirm_expensive_model", true)
+            },
+            timeoutMs = SLOW_MS,
+        ) as? JsonObject
+        if ((reply?.get("confirm_required") as? JsonPrimitive)?.booleanOrNull == true) {
+            return (reply["confirm_message"] as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() } ?: "Use this model?"
+        }
+        val saved = ((reply?.get("applied") as? JsonObject)?.get("model") as? JsonPrimitive)?.booleanOrNull
+        if (saved == false) throw RpcException(0, "The gateway didn't save the model.")
+        return null
+    }
+
+    /**
      * Copies [bot] as a new bot named `<name>-2` (the first free number), configuration, skills, SOUL and
      * memory included, with the same look and "(copy)" after its title. Returns the new profile.
      */

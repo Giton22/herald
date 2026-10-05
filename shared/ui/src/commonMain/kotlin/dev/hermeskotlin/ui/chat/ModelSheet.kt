@@ -74,7 +74,10 @@ internal fun ChatState.effort(option: ModelOption?): ReasoningEffort? {
     return ReasoningEffort.fromWire(reasoningEffort) ?: ReasoningEffort.Default.takeIf { option != null }
 }
 
-/** Model, thinking level and fast mode for the open chat. */
+/**
+ * Model, thinking level and fast mode for the open chat. With [modelOnly] it picks just a model, e.g. a
+ * bot's own, which carries no thinking level or fast mode; [note] says what a pick changes.
+ */
 @Composable
 internal fun ModelSheet(
     visible: Boolean,
@@ -85,6 +88,8 @@ internal fun ModelSheet(
     onSelectModel: (ModelOption) -> Unit,
     onSelectEffort: (ReasoningEffort) -> Unit,
     onFast: (Boolean) -> Unit,
+    modelOnly: Boolean = false,
+    note: String? = null,
 ) {
     LaunchedEffect(visible) { if (visible) onRefresh() }
     val selection = ModelSelection.of(state, picker.catalog)
@@ -95,10 +100,18 @@ internal fun ModelSheet(
             "Model",
             style = Theme[typography][heading],
             color = Theme[colors][textColor],
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = if (note != null) 4.dp else 12.dp),
         )
+        note?.let {
+            Text(
+                it,
+                style = Theme[typography][bodySmall],
+                color = Theme[colors][textSecondary],
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
+            )
+        }
         val option = selection.option
-        val efforts = ReasoningEffort.choicesFor(option)
+        val efforts = if (modelOnly) emptyList() else ReasoningEffort.choicesFor(option)
         if (efforts.isNotEmpty()) {
             SectionLabel("Thinking")
             val current = state.effort(option)
@@ -111,7 +124,7 @@ internal fun ModelSheet(
                 }
             }
         }
-        if (option?.fast == true) {
+        if (option?.fast == true && !modelOnly) {
             val fast = state.fast == true
             Row(
                 Modifier.fillMaxWidth().clickable { onFast(!fast) }.padding(horizontal = 20.dp, vertical = 14.dp),

@@ -1216,6 +1216,13 @@ class ChatSession(
     fun showTitle(title: String?) = _state.update { it.copy(title = title) }
 
     /**
+     * Shows a model set elsewhere (a Bot Chat's bot's own, which the chat follows) without asking the
+     * gateway to pin it here; [error] says it couldn't be set.
+     */
+    fun showModel(model: String?, provider: String?, error: String? = null) =
+        _state.update { if (error != null) it.copy(error = error) else it.copy(model = model, provider = provider) }
+
+    /**
      * Sends [result] as the answer to [request] (see [InputAnswers]). The request leaves the state
      * once the answer is out; another client may have answered first, which the gateway ignores.
      */

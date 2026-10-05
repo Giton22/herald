@@ -200,7 +200,9 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] New bot (the "+" by Bots): face (shape and colour), name → profile id as Desktop makes it, title, description, optional SOUL (else Desktop's generated persona, without the messaging section the gateway injects); `profiles.create` cloning the default's configuration with shared keys, look in `ui_meta`, `setup.runtime_check`, then its Bot Chat with the intro
 - [x] Edit a bot (face, title, description, SOUL) sending only what changed; Duplicate (`clone_from`, look copied, "(copy)"); Delete (`DELETE /api/profiles/{name}`, asked first, not for the default)
 - [x] Routines per bot (long-press → Routines): the bot's cron jobs (its own store, plus older Desktop ones tagged `[bot:<profile>]` in the launch store); new ones made in the bot's store as `[bot:<profile>] <name>`, reporting to its chat (`deliver: bot-chat`) or anywhere else; runs open in the bot's profile; what went wrong with the last run spelled out; a ⚠ on the bot while one of its routines is failing (not for ones the user paused)
-- [ ] Avatar pictures (upload, `image.generate`), Desktop's blob faces, model picker per bot
+- [x] Model per bot: the editor's Model row (`profiles.configure` model + provider, the expensive-model confirmation), and a model picked in a Bot Chat's composer becomes the bot's own instead of pinning the chat (#129460)
+- [x] Skills, toolsets and MCP servers per bot: the editor opens the Capabilities page on the bot's profile, saying a running Bot Chat may keep its old tools (#124211)
+- [ ] Avatar pictures (upload, `image.generate`), Desktop's blob faces
 - [x] Bot notifications: while out of sight, a bot writing in its chat arrives as an Android conversation notification from it (face, name, inline Reply into its chat); driven by `sessions.changed` on the open socket (Stay connected or a running turn), only for the bot's own words, never hidden bots
 - [x] Each bot a launcher conversation shortcut; `hermes://bot/<profile>` opens its chat
 - [x] @mentions: `@` in the composer offers the bots with their faces; picking inserts `@handle`

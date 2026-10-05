@@ -43,6 +43,13 @@ import dev.hermeskotlin.ui.bots.BotsViewModel
 import dev.hermeskotlin.ui.bots.LocalBotFaces
 import dev.hermeskotlin.ui.chat.ChatScreen
 import dev.hermeskotlin.ui.chat.ChatViewModel
+import dev.hermeskotlin.ui.chat.ModelConfirmDialog
+import dev.hermeskotlin.ui.chat.ModelSheet
+import dev.hermeskotlin.ui.sessions.CapabilitiesPage
+import dev.hermeskotlin.core.chat.ChatState
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import dev.hermeskotlin.ui.connect.ConnectScreen
 import dev.hermeskotlin.ui.gateways.GatewaysSheet
 import dev.hermeskotlin.ui.sessions.ChatMenu
@@ -278,6 +285,10 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
 
     editing?.let { target ->
         val busy by bots.busy.collectAsStateWithLifecycle()
+        val modelPicker by bots.modelPicker.collectAsStateWithLifecycle()
+        var pickingModel by remember { mutableStateOf(false) }
+        var capabilitiesOpen by remember { mutableStateOf(false) }
+        val live = target.bot?.let { edited -> roster.all.firstOrNull { it.name == edited.name } ?: edited }
         BotEditor(
             bot = target.bot,
             taken = roster.all.map { it.name }.toSet(),
@@ -293,7 +304,44 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
             onSave = { description, soul, look ->
                 target.bot?.let { bot -> bots.save(bot, description, soul, look) { editing = null } }
             },
+            live = live,
+            onPickModel = { pickingModel = true },
+            onCapabilities = { capabilitiesOpen = true },
         )
+        live?.let { bot ->
+            ModelSheet(
+                visible = pickingModel,
+                onDismiss = { pickingModel = false },
+                state = ChatState(model = bot.model, provider = bot.provider),
+                picker = modelPicker,
+                onRefresh = { bots.loadModels(bot) },
+                onSelectModel = { model -> bots.setModel(bot, model) { pickingModel = false } },
+                onSelectEffort = {},
+                onFast = {},
+                modelOnly = true,
+                note = "${bot.label} runs this in all its chats, its Bot Chat and routines included.",
+            )
+            ModelConfirmDialog(
+                modelPicker.confirm,
+                onConfirm = { model -> bots.setModel(bot, model, confirmed = true) { pickingModel = false } },
+                onDismiss = bots::dismissModelConfirm,
+            )
+            if (capabilitiesOpen) {
+                PlatformBackHandler(enabled = true) { capabilitiesOpen = false }
+                Box(Modifier.fillMaxSize().background(Theme[colors][background]).windowInsetsPadding(WindowInsets.safeDrawing)) {
+                    CapabilitiesPage(
+                        gateway = route.gateway,
+                        profile = bot.name,
+                        onBack = { capabilitiesOpen = false },
+                        onSessionExpired = app::onSessionExpired,
+                        title = "${bot.label}'s capabilities",
+                        // Hermes fixes a chat's tools when it starts (#124211).
+                        note = "Changes apply to ${bot.label}'s new chats. If its Bot Chat doesn't pick one up, Start fresh gives it a new chat with everything set here.",
+                        viewModel = koinViewModel(key = "capabilities-${bot.name}"),
+                    )
+                }
+            }
+        }
     }
 
     if (settingsOpen) {

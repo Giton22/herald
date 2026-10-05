@@ -34,8 +34,21 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.text.style.TextOverflow
+import com.composables.icons.lucide.Blocks
+import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.Cpu
+import com.composables.icons.lucide.Lucide
 import com.composeunstyled.Text
+import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
+import dev.hermeskotlin.core.models.displayModelName
+import dev.hermeskotlin.core.models.displayProviderName
+import dev.hermeskotlin.designsystem.body
+import dev.hermeskotlin.designsystem.components.MinTouchTarget
+import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.core.bots.BOT_SWATCHES
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.bots.BotDetails
@@ -81,6 +94,12 @@ fun BotEditor(
     onBack: () -> Unit,
     onCreate: (BotDraft) -> Unit,
     onSave: (description: String?, soul: String?, look: Map<String, JsonElement?>) -> Unit,
+    /** The bot as the roster has it now, for what's saved apart from the form (its model). */
+    live: Bot? = bot,
+    /** Picks the model the bot runs; saved on its own, at once. */
+    onPickModel: () -> Unit = {},
+    /** Opens the bot's skills, tools and connectors. */
+    onCapabilities: () -> Unit = {},
 ) {
     PlatformBackHandler(enabled = busy == null, onBack = onBack)
     val meta = bot?.meta ?: BotMeta()
@@ -186,6 +205,23 @@ fun BotEditor(
                     singleLine = false,
                     maxLines = 12,
                 )
+                // What it runs and can do: each saved as soon as it's picked, apart from the form.
+                if (bot != null) {
+                    val now = live ?: bot
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        SectionLabel("How it works")
+                        SettingRow(
+                            Lucide.Cpu,
+                            "Model",
+                            now.model?.takeIf { it.isNotBlank() }?.let { model ->
+                                listOfNotNull(displayModelName(model), now.provider?.takeIf { it.isNotBlank() }?.let { displayProviderName(it) })
+                                    .joinToString(" · ")
+                            } ?: "The gateway's default",
+                            onClick = onPickModel,
+                        )
+                        SettingRow(Lucide.Blocks, "Skills, tools and connectors", "What ${bot.label} can use in its chats", onClick = onCapabilities)
+                    }
+                }
                 busy?.let { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary]) }
                 if (bot == null) {
                     Button(
@@ -237,6 +273,28 @@ fun BotEditor(
                 }
             }
         }
+    }
+}
+
+/** A row that opens one of the bot's settings: what it is, and what it's set to now. */
+@Composable
+private fun SettingRow(icon: ImageVector, title: String, value: String, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = MinTouchTarget)
+            .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
+            .clickable(onClick = onClick)
+            .padding(vertical = 10.dp, horizontal = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(20.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = Theme[typography][body], color = Theme[colors][text])
+            Text(value, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+        UnstyledIcon(Lucide.ChevronRight, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp))
     }
 }
 
