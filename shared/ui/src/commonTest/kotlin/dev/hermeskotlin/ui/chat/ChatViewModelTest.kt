@@ -138,6 +138,18 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun aSharedPictureAloneDoesNotBringBackAnOldNewChatDraft() = runTest(dispatcher) {
+        val drafts = DraftStore(InMemoryKeyValueStore())
+        drafts.set(gateway.gatewayUrl, null, "text of an earlier share")
+        val (vm, _) = viewModel(drafts)
+
+        vm.open(ChatTarget(gateway, null, null, nonce = 1, draft = ComposeDraft(attachments = listOf(attachment("p")))))
+
+        assertEquals("", vm.composer.text.toString())
+        assertEquals(listOf("p"), vm.attachments.value.map { it.id })
+    }
+
+    @Test
     fun sharedFilesStopAtTheTrayLimit() = runTest(dispatcher) {
         val (vm, _) = viewModel()
         val many = (1..OutgoingAttachment.MAX_COUNT + 2).map { attachment("f$it") }

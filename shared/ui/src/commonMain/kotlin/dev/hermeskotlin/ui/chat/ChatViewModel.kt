@@ -270,7 +270,8 @@ class ChatViewModel(
         _attachments.value = trays.remove(trayKey(target, target.storedSessionId)).orEmpty()
         _comments.value = commentTrays.remove(trayKey(target, target.storedSessionId)).orEmpty()
         viewModelScope.launch {
-            val text = drafts.get(target.gateway.gatewayUrl, target.storedSessionId, target.profile)
+            // A draft brought from outside (a share, a shortcut) starts the chat clean instead.
+            val text = if (target.draft != null) null else drafts.get(target.gateway.gatewayUrl, target.storedSessionId, target.profile)
             if (this@ChatViewModel.target != target) return@launch
             if (text != null && composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
             draftOf = target
@@ -293,7 +294,6 @@ class ChatViewModel(
         composer.clearText()
         _attachmentError.value = null
         restoreDraft(target)
-        // Its text is in before the stored draft is read back, so that one doesn't replace it.
         target.draft?.let(::takeDraft)
         if (target.storedSessionId == null) viewModelScope.launch { lastChats.set(target.gateway.gatewayUrl, null, target.profile) }
         session.value = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title, target.profile)
