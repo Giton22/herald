@@ -29,6 +29,9 @@ import dev.hermeskotlin.core.slash.SlashApi
 import dev.hermeskotlin.core.update.UpdateChecker
 import dev.hermeskotlin.core.journey.JourneyApi
 import dev.hermeskotlin.core.pet.PetApi
+import dev.hermeskotlin.core.bots.BotChats
+import dev.hermeskotlin.core.bots.BotsApi
+import dev.hermeskotlin.core.bots.SidebarModeStore
 import dev.hermeskotlin.core.voice.AudioApi
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
@@ -79,6 +82,9 @@ val coreModule = module {
     single { ModelsApi(get()) }
     single { SlashApi(get()) }
     single { PetApi(get()) }
+    single { BotsApi(get()) }
+    single { BotChats(get<BotsApi>()) }
+    single { SidebarModeStore(get()) }
     single { JourneyApi(get()) }
     single { AudioApi(get()) }
     // Outside requests (pictures from the web, GitHub) get a client without the gateway's cookies.
