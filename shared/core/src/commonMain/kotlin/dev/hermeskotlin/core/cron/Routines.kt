@@ -36,8 +36,10 @@ val CronJob.routineTitle: String get() = Routines.title(name)
  */
 fun CronJob.isRoutineOf(bot: String): Boolean {
     val owner = profile ?: Routines.DEFAULT_PROFILE
-    if (owner.equals(bot, ignoreCase = true)) return true
-    return owner == Routines.DEFAULT_PROFILE && Routines.taggedBot(name) == bot.lowercase()
+    val tagged = Routines.taggedBot(name)
+    // The launch store also holds other bots' older routines, tagged for them: theirs, not the default's.
+    if (owner == Routines.DEFAULT_PROFILE) return (tagged ?: Routines.DEFAULT_PROFILE) == bot.lowercase()
+    return owner.equals(bot, ignoreCase = true)
 }
 
 /** Why a job isn't doing what it's set to do, in a line; null while it's fine. */
