@@ -6,8 +6,10 @@ import dev.hermeskotlin.core.chat.AttentionTracker
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.LastChatStore
+import dev.hermeskotlin.core.sessions.ActiveSessions
 import dev.hermeskotlin.core.sessions.SeenStore
 import dev.hermeskotlin.core.connection.GatewayConnection
+import dev.hermeskotlin.core.rpc.RpcTransport
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.profiles.ProfilesApi
@@ -23,8 +25,16 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
@@ -49,6 +59,7 @@ class SessionsViewModelTest {
         deleteStatus: HttpStatusCode = HttpStatusCode.OK,
         listStatus: HttpStatusCode = HttpStatusCode.OK,
         total: Int = 2,
+        socket: RpcTransport? = null,
     ): SessionsViewModel {
         // On the test dispatcher, so no request is still finishing on another thread when a test ends
         // (and resuming onto Dispatchers.Main while the next test sets it).
@@ -60,6 +71,7 @@ class SessionsViewModelTest {
                     """{"sessions":[{"id":"a","title":"Alpha","pinned":true},{"id":"b","title":"Beta"}],"total":$total}""",
                     listStatus, json,
                 )
+                request.url.encodedPath == "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
                 request.method == HttpMethod.Delete -> respond("""{"detail":"Store is busy"}""", deleteStatus, json)
                 else -> respond("""{"display_name":"Me"}""", HttpStatusCode.OK, json)
             }
@@ -67,13 +79,42 @@ class SessionsViewModelTest {
         val cookies = PersistentCookiesStorage(InMemoryKeyValueStore())
         val client = createHttpClient(MockEngine(config), cookies)
         val auth = AuthApi(client, cookies)
-        val connection = GatewayConnection(auth, { _, _ -> error("not connecting in tests") }, CoroutineScope(dispatcher))
+        val connection = GatewayConnection(auth, { _, _ -> socket ?: error("not connecting in tests") }, CoroutineScope(dispatcher))
+        if (socket != null) connection.start(gateway.gatewayUrl)
         val scope = CoroutineScope(dispatcher)
-        val attention = AttentionTracker(connection, ChatHost(connection, SessionsApi(client), scope), scope)
+        val attention = AttentionTracker(connection, ChatHost(connection, SessionsApi(client), scope), ActiveSessions(connection, scope), scope)
         return SessionsViewModel(
             SessionsApi(client), auth, connection, LastChatStore(InMemoryKeyValueStore()), ProfilesApi(client),
             attention, SeenStore(InMemoryKeyValueStore()) { 0.0 }, DraftStore(InMemoryKeyValueStore()),
         )
+    }
+
+    /** A gateway socket that says it's ready and lists [live] as live sessions (`stored id to status`). */
+    private class LiveGateway(private val live: Map<String, String>) : RpcTransport {
+        private val inbound = Channel<String>(Channel.UNLIMITED).apply {
+            trySend("""{"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready","payload":{}}}""")
+        }
+
+        /** How many times `session.active_list` was asked. */
+        var asked = 0
+
+        override val incoming: Flow<String> = inbound.receiveAsFlow()
+
+        override suspend fun send(text: String) {
+            val message = Json.parseToJsonElement(text).jsonObject
+            val id = message["id"] ?: return
+            val result = if (message["method"]?.jsonPrimitive?.content == "session.active_list") {
+                asked++
+                live.entries.joinToString(",", """{"sessions":[""", "]}") { (key, status) -> """{"id":"rt-$key","session_key":"$key","status":"$status"}""" }
+            } else {
+                "{}"
+            }
+            inbound.send("""{"jsonrpc":"2.0","id":$id,"result":$result}""")
+        }
+
+        override suspend fun close(code: Short, reason: String) {
+            inbound.close()
+        }
     }
 
     /** Loading finishes through the HTTP client's own coroutines, so wait on state rather than the test scheduler. */
@@ -86,6 +127,44 @@ class SessionsViewModelTest {
         val state = vm.awaitLoaded()
         assertEquals(listOf("a", "b"), state.sessions.map { it.id })
         assertEquals(false, state.canLoadMore)
+    }
+
+    @Test
+    fun aTurnThisPhoneNeverOpenedShowsRunningButOnlyForListedChats() = runTest(dispatcher) {
+        // "b" runs on another client; "elsewhere" is live in another profile and isn't in this list.
+        val vm = viewModel(socket = LiveGateway(mapOf("b" to "working", "a" to "idle", "elsewhere" to "waiting")))
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        vm.setVisible(true)
+        val collector = backgroundScope.launch { vm.statuses.collect {} }
+        val statuses = vm.statuses.first { it.isNotEmpty() }
+        assertEquals(mapOf("b" to RowStatus(running = true)), statuses)
+        collector.cancel()
+    }
+
+    @Test
+    fun theGatewayIsAskedForLiveStatusesOnlyWhileTheListShows() = runTest(dispatcher) {
+        // The sidebar stays composed, so its statuses are collected while it's closed too.
+        val socket = LiveGateway(mapOf("b" to "working"))
+        val vm = viewModel(socket = socket)
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        val collector = backgroundScope.launch { vm.statuses.collect {} }
+        advanceTimeBy(30_000)
+        assertEquals(0, socket.asked)
+
+        vm.setVisible(true)
+        assertEquals(mapOf("b" to RowStatus(running = true)), vm.statuses.first { it.isNotEmpty() })
+        assertTrue(socket.asked > 0)
+
+        // Closed again: the asking stops, and the last statuses stand.
+        vm.setVisible(false)
+        advanceTimeBy(6_000)
+        val stopped = socket.asked
+        advanceTimeBy(60_000)
+        assertEquals(stopped, socket.asked)
+        assertEquals(mapOf("b" to RowStatus(running = true)), vm.statuses.value)
+        collector.cancel()
     }
 
     @Test
