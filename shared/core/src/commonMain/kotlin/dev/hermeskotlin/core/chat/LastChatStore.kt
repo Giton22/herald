@@ -5,9 +5,17 @@ import dev.hermeskotlin.core.network.HermesJson
 import dev.hermeskotlin.core.storage.KeyValueStore
 import kotlinx.serialization.Serializable
 
-/** The stored session the user last had open, so the app can reopen it on launch. */
+/**
+ * The stored session the user last had open, so the app can reopen it on launch. When it was a bot's
+ * permanent chat, [bot] names the bot's profile and [botLabel] what it goes by, so it reopens as that bot's.
+ */
 @Serializable
-data class LastChat(val sessionId: String, val title: String? = null)
+data class LastChat(
+    val sessionId: String,
+    val title: String? = null,
+    val bot: String? = null,
+    val botLabel: String? = null,
+)
 
 /**
  * Remembers where the user left off on each gateway and profile (null: the launch profile): a stored

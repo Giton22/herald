@@ -24,6 +24,17 @@ class LastChatStoreTest {
     }
 
     @Test
+    fun aBotsChatIsRememberedAsTheBots() = runTest {
+        val kv = InMemoryKeyValueStore()
+        val store = LastChatStore(kv)
+        store.set(home, LastChat("b1", "Bot Chat", bot = "test1", botLabel = "Test1"))
+        assertEquals(LastChat("b1", "Bot Chat", bot = "test1", botLabel = "Test1"), store.get(home))
+        // What earlier versions saved still reads, as an ordinary chat.
+        kv.put("chat.last.v1.$work", """{"sessionId":"w1","title":"Old"}""")
+        assertEquals(LastChat("w1", "Old"), store.get(work))
+    }
+
+    @Test
     fun clearingOrForgettingTheRememberedSessionEmptiesIt() = runTest {
         val store = LastChatStore(InMemoryKeyValueStore())
         store.set(home, LastChat("s1"))

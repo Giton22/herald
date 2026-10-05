@@ -113,8 +113,11 @@ data class ChatTarget(
     val bot: BotIdentity? = null,
 )
 
-/** The bot whose permanent chat is open: its profile and the name it goes by. */
-data class BotIdentity(val name: String, val label: String)
+/**
+ * The bot whose permanent chat is open: its profile and the name it goes by. [chatsProfile] is the profile
+ * the Chats list was on when it opened, where the app remembers to come back to this chat.
+ */
+data class BotIdentity(val name: String, val label: String, val chatsProfile: String? = null)
 
 /**
  * Shows the [ChatSession] the app-wide [ChatHost] has open; opening another target replaces it.
@@ -223,12 +226,19 @@ class ChatViewModel(
         }
         viewModelScope.launch {
             state
-                .map { chat -> chat.storedSessionId?.takeIf { chat.hasConversation }?.let { LastChat(it, chat.title) } }
+                .map { chat ->
+                    chat.storedSessionId?.takeIf { chat.hasConversation }?.let { id ->
+                        val bot = target?.bot
+                        LastChat(id, chat.title, bot = bot?.name, botLabel = bot?.label)
+                    }
+                }
                 // Distinct before dropping nulls, so returning to the same chat after a new one saves it again.
                 .distinctUntilChanged()
                 .filterNotNull()
-                // A bot's chat is reached from the Bots list; launching back into it would lose that it's the bot's.
-                .collect { last -> target?.takeIf { it.bot == null }?.let { lastChats.set(it.gateway.gatewayUrl, last, it.profile) } }
+                .collect { last ->
+                    // A bot's chat is remembered where the Chats list was, which is what the next launch reads.
+                    target?.let { lastChats.set(it.gateway.gatewayUrl, last, it.bot?.chatsProfile ?: it.profile) }
+                }
         }
         viewModelScope.launch {
             snapshotFlow { composer.text.toString() }

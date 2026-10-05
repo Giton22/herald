@@ -4,6 +4,10 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.bots.Bot
+import dev.hermeskotlin.core.bots.BotChats
+import dev.hermeskotlin.core.bots.BotSession
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 import dev.hermeskotlin.ui.chat.BotIdentity
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatLinks
@@ -41,6 +45,7 @@ class AppViewModel(
     private val host: ChatHost,
     private val profiles: ProfileStore,
     private val links: ChatLinks,
+    private val botChats: BotChats,
 ) : ViewModel() {
 
     private val _route = MutableStateFlow<Route>(Route.Loading)
@@ -107,9 +112,33 @@ class AppViewModel(
     /** Opens [bot]'s permanent chat, the stored session [storedSessionId], in the bot's own profile. */
     fun openBotChat(bot: Bot, storedSessionId: String) {
         val gateway = signedInGateway() ?: return
-        _route.value = Route.Chat(
-            ChatTarget(gateway, storedSessionId, bot.label, profile = bot.name, bot = BotIdentity(bot.name, bot.label)),
-        )
+        _route.value = Route.Chat(botChatTarget(gateway, storedSessionId, bot.name, bot.label))
+    }
+
+    private fun botChatTarget(gateway: SavedGateway, storedSessionId: String, name: String, label: String) =
+        ChatTarget(gateway, storedSessionId, label, profile = name, bot = BotIdentity(name, label, chatsProfile = currentProfile()))
+
+    /**
+     * A bot's chat reopened from a past launch may have moved on since (`/compress` continues it in a new
+     * session), so ask the gateway where it lives now and follow it. The remembered id counts as proof the
+     * bot has a chat, so an unsure answer never starts a second one; it just leaves the chat as it was.
+     */
+    private fun followBotChat(target: ChatTarget) {
+        val bot = target.bot ?: return
+        val stored = target.storedSessionId ?: return
+        viewModelScope.launch {
+            connection.state.first { it is ConnectionState.Connected }
+            val live = try {
+                botChats.open(Bot(name = bot.name, canonicalSession = BotSession(id = stored)))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                return@launch
+            }
+            if (live != stored && (_route.value as? Route.Chat)?.target == target) {
+                _route.value = Route.Chat(target.copy(storedSessionId = live))
+            }
+        }
     }
 
     /**
@@ -168,7 +197,13 @@ class AppViewModel(
         val profile = profiles.get(gateway.gatewayUrl)
         _chatsProfile.value = profile
         val last = lastChats.get(gateway.gatewayUrl, profile)
-        return Route.Chat(last?.let { ChatTarget(gateway, it.sessionId, it.title, profile = profile) } ?: newChatTarget(gateway, profile))
+        val bot = last?.bot
+        val target = when {
+            last == null -> newChatTarget(gateway, profile)
+            bot != null -> botChatTarget(gateway, last.sessionId, bot, last.botLabel ?: bot).also(::followBotChat)
+            else -> ChatTarget(gateway, last.sessionId, last.title, profile = profile)
+        }
+        return Route.Chat(target)
     }
 
     // The nonce makes every new chat a fresh target, even right after another empty one.
