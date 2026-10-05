@@ -67,10 +67,26 @@ class BotsApi(private val connection: GatewayConnection) : BotChatBackend {
                 },
             )
         } catch (e: RpcException) {
+            // Our runtime is of no use now. The gateway doesn't prune the empty row it made for a
+            // non-"tui" source, so let go of the runtime and remove the row rather than leave a stray.
+            discard(client, profile, runtime, stored)
             if (TITLE_TAKEN.containsMatchIn(e.message)) throw BotChatTakenException()
             throw e
         }
         return stored
+    }
+
+    private suspend fun discard(client: JsonRpcClient, profile: String, runtime: String, stored: String) {
+        runCatching { client.request("session.close", buildJsonObject { put("session_id", runtime) }) }
+        runCatching {
+            client.request(
+                "session.delete",
+                buildJsonObject {
+                    put("session_id", stored)
+                    put("profile", profile)
+                },
+            )
+        }
     }
 
     private fun client(): JsonRpcClient = (connection.state.value as? ConnectionState.Connected)?.client

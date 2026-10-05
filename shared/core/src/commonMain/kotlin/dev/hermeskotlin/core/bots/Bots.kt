@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.jsonObject
 
 /**
@@ -86,6 +87,10 @@ data class BotMeta(
     val hidden: Boolean = false,
     /** `photo` when the avatar asset is a real picture, `shape` when the face is drawn. */
     val imageKind: String? = null,
+    /** Kept at the top of the roster. */
+    val pinned: Boolean = false,
+    /** When the bot was made, epoch milliseconds. */
+    val createdMs: Double? = null,
 ) {
     companion object {
         const val KEY = "hermes-bots"
@@ -94,7 +99,9 @@ data class BotMeta(
             val obj = element as? JsonObject ?: return BotMeta()
             fun text(key: String) = (obj[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
             fun flag(key: String) = (obj[key] as? JsonPrimitive)?.takeUnless { it.isString }?.booleanOrNull == true
-            return BotMeta(title = text("title"), shape = text("shape"), color = text("color"), custom = flag("custom"), hidden = flag("hidden"), imageKind = text("imageKind"))
+            return BotMeta(title = text("title"), shape = text("shape"), color = text("color"), custom = flag("custom"), hidden = flag("hidden"), imageKind = text("imageKind"),
+                pinned = flag("pinned"), createdMs = (obj["created"] as? JsonPrimitive)?.takeUnless { it.isString }?.doubleOrNull,
+            )
         }
     }
 }
@@ -109,18 +116,22 @@ fun parseBotRoster(result: JsonElement?): BotRoster {
 }
 
 /**
- * Desktop's roster order: the default bot first, then the rest by their Bot Chat's latest activity, bots
- * never talked to last by name. Hidden bots stay out.
+ * Desktop's roster order (roster-pane-derivation.ts): pinned bots first, then by whichever is newer, the
+ * bot's latest activity or its creation, so a bot just made sits on top. Ties by name. Hidden bots stay out.
  */
 fun List<Bot>.forRoster(): List<Bot> = filterNot { it.meta.hidden }
     .sortedWith(
-        compareByDescending<Bot> { it.name == Bot.DEFAULT }
-            .thenByDescending { it.canonicalSession?.activityAt ?: it.lastSession?.activityAt ?: 0.0 }
+        compareByDescending<Bot> { it.meta.pinned }
+            .thenByDescending { maxOf(it.lastActivity() ?: 0.0, (it.meta.createdMs ?: 0.0) / 1000) }
             .thenBy { it.label.lowercase() },
     )
 
+/** The bot's latest sign of life, in epoch seconds: its newest chat or background work. */
+fun Bot.lastActivity(): Double? =
+    listOfNotNull(canonicalSession?.activityAt, lastSession?.activityAt, workerSession?.activityAt).maxOrNull()
+
 /** The Bot Chat's latest line as a roster row shows it: Markdown marks taken out, one line (labels.ts `stripPreviewMarkdown`). */
-fun Bot.previewLine(): String? = (canonicalSession?.preview ?: return null).let { text ->
+fun Bot.previewLine(): String? = (canonicalSession?.preview ?: lastSession?.preview ?: return null).let { text ->
     text.replace(Regex("```[\\s\\S]*?```"), " ")
         .replace(Regex("`([^`\\n]*)`"), "$1")
         .replace(Regex("!\\[([^\\]]*)]\\([^)]*\\)"), "$1")

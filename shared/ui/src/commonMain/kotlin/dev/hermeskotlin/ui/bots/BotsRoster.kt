@@ -27,6 +27,7 @@ import androidx.compose.ui.unit.sp
 import com.composeunstyled.Text
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.bots.Bot
+import dev.hermeskotlin.core.bots.lastActivity
 import dev.hermeskotlin.core.bots.previewLine
 import dev.hermeskotlin.core.bots.showsPicture
 import dev.hermeskotlin.designsystem.accent
@@ -152,7 +153,7 @@ private fun BotRow(
                 }
                 when {
                     opening -> Spinner(Modifier.size(14.dp))
-                    chat?.activityAt != null -> Text(relativeTime(chat.activityAt), style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
+                    bot.lastActivity() != null -> Text(relativeTime(bot.lastActivity()), style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
                 }
             }
             val preview = bot.previewLine()
