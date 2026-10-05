@@ -39,6 +39,7 @@ Output:
         assertIs<DeliveryOutcome.Waiting>(outcome("No reply from Mac Mini within 300s. The message may still be processed; do not resend blindly."))
         // A plain CLI turn prints the reply, maybe with its session id.
         assertEquals(DeliveryOutcome.Replied("Done."), outcome("session_id: 2026_x\nDone."))
+        assertEquals(DeliveryOutcome.Replied("A fact."), outcome("A fact.\n\n↻ Resumed session 20261005_005623 (Bot Chat)"))
         assertEquals(DeliveryOutcome.NoReply, outcome(""))
         assertEquals(DeliveryOutcome.NoReply, outcome("(no reply)"))
     }

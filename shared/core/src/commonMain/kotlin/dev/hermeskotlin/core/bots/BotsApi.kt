@@ -130,6 +130,33 @@ class BotsApi(private val connection: GatewayConnection) : BotChatBackend {
         return stored
     }
 
+    /**
+     * Sends [text] to [profile]'s Bot Chat [storedSessionId] without opening it in the app, as a reply
+     * typed into the bot's notification: the chat is attached on this socket and the prompt submitted;
+     * the bot's answer shows up like any other.
+     */
+    suspend fun sendToBot(profile: String, storedSessionId: String, text: String) {
+        val client = client()
+        val resumed = client.request(
+            "session.resume",
+            buildJsonObject {
+                put("session_id", storedSessionId)
+                put("profile", profile)
+                put("source", CLIENT_SOURCE)
+                put("cols", TERMINAL_COLUMNS)
+                put("omit_messages", true)
+            },
+        ) as? JsonObject
+        val runtime = (resumed?.get("session_id") as? JsonPrimitive)?.contentOrNull ?: throw RpcException(0, "Couldn't open the bot's chat.")
+        client.request(
+            "prompt.submit",
+            buildJsonObject {
+                put("session_id", runtime)
+                put("text", text)
+            },
+        )
+    }
+
     /** What the editor shows of a bot beyond the roster: its SOUL and description (`profiles.describe`). */
     suspend fun describe(name: String): BotDetails {
         val reply = client().request("profiles.describe", buildJsonObject { put("name", name) }) as? JsonObject

@@ -155,7 +155,8 @@ object TranscriptRows {
     private val PEER_TARGET = Regex("""\bpeer\s+dm\s+'?"?([A-Za-z0-9_./-]+)""")
     private val ROUTINE = Regex("""^\[Cronjob "(.+?)" output — [^\]\n]*]\s*([\s\S]*)$""")
     private val CRON_MIRROR = Regex("""^\[Cron delivery: ([^\]\n]+)]\n([\s\S]*)$""")
-    private val SESSION_ID_LINE = Regex("""^session_id:\s.*$""")
+    /** The CLI runner's own lines around a reply: the session it used, and that it resumed one. */
+    private val SESSION_ID_LINE = Regex("""^\s*(?:session_id:\s.*|↻ Resumed session\b.*)$""")
     private val REPLY_FROM = Regex("""^Reply from [^:\n]+:\s*([\s\S]*)$""")
     private val DELIVERY_FAILED = Regex("""^Delivery to .+? failed \[reason: ([a-z_]+)]""")
     private val NOT_YET = Regex("""^No reply from .+ within|has its Bot Chat open|Do NOT resend|do not resend""", RegexOption.IGNORE_CASE)
