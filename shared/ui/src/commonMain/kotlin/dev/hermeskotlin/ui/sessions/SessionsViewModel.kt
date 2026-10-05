@@ -124,13 +124,17 @@ class SessionsViewModel(
     private val _state = MutableStateFlow(SessionsUiState())
     val state: StateFlow<SessionsUiState> = _state.asStateFlow()
 
-    /** Each listed chat's status by id; chats with nothing to say are left out. */
+    /**
+     * Each listed chat's status by id; chats with nothing to say are left out. Only listed chats get one:
+     * the gateway's live list spans every profile. Collected only while the list shows, so the gateway is
+     * asked for live statuses only then.
+     */
     val statuses: StateFlow<Map<String, RowStatus>> = combine(_state, waiting, seen, running) { state, waiting, seen, running ->
         (state.sessions + state.searchResults.orEmpty()).mapNotNull { session ->
             RowStatus(waiting[session.id], seen?.isUnread(session) == true, running[session.id] == true)
                 .takeIf { it.needsAttention || it.running }?.let { session.id to it }
         }.toMap()
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyMap())
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_AFTER_MS), emptyMap())
 
     val query = TextFieldState()
 
@@ -349,6 +353,9 @@ class SessionsViewModel(
     private companion object {
         val REFRESH_EVENTS = setOf("sessions.changed", "session.title")
         const val MIN_QUERY = 2
+
+        /** Brief gaps (a screen rotating) keep the statuses collected. */
+        const val STOP_AFTER_MS = 5_000L
     }
 }
 

@@ -118,7 +118,7 @@ class BotsViewModel(
     val needsYou: StateFlow<List<NeedsYou>> =
         combine(_state, attention.waiting, troubles, _failingRoutines) { state, waiting, troubles, routines ->
             needsYou(state.all, waiting, troubles, routines)
-        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_AFTER_MS), emptyList())
 
     private val _mode = MutableStateFlow(SidebarMode.Chats)
     val mode: StateFlow<SidebarMode> = _mode.asStateFlow()
@@ -547,6 +547,9 @@ class BotsViewModel(
         const val POLL_MS = 30_000L
         const val EVENT_DEBOUNCE_MS = 400L
         const val ROUTINES_EVERY_MS = 60_000L
+
+        /** Brief gaps (a screen rotating) keep the inbox collected; collecting it asks the gateway for live statuses. */
+        const val STOP_AFTER_MS = 5_000L
         val UNKNOWN_METHOD = Regex("method not found|unknown method|no handler", RegexOption.IGNORE_CASE)
     }
 }
