@@ -65,6 +65,16 @@ class GatewayRepositoryTest {
     }
 
     @Test
+    fun signingInWithAnOlderCopyDoesntUndoARename() = runTest {
+        val repo = GatewayRepository(InMemoryKeyValueStore())
+        val signInCopy = repo.save(home.copy(name = "Work"))
+        repo.rename(home.url, "Lab")
+        repo.save(signInCopy)
+
+        assertEquals("Lab", repo.current()?.name)
+    }
+
+    @Test
     fun aBlankNameShowsTheAddress() = runTest {
         val repo = GatewayRepository(InMemoryKeyValueStore())
         repo.save(work.copy(name = "Work"))

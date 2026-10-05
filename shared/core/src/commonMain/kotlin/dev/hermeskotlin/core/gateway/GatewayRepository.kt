@@ -57,10 +57,13 @@ class GatewayRepository(private val store: KeyValueStore) {
 
     suspend fun current(): SavedGateway? = all().current
 
-    /** Adds [gateway] (or updates the saved one with its address) and makes it current; the first one saved is primary. */
+    /**
+     * Adds [gateway] (or updates the saved one with its address) and makes it current; the first one saved is
+     * primary. A saved gateway keeps its name: only [rename] changes it, so a copy taken earlier can't undo one.
+     */
     suspend fun save(gateway: SavedGateway): SavedGateway = edit { list ->
         val existing = list.find(gateway.url)
-        val kept = gateway.copy(name = gateway.name ?: existing?.name)
+        val kept = existing?.let { gateway.copy(name = it.name) } ?: gateway
         list.copy(
             gateways = if (existing == null) list.gateways + kept else list.gateways.map { if (it.url == kept.url) kept else it },
             currentUrl = kept.url,
