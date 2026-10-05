@@ -14,6 +14,8 @@ class ProjectsApiTest {
           {"id":"p1","label":"herald","path":"/srv/herald","color":"blue","isAuto":false,"isNoProject":false,"sessionCount":3,"repos":[]},
           {"id":"/srv/scratch","label":"scratch","path":"/srv/scratch","isAuto":true,"isNoProject":false,"sessionCount":12,"repos":[]},
           {"id":"/srv/empty","label":"empty","path":"/srv/empty","isAuto":true,"sessionCount":0,"repos":[]},
+          {"id":"/srv/cron-only","label":"cron-only","path":"/srv/cron-only","isAuto":true,"sessionCount":14,"sessionIds":[],"repos":[]},
+          {"id":"/srv/real","label":"real","path":"/srv/real","isAuto":true,"sessionCount":40,"sessionIds":["x","y"],"repos":[]},
           {"label":"no id"}
         ]""",
     )
@@ -21,7 +23,9 @@ class ProjectsApiTest {
     @Test
     fun projectsWithChatsComeBusiestFirstAndHomeLast() {
         val projects = ProjectsApi.parseProjects(tree)
-        assertEquals(listOf("/srv/scratch", "p1", "__no_project__"), projects.map { it.id })
+        // A discovered repo counts all history; only the chats it holds (sessionIds) make a chip and its count.
+        assertEquals(listOf("/srv/scratch", "p1", "/srv/real", "__no_project__"), projects.map { it.id })
+        assertEquals(2, projects.first { it.id == "/srv/real" }.sessionCount)
         val home = projects.last()
         assertTrue(home.isNoProject)
         assertEquals(null, home.path)

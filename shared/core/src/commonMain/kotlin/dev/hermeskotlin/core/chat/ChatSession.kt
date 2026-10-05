@@ -1614,12 +1614,16 @@ class ChatSession(
             seqRuntime = runtimeId
             seqEpoch = readyEpoch(client)
         }
+        // The gateway takes a folder that's gone without an error and runs the chat in its own folder instead.
+        val ranIn = (result["info"] as? JsonObject).string("cwd")
+        val movedFrom = cwd?.takeIf { ranIn != null && ranIn.trimEnd('/', '\\') != it.trimEnd('/', '\\') }
         _state.update {
             it.copy(
                 attachment = Attachment.Attached(runtimeId),
                 storedSessionId = result.string("stored_session_id") ?: it.storedSessionId,
                 historyLoaded = true,
                 inputRequests = it.inputRequests.plusNew(claimUnclaimed(runtimeId)),
+                error = if (movedFrom != null) "The project's folder $movedFrom wasn't found, so this chat runs in $ranIn." else it.error,
             ).withInfo(result["info"] as? JsonObject)
         }
         runtimeId

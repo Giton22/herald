@@ -39,14 +39,15 @@ class ProjectsApi(private val connection: GatewayConnection) {
 
     /**
      * `projects.tree`: every project that has chats, the busiest first, Home last. Projects the gateway only
-     * discovered on disk, with no chats yet, are left out.
+     * discovered on disk, or that only old, cron or helper sessions used, are left out: their chip would
+     * open an empty list.
      */
     suspend fun projects(profile: String?): List<Project> {
         val reply = client().request(
             "projects.tree",
             buildJsonObject {
                 profile?.let { put("profile", it) }
-                put("preview_limit", 0)
+                put("session_limit", SESSION_LIMIT)
             },
         ) as? JsonObject
         return parseProjects(reply?.get("projects"))
@@ -59,6 +60,8 @@ class ProjectsApi(private val connection: GatewayConnection) {
             buildJsonObject {
                 profile?.let { put("profile", it) }
                 put("project_id", id)
+                // The same window as the tree, so a chip's count matches what it opens.
+                put("session_limit", SESSION_LIMIT)
             },
         ) as? JsonObject
         return parseProjectSessions(reply?.get("project"))
@@ -71,15 +74,21 @@ class ProjectsApi(private val connection: GatewayConnection) {
         /** The id of Home, the bucket for chats with no project folder. */
         const val NO_PROJECT_ID = "__no_project__"
 
+        /** The newest sessions the gateway groups; it reads 2000 by default, which is a lot for a phone to ask often. */
+        const val SESSION_LIMIT = 500
+
         internal fun parseProjects(element: JsonElement?): List<Project> =
             (element as? JsonArray).orEmpty().mapNotNull { node ->
                 val o = node as? JsonObject ?: return@mapNotNull null
                 val id = o.text("id") ?: return@mapNotNull null
+                // `sessionIds` are the chats the project really holds in the window; a discovered repo's
+                // `sessionCount` counts all history (cron runs, helpers, years back) and opens on nothing.
+                val ids = o["sessionIds"] as? JsonArray
                 Project(
                     id = id,
                     label = o.text("label") ?: id,
                     path = o.text("path"),
-                    sessionCount = (o["sessionCount"] as? JsonPrimitive)?.intOrNull ?: 0,
+                    sessionCount = ids?.size ?: (o["sessionCount"] as? JsonPrimitive)?.intOrNull ?: 0,
                     isAuto = (o["isAuto"] as? JsonPrimitive)?.booleanOrNull == true,
                     isNoProject = (o["isNoProject"] as? JsonPrimitive)?.booleanOrNull == true || id == NO_PROJECT_ID,
                 )

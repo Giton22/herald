@@ -178,7 +178,7 @@ class SessionsViewModelTest {
                 "projects.tree" to """{"projects":[
                     {"id":"__no_project__","label":"Home","isNoProject":true,"sessionCount":1},
                     {"id":"p1","label":"herald","path":"/srv/herald","sessionCount":1}]}""",
-                "projects.project_sessions" to """{"project":{"id":"p1","repos":[{"groups":[{"sessions":[{"id":"z","title":"Older work"}]}]}]}}""",
+                "projects.project_sessions" to """{"project":{"id":"p1","repos":[{"groups":[{"sessions":[{"id":"z","title":"Older work","last_active":200},{"id":"a","title":"Alpha","last_active":100}]}]}]}}""",
             ),
         )
         val vm = viewModel(socket = socket)
@@ -189,7 +189,9 @@ class SessionsViewModelTest {
 
         vm.selectProject(projects.first())
         val narrowed = vm.state.first { it.projectSessions != null }
-        assertEquals(listOf("z"), narrowed.listed.map { it.id })
+        assertEquals(listOf("z", "a"), narrowed.listed.map { it.id })
+        // The project's rows don't carry `pinned`; the main list says "a" is pinned.
+        assertTrue(narrowed.listed.first { it.id == "a" }.pinned)
         // The full list stays loaded for when the filter goes.
         assertEquals(listOf("a", "b"), narrowed.sessions.map { it.id })
 

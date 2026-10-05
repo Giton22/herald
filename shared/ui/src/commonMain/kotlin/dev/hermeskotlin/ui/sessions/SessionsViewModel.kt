@@ -23,6 +23,8 @@ import dev.hermeskotlin.core.profiles.ProfileRoster
 import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.projects.Project
 import dev.hermeskotlin.core.projects.ProjectsApi
+import dev.hermeskotlin.core.rpc.RpcException
+import kotlin.time.Clock
 import dev.hermeskotlin.core.sessions.SessionListFilter
 import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.core.sessions.SessionsApi
@@ -159,6 +161,7 @@ class SessionsViewModel(
     /** The list is on screen (the sidebar open or docked), or no longer is. */
     fun setVisible(shown: Boolean) {
         visible.value = shown
+        if (shown && _state.value.filter == SessionListFilter.Recent) loadProjects()
     }
 
     val query = TextFieldState()
@@ -187,6 +190,11 @@ class SessionsViewModel(
         this.profile = profile
         bound.value = gateway.gatewayUrl to profile
         _state.value = SessionsUiState()
+        // The last list's projects mean nothing here; ask afresh.
+        projectsJob?.cancel()
+        projectSessionsJob?.cancel()
+        projectsAskedAt = 0
+        projectsAgain = false
         load(refresh = false)
         if (newGateway) {
             _user.value = null
@@ -226,49 +234,83 @@ class SessionsViewModel(
     }
 
     private var projectsJob: Job? = null
-    private var projectsFor: String? = null
+    private var projectSessionsJob: Job? = null
 
-    /** The project list, again: after each list load, since no event says a chat moved between projects. */
-    private fun loadProjects() {
+    /** When the projects were last asked for (epoch ms), to ask at most every [PROJECTS_EVERY_MS] on changes. */
+    private var projectsAskedAt = 0L
+
+    /** A change came in while the projects were being asked for; ask once more when that answer is in. */
+    private var projectsAgain = false
+
+    /**
+     * The project list, again, since no event says a chat moved between projects. The gateway groups the
+     * newest sessions each time, so this is asked only while the list shows, at most every
+     * [PROJECTS_EVERY_MS] for a change, and at once on connect, on opening the list, or with [force].
+     */
+    private fun loadProjects(force: Boolean = false) {
         if (connection.state.value !is ConnectionState.Connected) return
-        val profile = profile
-        // Connecting and the first list load ask at about the same time; one answer serves both.
-        if (projectsJob?.isActive == true && projectsFor == profile) return
-        projectsJob?.cancel()
-        projectsFor = profile
+        if (!force && !visible.value && _state.value.projects.isNotEmpty()) return
+        val now = getTimeMillis()
+        if (!force && now - projectsAskedAt < PROJECTS_EVERY_MS) return
+        if (projectsJob?.isActive == true) {
+            projectsAgain = true
+            return
+        }
+        val scope = bound.value
+        projectsAskedAt = now
         projectsJob = viewModelScope.launch {
             val projects = try {
-                projectsApi.projects(profile)
+                projectsApi.projects(scope?.second)
             } catch (e: CancellationException) {
                 throw e
+            } catch (e: RpcException) {
+                // A gateway that doesn't know projects: no chips. Any other failure keeps what shows.
+                if (e.code == METHOD_NOT_FOUND) emptyList() else null
             } catch (_: Exception) {
-                // An older gateway without projects, or a passing failure: no chips, every chat listed.
-                emptyList()
+                null
             }
-            if (profile != this@SessionsViewModel.profile) return@launch
-            // Only worth a filter when some chats are in a project, not all in Home.
-            val shown = projects.takeIf { list -> list.any { !it.isNoProject } }.orEmpty()
-            _state.update { state ->
-                val picked = state.project?.let { p -> shown.firstOrNull { it.id == p.id } }
-                state.copy(projects = shown, project = picked, projectSessions = state.projectSessions.takeIf { picked != null })
+            if (projects != null && bound.value == scope) {
+                // Only worth a filter when some chats are in a project, not all in Home.
+                val shown = projects.takeIf { list -> list.any { !it.isNoProject } }.orEmpty()
+                _state.update { state ->
+                    val picked = state.project?.let { p -> shown.firstOrNull { it.id == p.id } }
+                    state.copy(projects = shown, project = picked, projectSessions = state.projectSessions.takeIf { picked != null })
+                }
+                loadProjectSessions()
             }
-            loadProjectSessions()
+            if (projectsAgain) {
+                projectsAgain = false
+                loadProjects(force = true)
+            }
         }
     }
 
     private fun loadProjectSessions() {
         val project = _state.value.project ?: return
-        val profile = profile
-        viewModelScope.launch {
+        val scope = bound.value
+        // A newer ask replaces an older one, so a late answer can't bring back a row since archived.
+        projectSessionsJob?.cancel()
+        projectSessionsJob = viewModelScope.launch {
             val rows = try {
-                projectsApi.sessions(profile, project.id)
+                projectsApi.sessions(scope?.second, project.id)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { if (it.project?.id == project.id) it.copy(projectSessions = emptyList(), message = e.message) else it }
+                _state.update {
+                    if (bound.value == scope && it.project?.id == project.id) {
+                        it.copy(projectSessions = it.projectSessions ?: emptyList(), message = e.message)
+                    } else {
+                        it
+                    }
+                }
                 return@launch
             }
-            _state.update { if (it.project?.id == project.id) it.copy(projectSessions = rows) else it }
+            _state.update { state ->
+                if (bound.value != scope || state.project?.id != project.id) return@update state
+                // The project's rows don't say which chats are pinned; the main list (pinned ones included) does.
+                val pinned = state.sessions.filter { it.pinned }.mapTo(HashSet()) { it.id }
+                state.copy(projectSessions = rows.map { if (it.id in pinned) it.copy(pinned = true) else it })
+            }
         }
     }
 
@@ -358,7 +400,8 @@ class SessionsViewModel(
         // This may cancel a page fetch mid-flight, which would otherwise leave its spinner up for good.
         loadJob?.cancel()
         _state.update { (if (refresh) it.copy(refreshing = true) else it.copy(loading = it.sessions.isEmpty())).copy(loadingMore = false) }
-        if (filter == SessionListFilter.Recent) loadProjects()
+        // Pull to refresh asks at once; a change from the gateway waits its turn.
+        if (filter == SessionListFilter.Recent) loadProjects(force = refresh)
         loadJob = viewModelScope.launch {
             // Keep however many rows are already showing so a background refetch doesn't truncate the list.
             val limit = _state.value.sessions.size.coerceIn(SessionsApi.PAGE_SIZE, 100)
@@ -397,7 +440,7 @@ class SessionsViewModel(
         // Projects come over the socket, which may connect after the list (REST) has loaded.
         viewModelScope.launch {
             connection.state.map { it is ConnectionState.Connected }.distinctUntilChanged().filter { it }.collect {
-                if (gateway != null && _state.value.filter == SessionListFilter.Recent) loadProjects()
+                if (gateway != null && _state.value.filter == SessionListFilter.Recent) loadProjects(force = true)
             }
         }
         viewModelScope.launch {
@@ -446,7 +489,15 @@ class SessionsViewModel(
 
         /** Brief gaps (a screen rotating) keep the statuses collected. */
         const val STOP_AFTER_MS = 5_000L
+
+        /** How often a change on the gateway may ask for the projects again; a turn changes sessions every 2 s. */
+        const val PROJECTS_EVERY_MS = 30_000L
+
+        /** JSON-RPC's "method not found": a gateway from before projects. */
+        const val METHOD_NOT_FOUND = -32601
     }
+
+    private fun getTimeMillis(): Long = Clock.System.now().toEpochMilliseconds()
 }
 
 private val ApiResult<*>.isExpired: Boolean get() = this == ApiResult.SessionExpired
