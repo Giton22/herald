@@ -123,11 +123,17 @@ private fun DeliveryLine(event: TranscriptEvent.Delivery) {
     val bot = remember(faces, event.target) { faces.find(event.target) }
     val who = bot?.label ?: event.target?.let { "@$it" } ?: "the other bot"
     when (val outcome = event.outcome) {
-        // A receipt, not a message: what they said back to us also comes as their own message when it matters.
+        // A receipt, not a reply. Its text is what the other bot wrote in its own turn after reading the
+        // message, usually a note for its human (often quoting us); a real answer comes as its own message.
         is DeliveryOutcome.Replied -> FoldedLine(
             Lucide.CheckCheck,
-            "$who got it" + outcome.text.toPreview().takeIf { it.isNotEmpty() }?.let { " · $it" }.orEmpty(),
-            body = { MarkdownText(outcome.text) },
+            "Delivered to $who",
+            body = {
+                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text("What $who noted after reading it", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                    MarkdownText(outcome.text)
+                }
+            },
         )
         DeliveryOutcome.NoReply -> FoldedLine(Lucide.MessageCircleOff, "$who read it and chose not to reply", body = null)
         is DeliveryOutcome.Waiting -> FoldedLine(
