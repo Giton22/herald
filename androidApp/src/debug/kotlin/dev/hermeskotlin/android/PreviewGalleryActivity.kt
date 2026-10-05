@@ -12,6 +12,7 @@ import dev.hermeskotlin.ui.preview.PreviewScene
 /**
  * Debug builds only: shows one sample screen full-screen, for the README screenshots.
  * `adb shell am start -n dev.herald.android/dev.hermeskotlin.android.PreviewGalleryActivity --es scene Reply --ez dark true`
+ * (and `--es accent Violet` for another accent preset).
  */
 class PreviewGalleryActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -20,6 +21,7 @@ class PreviewGalleryActivity : ComponentActivity() {
         enableEdgeToEdge(statusBarStyle = style, navigationBarStyle = style)
         super.onCreate(savedInstanceState)
         val scene = PreviewScene.entries.firstOrNull { it.name == intent.getStringExtra("scene") } ?: PreviewScene.Reply
-        setContent { HeraldPreview(scene, dark) }
+        val accent = intent.getStringExtra("accent")
+        setContent { if (accent != null) HeraldPreview(scene, dark, accent) else HeraldPreview(scene, dark) }
     }
 }
