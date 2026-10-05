@@ -120,14 +120,16 @@ class ChatNotifier(
         }
             .distinctUntilChanged()
             .collect {
-                if (serviceStarted) notifications.postWorking(session.state.value, connection.state.value)
+                if (serviceStarted) notifications.postWorking(session.state.value, connection.state.value, settings.settings.value?.pushAnywhere == true)
                 delay(1_000)
             }
     }
 
     private suspend fun keepConnected() {
         if (!serviceStarted) serviceStarted = ChatService.start(context)
-        connection.state.collect { state -> if (serviceStarted) notifications.postWorking(null, state) }
+        combine(connection.state, settings.settings) { state, prefs -> state to (prefs?.pushAnywhere == true) }
+            .distinctUntilChanged()
+            .collect { (state, push) -> if (serviceStarted) notifications.postWorking(null, state, push) }
     }
 
     private fun stopService() {

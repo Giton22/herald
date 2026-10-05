@@ -7,6 +7,7 @@ import dev.hermeskotlin.core.gateway.CheckStage
 import dev.hermeskotlin.core.gateway.ConnectionCheck
 import dev.hermeskotlin.core.gateway.GatewayProbe
 import dev.hermeskotlin.core.gateway.StageResult
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import dev.hermeskotlin.core.gateway.ProbeResult
 import dev.hermeskotlin.core.gateway.SavedGateway
@@ -84,12 +85,14 @@ class SettingsViewModel(
     /** The last "Send a test": true when the gateway sent it, false when it couldn't, null before or while sending. */
     val pushTest: StateFlow<Boolean?> = _pushTest.asStateFlow()
 
+    // Off the main thread: the first time, the phone's push keys are made and wrapped in the keystore.
     fun setPushAnywhere(on: Boolean) {
-        viewModelScope.launch { if (on) push.enable() else push.disable() }
+        _pushTest.value = null
+        viewModelScope.launch(Dispatchers.Default) { if (on) push.enable() else push.disable() }
     }
 
     fun sendPushTest() {
         _pushTest.value = null
-        viewModelScope.launch { _pushTest.value = push.test() }
+        viewModelScope.launch(Dispatchers.Default) { _pushTest.value = push.test() }
     }
 }

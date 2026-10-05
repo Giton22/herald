@@ -63,10 +63,11 @@ class PushListener(
     private suspend fun listen() {
         var failures = 0
         while (true) {
-            val device = withContext(Dispatchers.IO) { store.device() }
             val started = System.currentTimeMillis()
             try {
-                ntfy.subscribe(device.server, device.pushTopic, store.since).collect { event -> receive(device, event) }
+                // Inside the try: a keystore that stumbles for a moment is retried like a dropped stream.
+                val device = withContext(Dispatchers.IO) { store.device() }
+                ntfy.subscribe(device.server, device.pushTopic, store.sinceSeconds).collect { event -> receive(device, event) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -83,7 +84,7 @@ class PushListener(
         // Only the gateway Herald is signed in to may speak: not one it left, not one it never pinned.
         val signer = gateways.current()?.gatewayUrl?.value?.let(store::pinned)
         val message = signer?.let { withContext(Dispatchers.Default) { open(device, event, it) } }
-        store.since = event.id
+        if (event.time > 0) store.sinceSeconds = event.time
         if (message == null || !guard.accept(message)) return
         store.seen = guard.snapshot()
         when (message.type) {

@@ -10,6 +10,7 @@ import androidx.core.app.ServiceCompat
 import androidx.core.content.ContextCompat
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.connection.GatewayConnection
+import dev.hermeskotlin.core.settings.SettingsStore
 import org.koin.android.ext.android.inject
 
 /**
@@ -24,12 +25,13 @@ class ChatService : Service() {
     private val host: ChatHost by inject()
     private val notifications: ChatNotifications by inject()
     private val connection: GatewayConnection by inject()
+    private val settings: SettingsStore by inject()
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         ServiceCompat.startForeground(
             this,
             ChatNotifications.WORKING_ID,
-            notifications.working(host.session.value?.state?.value, connection.state.value),
+            notifications.working(host.session.value?.state?.value, connection.state.value, settings.settings.value?.pushAnywhere == true),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_SPECIAL_USE,
         )
         return START_NOT_STICKY

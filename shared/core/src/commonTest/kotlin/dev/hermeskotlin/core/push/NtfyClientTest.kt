@@ -28,15 +28,16 @@ class NtfyClientTest {
             "not json",
             """{"id":"m3","event":"keepalive","topic":"$topic"}""",
         ).joinToString("\n")
-        val events = client(body, urls).subscribe("https://ntfy.example", topic, since = "abc").toList()
+        val events = client(body, urls).subscribe("https://ntfy.example", topic, sinceSeconds = 1_700_000_000L).toList()
         assertEquals(listOf("one"), events.map { it.message })
-        assertTrue(urls.single().endsWith("/$topic/json?since=abc"))
+        // A time, which ntfy defines for any value; a message id that left the cache is undefined.
+        assertTrue(urls.single().endsWith("/$topic/json?since=1700000000"))
     }
 
     @Test
     fun aFirstReadAsksForEverythingHeld() = runTest {
         val urls = mutableListOf<String>()
-        client("", urls).subscribe("https://ntfy.example", topic, since = null).toList()
+        client("", urls).subscribe("https://ntfy.example", topic, sinceSeconds = null).toList()
         // ntfy refuses since=now with a 400.
         assertTrue(urls.single().endsWith("/$topic/json?since=all"))
     }

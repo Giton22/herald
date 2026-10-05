@@ -18,7 +18,9 @@ import kotlinx.serialization.builtins.SetSerializer
 import kotlinx.serialization.builtins.serializer
 import java.security.KeyPair
 import java.security.KeyStore
+import java.security.spec.InvalidKeySpecException
 import java.util.UUID
+import javax.crypto.AEADBadTagException
 import javax.crypto.Cipher
 import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
@@ -61,11 +63,19 @@ class PushStore(context: Context) : PushKeys {
         val server: String,
     )
 
+    /**
+     * This phone's identity, made on first use. Throws when the keystore merely stumbled (a transient
+     * error): the identity still exists, and replacing it would strand the gateway's registration.
+     */
     @Synchronized
     fun device(): Device {
         val id = prefs.getString(KEY_ID, null)
         if (id != null) {
-            runCatching { load(id) }.getOrNull()?.let { return it }
+            try {
+                return load(id)
+            } catch (e: Exception) {
+                if (!identityLost(e)) throw e
+            }
         }
         // First use, or keys that can't be unwrapped any more (keystore reset): start a fresh identity, and
         // have the gateway forget the unusable one.
@@ -109,12 +119,15 @@ class PushStore(context: Context) : PushKeys {
         changes.update { it + 1 }
     }
 
-    /** The ntfy server pushes go through. Changing it starts a new identity, which the gateway must register again. */
-    @Synchronized
-    fun setServer(url: String) {
-        require(NtfyClient.validServer(url)) { "https only" }
-        pinnedGatewayUrl()?.let(::retire)
-        prefs.edit { putString(KEY_SERVER, url.trim().trimEnd('/')) }
+    /**
+     * Whether a failed [load] means the identity is gone for good: its wrapping key left the keystore, its
+     * wrapped keys no longer match it, or the preferences lost a field. Anything else (the keystore busy or
+     * unavailable for a moment) is transient and the identity must be kept.
+     */
+    private fun identityLost(e: Exception): Boolean {
+        if (e is AEADBadTagException || e is InvalidKeySpecException || e is NullPointerException) return true
+        if (listOf(KEY_ENC, KEY_SIG, KEY_ENC_PUB, KEY_SIG_PUB, KEY_PUSH_TOPIC, KEY_REPLY_TOPIC).any { prefs.getString(it, null) == null }) return true
+        return runCatching { KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }.containsAlias(WRAP_ALIAS) }.getOrNull() == false
     }
 
     /** The gateway this identity is registered with and its keys, or null. One identity serves one gateway. */
@@ -125,6 +138,9 @@ class PushStore(context: Context) : PushKeys {
     override fun pinned(gatewayUrl: String): PushGateway? = gateway()?.takeIf { it.first == gatewayUrl }?.second
 
     override fun pinnedGatewayUrl(): String? = gateway()?.first
+
+    override fun accepts(keys: PushGateway): Boolean =
+        keys.version == 1 && runCatching { PushCrypto.decodePublic(keys.sigPub); PushCrypto.decodePublic(keys.encPub) }.isSuccess
 
     @Synchronized
     override fun pin(gatewayUrl: String, keys: PushGateway) {
@@ -160,10 +176,10 @@ class PushStore(context: Context) : PushKeys {
 
     private fun saveRetired(map: Map<String, Set<String>>) = prefs.edit { putString(KEY_RETIRED, HermesJson.encodeToString(retiredSerializer, map)) }
 
-    /** The last ntfy message id read, so a reconnect picks up what came meanwhile. */
-    var since: String?
-        get() = prefs.getString(KEY_SINCE, null)
-        set(value) = prefs.edit { putString(KEY_SINCE, value) }
+    /** When the last ntfy message read was published (unix seconds), so a reconnect picks up what came meanwhile. */
+    var sinceSeconds: Long?
+        get() = prefs.getLong(KEY_SINCE, 0L).takeIf { it > 0 }
+        set(value) = prefs.edit { if (value == null) remove(KEY_SINCE) else putLong(KEY_SINCE, value) }
 
     /** Recently accepted message ids, so a replayed envelope is refused even after a restart. */
     var seen: Map<String, Long>
@@ -222,7 +238,7 @@ class PushStore(context: Context) : PushKeys {
         const val KEY_REPLY_TOPIC = "reply_topic"
         const val KEY_SERVER = "server"
         const val KEY_GATEWAYS = "gateways"
-        const val KEY_SINCE = "since"
+        const val KEY_SINCE = "since_seconds"
         const val KEY_SEEN = "seen"
         const val KEY_RETIRED = "retired"
     }

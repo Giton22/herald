@@ -67,8 +67,8 @@ class ChatNotifications(private val context: Context) {
      * The ongoing notification of [ChatService]: what the agent is doing, with a Stop button, or a
      * quiet connection line between turns when Stay connected keeps the service up.
      */
-    fun working(state: ChatState?, connection: ConnectionState): Notification {
-        if (state?.running != true) return connected(state, connection)
+    fun working(state: ChatState?, connection: ConnectionState, pushAnywhere: Boolean = false): Notification {
+        if (state?.running != true) return connected(state, connection, pushAnywhere)
         val waiting = state?.inputRequests?.isNotEmpty() == true
         val runningTool = state?.messages?.lastOrNull()
             ?.let { it as? dev.hermeskotlin.core.chat.ChatMessage.Assistant }
@@ -103,20 +103,26 @@ class ChatNotifications(private val context: Context) {
             .build()
     }
 
-    fun postWorking(state: ChatState?, connection: ConnectionState) = post(null, WORKING_ID, working(state, connection))
+    fun postWorking(state: ChatState?, connection: ConnectionState, pushAnywhere: Boolean = false) =
+        post(null, WORKING_ID, working(state, connection, pushAnywhere))
 
-    private fun connected(state: ChatState?, connection: ConnectionState): Notification {
-        val title = when (connection) {
-            is ConnectionState.Connected -> "Connected to Hermes"
-            is ConnectionState.Connecting, is ConnectionState.Reconnecting -> "Reconnecting to Hermes…"
-            else -> "Not connected to Hermes"
+    /**
+     * The quiet line between turns. Stay connected holds the socket; Notifications anywhere holds the ntfy
+     * stream instead, so with no connection it says that, not that something is wrong. "Turn off" turns off
+     * whichever of the two keeps this up.
+     */
+    private fun connected(state: ChatState?, connection: ConnectionState, pushAnywhere: Boolean): Notification {
+        val following = (state?.storedSessionId?.let(botName) ?: state?.title)?.takeIf { it.isNotBlank() }?.let { "Following $it" }
+        val (title, text) = when {
+            connection is ConnectionState.Connected -> "Connected to Hermes" to (following ?: "Waiting for turns from any device")
+            connection is ConnectionState.Connecting || connection is ConnectionState.Reconnecting ->
+                "Reconnecting to Hermes…" to (following ?: "Waiting for turns from any device")
+            pushAnywhere -> "Notifications anywhere" to "Bot messages still reach you while Hermes is out of reach."
+            else -> "Not connected to Hermes" to (following ?: "Waiting for turns from any device")
         }
         return base(CHANNEL_CONNECTION)
             .setContentTitle(title)
-            .setContentText(
-                (state?.storedSessionId?.let(botName) ?: state?.title)?.takeIf { it.isNotBlank() }?.let { "Following $it" }
-                    ?: "Waiting for turns from any device",
-            )
+            .setContentText(text)
             .setOngoing(true)
             .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_MIN)

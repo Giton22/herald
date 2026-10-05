@@ -17,6 +17,7 @@ import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.profiles.ProfileStore
+import dev.hermeskotlin.core.push.PushSetup
 import dev.hermeskotlin.ui.chat.ChatTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +47,7 @@ class AppViewModel(
     private val profiles: ProfileStore,
     private val links: ChatLinks,
     private val botChats: BotChats,
+    private val push: PushSetup,
 ) : ViewModel() {
 
     private val _route = MutableStateFlow<Route>(Route.Loading)
@@ -199,9 +201,11 @@ class AppViewModel(
 
     fun signOut() {
         val gateway = currentGateway() ?: return
-        connection.stop()
-        host.close()
         viewModelScope.launch {
+            // While the socket is still up: the gateway forgets this phone's push identity.
+            push.forget()
+            connection.stop()
+            host.close()
             auth.signOut(gateway.gatewayUrl)
             _route.value = Route.SignIn(gateway)
         }
@@ -209,9 +213,10 @@ class AppViewModel(
 
     fun changeGateway() {
         val gateway = currentGateway()
-        connection.stop()
-        host.close()
         viewModelScope.launch {
+            push.forget()
+            connection.stop()
+            host.close()
             gateway?.let { auth.signOut(it.gatewayUrl) }
             gateways.clear()
             _route.value = Route.Connect

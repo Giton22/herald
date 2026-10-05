@@ -35,7 +35,9 @@ process, so a person allowed to chat with a bot can't register their own phone. 
 If the gateway lacks the plugin, Herald installs it with `plugins.manage {action: "install", identifier:
 "https://github.com/Giton22/hermes-herald-push", ref: <commit>, enable: true}`. That is the same call
 Desktop's Plugins hub makes, and the plugin is live without a restart. `ref` pins the exact commit Herald was
-built against, so a later change to the repository never reaches a gateway unreviewed.
+built against, so a later change to the repository never reaches a gateway unreviewed. A copy that is
+present but switched off is switched on (`plugins.manage {action: "toggle"}`) rather than reinstalled, and
+one older than Herald's minimum version is reinstalled at the pinned commit (`force: true`).
 
 One phone identity serves one gateway. Moving to another gateway, or turning the feature off, retires the
 identity: the keys and topics are dropped, so the old gateway's pushes land on a topic nobody reads, and that

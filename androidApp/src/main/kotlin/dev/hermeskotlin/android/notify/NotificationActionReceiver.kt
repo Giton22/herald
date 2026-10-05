@@ -12,6 +12,7 @@ import dev.hermeskotlin.core.chat.InputAnswers
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
+import dev.hermeskotlin.core.push.PushSetup
 import dev.hermeskotlin.core.settings.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -30,6 +31,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
     private val scope: CoroutineScope by inject()
     private val settings: SettingsStore by inject()
     private val bots: BotsApi by inject()
+    private val push: PushSetup by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -47,7 +49,12 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         val text = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(KEY_TEXT)?.toString()?.trim()
         when (intent.action) {
             ACTION_STOP -> session?.interrupt()
-            ACTION_DISCONNECT -> settings.update { it.copy(stayConnected = false) }
+            ACTION_DISCONNECT -> {
+                // Whichever keeps the quiet notification up goes: the socket, and push with it.
+                val pushOn = settings.settings.value?.pushAnywhere == true
+                settings.update { it.copy(stayConnected = false) }
+                if (pushOn) withTimeoutOrNull(RECEIVER_BUDGET_MS) { push.disable() }
+            }
             ACTION_APPROVE -> {
                 val choice = ApprovalChoice.fromWire(intent.getStringExtra(EXTRA_CHOICE).orEmpty()) ?: return
                 answer(session, intent.getStringExtra(EXTRA_REQUEST_ID) ?: return) { InputAnswers.approval(choice) }

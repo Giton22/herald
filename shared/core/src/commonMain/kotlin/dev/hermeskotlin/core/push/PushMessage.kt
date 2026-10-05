@@ -24,23 +24,16 @@ data class PushMessage(
     val choice: String? = null,
 ) {
     companion object {
+        // The types the phone acts on. The others in docs/push-protocol.md (approval, and the
+        // phone → gateway ones) arrive with the code that handles them.
         const val BOT_MESSAGE = "bot_message"
-        const val APPROVAL = "approval"
         const val PING = "ping"
-        const val REPLY = "reply"
-        const val APPROVAL_ANSWER = "approval_answer"
 
         /** Gateway → phone messages are news; older than a day they're dropped. */
         const val MAX_AGE_G2P_SECONDS = 24 * 3600L
 
-        /** Phone → gateway messages are actions; older than ten minutes the gateway drops them. */
-        const val MAX_AGE_P2G_SECONDS = 600L
-
         /** Clocks differ; further ahead than this is a forgery or a broken clock. */
         const val MAX_SKEW_SECONDS = 300L
-
-        /** The approval choices a notification may offer; "always" stays in the app. */
-        val NOTIFICATION_CHOICES = setOf("once", "session", "deny")
     }
 }
 

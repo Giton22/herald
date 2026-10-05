@@ -4,12 +4,8 @@ import dev.hermeskotlin.core.network.HermesJson
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.parameter
-import io.ktor.client.request.post
 import io.ktor.client.request.prepareGet
-import io.ktor.client.request.setBody
 import io.ktor.client.statement.bodyAsChannel
-import io.ktor.http.ContentType
-import io.ktor.http.contentType
 import io.ktor.http.encodeURLPathPart
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readUTF8Line
@@ -22,31 +18,22 @@ import kotlinx.serialization.Serializable
 data class NtfyEvent(val id: String = "", val time: Long = 0, val event: String = "", val topic: String = "", val message: String? = null)
 
 /**
- * The ntfy server between gateway and phone (https://docs.ntfy.sh): publish with a POST to the topic, receive
- * with a long-lived JSON stream. Both directions are outbound from the phone, so it works off the tailnet.
- * Uses its own HTTP client: requests here must never carry the gateway's cookies.
+ * The ntfy server between gateway and phone (https://docs.ntfy.sh): the phone receives with a long-lived
+ * JSON stream, an outbound connection, so it works off the tailnet. Uses its own HTTP client: requests here
+ * must never carry the gateway's cookies.
  */
 class NtfyClient(private val client: HttpClient) {
 
-    /** Posts [body] to [topic]. Bodies over 4096 bytes would turn into attachments, so they're refused. */
-    suspend fun publish(server: String, topic: String, body: String) {
-        require(body.encodeToByteArray().size <= MAX_BODY) { "push message too large" }
-        val response = client.post(topicUrl(server, topic)) {
-            contentType(ContentType.Text.Plain)
-            setBody(body)
-        }
-        check(response.status.isSuccess()) { "ntfy answered ${response.status.value}" }
-    }
-
     /**
-     * The messages of [topic], from just after [since] (an earlier message id; ntfy keeps them for hours) or
-     * all it still holds. Ends when the stream does; the caller reconnects.
+     * The messages of [topic] from [sinceSeconds] (the unix time of the last one read; ntfy keeps messages
+     * for hours) or all it still holds. Ends when the stream does; the caller reconnects.
      */
-    fun subscribe(server: String, topic: String, since: String?): Flow<NtfyEvent> = flow {
+    fun subscribe(server: String, topic: String, sinceSeconds: Long?): Flow<NtfyEvent> = flow {
         client.prepareGet(topicUrl(server, topic) + "/json") {
-            // The topic is this phone's alone: with no id yet, everything ntfy still holds for it is ours to read
-            // (the replay guard drops what was already shown). ntfy has no "now"; it answers 400.
-            parameter("since", since ?: "all")
+            // A time, not the last message's id: ntfy doesn't say what an id that has left its cache means,
+            // and that is exactly the case after a long stretch offline. The message at that very second
+            // comes again and the replay guard drops it. ntfy has no "now"; it answers 400.
+            parameter("since", sinceSeconds?.toString() ?: "all")
             // The stream is meant to stay open; ntfy keeps it alive every ~45 s.
             timeout {
                 requestTimeoutMillis = Long.MAX_VALUE
