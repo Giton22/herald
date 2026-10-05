@@ -15,6 +15,7 @@ import dev.hermeskotlin.core.rooms.RoomMemberInput
 import dev.hermeskotlin.core.rooms.RoomPendingAction
 import dev.hermeskotlin.core.rooms.RoomsApi
 import dev.hermeskotlin.core.rooms.mergeRoomEvents
+import dev.hermeskotlin.core.rooms.messageText
 import dev.hermeskotlin.core.rooms.roomLines
 import dev.hermeskotlin.core.rpc.RpcException
 import kotlinx.coroutines.CancellationException
@@ -40,8 +41,11 @@ data class RoomsUiState(
     val loading: Boolean = true,
     /** The list failed to load. */
     val error: String? = null,
-    /** The gateway doesn't host rooms (an older Hermes, or the driver is off). */
-    val unsupported: Boolean = false,
+    /**
+     * The gateway said it hosts rooms (`groups.capabilities` with `driver`). False until it has said so,
+     * and on an older Hermes or with the driver off, so the section never shows on a guess.
+     */
+    val available: Boolean = false,
     /** What the last action said: why a room wasn't made. */
     val notice: String? = null,
     /** A room is being made right now, e.g. "Making the room…". */
@@ -106,6 +110,15 @@ class RoomsViewModel(
     /** Where the open room's log has been read to (the page cursor). */
     private var readThrough = 0
 
+    /** Events per log page: [PAGE], or less when the gateway's `max_log_limit` says so. */
+    private var logLimit = PAGE
+
+    /** The last message sent without an answer back, kept so a retry of it can't post twice. */
+    private var unansweredSend: UnansweredSend? = null
+
+    /** The last room asked for (name and roster) without an answer back, with the id it was asked under. */
+    private var unansweredCreate: Pair<Pair<String, List<RoomMemberInput>>, String>? = null
+
     init {
         // While the sidebar and the connection are live: read the rooms, then slowly besides.
         viewModelScope.launch {
@@ -125,6 +138,9 @@ class RoomsViewModel(
         // Another gateway's rooms are other rooms, whatever their names.
         gateway.value = url
         _state.value = RoomsUiState()
+        logLimit = PAGE
+        unansweredSend = null
+        unansweredCreate = null
         close()
     }
 
@@ -173,20 +189,32 @@ class RoomsViewModel(
         if (open.sending) return
         val text = composer.text.toString().trim()
         if (text.isEmpty()) return
+        val roomId = open.room.roomId
+        // Sending the same text again after an unanswered try reuses its id, so the gateway takes it once.
+        val attempt = unansweredSend?.takeIf { it.roomId == roomId && it.text == text }
+            ?: UnansweredSend(roomId, text, newId("message"), sentAfter = readThrough)
+        unansweredSend = attempt
+        val eventId = attempt.eventId
         _opened.update { it?.copy(sending = true, notice = null) }
         viewModelScope.launch {
             try {
-                val event = api.send(open.room.roomId, text = text, threadId = MAIN_THREAD, eventId = newId("message"))
-                composer.clearText()
+                val event = api.send(roomId, text = text, threadId = MAIN_THREAD, eventId = eventId)
+                if (unansweredSend?.eventId == eventId) unansweredSend = null
+                // The user may have left for another room while this was on its way.
+                if (_opened.value?.room?.roomId != roomId) return@launch
+                // Only what was sent goes: a draft typed meanwhile (or in the room reopened since) stays.
+                if (composer.text.toString().trim() == text) composer.clearText()
                 openEvents = mergeRoomEvents(openEvents, listOf(event))
                 _opened.update { it?.copy(lines = roomLines(openEvents, it.room.members)) }
-                readRoomSoon(open.room.roomId)
+                readRoomSoon(roomId)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _opened.update { it?.copy(notice = "Couldn't send. ${e.message.orEmpty()}".trim()) }
+                _opened.update { current ->
+                    current?.takeIf { it.room.roomId == roomId }?.copy(notice = "Couldn't send. ${e.message.orEmpty()}".trim()) ?: current
+                }
             } finally {
-                _opened.update { it?.copy(sending = false) }
+                _opened.update { current -> current?.takeIf { it.room.roomId == roomId }?.copy(sending = false) ?: current }
             }
         }
     }
@@ -255,16 +283,18 @@ class RoomsViewModel(
      */
     fun createRoom(name: String, members: List<Bot>, onCreated: (Room) -> Unit) {
         if (_state.value.busy != null) return
+        val roster = members.map { bot ->
+            RoomMemberInput(memberId = bot.name, profile = bot.name, handle = bot.name, displayName = bot.label)
+        }
+        // Trying the same room again after an unanswered try reuses its id, so the gateway makes it once.
+        val ask = name.trim() to roster
+        val roomId = unansweredCreate?.takeIf { it.first == ask }?.second ?: newId("room")
+        unansweredCreate = ask to roomId
         _state.update { it.copy(busy = "Making the room…", notice = null) }
         viewModelScope.launch {
             try {
-                val room = api.create(
-                    roomId = newId("room"),
-                    name = name.trim(),
-                    members = members.map { bot ->
-                        RoomMemberInput(memberId = bot.name, profile = bot.name, handle = bot.name, displayName = bot.label)
-                    },
-                )
+                val room = api.create(roomId = roomId, name = ask.first, members = roster)
+                unansweredCreate = null
                 readRooms()
                 onCreated(room)
             } catch (e: CancellationException) {
@@ -281,19 +311,26 @@ class RoomsViewModel(
         val url = gateway.value ?: return
         try {
             val capabilities = api.capabilities()
+            if (gateway.value != url) return
             if (!capabilities.driver) {
-                if (gateway.value == url) _state.update { it.copy(loading = false, unsupported = true, error = null) }
+                _state.update { it.copy(loading = false, available = false, error = null) }
                 return
             }
+            logLimit = capabilities.maxLogLimit.coerceIn(1, PAGE)
             val rooms = api.list()
             if (gateway.value != url) return
-            _state.update { it.copy(rooms = rooms, loading = false, error = null, unsupported = false) }
+            _state.update { it.copy(rooms = rooms, loading = false, error = null, available = true) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: RpcException) {
+            if (gateway.value != url) return
+            // An older gateway doesn't know `groups.*`: no section. Any other failure keeps what's known.
             val unsupported = UNKNOWN_METHOD.containsMatchIn(e.message)
-            _state.update { it.copy(loading = false, unsupported = unsupported, error = e.message.takeUnless { unsupported }) }
+            _state.update {
+                it.copy(loading = false, available = it.available && !unsupported, error = e.message.takeUnless { unsupported })
+            }
         } catch (e: Exception) {
+            if (gateway.value != url) return
             _state.update { it.copy(loading = false, error = e.message ?: "Couldn't load the rooms.") }
         }
     }
@@ -307,12 +344,27 @@ class RoomsViewModel(
         try {
             val state = api.state(roomId)
             if (_opened.value?.room?.roomId != roomId) return
+            // Never ask for more than the gateway serves in one page.
+            val limit = logLimit
             // A first read starts a bounded way back from the end: a room's whole history can be long.
-            if (readThrough == 0) readThrough = maxOf(0, (state.room.latestSeq ?: 0) - PAGE)
-            val page = api.log(roomId, sinceSeq = readThrough, limit = PAGE)
-            if (_opened.value?.room?.roomId != roomId) return
-            openEvents = mergeRoomEvents(openEvents, page.events)
-            readThrough = maxOf(readThrough, page.cursor)
+            if (readThrough == 0) readThrough = maxOf(0, (state.room.latestSeq ?: 0) - limit)
+            // A page that stops short of the end is followed right away, so the newest lines aren't a poll late.
+            var pages = 0
+            do {
+                val page = api.log(roomId, sinceSeq = readThrough, limit = limit)
+                if (_opened.value?.room?.roomId != roomId) return
+                openEvents = mergeRoomEvents(openEvents, page.events)
+                val advanced = page.cursor > readThrough
+                readThrough = maxOf(readThrough, page.cursor)
+                pages++
+            } while (page.hasMore && advanced && pages < MAX_PAGES_PER_READ)
+            // An unanswered send that shows up in the log did land: the same words later are a new message.
+            unansweredSend?.takeIf { it.roomId == roomId }?.let { pending ->
+                val landed = openEvents.any {
+                    it.seq > pending.sentAfter && it.kind == "message.user" && it.messageText?.trim() == pending.text
+                }
+                if (landed) unansweredSend = null
+            }
             _opened.update { open ->
                 open?.copy(
                     room = state.room,
@@ -326,13 +378,17 @@ class RoomsViewModel(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            // A late failure for a room that's no longer open leaves the one on screen alone.
             _opened.update { open ->
-                open?.takeIf { it.room.roomId == roomId }?.copy(loading = false, error = e.message ?: "Couldn't read the room.")
+                open?.takeIf { it.room.roomId == roomId }?.copy(loading = false, error = e.message ?: "Couldn't read the room.") ?: open
             }
         }
     }
 
     private fun newId(what: String): String = "$what-${Uuid.random()}"
+
+    /** A send with no answer back: [sentAfter] is the log seq read through when it went out. */
+    private data class UnansweredSend(val roomId: String, val text: String, val eventId: String, val sentAfter: Int)
 
     private companion object {
         /** The roster's fallback read; rooms change on other clients too, and send no event here. */
@@ -344,8 +400,11 @@ class RoomsViewModel(
         /** …and when it's quiet. */
         const val IDLE_POLL_MS = 10_000L
 
-        /** Events per log page. */
+        /** Events per log page, at most; the gateway's own `max_log_limit` can make it smaller. */
         const val PAGE = 200
+
+        /** How many pages one read follows before leaving the rest to the next poll. */
+        const val MAX_PAGES_PER_READ = 5
 
         /** All of an app's messages go on one line of the conversation. */
         const val MAIN_THREAD = "main"

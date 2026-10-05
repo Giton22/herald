@@ -376,15 +376,22 @@ fun SessionsSidebar(
                             failingRoutines = failingRoutines,
                             needsYou = needsYou,
                             rooms = roomsState.rooms,
-                            roomsAvailable = !roomsState.unsupported,
+                            roomsAvailable = roomsState.available,
                             onOpenRoom = onOpenRoom,
-                            onNewRoom = { newRoomOpen = true },
+                            onNewRoom = {
+                                rooms.dismissNotice()
+                                newRoomOpen = true
+                            },
                         )
                         CreateRoomDialog(
                             visible = newRoomOpen,
                             bots = botsState.all,
                             busy = roomsState.busy,
-                            onDismiss = { newRoomOpen = false },
+                            error = roomsState.notice,
+                            onDismiss = {
+                                newRoomOpen = false
+                                rooms.dismissNotice()
+                            },
                             onCreate = { name, members ->
                                 rooms.createRoom(name, members) { room ->
                                     newRoomOpen = false

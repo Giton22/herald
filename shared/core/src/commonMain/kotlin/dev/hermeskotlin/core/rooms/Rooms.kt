@@ -139,6 +139,9 @@ sealed interface RoomLine {
 /** A payload string, or null when the key is absent or not a string. */
 internal fun JsonObject.payloadText(key: String): String? = (this[key] as? JsonPrimitive)?.contentOrNull
 
+/** The words of a message event; null when it carries none. */
+val RoomEvent.messageText: String? get() = payload.payloadText("text")
+
 /** A payload integer, or null when the key is absent or not a number. */
 internal fun JsonObject.payloadInt(key: String): Int? = (this[key] as? JsonPrimitive)?.intOrNull
 

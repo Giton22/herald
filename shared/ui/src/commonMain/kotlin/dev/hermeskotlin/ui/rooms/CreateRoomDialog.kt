@@ -41,6 +41,7 @@ import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.Dialog
 import dev.hermeskotlin.designsystem.components.SectionLabel
 import dev.hermeskotlin.designsystem.components.TextField
+import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.onAccent
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusMedium
@@ -59,6 +60,8 @@ fun CreateRoomDialog(
     visible: Boolean,
     bots: List<Bot>,
     busy: String?,
+    /** Why the last try didn't make the room, shown until the next try. */
+    error: String? = null,
     onDismiss: () -> Unit,
     onCreate: (name: String, members: List<Bot>) -> Unit,
 ) {
@@ -127,6 +130,9 @@ fun CreateRoomDialog(
             style = Theme[typography][caption],
             color = Theme[colors][textTertiary],
         )
+        if (error != null && busy == null) {
+            Text(error, style = Theme[typography][bodySmall], color = Theme[colors][danger])
+        }
     }
 }
 
