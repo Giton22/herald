@@ -97,10 +97,11 @@ class BotNotifier(
             }
         }
         // Leaving the app: a bot removed, renamed or hidden in it leaves the share sheet and launcher now,
-        // not at the next connection. Nothing notifies from this read.
+        // not at the next connection. Only the shortcuts: marking the chats seen here would swallow a reply
+        // that came in just before, whose sessions.changed check is still waiting out its debounce.
         scope.launch {
             visibility.visible.drop(1).filter { !it }.collect {
-                if (connection.state.value is ConnectionState.Connected) runCatching { check(notify = false, watch = false) }
+                if (connection.state.value is ConnectionState.Connected) runCatching { check(notify = false, watch = false, track = false) }
             }
         }
     }
@@ -108,7 +109,8 @@ class BotNotifier(
     /** The bots the shortcuts were last published for, by name, label and look: a change publishes them again. */
     private var published: List<Bot>? = null
 
-    private suspend fun check(notify: Boolean, watch: Boolean) = lock.withLock {
+    /** Reads the roster: keeps the shortcuts to it, and with [track] notes (and with [notify] tells) what each bot's chat did. */
+    private suspend fun check(notify: Boolean, watch: Boolean, track: Boolean = true) = lock.withLock {
         val bots = try {
             api.roster().bots.forRoster()
         } catch (e: CancellationException) {
@@ -130,6 +132,7 @@ class BotNotifier(
             BotShortcuts.publish(context, shown, pictures)
             published = look
         }
+        if (!track) return@withLock
         val prefs = settings.settings.value ?: AppSettings()
         val open = host.session.value?.state?.value?.storedSessionId
         for (bot in bots) {
