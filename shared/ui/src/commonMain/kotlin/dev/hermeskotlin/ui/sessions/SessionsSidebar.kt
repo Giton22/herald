@@ -6,7 +6,6 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import dev.hermeskotlin.designsystem.components.Chip
-import dev.hermeskotlin.ui.LocalAppSettings
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -193,7 +192,6 @@ fun SessionsSidebar(
     val roster by viewModel.roster.collectAsStateWithLifecycle()
     val statuses by viewModel.statuses.collectAsStateWithLifecycle()
     val attentionFilter by viewModel.attentionFilter.collectAsStateWithLifecycle()
-    val stayConnected = LocalAppSettings.current.stayConnected
     val drafts by viewModel.draftChats.collectAsStateWithLifecycle()
     var profilesOpen by remember { mutableStateOf(false) }
 
@@ -406,16 +404,6 @@ fun SessionsSidebar(
                                 }
                                 attentionFilter == AttentionFilter.NeedsAttention && state.sessions.none { statuses[it.id]?.needsAttention == true } ->
                                     item(key = "none-waiting") { ListNotice("Nothing needs you right now.") }
-                            }
-                            if (attentionFilter == AttentionFilter.NeedsAttention && !stayConnected) {
-                                item(key = "stay-connected") {
-                                    ListNotice(
-                                        "While Herald is closed, it only hears about the chat you had open. " +
-                                            "Turn on Stay connected to be notified about every chat.",
-                                        action = "Open Settings",
-                                        onAction = onOpenSettings,
-                                    )
-                                }
                             }
                         },
                     ) {

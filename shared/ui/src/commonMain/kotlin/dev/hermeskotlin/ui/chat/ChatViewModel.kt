@@ -85,6 +85,9 @@ data class ModelPickerState(
     val loading: Boolean = false,
     val error: String? = null,
     val confirm: PendingSwitch? = null,
+    /** A pick being saved where it takes a while (a bot's own model), and why the last one wasn't. */
+    val saving: Boolean = false,
+    val saveError: String? = null,
 )
 
 data class PendingSwitch(val model: ModelOption, val message: String)
@@ -123,7 +126,13 @@ data class ChatTarget(
     val profile: String? = null,
     val bot: BotIdentity? = null,
     val draft: ComposeDraft? = null,
-)
+) {
+    /**
+     * The profile whose last chat this is, which the next launch reads: a bot's chat counts where the Chats
+     * list was, the launch profile (null) included, not under the bot's own profile.
+     */
+    val rememberedIn: String? get() = if (bot != null) bot.chatsProfile else profile
+}
 
 /**
  * The bot whose permanent chat is open: its profile and the name it goes by. [chatsProfile] is the profile
@@ -264,8 +273,7 @@ class ChatViewModel(
                 .distinctUntilChanged()
                 .filterNotNull()
                 .collect { last ->
-                    // A bot's chat is remembered where the Chats list was, which is what the next launch reads.
-                    target?.let { lastChats.set(it.gateway.gatewayUrl, last, it.bot?.chatsProfile ?: it.profile) }
+                    target?.let { lastChats.set(it.gateway.gatewayUrl, last, it.rememberedIn) }
                 }
         }
         viewModelScope.launch {

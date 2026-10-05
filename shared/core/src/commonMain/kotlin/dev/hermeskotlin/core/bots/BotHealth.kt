@@ -222,9 +222,17 @@ class BotHealth(
         _troubles.update { it + (profile to BotTrouble(problem, reasonOrText.orEmpty().trim().take(MAX_DETAIL), BotTrouble.Source.Turn)) }
     }
 
-    /** [profile] answered: whatever a failed turn said no longer holds. */
+    /**
+     * [profile] answered: whatever a failed turn said no longer holds. What a check said is asked again
+     * instead, as the reply may have come on a model other than the profile's own: fixed elsewhere, its ⚠
+     * would otherwise stay until the next connection.
+     */
     fun noteAnswered(profile: String) {
-        _troubles.update { all -> if (all[profile]?.source == BotTrouble.Source.Turn) all - profile else all }
+        when (_troubles.value[profile]?.source) {
+            BotTrouble.Source.Turn -> _troubles.update { all -> if (all[profile]?.source == BotTrouble.Source.Turn) all - profile else all }
+            BotTrouble.Source.Check -> recheck(profile)
+            null -> Unit
+        }
     }
 
     private companion object {

@@ -14,7 +14,6 @@ val notifyModule = module {
     single { AppVisibility(androidApplication()) }
     single { ChatNotifications(androidContext()) }
     single { ChatNotifier(androidContext(), get(), get(), get(), get(), get(), get()) }
-    single { BackgroundConnection(get(), get(), get(), get()) }
     single { BotNotifier(androidContext(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { PushStore(androidContext()) } bind PushKeys::class
     single { PushListener(get(), get(), get(), get(), get(), get(), get(), get()) }

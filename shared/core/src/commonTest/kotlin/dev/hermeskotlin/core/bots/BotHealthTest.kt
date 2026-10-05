@@ -185,6 +185,21 @@ class BotHealthTest {
     }
 
     @Test
+    fun aGoodTurnAsksAgainAboutWhatACheckFound() = runTest {
+        var ok = false
+        val s = setup(backgroundScope) { RuntimeCheck(ok, "No API key found for openrouter") }
+        s.health.recheck("scribe")
+        s.health.troubles.first { "scribe" in it }
+
+        // Its key was fixed elsewhere, and it just answered.
+        ok = true
+        s.health.noteAnswered("scribe")
+
+        s.health.troubles.first { it.isEmpty() }
+        assertEquals(listOf("scribe", "scribe"), s.checks)
+    }
+
+    @Test
     fun aBotChatsFailedTurnMarksTheBotAndItsNextReplyClearsIt() = runTest {
         val s = setup(backgroundScope)
         val chat = s.host.open(url, "stored-1", "Bot Chat", profile = "scribe")

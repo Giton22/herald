@@ -4,6 +4,7 @@ import dev.hermeskotlin.core.network.HermesJson
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -47,6 +48,15 @@ class BotsTest {
         assertEquals("a", test1.canonicalSession?.id)
         assertEquals("b", test1.canonicalSession?.openId)
         assertNull(parseBotRoster(reply).bots[2].canonicalSession)
+    }
+
+    @Test
+    fun aBotChatIsKnownByEitherEndOfItsLineage() {
+        val chat = assertNotNull(parseBotRoster(reply).bots[1].canonicalSession)
+        assertTrue(chat.isChat("a"))
+        assertTrue(chat.isChat("b"))
+        assertFalse(chat.isChat("w"))
+        assertFalse(chat.isChat(null))
     }
 
     @Test

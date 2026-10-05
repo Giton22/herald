@@ -181,7 +181,8 @@ fun BotsRoster(
                 item(key = "needs-you-label") {
                     SectionLabel("Needs you · ${needsYou.size}", Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp))
                 }
-                items(needsYou, key = { "needs-${it.bot.name}" }) { item ->
+                // Row keys carry a ':', which no profile name has, so a bot named like a key can't collide.
+                items(needsYou, key = { "needs:${it.bot.name}" }) { item ->
                     NeedsYouRow(
                         item,
                         picture = avatars[item.bot.name]?.takeIf { showsPicture(item.bot, it) },
@@ -209,7 +210,7 @@ fun BotsRoster(
                     ListNotice("All bots are hidden. They keep working and keep their history.", action = "Show hidden bots") { hiddenOpen = true }
                 }
             }
-            items(state.bots, key = { it.name }) { row(it, false) }
+            items(state.bots, key = { "bot:${it.name}" }) { row(it, false) }
             if (state.hidden.isNotEmpty()) {
                 item(key = "hidden-label") {
                     Row(
@@ -231,7 +232,7 @@ fun BotsRoster(
                         Text("Hidden ${state.hidden.size}", style = Theme[typography][caption], color = Theme[colors][textTertiary])
                     }
                 }
-                if (hiddenOpen) items(state.hidden, key = { "hidden-${it.name}" }) { row(it, true) }
+                if (hiddenOpen) items(state.hidden, key = { "hidden:${it.name}" }) { row(it, true) }
             }
         }
         state.notice?.let { message ->
@@ -405,7 +406,7 @@ private fun NeedsYouRow(item: NeedsYou, picture: ByteArray?, onClick: () -> Unit
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
             .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
-            .clickable(onClickLabel = "Open ${item.bot.label}", onClick = onClick)
+            .clickable(onClickLabel = if (item is NeedsYou.Routine) "Open ${item.bot.label}'s routines" else "Open ${item.bot.label}'s chat", onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,

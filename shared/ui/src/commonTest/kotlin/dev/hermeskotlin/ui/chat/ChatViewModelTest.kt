@@ -28,6 +28,7 @@ import dev.hermeskotlin.core.voice.SpokenAudio
 import dev.hermeskotlin.core.voice.VoiceActivity
 import dev.hermeskotlin.core.voice.VoiceRecorder
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockEngineConfig
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -83,7 +84,11 @@ class ChatViewModelTest {
 
     private fun viewModel(drafts: DraftStore = DraftStore(InMemoryKeyValueStore())): Pair<ChatViewModel, ChatHost> {
         val cookies = PersistentCookiesStorage(InMemoryKeyValueStore())
-        val client = createHttpClient(MockEngine { respond("{}", HttpStatusCode.OK, json) }, cookies)
+        // On the test dispatcher, so no request is still finishing on another thread when a test ends.
+        val engine = MockEngineConfig()
+        engine.dispatcher = dispatcher
+        engine.addHandler { respond("{}", HttpStatusCode.OK, json) }
+        val client = createHttpClient(MockEngine(engine), cookies)
         val connection = GatewayConnection(AuthApi(client, cookies), { _, _ -> error("not connecting in tests") }, scope)
         val sessions = SessionsApi(client)
         val chatHost = ChatHost(connection, sessions, scope)
@@ -110,6 +115,14 @@ class ChatViewModelTest {
         vm.open(target)
 
         assertNotSame(first, assertNotNull(host.session.value))
+    }
+
+    @Test
+    fun aBotsChatIsRememberedWhereTheChatsListWasTheLaunchProfileIncluded() {
+        // Opened from the launch profile's Chats list: the next launch reads the launch profile's last chat.
+        assertNull(ChatTarget(gateway, "b1", "Side", profile = "side", bot = BotIdentity("side", "Side")).rememberedIn)
+        assertEquals("work", ChatTarget(gateway, "b1", "Side", profile = "side", bot = BotIdentity("side", "Side", chatsProfile = "work")).rememberedIn)
+        assertEquals("work", ChatTarget(gateway, "s1", "Chat", profile = "work").rememberedIn)
     }
 
     private fun attachment(id: String) = OutgoingAttachment(id, "$id.txt", "text/plain", byteArrayOf(1))

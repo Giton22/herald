@@ -13,7 +13,6 @@ import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.push.PushSetup
-import dev.hermeskotlin.core.settings.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
@@ -29,7 +28,6 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
     private val connection: GatewayConnection by inject()
     private val notifications: ChatNotifications by inject()
     private val scope: CoroutineScope by inject()
-    private val settings: SettingsStore by inject()
     private val bots: BotsApi by inject()
     private val push: PushSetup by inject()
 
@@ -48,12 +46,9 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         val session = host.session.value
         val text = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(KEY_TEXT)?.toString()?.trim()
         when (intent.action) {
-            ACTION_STOP -> session?.interrupt()
             ACTION_DISCONNECT -> {
-                // Whichever keeps the quiet notification up goes: the socket, and push with it.
-                val pushOn = settings.settings.value?.pushAnywhere == true
-                settings.update { it.copy(stayConnected = false) }
-                if (pushOn) withTimeoutOrNull(RECEIVER_BUDGET_MS) { push.disable() }
+                // Notifications anywhere is what keeps the quiet notification up between turns.
+                withTimeoutOrNull(RECEIVER_BUDGET_MS) { push.disable() }
             }
             ACTION_APPROVE -> {
                 val choice = ApprovalChoice.fromWire(intent.getStringExtra(EXTRA_CHOICE).orEmpty()) ?: return
@@ -121,7 +116,6 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
     }
 
     companion object {
-        const val ACTION_STOP = "dev.hermeskotlin.action.STOP"
         const val ACTION_APPROVE = "dev.hermeskotlin.action.APPROVE"
         const val ACTION_CLARIFY = "dev.hermeskotlin.action.CLARIFY"
         const val ACTION_REPLY = "dev.hermeskotlin.action.REPLY"

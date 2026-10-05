@@ -261,6 +261,37 @@ class ChatSessionResumeTest {
     }
 
     @Test
+    fun aChatTheGatewayNoLongerHasStopsShowingATurn() = runTest {
+        // Its bot was deleted mid-turn: the turn never completes, and resuming is refused.
+        val (chat, _) = droppedMidTurn(backgroundScope, resume = "error:4007")
+
+        val gone = chat.state.first { it.attachment is Attachment.Failed }
+
+        assertFalse(gone.running)
+    }
+
+    @Test
+    fun stoppingATurnWhoseChatIsGoneStopsShowingIt() = runTest {
+        var resumes = 0
+        answer = { _, method, _ ->
+            when (method) {
+                // Attached mid-turn; by the time Stop is pressed, the bot and its chat were deleted elsewhere.
+                "session.resume" -> if (resumes++ == 0) """{"session_id":"rt1","running":true}""" else "error:4007"
+                "session.interrupt" -> "error:4007"
+                else -> "{}"
+            }
+        }
+        val (connection, _) = connect(backgroundScope)
+        val chat = ChatSession(url, "stored-1", "Chat", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.running }
+
+        chat.interrupt()
+
+        assertFalse(chat.state.first { it.attachment is Attachment.Failed }.running)
+    }
+
+    @Test
     fun aTurnThatEndedOnAReapedRuntimeLeavesNoStaleLiveReply() = runTest {
         // The gateway let the runtime go while we were away: a new one, nothing to replay, the turn in the transcript.
         transcript = rowsUpTo(4)

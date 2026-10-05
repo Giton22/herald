@@ -6,6 +6,7 @@ import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatSession
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.TurnOutcome
+import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
@@ -13,7 +14,6 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -21,8 +21,8 @@ import kotlinx.coroutines.launch
 import kotlin.reflect.KClass
 
 /**
- * Turns the open chat's state into Android notifications: the foreground [ChatService] while a turn
- * runs, a heads-up for every question the agent asks, and the reply when a turn ends. Requests and
+ * Turns the open chat's state into Android notifications: the foreground [ChatService] (with its one quiet
+ * line) while a turn runs, a heads-up for every question the agent asks, and the reply when a turn ends. Requests and
  * replies are only posted while the app is out of sight, and cleared when it comes back.
  *
  * Runs on the main thread, so starting/stopping the service and posting its notification can't race.
@@ -40,7 +40,6 @@ class ChatNotifier(
     private var serviceStarted = false
 
     fun start() {
-        notifications.botName = { storedId -> bots.botWithChat(storedId)?.label }
         scope.launch {
             combine(host.session, settings.settings) { session, prefs -> session to (prefs?.keepsProcessUp == true) }
                 .distinctUntilChanged()
@@ -48,7 +47,7 @@ class ChatNotifier(
                     when {
                         session != null -> follow(session)
                         // No chat open (the app started in the background after an update or reboot):
-                        // Stay connected still keeps the socket up, for bot notifications.
+                        // Notifications anywhere still needs the process up, for its ntfy stream.
                         stay -> keepConnected()
                         else -> stopService()
                     }
@@ -62,15 +61,27 @@ class ChatNotifier(
     private suspend fun follow(session: ChatSession) = coroutineScope {
         val notified = mutableSetOf<String>()
         var previous: ChatState? = null
+        var shown: Shown? = null
         try {
-            launch { keepWorkingNotificationCurrent(session) }
-            combine(session.state, visibility.visible, settings.settings, ::Triple).collect { (state, visible, stored) ->
+            combine(session.state, visibility.visible, settings.settings, connection.state) { state, visible, stored, link ->
+                Quad(state, visible, stored, link)
+            }.collect { (state, visible, stored, link) ->
                 val prefs = stored ?: AppSettings()
 
                 // Each change is a chance to start it: Android refuses while the app is in the background.
                 val wanted = state.running || prefs.keepsProcessUp
-                if (wanted && !serviceStarted) serviceStarted = ChatService.start(context)
+                if (wanted && !serviceStarted) {
+                    serviceStarted = ChatService.start(context)
+                    // The service shows the notification as it is when it starts.
+                    shown = Shown(link::class, prefs.pushAnywhere)
+                }
                 if (!wanted) stopService()
+                // Its line says only whether Herald is connected, so it changes with the link, never with a turn.
+                val now = Shown(link::class, prefs.pushAnywhere)
+                if (serviceStarted && now != shown) {
+                    notifications.postOngoing(link, prefs.pushAnywhere)
+                    shown = now
+                }
 
                 // Only what was actually posted counts: a question that came in while Herald was in sight
                 // still needs its notification once Herald isn't. In sight, cancelAttention took them down.
@@ -112,24 +123,11 @@ class ChatNotifier(
         }
     }
 
-    /** Status lines can change several times a second; Android drops updates past a few per second. */
-    private suspend fun keepWorkingNotificationCurrent(session: ChatSession) {
-        combine(session.state, connection.state) { state, connectionState ->
-            val tool = (state.messages.lastOrNull() as? ChatMessage.Assistant)?.tools?.lastOrNull { it.running }
-            WorkingKey(state.running, state.title, state.status, state.inputRequests.size, tool?.id, connectionState::class)
-        }
-            .distinctUntilChanged()
-            .collect {
-                if (serviceStarted) notifications.postWorking(session.state.value, connection.state.value, settings.settings.value?.pushAnywhere == true)
-                delay(1_000)
-            }
-    }
-
     private suspend fun keepConnected() {
         if (!serviceStarted) serviceStarted = ChatService.start(context)
         combine(connection.state, settings.settings) { state, prefs -> state to (prefs?.pushAnywhere == true) }
             .distinctUntilChanged()
-            .collect { (state, push) -> if (serviceStarted) notifications.postWorking(null, state, push) }
+            .collect { (state, push) -> if (serviceStarted) notifications.postOngoing(state, push) }
     }
 
     private fun stopService() {
@@ -138,15 +136,11 @@ class ChatNotifier(
         ChatService.stop(context)
     }
 
-    /** Stay connected holds the socket; Notifications anywhere holds the ntfy stream. Either needs the process alive. */
-    private val AppSettings.keepsProcessUp: Boolean get() = stayConnected || pushAnywhere
+    /** Notifications anywhere holds the ntfy stream, which needs the process alive between turns too. */
+    private val AppSettings.keepsProcessUp: Boolean get() = pushAnywhere
 
-    private data class WorkingKey(
-        val running: Boolean,
-        val title: String?,
-        val status: String?,
-        val waiting: Int,
-        val toolId: String?,
-        val connection: KClass<*>,
-    )
+    private data class Quad(val state: ChatState, val visible: Boolean, val settings: AppSettings?, val link: ConnectionState)
+
+    /** What the ongoing notification says: it's posted again only when this changes. */
+    private data class Shown(val link: KClass<*>, val push: Boolean)
 }
