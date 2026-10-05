@@ -151,7 +151,7 @@ private fun buildHermesTheme(palette: AccentPalette) = buildThemeV2 {
         )
         defaultContentColor = Palette.Snow
         defaultIndication = rememberColoredIndication(Palette.Snow)
-        defaultTextSelectionColors = TextSelectionColors(palette.dark.accent, palette.dark.accent.copy(alpha = 0.35f))
+        defaultTextSelectionColors = TextSelectionColors(palette.black.accent, palette.black.accent.copy(alpha = 0.35f))
     }
 
     defaultTextStyle = baseText.copy(fontSize = 16.sp, lineHeight = 24.sp)

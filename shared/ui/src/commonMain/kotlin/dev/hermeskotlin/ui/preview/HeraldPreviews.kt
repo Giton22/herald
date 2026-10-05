@@ -48,6 +48,7 @@ import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.DEFAULT_ACCENT
 import dev.hermeskotlin.designsystem.AccentPalette
+import dev.hermeskotlin.designsystem.LocalAccentPalette
 import dev.hermeskotlin.designsystem.hermesTheme
 import dev.hermeskotlin.ui.LocalAppSettings
 import dev.hermeskotlin.ui.chat.ChatView
@@ -88,8 +89,9 @@ enum class PreviewScene(val label: String) {
  */
 @Composable
 fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DEFAULT_ACCENT) {
-    hermesTheme(AccentPalette.named(accent))(if (dark) ColorScheme.Dark else ColorScheme.Light) {
-        CompositionLocalProvider(LocalAppSettings provides AppSettings(showPet = false)) {
+    val palette = AccentPalette.named(accent)
+    hermesTheme(palette)(if (dark) ColorScheme.Dark else ColorScheme.Light) {
+        CompositionLocalProvider(LocalAccentPalette provides palette, LocalAppSettings provides AppSettings(showPet = false)) {
             when (scene) {
                 PreviewScene.Reply -> SampleChat(ChatSamples.reply)
                 PreviewScene.Working -> SampleChat(ChatSamples.working)

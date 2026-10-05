@@ -1,7 +1,11 @@
 package dev.hermeskotlin.designsystem
 
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
+
+/** The accent the app is drawn in, for colors outside the theme's tokens (the assistant's edge light). */
+val LocalAccentPalette = staticCompositionLocalOf { AccentPalette.Blue }
 
 /** The colors one accent gives a scheme: [accent], [onAccent] and [accentSoft], and the user's bubble tinted with it. */
 class AccentColors(
