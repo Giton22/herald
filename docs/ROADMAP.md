@@ -70,7 +70,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] `gateway.ping` keepalive every 15 s, 45 s inbound deadline
 - [x] Automatic reconnect with backoff (fresh ticket each time)
 - [x] Re-attach (`session.resume`) and refetch the transcript after a reconnect; rebuild a running turn from `inflight`
-- [ ] Exact event replay after reconnect (`session.events.since`)
+- [x] Exact event replay after reconnect (`session.events.since`): the last applied `seq` is tracked per runtime session and the missed events go through the same reducer, overlap with live frames dropped by seq; a gap in the live stream is filled the same way. A truncated ring, another `replay_epoch` or an older gateway fall back to the transcript refetch and `inflight`. The chat shows "Reconnecting…" / "Waiting for network…" while the link is down
 - [x] Connection-state indicator in the UI (connecting, connected, retrying with countdown, refused, session expired)
 
 ### 3. Sessions
@@ -78,6 +78,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Pinned chats on top (with a pin), plus an Archived page; the chat list leaves out cron runs (`exclude_sources=cron`, like Desktop), which are reached through their job under Scheduled
 - [x] Create a new session (`session.create`) from the New chat button (chat top bar or sidebar); the stored row appears with the first prompt
 - [x] Open a session and read its stored history (`GET /api/sessions/{id}/messages`, read-only; tool steps are folded into one reply)
+- [x] Long chats load a page at a time: the newest 60 rows on opening, older pages as you scroll to the top (`order=latest` + `offset`), each starting at a prompt so no turn is cut in two; the list keeps its place. Branching loads the rest first so it counts from the first row
 - [x] Resume a session live and reply in it (`session.resume {omit_messages}` + REST history, like Desktop)
 - [x] The app opens on a chat: the one you had open last on this gateway, or a fresh one if you left on a new chat (remembered per gateway)
 - [x] Sessions live in a left sidebar: a swipe-in drawer on phones (swipe right or the panel button; swipe left, tap outside or Back to close), docked and collapsible on wide screens; the open chat is highlighted
