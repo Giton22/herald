@@ -18,6 +18,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -47,6 +48,9 @@ class BotHealthTest {
         },
     )
 
+    /** Methods the fake gateway turns down, with the error message it sends. */
+    private val refusals = mutableMapOf<String, String>()
+
     private fun CoroutineScope.serve(transport: FakeTransport) = launch {
         var answered = 0
         transport.sent.collect { sent ->
@@ -54,6 +58,11 @@ class BotHealthTest {
                 answered++
                 val id = message["id"] ?: return@forEach
                 val method = message["method"]?.jsonPrimitive?.contentOrNull
+                val refusal = refusals[method]
+                if (refusal != null) {
+                    transport.push("""{"jsonrpc":"2.0","id":$id,"error":{"code":5000,"message":"$refusal"}}""")
+                    return@forEach
+                }
                 val result = if (method == "session.resume") """{"session_id":"rt1","running":false}""" else "{}"
                 transport.push("""{"jsonrpc":"2.0","id":$id,"result":$result}""")
             }
@@ -62,7 +71,7 @@ class BotHealthTest {
 
     private class Setup(val host: ChatHost, val health: BotHealth, val transport: FakeTransport, val checks: MutableList<String>)
 
-    private suspend fun setup(scope: CoroutineScope, answer: (String) -> RuntimeCheck = { RuntimeCheck(ok = true) }): Setup {
+    private suspend fun setup(scope: CoroutineScope, answer: suspend (String) -> RuntimeCheck = { RuntimeCheck(ok = true) }): Setup {
         val http = client()
         val transport = FakeTransport()
         val connection = GatewayConnection(AuthApi(http, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> transport }, scope)
@@ -118,6 +127,22 @@ class BotHealthTest {
         s.health.recheck("scribe")
 
         s.health.troubles.first { it.isEmpty() }
+    }
+
+    @Test
+    fun aFailureOnThePhoneSaysNothingAboutTheBot() = runTest {
+        val s = setup(backgroundScope)
+        val chat = s.host.open(url, "stored-1", "Bot Chat", profile = "scribe")
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        refusals["prompt.submit"] = "403 Forbidden: not allowed from this client"
+
+        // The send fails on the way, with words that would read as a refused key.
+        chat.send("hello")
+        chat.state.first { it.error != null }
+        // Let the watcher see it (background work runs on runCurrent).
+        testScheduler.runCurrent()
+
+        assertTrue(s.health.troubles.value.isEmpty())
     }
 
     @Test

@@ -15,8 +15,11 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChangedBy
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
+import dev.hermeskotlin.core.chat.string
 
 /**
  * A failure that keeps a bot from working until someone fixes something, Desktop's needs-attention
@@ -115,9 +118,20 @@ class BotHealth(
      * in a bot's profile), and the outcome of every message it sends another bot. What the transcript held
      * when it opened is history, possibly long since fixed, so only rows that arrive later count.
      */
-    private suspend fun watch(session: ChatSession) {
+    private suspend fun watch(session: ChatSession): Unit = coroutineScope {
+        // The gateway's own word that the bot's turn failed. Not the chat's error line: that also carries
+        // what failed on the phone (a send, a model change), which says nothing about the bot.
+        session.profile?.let { self ->
+            launch {
+                connection.events.collect { event ->
+                    val live = session.state.value.runtimeSessionId
+                    if (event.type == "error" && live != null && event.sessionId == live) {
+                        noteFailure(self, (event.payload as? JsonObject).string("message"))
+                    }
+                }
+            }
+        }
         var seen: MutableSet<String>? = null
-        var lastError: String? = null
         // The newest finished reply seen; one after it is the bot answering. Read by key, not by watching
         // `running` flip: a state flow may skip a short turn's running state altogether.
         var lastReply: String? = null
@@ -149,12 +163,10 @@ class BotHealth(
                 }
             }
             if (self != null) {
-                if (state.error != null && state.error != lastError) noteFailure(self, state.error)
                 // A turn that ended in a reply is the bot working again.
                 if (reply != null && reply != lastReply && state.error == null) noteAnswered(self)
             }
             if (reply != null) lastReply = reply
-            lastError = state.error
         }
     }
 
