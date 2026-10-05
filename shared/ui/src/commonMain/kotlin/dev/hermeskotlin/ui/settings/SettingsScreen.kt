@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -466,19 +467,23 @@ private fun SwitchRow(title: String, detail: String?, checked: Boolean, onChecke
     }
 }
 
-/** One swatch per accent preset, drawn in the accent the current light or dark scheme would use. */
+/**
+ * One swatch per accent preset, drawn in the accent the current light or dark scheme would use. Each is a
+ * 48dp touch target; on a narrow phone or with a large display size the row wraps.
+ */
 @Composable
 private fun AccentPicker(selected: AccentPalette, onSelect: (AccentPalette) -> Unit) {
     val dark = Theme[colors][background].luminance() < 0.5f
-    Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+    FlowRow(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         AccentPalette.all.forEach { palette ->
             val isSelected = palette == selected
             Box(
                 Modifier
-                    .size(40.dp)
+                    .size(48.dp)
                     .clip(CircleShape)
                     .selectable(selected = isSelected, role = Role.RadioButton, onClick = { onSelect(palette) })
                     .semantics { contentDescription = palette.name }
+                    .padding(2.dp)
                     .border(2.dp, if (isSelected) Theme[colors][text] else Color.Transparent, CircleShape)
                     .padding(5.dp)
                     .background(if (dark) palette.dark.accent else palette.light.accent, CircleShape),
