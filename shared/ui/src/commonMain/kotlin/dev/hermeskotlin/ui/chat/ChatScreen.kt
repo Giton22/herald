@@ -290,6 +290,7 @@ fun ChatScreen(
                 ChatRequest.OpenUsage -> usageOpen = true
                 ChatRequest.OpenProcesses -> processesOpen = true
                 ChatRequest.StartVoice -> startVoiceChat()
+                ChatRequest.StartDictation -> toggleDictation()
             }
         }
     }

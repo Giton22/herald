@@ -10,6 +10,7 @@ import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatSession
 import dev.hermeskotlin.core.chat.ChatState
+import dev.hermeskotlin.core.chat.ComposeDraft
 import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.chat.LastChat
@@ -96,13 +97,17 @@ sealed interface ChatRequest {
     /** `/voice`: the screen asks for the microphone, then starts a voice chat. */
     data object StartVoice : ChatRequest
 
+    /** The voice shortcut: the screen asks for the microphone, then dictates into the composer. */
+    data object StartDictation : ChatRequest
+
     /** [profile] null is the gateway's launch profile. */
     data class SwitchProfile(val profile: String?) : ChatRequest
 }
 
 /**
  * Identifies what the chat screen shows: a stored session, or a new chat (`storedSessionId == null`),
- * in [profile] (null: the gateway's launch profile).
+ * in [profile] (null: the gateway's launch profile). A new chat opened from outside (share sheet,
+ * shortcut) brings its [draft].
  */
 data class ChatTarget(
     val gateway: SavedGateway,
@@ -110,6 +115,7 @@ data class ChatTarget(
     val title: String?,
     val nonce: Long = 0,
     val profile: String? = null,
+    val draft: ComposeDraft? = null,
 )
 
 /**
@@ -285,8 +291,10 @@ class ChatViewModel(
         // A voice chat belongs to the chat it started in.
         voice.stopAll()
         composer.clearText()
-        restoreDraft(target)
         _attachmentError.value = null
+        restoreDraft(target)
+        // Its text is in before the stored draft is read back, so that one doesn't replace it.
+        target.draft?.let(::takeDraft)
         if (target.storedSessionId == null) viewModelScope.launch { lastChats.set(target.gateway.gatewayUrl, null, target.profile) }
         session.value = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title, target.profile)
         // The catalog marks the previous chat's model; a new chat must show the profile default instead.
@@ -295,6 +303,17 @@ class ChatViewModel(
             loadModels()
             pets.bind(target.profile)
         }
+    }
+
+    /**
+     * Fills the new chat's composer with what came from outside, to look over before sending: shared
+     * text and files, or dictation started by the voice shortcut.
+     */
+    private fun takeDraft(draft: ComposeDraft) {
+        draft.text?.takeIf { it.isNotBlank() }?.let(composer::setTextAndPlaceCursorAtEnd)
+        if (draft.attachments.isNotEmpty()) addAttachments(draft.attachments)
+        draft.notice?.let(::showAttachmentError)
+        if (draft.dictate) viewModelScope.launch { _requests.send(ChatRequest.StartDictation) }
     }
 
     fun startVoiceChat() {
