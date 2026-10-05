@@ -106,6 +106,12 @@ data class SessionMessage(
     val timestamp: Double? = null,
     val reasoning: String? = null,
     @SerialName("display_kind") val displayKind: String? = null,
+    /** The session the row is stored under: an ancestor's id for rows from before a compression. */
+    @SerialName("session_id") val sessionId: String? = null,
+    /** False for rows a compression archived; the live agent no longer holds them. */
+    @Serializable(with = LenientBooleanSerializer::class) val active: Boolean = true,
+    /** Kept only to show what a compression summarized. */
+    @Serializable(with = LenientBooleanSerializer::class) val compacted: Boolean = false,
 ) {
     /** Plain text to render: the display projection when present, else the stored content. */
     val text: String get() = (displayContent ?: content).plainText()

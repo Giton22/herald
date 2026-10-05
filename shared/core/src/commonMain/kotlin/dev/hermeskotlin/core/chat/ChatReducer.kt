@@ -262,8 +262,9 @@ internal fun unwrapCorrection(text: String): String = CORRECTION_FRAME.find(text
 /**
  * Stored rows → chat messages: tool results and system/hidden rows drop out, and consecutive
  * assistant rows (text and tool-call steps) merge into one reply listing every tool it used.
+ * [liveSessionId] is the session the page was read from; prompts stored under an older one can't be cut at.
  */
-fun historyToMessages(rows: List<SessionMessage>): List<ChatMessage> {
+fun historyToMessages(rows: List<SessionMessage>, liveSessionId: String? = null): List<ChatMessage> {
     val messages = mutableListOf<ChatMessage>()
     // Each call's result is a later `tool` row carrying its id.
     val results = rows.filter { it.role == "tool" && it.toolCallId != null }.associateBy { it.toolCallId }
@@ -281,8 +282,19 @@ fun historyToMessages(rows: List<SessionMessage>): List<ChatMessage> {
                 val raw = unwrapCorrection(row.text.trim())
                 val (refs, text) = skillInvocationText(raw)?.let { emptyList<ShownAttachment>() to it } ?: splitAttachmentRefs(raw, key)
                 val attachments = List(row.imageCount) { ShownAttachment("$key-i$it", "Image", AttachmentKind.Image) } + refs
+                // Only rows the live agent still holds can be cut at: not those a compression archived or left
+                // in the session before it.
+                val cuttable = row.active && !row.compacted && (liveSessionId == null || row.sessionId == null || row.sessionId == liveSessionId)
                 if (text.isNotEmpty() || attachments.isNotEmpty()) {
-                    messages += ChatMessage.User(key, text, attachments = attachments, timestamp = row.timestamp)
+                    messages += ChatMessage.User(
+                        key,
+                        text,
+                        attachments = attachments,
+                        rowId = row.id?.takeIf { cuttable },
+                        // Pictures and files went up once and can't be sent again with the text.
+                        sentText = raw.takeIf { attachments.isEmpty() && raw.isNotEmpty() },
+                        timestamp = row.timestamp,
+                    )
                 }
             }
             "assistant" -> {

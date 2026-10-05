@@ -63,6 +63,17 @@ interface ChatActions {
     /** Copies the chat up to message [key] into a new chat (`session.branch`) and opens it, if it [can change][canChangeChat]. */
     fun branchFrom(key: String)
 
+    /** Drops reply [key] and everything after it and sends the prompt it answered again, if the chat [can change][canChangeChat]. */
+    fun regenerate(key: String)
+
+    /**
+     * Puts prompt [key] in the composer to change it; the next send replaces it and everything after it.
+     * What was being typed waits and comes back when the edit is sent or [cancelled][cancelEdit].
+     */
+    fun startEdit(key: String)
+
+    fun cancelEdit()
+
     /** Looks in the transcript again for a prompt whose delivery is unknown. */
     fun checkDelivery(key: String)
 

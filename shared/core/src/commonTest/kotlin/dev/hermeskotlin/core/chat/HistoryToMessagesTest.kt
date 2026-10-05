@@ -38,7 +38,7 @@ class HistoryToMessagesTest {
 
         assertEquals(
             listOf(
-                ChatMessage.User("row-1", "list files"),
+                ChatMessage.User("row-1", "list files", rowId = 1, sentText = "list files"),
                 ChatMessage.Assistant("row-2", text = "There is one file.", tools = listOf(ToolActivity("c-terminal", "terminal", output = "a.txt"))),
             ),
             messages,
@@ -124,5 +124,38 @@ class HistoryToMessagesTest {
         assertEquals("summarise both", files.text)
         assertEquals(listOf("notes.txt", "my spec.pdf"), files.attachments.map { it.name })
         assertEquals(listOf(AttachmentKind.File, AttachmentKind.Pdf), files.attachments.map { it.kind })
+    }
+
+    @Test
+    fun onlyPromptsTheLiveAgentHoldsCanBeCutAt() {
+        val rows = Json.decodeFromString<List<SessionMessage>>(
+            """[
+            {"id":1,"session_id":"old","role":"user","content":"before the compression","active":0},
+            {"id":2,"session_id":"old","role":"assistant","content":"ok","active":0},
+            {"id":3,"session_id":"tip","role":"user","content":"summarized","active":0,"compacted":1},
+            {"id":4,"session_id":"tip","role":"user","content":"now","active":1,"compacted":0}
+            ]""",
+        )
+
+        val prompts = historyToMessages(rows, liveSessionId = "tip").filterIsInstance<ChatMessage.User>()
+
+        assertEquals(listOf(null, null, 4L), prompts.map { it.rowId })
+        // An ancestor's row stays out even when it reads as active.
+        val ancestor = SessionMessage(id = 9, role = "user", content = JsonPrimitive("hi"), sessionId = "old")
+        assertEquals(null, (historyToMessages(listOf(ancestor), liveSessionId = "tip").single() as ChatMessage.User).rowId)
+    }
+
+    @Test
+    fun whatWentOutIsKeptUnlessFilesRodeAlong() {
+        val messages = historyToMessages(
+            listOf(
+                SessionMessage(id = 1, role = "user", content = JsonPrimitive("plain")),
+                SessionMessage(id = 2, role = "user", content = JsonPrimitive("@file:notes.txt\n\nread it")),
+            ),
+        ).filterIsInstance<ChatMessage.User>()
+
+        assertEquals("plain", messages[0].sentText)
+        assertEquals(1L, messages[0].rowId)
+        assertEquals(null, messages[1].sentText)
     }
 }
