@@ -82,7 +82,12 @@ class AppViewModel(
                 .collect { link ->
                     links.consume(link)
                     val open = (_route.value as? Route.Chat)?.target?.storedSessionId
-                    if (open != link.storedSessionId) openSession(link.storedSessionId, link.title ?: "Chat")
+                    val bot = link.bot
+                    val stored = link.storedSessionId
+                    when {
+                        bot != null -> openBotLink(bot, link.title, stored)
+                        stored != null && open != stored -> openSession(stored, link.title ?: "Chat")
+                    }
                 }
         }
     }
@@ -125,6 +130,24 @@ class AppViewModel(
     fun openBotChat(bot: Bot, storedSessionId: String) {
         val gateway = signedInGateway() ?: return
         _route.value = Route.Chat(botChatTarget(gateway, storedSessionId, bot.name, bot.label))
+    }
+
+    /**
+     * A bot's chat asked for from outside (notification, shortcut, link). With a known [storedSessionId] it
+     * opens at once and is then checked against the gateway; without one it's looked up first, safely.
+     */
+    private fun openBotLink(bot: String, label: String?, storedSessionId: String?) {
+        val gateway = signedInGateway() ?: return
+        val name = label?.takeIf { it.isNotBlank() } ?: Bot(name = bot).label
+        if (storedSessionId != null) {
+            _route.value = Route.Chat(botChatTarget(gateway, storedSessionId, bot, name).also(::followBotChat))
+            return
+        }
+        viewModelScope.launch {
+            connection.state.first { it is ConnectionState.Connected }
+            val id = runCatching { botChats.open(Bot(name = bot)) }.getOrNull() ?: return@launch
+            _route.value = Route.Chat(botChatTarget(gateway, id, bot, name))
+        }
     }
 
     private fun botChatTarget(gateway: SavedGateway, storedSessionId: String, name: String, label: String) =

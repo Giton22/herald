@@ -67,6 +67,9 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
+import dev.hermeskotlin.core.bots.Bot
+import dev.hermeskotlin.core.bots.botLook
+import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.ui.bots.BotAvatar
 import dev.hermeskotlin.ui.bots.LocalBotFaces
 
@@ -103,60 +106,23 @@ internal fun TranscriptEventRow(event: TranscriptEvent) {
     }
 }
 
-/** Another bot's message: who sent it, with its face, and its words a tap away (the first lines show). */
+/** Another bot's message, as that bot speaking: its face beside a bubble in its colour. */
 @Composable
 private fun FromBotNote(event: TranscriptEvent.FromBot) {
     val faces = LocalBotFaces.current
     val bot = remember(faces, event.handle, event.sender) { faces.find(event.handle) ?: faces.find(event.sender) }
-    var open by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .background(Theme[colors][surface], shape)
-            .border(1.dp, Theme[colors][stroke], shape)
-            .clickable(onClickLabel = if (open) "Hide message" else "Show message") { open = !open }
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            if (bot != null) {
-                BotAvatar(bot, faces.picture(bot), size = 20.dp)
-            } else {
-                UnstyledIcon(Lucide.Bot, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(16.dp))
-            }
-            Text(
-                "Message from ${bot?.label ?: event.sender}",
-                style = Theme[typography][bodySmall].copy(fontWeight = FontWeight.SemiBold),
-                color = Theme[colors][text],
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            Chevron(open)
-        }
-        if (open) {
-            if (event.body.isNotBlank()) MarkdownText(event.body)
-        } else if (event.body.isNotBlank()) {
-            Text(
-                event.body.replace(Regex("\\s+"), " "),
-                style = Theme[typography][bodySmall],
-                color = Theme[colors][textSecondary],
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-    }
+    BotSays(bot, fallbackName = event.sender, note = null, words = event.body)
 }
 
 /** How a message to another bot ended, in words: their reply, that it's still on its way, or why it failed. */
 @Composable
 private fun DeliveryLine(event: TranscriptEvent.Delivery) {
     val faces = LocalBotFaces.current
-    val who = event.target?.let { target -> faces.find(target)?.label ?: "@$target" } ?: "the other bot"
+    val bot = remember(faces, event.target) { faces.find(event.target) }
+    val who = bot?.label ?: event.target?.let { "@$it" } ?: "the other bot"
     when (val outcome = event.outcome) {
-        is DeliveryOutcome.Replied -> FoldedLine(Lucide.MessageCircle, "Reply from $who", body = { MarkdownText(outcome.text) })
+        // Their answer is them speaking, like any message of theirs.
+        is DeliveryOutcome.Replied -> BotSays(bot, fallbackName = who, note = "replied", words = outcome.text)
         DeliveryOutcome.NoReply -> FoldedLine(Lucide.MessageCircleOff, "$who read it and chose not to reply", body = null)
         is DeliveryOutcome.Waiting -> FoldedLine(
             Lucide.Hourglass,
@@ -173,52 +139,137 @@ private fun DeliveryLine(event: TranscriptEvent.Delivery) {
     }
 }
 
-/** A reply that answered another bot's message: folded under who it went to, unless opened. */
+/**
+ * This bot's answer to another bot's message, as a note addressed to it: "To X" with X's face and the
+ * first lines; the whole reply, with its tools and reasoning, a tap away.
+ */
 @Composable
-internal fun RepliedToFold(to: String, content: @Composable () -> Unit) {
-    var open by remember { mutableStateOf(false) }
+internal fun RepliedToFold(to: String, preview: String, content: @Composable () -> Unit) {
     val faces = LocalBotFaces.current
-    val name = remember(faces, to) { faces.find(to)?.label ?: to }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(
-            Modifier
-                .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
-                .clickable(onClickLabel = if (open) "Hide reply" else "Show reply") { open = !open }
-                .heightIn(min = MinTouchTarget)
-                .padding(horizontal = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            UnstyledIcon(Lucide.CornerDownRight, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
-            Text("Replied to $name", style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
-            Chevron(open)
-        }
-        AnimatedVisibility(open) { content() }
-    }
+    val bot = remember(faces, to) { faces.find(to) }
+    ToBot(bot, fallbackName = to, note = "reply", words = preview, sending = false, failed = false, full = content)
 }
 
-/** This bot's `message_agent` call: to whom, and whether it went; the message itself a tap away. */
+/** This bot's `message_agent` call, as a note addressed to the other bot: "To X" and the message. */
 @Composable
 internal fun MessagedLine(tool: ToolActivity) {
     val target = remember(tool.input) { tool.input?.let { messageTarget(JsonPrimitive(it)) } }
     val message = remember(tool.input) { tool.input?.let(::messageText) }
-    val who = target?.let { "@$it" } ?: "another bot"
-    val (title, tint) = when {
-        tool.running -> "Messaging $who…" to Theme[colors][textTertiary]
-        tool.failed -> "Couldn't message $who" to Theme[colors][danger]
-        else -> "Messaged $who" to Theme[colors][textTertiary]
-    }
-    FoldedLine(
-        icon = Lucide.Send,
-        title = title,
-        tint = tint,
-        body = when {
-            tool.failed -> tool.output?.let { { Monospace(it) } }
-            message != null -> { { MarkdownText(message) } }
-            else -> null
+    val faces = LocalBotFaces.current
+    val bot = remember(faces, target) { faces.find(target) }
+    ToBot(
+        bot,
+        fallbackName = target?.let { "@$it" } ?: "another bot",
+        note = when {
+            tool.running -> "sending…"
+            tool.failed -> "not sent"
+            else -> "message"
         },
+        words = if (tool.failed) tool.output.orEmpty() else message.orEmpty(),
+        sending = tool.running,
+        failed = tool.failed,
     )
 }
+
+/** [bot] speaking: its face beside a bubble tinted in its colour, its name over the first lines. */
+@Composable
+private fun BotSays(bot: Bot?, fallbackName: String, note: String?, words: String) {
+    val faces = LocalBotFaces.current
+    val tint = bot?.let { remember(it.name, it.uiMeta) { Color(0xFF000000 or botLook(it).color.toLong()) } } ?: Theme[colors][textSecondary]
+    var open by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(topStart = 4.dp, topEnd = 16.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
+    Row(Modifier.fillMaxWidth().padding(end = 32.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (bot != null) {
+            BotAvatar(bot, faces.picture(bot), size = 28.dp)
+        } else {
+            Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+                UnstyledIcon(Lucide.Bot, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
+            }
+        }
+        Column(
+            Modifier
+                .weight(1f, fill = false)
+                .clip(shape)
+                .background(tint.copy(alpha = 0.12f), shape)
+                .border(1.dp, tint.copy(alpha = 0.28f), shape)
+                .clickable(enabled = words.isNotBlank(), onClickLabel = if (open) "Show less" else "Show all") { open = !open }
+                .padding(horizontal = 12.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    bot?.label ?: fallbackName,
+                    style = Theme[typography][bodySmall].copy(fontWeight = FontWeight.SemiBold),
+                    color = tint,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                note?.let { Text(it, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1) }
+            }
+            when {
+                words.isBlank() -> Unit
+                open -> MarkdownText(words)
+                else -> Text(words.toPreview(), style = Theme[typography][bodySmall], color = Theme[colors][text], maxLines = 4, overflow = TextOverflow.Ellipsis)
+            }
+        }
+    }
+}
+
+/**
+ * Something this bot sent another one: a note set to the right, addressed "To X" with X's face. Shows the
+ * first lines; a tap shows [full] when given (the whole reply), else the whole text.
+ */
+@Composable
+private fun ToBot(
+    bot: Bot?,
+    fallbackName: String,
+    note: String,
+    words: String,
+    sending: Boolean,
+    failed: Boolean,
+    full: (@Composable () -> Unit)? = null,
+) {
+    val faces = LocalBotFaces.current
+    var open by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(topStart = 16.dp, topEnd = 4.dp, bottomEnd = 16.dp, bottomStart = 16.dp)
+    val edge = if (failed) Theme[colors][danger] else Theme[colors][stroke]
+    Column(Modifier.fillMaxWidth().padding(start = 40.dp), verticalArrangement = Arrangement.spacedBy(8.dp), horizontalAlignment = Alignment.End) {
+        Column(
+            Modifier
+                .clip(shape)
+                .background(Theme[colors][surface], shape)
+                .border(1.dp, edge, shape)
+                .clickable(enabled = words.isNotBlank() || full != null, onClickLabel = if (open) "Show less" else "Show all") { open = !open }
+                .padding(horizontal = 12.dp, vertical = 9.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                UnstyledIcon(Lucide.Send, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(12.dp))
+                Text("To", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                if (bot != null) BotAvatar(bot, faces.picture(bot), size = 16.dp)
+                Text(
+                    bot?.label ?: fallbackName,
+                    style = Theme[typography][bodySmall].copy(fontWeight = FontWeight.SemiBold),
+                    color = Theme[colors][text],
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Text(note, style = Theme[typography][caption], color = if (failed) Theme[colors][danger] else Theme[colors][textTertiary], maxLines = 1)
+                if (sending) Spinner(Modifier.size(12.dp))
+            }
+            when {
+                open && full != null -> Unit
+                open -> if (failed) Monospace(words) else MarkdownText(words)
+                words.isNotBlank() -> Text(words.toPreview(), style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 3, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        if (open && full != null) Box(Modifier.fillMaxWidth()) { full() }
+    }
+}
+
+private fun String.toPreview(): String = replace(Regex("""[*_`#>]+"""), "").replace(Regex("\\s+"), " ").trim()
 
 private fun messageText(input: String): String? = runCatching {
     ((HermesJson.parseToJsonElement(input) as? JsonObject)?.get("message") as? JsonPrimitive)?.contentOrNull

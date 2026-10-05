@@ -873,7 +873,7 @@ private fun Messages(
                         }
                         // An answer to another bot's message folds under it; never while it's still being written.
                         val to = message.repliedTo
-                        if (to != null && !message.streaming) RepliedToFold(to, reply) else reply()
+                        if (to != null && !message.streaming) RepliedToFold(to, message.text, reply) else reply()
                     }
                     is ChatMessage.Event -> TranscriptEventRow(message.event)
                     is ChatMessage.Command -> CommandOutput(message)
