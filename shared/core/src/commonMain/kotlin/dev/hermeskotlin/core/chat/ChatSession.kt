@@ -1285,5 +1285,6 @@ private val ChatMessage.isLocalOnly: Boolean
         // A queued prompt isn't in the transcript until its turn starts.
         is ChatMessage.User -> pending || queued || check != null
         is ChatMessage.Notice -> !stored
+        is ChatMessage.Event -> false
         is ChatMessage.Command -> true
     }

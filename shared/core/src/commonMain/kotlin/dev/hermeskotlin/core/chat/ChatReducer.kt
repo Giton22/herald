@@ -265,6 +265,14 @@ fun historyToMessages(rows: List<SessionMessage>): List<ChatMessage> {
     val messages = mutableListOf<ChatMessage>()
     // Each call's result is a later `tool` row carrying its id.
     val results = rows.filter { it.role == "tool" && it.toolCallId != null }.associateBy { it.toolCallId }
+    // Messages this bot sent others (`message_agent`): their delivery process → to whom, to name the outcome.
+    val deliveries = rows.asSequence().filter { it.role == "assistant" }.flatMap { it.storedToolCalls }
+        .filter { it.name == MESSAGE_AGENT_TOOL }
+        .mapNotNull { call -> call.id?.let(results::get)?.text?.let(TranscriptRows::deliveryAck) }
+        .toMap()
+    // Who this bot has messaged since the person last spoke: their answers aren't replies to fold away.
+    val messagedSinceUser = mutableSetOf<String>()
+    var replyingTo: String? = null
     rows.forEachIndexed { index, row ->
         if (row.isHidden) return@forEachIndexed
         val key = row.id?.let { "row-$it" } ?: "h$index"
@@ -276,13 +284,33 @@ fun historyToMessages(rows: List<SessionMessage>): List<ChatMessage> {
                     messages += ChatMessage.Notice(key, report.line, stored = true)
                     return@forEachIndexed
                 }
+                if (TranscriptRows.isNoise(row.text.trim(), row.displayKind)) return@forEachIndexed
+                TranscriptRows.classify(row.text, row.displayKind, deliveries)?.let { events ->
+                    events.forEachIndexed { i, event ->
+                        messages += ChatMessage.Event(if (events.size == 1) key else "$key-$i", event)
+                        replyingTo = (event as? TranscriptEvent.FromBot)?.takeUnless { from ->
+                            from.handle?.lowercase() in messagedSinceUser || from.sender.lowercase() in messagedSinceUser
+                        }?.sender
+                    }
+                    return@forEachIndexed
+                }
+                messagedSinceUser.clear()
+                replyingTo = null
                 val raw = unwrapCorrection(row.text.trim())
                 val (refs, text) = skillInvocationText(raw)?.let { emptyList<ShownAttachment>() to it } ?: splitAttachmentRefs(raw, key)
                 val attachments = List(row.imageCount) { ShownAttachment("$key-i$it", "Image", AttachmentKind.Image) } + refs
                 if (text.isNotEmpty() || attachments.isNotEmpty()) messages += ChatMessage.User(key, text, attachments = attachments)
             }
             "assistant" -> {
-                val text = row.text.trim()
+                if (row.displayKind == "failed_turn") {
+                    messages += ChatMessage.Event(key, TranscriptEvent.FailedTurn(row.text.trim()))
+                    return@forEachIndexed
+                }
+                // A bot that chose to say nothing shows nothing.
+                val text = row.text.trim().takeUnless(TranscriptRows::isSilence).orEmpty()
+                row.storedToolCalls.filter { it.name == MESSAGE_AGENT_TOOL }.forEach { call ->
+                    messageTarget(call.arguments)?.let { messagedSinceUser += it.lowercase() }
+                }
                 val tools = row.storedToolCalls.mapIndexed { i, call ->
                     val result = call.id?.let(results::get)?.content
                     ToolActivity(
@@ -304,10 +332,25 @@ fun historyToMessages(rows: List<SessionMessage>): List<ChatMessage> {
                         tools = previous.tools + tools,
                     )
                 } else if (text.isNotEmpty() || tools.isNotEmpty()) {
-                    messages += ChatMessage.Assistant(key, text = text, reasoning = reasoning, tools = tools)
+                    messages += ChatMessage.Assistant(key, text = text, reasoning = reasoning, tools = tools, repliedTo = replyingTo)
                 }
             }
         }
     }
     return messages
+}
+
+/** Bot Mode's tool for messaging another bot. */
+const val MESSAGE_AGENT_TOOL = "message_agent"
+
+/** The bot a `message_agent` call is addressed to (`target`, with or without its `@`). */
+fun messageTarget(arguments: kotlinx.serialization.json.JsonElement?): String? {
+    val obj = when (arguments) {
+        is kotlinx.serialization.json.JsonObject -> arguments
+        is kotlinx.serialization.json.JsonPrimitive -> arguments.contentOrNull?.let {
+            runCatching { dev.hermeskotlin.core.network.HermesJson.parseToJsonElement(it) as? kotlinx.serialization.json.JsonObject }.getOrNull()
+        }
+        else -> null
+    } ?: return null
+    return (obj["target"] as? kotlinx.serialization.json.JsonPrimitive)?.contentOrNull?.trim()?.removePrefix("@")?.substringBefore('@')?.takeIf { it.isNotEmpty() }
 }
