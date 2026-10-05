@@ -50,7 +50,12 @@ val CronJob.problem: String? get() {
         // The run worked, but its result never reached anyone: not a run to trust.
         "delivery_failed" -> "The last run's result wasn't delivered"
         "blocked_config" -> "Couldn't run: something isn't set up"
-        else -> return if (state == "error") reason ?: "Stopped after an error" else null
+        else -> return when {
+            state == "error" -> reason ?: "Stopped after an error"
+            // An older store, or a run that died before writing its status, leaves only the error.
+            lastStatus == null -> lastError?.takeIf { it.isNotBlank() }?.trim()?.lineSequence()?.firstOrNull()?.take(160)
+            else -> null
+        }
     }
     return listOfNotNull(headline, reason?.lineSequence()?.firstOrNull()?.take(160)).joinToString(": ")
 }
