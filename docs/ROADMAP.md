@@ -44,7 +44,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] The app mark (`HeraldMark`), also the launcher, themed and notification icons
 - [ ] Menu, toast, chat bubble, tool card, approval card
 - [x] Theme picker (system / light / dark) and pure black
-- [ ] Accent color presets
+- [x] Accent color presets (Settings → Appearance → Accent): blue, violet, green, orange, pink and teal, each tuned for light, dark and pure black
 
 ---
 
