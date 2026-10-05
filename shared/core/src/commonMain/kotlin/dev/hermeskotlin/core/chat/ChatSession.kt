@@ -1047,7 +1047,9 @@ class ChatSession(
             if (!rowExists) return@collectLatest // a new chat attaches on first send
             // Load what couldn't be read before the link came up; after a drop, attaching catches up.
             if (!attachedBefore && _state.value.historyError != null) loadHistory()
-            if (runCatchingAttach(connectionState.client, reconnected = attachedBefore)) attachedBefore = true
+            // A chat created on this link was live too, though it never resumed: it catches up the same way.
+            val reconnected = attachedBefore || streamMutex.withLock { seqRuntime != null }
+            if (runCatchingAttach(connectionState.client, reconnected = reconnected)) attachedBefore = true
         }
     }
 
@@ -1117,7 +1119,11 @@ class ChatSession(
             } else {
                 lastSeq = null
                 val streamed = inflightText
-                if (streamed != null && _state.value.running) _state.update { it.withInflight(streamed) }
+                if (streamed != null && _state.value.running) {
+                    _state.update { it.withInflight(streamed) }
+                } else if (!_state.value.running) {
+                    _state.update { it.withoutStaleReply() }
+                }
             }
             val waiting = held.orEmpty()
             held = null
@@ -1333,8 +1339,14 @@ class ChatSession(
             state.copy(
                 attachment = Attachment.Attached(runtimeId),
                 running = running,
-                // Picking up replays the turn itself; otherwise the reply shows as far as the gateway has it.
-                messages = if (running && !resumable) state.withInflight(streamed).messages else state.messages,
+                // Picking up replays the turn itself; otherwise the reply shows as far as the gateway has it,
+                // or, when the turn ended while away, as the transcript just read has it.
+                messages = when {
+                    resumable -> state.messages
+                    running -> state.withInflight(streamed).messages
+                    reconnected -> state.withoutStaleReply().messages
+                    else -> state.messages
+                },
                 inputRequests = open.plusNew(claimUnclaimed(runtimeId)),
                 keySeq = state.keySeq + 1,
             ).withInfo(result["info"] as? JsonObject).withTodos(TodoList.parse(result["todo_state"] as? JsonObject))
@@ -1467,6 +1479,22 @@ internal fun ChatState.withInflight(streamed: String): ChatState {
     val reply = messages[open] as ChatMessage.Assistant
     if (streamed.length <= reply.text.length || !streamed.startsWith(reply.text)) return this
     return copy(messages = messages.toMutableList().apply { set(open, reply.copy(text = streamed)) })
+}
+
+/**
+ * The reply still marked streaming from a turn that ended while the link was down and couldn't be replayed. The
+ * transcript just read holds the turn, so the live copy goes; when it couldn't be read, the copy stays, closed.
+ */
+internal fun ChatState.withoutStaleReply(): ChatState {
+    if (messages.none { it is ChatMessage.Assistant && it.streaming }) return this
+    return copy(
+        messages = if (historyError == null) {
+            messages.filterNot { it is ChatMessage.Assistant && it.streaming }
+        } else {
+            messages.map { if (it is ChatMessage.Assistant && it.streaming) it.copy(streaming = false) else it }
+        },
+        correctedReplyKey = null,
+    )
 }
 
 private fun List<ChatMessage>.updateUser(key: String, change: (ChatMessage.User) -> ChatMessage.User): List<ChatMessage> =

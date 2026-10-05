@@ -250,6 +250,45 @@ class ChatSessionResumeTest {
     }
 
     @Test
+    fun aTurnThatEndedOnAReapedRuntimeLeavesNoStaleLiveReply() = runTest {
+        // The gateway let the runtime go while we were away: a new one, nothing to replay, the turn in the transcript.
+        transcript = rowsUpTo(4)
+        val (chat, transports) = droppedMidTurn(backgroundScope, resume = """{"session_id":"rt2","running":false}""")
+
+        val back = chat.state.first { it.runtimeSessionId == "rt2" }
+
+        assertEquals(listOf("row-1", "row-2", "row-3", "row-4"), back.messages.map { it.key })
+        assertFalse(back.messages.any { it is ChatMessage.Assistant && it.streaming })
+        assertFalse(transports.last().sent.value.any { it.isCall("session.events.since") })
+    }
+
+    @Test
+    fun aChatCreatedHereCatchesUpAfterADropToo() = runTest {
+        answer = { _, method, _ ->
+            when (method) {
+                "session.create" -> """{"session_id":"rt1","stored_session_id":"stored-1","info":{}}"""
+                "prompt.submit" -> """{"status":"streaming"}"""
+                "session.resume" -> """{"session_id":"rt1","running":true}"""
+                "session.events.since" -> since(replayed(3, "lo"), latest = 3)
+                else -> "{}"
+            }
+        }
+        val (connection, transports) = connect(backgroundScope)
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        assertTrue(chat.send("hi"))
+        val first = transports.last()
+        first.push(event("message.start", 1))
+        first.push(delta(2, "Hel"))
+        chat.state.first { it.reply()?.text == "Hel" }
+        first.serverClose(1006)
+
+        assertEquals("Hello", chat.state.first { it.reply()?.text == "Hello" }.reply()?.text)
+        assertEquals("2", transports.last().sent.value.first { it.isCall("session.events.since") }.param("last_seen"))
+    }
+
+    @Test
     fun aGapInTheLiveStreamIsFilledBeforeWhatFollowsIt() = runTest {
         answer = { _, method, _ ->
             when (method) {
