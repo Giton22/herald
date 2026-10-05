@@ -33,8 +33,14 @@ process, so a person allowed to chat with a bot can't register their own phone. 
 `info`, `unregister <device_id>` and `test <device_id>` (sends a `ping`). Each answers with one JSON object.
 
 If the gateway lacks the plugin, Herald installs it with `plugins.manage {action: "install", identifier:
-"https://github.com/Giton22/hermes-herald-push", enable: true}`. That is the same call Desktop's Plugins hub
-makes, and the plugin is live without a restart.
+"https://github.com/Giton22/hermes-herald-push", ref: <commit>, enable: true}`. That is the same call
+Desktop's Plugins hub makes, and the plugin is live without a restart. `ref` pins the exact commit Herald was
+built against, so a later change to the repository never reaches a gateway unreviewed.
+
+One phone identity serves one gateway. Moving to another gateway, or turning the feature off, retires the
+identity: the keys and topics are dropped, so the old gateway's pushes land on a topic nobody reads, and that
+gateway is sent `unregister` as soon as it can be reached. The phone only accepts envelopes signed by the
+gateway it is signed in to now.
 
 The phone sends:
 

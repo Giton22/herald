@@ -14,6 +14,7 @@ import dev.hermeskotlin.core.push.PushRegistration
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.serialization.builtins.MapSerializer
+import kotlinx.serialization.builtins.SetSerializer
 import kotlinx.serialization.builtins.serializer
 import java.security.KeyPair
 import java.security.KeyStore
@@ -50,8 +51,6 @@ class PushStore(context: Context) : PushKeys {
         )
     }
 
-    override fun pinned(gatewayUrl: String): PushGateway? = gateways()[gatewayUrl]
-
     /** This phone's identity, made on first use. */
     data class Device(
         val id: String,
@@ -68,7 +67,10 @@ class PushStore(context: Context) : PushKeys {
         if (id != null) {
             runCatching { load(id) }.getOrNull()?.let { return it }
         }
-        // First use, or keys that can't be unwrapped any more (keystore reset): start a fresh identity.
+        // First use, or keys that can't be unwrapped any more (keystore reset): start a fresh identity, and
+        // have the gateway forget the unusable one.
+        val oldGateway = pinnedGatewayUrl()
+        if (id != null && oldGateway != null) saveRetired(retiredAll() + (oldGateway to (retired(oldGateway) + id)))
         val fresh = Device(
             id = UUID.randomUUID().toString(),
             enc = PushCrypto.generateKeyPair(),
@@ -90,50 +92,73 @@ class PushStore(context: Context) : PushKeys {
             remove(KEY_SINCE)
             remove(KEY_SEEN)
         }
+        if (oldGateway != null) changes.update { it + 1 }
         return fresh
     }
 
-    /** Forgets this identity: new keys and topics next time, and every gateway must register it again. */
+    /** Forgets this identity: new keys and topics next time. Identities still to unregister are kept. */
     @Synchronized
     fun reset() {
-        prefs.edit { clear() }
-        changes.update { it + 1 }
-    }
-
-    /** The ntfy server pushes go through. Changing it starts a new identity, which every gateway must register again. */
-    @Synchronized
-    fun setServer(url: String) {
-        require(NtfyClient.validServer(url)) { "https only" }
+        val retired = prefs.getString(KEY_RETIRED, null)
+        val server = prefs.getString(KEY_SERVER, null)
         prefs.edit {
             clear()
-            putString(KEY_SERVER, url.trim().trimEnd('/'))
+            retired?.let { putString(KEY_RETIRED, it) }
+            server?.let { putString(KEY_SERVER, it) }
         }
         changes.update { it + 1 }
     }
 
-    /** Every gateway this phone receives pushes from: the push topic carries all of them. */
-    fun gateways(): Map<String, PushGateway> = prefs.getString(KEY_GATEWAYS, null)?.let {
+    /** The ntfy server pushes go through. Changing it starts a new identity, which the gateway must register again. */
+    @Synchronized
+    fun setServer(url: String) {
+        require(NtfyClient.validServer(url)) { "https only" }
+        pinnedGatewayUrl()?.let(::retire)
+        prefs.edit { putString(KEY_SERVER, url.trim().trimEnd('/')) }
+    }
+
+    /** The gateway this identity is registered with and its keys, or null. One identity serves one gateway. */
+    fun gateway(): Pair<String, PushGateway>? = prefs.getString(KEY_GATEWAYS, null)?.let {
         runCatching { HermesJson.decodeFromString(MapSerializer(String.serializer(), PushGateway.serializer()), it) }.getOrNull()
-    }.orEmpty()
+    }?.entries?.singleOrNull()?.toPair()
+
+    override fun pinned(gatewayUrl: String): PushGateway? = gateway()?.takeIf { it.first == gatewayUrl }?.second
+
+    override fun pinnedGatewayUrl(): String? = gateway()?.first
 
     @Synchronized
     override fun pin(gatewayUrl: String, keys: PushGateway) {
         // Decoding refuses a malformed or off-curve key before it is trusted.
         PushCrypto.decodePublic(keys.sigPub)
         PushCrypto.decodePublic(keys.encPub)
-        save(gateways() + (gatewayUrl to keys))
-    }
-
-    @Synchronized
-    override fun unpin(gatewayUrl: String) = save(gateways() - gatewayUrl)
-
-    private fun save(map: Map<String, PushGateway>) {
-        val before = prefs.getString(KEY_GATEWAYS, null)
-        val after = HermesJson.encodeToString(MapSerializer(String.serializer(), PushGateway.serializer()), map)
-        if (before == after) return
+        val after = HermesJson.encodeToString(MapSerializer(String.serializer(), PushGateway.serializer()), mapOf(gatewayUrl to keys))
+        if (prefs.getString(KEY_GATEWAYS, null) == after) return
         prefs.edit { putString(KEY_GATEWAYS, after) }
         changes.update { it + 1 }
     }
+
+    @Synchronized
+    override fun retire(gatewayUrl: String) {
+        val id = prefs.getString(KEY_ID, null)
+        if (id != null) saveRetired(retiredAll() + (gatewayUrl to (retired(gatewayUrl) + id)))
+        reset()
+    }
+
+    override fun retired(gatewayUrl: String): Set<String> = retiredAll()[gatewayUrl].orEmpty()
+
+    @Synchronized
+    override fun forgetRetired(gatewayUrl: String, deviceId: String) {
+        val left = retired(gatewayUrl) - deviceId
+        saveRetired(if (left.isEmpty()) retiredAll() - gatewayUrl else retiredAll() + (gatewayUrl to left))
+    }
+
+    private val retiredSerializer = MapSerializer(String.serializer(), SetSerializer(String.serializer()))
+
+    private fun retiredAll(): Map<String, Set<String>> = prefs.getString(KEY_RETIRED, null)?.let {
+        runCatching { HermesJson.decodeFromString(retiredSerializer, it) }.getOrNull()
+    }.orEmpty()
+
+    private fun saveRetired(map: Map<String, Set<String>>) = prefs.edit { putString(KEY_RETIRED, HermesJson.encodeToString(retiredSerializer, map)) }
 
     /** The last ntfy message id read, so a reconnect picks up what came meanwhile. */
     var since: String?
@@ -199,5 +224,6 @@ class PushStore(context: Context) : PushKeys {
         const val KEY_GATEWAYS = "gateways"
         const val KEY_SINCE = "since"
         const val KEY_SEEN = "seen"
+        const val KEY_RETIRED = "retired"
     }
 }

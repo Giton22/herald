@@ -17,6 +17,6 @@ val notifyModule = module {
     single { BackgroundConnection(get(), get(), get(), get()) }
     single { BotNotifier(androidContext(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { PushStore(androidContext()) } bind PushKeys::class
-    single { PushListener(get(), get(), get(), get(), get(), get(), get()) }
+    single { PushListener(get(), get(), get(), get(), get(), get(), get(), get()) }
     single { PushSetup(get(), get(), get(), get(), get(), get(), deviceName = { Build.MODEL ?: "Android phone" }) }
 }

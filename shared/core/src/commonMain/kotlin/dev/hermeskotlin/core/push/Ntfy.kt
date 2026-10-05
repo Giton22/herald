@@ -54,8 +54,9 @@ class NtfyClient(private val client: HttpClient) {
             check(response.status.isSuccess()) { "ntfy answered ${response.status.value}" }
             val channel = response.bodyAsChannel()
             while (true) {
-                val line = channel.readUTF8Line() ?: break
-                if (line.isBlank() || line.length > MAX_LINE) continue
+                // Bounded: the server isn't trusted, and an endless line must not fill memory.
+                val line = channel.readUTF8Line(MAX_LINE) ?: break
+                if (line.isBlank()) continue
                 val event = runCatching { HermesJson.decodeFromString(NtfyEvent.serializer(), line) }.getOrNull() ?: continue
                 if (event.event == "message" && event.topic == topic) emit(event)
             }

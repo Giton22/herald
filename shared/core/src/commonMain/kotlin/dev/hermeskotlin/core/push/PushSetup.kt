@@ -21,6 +21,10 @@ import kotlinx.coroutines.sync.withLock
  * "Notifications anywhere": keeps this phone registered with the gateway's herald-push plugin while the
  * setting is on. Registration only ever happens over the signed-in dashboard socket; each time the socket
  * comes up it is repeated (cheap and idempotent), so the gateway's copy and the pinned keys stay current.
+ *
+ * One identity belongs to one gateway. Moving to another gateway, or turning this off, retires it: new
+ * keys and topics, so the old gateway's pushes land where nobody listens, and it is told to forget the
+ * phone as soon as it can be reached.
  */
 class PushSetup(
     private val api: PushApi,
@@ -40,6 +44,7 @@ class PushSetup(
             combine(connection.state, settings.settings) { state, prefs -> (state is ConnectionState.Connected) to (prefs?.pushAnywhere == true) }
                 .distinctUntilChanged()
                 .collectLatest { (connected, on) ->
+                    if (connected) runCatching { cleanUp() }
                     when {
                         !on -> _status.value = PushStatus(State.Off)
                         connected -> runCatching { refresh(install = false) }
@@ -58,18 +63,32 @@ class PushSetup(
     /** Turns it off here and on the gateway, which forgets this phone and its topics. */
     suspend fun disable() = lock.withLock {
         settings.update { it.copy(pushAnywhere = false) }
-        val url = gateways.current()?.gatewayUrl?.value
-        runCatching { api.unregister(keys.deviceId) }
-        url?.let(keys::unpin)
         _status.value = PushStatus(State.Off)
+        val url = keys.pinnedGatewayUrl() ?: return@withLock
+        // Retired first: if the gateway can't be told now, it's told on the next connection.
+        keys.retire(url)
+        runCatching { cleanUp() }
     }
 
     suspend fun test(): Boolean = runCatching { api.test(keys.deviceId) }.getOrDefault(false)
 
+    /** Tells the connected gateway to forget identities this phone gave up while it was out of reach. */
+    private suspend fun cleanUp() {
+        val url = gateways.current()?.gatewayUrl?.value ?: return
+        if (connection.state.value !is ConnectionState.Connected) return
+        for (id in keys.retired(url)) {
+            if (runCatching { api.unregister(id) }.isSuccess) keys.forgetRetired(url, id)
+        }
+    }
+
     private suspend fun refresh(install: Boolean) = lock.withLock {
+        // Turned off while this waited for the lock: don't register again.
+        if (settings.settings.value?.pushAnywhere != true) return@withLock
         val url = gateways.current()?.gatewayUrl?.value ?: return@withLock
         _status.value = PushStatus(State.Working)
         try {
+            // An identity registered with another gateway is retired, never shared.
+            keys.pinnedGatewayUrl()?.takeIf { it != url }?.let(keys::retire)
             var info = api.info()
             if (info == null && install) {
                 _status.value = PushStatus(State.Working, "Installing on the gateway…")

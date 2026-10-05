@@ -8,7 +8,9 @@ import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.bots.BotMeta
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
+import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.network.HermesJson
+import dev.hermeskotlin.core.push.PushGateway
 import dev.hermeskotlin.core.push.NtfyClient
 import dev.hermeskotlin.core.push.NtfyEvent
 import dev.hermeskotlin.core.push.PushCrypto
@@ -44,6 +46,7 @@ class PushListener(
     private val visibility: AppVisibility,
     private val notifications: ChatNotifications,
     private val bots: BotNotifier,
+    private val gateways: GatewayRepository,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val guard = PushGuard(PushMessage.MAX_AGE_G2P_SECONDS) { System.currentTimeMillis() / 1000 }
@@ -51,7 +54,7 @@ class PushListener(
     fun start() {
         scope.launch {
             withContext(Dispatchers.IO) { guard.remember(store.seen) }
-            combine(settings.settings, store.changes) { prefs, _ -> prefs?.pushAnywhere == true && store.gateways().isNotEmpty() }
+            combine(settings.settings, store.changes) { prefs, _ -> prefs?.pushAnywhere == true && store.gateway() != null }
                 .distinctUntilChanged()
                 .collectLatest { listen -> if (listen) listen() }
         }
@@ -76,7 +79,9 @@ class PushListener(
     }
 
     private suspend fun receive(device: PushStore.Device, event: NtfyEvent) {
-        val message = withContext(Dispatchers.Default) { open(device, event) }
+        // Only the gateway Herald is signed in to may speak: not one it left, not one it never pinned.
+        val signer = gateways.current()?.gatewayUrl?.value?.let(store::pinned)
+        val message = signer?.let { withContext(Dispatchers.Default) { open(device, event, it) } }
         store.since = event.id
         if (message == null || !guard.accept(message)) return
         store.seen = guard.snapshot()
@@ -86,18 +91,15 @@ class PushListener(
         }
     }
 
-    /** The message inside [event], or null for anything that isn't a valid envelope from a pinned gateway. */
-    private fun open(device: PushStore.Device, event: NtfyEvent): PushMessage? {
+    /** The message inside [event], or null for anything that isn't a valid envelope signed by [gateway]. */
+    private fun open(device: PushStore.Device, event: NtfyEvent, gateway: PushGateway): PushMessage? {
         val body = event.message?.takeIf { it.length <= NtfyClient.MAX_BODY } ?: return null
         val envelope = runCatching { PushCrypto.decodeEnvelope(body) }.getOrNull() ?: return null
-        for (gateway in store.gateways().values) {
-            val signer = runCatching { PushCrypto.decodePublic(gateway.sigPub) }.getOrNull() ?: continue
-            val plain = runCatching {
-                PushCrypto.open(envelope, device.pushTopic, PushDirection.GatewayToPhone, device.enc.private, signer)
-            }.getOrNull() ?: continue
-            return runCatching { HermesJson.decodeFromString(PushMessage.serializer(), plain.decodeToString()) }.getOrNull()
-        }
-        return null
+        val signer = runCatching { PushCrypto.decodePublic(gateway.sigPub) }.getOrNull() ?: return null
+        val plain = runCatching {
+            PushCrypto.open(envelope, device.pushTopic, PushDirection.GatewayToPhone, device.enc.private, signer)
+        }.getOrNull() ?: return null
+        return runCatching { HermesJson.decodeFromString(PushMessage.serializer(), plain.decodeToString()) }.getOrNull()
     }
 
     private suspend fun showBotMessage(message: PushMessage) {
@@ -110,7 +112,7 @@ class PushListener(
         if (visibility.visible.value && connection.state.value is ConnectionState.Connected) return
         val bot = bots.knownBot(name) ?: fallbackBot(name, message.label)
         if (bot.meta.hidden) return
-        notifications.postBotMessage(bot, bots.picture(bot), session, text)
+        notifications.postBotMessage(bot, bots.picture(bot), session, text, viaPush = true)
     }
 
     private fun fallbackBot(name: String, label: String?): Bot {

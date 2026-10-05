@@ -49,6 +49,8 @@ class PushApi(private val connection: GatewayConnection) {
             buildJsonObject {
                 put("action", "install")
                 put("identifier", PLUGIN_REPO)
+                // A reviewed commit, never whatever the branch holds today: this code runs on the gateway.
+                put("ref", PLUGIN_REF)
                 put("enable", true)
             },
             timeoutMs = INSTALL_TIMEOUT_MS,
@@ -81,6 +83,9 @@ class PushApi(private val connection: GatewayConnection) {
     companion object {
         const val PLUGIN_COMMAND = "herald-push"
         const val PLUGIN_REPO = "https://github.com/Giton22/hermes-herald-push"
+
+        /** The plugin commit this Herald was built and reviewed against (0.1.0). */
+        const val PLUGIN_REF = "a6e367981ef46b3c6d1dbed75644d677abd27011"
         private const val NOT_A_COMMAND = 4018
         private const val INSTALL_TIMEOUT_MS = 180_000L
     }
@@ -95,8 +100,22 @@ interface PushKeys {
 
     /** The gateway keys trusted for [gatewayUrl], pinned when it answered a registration. */
     fun pinned(gatewayUrl: String): PushGateway?
+
+    /** Trusts [keys] for [gatewayUrl] and no other gateway: one phone identity serves one gateway. */
     fun pin(gatewayUrl: String, keys: PushGateway)
-    fun unpin(gatewayUrl: String)
+
+    /**
+     * Drops this identity (keys and topics) because the gateway at [gatewayUrl] holds it and should stop
+     * using it; the gateway is told later, when it can be reached ([retired]). A fresh identity follows.
+     */
+    fun retire(gatewayUrl: String)
+
+    /** Identities given up but not yet unregistered from their gateway, by gateway URL. */
+    fun retired(gatewayUrl: String): Set<String>
+    fun forgetRetired(gatewayUrl: String, deviceId: String)
+
+    /** The URL of the gateway this identity is registered with, if any. */
+    fun pinnedGatewayUrl(): String?
 }
 
 /** Whether a gateway was told about this phone, as a short status line. */

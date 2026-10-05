@@ -214,15 +214,20 @@ class ChatNotifications(private val context: Context) {
      * inline Reply that goes straight into its chat. Backed by the bot's shortcut, so it sits with
      * conversations and can be prioritised or bubbled like a person's.
      */
-    fun postBotMessage(bot: Bot, picture: ByteArray?, storedSessionId: String, text: String) {
+    fun postBotMessage(bot: Bot, picture: ByteArray?, storedSessionId: String, text: String, viaPush: Boolean = false) {
         val preview = text.toPlainText().take(MAX_PREVIEW).ifBlank { return }
-        // The same message can come twice: over the gateway socket and through push.
+        // One message can arrive both over the gateway socket and through push: the second copy is dropped.
+        // The same words twice from one path are two messages (a bot repeating itself) and both notify.
         val now = System.currentTimeMillis()
         val key = bot.name + "\u0000" + preview.take(DEDUPE_PREFIX)
         synchronized(recentBotMessages) {
-            recentBotMessages.values.removeAll { now - it > DEDUPE_WINDOW_MS }
-            if (recentBotMessages.containsKey(key)) return
-            recentBotMessages[key] = now
+            recentBotMessages.values.removeAll { now - it.second > DEDUPE_WINDOW_MS }
+            val earlier = recentBotMessages[key]
+            if (earlier != null && earlier.first != viaPush) {
+                recentBotMessages.remove(key)
+                return
+            }
+            recentBotMessages[key] = viaPush to now
         }
         val shortcut = BotShortcuts.push(context, bot, picture)
         val person = BotShortcuts.person(bot, picture)
@@ -276,8 +281,8 @@ class ChatNotifications(private val context: Context) {
     /** Each bot's messages shown in its notification, oldest first, with when they came. */
     private val unreadBotMessages = mutableMapOf<String, List<Pair<String, Long>>>()
 
-    /** Bot messages posted lately (bot and opening words → when), so one message never notifies twice. */
-    private val recentBotMessages = LinkedHashMap<String, Long>()
+    /** Bot messages posted lately: bot and opening words → (came through push, when). */
+    private val recentBotMessages = LinkedHashMap<String, Pair<Boolean, Long>>()
 
     /** "Send a test" from the push setup: proof that a push got through ntfy and decrypted. */
     fun postPushTest() = post(
@@ -367,7 +372,7 @@ class ChatNotifications(private val context: Context) {
         private const val MAX_STACKED = 6
         private const val CHIP_LENGTH = 12
         private const val DEDUPE_PREFIX = 200
-        private const val DEDUPE_WINDOW_MS = 15 * 60_000L
+        private const val DEDUPE_WINDOW_MS = 10 * 60_000L
     }
 }
 
