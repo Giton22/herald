@@ -21,9 +21,12 @@ import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.profiles.ProfileRoster
 import dev.hermeskotlin.core.profiles.ProfilesApi
+import dev.hermeskotlin.core.projects.Project
+import dev.hermeskotlin.core.projects.ProjectsApi
 import dev.hermeskotlin.core.sessions.SessionListFilter
 import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.core.sessions.SessionsApi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -59,7 +62,16 @@ data class SessionsUiState(
     /** One-off feedback for a failed row action, cleared by [SessionsViewModel.dismissMessage]. */
     val message: String? = null,
     val sessionExpired: Boolean = false,
-)
+    /** The gateway's projects that have chats; empty when it has none or doesn't know projects. */
+    val projects: List<Project> = emptyList(),
+    /** The project the recent list is narrowed to; null for every chat. */
+    val project: Project? = null,
+    /** [project]'s chats; null while they load (or with no project picked). */
+    val projectSessions: List<SessionSummary>? = null,
+) {
+    /** The recent list as it shows: [project]'s chats, or every loaded chat. */
+    val listed: List<SessionSummary> get() = if (project != null) projectSessions.orEmpty() else sessions
+}
 
 /** The recent list narrowed to what's running, or to chats waiting on the user or with a reply not yet read. */
 enum class AttentionFilter(val label: String) {
@@ -88,6 +100,7 @@ class SessionsViewModel(
     attention: AttentionTracker,
     private val seenStore: SeenStore,
     private val drafts: DraftStore,
+    private val projectsApi: ProjectsApi,
 ) : ViewModel() {
 
     val connectionState: StateFlow<ConnectionState> = connection.state
@@ -136,7 +149,7 @@ class SessionsViewModel(
     val statuses: StateFlow<Map<String, RowStatus>> = visible.flatMapLatest { shown ->
         if (!shown) return@flatMapLatest emptyFlow()
         combine(_state, waiting, seen, running) { state, waiting, seen, running ->
-            (state.sessions + state.searchResults.orEmpty()).mapNotNull { session ->
+            (state.sessions + state.searchResults.orEmpty() + state.projectSessions.orEmpty()).mapNotNull { session ->
                 RowStatus(waiting[session.id], seen?.isUnread(session) == true, running[session.id] == true)
                     .takeIf { it.needsAttention || it.running }?.let { session.id to it }
             }.toMap()
@@ -200,8 +213,63 @@ class SessionsViewModel(
 
     fun setFilter(filter: SessionListFilter) {
         if (filter == _state.value.filter) return
-        _state.update { SessionsUiState(filter = filter) }
+        // The picked project stays for the way back; the archive isn't split by project.
+        _state.update { SessionsUiState(filter = filter, projects = it.projects, project = it.project, projectSessions = it.projectSessions) }
         load(refresh = false)
+    }
+
+    /** Narrows the recent list to [project]'s chats, or shows every chat again with null. */
+    fun selectProject(project: Project?) {
+        if (project?.id == _state.value.project?.id) return
+        _state.update { it.copy(project = project, projectSessions = null) }
+        loadProjectSessions()
+    }
+
+    private var projectsJob: Job? = null
+    private var projectsFor: String? = null
+
+    /** The project list, again: after each list load, since no event says a chat moved between projects. */
+    private fun loadProjects() {
+        if (connection.state.value !is ConnectionState.Connected) return
+        val profile = profile
+        // Connecting and the first list load ask at about the same time; one answer serves both.
+        if (projectsJob?.isActive == true && projectsFor == profile) return
+        projectsJob?.cancel()
+        projectsFor = profile
+        projectsJob = viewModelScope.launch {
+            val projects = try {
+                projectsApi.projects(profile)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // An older gateway without projects, or a passing failure: no chips, every chat listed.
+                emptyList()
+            }
+            if (profile != this@SessionsViewModel.profile) return@launch
+            // Only worth a filter when some chats are in a project, not all in Home.
+            val shown = projects.takeIf { list -> list.any { !it.isNoProject } }.orEmpty()
+            _state.update { state ->
+                val picked = state.project?.let { p -> shown.firstOrNull { it.id == p.id } }
+                state.copy(projects = shown, project = picked, projectSessions = state.projectSessions.takeIf { picked != null })
+            }
+            loadProjectSessions()
+        }
+    }
+
+    private fun loadProjectSessions() {
+        val project = _state.value.project ?: return
+        val profile = profile
+        viewModelScope.launch {
+            val rows = try {
+                projectsApi.sessions(profile, project.id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { if (it.project?.id == project.id) it.copy(projectSessions = emptyList(), message = e.message) else it }
+                return@launch
+            }
+            _state.update { if (it.project?.id == project.id) it.copy(projectSessions = rows) else it }
+        }
     }
 
     fun loadMore() {
@@ -257,7 +325,7 @@ class SessionsViewModel(
         },
     )
 
-    /** Optimistic row update: apply locally (list and search results), call the server, roll back on failure. */
+    /** Optimistic row update: apply locally (list, search results, project), call the server, roll back on failure. */
     private fun mutate(
         apply: (List<SessionSummary>) -> List<SessionSummary>,
         call: suspend (GatewayUrl, String?) -> ApiResult<Unit>,
@@ -265,7 +333,9 @@ class SessionsViewModel(
         val url = gateway?.gatewayUrl ?: return
         val profile = profile
         val before = _state.value
-        _state.update { it.copy(sessions = apply(it.sessions), searchResults = it.searchResults?.let(apply)) }
+        _state.update {
+            it.copy(sessions = apply(it.sessions), searchResults = it.searchResults?.let(apply), projectSessions = it.projectSessions?.let(apply))
+        }
         viewModelScope.launch {
             val result = call(url, profile)
             if (result !is ApiResult.Success) {
@@ -273,6 +343,7 @@ class SessionsViewModel(
                     it.copy(
                         sessions = before.sessions,
                         searchResults = before.searchResults,
+                        projectSessions = before.projectSessions.takeIf { _ -> it.project?.id == before.project?.id } ?: it.projectSessions,
                         message = result.errorMessage,
                         sessionExpired = result.isExpired,
                     )
@@ -287,6 +358,7 @@ class SessionsViewModel(
         // This may cancel a page fetch mid-flight, which would otherwise leave its spinner up for good.
         loadJob?.cancel()
         _state.update { (if (refresh) it.copy(refreshing = true) else it.copy(loading = it.sessions.isEmpty())).copy(loadingMore = false) }
+        if (filter == SessionListFilter.Recent) loadProjects()
         loadJob = viewModelScope.launch {
             // Keep however many rows are already showing so a background refetch doesn't truncate the list.
             val limit = _state.value.sessions.size.coerceIn(SessionsApi.PAGE_SIZE, 100)
@@ -321,6 +393,12 @@ class SessionsViewModel(
                 .filter { it.type in REFRESH_EVENTS }
                 .debounce(400)
                 .collect { load(refresh = false) }
+        }
+        // Projects come over the socket, which may connect after the list (REST) has loaded.
+        viewModelScope.launch {
+            connection.state.map { it is ConnectionState.Connected }.distinctUntilChanged().filter { it }.collect {
+                if (gateway != null && _state.value.filter == SessionListFilter.Recent) loadProjects()
+            }
         }
         viewModelScope.launch {
             var wasConnected = true

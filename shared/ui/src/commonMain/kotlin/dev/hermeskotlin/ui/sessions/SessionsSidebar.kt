@@ -93,6 +93,7 @@ import dev.hermeskotlin.ui.bots.BotsViewModel
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.models.displayModelName
 import dev.hermeskotlin.core.profiles.Profile
+import dev.hermeskotlin.core.projects.Project
 import dev.hermeskotlin.core.sessions.SessionListFilter
 import dev.hermeskotlin.core.sessions.SessionSummary
 import androidx.compose.ui.text.font.FontWeight
@@ -155,7 +156,8 @@ fun SessionsSidebar(
     selectedId: String?,
     visible: Boolean,
     onOpenSession: (SessionSummary) -> Unit,
-    onNewChat: () -> Unit,
+    /** A new chat; [cwd] is the folder of the project the list shows, when one is picked. */
+    onNewChat: (cwd: String?) -> Unit,
     onDeleted: (SessionSummary) -> Unit,
     onSessionExpired: () -> Unit,
     onSignOut: () -> Unit,
@@ -369,28 +371,34 @@ fun SessionsSidebar(
                     }
                     state.filter == SessionListFilter.Recent -> SessionList(
                         sessions = when (attentionFilter) {
-                            AttentionFilter.All -> state.sessions
-                            AttentionFilter.Running -> state.sessions.filter { statuses[it.id]?.running == true }
-                            AttentionFilter.NeedsAttention -> state.sessions.filter { statuses[it.id]?.needsAttention == true }
+                            AttentionFilter.All -> state.listed
+                            AttentionFilter.Running -> state.listed.filter { statuses[it.id]?.running == true }
+                            AttentionFilter.NeedsAttention -> state.listed.filter { statuses[it.id]?.needsAttention == true }
                         },
                         selectedId = selectedId,
                         onOpen = open,
                         onActions = rowActions,
                         // A filtered list stays short, so the end is always in sight: paging on would
-                        // fetch the whole history. What's running or waiting is recent anyway.
-                        canLoadMore = state.canLoadMore && attentionFilter == AttentionFilter.All,
+                        // fetch the whole history. What's running or waiting is recent anyway. A project's
+                        // chats come whole.
+                        canLoadMore = state.canLoadMore && attentionFilter == AttentionFilter.All && state.project == null,
                         loadingMore = state.loadingMore,
                         onLoadMore = viewModel::loadMore,
                         statuses = statuses,
                         drafts = drafts,
                         sectioned = true,
                         status = {
-                            if (!state.loading && state.error == null && state.sessions.isNotEmpty()) {
+                            if (!state.loading && state.error == null && state.projects.isNotEmpty()) {
+                                item(key = "projects") {
+                                    ProjectFilters(state.projects, state.project, onSelect = viewModel::selectProject)
+                                }
+                            }
+                            if (!state.loading && state.error == null && state.listed.isNotEmpty()) {
                                 item(key = "filters") {
                                     AttentionFilters(
                                         selected = attentionFilter,
-                                        running = state.sessions.count { statuses[it.id]?.running == true },
-                                        needsAttention = state.sessions.count { statuses[it.id]?.needsAttention == true },
+                                        running = state.listed.count { statuses[it.id]?.running == true },
+                                        needsAttention = state.listed.count { statuses[it.id]?.needsAttention == true },
                                         onSelect = viewModel::setAttentionFilter,
                                     )
                                 }
@@ -400,13 +408,14 @@ fun SessionsSidebar(
                                 state.error != null -> item(key = "error") {
                                     ListNotice("Couldn't load sessions. ${state.error}", action = "Try again", onAction = viewModel::refresh)
                                 }
-                                state.sessions.isEmpty() -> item(key = "empty") {
-                                    ListNotice("Your conversations will show up here.")
+                                state.project != null && state.projectSessions == null -> item(key = "project-loading") { ListSpinner() }
+                                state.listed.isEmpty() -> item(key = "empty") {
+                                    ListNotice(if (state.project != null) "No chats in this project." else "Your conversations will show up here.")
                                 }
-                                attentionFilter == AttentionFilter.Running && state.sessions.none { statuses[it.id]?.running == true } -> item(key = "none-running") {
+                                attentionFilter == AttentionFilter.Running && state.listed.none { statuses[it.id]?.running == true } -> item(key = "none-running") {
                                     ListNotice("Nothing is running right now.")
                                 }
-                                attentionFilter == AttentionFilter.NeedsAttention && state.sessions.none { statuses[it.id]?.needsAttention == true } ->
+                                attentionFilter == AttentionFilter.NeedsAttention && state.listed.none { statuses[it.id]?.needsAttention == true } ->
                                     item(key = "none-waiting") { ListNotice("Nothing needs you right now.") }
                             }
                         },
@@ -447,7 +456,7 @@ fun SessionsSidebar(
             onDismissMessage = viewModel::dismissMessage,
             onNewChat = {
                 if (searchOpen) closeSearch()
-                onNewChat()
+                onNewChat(state.project?.path.takeIf { state.filter == SessionListFilter.Recent })
             },
             onAccount = {
                 accountOpen = true
@@ -515,6 +524,7 @@ internal fun SessionsSidebarSample(
     userLabel: String,
     statuses: Map<String, RowStatus> = emptyMap(),
     drafts: Set<String> = emptySet(),
+    projects: List<Project> = emptyList(),
 ) {
     Box(
         Modifier
@@ -533,6 +543,7 @@ internal fun SessionsSidebarSample(
                     drafts = drafts,
                     sectioned = true,
                     status = {
+                        if (projects.isNotEmpty()) item(key = "projects") { ProjectFilters(projects, selected = null, onSelect = {}) }
                         item(key = "filters") {
                             AttentionFilters(
                                 selected = AttentionFilter.All,
@@ -911,6 +922,27 @@ private fun AttentionFilters(selected: AttentionFilter, running: Int, needsAtten
                 text = if (count != null && count > 0) "${filter.label} · $count" else filter.label,
                 selected = filter == selected,
                 onClick = { onSelect(filter) },
+            )
+        }
+    }
+}
+
+/**
+ * The gateway's projects as chips, as Desktop's sidebar groups chats: "All", then each project with its chat
+ * count, Home last. A new chat started under a project runs in its folder.
+ */
+@Composable
+private fun ProjectFilters(projects: List<Project>, selected: Project?, onSelect: (Project?) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Chip(text = "All projects", selected = selected == null, onClick = { onSelect(null) })
+        projects.forEach { project ->
+            Chip(
+                text = "${project.label} · ${project.sessionCount}",
+                selected = project.id == selected?.id,
+                onClick = { onSelect(project) },
             )
         }
     }

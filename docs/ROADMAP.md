@@ -219,7 +219,9 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Toolsets on the Capabilities page with their switches and a "needs setup" tag (`GET /api/tools/toolsets`, `PUT /api/tools/toolsets/{name}`)
 - [x] MCP servers on the Capabilities page: switch, and a connection test listing its tools (`/api/mcp/servers`, `…/{name}/enabled`, `…/{name}/test`). Adding servers and OAuth not yet
 - [ ] Config viewer and editor (`config.get`, `config.set`)
-- [ ] Projects and workspaces (`projects.*`)
+- [x] Projects in the chat list (`projects.tree`, `projects.project_sessions`): a chip per project with chats, as Desktop groups them by folder; a new chat started under one runs in its folder (`session.create` `cwd`)
+- [ ] A chat's working folder: show it, and change it with a folder picker (`complete.path`, `session.cwd.set`, `session.workspace.move`)
+- [ ] Create, rename and delete projects (`projects.create`, `projects.update`, `projects.delete`)
 - [x] Insights page in the sidebar, after Desktop's (`GET /api/analytics/usage`): cost, sessions, tokens and cache share over 7/30/90 days, tokens by day (tap a day), top models, tools and skills. `usage.bars` (subscription limits) not yet
 
 ### Notifications & background

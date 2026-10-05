@@ -105,6 +105,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true) {
                         userLabel = ChatSamples.USER,
                         statuses = ChatSamples.sessionStatuses,
                         drafts = ChatSamples.sessionDrafts,
+                        projects = ChatSamples.projects,
                     )
                 }
                 PreviewScene.Comments -> SampleChat(ChatSamples.reply, comments = remember { ChatSamples.comments() })

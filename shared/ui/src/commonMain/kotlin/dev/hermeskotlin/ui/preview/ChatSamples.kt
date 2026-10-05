@@ -4,6 +4,7 @@ import androidx.compose.foundation.text.input.TextFieldState
 import dev.hermeskotlin.core.chat.ApprovalChoice
 import dev.hermeskotlin.core.chat.Attachment
 import dev.hermeskotlin.core.chat.ChatMessage
+import dev.hermeskotlin.core.projects.Project
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.DelegatedTask
 import dev.hermeskotlin.core.chat.InputRequest
@@ -310,6 +311,13 @@ internal object ChatSamples {
 
     /** Chats in [sessions] holding unsent text. */
     val sessionDrafts = setOf("s5")
+
+    /** Projects the sample chats sit in: two git roots and Home. */
+    val projects = listOf(
+        Project("/srv/backup", "backup", "/srv/backup", sessionCount = 6, isAuto = true),
+        Project("p-site", "website", "/srv/site", sessionCount = 3),
+        Project("__no_project__", "Home", null, sessionCount = 9, isNoProject = true),
+    )
 
     /** Two comments on [reply]'s answer, waiting in the composer with their notes. */
     fun comments(): List<PendingComment> {
