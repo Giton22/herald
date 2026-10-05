@@ -129,19 +129,23 @@ class AssistantPanelModel(
     private var sessionScope: CoroutineScope? = null
 
     init {
-        scope.launch {
-            val saved = gateways.current()
-            if (saved == null || !auth.hasStoredSession(saved.gatewayUrl)) {
-                _phase.value = AssistantPhase.SignedOut
-                return@launch
-            }
-            gateway = saved
-            profile = profiles.get(saved.gatewayUrl)
-            // Already running when Herald is open; otherwise the panel brings the socket up while the user speaks.
-            connection.start(saved.gatewayUrl)
-            newChat()
-            _phase.value = AssistantPhase.Ready
+        scope.launch { bind() }
+    }
+
+    /** Takes up the gateway Herald is on, its picked profile and a new chat there. */
+    private suspend fun bind() {
+        val saved = gateways.current()
+        if (saved == null || !auth.hasStoredSession(saved.gatewayUrl)) {
+            gateway = null
+            _phase.value = AssistantPhase.SignedOut
+            return
         }
+        gateway = saved
+        profile = profiles.get(saved.gatewayUrl)
+        // Already running when Herald is open; otherwise the panel brings the socket up while the user speaks.
+        connection.start(saved.gatewayUrl)
+        newChat()
+        _phase.value = AssistantPhase.Ready
     }
 
     /**
@@ -156,8 +160,12 @@ class AssistantPanelModel(
         _circledPart.value = null
         circledFull = null
         _screen.value = ScreenCapture(pending = listOf(expectText, expectScreenshot).count { it }, callUp = _screen.value.callUp + 1)
+        // The panel outlives a call-up, and Herald may have switched gateways since: the socket is shared, so
+        // the chat must move along with it.
+        val current = gateways.list.value.current
+        if (_phase.value != AssistantPhase.Loading && current?.url != gateway?.url) scope.launch { bind() }
         // The last call-up's chat goes on in the sessions list; an unused one is simply kept.
-        if (_session.value?.state?.value?.hasConversation == true) newChat()
+        else if (_session.value?.state?.value?.hasConversation == true) newChat()
         _shows.update { it + 1 }
     }
 

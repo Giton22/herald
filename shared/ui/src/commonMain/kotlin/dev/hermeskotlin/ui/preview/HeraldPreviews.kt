@@ -139,7 +139,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true) {
                     onUpdate = {},
                     onBack = {},
                     onSignOut = {},
-                    onChangeGateway = {},
+                    onOpenGateways = {},
                 )
                 PreviewScene.ConnectionCheck -> Box(Modifier.fillMaxSize()) {
                     SettingsView(
@@ -149,7 +149,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true) {
                         onUpdate = {},
                         onBack = {},
                         onSignOut = {},
-                        onChangeGateway = {},
+                        onOpenGateways = {},
                     )
                     BottomSheet(visible = true, onDismiss = {}) {
                         SheetHeader("Check connection", subtitle = "Each stage is tested on its own.")

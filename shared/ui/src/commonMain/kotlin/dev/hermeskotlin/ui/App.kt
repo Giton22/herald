@@ -44,6 +44,7 @@ import dev.hermeskotlin.ui.bots.LocalBotFaces
 import dev.hermeskotlin.ui.chat.ChatScreen
 import dev.hermeskotlin.ui.chat.ChatViewModel
 import dev.hermeskotlin.ui.connect.ConnectScreen
+import dev.hermeskotlin.ui.gateways.GatewaysSheet
 import dev.hermeskotlin.ui.sessions.ChatMenu
 import dev.hermeskotlin.ui.sessions.SessionsSidebar
 import dev.hermeskotlin.ui.settings.AppLockCover
@@ -110,7 +111,10 @@ private fun Routes() {
     val app: AppViewModel = koinViewModel()
     val route by app.route.collectAsStateWithLifecycle()
 
-    PlatformBackHandler(enabled = route is Route.SignIn) { app.back() }
+    val choices by app.gatewayChoices.collectAsStateWithLifecycle()
+    var gatewaysOpen by remember { mutableStateOf(false) }
+
+    PlatformBackHandler(enabled = (route as? Route.SignIn)?.adding == true || (route as? Route.Connect)?.canCancel == true) { app.back() }
 
     when (val r = route) {
         Route.Loading -> Box(
@@ -118,17 +122,39 @@ private fun Routes() {
             contentAlignment = Alignment.Center,
         ) { Spinner() }
 
-        Route.Connect -> ConnectScreen(onContinue = app::onGatewayChosen)
+        is Route.Connect -> ConnectScreen(
+            onContinue = app::onGatewayChosen,
+            onCancel = if (r.canCancel) app::cancelAddGateway else null,
+        )
 
         is Route.SignIn -> SignInScreen(
             gateway = r.gateway,
             notice = r.notice,
             onSignedIn = { app.onSignedIn(r.gateway) },
-            onChangeGateway = app::changeGateway,
+            // With nothing else saved, the sheet would only offer "Add a gateway".
+            onChangeGateway = {
+                when {
+                    r.adding -> app.back()
+                    choices.list.gateways.any { it.url != r.gateway.url } -> gatewaysOpen = true
+                    else -> app.addGateway()
+                }
+            },
         )
 
-        is Route.Chat -> Home(r, app)
+        is Route.Chat -> Home(r, app, onOpenGateways = { gatewaysOpen = true })
     }
+
+    GatewaysSheet(
+        visible = gatewaysOpen,
+        choices = choices,
+        activeUrl = (route as? Route.Chat)?.gateway?.url ?: (route as? Route.SignIn)?.gateway?.url,
+        onDismiss = { gatewaysOpen = false },
+        onSwitch = app::switchGateway,
+        onAdd = app::addGateway,
+        onSetPrimary = app::setPrimaryGateway,
+        onRename = app::renameGateway,
+        onRemove = app::removeGateway,
+    )
 }
 
 /** The bot editor's subject: [bot] to change, or null for a new one. */
@@ -136,7 +162,7 @@ private class BotEditing(val bot: Bot?)
 
 /** The signed-in home: the chat, with the sessions sidebar to its left (a drawer on phones, docked on wide screens). */
 @Composable
-private fun Home(route: Route.Chat, app: AppViewModel) {
+private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Unit) {
     val chat: ChatViewModel = koinViewModel()
     val chatState by chat.state.collectAsStateWithLifecycle()
     val sidebar = rememberSidebarState()
@@ -196,7 +222,7 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
                 onDeleted = { if (it.id == openSessionId) app.newChat() },
                 onSessionExpired = app::onSessionExpired,
                 onSignOut = app::signOut,
-                onChangeGateway = app::changeGateway,
+                onOpenGateways = onOpenGateways,
                 onOpenSettings = { settingsOpen = true },
                 onSwitchProfile = {
                     app.switchProfile(it)
@@ -275,7 +301,7 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
             gateway = route.gateway,
             onBack = { settingsOpen = false },
             onSignOut = app::signOut,
-            onChangeGateway = app::changeGateway,
+            onOpenGateways = onOpenGateways,
         )
     }
 }
