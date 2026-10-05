@@ -34,3 +34,15 @@ jobs:
 
       - name: Test and build
         run: ./gradlew --no-daemon :shared:core:testAndroidHostTest :shared:ui:testAndroidHostTest :androidApp:assembleDebug
+
+      # Only issues that aren't in androidApp/lint-baseline.xml fail this step.
+      - name: Lint
+        run: ./gradlew --no-daemon :androidApp:lintDebug
+
+      - name: Lint report
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: lint-report
+          path: androidApp/build/reports/lint-results-debug.html
+          if-no-files-found: ignore
