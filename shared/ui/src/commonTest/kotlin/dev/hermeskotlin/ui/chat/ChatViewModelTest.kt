@@ -1,5 +1,6 @@
 package dev.hermeskotlin.ui.chat
 
+import androidx.lifecycle.ViewModelStore
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.chat.ChatHost
@@ -31,6 +32,7 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -50,8 +52,17 @@ class ChatViewModelTest {
     private val gateway = SavedGateway("https://hermes.example.ts.net")
     private val json = headersOf(HttpHeaders.ContentType, "application/json")
 
+    private val scope = CoroutineScope(dispatcher)
+    private val viewModels = ViewModelStore()
+
     @BeforeTest fun setUp() = Dispatchers.setMain(dispatcher)
-    @AfterTest fun tearDown() = Dispatchers.resetMain()
+
+    /** Stops the chat's own coroutines while the test Main is still set, so none outlive the test. */
+    @AfterTest fun tearDown() {
+        viewModels.clear()
+        scope.cancel()
+        Dispatchers.resetMain()
+    }
 
     private object NoRecorder : VoiceRecorder {
         override suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit, onSpeech: () -> Unit): Recording =
@@ -67,7 +78,6 @@ class ChatViewModelTest {
     private fun viewModel(): Pair<ChatViewModel, ChatHost> {
         val cookies = PersistentCookiesStorage(InMemoryKeyValueStore())
         val client = createHttpClient(MockEngine { respond("{}", HttpStatusCode.OK, json) }, cookies)
-        val scope = CoroutineScope(dispatcher)
         val connection = GatewayConnection(AuthApi(client, cookies), { _, _ -> error("not connecting in tests") }, scope)
         val sessions = SessionsApi(client)
         val chatHost = ChatHost(connection, sessions, scope)
@@ -77,6 +87,7 @@ class ChatViewModelTest {
             SettingsStore(InMemoryKeyValueStore(), scope), PetApi(connection), JourneyApi(client), AudioApi(client),
             NoRecorder, NoPlayer, scope,
         )
+        viewModels.put("chat", vm)
         return vm to chatHost
     }
 
