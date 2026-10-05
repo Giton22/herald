@@ -112,7 +112,7 @@ internal object ChatSamples {
             GatewayNotice("credits.depleted", "Credit access paused · run /topup to top up", GatewayNotice.Level.Error, GatewayNotice.Kind.Sticky),
             GatewayNotice("credits.usage", "80% of this month's credit used", GatewayNotice.Level.Warning, GatewayNotice.Kind.Sticky),
             GatewayNotice(
-                "agent.build.slow",
+                "agent-build-slow",
                 "Still starting the agent (tool discovery / model setup) — your message will be sent as soon as it's ready.",
                 GatewayNotice.Level.Info,
                 GatewayNotice.Kind.Agent,

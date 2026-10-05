@@ -1778,15 +1778,9 @@ private fun NoticeLine(text: String) {
     }
 }
 
-/** A gateway notice, with its level's icon and color; × hides it. A timed one goes by itself. */
+/** A gateway notice, with its level's icon and color; × hides it. A timed one goes by itself (ChatSession). */
 @Composable
 private fun NoticeBanner(notice: GatewayNotice, onDismiss: (String) -> Unit) {
-    if (notice.kind == GatewayNotice.Kind.Timed) {
-        LaunchedEffect(notice) {
-            delay(notice.ttlMillis ?: return@LaunchedEffect)
-            onDismiss(notice.key)
-        }
-    }
     val (icon, tint) = when (notice.level) {
         GatewayNotice.Level.Info -> Lucide.Info to Theme[colors][accent]
         GatewayNotice.Level.Warning -> Lucide.TriangleAlert to Theme[colors][warning]

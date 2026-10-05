@@ -92,13 +92,12 @@ fun ChatState.reduce(event: GatewayEvent, now: Double? = null): ChatState {
             copy(messages = messages + ChatMessage.Notice("notice-$keySeq", text), keySeq = keySeq + 1)
         } ?: this
         // The turn has ended, so a notice about the agent being built is stale even if its clear never came.
-        "message.complete" -> complete(payload, now).let { done ->
-            done.copy(notices = done.notices.filterNot { it.kind == GatewayNotice.Kind.Agent })
-        }
+        "message.complete" -> complete(payload, now).withoutAgentNotices()
         "notification.show" -> showNotice(payload)
         "notification.clear" -> withoutNotice(payload.string("key"))
         "status.update" -> copy(status = payload.string("text")?.takeIf { it.isNotBlank() })
-        "error" -> copy(error = payload.string("message"))
+        // A turn cancelled while the agent was still being built ends with only an error, and no clear.
+        "error" -> copy(error = payload.string("message")).withoutAgentNotices()
         "session.title" -> copy(title = payload.string("title") ?: title)
         "session.info" -> withInfo(payload).copy(title = payload.string("title")?.takeIf { it.isNotBlank() } ?: title)
         "btw.complete" -> answerAside(payload)

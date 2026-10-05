@@ -59,6 +59,10 @@ internal fun ChatState.showNotice(payload: JsonObject?): ChatState {
     return copy(notices = next, keySeq = keySeq + 1)
 }
 
+/** Drops the notices about the agent being built, once nothing is waiting on it any more. */
+internal fun ChatState.withoutAgentNotices(): ChatState =
+    if (notices.none { it.kind == GatewayNotice.Kind.Agent }) this else copy(notices = notices.filterNot { it.kind == GatewayNotice.Kind.Agent })
+
 /** Removes the notice with [key]: `notification.clear`, the user's ×, or a timed notice running out. */
 fun ChatState.withoutNotice(key: String?): ChatState =
     if (key == null || notices.none { it.key == key }) this else copy(notices = notices.filterNot { it.key == key })

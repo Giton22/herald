@@ -68,10 +68,13 @@ class GatewayNoticeTest {
     fun theTurnEndingDropsTheSlowStartNoticeButKeepsStickyOnes() {
         val slow = event(
             "notification.show",
-            """{"text":"Still starting the agent (tool discovery / model setup)","level":"info","kind":"agent","ttl_ms":null,"key":"agent.build.slow","id":"agent.build.slow"}""",
+            """{"text":"Still starting the agent (tool discovery / model setup)","level":"info","kind":"agent","ttl_ms":null,"key":"agent-build-slow","id":"agent-build-slow"}""",
         )
         val state = ChatState().apply(depleted, slow, event("message.start"), event("message.complete", """{"text":"done"}"""))
         assertEquals(listOf("credits.depleted"), state.notices.map { it.key })
+        // Cancelled while the agent was still being built: only an error comes, no clear and no completion.
+        val cancelled = ChatState().apply(depleted, slow, event("error", """{"message":"Turn cancelled before the agent was ready"}"""))
+        assertEquals(listOf("credits.depleted"), cancelled.notices.map { it.key })
     }
 
     @Test
