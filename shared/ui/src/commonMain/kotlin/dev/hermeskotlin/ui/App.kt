@@ -29,6 +29,7 @@ import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.designsystem.HermesTheme
 import dev.hermeskotlin.designsystem.PureBlack
+import dev.hermeskotlin.designsystem.components.LocalCodeWrap
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.SidebarLayout
@@ -78,6 +79,7 @@ fun App(appVersion: String? = null, releasesRepo: String? = null, onDarkTheme: (
     HermesTheme(scheme) {
         CompositionLocalProvider(
             LocalAppSettings provides settings,
+            LocalCodeWrap provides settings.wrapCode,
             LocalAppVersion provides appVersion,
             LocalUpdateOffer provides rememberUpdateOffer(releasesRepo, appVersion, settings.checkForUpdates),
             LocalDensity provides Density(density.density, density.fontScale * settings.textSize.scale),

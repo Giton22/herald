@@ -43,6 +43,10 @@ data class AppSettings(
     val showToolActivity: Boolean = true,
     /** Tokens each reply took, under it. */
     val showUsage: Boolean = true,
+    /** The time under each prompt and finished reply. */
+    val showTimestamps: Boolean = true,
+    /** Long lines in code blocks wrap; off, a block scrolls sideways. */
+    val wrapCode: Boolean = false,
     /** Show the profile's pet (when the gateway has one on) above the composer. */
     val showPet: Boolean = true,
     val voicePause: VoicePause = VoicePause.Normal,
