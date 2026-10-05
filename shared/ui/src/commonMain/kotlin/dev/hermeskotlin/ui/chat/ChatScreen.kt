@@ -97,6 +97,7 @@ import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -128,6 +129,7 @@ import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleAlert
+import com.composables.icons.lucide.CircleCheck
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.ListEnd
 import com.composables.icons.lucide.Info
@@ -162,6 +164,7 @@ import com.composeunstyled.theme.Theme
 import com.composeunstyled.theme.rememberColoredIndication
 import dev.hermeskotlin.core.chat.Attachment
 import dev.hermeskotlin.core.chat.ChatMessage
+import dev.hermeskotlin.core.chat.GatewayNotice
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.OutgoingAttachment
 import dev.hermeskotlin.core.chat.SendCheck
@@ -643,6 +646,7 @@ private fun ColumnScope.Dock(
         Banner(it.message, actionLabel = "Retry", onAction = actions::retry)
     }
     state.error?.let { Banner(it, actionLabel = null, onAction = actions::dismissError) }
+    state.notices.forEach { notice -> key(notice.key) { NoticeBanner(notice, actions::dismissNotice) } }
     // Turned away, not failed: the prompt is back in the composer, ready to go again. Once the composer is
     // emptied there's nothing to send, so the banner can only be closed.
     state.refused?.let { refused ->
@@ -1774,15 +1778,33 @@ private fun NoticeLine(text: String) {
     }
 }
 
+/** A gateway notice, with its level's icon and color; × hides it. A timed one goes by itself. */
 @Composable
-private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit, icon: ImageVector? = null) {
+private fun NoticeBanner(notice: GatewayNotice, onDismiss: (String) -> Unit) {
+    if (notice.kind == GatewayNotice.Kind.Timed) {
+        LaunchedEffect(notice) {
+            delay(notice.ttlMillis ?: return@LaunchedEffect)
+            onDismiss(notice.key)
+        }
+    }
+    val (icon, tint) = when (notice.level) {
+        GatewayNotice.Level.Info -> Lucide.Info to Theme[colors][accent]
+        GatewayNotice.Level.Warning -> Lucide.TriangleAlert to Theme[colors][warning]
+        GatewayNotice.Level.Error -> Lucide.CircleAlert to Theme[colors][danger]
+        GatewayNotice.Level.Success -> Lucide.CircleCheck to Theme[colors][success]
+    }
+    Banner(notice.text, actionLabel = null, onAction = { onDismiss(notice.key) }, icon = icon, tint = tint)
+}
+
+@Composable
+private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit, icon: ImageVector? = null, tint: Color? = null) {
     Surface(Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth()) {
         Row(Modifier.padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             // A problem by default; [icon] says it's a state instead.
             UnstyledIcon(
                 icon ?: Lucide.CircleAlert,
                 contentDescription = null,
-                tint = if (icon == null) Theme[colors][danger] else Theme[colors][accent],
+                tint = tint ?: if (icon == null) Theme[colors][danger] else Theme[colors][accent],
                 modifier = Modifier.size(16.dp),
             )
             Text(

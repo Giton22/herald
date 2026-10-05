@@ -90,6 +90,9 @@ interface ChatActions {
 
     fun dismissError()
 
+    /** Hides the gateway notice with [key] (its ×, or a timed one running out). */
+    fun dismissNotice(key: String) {}
+
     fun dismissAttachmentError()
 
     fun skipSpeech()
