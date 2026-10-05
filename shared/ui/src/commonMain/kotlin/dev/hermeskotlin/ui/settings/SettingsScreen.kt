@@ -304,7 +304,7 @@ internal fun SettingsView(
                         title = "App lock",
                         detail = if (canLock || settings.appLock) {
                             "Ask for your fingerprint, face or screen lock when Herald opens and after a minute away. " +
-                                "Hides Herald's content in Recents. Notification actions keep working."
+                                "Hides Herald in Recents and blocks screenshots of it. Notification actions keep working."
                         } else {
                             "Set a screen lock in Android's settings first."
                         },

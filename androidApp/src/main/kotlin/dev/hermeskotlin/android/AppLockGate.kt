@@ -47,10 +47,9 @@ class AppLockGate(private val activity: FragmentActivity, private val timer: App
 
     /** Hides the app's content in Recents while [on]. */
     fun hideFromRecents(on: Boolean) {
-        if (Build.VERSION.SDK_INT >= 33) {
-            activity.setRecentsScreenshotEnabled(!on)
-        } else if (on) {
-            // Older Android has no Recents-only switch; FLAG_SECURE also blocks screenshots of the app.
+        // Not setRecentsScreenshotEnabled: it only drops the stored snapshot, and Recents still shows the app
+        // live while swiping up from it. FLAG_SECURE blanks both, and also blocks screenshots of the app.
+        if (on) {
             activity.window.addFlags(WindowManager.LayoutParams.FLAG_SECURE)
         } else {
             activity.window.clearFlags(WindowManager.LayoutParams.FLAG_SECURE)
