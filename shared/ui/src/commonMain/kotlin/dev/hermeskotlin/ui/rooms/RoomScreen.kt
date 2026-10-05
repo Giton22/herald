@@ -30,11 +30,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.ArrowLeft
-import com.composables.icons.lucide.ArrowUp
 import com.composables.icons.lucide.Lucide
 import com.composeunstyled.Text
 import com.composeunstyled.theme.Theme
-import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.accentSoft
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
@@ -48,7 +46,6 @@ import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.components.Surface
 import dev.hermeskotlin.designsystem.components.TextField
-import dev.hermeskotlin.designsystem.onAccent
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.success
@@ -59,6 +56,8 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
 import dev.hermeskotlin.core.rooms.RoomPendingAction
 import dev.hermeskotlin.core.rooms.RoomLine
+import dev.hermeskotlin.ui.chat.SendButton
+import dev.hermeskotlin.ui.chat.SendIcon
 import dev.hermeskotlin.ui.sessions.ListNotice
 import dev.hermeskotlin.ui.sessions.ListSpinner
 import dev.hermeskotlin.ui.sessions.MessageBanner
@@ -245,13 +244,7 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomsViewModel) {
             singleLine = false,
             maxLines = 4,
         )
-        IconButton(
-            Lucide.ArrowUp,
-            contentDescription = "Send",
-            onClick = viewModel::send,
-            enabled = canSend,
-            tint = Theme[colors][onAccent],
-            containerColor = if (canSend) Theme[colors][accent] else Theme[colors][accentSoft],
-        )
+        // The chat's own send, so a room reads like the rest of the app.
+        SendButton(SendIcon.Send, onClick = viewModel::send, enabled = canSend)
     }
 }
