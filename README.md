@@ -1,3 +1,5 @@
+<div align="center">
+
 <img src="docs/logo.svg" alt="" width="96" height="96">
 
 # Herald
@@ -10,6 +12,8 @@ computer. Herald connects to the `hermes dashboard` you already run on your serv
 Tailnet, the same way Hermes Desktop's "Remote gateway" connection does.
 
 Herald is an independent project. It isn't made or endorsed by Nous Research.
+
+</div>
 
 > **Status: early pilot.** Herald is in testing with a small group. Expect rough edges, and please
 > report what you find in [Issues](../../issues).
