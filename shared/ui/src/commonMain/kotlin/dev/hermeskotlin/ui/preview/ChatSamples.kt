@@ -196,6 +196,25 @@ internal object ChatSamples {
         inputRequests = listOf(approvalRequest.copy(toolName = "", description = "")),
     )
 
+    /** The agent signs in on a page: the password manager is locked. */
+    val vaultUnlock: ChatState = approval.copy(
+        inputRequests = listOf(
+            InputRequest.Secret("r2", InputRequest.Secret.Kind.VaultUnlock, "Hermes needs Bitwarden unlocked to sign in for you.", envVar = null, command = null),
+        ),
+    )
+
+    /** The page asks for a one-time code. */
+    val vaultCode: ChatState = approval.copy(
+        inputRequests = listOf(
+            InputRequest.Secret("r3", InputRequest.Secret.Kind.VaultCode, "Enter the sign-in code for example.com.", envVar = null, command = null),
+        ),
+    )
+
+    /** A sign-in page with no login in the vault. */
+    val vaultSaveLogin: ChatState = approval.copy(
+        inputRequests = listOf(InputRequest.VaultSaveLogin("r4", site = "example.com", origin = "https://example.com")),
+    )
+
     private val delegation = ToolActivity(
         id = "d1",
         name = "delegate_task",

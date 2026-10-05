@@ -25,7 +25,7 @@ enum class Waiting(val label: String) {
         fun of(request: InputRequest): Waiting = when (request) {
             is InputRequest.Approval -> Approval
             is InputRequest.Clarify -> Question
-            is InputRequest.Secret -> Input
+            is InputRequest.Secret, is InputRequest.VaultSaveLogin -> Input
         }
     }
 }

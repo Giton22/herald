@@ -56,7 +56,11 @@ sealed interface InputRequest {
         val batch: Boolean get() = questions.any { it.qid != null }
     }
 
-    /** A masked one-line value: the sudo password for a terminal command, or a named secret. */
+    /**
+     * A one-line value: the sudo password for a terminal command, a named secret, the master password
+     * of a password manager ([Kind.VaultUnlock]) or a sign-in code for the page the agent is on
+     * ([Kind.VaultCode], the only one not masked).
+     */
     data class Secret(
         override val id: String,
         val kind: Kind,
@@ -66,12 +70,27 @@ sealed interface InputRequest {
         /** The command a [Kind.Sudo] password is for. */
         val command: String?,
     ) : InputRequest {
-        enum class Kind { Sudo, Secret }
+        enum class Kind { Sudo, Secret, VaultUnlock, VaultCode }
+    }
+
+    /**
+     * The agent is on a sign-in page with nothing in the vault: save a login for it. Answered with
+     * [InputAnswers.saveLogin], or an empty value to not save.
+     */
+    data class VaultSaveLogin(
+        override val id: String,
+        /** The site's name as the agent shows it, e.g. `github.com`. */
+        val site: String,
+        /** The page's origin, e.g. `https://github.com`. */
+        val origin: String,
+    ) : InputRequest {
+        /** The question, without a blank where the site goes when the gateway named none. */
+        val title: String get() = if (site.isBlank()) "Save a login?" else "Save your $site login?"
     }
 
     companion object {
         /** The methods this client answers; anything else is left for another client. */
-        val METHODS = setOf("approval", "clarify", "sudo", "secret")
+        val METHODS = setOf("approval", "clarify", "sudo", "secret", "vault.unlock_prompt", "vault.code", "vault.save_login")
 
         fun parse(id: String, method: String, params: JsonObject): InputRequest? = when (method) {
             "approval" -> Approval(
@@ -90,6 +109,22 @@ sealed interface InputRequest {
                 envVar = params.string("env_var"),
                 command = null,
             )
+            "vault.unlock_prompt" -> {
+                val name = params.string("display_name")?.takeIf { it.isNotBlank() }
+                    ?: params.string("backend")?.takeIf { it.isNotBlank() }
+                    ?: "your password manager"
+                Secret(id, Secret.Kind.VaultUnlock, "Hermes needs $name unlocked to sign in for you.", envVar = null, command = null)
+            }
+            "vault.code" -> {
+                val site = params.string("site")?.takeIf { it.isNotBlank() }
+                val hint = params.string("hint")?.takeIf { it.isNotBlank() }
+                val ask = if (site != null) "Enter the sign-in code for $site." else "Enter the sign-in code."
+                Secret(id, Secret.Kind.VaultCode, listOfNotNull(ask, hint).joinToString(" "), envVar = null, command = null)
+            }
+            "vault.save_login" -> {
+                val origin = params.string("origin").orEmpty()
+                VaultSaveLogin(id, site = params.string("site")?.takeIf { it.isNotBlank() } ?: origin, origin = origin)
+            }
             else -> null
         }
 
@@ -155,6 +190,17 @@ object InputAnswers {
 
     /** An empty [value] declines the prompt. */
     fun value(value: String): JsonObject = buildJsonObject { put("value", value) }
+
+    /**
+     * A [InputRequest.VaultSaveLogin] answer: the login as a JSON string in `value`. The gateway drops
+     * one without a password, so send [value] `""` to not save.
+     */
+    fun saveLogin(identifier: String, password: String): JsonObject = value(
+        buildJsonObject {
+            put("identifier", identifier)
+            put("password", password)
+        }.toString(),
+    )
 }
 
 private fun JsonObject.strings(key: String): List<String> =

@@ -137,9 +137,20 @@ class ChatNotifications(private val context: Context) {
                     )
                 }
             }
+            // Passwords and codes are typed in the app only; a tap opens the chat.
             is InputRequest.Secret -> builder
-                .setContentTitle(if (request.kind == InputRequest.Secret.Kind.Sudo) "Sudo password needed" else "Secret needed")
+                .setContentTitle(
+                    when (request.kind) {
+                        InputRequest.Secret.Kind.Sudo -> "Sudo password needed"
+                        InputRequest.Secret.Kind.Secret -> "Secret needed"
+                        InputRequest.Secret.Kind.VaultUnlock -> "Unlock your password manager"
+                        InputRequest.Secret.Kind.VaultCode -> "Sign-in code needed"
+                    },
+                )
                 .setContentText(request.command ?: request.prompt)
+            is InputRequest.VaultSaveLogin -> builder
+                .setContentTitle(request.title)
+                .setContentText("Hermes has no login for ${request.site.ifBlank { "this site" }}. Open the chat to save one.")
         }
         return post(request.id, REQUEST_ID, builder.build())
     }
