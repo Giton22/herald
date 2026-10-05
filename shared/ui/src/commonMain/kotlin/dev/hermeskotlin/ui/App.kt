@@ -41,7 +41,10 @@ import dev.hermeskotlin.ui.bots.BotFaces
 import dev.hermeskotlin.ui.bots.StartOverDialog
 import dev.hermeskotlin.ui.bots.BotsViewModel
 import dev.hermeskotlin.ui.bots.LocalBotFaces
+import dev.hermeskotlin.core.rooms.Room
 import dev.hermeskotlin.ui.chat.ChatScreen
+import dev.hermeskotlin.ui.rooms.RoomScreen
+import dev.hermeskotlin.ui.rooms.RoomsViewModel
 import dev.hermeskotlin.ui.chat.ChatViewModel
 import dev.hermeskotlin.ui.chat.ModelConfirmDialog
 import dev.hermeskotlin.ui.chat.ModelSheet
@@ -179,6 +182,10 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     var menuOpen by remember { mutableStateOf(false) }
     val chatsProfile by app.chatsProfile.collectAsStateWithLifecycle()
     val bots: BotsViewModel = koinViewModel()
+    val rooms: RoomsViewModel = koinViewModel()
+
+    /** The hosted room filling the content area; null shows the chat. */
+    var openRoom by remember { mutableStateOf<Room?>(null) }
     val roster by bots.state.collectAsStateWithLifecycle()
     val pictures by bots.avatars.collectAsStateWithLifecycle()
     val faces = remember(roster.all, pictures) { BotFaces(roster.all, pictures) }
@@ -205,6 +212,11 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     }
 
     PlatformBackHandler(enabled = sidebar.isOpen && !sidebar.docked) { closeDrawer() }
+    // A hosted room closes back to the chat before anything else.
+    PlatformBackHandler(enabled = openRoom != null) {
+        rooms.close()
+        openRoom = null
+    }
     // On phones the keyboard makes way for the drawer.
     LaunchedEffect(sidebar) {
         snapshotFlow { sidebar.fraction > 0f && !sidebar.docked }.filter { it }.collect { focusManager.clearFocus() }
@@ -249,20 +261,30 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                 },
                 onEditBot = { bot -> editing = BotEditing(bot) },
                 onBotDeleted = { bot -> if (route.target.bot?.name == bot.name || route.target.profile == bot.name) app.newChat() },
+                onOpenRoom = { room ->
+                    rooms.open(room)
+                    openRoom = room
+                    closeDrawer()
+                },
                 selectedRunning = chatState.running,
             )
         },
     ) {
         CompositionLocalProvider(LocalBotFaces provides faces) {
-            ChatScreen(
-                target = route.target,
-                onOpenSidebar = { scope.launch { sidebar.toggle() } },
-                onNewChat = app::newChat,
-                onOpenMenu = openSessionId?.let { { menuOpen = true } },
-                onOpenChat = { id, title -> app.openSession(id, title ?: "Untitled session") },
-                onSwitchProfile = app::switchProfile,
-                viewModel = chat,
-            )
+            val shownRoom = openRoom
+            if (shownRoom != null) {
+                RoomScreen(viewModel = rooms, onBack = { rooms.close(); openRoom = null })
+            } else {
+                ChatScreen(
+                    target = route.target,
+                    onOpenSidebar = { scope.launch { sidebar.toggle() } },
+                    onNewChat = app::newChat,
+                    onOpenMenu = openSessionId?.let { { menuOpen = true } },
+                    onOpenChat = { id, title -> app.openSession(id, title ?: "Untitled session") },
+                    onSwitchProfile = app::switchProfile,
+                    viewModel = chat,
+                )
+            }
         }
     }
 

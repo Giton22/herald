@@ -60,6 +60,7 @@ import com.composeunstyled.theme.Theme
 import com.composeunstyled.theme.rememberColoredIndication
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.bots.BotTrouble
+import dev.hermeskotlin.core.rooms.Room
 import dev.hermeskotlin.core.cron.CronJob
 import dev.hermeskotlin.core.bots.lastActivity
 import dev.hermeskotlin.core.bots.rosterPreview
@@ -143,6 +144,14 @@ fun BotsRoster(
     failingRoutines: Map<String, CronJob> = emptyMap(),
     /** The bots needing the user, most pressing first. */
     needsYou: List<NeedsYou> = emptyList(),
+    /** The gateway's hosted rooms; the section is drawn only when the gateway hosts them. */
+    rooms: List<Room> = emptyList(),
+    /** Whether this gateway hosts rooms at all (`groups.capabilities`). */
+    roomsAvailable: Boolean = false,
+    /** Opens a room's conversation. */
+    onOpenRoom: (Room) -> Unit = {},
+    /** Starts a new room: name it and pick its bots. */
+    onNewRoom: () -> Unit = {},
 ) {
     val heldUp = remember(needsYou) { needsYou.filterIsInstance<NeedsYou.Answer>().associate { it.bot.name to it.waiting } }
     var hiddenOpen by remember { mutableStateOf(false) }
@@ -189,6 +198,19 @@ fun BotsRoster(
                         // A failing routine is mended on its page; anything else in the bot's chat.
                         onClick = { if (item is NeedsYou.Routine) actions.routines(item.bot) else actions.open(item.bot) },
                     )
+                }
+            }
+            if (roomsAvailable) {
+                item(key = "rooms-label") {
+                    Row(Modifier.fillMaxWidth().padding(start = 12.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        SectionLabel("Rooms", Modifier.weight(1f))
+                        IconButton(Lucide.Plus, contentDescription = "New room", onClick = onNewRoom)
+                    }
+                }
+                if (rooms.isEmpty()) {
+                    item(key = "rooms-empty") { ListNotice("No rooms yet. New room starts one with 2\u20136 bots.") }
+                } else {
+                    items(rooms, key = { "room:${it.roomId}" }) { room -> RoomRow(room, onClick = { onOpenRoom(room) }) }
                 }
             }
             item(key = "label") {
@@ -448,4 +470,46 @@ internal fun StartOverDialog(bot: Bot?, onDismiss: () -> Unit, onConfirm: (Bot) 
             Button("Start fresh", onClick = { onDismiss(); onConfirm(b) }, variant = ButtonVariant.Primary, size = ButtonSize.Small)
         },
     )
+}
+
+/** One hosted room: its name, who's in it, and when it last moved. */
+@Composable
+private fun RoomRow(room: Room, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = MinTouchTarget)
+            .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
+            .clickable(onClickLabel = "Open room ${room.name}", onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                room.name,
+                style = Theme[typography][body].copy(fontSize = 15.sp, fontWeight = FontWeight.Medium),
+                color = Theme[colors][text],
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                roomSubtitle(room),
+                style = Theme[typography][bodySmall],
+                color = Theme[colors][textSecondary],
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        val last = relativeTime(room.updatedAt)
+        if (last.isNotBlank()) {
+            Text(last, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
+        }
+    }
+}
+
+/** "3 members: ops, scribe, cadence" — enough to know who's in the room at a glance. */
+private fun roomSubtitle(room: Room): String {
+    if (room.members.isEmpty()) return "No members"
+    return "${room.members.size} members: ${room.members.joinToString(", ") { it.label }}"
 }
