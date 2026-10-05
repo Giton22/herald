@@ -117,11 +117,18 @@ class BotHealth(
      */
     private suspend fun watch(session: ChatSession) {
         var seen: MutableSet<String>? = null
-        var wasRunning = false
         var lastError: String? = null
+        // The newest finished reply seen; one after it is the bot answering. Read by key, not by watching
+        // `running` flip: a state flow may skip a short turn's running state altogether.
+        var lastReply: String? = null
         session.state.collect { state ->
             if (!state.historyLoaded) return@collect
-            val known = seen ?: state.messages.mapTo(HashSet()) { it.key }.also { seen = it }
+            val reply = (state.messages.lastOrNull() as? ChatMessage.Assistant)
+                ?.takeIf { !it.streaming && !state.running && it.text.isNotBlank() }?.key
+            val known = seen ?: state.messages.mapTo(HashSet()) { it.key }.also {
+                seen = it
+                lastReply = reply
+            }
             // An earlier page loaded on scroll-up lands above the first stored row already seen: history too.
             // Only stored rows anchor it; a live reply or a local bubble can sit anywhere meanwhile.
             val firstKnown = state.messages.indexOfFirst { it.key in known && it.key.startsWith(STORED_ROW) }
@@ -144,12 +151,10 @@ class BotHealth(
             if (self != null) {
                 if (state.error != null && state.error != lastError) noteFailure(self, state.error)
                 // A turn that ended in a reply is the bot working again.
-                if (wasRunning && !state.running && state.error == null && state.messages.lastOrNull() is ChatMessage.Assistant) {
-                    noteAnswered(self)
-                }
+                if (reply != null && reply != lastReply && state.error == null) noteAnswered(self)
             }
+            if (reply != null) lastReply = reply
             lastError = state.error
-            wasRunning = state.running
         }
     }
 
