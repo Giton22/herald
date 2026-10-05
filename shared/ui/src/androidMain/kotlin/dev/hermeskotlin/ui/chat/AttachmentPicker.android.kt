@@ -48,13 +48,9 @@ actual fun rememberAttachmentPicker(
     fun read(uris: List<Uri>) {
         if (uris.isEmpty()) return
         scope.launch {
-            val results = withContext(Dispatchers.IO) {
-                // Everything picked sits in memory until it's sent, so a pick has a budget as a whole too.
-                var left = MAX_PICK_BYTES
-                uris.map { uri -> runCatching { readAttachment(context, uri, left).also { left -= it.bytes.size } } }
-            }
-            results.mapNotNull { it.exceptionOrNull()?.message }.firstOrNull()?.let(failed)
-            results.mapNotNull { it.getOrNull() }.takeIf { it.isNotEmpty() }?.let(picked)
+            val (read, error) = readAttachments(context, uris)
+            error?.let(failed)
+            read.takeIf { it.isNotEmpty() }?.let(picked)
         }
     }
 
@@ -98,6 +94,21 @@ actual fun rememberAttachmentPicker(
             override fun pickFiles() = files.launch(arrayOf("*/*"))
         }
     }
+}
+
+/**
+ * Reads [uris] (picked here, or shared from another app) the way the composer's pickers do: photos
+ * scaled down, everything within the per-file and per-pick limits. Returns what could be read and a
+ * sentence for the first thing that couldn't.
+ */
+suspend fun readAttachments(context: Context, uris: List<Uri>): Pair<List<OutgoingAttachment>, String?> {
+    val results = withContext(Dispatchers.IO) {
+        // Everything picked sits in memory until it's sent, so a pick has a budget as a whole too.
+        var left = MAX_PICK_BYTES
+        uris.map { uri -> runCatching { readAttachment(context, uri, left).also { left -= it.bytes.size } } }
+    }
+    val error = results.firstNotNullOfOrNull { result -> result.exceptionOrNull()?.let { it.message ?: "Couldn't read a file." } }
+    return results.mapNotNull { it.getOrNull() } to error
 }
 
 @Composable
