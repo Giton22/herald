@@ -4,6 +4,8 @@ import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.rpc.JsonRpcClient
 import dev.hermeskotlin.core.rpc.RpcException
+import kotlinx.serialization.json.JsonElement
+import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
@@ -32,6 +34,49 @@ class BotsApi(private val connection: GatewayConnection) : BotChatBackend {
         if ((reply["found"] as? JsonPrimitive)?.booleanOrNull != true) return null
         val data = (reply["data"] as? JsonPrimitive)?.contentOrNull ?: return null
         return runCatching { Base64.decode(data.substringAfter("base64,")) }.getOrNull()
+    }
+
+    /**
+     * Changes some of [name]'s Bot Mode fields (null removes one), the way Desktop writes them: the gateway
+     * merges `ui_meta` per top-level key, so the whole `hermes-bots` block goes, read fresh and named by its
+     * revision so a concurrent edit from Desktop isn't overwritten; a lost race reads again and retries.
+     */
+    suspend fun updateMeta(name: String, changes: Map<String, JsonElement?>) {
+        repeat(META_ATTEMPTS) {
+            val bot = roster().bots.firstOrNull { it.name == name } ?: throw RpcException(4064, "No bot named $name.")
+            val merged = JsonObject(
+                (bot.metaBlock + changes.mapValues { it.value ?: JsonNull }).filterValues { it !is JsonNull },
+            )
+            val reply = client().request(
+                "profiles.configure",
+                buildJsonObject {
+                    put("name", name)
+                    put("ui_meta", buildJsonObject { put(BotMeta.KEY, merged) })
+                    bot.metaRevision?.let { revision -> put("ui_meta_expected_revisions", buildJsonObject { put(BotMeta.KEY, revision) }) }
+                },
+            ) as? JsonObject
+            val applied = reply?.get("applied") as? JsonObject
+            if (applied?.get("ui_meta_conflicts") == null) {
+                if ((applied?.get("ui_meta") as? JsonPrimitive)?.booleanOrNull == false) throw RpcException(0, "The gateway didn't save it.")
+                return
+            }
+        }
+        throw RpcException(0, "Changed elsewhere at the same time. Try again.")
+    }
+
+    /**
+     * Makes the gateway watch [profile]'s chats, so `sessions.changed` fires when the bot's chat moves:
+     * it only watches profiles a call has named, and the roster call doesn't count (change_watcher.py).
+     */
+    suspend fun watch(profile: String) {
+        client().request(
+            "session.list",
+            buildJsonObject {
+                put("profile", profile)
+                put("title", BOT_CHAT_TITLE)
+                put("limit", 1)
+            },
+        )
     }
 
     override suspend fun botChat(profile: String): BotSession? =
@@ -100,5 +145,6 @@ class BotsApi(private val connection: GatewayConnection) : BotChatBackend {
         private const val CLIENT_SOURCE = "desktop"
         private const val TERMINAL_COLUMNS = 80
         private val TITLE_TAKEN = Regex("already in use", RegexOption.IGNORE_CASE)
+        private const val META_ATTEMPTS = 4
     }
 }

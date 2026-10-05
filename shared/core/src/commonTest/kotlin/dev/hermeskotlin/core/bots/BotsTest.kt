@@ -70,13 +70,15 @@ class BotsTest {
     }
 
     @Test
-    fun rosterPutsPinnedFirstThenTheNewestAndLeavesHiddenOut() {
+    fun rosterPutsPinnedFirstThenTheNewest() {
         val bots = parseBotRoster(reply).bots
-        assertEquals(listOf("default", "test1", "test2"), bots.forRoster().map { it.name })
+        // Hidden bots keep their place in the order; the roster shows them in their own section.
+        assertEquals(listOf("default", "test1", "test2", "old-helper"), bots.forRoster().map { it.name })
+        assertTrue(bots.forRoster().last().meta.hidden)
         // A bot just made outranks older chats; a pinned one outranks everything.
         val fresh = HermesJson.decodeFromString(Bot.serializer(), """{"name":"fresh","ui_meta":{"hermes-bots":{"created":1791170000000}}}""")
         val pinned = HermesJson.decodeFromString(Bot.serializer(), """{"name":"zed","ui_meta":{"hermes-bots":{"pinned":true}}}""")
-        assertEquals(listOf("zed", "fresh", "default", "test1", "test2"), (bots + fresh + pinned).forRoster().map { it.name })
+        assertEquals(listOf("zed", "fresh", "default", "test1", "test2", "old-helper"), (bots + fresh + pinned).forRoster().map { it.name })
         // Background work counts as activity.
         assertEquals(1791162900.0, bots[1].lastActivity())
     }

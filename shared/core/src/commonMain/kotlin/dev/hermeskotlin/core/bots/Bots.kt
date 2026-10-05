@@ -31,8 +31,17 @@ data class Bot(
     /** The Bot Chat, resolved by the gateway on every listing; null until there is one. */
     @SerialName("canonical_session") val canonicalSession: BotSession? = null,
     @SerialName("ui_meta") val uiMeta: JsonObject? = null,
+    /** Each `ui_meta` key's write count, for compare-and-swap writes; always sent, maybe empty. */
+    @SerialName("ui_meta_revisions") val uiMetaRevisions: JsonObject? = null,
     @SerialName("has_avatar") val hasAvatar: Boolean = false,
 ) {
+    /** The `hermes-bots` block as stored, unknown keys and all, for a write that changes only some of them. */
+    val metaBlock: JsonObject get() = uiMeta?.get(BotMeta.KEY) as? JsonObject ?: JsonObject(emptyMap())
+
+    /** The `hermes-bots` revision a write must name, or null on a gateway without compare-and-swap. */
+    val metaRevision: Int?
+        get() = uiMetaRevisions?.let { (it[BotMeta.KEY] as? JsonPrimitive)?.takeUnless { p -> p.isString }?.content?.toIntOrNull() ?: 0 }
+
     /** Desktop's look and title for this bot (`ui_meta["hermes-bots"]`); every field may be missing. */
     val meta: BotMeta get() = BotMeta.of(uiMeta?.get(BotMeta.KEY))
 
@@ -63,6 +72,7 @@ data class BotSession(
     val preview: String? = null,
     @SerialName("started_at") val startedAt: Double? = null,
     @SerialName("last_active") val lastActive: Double? = null,
+    @SerialName("message_count") val messageCount: Int? = null,
 ) {
     /** The stored session to open: the live end of the chat. */
     val openId: String? get() = resolvedId?.takeIf { it.isNotBlank() } ?: id?.takeIf { it.isNotBlank() }
@@ -117,18 +127,27 @@ fun parseBotRoster(result: JsonElement?): BotRoster {
 
 /**
  * Desktop's roster order (roster-pane-derivation.ts): pinned bots first, then by whichever is newer, the
- * bot's latest activity or its creation, so a bot just made sits on top. Ties by name. Hidden bots stay out.
+ * bot's latest activity or its creation, so a bot just made sits on top. Ties by name.
  */
-fun List<Bot>.forRoster(): List<Bot> = filterNot { it.meta.hidden }
-    .sortedWith(
+fun List<Bot>.forRoster(): List<Bot> = sortedWith(
         compareByDescending<Bot> { it.meta.pinned }
             .thenByDescending { maxOf(it.lastActivity() ?: 0.0, (it.meta.createdMs ?: 0.0) / 1000) }
             .thenBy { it.label.lowercase() },
-    )
+)
 
 /** The bot's latest sign of life, in epoch seconds: its newest chat or background work. */
 fun Bot.lastActivity(): Double? =
     listOfNotNull(canonicalSession?.activityAt, lastSession?.activityAt, workerSession?.activityAt).maxOrNull()
+
+/** A roster row's second line; [fromBot] when it's another bot's message, shown as theirs. */
+data class RosterPreview(val text: String, val fromBot: String? = null)
+
+/** The latest line, with another bot's "Message from 🤖 X (@x):" turned into who said it (row-helpers.ts). */
+fun Bot.rosterPreview(): RosterPreview? {
+    val line = previewLine() ?: return null
+    val agent = dev.hermeskotlin.core.chat.AgentMessage.parse(line) ?: return RosterPreview(line)
+    return RosterPreview(agent.body.ifEmpty { "…" }, fromBot = agent.sender)
+}
 
 /** The Bot Chat's latest line as a roster row shows it: Markdown marks taken out, one line (labels.ts `stripPreviewMarkdown`). */
 fun Bot.previewLine(): String? = (canonicalSession?.preview ?: lastSession?.preview ?: return null).let { text ->

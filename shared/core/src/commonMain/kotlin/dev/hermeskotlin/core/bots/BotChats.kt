@@ -40,6 +40,12 @@ class BotChats(private val backend: BotChatBackend) {
     }
 
     /**
+     * The user retired [name]'s chat on purpose (archived it to start over): an empty lookup now means "none",
+     * so the next open may start a fresh one.
+     */
+    suspend fun forget(name: String) = knownLock.withLock { known -= name }
+
+    /**
      * The stored session to open for [bot]'s chat: the live end of its Bot Chat, started first when it has
      * none. One open per bot at a time, so a double tap can't start two chats.
      */
