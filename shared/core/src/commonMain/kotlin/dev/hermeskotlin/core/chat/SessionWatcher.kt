@@ -14,6 +14,7 @@ import dev.hermeskotlin.core.sessions.LiveStatus
 import io.ktor.util.date.getTimeMillis
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableSharedFlow
@@ -24,6 +25,8 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -60,6 +63,7 @@ data class WatchedTurnEnd(val storedId: String, val title: String, val text: Str
  *
  * Works only while the socket is up: in sight, while a turn runs, or with Notifications anywhere.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 class SessionWatcher(
     private val connection: GatewayConnection,
     private val host: ChatHost,
@@ -79,10 +83,35 @@ class SessionWatcher(
 
     init {
         scope.launch {
-            connection.state.map { (it as? ConnectionState.Connected)?.client }.distinctUntilChanged().collectLatest { client ->
-                // A new socket is attached to nothing: everything is watched again from scratch.
-                _chats.value = emptyMap()
-                if (client != null) watch(client)
+            connection.state.map { state ->
+                when (state) {
+                    is ConnectionState.Connected -> state.client
+                    is ConnectionState.Connecting, is ConnectionState.Reconnecting -> BETWEEN_SOCKETS
+                    else -> null
+                }
+            }.distinctUntilChanged().collectLatest { link ->
+                when (link) {
+                    // A new socket is attached to nothing, so each chat is attached again. What was watched stays
+                    // meanwhile: a request still waiting keeps its notification (no second heads-up), and a reply
+                    // still reaches a chat whose turn ended while the socket was down.
+                    is JsonRpcClient -> watch(link)
+                    BETWEEN_SOCKETS -> Unit
+                    // Signed out, or nothing to retry: nothing is watched.
+                    else -> _chats.value = emptyMap()
+                }
+            }
+        }
+        scope.launch {
+            // Both hear a watched chat's requests once it's open, but only the open chat sees its answer there.
+            // Gone from the chat still open means answered (or withdrawn); switching chats isn't an answer.
+            var shownIn: String? = null
+            var shown = emptySet<String>()
+            host.session.flatMapLatest { it?.state ?: flowOf(null) }.collect { state ->
+                val storedId = state?.storedSessionId
+                val now = state?.inputRequests.orEmpty().mapTo(HashSet()) { it.id }
+                if (storedId != null && storedId == shownIn) (shown - now).forEach(::drop)
+                shownIn = storedId
+                shown = now
             }
         }
     }
@@ -135,6 +164,12 @@ class SessionWatcher(
             val openId = host.session.value?.state?.value?.storedSessionId
             for ((storedId, row) in live.rows) {
                 if (!row.status.running || storedId == openId || row.title == BotsApi.BOT_CHAT_TITLE) continue
+                // Compressing a chat goes on in a new stored session on the same runtime: the same chat, renamed.
+                _chats.value.values.firstOrNull { it.runtimeId == row.runtimeId && it.storedId != storedId }?.let { old ->
+                    _chats.update { all -> all[old.storedId]?.let { all - old.storedId + (storedId to it.copy(storedId = storedId)) } ?: all }
+                    attention.watched(row.runtimeId, storedId, row.status.running, emptyList())
+                    if (attached.remove(old.storedId)) attached += storedId
+                }
                 if (storedId in attached || attached.size >= maxWatched) continue
                 attached += storedId
                 when (attach(client, storedId, row)) {
@@ -152,8 +187,14 @@ class SessionWatcher(
     }
 
     private suspend fun attach(client: JsonRpcClient, storedId: String, row: LiveSession): Attach {
-        // Known before the call, so a request sent while it attaches already finds its chat.
-        _chats.update { it + (storedId to WatchedChat(storedId, row.runtimeId, row.title)) }
+        val since = clock()
+        val known = storedId in _chats.value
+        // Known before the call, so a request sent while it attaches already finds its chat. One watched on an
+        // earlier socket keeps its requests until the reply says which still wait.
+        _chats.update { all ->
+            val chat = all[storedId]?.let { it.copy(runtimeId = row.runtimeId, title = row.title.ifBlank { it.title }) }
+            all + (storedId to (chat ?: WatchedChat(storedId, row.runtimeId, row.title)))
+        }
         val result = try {
             client.request(
                 "session.activate",
@@ -171,7 +212,8 @@ class SessionWatcher(
             null
         }
         if (result == null) {
-            _chats.update { it - storedId }
+            // A timeout says nothing either way: one watched before keeps what it had, and the next list decides.
+            if (!known) _chats.update { it - storedId }
             return Attach.Failed
         }
         val runtimeId = result.string("session_id") ?: row.runtimeId
@@ -186,8 +228,11 @@ class SessionWatcher(
         val now = clock()
         _chats.update { all ->
             val chat = all[storedId] ?: return@update all
-            val fresh = open.filter { request -> chat.requests.none { it.id == request.id } }
-            all + (storedId to chat.copy(runtimeId = runtimeId, requests = chat.requests + fresh, arrivals = chat.arrivals + fresh.associate { it.id to now }))
+            // The reply lists every request still open. One heard on this socket since the call went out is as
+            // new; one from an earlier socket that the reply leaves out was answered while that socket was down.
+            val heard = chat.requests.filter { request -> (chat.arrivals[request.id] ?: 0) >= since && open.none { it.id == request.id } }
+            val requests = open + heard
+            all + (storedId to chat.copy(runtimeId = runtimeId, requests = requests, arrivals = requests.associate { it.id to (chat.arrivals[it.id] ?: now) }))
         }
         attention.watched(runtimeId, storedId, result.boolean("running") == true, open)
         return Attach.Done
@@ -254,5 +299,8 @@ class SessionWatcher(
         /** Chats attached on one socket at most. With no way to detach, each stays until the socket closes. */
         const val MAX_WATCHED = 10
         const val METHOD_NOT_FOUND = -32601
+
+        /** Connecting or retrying: no socket, but one is on its way. */
+        val BETWEEN_SOCKETS = Any()
     }
 }

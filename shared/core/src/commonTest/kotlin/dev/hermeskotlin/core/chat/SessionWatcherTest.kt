@@ -43,8 +43,8 @@ class SessionWatcherTest {
     /** `gateway.ready` without the heartbeat, so moving the test clock never trips it. */
     private val ready = """{"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready","payload":{}}}"""
 
-    /** A live row: stored id, status, title. Runtime ids are `rt-<stored id>`. */
-    private data class Row(val key: String, val status: String, val title: String = "Chat $key")
+    /** A live row: stored id, status, title. Runtime ids are `rt-<stored id>` unless given. */
+    private data class Row(val key: String, val status: String, val title: String = "Chat $key", val runtime: String = "rt-$key")
 
     /** What the fake gateway lists as live, and what `session.activate` hands back as open requests. */
     private val live = MutableStateFlow(listOf<Row>())
@@ -67,7 +67,7 @@ class SessionWatcherTest {
                 val sid = params?.get("session_id")?.jsonPrimitive?.contentOrNull.orEmpty()
                 val result = when (method) {
                     "session.active_list" -> live.value.joinToString(",", """{"sessions":[""", "]}") {
-                        """{"id":"rt-${it.key}","session_key":"${it.key}","status":"${it.status}","title":"${it.title}"}"""
+                        """{"id":"${it.runtime}","session_key":"${it.key}","status":"${it.status}","title":"${it.title}"}"""
                     }
                     "session.activate" -> """{"session_id":"$sid","running":true,"open_requests":$openRequests}"""
                     "session.resume" -> """{"session_id":"rt-$sid","running":false}"""
@@ -232,5 +232,103 @@ class SessionWatcherTest {
         runCurrent()
         assertEquals(2, sockets.size)
         assertEquals(1, sockets.last().sent.value.count { it["method"]?.jsonPrimitive?.contentOrNull == "session.activate" })
+    }
+
+    private suspend fun TestScope.reconnect(setup: Setup) {
+        sockets.last().serverClose(1006, "gone")
+        setup.connection.state.first { it !is ConnectionState.Connected }
+        advanceTimeBy(2_000)
+        setup.connection.state.first { it is ConnectionState.Connected }
+        runCurrent()
+    }
+
+    @Test
+    fun aRequestAnsweredInTheOpenChatNoLongerWaitsOnceTheChatIsLeft() = runTest {
+        live.value = listOf(Row("a", "working"))
+        val setup = setup()
+        setup.watcher.chats.first { "a" in it }
+        // Watched first, then opened: both hear its requests on the one socket.
+        val session = setup.host.open(url, "a", null)
+        session.state.first { it.runtimeSessionId == "rt-a" }
+        sockets.last().push(approval("srq-1", "rt-a"))
+        val request = session.state.first { it.inputRequests.isNotEmpty() }.inputRequests.single()
+        setup.watcher.chats.first { it["a"]?.requests?.isNotEmpty() == true }
+
+        assertTrue(session.answer(request, InputAnswers.approval(ApprovalChoice.Once)))
+        session.state.first { it.inputRequests.isEmpty() }
+        runCurrent()
+        setup.host.open(url, "b", null)
+        runCurrent()
+        // Else, once out of sight, the approval just given would notify again.
+        assertTrue(setup.watcher.chats.value.getValue("a").requests.isEmpty())
+    }
+
+    @Test
+    fun aNewSocketKeepsAWaitingRequestInsteadOfDroppingItAndAskingAgain() = runTest {
+        openRequests = """[{"id":"srq-1","method":"approval","params":{"session_id":"rt-a","command":"ls","choices":["once","deny"]}}]"""
+        live.value = listOf(Row("a", "waiting"))
+        val setup = setup()
+        setup.watcher.chats.first { it["a"]?.requests?.isNotEmpty() == true }
+        val seen = mutableListOf<List<String>>()
+        backgroundScope.launch { setup.watcher.chats.collect { all -> seen += all["a"]?.requests.orEmpty().map { it.id } } }
+        runCurrent()
+
+        reconnect(setup)
+        assertEquals(1, sockets.last().sent.value.count { it["method"]?.jsonPrimitive?.contentOrNull == "session.activate" })
+        // A gap would take its notification down and post it again, with a second heads-up.
+        assertTrue(seen.all { it == listOf("srq-1") }, "requests seen: $seen")
+    }
+
+    @Test
+    fun aRequestAnsweredWhileTheSocketWasDownLeavesWithTheNewAttach() = runTest {
+        openRequests = """[{"id":"srq-1","method":"approval","params":{"session_id":"rt-a","command":"ls","choices":["once","deny"]}}]"""
+        live.value = listOf(Row("a", "waiting"))
+        val setup = setup()
+        setup.watcher.chats.first { it["a"]?.requests?.isNotEmpty() == true }
+        openRequests = "[]"
+        live.value = listOf(Row("a", "working"))
+        reconnect(setup)
+        assertTrue(setup.watcher.chats.value.getValue("a").requests.isEmpty())
+    }
+
+    @Test
+    fun aReplyAfterANewSocketStillReachesAChatWhoseTurnEnded() = runTest {
+        live.value = listOf(Row("a", "working"))
+        val setup = setup()
+        setup.watcher.chats.first { "a" in it }
+        // Attached, not only being attached.
+        runCurrent()
+        live.value = listOf(Row("a", "idle"))
+        reconnect(setup)
+
+        assertEquals(setOf("a"), setup.watcher.chats.value.keys)
+        assertTrue(setup.watcher.reply("a", "And then?"))
+        val submit = sockets.last().sent.value.single { it["method"]?.jsonPrimitive?.contentOrNull == "prompt.submit" }
+        assertEquals("rt-a", submit["params"]!!.jsonObject["session_id"]?.jsonPrimitive?.contentOrNull)
+    }
+
+    @Test
+    fun signingOutForgetsTheWatchedChats() = runTest {
+        live.value = listOf(Row("a", "working"))
+        val setup = setup()
+        setup.watcher.chats.first { "a" in it }
+        setup.connection.stop()
+        setup.watcher.chats.first { it.isEmpty() }
+    }
+
+    @Test
+    fun aChatWhoseStoredIdChangesKeepsItsOneAttach() = runTest {
+        live.value = listOf(Row("a", "working"))
+        val watcher = setup().watcher
+        watcher.chats.first { "a" in it }
+        // Compressing a chat goes on in a new stored session, on the same runtime.
+        live.value = listOf(Row("a2", "working", runtime = "rt-a"))
+        advanceTimeBy(10_001)
+        runCurrent()
+        assertEquals(setOf("a2"), watcher.chats.value.keys)
+        assertEquals(1, sentMethods("session.activate").size)
+
+        sockets.last().push(approval("srq-1", "rt-a"))
+        watcher.chats.first { it["a2"]?.requests?.isNotEmpty() == true }
     }
 }
