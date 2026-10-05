@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.RemoteInput
+import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.chat.ApprovalChoice
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatSession
@@ -11,6 +12,7 @@ import dev.hermeskotlin.core.chat.InputAnswers
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
+import dev.hermeskotlin.core.push.PushSetup
 import dev.hermeskotlin.core.settings.SettingsStore
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
@@ -28,6 +30,8 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
     private val notifications: ChatNotifications by inject()
     private val scope: CoroutineScope by inject()
     private val settings: SettingsStore by inject()
+    private val bots: BotsApi by inject()
+    private val push: PushSetup by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -45,7 +49,12 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         val text = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(KEY_TEXT)?.toString()?.trim()
         when (intent.action) {
             ACTION_STOP -> session?.interrupt()
-            ACTION_DISCONNECT -> settings.update { it.copy(stayConnected = false) }
+            ACTION_DISCONNECT -> {
+                // Whichever keeps the quiet notification up goes: the socket, and push with it.
+                val pushOn = settings.settings.value?.pushAnywhere == true
+                settings.update { it.copy(stayConnected = false) }
+                if (pushOn) withTimeoutOrNull(RECEIVER_BUDGET_MS) { push.disable() }
+            }
             ACTION_APPROVE -> {
                 val choice = ApprovalChoice.fromWire(intent.getStringExtra(EXTRA_CHOICE).orEmpty()) ?: return
                 answer(session, intent.getStringExtra(EXTRA_REQUEST_ID) ?: return) { InputAnswers.approval(choice) }
@@ -54,6 +63,19 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 if (text.isNullOrEmpty()) return
                 answer(session, intent.getStringExtra(EXTRA_REQUEST_ID) ?: return) { request ->
                     (request as? InputRequest.Clarify)?.let { InputAnswers.clarify(it, listOf(listOf(text))) }
+                }
+            }
+            ACTION_BOT_CLEARED -> intent.getStringExtra(EXTRA_BOT)?.let(notifications::forgetBot)
+            ACTION_BOT_REPLY -> {
+                val bot = intent.getStringExtra(EXTRA_BOT) ?: return
+                val storedId = intent.getStringExtra(EXTRA_SESSION_ID) ?: return
+                if (text.isNullOrEmpty()) return
+                notifications.cancelBot(bot)
+                awaitConnection()
+                // The bot's answer comes back as its next notification.
+                val sent = scope.async { runCatching { bots.sendToBot(bot, storedId, text) }.isSuccess }
+                if (withTimeoutOrNull(RECEIVER_BUDGET_MS) { sent.await() } == false) {
+                    notifications.postFailure(bot, ChatNotifications.BOT_ID, "Couldn't send it. Open Herald to try again.")
                 }
             }
             ACTION_REPLY -> {
@@ -104,6 +126,9 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         const val ACTION_CLARIFY = "dev.hermeskotlin.action.CLARIFY"
         const val ACTION_REPLY = "dev.hermeskotlin.action.REPLY"
         const val ACTION_DISCONNECT = "dev.hermeskotlin.action.DISCONNECT"
+        const val ACTION_BOT_REPLY = "dev.hermeskotlin.action.BOT_REPLY"
+        const val ACTION_BOT_CLEARED = "dev.hermeskotlin.action.BOT_CLEARED"
+        const val EXTRA_BOT = "bot"
 
         const val EXTRA_REQUEST_ID = "request_id"
         const val EXTRA_CHOICE = "choice"

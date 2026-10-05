@@ -3,6 +3,12 @@ package dev.hermeskotlin.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.auth.AuthApi
+import dev.hermeskotlin.core.bots.Bot
+import dev.hermeskotlin.core.bots.BotChats
+import dev.hermeskotlin.core.bots.BotSession
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
+import dev.hermeskotlin.ui.chat.BotIdentity
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatLinks
 import dev.hermeskotlin.core.chat.ComposeDraft
@@ -13,6 +19,7 @@ import dev.hermeskotlin.core.gateway.GatewayList
 import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.profiles.ProfileStore
+import dev.hermeskotlin.core.push.PushSetup
 import dev.hermeskotlin.ui.chat.ChatTarget
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -51,10 +58,20 @@ class AppViewModel(
     private val host: ChatHost,
     private val profiles: ProfileStore,
     private val links: ChatLinks,
+    private val botChats: BotChats,
+    private val push: PushSetup,
 ) : ViewModel() {
 
     private val _route = MutableStateFlow<Route>(Route.Loading)
     val route: StateFlow<Route> = _route.asStateFlow()
+
+    private val _chatsProfile = MutableStateFlow<String?>(null)
+
+    /**
+     * The profile picked for chats (null: the launch profile). A bot's chat runs in the bot's own profile
+     * without changing this, so the chat list and the next new chat stay where they were.
+     */
+    val chatsProfile: StateFlow<String?> = _chatsProfile.asStateFlow()
 
     // Bumped when a sign-in or sign-out changes which gateways hold a session; the list alone doesn't show it.
     private val sessionsChanged = MutableStateFlow(0)
@@ -87,8 +104,10 @@ class AppViewModel(
                 .collect { link ->
                     links.consume(link)
                     val open = (_route.value as? Route.Chat)?.target?.storedSessionId
+                    val bot = link.bot
                     val stored = link.storedSessionId
                     when {
+                        bot != null -> openBotLink(bot, link.title, stored)
                         stored == null -> newChat(link.draft)
                         open != stored -> openSession(stored, link.title ?: "Chat")
                     }
@@ -149,6 +168,8 @@ class AppViewModel(
         viewModelScope.launch {
             val wasCurrent = currentGateway()?.url == gateway.url || gateways.current()?.url == gateway.url
             if (wasCurrent) {
+                // While the socket is still up: the gateway forgets this phone's push identity.
+                push.forget()
                 connection.stop()
                 host.close()
             }
@@ -171,6 +192,68 @@ class AppViewModel(
     fun newChat(draft: ComposeDraft? = null) {
         val gateway = signedInGateway() ?: return
         _route.value = Route.Chat(newChatTarget(gateway, currentProfile()).copy(draft = draft))
+    }
+
+    /** Opens [bot]'s conversation [storedSessionId] that isn't its Bot Chat, in the bot's profile. */
+    fun openBotSession(bot: Bot, storedSessionId: String, title: String) {
+        val gateway = signedInGateway() ?: return
+        _route.value = Route.Chat(ChatTarget(gateway, storedSessionId, title, profile = bot.name))
+    }
+
+    /** A new throwaway chat with [bot], apart from its permanent one. */
+    fun newBotChat(bot: Bot) {
+        val gateway = signedInGateway() ?: return
+        _route.value = Route.Chat(newChatTarget(gateway, bot.name))
+    }
+
+    /** Opens [bot]'s permanent chat, the stored session [storedSessionId], in the bot's own profile. */
+    fun openBotChat(bot: Bot, storedSessionId: String) {
+        val gateway = signedInGateway() ?: return
+        _route.value = Route.Chat(botChatTarget(gateway, storedSessionId, bot.name, bot.label))
+    }
+
+    /**
+     * A bot's chat asked for from outside (notification, shortcut, link). With a known [storedSessionId] it
+     * opens at once and is then checked against the gateway; without one it's looked up first, safely.
+     */
+    private fun openBotLink(bot: String, label: String?, storedSessionId: String?) {
+        val gateway = signedInGateway() ?: return
+        val name = label?.takeIf { it.isNotBlank() } ?: Bot(name = bot).label
+        if (storedSessionId != null) {
+            _route.value = Route.Chat(botChatTarget(gateway, storedSessionId, bot, name).also(::followBotChat))
+            return
+        }
+        viewModelScope.launch {
+            connection.state.first { it is ConnectionState.Connected }
+            val id = runCatching { botChats.open(Bot(name = bot)) }.getOrNull() ?: return@launch
+            _route.value = Route.Chat(botChatTarget(gateway, id, bot, name))
+        }
+    }
+
+    private fun botChatTarget(gateway: SavedGateway, storedSessionId: String, name: String, label: String) =
+        ChatTarget(gateway, storedSessionId, label, profile = name, bot = BotIdentity(name, label, chatsProfile = currentProfile()))
+
+    /**
+     * A bot's chat reopened from a past launch may have moved on since (`/compress` continues it in a new
+     * session), so ask the gateway where it lives now and follow it. The remembered id counts as proof the
+     * bot has a chat, so an unsure answer never starts a second one; it just leaves the chat as it was.
+     */
+    private fun followBotChat(target: ChatTarget) {
+        val bot = target.bot ?: return
+        val stored = target.storedSessionId ?: return
+        viewModelScope.launch {
+            connection.state.first { it is ConnectionState.Connected }
+            val live = try {
+                botChats.open(Bot(name = bot.name, canonicalSession = BotSession(id = stored)))
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                return@launch
+            }
+            if (live != stored && (_route.value as? Route.Chat)?.target == target) {
+                _route.value = Route.Chat(target.copy(storedSessionId = live))
+            }
+        }
     }
 
     /**
@@ -197,9 +280,11 @@ class AppViewModel(
     /** Signs out of the current gateway; it stays saved, so signing in again (or switching away) is one step. */
     fun signOut() {
         val gateway = currentGateway() ?: return
-        connection.stop()
-        host.close()
         viewModelScope.launch {
+            // While the socket is still up: the gateway forgets this phone's push identity.
+            push.forget()
+            connection.stop()
+            host.close()
             auth.signOut(gateway.gatewayUrl)
             sessionsChanged.update { it + 1 }
             _route.value = Route.SignIn(gateway)
@@ -228,8 +313,15 @@ class AppViewModel(
     /** The last chat the user had open on [gateway] in its picked profile, or a fresh one. */
     private suspend fun home(gateway: SavedGateway): Route.Chat {
         val profile = profiles.get(gateway.gatewayUrl)
+        _chatsProfile.value = profile
         val last = lastChats.get(gateway.gatewayUrl, profile)
-        return Route.Chat(last?.let { ChatTarget(gateway, it.sessionId, it.title, profile = profile) } ?: newChatTarget(gateway, profile))
+        val bot = last?.bot
+        val target = when {
+            last == null -> newChatTarget(gateway, profile)
+            bot != null -> botChatTarget(gateway, last.sessionId, bot, last.botLabel ?: bot).also(::followBotChat)
+            else -> ChatTarget(gateway, last.sessionId, last.title, profile = profile)
+        }
+        return Route.Chat(target)
     }
 
     // The nonce makes every new chat a fresh target, even right after another empty one.
@@ -238,7 +330,7 @@ class AppViewModel(
 
     private fun signedInGateway(): SavedGateway? = (_route.value as? Route.Chat)?.gateway
 
-    private fun currentProfile(): String? = (_route.value as? Route.Chat)?.target?.profile
+    private fun currentProfile(): String? = _chatsProfile.value
 
     private fun currentGateway(): SavedGateway? = (_route.value as? Route.SignIn)?.gateway ?: signedInGateway()
 }

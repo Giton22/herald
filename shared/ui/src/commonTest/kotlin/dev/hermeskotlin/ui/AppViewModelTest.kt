@@ -2,6 +2,8 @@ package dev.hermeskotlin.ui
 
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
+import dev.hermeskotlin.core.bots.BotChatBackend
+import dev.hermeskotlin.core.bots.BotChats
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatLinks
 import dev.hermeskotlin.core.chat.LastChat
@@ -11,7 +13,12 @@ import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.profiles.ProfileStore
+import dev.hermeskotlin.core.push.PushApi
+import dev.hermeskotlin.core.push.PushGateway
+import dev.hermeskotlin.core.push.PushKeys
+import dev.hermeskotlin.core.push.PushSetup
 import dev.hermeskotlin.core.sessions.SessionsApi
+import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -68,7 +75,26 @@ class AppViewModelTest {
     private fun TestScope.viewModel(): AppViewModel {
         val connection = GatewayConnection(auth, openSocket = { _, _ -> error("no socket in tests") }, scope = backgroundScope)
         val host = ChatHost(connection, SessionsApi(client), backgroundScope)
-        return AppViewModel(gateways, auth, connection, lastChats, host, ProfileStore(store), ChatLinks())
+        val push = PushSetup(PushApi(connection), NoPushKeys, connection, gateways, SettingsStore(store, backgroundScope), backgroundScope) { "Test" }
+        return AppViewModel(gateways, auth, connection, lastChats, host, ProfileStore(store), ChatLinks(), BotChats(NoBotChats), push)
+    }
+
+    // Push was never set up and no bot is opened in these tests.
+    private object NoPushKeys : PushKeys {
+        override val deviceId = "test"
+        override fun registration(name: String) = error("not registering in tests")
+        override fun pinned(gatewayUrl: String): PushGateway? = null
+        override fun accepts(keys: PushGateway) = false
+        override fun pin(gatewayUrl: String, keys: PushGateway) = Unit
+        override fun retire(gatewayUrl: String) = Unit
+        override fun retired(gatewayUrl: String) = emptySet<String>()
+        override fun forgetRetired(gatewayUrl: String, deviceId: String) = Unit
+        override fun pinnedGatewayUrl(): String? = null
+    }
+
+    private object NoBotChats : BotChatBackend {
+        override suspend fun botChat(profile: String) = error("no bots in tests")
+        override suspend fun startBotChat(profile: String) = error("no bots in tests")
     }
 
     private suspend fun signedIn(gateway: SavedGateway) =

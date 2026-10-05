@@ -21,6 +21,8 @@ import dev.hermeskotlin.core.media.MediaApi
 import dev.hermeskotlin.core.models.ModelsApi
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.profiles.ProfileStore
+import dev.hermeskotlin.core.push.NtfyClient
+import dev.hermeskotlin.core.push.PushApi
 import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.rpc.openGatewaySocket
@@ -29,6 +31,9 @@ import dev.hermeskotlin.core.slash.SlashApi
 import dev.hermeskotlin.core.update.UpdateChecker
 import dev.hermeskotlin.core.journey.JourneyApi
 import dev.hermeskotlin.core.pet.PetApi
+import dev.hermeskotlin.core.bots.BotChats
+import dev.hermeskotlin.core.bots.BotsApi
+import dev.hermeskotlin.core.bots.SidebarModeStore
 import dev.hermeskotlin.core.voice.AudioApi
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
@@ -79,10 +84,16 @@ val coreModule = module {
     single { ModelsApi(get()) }
     single { SlashApi(get()) }
     single { PetApi(get()) }
+    single { BotsApi(get()) }
+    single { BotChats(get<BotsApi>()) }
+    single { SidebarModeStore(get()) }
     single { JourneyApi(get()) }
     single { AudioApi(get()) }
     // Outside requests (pictures from the web, GitHub) get a client without the gateway's cookies.
     single(named(OUTSIDE_CLIENT)) { createHttpClient() }
     single { MediaApi(get(), get(named(OUTSIDE_CLIENT))) }
     single { UpdateChecker(get(named(OUTSIDE_CLIENT)), get()) }
+    // ntfy is someone else's server: never send it the gateway's cookies.
+    single { NtfyClient(get(named(OUTSIDE_CLIENT))) }
+    single { PushApi(get()) }
 }

@@ -7,7 +7,10 @@ import dev.hermeskotlin.core.network.map
 import dev.hermeskotlin.core.storage.KeyValueStore
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
+import io.ktor.client.plugins.timeout
+import io.ktor.client.request.delete
 import io.ktor.client.request.get
+import io.ktor.http.encodeURLPathPart
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -51,6 +54,14 @@ class ProfilesApi(private val client: HttpClient) {
             )
         }
     }
+
+    /**
+     * `DELETE /api/profiles/{name}`: removes the profile, chats, memory and all, for good. The gateway
+     * refuses the default profile. It can take a few seconds while the profile's backend stops.
+     */
+    suspend fun delete(url: GatewayUrl, name: String): ApiResult<Unit> = apiCall {
+        client.delete(url.resolve("api/profiles/${name.encodeURLPathPart()}")) { timeout { requestTimeoutMillis = 30_000 } }
+    }.map { }
 
     companion object {
         const val DEFAULT = "default"

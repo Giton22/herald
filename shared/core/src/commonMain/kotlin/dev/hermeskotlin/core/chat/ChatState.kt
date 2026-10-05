@@ -98,12 +98,17 @@ sealed interface ChatMessage {
         val usage: TurnUsage? = null,
         /** Something the gateway wants known about the finished turn, e.g. that it wasn't saved. */
         val warning: String? = null,
+        /** The bot whose message this answered; such a reply folds away under it, as on Desktop. */
+        val repliedTo: String? = null,
         /**
          * When it finished, in epoch seconds: its last stored row's time, or when this device saw it end
          * (live events carry no time). Null while it streams.
          */
         val timestamp: Double? = null,
     ) : ChatMessage
+
+    /** A row written by the machinery rather than the person: another bot's message, a delivery, a routine… */
+    data class Event(override val key: String, val event: TranscriptEvent) : ChatMessage
 
     /**
      * A one-line notice about the session: a live `notice`, shown on this device only, or a [stored] row

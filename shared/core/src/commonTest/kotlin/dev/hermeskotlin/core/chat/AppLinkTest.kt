@@ -11,6 +11,7 @@ class AppLinkTest {
         assertEquals(AppLink.NewChat, AppLink.parse("hermes://new-chat"))
         assertEquals(AppLink.NewChatVoice, AppLink.parse("hermes://new-chat-voice"))
         assertEquals(AppLink.Session("20260105_101500_ab12"), AppLink.parse("hermes://session/20260105_101500_ab12"))
+        assertEquals(AppLink.Bot("researcher"), AppLink.parse("hermes://bot/researcher"))
     }
 
     @Test
@@ -35,6 +36,8 @@ class AppLinkTest {
         assertNull(AppLink.parse("hermes://session/"))
         assertNull(AppLink.parse("hermes://session/a/b"))
         assertNull(AppLink.parse("hermes://session"))
+        assertNull(AppLink.parse("hermes://bot/"))
+        assertNull(AppLink.parse("hermes://bot/a/b"))
         assertNull(AppLink.parse("hermes://new-chat/extra"))
         assertNull(AppLink.parse("not a link"))
     }

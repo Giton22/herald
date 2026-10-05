@@ -45,6 +45,8 @@ import com.composables.icons.lucide.Image
 import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
+import com.composables.icons.lucide.Send
+import dev.hermeskotlin.core.push.PushStatus
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
@@ -97,6 +99,8 @@ fun SettingsScreen(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val info by viewModel.gateway.collectAsStateWithLifecycle()
     val check by viewModel.check.collectAsStateWithLifecycle()
+    val push by viewModel.pushStatus.collectAsStateWithLifecycle()
+    val pushTest by viewModel.pushTest.collectAsStateWithLifecycle()
     val wallpaper by viewModel.wallpaper.collectAsStateWithLifecycle()
     var wallpaperError by remember { mutableStateOf<String?>(null) }
     val chooseWallpaper = rememberWallpaperPicker(
@@ -115,6 +119,10 @@ fun SettingsScreen(
             checkOpen = true
             viewModel.runConnectionCheck()
         },
+        push = push,
+        pushTest = pushTest,
+        onPushAnywhere = viewModel::setPushAnywhere,
+        onPushTest = viewModel::sendPushTest,
         wallpaper = rememberWallpaperBitmap(wallpaper),
         hasWallpaper = wallpaper != null,
         wallpaperError = wallpaperError,
@@ -151,6 +159,10 @@ internal fun SettingsView(
     onSignOut: () -> Unit,
     onOpenGateways: () -> Unit,
     onCheckConnection: () -> Unit = {},
+    push: PushStatus = PushStatus(),
+    pushTest: Boolean? = null,
+    onPushAnywhere: (Boolean) -> Unit = {},
+    onPushTest: () -> Unit = {},
     /** The chat background, once decoded. */
     wallpaper: ImageBitmap? = null,
     hasWallpaper: Boolean = wallpaper != null,
@@ -325,6 +337,25 @@ internal fun SettingsView(
                         checked = settings.stayConnected,
                         onCheckedChange = { on -> onUpdate { it.copy(stayConnected = on) } },
                     )
+                    Divider()
+                    SwitchRow(
+                        title = "Notifications anywhere",
+                        detail = pushDetail(settings.pushAnywhere, push),
+                        checked = settings.pushAnywhere,
+                        onCheckedChange = onPushAnywhere,
+                    )
+                    if (settings.pushAnywhere && push.state == PushStatus.State.On) {
+                        Divider()
+                        ActionRow(
+                            when (pushTest) {
+                                true -> "Test sent: it should arrive in a moment"
+                                false -> "The gateway couldn't send the test"
+                                null -> "Send a test notification"
+                            },
+                            Lucide.Send,
+                            onPushTest,
+                        )
+                    }
                 }
 
                 Section("Privacy") {
@@ -367,6 +398,21 @@ internal fun SettingsView(
                 }
             }
         }
+    }
+}
+
+/** What Notifications anywhere does, or where its setup on the gateway stands. */
+private fun pushDetail(on: Boolean, push: PushStatus): String {
+    if (!on) {
+        return "Hear from your bots even off your gateway's network, end-to-end encrypted through ntfy.sh. " +
+            "Installs the herald-push plugin on the gateway. Keeps a quiet notification."
+    }
+    return when (push.state) {
+        PushStatus.State.On -> push.detail ?: "On. Bot messages come end-to-end encrypted through ntfy.sh; it only sees scrambled data."
+        PushStatus.State.Working -> push.detail ?: "Setting up with the gateway…"
+        PushStatus.State.NotInstalled -> "The gateway doesn't have the herald-push plugin. Turn this off and on to install it."
+        PushStatus.State.Failed -> "Couldn't set up: ${push.detail ?: "unknown error"}"
+        PushStatus.State.Unknown, PushStatus.State.Off -> "On. Checks with the gateway the next time Herald reaches it."
     }
 }
 

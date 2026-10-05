@@ -1,0 +1,14 @@
+{
+  "topic": "hp-5590291362fd0c729ad48f01964acfb4",
+  "plaintext": "{\"id\":\"v1\",\"ts\":1791170000,\"type\":\"bot_message\",\"bot\":\"test1\",\"label\":\"Side\",\"text\":\"über ✓\"}",
+  "phone_enc_pkcs8": "MIGHAgEAMBMGByqGSM49AgEGCCqGSM49AwEHBG0wawIBAQQgS6PQECMuApvQlaGEe7LevaNLRbcqFWOuy8TuJ-OXCtKhRANCAAQc-gqJBG8G9eb3gYeHEoIRlg3kCWhnfWH6t0Imn0PPSCeZYakWFdCiTI3z49iTr6ziLOV94XKSthHyU36xRVxD",
+  "gateway_sig_pub": "BBLlnzZjnj_Te19ilposNIFnw7hF8pSjmNhoFUd2b67g9pFO3Kbz60HlDknjKTolIlCLQ0jXhGqSu6wVuJhNgB8",
+  "envelope": {
+    "v": 1,
+    "epk": "BIRFo8LWBCbeTLmR0_26Px3GnFB3RVam61nE-9dkplFiTkGfG_RM7Q8ecc4tiSdr50F-6VeC8ZpBRYU1LYGSNAA",
+    "salt": "waAFwPlEs2jAyuqTPOMZaQ",
+    "iv": "U-RIj3zVmfEEFtTD",
+    "ct": "V-XPc8R13i9_JL7WOI17wGoMI8GZYZf9iK6H2CuPT-gfdILV2kLYTYCj1bVW2qugcMQVmd-76Fr5psigHgFF55WT2nUD9KcxBcriAkzsRYrCzoDYOj3iE6oydM5EZTWbsnmPQyfcCm2KWP8YUow9Pw",
+    "sig": "MEUCIDTRLYQ6Drk3w_B-jf4MFUdHyylCGdTjeExBbarMFz4kAiEAxtmToHwvyebaoLviZrHTKyLk9z9OjaVNAj_bQdEi5AE"
+  }
+}

@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- With Stay connected, reconnect after the phone restarts. -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- The assistant names the app it was called up over; apps are hidden from Herald unless it says which it looks up. -->
     <queries>
@@ -38,7 +40,10 @@
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
-            <!-- hermes://new-chat and new-chat-voice start a chat (the launcher shortcuts); session/<id> opens one. -->
+            <!--
+                hermes://new-chat and new-chat-voice start a chat (the launcher shortcuts); session/<id> opens one;
+                bot/<profile> opens that bot's chat, the link Hermes Desktop uses for a bot.
+            -->
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
@@ -47,6 +52,7 @@
                 <data android:host="new-chat" />
                 <data android:host="new-chat-voice" />
                 <data android:host="session" />
+                <data android:host="bot" />
             </intent-filter>
             <!--
                 Text, links, pictures and files shared from other apps start a new chat with them as its draft.
@@ -62,6 +68,16 @@
                 android:name="android.app.shortcuts"
                 android:resource="@xml/shortcuts" />
         </activity>
+
+        <!-- Wakes the app after a reboot or an update, to reconnect when Stay connected is on. -->
+        <receiver
+            android:name=".notify.RestartReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.intent.action.BOOT_COMPLETED" />
+                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
+            </intent-filter>
+        </receiver>
 
         <!-- Keeps the gateway socket alive while a turn runs, or always with Stay connected. -->
         <service

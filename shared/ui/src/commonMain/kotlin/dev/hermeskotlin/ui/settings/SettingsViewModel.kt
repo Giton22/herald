@@ -7,10 +7,13 @@ import dev.hermeskotlin.core.gateway.CheckStage
 import dev.hermeskotlin.core.gateway.ConnectionCheck
 import dev.hermeskotlin.core.gateway.GatewayProbe
 import dev.hermeskotlin.core.gateway.StageResult
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import dev.hermeskotlin.core.gateway.ProbeResult
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.ApiResult
+import dev.hermeskotlin.core.push.PushSetup
+import dev.hermeskotlin.core.push.PushStatus
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.settings.WallpaperStore
@@ -35,6 +38,7 @@ class SettingsViewModel(
     private val auth: AuthApi,
     private val probe: GatewayProbe,
     private val connectionCheck: ConnectionCheck,
+    private val push: PushSetup,
     private val wallpapers: WallpaperStore,
 ) : ViewModel() {
 
@@ -84,4 +88,22 @@ class SettingsViewModel(
     }
 
     fun update(transform: (AppSettings) -> AppSettings) = store.update(transform)
+
+    /** Notifications anywhere: where its setup stands on this gateway. */
+    val pushStatus: StateFlow<PushStatus> = push.status
+
+    private val _pushTest = MutableStateFlow<Boolean?>(null)
+    /** The last "Send a test": true when the gateway sent it, false when it couldn't, null before or while sending. */
+    val pushTest: StateFlow<Boolean?> = _pushTest.asStateFlow()
+
+    // Off the main thread: the first time, the phone's push keys are made and wrapped in the keystore.
+    fun setPushAnywhere(on: Boolean) {
+        _pushTest.value = null
+        viewModelScope.launch(Dispatchers.Default) { if (on) push.enable() else push.disable() }
+    }
+
+    fun sendPushTest() {
+        _pushTest.value = null
+        viewModelScope.launch(Dispatchers.Default) { _pushTest.value = push.test() }
+    }
 }

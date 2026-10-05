@@ -111,8 +111,8 @@ sealed interface ChatRequest {
 
 /**
  * Identifies what the chat screen shows: a stored session, or a new chat (`storedSessionId == null`),
- * in [profile] (null: the gateway's launch profile). A new chat opened from outside (share sheet,
- * shortcut) brings its [draft].
+ * in [profile] (null: the gateway's launch profile). With [bot] it is that bot's permanent chat. A new
+ * chat opened from outside (share sheet, shortcut) brings its [draft].
  */
 data class ChatTarget(
     val gateway: SavedGateway,
@@ -120,8 +120,15 @@ data class ChatTarget(
     val title: String?,
     val nonce: Long = 0,
     val profile: String? = null,
+    val bot: BotIdentity? = null,
     val draft: ComposeDraft? = null,
 )
+
+/**
+ * The bot whose permanent chat is open: its profile and the name it goes by. [chatsProfile] is the profile
+ * the Chats list was on when it opened, where the app remembers to come back to this chat.
+ */
+data class BotIdentity(val name: String, val label: String, val chatsProfile: String? = null)
 
 /**
  * Shows the [ChatSession] the app-wide [ChatHost] has open; opening another target replaces it.
@@ -245,11 +252,19 @@ class ChatViewModel(
         }
         viewModelScope.launch {
             state
-                .map { chat -> chat.storedSessionId?.takeIf { chat.hasConversation }?.let { LastChat(it, chat.title) } }
+                .map { chat ->
+                    chat.storedSessionId?.takeIf { chat.hasConversation }?.let { id ->
+                        val bot = target?.bot
+                        LastChat(id, chat.title, bot = bot?.name, botLabel = bot?.label)
+                    }
+                }
                 // Distinct before dropping nulls, so returning to the same chat after a new one saves it again.
                 .distinctUntilChanged()
                 .filterNotNull()
-                .collect { last -> target?.let { lastChats.set(it.gateway.gatewayUrl, last, it.profile) } }
+                .collect { last ->
+                    // A bot's chat is remembered where the Chats list was, which is what the next launch reads.
+                    target?.let { lastChats.set(it.gateway.gatewayUrl, last, it.bot?.chatsProfile ?: it.profile) }
+                }
         }
         viewModelScope.launch {
             combine(state, _editing) { chat, key -> key?.takeIf { chat.historyLoaded }?.let { it to chat.promptNow(it, editingRowId) } }
@@ -546,7 +561,8 @@ class ChatViewModel(
                 if (composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
             }
             when (val route = SlashRoute.of(command.name, catalog())) {
-                SlashRoute.NewChat -> _requests.send(ChatRequest.NewChat)
+                // A bot keeps one chat forever, so a fresh start there is a fresh context, as on Desktop.
+                SlashRoute.NewChat -> if (target?.bot != null) chat.compress(arg) else _requests.send(ChatRequest.NewChat)
                 // Like Desktop: bare opens the picker, `/model <name>` is for the gateway to parse.
                 SlashRoute.PickModel -> if (arg.isEmpty()) _requests.send(ChatRequest.PickModel) else onGateway()
                 SlashRoute.BrowseSessions -> if (arg.isEmpty()) _requests.send(ChatRequest.BrowseSessions) else resume(chat, arg)
@@ -567,7 +583,12 @@ class ChatViewModel(
                 }
                 SlashRoute.Yolo -> chat.toggleYolo()
                 // Bare `/title` reports the title, which the gateway's command does.
-                SlashRoute.Title -> if (arg.isEmpty()) onGateway() else chat.retitle(arg)
+                SlashRoute.Title -> when {
+                    arg.isEmpty() -> onGateway()
+                    // Its title is what makes it the bot's chat; renamed, the bot would start a new one.
+                    target?.bot != null -> chat.showCommandOutput("/title", "A bot's chat keeps its name, so the bot can find it.", failed = true)
+                    else -> chat.retitle(arg)
+                }
                 SlashRoute.Branch -> {
                     val count = arg.toIntOrNull()
                     if (arg.isNotEmpty() && (count == null || count < 1)) {

@@ -84,6 +84,10 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.Color
+import dev.hermeskotlin.core.bots.botLook
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -127,6 +131,13 @@ import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.ListEnd
 import com.composables.icons.lucide.Info
+import dev.hermeskotlin.core.chat.MESSAGE_AGENT_TOOL
+import dev.hermeskotlin.core.bots.Bot
+import dev.hermeskotlin.core.bots.handle
+import dev.hermeskotlin.core.bots.mentionQuery
+import dev.hermeskotlin.core.bots.mentionable
+import dev.hermeskotlin.ui.bots.BotAvatar
+import dev.hermeskotlin.ui.bots.LocalBotFaces
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PanelLeft
 import com.composables.icons.lucide.Pencil
@@ -302,8 +313,20 @@ fun ChatScreen(
         }
     }
 
+    // The `@word` at the cursor, read in a derived state so typing only redraws the chat when the list changes.
+    val faces = LocalBotFaces.current
+    val mention by remember(viewModel) {
+        derivedStateOf { viewModel.composer.let { mentionQuery(it.text.toString(), it.selection.end) } }
+    }
+    val mentions = remember(mention, faces, target.bot) {
+        mention?.let { faces.bots.mentionable(it.query, self = target.bot?.name) }.orEmpty()
+    }
     ChatView(
-        title = state.title?.takeIf { it.isNotBlank() } ?: target.title ?: "New chat",
+        // A bot's chat is titled "Bot Chat" on the gateway; the bot's name says more.
+        title = target.bot?.label ?: state.title?.takeIf { it.isNotBlank() } ?: target.title ?: "New chat",
+        titleFace = LocalBotFaces.current.let { faces ->
+            faces.find(target.bot?.name)?.let { bot -> { BotAvatar(bot, faces.picture(bot), size = 22.dp) } }
+        },
         state = state,
         picker = picker,
         connected = connected,
@@ -315,6 +338,11 @@ fun ChatScreen(
         voiceChat = viewModel.voice.chat.collectAsStateWithLifecycle().value,
         dictation = viewModel.voice.dictation.collectAsStateWithLifecycle().value,
         suggestions = viewModel.suggestions.collectAsStateWithLifecycle().value,
+        mentions = mentions,
+        onMention = { bot ->
+            val typed = mention ?: return@ChatView
+            viewModel.composer.edit { replace(typed.start, typed.end, "@${bot.handle} ") }
+        },
         sprite = viewModel.pets.sprite.collectAsStateWithLifecycle().value,
         // Re-rolled per conversation, kept while a new chat gets its stored id.
         placeholder = remember(target) { (if (target.storedSessionId == null) NEW_CHAT_PROMPTS else FOLLOW_UP_PROMPTS).random() },
@@ -393,6 +421,8 @@ fun ChatScreen(
 @Composable
 internal fun ChatView(
     title: String,
+    /** Drawn beside the title, e.g. the face of the bot whose chat this is. */
+    titleFace: (@Composable () -> Unit)? = null,
     state: ChatState,
     picker: ModelPickerState,
     connected: Boolean,
@@ -407,6 +437,9 @@ internal fun ChatView(
     voiceChat: VoiceChatState,
     dictation: DictationState,
     suggestions: List<SlashSuggestion>,
+    /** Bots matching the `@word` being typed, to pick one to mention. */
+    mentions: List<Bot> = emptyList(),
+    onMention: (Bot) -> Unit = {},
     sprite: PetSprite?,
     placeholder: String,
     notice: String?,
@@ -436,6 +469,7 @@ internal fun ChatView(
         Column(Modifier.widthIn(max = 760.dp).fillMaxSize().imePadding()) {
             TopBar(
                 title = title,
+                titleFace = titleFace,
                 subtitle = when {
                     !connected -> connectionLabel
                     state.attachment is Attachment.Attaching -> "Opening…"
@@ -541,6 +575,8 @@ internal fun ChatView(
                         voiceChat = voiceChat,
                         dictation = dictation,
                         suggestions = suggestions,
+                        mentions = mentions,
+                        onMention = onMention,
                         notice = notice,
                         editing = editing != null,
                         comments = comments,
@@ -583,6 +619,8 @@ private fun ColumnScope.Dock(
     voiceChat: VoiceChatState,
     dictation: DictationState,
     suggestions: List<SlashSuggestion>,
+    mentions: List<Bot>,
+    onMention: (Bot) -> Unit,
     notice: String?,
     editing: Boolean,
     comments: List<PendingComment>,
@@ -626,6 +664,11 @@ private fun ColumnScope.Dock(
             if (suggestions.isNotEmpty()) shown = suggestions
             SlashSuggestions(shown, hazeState, onPick = actions::pickSuggestion)
         }
+        AnimatedVisibility(visible = mentions.isNotEmpty() && suggestions.isEmpty(), enter = fadeIn(), exit = fadeOut()) {
+            var shown by remember { mutableStateOf(mentions) }
+            if (mentions.isNotEmpty()) shown = mentions
+            MentionSuggestions(shown, hazeState, onPick = onMention)
+        }
         if (editing) {
             Banner(
                 "Editing a message. Sending replaces it and everything after it.",
@@ -665,6 +708,7 @@ private fun ColumnScope.Dock(
 @Composable
 private fun TopBar(
     title: String,
+    titleFace: (@Composable () -> Unit)?,
     subtitle: String?,
     onOpenSidebar: () -> Unit,
     onNewChat: (() -> Unit)?,
@@ -679,14 +723,17 @@ private fun TopBar(
             BarButton(Lucide.PanelLeft, "Sessions", onClick = onOpenSidebar)
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 Column(Modifier.width(IntrinsicSize.Max), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        title.uppercase(),
-                        style = Theme[typography][label].copy(fontWeight = FontWeight.Bold, letterSpacing = 0.06.em),
-                        color = Theme[colors][textColor],
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        titleFace?.invoke()
+                        Text(
+                            title.uppercase(),
+                            style = Theme[typography][label].copy(fontWeight = FontWeight.Bold, letterSpacing = 0.06.em),
+                            color = Theme[colors][textColor],
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                        )
+                    }
                     Box(Modifier.fillMaxWidth().height(2.dp).background(Theme[colors][accent]))
                 }
                 if (!subtitle.isNullOrBlank()) {
@@ -838,6 +885,8 @@ private fun Messages(
     var confirm by remember { mutableStateOf<Pair<MessageChange, String>?>(null) }
     val lastPrompt = messages.lastOrNull { it is ChatMessage.User }?.key
     val lastReply = messages.lastOrNull { it is ChatMessage.Assistant && it.text.isNotBlank() }?.key
+    val faces = LocalBotFaces.current
+    val partners = remember(messages, faces) { messages.map { exchangePartner(it, faces) } }
     // The rewind rules read only the messages.
     val chat = remember(messages) { ChatState(messages = messages) }
     ConfirmChange(confirm, canChange, lastPrompt, chat, actions, onDismiss = { confirm = null })
@@ -902,7 +951,28 @@ private fun Messages(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp + bottomInset),
             verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.Bottom),
         ) {
-            items(messages, key = { it.key }) { message ->
+            itemsIndexed(messages, key = { _, it -> it.key }) { index, message ->
+                // Rows of one exchange with another bot are tied together by a line in that bot's colour.
+                val partner = partners.getOrNull(index)
+                val linkedAbove = partner != null && partners.getOrNull(index - 1) == partner
+                val linkedBelow = partner != null && partners.getOrNull(index + 1) == partner
+                val rail = partner?.let { name -> faces.find(name)?.let { Color(0xFF000000 or botLook(it).color.toLong()) } }
+                Box(
+                    Modifier.drawBehind {
+                        if (rail != null && (linkedAbove || linkedBelow)) {
+                            // In the list's side margin, clear of avatars and text.
+                            val x = -9.dp.toPx()
+                            val gap = 20.dp.toPx()
+                            drawLine(
+                                rail.copy(alpha = 0.55f),
+                                start = Offset(x, if (linkedAbove) -gap else 6.dp.toPx()),
+                                end = Offset(x, if (linkedBelow) size.height + gap else size.height - 6.dp.toPx()),
+                                strokeWidth = 3.dp.toPx(),
+                                cap = androidx.compose.ui.graphics.StrokeCap.Round,
+                            )
+                        }
+                    },
+                ) {
                 when (message) {
                     is ChatMessage.User -> UserBubble(
                         message,
@@ -920,16 +990,25 @@ private fun Messages(
                         onBranch = ask(MessageChange.Branch, message.key).takeIf { !message.pending && message.check == null },
                         editing = editing == message.key,
                     )
-                    is ChatMessage.Assistant -> AssistantReply(
-                        message,
-                        onBranch = ask(MessageChange.Branch, message.key),
-                        onRegenerate = chat.regenerateTarget(message.key)?.let { prompt ->
-                            rewind(MessageChange.Regenerate, prompt.key, message.key) { actions.regenerate(message.key) }
-                        },
-                        last = message.key == lastReply,
-                    )
+                    is ChatMessage.Assistant -> {
+                        val reply = @Composable {
+                            AssistantReply(
+                                message,
+                                onBranch = ask(MessageChange.Branch, message.key),
+                                onRegenerate = chat.regenerateTarget(message.key)?.let { prompt ->
+                                    rewind(MessageChange.Regenerate, prompt.key, message.key) { actions.regenerate(message.key) }
+                                },
+                                last = message.key == lastReply,
+                            )
+                        }
+                        // An answer to another bot's message folds under it; never while it's still being written.
+                        val to = message.repliedTo
+                        if (to != null && !message.streaming) RepliedToFold(to, message.text, reply) else reply()
+                    }
+                    is ChatMessage.Event -> TranscriptEventRow(message.event)
                     is ChatMessage.Command -> CommandOutput(message)
                     is ChatMessage.Notice -> NoticeLine(message)
+                }
                 }
             }
         }
@@ -1072,6 +1151,7 @@ private fun ChatMessage.contentSize(): Int = when (this) {
     is ChatMessage.Assistant -> text.length + reasoning.length + tools.size
     is ChatMessage.Command -> output.length
     is ChatMessage.Notice -> text.length
+    is ChatMessage.Event -> event.hashCode()
 }
 
 /** Tells apart the ways the link can be down: none, being re-made, or needing a new sign-in. */
@@ -1328,15 +1408,19 @@ private fun AssistantReply(
 ) {
     val settings = LocalAppSettings.current
     val showReasoning = settings.showReasoning && message.reasoning.isNotBlank()
-    val showTools = settings.showToolActivity && message.tools.isNotEmpty()
+    // Messages to other bots get their own line below, so they aren't listed again among the tools.
+    val listedTools = message.tools.filter { it.name != MESSAGE_AGENT_TOOL }
+    val showTools = settings.showToolActivity && listedTools.isNotEmpty()
     // Pictures and files the reply delivered show as themselves, not as Markdown a renderer can't load.
     val (text, media) = remember(message.text) { extractReplyMedia(message.text) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         // What's happening now is said once, above the composer; the reply keeps only what it's made of.
         if (showReasoning) Reasoning(message.reasoning)
-        if (showTools) Tools(message.tools, message.key)
+        if (showTools) Tools(listedTools, message.key)
         // Shown whatever the tool-activity setting: the work happens out of sight, in other agents.
         message.tools.filter { it.name == "delegate_task" }.forEach { DelegationCard(it) }
+        // Messages to other bots, said whatever the tool-activity setting: they're part of the conversation.
+        message.tools.filter { it.name == MESSAGE_AGENT_TOOL }.forEach { MessagedLine(it) }
         if (text.isNotBlank()) {
             // Named the way the agent will know it: the newest reply, or an older one by its first words.
             val source = remember(message.key, text, last) {
@@ -1513,6 +1597,43 @@ private fun SlashSuggestions(suggestions: List<SlashSuggestion>, hazeState: Haze
     }
 }
 
+/** The `@` list over the composer: bots to mention, with their faces, names and handles. */
+@Composable
+private fun MentionSuggestions(bots: List<Bot>, hazeState: HazeState, onPick: (Bot) -> Unit) {
+    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
+    val page = Theme[colors][background]
+    val faces = LocalBotFaces.current
+    val frosted = remember(page) {
+        HazeBlurStyle {
+            blurEnabled(true)
+            blurRadius(20.dp)
+            backgroundColor(page)
+        }
+    }
+    Column(
+        Modifier
+            .padding(start = 12.dp, end = 12.dp, top = 6.dp)
+            .fillMaxWidth()
+            .clip(shape)
+            .hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)
+            .background(Theme[colors][surfaceElevated].copy(alpha = 0.85f))
+            .border(1.dp, Theme[colors][strokeStrong], shape)
+            .padding(vertical = 6.dp),
+    ) {
+        bots.forEach { bot ->
+            Row(
+                Modifier.fillMaxWidth().clickable(onClickLabel = "Mention ${bot.label}") { onPick(bot) }.padding(horizontal = 14.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BotAvatar(bot, faces.picture(bot), size = 24.dp)
+                Text(bot.label, style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][textColor], maxLines = 1)
+                Text("@${bot.handle}", style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1, modifier = Modifier.weight(1f))
+            }
+        }
+    }
+}
+
 /** A tappable one-line header that opens to show more, shared by reasoning and tool activity. */
 @Composable
 private fun Disclosure(
@@ -1599,9 +1720,15 @@ internal fun currentAction(state: ChatState): String {
         return if (detail != null) "${tool.name.toolVerb()}: $detail" else tool.name.toolVerb()
     }
     state.livePlan()?.items?.firstOrNull { it.status == TodoStatus.InProgress }?.let { return it.content }
-    state.status?.takeIf { it.isNotBlank() }?.let { return it }
+    state.status?.takeIf { it.isNotBlank() }?.let { status ->
+        // A turn woken by another bot's reply arriving says so, not the runner's command line.
+        return if (BOT_DELIVERY_STATUS.containsMatchIn(status)) "Reading another bot's reply" else status
+    }
     return state.thinkingFrame ?: "Thinking…"
 }
+
+/** The status of a turn started by a bot-to-bot delivery finishing (tools/bot_mode_dm.py's runner). */
+private val BOT_DELIVERY_STATUS = Regex("""Background Process Finished:.*(?:bot_mode_dm\.py|--run-delivery)""", RegexOption.IGNORE_CASE)
 
 /** "terminal" reads as "Running a command", and so on; other tools as "Using <name>". */
 private fun String.toolVerb(): String = when (this) {
@@ -1611,6 +1738,7 @@ private fun String.toolVerb(): String = when (this) {
     "web_search", "search" -> "Searching the web"
     "web_extract", "browser", "fetch" -> "Reading a web page"
     "delegate_task" -> "Working with subagents"
+    MESSAGE_AGENT_TOOL -> "Messaging another bot"
     else -> "Using ${replace('_', ' ')}"
 }
 

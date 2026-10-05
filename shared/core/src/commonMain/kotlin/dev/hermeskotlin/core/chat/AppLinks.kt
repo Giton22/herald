@@ -11,6 +11,9 @@ sealed interface AppLink {
     /** `hermes://session/<id>`: a stored chat. */
     data class Session(val id: String) : AppLink
 
+    /** `hermes://bot/<profile>`: that bot's permanent chat, the link Hermes Desktop uses for a bot. */
+    data class Bot(val profile: String) : AppLink
+
     companion object {
         const val SCHEME = "hermes"
 
@@ -25,6 +28,7 @@ sealed interface AppLink {
                 "new-chat" -> NewChat.takeIf { segments.isEmpty() }
                 "new-chat-voice" -> NewChatVoice.takeIf { segments.isEmpty() }
                 "session" -> segments.singleOrNull()?.takeIf { it.isNotBlank() }?.let(::Session)
+                "bot" -> segments.singleOrNull()?.takeIf { it.isNotBlank() }?.let(::Bot)
                 else -> null
             }
         }

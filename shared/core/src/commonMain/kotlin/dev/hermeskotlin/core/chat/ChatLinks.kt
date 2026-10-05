@@ -7,9 +7,15 @@ import kotlinx.coroutines.flow.update
 
 /**
  * A chat to open, asked for from outside the app's screens: the stored session [storedSessionId], or with
- * none a new chat with [draft] in its composer.
+ * none a new chat with [draft] in its composer. With [bot] it is that bot's permanent chat:
+ * [storedSessionId] is where it was last seen, or null to look it up (a shortcut, a `hermes://bot/` link).
  */
-data class ChatLink(val storedSessionId: String?, val title: String?, val draft: ComposeDraft? = null)
+data class ChatLink(
+    val storedSessionId: String?,
+    val title: String?,
+    val draft: ComposeDraft? = null,
+    val bot: String? = null,
+)
 
 /**
  * What a new chat opened from outside starts with: [text] in the composer and [attachments] in its tray
@@ -35,6 +41,11 @@ class ChatLinks {
         _pending.value = ChatLink(storedSessionId, title)
     }
 
+    /** Opens [bot]'s permanent chat, known to be [storedSessionId] when given. */
+    fun openBot(bot: String, label: String?, storedSessionId: String? = null) {
+        _pending.value = ChatLink(storedSessionId, label, bot = bot)
+    }
+
     /** Opens a new chat that starts with [draft]. */
     fun newChat(draft: ComposeDraft = ComposeDraft()) {
         _pending.value = ChatLink(storedSessionId = null, title = null, draft = draft)
@@ -45,6 +56,7 @@ class ChatLinks {
         AppLink.NewChat -> newChat()
         AppLink.NewChatVoice -> newChat(ComposeDraft(dictate = true))
         is AppLink.Session -> open(link.id, title = null)
+        is AppLink.Bot -> openBot(link.profile, label = null)
     }
 
     /** Clears [link] once opened, unless a newer one came in meanwhile. */

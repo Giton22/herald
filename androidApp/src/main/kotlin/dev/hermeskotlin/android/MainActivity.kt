@@ -116,19 +116,23 @@ class MainActivity : FragmentActivity() {
     }
 
     /**
-     * A tapped notification about a chat opens that chat, not just the last one; a `hermes://` link opens
-     * what it names (a new chat, a stored one).
+     * A tapped notification about a chat opens that chat, not just the last one; a bot's notification or
+     * shortcut opens that bot's chat; a `hermes://` link opens what it names (a new chat, a stored one, a bot).
      */
     private fun openLinkedChat(intent: Intent) {
+        val bot = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_BOT)
         val sessionId = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_SESSION)
+        val title = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_TITLE)
         val link = intent.data?.let { AppLink.parse(it.toString()) }
         when {
-            sessionId != null -> links.open(sessionId, intent.getStringExtra(ChatNotifications.EXTRA_OPEN_TITLE))
+            bot != null -> links.openBot(bot, title, sessionId)
+            sessionId != null -> links.open(sessionId, title)
             link != null -> links.follow(link)
             else -> return
         }
         // Handled once: a recreated activity must not jump back to it.
         intent.removeExtra(ChatNotifications.EXTRA_OPEN_SESSION)
+        intent.removeExtra(ChatNotifications.EXTRA_OPEN_BOT)
         intent.data = null
     }
 

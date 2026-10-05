@@ -10,7 +10,9 @@ import android.content.pm.PackageManager
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.app.Person
 import androidx.core.app.RemoteInput
+import dev.hermeskotlin.core.bots.Bot
 import androidx.core.content.ContextCompat
 import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.chat.ApprovalChoice
@@ -44,9 +46,16 @@ class ChatNotifications(private val context: Context) {
                     .setName("Finished replies")
                     .setDescription("A turn ended while the app was in the background.")
                     .build(),
+                NotificationChannelCompat.Builder(CHANNEL_BOTS, NotificationManagerCompat.IMPORTANCE_DEFAULT)
+                    .setName("Bot messages")
+                    .setDescription("A bot wrote in its chat while the app was in the background.")
+                    .build(),
             ),
         )
     }
+
+    /** The name of the bot whose permanent chat a stored session is, when it is one (titled "Bot Chat" on the gateway). */
+    var botName: (String) -> String? = { null }
 
     val canPost: Boolean
         get() = manager.areNotificationsEnabled() && (
@@ -58,14 +67,16 @@ class ChatNotifications(private val context: Context) {
      * The ongoing notification of [ChatService]: what the agent is doing, with a Stop button, or a
      * quiet connection line between turns when Stay connected keeps the service up.
      */
-    fun working(state: ChatState?, connection: ConnectionState): Notification {
-        if (state?.running != true) return connected(state, connection)
+    fun working(state: ChatState?, connection: ConnectionState, pushAnywhere: Boolean = false): Notification {
+        if (state?.running != true) return connected(state, connection, pushAnywhere)
         val waiting = state?.inputRequests?.isNotEmpty() == true
         val runningTool = state?.messages?.lastOrNull()
             ?.let { it as? dev.hermeskotlin.core.chat.ChatMessage.Assistant }
             ?.tools?.lastOrNull { it.running }
         val text = when {
             waiting -> "Waiting for your answer"
+            // A turn woken by another bot's reply arriving: not the runner's command line.
+            state?.status?.contains("bot_mode_dm.py") == true -> "Reading another bot's reply"
             !state?.status.isNullOrBlank() -> state.status
             runningTool != null -> runningTool.detail?.let { "${runningTool.name}: $it" } ?: "Using ${runningTool.name}"
             else -> "Working…"
@@ -76,8 +87,9 @@ class ChatNotifications(private val context: Context) {
             runningTool != null -> runningTool.name.take(CHIP_LENGTH)
             else -> "Working"
         }
-        return base(CHANNEL_WORKING, state?.storedSessionId, state?.title)
-            .setContentTitle(state?.title?.takeIf { it.isNotBlank() } ?: "Hermes is working")
+        val title = state?.storedSessionId?.let(botName) ?: state?.title
+        return base(CHANNEL_WORKING, state?.storedSessionId, title)
+            .setContentTitle(title?.takeIf { it.isNotBlank() } ?: "Hermes is working")
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -91,17 +103,26 @@ class ChatNotifications(private val context: Context) {
             .build()
     }
 
-    fun postWorking(state: ChatState?, connection: ConnectionState) = post(null, WORKING_ID, working(state, connection))
+    fun postWorking(state: ChatState?, connection: ConnectionState, pushAnywhere: Boolean = false) =
+        post(null, WORKING_ID, working(state, connection, pushAnywhere))
 
-    private fun connected(state: ChatState?, connection: ConnectionState): Notification {
-        val title = when (connection) {
-            is ConnectionState.Connected -> "Connected to Hermes"
-            is ConnectionState.Connecting, is ConnectionState.Reconnecting -> "Reconnecting to Hermes…"
-            else -> "Not connected to Hermes"
+    /**
+     * The quiet line between turns. Stay connected holds the socket; Notifications anywhere holds the ntfy
+     * stream instead, so with no connection it says that, not that something is wrong. "Turn off" turns off
+     * whichever of the two keeps this up.
+     */
+    private fun connected(state: ChatState?, connection: ConnectionState, pushAnywhere: Boolean): Notification {
+        val following = (state?.storedSessionId?.let(botName) ?: state?.title)?.takeIf { it.isNotBlank() }?.let { "Following $it" }
+        val (title, text) = when {
+            connection is ConnectionState.Connected -> "Connected to Hermes" to (following ?: "Waiting for turns from any device")
+            connection is ConnectionState.Connecting || connection is ConnectionState.Reconnecting ->
+                "Reconnecting to Hermes…" to (following ?: "Waiting for turns from any device")
+            pushAnywhere -> "Notifications anywhere" to "Bot messages still reach you while Hermes is out of reach."
+            else -> "Not connected to Hermes" to (following ?: "Waiting for turns from any device")
         }
         return base(CHANNEL_CONNECTION)
             .setContentTitle(title)
-            .setContentText(state?.title?.takeIf { it.isNotBlank() }?.let { "Following $it" } ?: "Waiting for turns from any device")
+            .setContentText(text)
             .setOngoing(true)
             .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_MIN)
@@ -194,6 +215,101 @@ class ChatNotifications(private val context: Context) {
 
     fun cancelReply(storedSessionId: String) = manager.cancel(storedSessionId, REPLY_ID)
 
+    /**
+     * A message from [bot], as Android shows a conversation: the bot's face and name, its words, and an
+     * inline Reply that goes straight into its chat. Backed by the bot's shortcut, so it sits with
+     * conversations and can be prioritised or bubbled like a person's.
+     */
+    fun postBotMessage(bot: Bot, picture: ByteArray?, storedSessionId: String, text: String, viaPush: Boolean = false) {
+        val preview = text.toPlainText().take(MAX_PREVIEW).ifBlank { return }
+        // One message can arrive both over the gateway socket and through push: the second copy is dropped.
+        // The same words twice from one path are two messages (a bot repeating itself) and both notify.
+        val now = System.currentTimeMillis()
+        val key = bot.name + "\u0000" + preview.take(DEDUPE_PREFIX)
+        synchronized(recentBotMessages) {
+            recentBotMessages.values.removeAll { now - it.second > DEDUPE_WINDOW_MS }
+            val earlier = recentBotMessages[key]
+            if (earlier != null && earlier.first != viaPush) {
+                recentBotMessages.remove(key)
+                return
+            }
+            recentBotMessages[key] = viaPush to now
+        }
+        val shortcut = BotShortcuts.push(context, bot, picture)
+        val person = BotShortcuts.person(bot, picture)
+        val me = Person.Builder().setName("You").build()
+        // Messages stack like a messaging app's until the bot's notification is opened or cleared.
+        val history = (unreadBotMessages[bot.name].orEmpty() + (preview to System.currentTimeMillis())).takeLast(MAX_STACKED)
+        unreadBotMessages[bot.name] = history
+        val input = RemoteInput.Builder(NotificationActionReceiver.KEY_TEXT).setLabel("Message ${bot.label}").build()
+        val notification = NotificationCompat.Builder(context, CHANNEL_BOTS)
+            // The bot's own silhouette in the status bar, not Herald's.
+            .setSmallIcon(BotIcons.statusIcon(bot))
+            .setColor(ContextCompat.getColor(context, R.color.notification_accent))
+            .setContentIntent(openBot(bot, storedSessionId))
+            .setAutoCancel(true)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setShortcutId(shortcut)
+            .setLargeIcon(BotIcons.icon(bot, picture).toIcon(context))
+            // One-to-one: the conversation is the bot, its face and name the notification's own.
+            .setStyle(
+                NotificationCompat.MessagingStyle(me).setGroupConversation(false).also { style ->
+                    history.forEach { (text, at) -> style.addMessage(text, at, person) }
+                },
+            )
+            .setNumber(history.size)
+            .setDeleteIntent(action(NotificationActionReceiver.ACTION_BOT_CLEARED, bot.name) { putExtra(NotificationActionReceiver.EXTRA_BOT, bot.name) })
+            .addAction(
+                NotificationCompat.Action.Builder(
+                    0,
+                    "Reply",
+                    action(NotificationActionReceiver.ACTION_BOT_REPLY, bot.name, mutable = true) {
+                        putExtra(NotificationActionReceiver.EXTRA_BOT, bot.name)
+                        putExtra(NotificationActionReceiver.EXTRA_SESSION_ID, storedSessionId)
+                    },
+                ).addRemoteInput(input).setAllowGeneratedReplies(true).setAuthenticationRequired(true)
+                    .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY).build(),
+            )
+            .build()
+        post(bot.name, BOT_ID, notification)
+    }
+
+    fun cancelBot(name: String) {
+        unreadBotMessages.remove(name)
+        manager.cancel(name, BOT_ID)
+    }
+
+    /** The bot's notification was swiped away: its stack starts over. */
+    fun forgetBot(name: String) {
+        unreadBotMessages.remove(name)
+    }
+
+    /** Each bot's messages shown in its notification, oldest first, with when they came. */
+    private val unreadBotMessages = mutableMapOf<String, List<Pair<String, Long>>>()
+
+    /** Bot messages posted lately: bot and opening words → (came through push, when). */
+    private val recentBotMessages = LinkedHashMap<String, Pair<Boolean, Long>>()
+
+    /** "Send a test" from the push setup: proof that a push got through ntfy and decrypted. */
+    fun postPushTest() = post(
+        null,
+        PUSH_TEST_ID,
+        base(CHANNEL_BOTS)
+            .setContentTitle("Notifications anywhere work")
+            .setContentText("This came end-to-end encrypted through ntfy, not over your gateway connection.")
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .build(),
+    )
+
+    private fun openBot(bot: Bot, storedSessionId: String): PendingIntent {
+        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)!!
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra(EXTRA_OPEN_BOT, bot.name)
+            .putExtra(EXTRA_OPEN_SESSION, storedSessionId)
+            .putExtra(EXTRA_OPEN_TITLE, bot.label)
+        return PendingIntent.getActivity(context, "bot:${bot.name}".hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
     /** Replaces an answered-from-the-shade notification when the answer couldn't be delivered. */
     fun postFailure(tag: String?, id: Int, message: String) = post(
         tag,
@@ -203,6 +319,7 @@ class ChatNotifications(private val context: Context) {
 
     /** Everything except the ongoing notification, once the user is looking at the app. */
     fun cancelAttention() {
+        unreadBotMessages.clear()
         manager.activeNotifications.filter { it.id != WORKING_ID }.forEach { manager.cancel(it.tag, it.id) }
     }
 
@@ -242,17 +359,26 @@ class ChatNotifications(private val context: Context) {
         const val WORKING_ID = 1
         const val REPLY_ID = 2
         const val REQUEST_ID = 3
+        const val BOT_ID = 4
+        const val PUSH_TEST_ID = 5
 
         /** On the launch intent of a notification about a chat: that chat's stored session id, and its title. */
         const val EXTRA_OPEN_SESSION = "open_session_id"
         const val EXTRA_OPEN_TITLE = "open_session_title"
 
+        /** On the launch intent of a bot's notification or shortcut: the bot's profile. */
+        const val EXTRA_OPEN_BOT = "open_bot"
+
         private const val CHANNEL_WORKING = "working"
         private const val CHANNEL_CONNECTION = "connection"
         private const val CHANNEL_REQUESTS = "requests"
         private const val CHANNEL_REPLIES = "replies"
+        private const val CHANNEL_BOTS = "bots"
         private const val MAX_PREVIEW = 2_000
+        private const val MAX_STACKED = 6
         private const val CHIP_LENGTH = 12
+        private const val DEDUPE_PREFIX = 200
+        private const val DEDUPE_WINDOW_MS = 10 * 60_000L
     }
 }
 

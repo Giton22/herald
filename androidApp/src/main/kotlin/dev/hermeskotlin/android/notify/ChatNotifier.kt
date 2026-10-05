@@ -34,15 +34,25 @@ class ChatNotifier(
     private val visibility: AppVisibility,
     private val notifications: ChatNotifications,
     private val connection: GatewayConnection,
+    private val bots: BotNotifier,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var serviceStarted = false
 
     fun start() {
+        notifications.botName = { storedId -> bots.botWithChat(storedId)?.label }
         scope.launch {
-            host.session.collectLatest { session ->
-                if (session == null) stopService() else follow(session)
-            }
+            combine(host.session, settings.settings) { session, prefs -> session to (prefs?.keepsProcessUp == true) }
+                .distinctUntilChanged()
+                .collectLatest { (session, stay) ->
+                    when {
+                        session != null -> follow(session)
+                        // No chat open (the app started in the background after an update or reboot):
+                        // Stay connected still keeps the socket up, for bot notifications.
+                        stay -> keepConnected()
+                        else -> stopService()
+                    }
+                }
         }
         scope.launch {
             visibility.visible.collect { visible -> if (visible) notifications.cancelAttention() }
@@ -58,7 +68,7 @@ class ChatNotifier(
                 val prefs = stored ?: AppSettings()
 
                 // Each change is a chance to start it: Android refuses while the app is in the background.
-                val wanted = state.running || prefs.stayConnected
+                val wanted = state.running || prefs.keepsProcessUp
                 if (wanted && !serviceStarted) serviceStarted = ChatService.start(context)
                 if (!wanted) stopService()
 
@@ -84,7 +94,14 @@ class ChatNotifier(
                         val reply = state.messages.lastOrNull() as? ChatMessage.Assistant
                         if (reply != null && reply.outcome != TurnOutcome.Interrupted) {
                             val failed = reply.outcome == TurnOutcome.Error
-                            notifications.postReply(storedId, state.title, if (failed) reply.error ?: reply.text else reply.text, failed)
+                            val text = if (failed) reply.error ?: reply.text else reply.text
+                            // A bot's chat is the bot talking: its face and name, not "Bot Chat".
+                            val bot = bots.botWithChat(storedId)
+                            if (bot != null && !failed) {
+                                notifications.postBotMessage(bot, bots.picture(bot), storedId, text)
+                            } else {
+                                notifications.postReply(storedId, bot?.label ?: state.title, text, failed)
+                            }
                         }
                     }
                 }
@@ -103,9 +120,16 @@ class ChatNotifier(
         }
             .distinctUntilChanged()
             .collect {
-                if (serviceStarted) notifications.postWorking(session.state.value, connection.state.value)
+                if (serviceStarted) notifications.postWorking(session.state.value, connection.state.value, settings.settings.value?.pushAnywhere == true)
                 delay(1_000)
             }
+    }
+
+    private suspend fun keepConnected() {
+        if (!serviceStarted) serviceStarted = ChatService.start(context)
+        combine(connection.state, settings.settings) { state, prefs -> state to (prefs?.pushAnywhere == true) }
+            .distinctUntilChanged()
+            .collect { (state, push) -> if (serviceStarted) notifications.postWorking(null, state, push) }
     }
 
     private fun stopService() {
@@ -113,6 +137,9 @@ class ChatNotifier(
         serviceStarted = false
         ChatService.stop(context)
     }
+
+    /** Stay connected holds the socket; Notifications anywhere holds the ntfy stream. Either needs the process alive. */
+    private val AppSettings.keepsProcessUp: Boolean get() = stayConnected || pushAnywhere
 
     private data class WorkingKey(
         val running: Boolean,

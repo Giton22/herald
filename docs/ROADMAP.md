@@ -185,6 +185,28 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Background process list and kill, from the chat menu (`process.list`, `process.kill`; polled while open, with each one's output tail). Live `agent.terminal.output` streaming not used
 - [ ] Rollback / checkpoints (`rollback.list`, `rollback.diff`, `rollback.restore`)
 
+### Bots (Hermes Bot Mode; design in `docs/bot-mode-integration.md`)
+- [x] Chats | Bots switch at the top of the sidebar, remembered per gateway
+- [x] Bot roster (`profiles.list` over the socket, polled every 5 s while shown): Desktop's face (picture, or its shape and hue from the name), name, latest line of the Bot Chat, age, unread dot, working dot; hidden bots left out
+- [x] Tapping a bot opens its one permanent Bot Chat in the bot's profile without changing the Chats profile; a bot that never had one gets it started (`session.create` hidden + `follow_profile_config`, `session.title "Bot Chat"`), never a second one when a lookup can't be trusted
+- [x] In a Bot Chat, `/new` and `/reset` compress instead; `/title`, Rename, Pin, Archive and Delete are kept away from it
+- [x] Messages from other bots (`Message from 🤖 …`) show as the sender's note in every chat, not as the user's prompt
+- [x] Reopens the last bot's chat on launch; roster ordered as Desktop's (pinned, then newest activity or creation)
+- [x] Transcript: delivery outcomes ("Reply from X", "Still waiting", "Couldn't reach X · why"), folded process rows, other bots' notes with their faces, replies to them folded, silence tokens hidden, routine notes, "Messaged X" for `message_agent`, failed turns; the status line of a turn woken by a reply says so
+- [ ] "Open elsewhere" (4090 `SESSION_NOT_OWNED`) as its own state
+- [x] Roster: long-press menu (Pin, Hide with a "Hidden" section, Open recent session, New chat with this bot, Start fresh), Thinking/Working, previews that name the bot that wrote, `@handle` for same names, bot face in the chat header; refresh on `sessions.changed` (bots' chats watched) with a 30 s fallback
+- [x] Start fresh: archive the Bot Chat (kept, retired) and begin an empty one, from the roster or the chat menu; the open chat follows a bot whose chat was started over elsewhere
+- [ ] ⚠ attention badge for sign-in, quota or setup failures
+- [x] New bot (the "+" by Bots): face (shape and colour), name → profile id as Desktop makes it, title, description, optional SOUL (else Desktop's generated persona, without the messaging section the gateway injects); `profiles.create` cloning the default's configuration with shared keys, look in `ui_meta`, `setup.runtime_check`, then its Bot Chat with the intro
+- [x] Edit a bot (face, title, description, SOUL) sending only what changed; Duplicate (`clone_from`, look copied, "(copy)"); Delete (`DELETE /api/profiles/{name}`, asked first, not for the default)
+- [ ] Avatar pictures (upload, `image.generate`), Desktop's blob faces, model picker per bot
+- [x] Bot notifications: while out of sight, a bot writing in its chat arrives as an Android conversation notification from it (face, name, inline Reply into its chat); driven by `sessions.changed` on the open socket (Stay connected or a running turn), only for the bot's own words, never hidden bots
+- [x] Each bot a launcher conversation shortcut; `hermes://bot/<profile>` opens its chat
+- [x] @mentions: `@` in the composer offers the bots with their faces; picking inserts `@handle`
+- [x] Bot exchanges drawn as a conversation: the other bot speaking in its colour, this bot's messages to it as "To X" notes
+- [ ] Needs-you inbox across bots, share-to-bot, "ask <bot>" by voice, a Settings switch for bot notifications
+- [ ] Rooms: Desktop rooms read-only from the `hermes-bots-groups` mirror; hosted rooms (`groups.*`) to take part
+
 ### Automation & configuration
 - [x] Scheduled jobs in the sidebar (`GET /api/cron/jobs`): schedule in plain words, next run, state; a job page with its prompt, last error, Run now, Pause / Resume, and its runs (`/api/cron/jobs/{id}/runs`), each opening as a chat
 - [x] Create, edit and delete cron jobs (`POST`/`PUT`/`DELETE /api/cron/jobs`): prompt, free-text schedule with presets, name, and delivery target (`/api/cron/delivery-targets`); refetch on `cron.changed`
@@ -205,7 +227,9 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Stay connected: keeps the socket up in the background (quiet notification) so turns started on other devices reach the open chat
 - [ ] Gateway-pushed `notification.show`
 - [ ] Follow all sessions: notify for chats other than the open one (watch `session.active_list`, attach to sessions that start a turn)
-- [ ] ntfy integration as a push channel without Google services (Hermes ntfy platform adapter)
+- [x] Notifications anywhere: bot messages reach the phone off the gateway's network, end-to-end encrypted and signed through ntfy, without Google services. The herald-push plugin is installed from Settings in one tap ([protocol](push-protocol.md))
+- [ ] Reply and approve from a push notification when the gateway is out of reach (the `p2g` direction)
+- [ ] UnifiedPush distributor support, so the ntfy app holds the one connection instead of Herald's foreground service
 
 ### Auth & connectivity extras
 - [ ] Native OAuth sign-in (RFC 8252 PKCE via Custom Tab and a loopback redirect; `/auth/native/*`)

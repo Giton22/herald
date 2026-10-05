@@ -35,6 +35,12 @@ import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.SidebarLayout
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.components.rememberSidebarState
+import dev.hermeskotlin.core.bots.Bot
+import dev.hermeskotlin.ui.bots.BotEditor
+import dev.hermeskotlin.ui.bots.BotFaces
+import dev.hermeskotlin.ui.bots.StartOverDialog
+import dev.hermeskotlin.ui.bots.BotsViewModel
+import dev.hermeskotlin.ui.bots.LocalBotFaces
 import dev.hermeskotlin.ui.chat.ChatScreen
 import dev.hermeskotlin.ui.chat.ChatViewModel
 import dev.hermeskotlin.ui.connect.ConnectScreen
@@ -151,6 +157,9 @@ private fun Routes() {
     )
 }
 
+/** The bot editor's subject: [bot] to change, or null for a new one. */
+private class BotEditing(val bot: Bot?)
+
 /** The signed-in home: the chat, with the sessions sidebar to its left (a drawer on phones, docked on wide screens). */
 @Composable
 private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Unit) {
@@ -161,9 +170,28 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     val focusManager = LocalFocusManager.current
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
+    val chatsProfile by app.chatsProfile.collectAsStateWithLifecycle()
+    val bots: BotsViewModel = koinViewModel()
+    val roster by bots.state.collectAsStateWithLifecycle()
+    val pictures by bots.avatars.collectAsStateWithLifecycle()
+    val faces = remember(roster.all, pictures) { BotFaces(roster.all, pictures) }
+    // The bot whose chat is open, as the roster knows it now.
+    val openBot = route.target.bot?.let { open -> roster.all.firstOrNull { it.name == open.name } }
+    var startOver by remember { mutableStateOf<Bot?>(null) }
+    var editing by remember { mutableStateOf<BotEditing?>(null) }
 
     // The open chat, once it exists on the gateway (a new chat gets its row with the first prompt).
     val openSessionId = chatState.storedSessionId?.takeIf { route.target.storedSessionId != null || chatState.hasConversation }
+
+    // The open bot's chat was started over elsewhere (Desktop, another phone): follow it to the new one,
+    // as Desktop does. Never mid-turn. A chat that only moved on by compression is still this one.
+    val liveChat = openBot?.canonicalSession
+    LaunchedEffect(liveChat?.id, liveChat?.openId) {
+        val bot = openBot ?: return@LaunchedEffect
+        val next = liveChat?.openId ?: return@LaunchedEffect
+        val open = openSessionId ?: return@LaunchedEffect
+        if (open != liveChat.id && open != next && !chatState.running) app.openBotChat(bot, next)
+    }
 
     fun closeDrawer() {
         if (!sidebar.docked) scope.launch { sidebar.close() }
@@ -180,7 +208,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
         sidebar = {
             SessionsSidebar(
                 gateway = route.gateway,
-                profile = route.target.profile,
+                profile = chatsProfile,
                 selectedId = openSessionId,
                 visible = sidebar.isOpen,
                 onOpenSession = {
@@ -200,31 +228,73 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                     app.switchProfile(it)
                     closeDrawer()
                 },
+                onOpenBot = { bot, storedSessionId ->
+                    if (storedSessionId != openSessionId || route.target.bot == null) app.openBotChat(bot, storedSessionId)
+                    closeDrawer()
+                },
+                onOpenBotSession = { bot, id, title ->
+                    app.openBotSession(bot, id, title)
+                    closeDrawer()
+                },
+                onNewBotChat = { bot ->
+                    app.newBotChat(bot)
+                    closeDrawer()
+                },
+                onEditBot = { bot -> editing = BotEditing(bot) },
+                onBotDeleted = { bot -> if (route.target.bot?.name == bot.name || route.target.profile == bot.name) app.newChat() },
+                selectedRunning = chatState.running,
             )
         },
     ) {
-        ChatScreen(
-            target = route.target,
-            onOpenSidebar = { scope.launch { sidebar.toggle() } },
-            onNewChat = app::newChat,
-            onOpenMenu = openSessionId?.let { { menuOpen = true } },
-            onOpenChat = { id, title -> app.openSession(id, title ?: "Untitled session") },
-            onSwitchProfile = app::switchProfile,
-            viewModel = chat,
-        )
+        CompositionLocalProvider(LocalBotFaces provides faces) {
+            ChatScreen(
+                target = route.target,
+                onOpenSidebar = { scope.launch { sidebar.toggle() } },
+                onNewChat = app::newChat,
+                onOpenMenu = openSessionId?.let { { menuOpen = true } },
+                onOpenChat = { id, title -> app.openSession(id, title ?: "Untitled session") },
+                onSwitchProfile = app::switchProfile,
+                viewModel = chat,
+            )
+        }
     }
 
     ChatMenu(
         visible = menuOpen && openSessionId != null,
         sessionId = openSessionId,
-        title = chatState.title?.takeIf { it.isNotBlank() } ?: route.target.title ?: "Untitled session",
+        title = route.target.bot?.label ?: chatState.title?.takeIf { it.isNotBlank() } ?: route.target.title ?: "Untitled session",
         messages = chatState.messages,
         onDismiss = { menuOpen = false },
         onRenamed = chat::showTitle,
         onDeleted = app::newChat,
         onUsage = chat::openUsage,
         onProcesses = chat::openProcesses,
+        botChat = route.target.bot != null,
+        onStartFresh = openBot?.let { bot -> { startOver = bot } },
     )
+    StartOverDialog(startOver, onDismiss = { startOver = null }) { bot ->
+        bots.startFresh(bot) { id -> app.openBotChat(bot, id) }
+    }
+
+    editing?.let { target ->
+        val busy by bots.busy.collectAsStateWithLifecycle()
+        BotEditor(
+            bot = target.bot,
+            taken = roster.all.map { it.name }.toSet(),
+            busy = busy,
+            loadDetails = { target.bot?.let { bots.details(it) } },
+            onBack = { editing = null },
+            onCreate = { draft ->
+                bots.create(draft, onDone = { editing = null }) { bot, id ->
+                    app.openBotChat(bot, id)
+                    closeDrawer()
+                }
+            },
+            onSave = { description, soul, look ->
+                target.bot?.let { bot -> bots.save(bot, description, soul, look) { editing = null } }
+            },
+        )
+    }
 
     if (settingsOpen) {
         SettingsScreen(
