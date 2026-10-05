@@ -112,6 +112,21 @@ class AttentionTracker(
         }
     }.stateIn(scope, SharingStarted.WhileSubscribed(), emptyMap())
 
+    /**
+     * A chat this phone attached to without opening it ([SessionWatcher]): its requests and turns now count
+     * for [storedId]. [running] and [openRequests] come from the attach reply, which also returns the
+     * requests asked before this socket was attached.
+     */
+    fun watched(runtimeId: String, storedId: String, running: Boolean, openRequests: List<InputRequest>) {
+        val now = clock()
+        links.update { it + (runtimeId to storedId) }
+        turns.update { it + (runtimeId to Turn(running, now)) }
+        if (openRequests.isNotEmpty()) requests.update { all -> all + openRequests.associate { it.id to OpenRequest(runtimeId, it, now) } }
+    }
+
+    /** [requestId] was answered from outside the open chat (a notification): it no longer waits. */
+    fun answered(requestId: String) = requests.update { it - requestId }
+
     init {
         scope.launch {
             connection.serverRequests.collect { request ->
