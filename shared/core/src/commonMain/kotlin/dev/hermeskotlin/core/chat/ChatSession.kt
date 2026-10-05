@@ -1323,7 +1323,8 @@ class ChatSession(
                 val known = rows.mapNotNullTo(HashSet()) { it.id }
                 // Rows already loaded come again when the transcript grew since: skip them, and past them next time.
                 val fresh = (if (full) page.fromFirstTurn() else page).filter { it.id == null || it.id !in known }
-                if (fresh.isEmpty() && full) olderSkew += page.size
+                // Past only those: rows before the page's first prompt that aren't loaded yet come with the next page.
+                if (fresh.isEmpty() && full) olderSkew += page.count { it.id != null && it.id in known }
                 val shownBefore = historyToMessages(rows).mapTo(HashSet()) { it.key }
                 rows = fresh + rows
                 val flagged = risks?.all().orEmpty()

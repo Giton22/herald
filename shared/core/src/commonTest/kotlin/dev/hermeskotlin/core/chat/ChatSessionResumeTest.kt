@@ -328,8 +328,8 @@ class ChatSessionResumeTest {
     }
 
     /** A chat over a long transcript, attached and showing its newest page. */
-    private suspend fun longChat(scope: CoroutineScope, rows: Int): Pair<ChatSession, List<FakeTransport>> {
-        transcript = rowsUpTo(rows)
+    private suspend fun longChat(scope: CoroutineScope, rows: Int, stored: List<String> = rowsUpTo(rows)): Pair<ChatSession, List<FakeTransport>> {
+        transcript = stored
         answer = { _, method, _ -> if (method == "session.resume") """{"session_id":"rt1","running":false}""" else "{}" }
         val (connection, transports) = connect(scope)
         val chat = ChatSession(url, "stored-1", "Chat", connection, SessionsApi(client()), scope)
@@ -388,6 +388,26 @@ class ChatSessionResumeTest {
         // Read from the 59 rows loaded back: rows 33-92, from the prompt at 33.
         assertEquals("${HISTORY_PAGE}/59", reads.last())
         assertEquals((33..151).map { "row-$it" }, chat.state.value.keys())
+    }
+
+    @Test
+    fun aLongTurnAboveRowsWrittenSinceIsLoadedWhole() = runTest {
+        // A prompt at 1, one turn of 79 steps (2-80), then short turns from 81 on.
+        fun turns(last: Int) = (1..last).map { id ->
+            if (id == 1 || (id > 80 && id % 2 == 1)) """{"id":$id,"role":"user","content":"p$id"}""" else """{"id":$id,"role":"assistant","content":"a$id"}"""
+        }
+        val (chat, _) = longChat(backgroundScope, 90, turns(90))
+        assertEquals("row-81", chat.state.value.messages.first().key)
+        // A turn streamed live since: its rows are stored, but the loaded ones weren't read again.
+        transcript = turns(92)
+
+        repeat(4) { if (chat.state.value.olderMessages) chat.loadOlder() }
+
+        val state = chat.state.value
+        assertFalse(state.olderMessages)
+        assertEquals(listOf("row-1", "row-2") + (81..90).map { "row-$it" }, state.keys())
+        // Every step of the long turn, none skipped past.
+        assertEquals((2..80).joinToString("\n\n") { "a$it" }, (state.messages[1] as ChatMessage.Assistant).text)
     }
 
     @Test
