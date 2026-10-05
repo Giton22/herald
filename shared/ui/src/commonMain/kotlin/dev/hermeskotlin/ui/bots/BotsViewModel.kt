@@ -15,7 +15,10 @@ import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.bots.SidebarMode
 import dev.hermeskotlin.core.bots.SidebarModeStore
 import dev.hermeskotlin.core.bots.forRoster
+import dev.hermeskotlin.core.chat.AttentionTracker
 import dev.hermeskotlin.core.connection.ConnectionState
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.stateIn
 import dev.hermeskotlin.core.cron.CronApi
 import dev.hermeskotlin.core.cron.CronJob
 import dev.hermeskotlin.core.cron.isRoutineOf
@@ -92,6 +95,7 @@ class BotsViewModel(
     private val health: BotHealth,
     private val cron: CronApi,
     private val models: ModelsApi,
+    attention: AttentionTracker,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(BotsUiState())
@@ -107,6 +111,12 @@ class BotsViewModel(
 
     /** When the routines were last read, in epoch ms; they're read less often than the roster. */
     private var routinesReadAt = 0L
+
+    /** The bots needing the user, most pressing first: the Needs-you section. */
+    val needsYou: StateFlow<List<NeedsYou>> =
+        combine(_state, attention.waiting, troubles, _failingRoutines) { state, waiting, troubles, routines ->
+            needsYou(state.all, waiting, troubles, routines)
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     private val _mode = MutableStateFlow(SidebarMode.Chats)
     val mode: StateFlow<SidebarMode> = _mode.asStateFlow()

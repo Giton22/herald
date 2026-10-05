@@ -207,7 +207,8 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Each bot a launcher conversation shortcut; `hermes://bot/<profile>` opens its chat
 - [x] @mentions: `@` in the composer offers the bots with their faces; picking inserts `@handle`
 - [x] Bot exchanges drawn as a conversation: the other bot speaking in its colour, this bot's messages to it as "To X" notes
-- [ ] Needs-you inbox across bots, share-to-bot, "ask <bot>" by voice, a Settings switch for bot notifications
+- [x] Needs-you inbox across bots: at the top of the roster, bots held up on an answer (approval, question, secret) first, then bots with a ⚠, then failing routines, one row each, tapping to the chat or the routines; the count on the Bots tab; a held-up bot's own row says so
+- [ ] Share-to-bot, "ask <bot>" by voice, a Settings switch for bot notifications
 - [ ] Rooms: Desktop rooms read-only from the `hermes-bots-groups` mirror; hosted rooms (`groups.*`) to take part
 
 ### Automation & configuration

@@ -184,6 +184,7 @@ fun SessionsSidebar(
     val avatars by bots.avatars.collectAsStateWithLifecycle()
     val troubles by bots.troubles.collectAsStateWithLifecycle()
     val failingRoutines by bots.failingRoutines.collectAsStateWithLifecycle()
+    val needsYou by bots.needsYou.collectAsStateWithLifecycle()
     LaunchedEffect(gateway) { bots.bind(gateway.gatewayUrl) }
     LaunchedEffect(visible) { bots.setVisible(visible) }
     LaunchedEffect(selectedId) { bots.setOpenSession(selectedId) }
@@ -308,7 +309,8 @@ fun SessionsSidebar(
                     options = SidebarMode.entries,
                     selected = mode,
                     onSelect = bots::setMode,
-                    optionLabel = { it.name },
+                    // How many bots need the user, readable from the Chats side too.
+                    optionLabel = { if (it == SidebarMode.Bots && needsYou.isNotEmpty()) "${it.name} · ${needsYou.size}" else it.name },
                     modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
                 )
                 UpdateBanner(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp))
@@ -348,6 +350,7 @@ fun SessionsSidebar(
                         onDismissNotice = bots::dismissNotice,
                         troubles = troubles,
                         failingRoutines = failingRoutines,
+                        needsYou = needsYou,
                     )
                     searchOpen && searchResults == null -> Unit
                     searchResults != null -> when {
