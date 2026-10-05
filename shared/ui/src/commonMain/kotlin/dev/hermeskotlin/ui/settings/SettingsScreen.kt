@@ -1,6 +1,8 @@
 package dev.hermeskotlin.ui.settings
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -28,13 +31,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.Activity
 import com.composables.icons.lucide.ArrowLeftRight
+import com.composables.icons.lucide.Image
 import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
@@ -46,13 +53,18 @@ import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.TextSize
 import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.core.settings.VoicePause
+import dev.hermeskotlin.core.settings.WallpaperStrength
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.BottomSheet
 import dev.hermeskotlin.designsystem.components.Button
+import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
+import dev.hermeskotlin.designsystem.danger
+import dev.hermeskotlin.designsystem.radii
+import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.components.SegmentedControl
 import dev.hermeskotlin.designsystem.components.SheetHeader
 import dev.hermeskotlin.designsystem.components.Surface
@@ -82,6 +94,15 @@ fun SettingsScreen(
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     val info by viewModel.gateway.collectAsStateWithLifecycle()
     val check by viewModel.check.collectAsStateWithLifecycle()
+    val wallpaper by viewModel.wallpaper.collectAsStateWithLifecycle()
+    var wallpaperError by remember { mutableStateOf<String?>(null) }
+    val chooseWallpaper = rememberWallpaperPicker(
+        onPicked = {
+            wallpaperError = null
+            viewModel.setWallpaper(it)
+        },
+        onError = { wallpaperError = it },
+    )
     var checkOpen by remember { mutableStateOf(false) }
     LaunchedEffect(gateway) { viewModel.bind(gateway) }
     PlatformBackHandler(enabled = !checkOpen, onBack = onBack)
@@ -90,6 +111,14 @@ fun SettingsScreen(
         onCheckConnection = {
             checkOpen = true
             viewModel.runConnectionCheck()
+        },
+        wallpaper = rememberWallpaperBitmap(wallpaper),
+        hasWallpaper = wallpaper != null,
+        wallpaperError = wallpaperError,
+        onChooseWallpaper = chooseWallpaper,
+        onRemoveWallpaper = {
+            wallpaperError = null
+            viewModel.removeWallpaper()
         },
     )
     BottomSheet(visible = checkOpen, onDismiss = { checkOpen = false }) {
@@ -119,6 +148,12 @@ internal fun SettingsView(
     onSignOut: () -> Unit,
     onChangeGateway: () -> Unit,
     onCheckConnection: () -> Unit = {},
+    /** The chat background, once decoded. */
+    wallpaper: ImageBitmap? = null,
+    hasWallpaper: Boolean = wallpaper != null,
+    wallpaperError: String? = null,
+    onChooseWallpaper: () -> Unit = {},
+    onRemoveWallpaper: () -> Unit = {},
 ) {
     Box(
         Modifier
@@ -157,6 +192,44 @@ internal fun SettingsView(
                             onSelect = { size -> onUpdate { it.copy(textSize = size) } },
                             optionLabel = { it.name },
                         )
+                    }
+                    Divider()
+                    Field("Chat background", detail = "A photo behind your conversations.") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                            if (wallpaper != null) {
+                                val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+                                Image(
+                                    wallpaper,
+                                    contentDescription = "Current chat background",
+                                    contentScale = ContentScale.Crop,
+                                    modifier = Modifier.size(width = 40.dp, height = 64.dp).clip(shape).border(1.dp, Theme[colors][stroke], shape),
+                                )
+                            }
+                            Button(
+                                if (hasWallpaper) "Change" else "Choose photo",
+                                onClick = onChooseWallpaper,
+                                variant = ButtonVariant.Secondary,
+                                size = ButtonSize.Small,
+                                leadingIcon = Lucide.Image,
+                            )
+                            if (hasWallpaper) {
+                                Button("Remove", onClick = onRemoveWallpaper, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+                            }
+                        }
+                        if (wallpaperError != null) {
+                            Text(wallpaperError, style = Theme[typography][bodySmall], color = Theme[colors][danger])
+                        }
+                    }
+                    if (hasWallpaper) {
+                        Divider()
+                        Field("Background strength", detail = "How much of the photo shows through.") {
+                            SegmentedControl(
+                                options = WallpaperStrength.entries,
+                                selected = settings.wallpaperStrength,
+                                onSelect = { strength -> onUpdate { it.copy(wallpaperStrength = strength) } },
+                                optionLabel = { it.name },
+                            )
+                        }
                     }
                 }
 
