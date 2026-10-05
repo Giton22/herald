@@ -22,6 +22,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
@@ -91,6 +92,15 @@ class ActiveSessions(
     /** Herald is out of sight: nobody reads the list, only notifications need the statuses, so ask less often. */
     @Volatile
     var inBackground: Boolean = false
+        set(value) {
+            val back = field && !value
+            field = value
+            // The answer can be a slow wait old, and the watcher keeps the poll going, so nothing restarts it: ask now.
+            if (back) wakes.trySend(Unit)
+        }
+
+    /** Ends the wait between asks when Herald comes back in sight. */
+    private val wakes = Channel<Unit>(Channel.CONFLATED)
 
     val live: StateFlow<LiveSessions> = connection.state
         .map { (it as? ConnectionState.Connected)?.client }
@@ -119,7 +129,10 @@ class ActiveSessions(
                 null
             }
             if (rows != null) send(LiveSessions(rows, askedAt))
-            if (withTimeoutOrNull(if (inBackground) backgroundPollMs else pollMs) { nudges.receive() } != null) {
+            val nudged = withTimeoutOrNull(if (inBackground) backgroundPollMs else pollMs) {
+                select { nudges.onReceive { true }; wakes.onReceive { false } }
+            }
+            if (nudged == true) {
                 // Events come in bursts (a turn's start, its end, the list changing): ask once they settle.
                 delay(settleMs)
                 nudges.tryReceive()
