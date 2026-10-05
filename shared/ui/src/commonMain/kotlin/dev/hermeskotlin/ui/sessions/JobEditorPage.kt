@@ -21,6 +21,7 @@ import com.composables.icons.lucide.Lucide
 import com.composeunstyled.Text
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.cron.DeliveryTarget
+import dev.hermeskotlin.core.cron.Routines
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
 import dev.hermeskotlin.designsystem.colors
@@ -34,7 +35,8 @@ import dev.hermeskotlin.designsystem.typography
 
 /**
  * The form for a new or existing scheduled job. The schedule is free text that the gateway parses,
- * so the presets just fill it in; anything Hermes's `/cron` accepts works here too.
+ * so the presets just fill it in; anything Hermes's `/cron` accepts works here too. For a bot's
+ * routine ([routineOf] names the bot) the name is needed, as Bot Mode lists routines by it.
  */
 @Composable
 internal fun JobEditorPage(
@@ -46,7 +48,9 @@ internal fun JobEditorPage(
     onSetDeliver: (String) -> Unit,
     onSave: () -> Unit,
     onClose: () -> Unit,
+    routineOf: String? = null,
 ) {
+    val noun = if (routineOf != null) "routine" else "job"
     // A job may deliver somewhere the target list doesn't name (a specific chat, or `origin`); keep it selectable.
     val targets = if (deliveryTargets.none { it.id == editor.deliver }) {
         deliveryTargets + DeliveryTarget(id = editor.deliver)
@@ -54,7 +58,7 @@ internal fun JobEditorPage(
         deliveryTargets
     }
     Column(Modifier.fillMaxSize()) {
-        SubpageHeader(if (editor.isNew) "New job" else "Edit job", onBack = onClose)
+        SubpageHeader(if (editor.isNew) "New $noun" else "Edit $noun", onBack = onClose)
         Column(
             Modifier
                 .weight(1f)
@@ -68,7 +72,8 @@ internal fun JobEditorPage(
                 state = prompt,
                 label = "Prompt",
                 placeholder = "Summarize my unread email and flag anything urgent",
-                supportingText = "What the agent does on each run, as a fresh chat.",
+                supportingText = routineOf?.let { "What $it does on each run, as itself, with its own memory and skills." }
+                    ?: "What the agent does on each run, as a fresh chat.",
                 singleLine = false,
                 maxLines = 8,
                 enabled = !editor.saving,
@@ -91,7 +96,7 @@ internal fun JobEditorPage(
             TextField(
                 state = name,
                 label = "Name",
-                placeholder = "Optional",
+                placeholder = if (routineOf != null) "Morning brief" else "Optional",
                 enabled = !editor.saving,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             )
@@ -109,10 +114,17 @@ internal fun JobEditorPage(
                         color = Theme[colors][textSecondary],
                     )
                 }
+                if (editor.deliver == Routines.BOT_CHAT_DELIVERY) {
+                    Text(
+                        "Each run's result arrives in ${routineOf ?: "the bot"}'s chat as a message it reads and answers, so a run costs it one more turn.",
+                        style = Theme[typography][bodySmall],
+                        color = Theme[colors][textSecondary],
+                    )
+                }
             }
             editor.error?.let { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
             Button(
-                if (editor.isNew) "Schedule job" else "Save",
+                if (editor.isNew) "Schedule $noun" else "Save",
                 onClick = onSave,
                 leadingIcon = Lucide.Check,
                 loading = editor.saving,

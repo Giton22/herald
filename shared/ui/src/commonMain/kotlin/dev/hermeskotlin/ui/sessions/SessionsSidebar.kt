@@ -183,6 +183,7 @@ fun SessionsSidebar(
     val botsState by bots.state.collectAsStateWithLifecycle()
     val avatars by bots.avatars.collectAsStateWithLifecycle()
     val troubles by bots.troubles.collectAsStateWithLifecycle()
+    val failingRoutines by bots.failingRoutines.collectAsStateWithLifecycle()
     LaunchedEffect(gateway) { bots.bind(gateway.gatewayUrl) }
     LaunchedEffect(visible) { bots.setVisible(visible) }
     LaunchedEffect(selectedId) { bots.setOpenSession(selectedId) }
@@ -199,6 +200,8 @@ fun SessionsSidebar(
     var scheduledOpen by remember { mutableStateOf(false) }
     var capabilitiesOpen by remember { mutableStateOf(false) }
     var insightsOpen by remember { mutableStateOf(false) }
+    /** The bot whose routines are showing. */
+    var routinesOf by remember { mutableStateOf<Bot?>(null) }
     var actionTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var renameTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var deleteTarget by remember { mutableStateOf<SessionSummary?>(null) }
@@ -210,10 +213,11 @@ fun SessionsSidebar(
     }
 
     // Back steps out of search or the Scheduled / Archived pages before it closes the drawer.
-    PlatformBackHandler(enabled = visible && (searchOpen || scheduledOpen || capabilitiesOpen || insightsOpen || state.filter != SessionListFilter.Recent)) {
+    PlatformBackHandler(enabled = visible && (searchOpen || scheduledOpen || routinesOf != null || capabilitiesOpen || insightsOpen || state.filter != SessionListFilter.Recent)) {
         when {
             searchOpen -> closeSearch()
             scheduledOpen -> scheduledOpen = false
+            routinesOf != null -> routinesOf = null
             capabilitiesOpen -> capabilitiesOpen = false
             insightsOpen -> insightsOpen = false
             else -> viewModel.setFilter(SessionListFilter.Recent)
@@ -263,6 +267,17 @@ fun SessionsSidebar(
                 onBack = { scheduledOpen = false },
                 onOpenRun = open,
                 onSessionExpired = onSessionExpired,
+            )
+        } else if (routinesOf != null && !searchOpen) routinesOf?.let { bot ->
+            ScheduledPage(
+                gateway = gateway,
+                visible = visible,
+                selectedId = selectedId,
+                onBack = { routinesOf = null },
+                // A run is a session of the bot's own profile.
+                onOpenRun = { run -> onOpenBotSession(bot, run.id, run.title?.takeIf { it.isNotBlank() } ?: bot.label) },
+                onSessionExpired = onSessionExpired,
+                owner = RoutineOwner(bot.name, bot.label),
             )
         } else if (capabilitiesOpen && !searchOpen) {
             CapabilitiesPage(
@@ -324,11 +339,15 @@ fun SessionsSidebar(
                                 override fun duplicate(bot: Bot) = bots.duplicate(bot)
                                 override fun delete(bot: Bot) = bots.delete(bot) { onBotDeleted(bot) }
                                 override fun checkAgain(bot: Bot) = bots.checkAgain(bot)
+                                override fun routines(bot: Bot) {
+                                    routinesOf = bot
+                                }
                             }
                         },
                         onRetry = bots::refresh,
                         onDismissNotice = bots::dismissNotice,
                         troubles = troubles,
+                        failingRoutines = failingRoutines,
                     )
                     searchOpen && searchResults == null -> Unit
                     searchResults != null -> when {

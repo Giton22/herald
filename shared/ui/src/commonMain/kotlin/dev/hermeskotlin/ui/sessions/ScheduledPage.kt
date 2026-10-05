@@ -37,6 +37,7 @@ import com.composables.icons.lucide.Zap
 import com.composeunstyled.Text
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.cron.CronJob
+import dev.hermeskotlin.core.cron.problem
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.designsystem.body
@@ -66,7 +67,8 @@ import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * The sidebar's Scheduled page: the gateway's cron jobs, and inside a job its runs. A run is a chat,
- * so it opens like any other session, but only from its job.
+ * so it opens like any other session, but only from its job. With an [owner] it is that bot's
+ * Routines: the jobs it runs as itself, each reporting to its chat if the user likes.
  */
 @Composable
 internal fun ScheduledPage(
@@ -76,12 +78,15 @@ internal fun ScheduledPage(
     onBack: () -> Unit,
     onOpenRun: (SessionSummary) -> Unit,
     onSessionExpired: () -> Unit,
-    viewModel: ScheduledViewModel = koinViewModel(),
+    owner: RoutineOwner? = null,
+    // Each bot's routines keep their own page state, apart from the full list's.
+    viewModel: ScheduledViewModel = koinViewModel(key = owner?.let { "routines-${it.profile}" }),
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
     val job = state.openJob
+    val routines = owner != null
 
-    LaunchedEffect(gateway) { viewModel.bind(gateway) }
+    LaunchedEffect(gateway, owner) { viewModel.bind(gateway, owner) }
     LaunchedEffect(Unit) { viewModel.refresh() }
     // Consume before the callback: the route changes on it, and the view model outlives the screen,
     // so a stale flag must not bounce the next mount after a fresh sign-in.
@@ -111,17 +116,27 @@ internal fun ScheduledPage(
                 onSetDeliver = viewModel::setDeliver,
                 onSave = viewModel::saveJob,
                 onClose = viewModel::closeEditor,
+                routineOf = owner?.label,
             )
         } else if (job == null) {
-            SubpageHeader("Scheduled", onBack = onBack) {
-                IconButton(Lucide.Plus, contentDescription = "New job", onClick = viewModel::newJob, tint = Theme[colors][text])
+            SubpageHeader(owner?.let { "${it.label}'s routines" } ?: "Scheduled", onBack = onBack) {
+                IconButton(Lucide.Plus, contentDescription = if (routines) "New routine" else "New job", onClick = viewModel::newJob, tint = Theme[colors][text])
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     state.loading -> CenteredSpinner()
-                    state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load scheduled jobs", state.error) {
+                    state.error != null -> EmptyState(Lucide.CloudOff, if (routines) "Couldn't load routines" else "Couldn't load scheduled jobs", state.error) {
                         Button("Try again", onClick = viewModel::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                     }
+                    state.jobs.isEmpty() && owner != null ->
+                        EmptyState(
+                            Lucide.CalendarClock,
+                            "No routines yet",
+                            "Have ${owner.label} do something on a schedule, like a morning briefing. It runs as ${owner.label}, " +
+                                "with its own memory and skills, and can report to its chat.",
+                        ) {
+                            Button("New routine", onClick = viewModel::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
+                        }
                     state.jobs.isEmpty() ->
                         EmptyState(Lucide.CalendarClock, "No scheduled jobs", "Have the agent do something on a schedule, like a morning briefing. Each run opens as a chat here.") {
                             Button("New job", onClick = viewModel::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
@@ -135,9 +150,10 @@ internal fun ScheduledPage(
                 }
             }
         } else {
+            val noun = if (routines) "routine" else "job"
             SubpageHeader(job.displayName, onBack = viewModel::closeJob) {
-                IconButton(Lucide.Pencil, contentDescription = "Edit job", onClick = viewModel::editJob, enabled = !state.busy, tint = Theme[colors][text])
-                IconButton(Lucide.Trash2, contentDescription = "Delete job", onClick = viewModel::askDelete, enabled = !state.busy, tint = Theme[colors][text])
+                IconButton(Lucide.Pencil, contentDescription = "Edit $noun", onClick = viewModel::editJob, enabled = !state.busy, tint = Theme[colors][text])
+                IconButton(Lucide.Trash2, contentDescription = "Delete $noun", onClick = viewModel::askDelete, enabled = !state.busy, tint = Theme[colors][text])
             }
             LazyColumn(
                 Modifier.weight(1f).fillMaxWidth(),
@@ -172,7 +188,7 @@ internal fun ScheduledPage(
     Dialog(
         visible = state.confirmingDelete,
         onDismissRequest = viewModel::cancelDelete,
-        title = "Delete job?",
+        title = if (routines) "Delete routine?" else "Delete job?",
         message = "“${job?.displayName.orEmpty()}” stops running. The chats from its past runs stay.",
         actions = {
             Button("Cancel", onClick = viewModel::cancelDelete, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
@@ -216,7 +232,7 @@ private fun JobSummary(job: CronJob, busy: Boolean, onRunNow: () -> Unit, onTogg
         if (job.prompt.isNotBlank()) {
             Text(job.prompt.trim(), style = Theme[typography][bodySmall], color = Theme[colors][text], maxLines = 6, overflow = TextOverflow.Ellipsis)
         }
-        job.lastError?.takeIf { it.isNotBlank() && job.lastStatus != "ok" }?.let {
+        job.problem?.let {
             Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger], maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -262,7 +278,7 @@ private fun RunRow(run: SessionSummary, selected: Boolean, onClick: () -> Unit) 
 @Composable
 private fun StateDot(job: CronJob) {
     val color = when {
-        job.state == "error" || job.lastStatus == "error" -> Theme[colors][danger]
+        job.problem != null -> Theme[colors][danger]
         job.paused || job.state == "completed" -> Theme[colors][textTertiary]
         else -> Theme[colors][success]
     }
