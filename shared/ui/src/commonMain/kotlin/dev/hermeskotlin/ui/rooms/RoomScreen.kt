@@ -44,6 +44,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.composables.icons.lucide.EllipsisVertical
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
 import com.composeunstyled.Text
@@ -61,6 +62,7 @@ import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
+import dev.hermeskotlin.designsystem.components.DropdownMenu
 import dev.hermeskotlin.designsystem.components.MarkdownText
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.components.Surface
@@ -102,6 +104,8 @@ fun RoomScreen(
     val open by viewModel.opened.collectAsStateWithLifecycle()
     val room = open ?: return
     val faces = LocalBotFaces.current
+    var ask by remember { mutableStateOf<RoomAsk?>(null) }
+    RoomAskDialogs(ask, onDismiss = { ask = null }, onRename = viewModel::renameRoom, onDelete = viewModel::deleteRoom)
     Box(
         Modifier
             .fillMaxSize()
@@ -118,7 +122,22 @@ fun RoomScreen(
                 onOpenSidebar = onOpenSidebar,
                 onNewChat = null,
                 onOpenMenu = null,
-                trailing = { BarButton(Lucide.X, "Close the room", onClick = onBack) },
+                trailing = {
+                    var menuOpen by remember { mutableStateOf(false) }
+                    DropdownMenu(
+                        expanded = menuOpen,
+                        onExpandedChange = { menuOpen = it },
+                        items = {
+                            RoomMenuActions(
+                                onRename = { menuOpen = false; ask = RoomAsk.Rename(room.room) },
+                                onDelete = { menuOpen = false; ask = RoomAsk.Delete(room.room) },
+                            )
+                        },
+                    ) {
+                        BarButton(Lucide.EllipsisVertical, "Room options", onClick = { menuOpen = true })
+                    }
+                    BarButton(Lucide.X, "Close the room", onClick = onBack)
+                },
             )
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 Transcript(room, faces)

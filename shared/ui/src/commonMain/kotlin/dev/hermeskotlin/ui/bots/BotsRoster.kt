@@ -89,7 +89,10 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
 import dev.hermeskotlin.ui.components.relativeTime
+import dev.hermeskotlin.ui.rooms.RoomAsk
+import dev.hermeskotlin.ui.rooms.RoomAskDialogs
 import dev.hermeskotlin.ui.rooms.RoomFaces
+import dev.hermeskotlin.ui.rooms.RoomMenuActions
 import dev.hermeskotlin.ui.sessions.ListNotice
 import dev.hermeskotlin.ui.sessions.ListSpinner
 import dev.hermeskotlin.ui.sessions.MessageBanner
@@ -153,8 +156,15 @@ fun BotsRoster(
     onOpenRoom: (Room) -> Unit = {},
     /** Starts a new room: name it and pick its bots. */
     onNewRoom: () -> Unit = {},
+    onRenameRoom: (Room, String) -> Unit = { _, _ -> },
+    onDeleteRoom: (Room) -> Unit = {},
+    /** Why a room's rename or delete didn't work. */
+    roomsNotice: String? = null,
+    onDismissRoomsNotice: () -> Unit = {},
 ) {
     val heldUp = remember(needsYou) { needsYou.filterIsInstance<NeedsYou.Answer>().associate { it.bot.name to it.waiting } }
+    var roomAsk by remember { mutableStateOf<RoomAsk?>(null) }
+    RoomAskDialogs(roomAsk, onDismiss = { roomAsk = null }, onRename = onRenameRoom, onDelete = onDeleteRoom)
     var hiddenOpen by remember { mutableStateOf(false) }
     var startOver by remember { mutableStateOf<Bot?>(null) }
     var deleting by remember { mutableStateOf<Bot?>(null) }
@@ -210,10 +220,21 @@ fun BotsRoster(
                         IconButton(Lucide.Plus, contentDescription = "New room", onClick = onNewRoom)
                     }
                 }
+                roomsNotice?.let { message ->
+                    item(key = "rooms-notice") { MessageBanner(message, onDismiss = onDismissRoomsNotice, modifier = Modifier.padding(vertical = 4.dp)) }
+                }
                 if (rooms.isEmpty()) {
                     item(key = "rooms-empty") { ListNotice("No rooms yet. New room starts one with 2\u20136 bots.") }
                 } else {
-                    items(rooms, key = { "room:${it.roomId}" }) { room -> RoomRow(room, roomFaces, onClick = { onOpenRoom(room) }) }
+                    items(rooms, key = { "room:${it.roomId}" }) { room ->
+                        RoomRow(
+                            room,
+                            roomFaces,
+                            onClick = { onOpenRoom(room) },
+                            onRename = { roomAsk = RoomAsk.Rename(room) },
+                            onDelete = { roomAsk = RoomAsk.Delete(room) },
+                        )
+                    }
                 }
             }
             item(key = "label") {
@@ -475,15 +496,51 @@ internal fun StartOverDialog(bot: Bot?, onDismiss: () -> Unit, onConfirm: (Bot) 
     )
 }
 
-/** One hosted room: its members' faces, its name, who's in it, and when it last moved. */
+/**
+ * One hosted room: its members' faces, its name, who's in it, and when it last moved. A long press
+ * opens its actions, as a bot's row does.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RoomRow(room: Room, faces: BotFaces, onClick: () -> Unit) {
+private fun RoomRow(room: Room, faces: BotFaces, onClick: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
+    val haptics = LocalHapticFeedback.current
+    var menuOpen by remember { mutableStateOf(false) }
+    DropdownMenu(
+        expanded = menuOpen,
+        onExpandedChange = { menuOpen = it },
+        items = {
+            RoomMenuActions(
+                onRename = { menuOpen = false; onRename() },
+                onDelete = { menuOpen = false; onDelete() },
+            )
+        },
+    ) {
+        RoomRowContent(
+            room,
+            faces,
+            Modifier.combinedClickable(
+                onClick = onClick,
+                onClickLabel = "Open room ${room.name}",
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    menuOpen = true
+                },
+                onLongClickLabel = "${room.name} actions",
+                interactionSource = null,
+                indication = rememberColoredIndication(Theme[colors][text]),
+            ),
+        )
+    }
+}
+
+@Composable
+private fun RoomRowContent(room: Room, faces: BotFaces, clicks: Modifier) {
     Row(
         Modifier
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
             .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
-            .clickable(onClickLabel = "Open room ${room.name}", onClick = onClick)
+            .then(clicks)
             .padding(horizontal = 10.dp, vertical = 9.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,

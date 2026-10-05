@@ -29,8 +29,10 @@ class RoomsApi(private val connection: GatewayConnection) {
     suspend fun list(): List<Room> {
         val reply = client().request("groups.list", JsonObject(emptyMap())) as? JsonObject ?: return emptyList()
         val rows = reply["rooms"] ?: return emptyList()
+        // A deleted room can linger as a tombstone; it's gone as far as the user is concerned.
         return runCatching { HermesJson.decodeFromJsonElement(ListSerializer(Room.serializer()), rows) }
             .getOrDefault(emptyList())
+            .filter { it.disbandedAt == null }
     }
 
     /**
@@ -110,6 +112,35 @@ class RoomsApi(private val connection: GatewayConnection) {
                 put("cancel_id", cancelId)
             },
         )
+    }
+
+    /**
+     * `groups.disband`: deletes the room for good, for every client: its work is stopped first.
+     * Identified by [cancelId] so a retry after a lost answer is the same ask.
+     */
+    suspend fun disband(roomId: String, cancelId: String) {
+        client().request(
+            "groups.disband",
+            buildJsonObject {
+                put("room_id", roomId)
+                put("cancel_id", cancelId)
+            },
+            timeoutMs = SEND_TIMEOUT_MS,
+        )
+    }
+
+    /** `groups.rename`: renames the room, idempotently by [eventId]; the renamed room comes back. */
+    suspend fun rename(roomId: String, name: String, eventId: String): Room {
+        val reply = client().request(
+            "groups.rename",
+            buildJsonObject {
+                put("room_id", roomId)
+                put("event_id", eventId)
+                put("name", name)
+            },
+        ) as? JsonObject
+        val room = reply?.get("room") ?: throw RpcException(0, "The gateway didn't say what it renamed.")
+        return decode(room, Room.serializer(), "a room")
     }
 
     /** `groups.retry`: gives the failed turn [taskId] another go. */

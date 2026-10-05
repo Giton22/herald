@@ -50,6 +50,8 @@ data class RoomsUiState(
     val notice: String? = null,
     /** A room is being made right now, e.g. "Making the room…". */
     val busy: String? = null,
+    /** Why deleting or renaming a room from the sidebar didn't work. */
+    val actionNotice: String? = null,
 )
 
 /** The room open on screen: its transcript as far as it's read, and what it's waiting on. */
@@ -110,6 +112,9 @@ class RoomsViewModel(
     /** Where the open room's log has been read to (the page cursor). */
     private var readThrough = 0
 
+    /** The ids of deletes asked without an answer back, by room, so asking again is the same ask. */
+    private val disbandIds = mutableMapOf<String, String>()
+
     /** Events per log page: [PAGE], or less when the gateway's `max_log_limit` says so. */
     private var logLimit = PAGE
 
@@ -141,6 +146,7 @@ class RoomsViewModel(
         logLimit = PAGE
         unansweredSend = null
         unansweredCreate = null
+        disbandIds.clear()
         close()
     }
 
@@ -274,6 +280,55 @@ class RoomsViewModel(
             } catch (e: Exception) {
                 _opened.update { it?.copy(notice = "Couldn't retry. ${e.message.orEmpty()}".trim()) }
             }
+        }
+    }
+
+    /**
+     * Deletes [room] on the gateway, for every client: its work stops and it leaves the list. A try
+     * again after a lost answer is the same ask, so it can't fail on a room already gone.
+     */
+    fun deleteRoom(room: Room) {
+        val cancelId = disbandIds.getOrPut(room.roomId) { newId("disband") }
+        viewModelScope.launch {
+            try {
+                api.disband(room.roomId, cancelId)
+                disbandIds.remove(room.roomId)
+                _state.update { state -> state.copy(rooms = state.rooms.filterNot { it.roomId == room.roomId }) }
+                if (_opened.value?.room?.roomId == room.roomId) close()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                say(room.roomId, "Couldn't delete “${room.name}”. ${e.message.orEmpty()}".trim())
+            }
+        }
+    }
+
+    /** Renames [room] to [name] on the gateway; the list and the open room follow. */
+    fun renameRoom(room: Room, name: String) {
+        val newName = name.trim()
+        if (newName.isEmpty() || newName == room.name) return
+        viewModelScope.launch {
+            try {
+                val renamed = api.rename(room.roomId, newName, eventId = newId("rename"))
+                _state.update { state -> state.copy(rooms = state.rooms.map { if (it.roomId == renamed.roomId) renamed else it }) }
+                _opened.update { open -> open?.takeIf { it.room.roomId == renamed.roomId }?.copy(room = renamed) ?: open }
+                readRoomSoon(renamed.roomId)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                say(room.roomId, "Couldn't rename “${room.name}”. ${e.message.orEmpty()}".trim())
+            }
+        }
+    }
+
+    fun dismissActionNotice() = _state.update { it.copy(actionNotice = null) }
+
+    /** Tells the user about [roomId]: on its screen while it's open, else in the sidebar's Rooms. */
+    private fun say(roomId: String, message: String) {
+        if (_opened.value?.room?.roomId == roomId) {
+            _opened.update { it?.copy(notice = message) }
+        } else {
+            _state.update { it.copy(actionNotice = message) }
         }
     }
 

@@ -199,6 +199,41 @@ class RoomsApiTest {
     }
 
     @Test
+    fun disbandAndRenameNameTheRoomAndTheirIds() = runTest {
+        val api = api(backgroundScope) { method, _ ->
+            when (method) {
+                "groups.disband" -> """{"tombstone":{"room_id":"r1","disbanded_at":5.0,"idempotent":false}}"""
+                "groups.rename" -> """{"room":{"room_id":"r1","name":"New name","members":[],
+                    "authority_gateway_id":"gw-1","authority_epoch":1,"revision":2,"created_at":1.0,"updated_at":2.0}}"""
+                else -> "{}"
+            }
+        }
+        api.disband("r1", cancelId = "disband-1")
+        val disband = sentTo("groups.disband")
+        assertEquals("r1", disband["room_id"]?.jsonPrimitive?.contentOrNull)
+        assertEquals("disband-1", disband["cancel_id"]?.jsonPrimitive?.contentOrNull)
+
+        val renamed = api.rename("r1", "New name", eventId = "rename-1")
+        assertEquals("New name", renamed.name)
+        val rename = sentTo("groups.rename")
+        assertEquals("rename-1", rename["event_id"]?.jsonPrimitive?.contentOrNull)
+        assertEquals("New name", rename["name"]?.jsonPrimitive?.contentOrNull)
+    }
+
+    @Test
+    fun aDeletedRoomIsLeftOutOfTheList() = runTest {
+        val api = api(backgroundScope) { method, _ ->
+            when (method) {
+                "groups.list" -> """{"rooms":[
+                    {"room_id":"r1","name":"Live","members":[],"authority_gateway_id":"gw-1","authority_epoch":1,"revision":1,"created_at":1.0,"updated_at":2.0},
+                    {"room_id":"r2","name":"Gone","members":[],"authority_gateway_id":"gw-1","authority_epoch":1,"revision":3,"created_at":1.0,"updated_at":3.0,"disbanded_at":3.0}]}"""
+                else -> "{}"
+            }
+        }
+        assertEquals(listOf("r1"), api.list().map { it.roomId })
+    }
+
+    @Test
     fun createProposesTheRoster() = runTest {
         val api = api(backgroundScope) { method, _ ->
             when (method) {

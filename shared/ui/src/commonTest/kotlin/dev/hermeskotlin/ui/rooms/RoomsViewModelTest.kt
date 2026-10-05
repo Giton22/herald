@@ -319,6 +319,79 @@ class RoomsViewModelTest {
     }
 
     @Test
+    fun deletingTheOpenRoomClosesItAndTakesItOffTheList() = runTest(dispatcher) {
+        var disbanded = false
+        val socket = RoomsGateway(CoroutineScope(dispatcher)) { method, params ->
+            when (method) {
+                "groups.capabilities" -> """{"protocol_version":2,"driver":true}"""
+                "groups.list" -> if (disbanded) """{"rooms":[]}""" else
+                    """{"rooms":[{"room_id":"a","name":"Room A","members":[]},{"room_id":"b","name":"Room B","members":[]}]}"""
+                "groups.disband" -> {
+                    disbanded = true
+                    """{"tombstone":{"room_id":"a","disbanded_at":5.0,"idempotent":false}}"""
+                }
+                else -> quietRoom(method, params) ?: "{}"
+            }
+        }
+        val vm = viewModel(socket)
+        vm.bind(gateway.gatewayUrl)
+        vm.setVisible(true)
+        vm.state.first { it.rooms.size == 2 }
+        vm.setVisible(false)
+        vm.open(roomA)
+
+        vm.deleteRoom(roomA)
+        vm.opened.first { it == null }
+
+        assertEquals(listOf("b"), vm.state.value.rooms.map { it.roomId })
+        assertEquals("a", socket.sent("groups.disband").single()["room_id"]?.jsonPrimitive?.contentOrNull)
+    }
+
+    @Test
+    fun aFailedDeleteFromTheSidebarSaysWhyThere() = runTest(dispatcher) {
+        val socket = RoomsGateway(CoroutineScope(dispatcher)) { method, _ ->
+            if (method == "groups.disband") "!The room is busy" else "{}"
+        }
+        val vm = viewModel(socket)
+        vm.bind(gateway.gatewayUrl)
+
+        vm.deleteRoom(roomB)
+        val notice = vm.state.first { it.actionNotice != null }.actionNotice!!
+        assertTrue(notice.contains("Room B") && notice.contains("The room is busy"))
+    }
+
+    @Test
+    fun renamingTheOpenRoomRenamesItThereAndInTheList() = runTest(dispatcher) {
+        var name = "Room A"
+        val socket = RoomsGateway(CoroutineScope(dispatcher)) { method, params ->
+            when (method) {
+                "groups.capabilities" -> """{"protocol_version":2,"driver":true}"""
+                "groups.list" -> """{"rooms":[{"room_id":"a","name":"$name","members":[]}]}"""
+                "groups.rename" -> {
+                    name = params["name"]!!.jsonPrimitive.content
+                    """{"room":{"room_id":"a","name":"$name","members":[]}}"""
+                }
+                "groups.state" -> """{"room":{"room_id":"a","name":"$name","members":[],"latest_seq":0}}"""
+                else -> quietRoom(method, params) ?: "{}"
+            }
+        }
+        val vm = viewModel(socket)
+        vm.bind(gateway.gatewayUrl)
+        vm.setVisible(true)
+        vm.state.first { it.rooms.isNotEmpty() }
+        vm.setVisible(false)
+        vm.open(roomA)
+        vm.opened.first { it?.loading == false }
+        try {
+            vm.renameRoom(roomA, "  Release room ")
+            assertEquals("Release room", vm.state.first { it.rooms.single().name != "Room A" }.rooms.single().name)
+            assertEquals("Release room", vm.opened.value?.room?.name)
+        } finally {
+            vm.close()
+        }
+    }
+
+    @Test
     fun aRoomThatWasntMadeSaysWhyAndATryAgainIsTheSameRoom() = runTest(dispatcher) {
         var creates = 0
         val socket = RoomsGateway(CoroutineScope(dispatcher)) {method, params ->

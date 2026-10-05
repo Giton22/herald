@@ -382,6 +382,10 @@ fun SessionsSidebar(
                                 rooms.dismissNotice()
                                 newRoomOpen = true
                             },
+                            onRenameRoom = rooms::renameRoom,
+                            onDeleteRoom = rooms::deleteRoom,
+                            roomsNotice = roomsState.actionNotice,
+                            onDismissRoomsNotice = rooms::dismissActionNotice,
                         )
                         CreateRoomDialog(
                             visible = newRoomOpen,
