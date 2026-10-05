@@ -69,4 +69,8 @@ class InsightsViewModel(private val api: InsightsApi) : ViewModel() {
             }
         }
     }
+
+    /** Clears the expiry flag once a screen has acted on it; the view model outlives the screen, so
+     *  leaving it set would bounce the next mount after a fresh sign-in. */
+    fun consumeSessionExpired() = _state.update { it.copy(sessionExpired = false) }
 }
