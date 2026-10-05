@@ -73,6 +73,9 @@ class ChatSession(
      */
     private var ownTurnsPending = 0
     private var foreignTurn = false
+
+    /** A [rewind] cut the transcript; the stored rows replace the live copy once its turn ends. */
+    private var rewound = false
     private var jobs: List<Job> = emptyList()
 
     /** What went out for each bubble marked by a [SendCheck], by key: a skill's bubble shows less than was sent. */
@@ -170,10 +173,15 @@ class ChatSession(
             val status = result.string("status")
             // Steering or redirecting folds the text into the running turn instead of starting one.
             if (status !in TURN_STARTING_STATUSES) ownTurnsPending = (ownTurnsPending - 1).coerceAtLeast(0)
+            // The row written for it, so it can be regenerated or edited before the transcript is read again.
+            val rowId = result.long("user_row_id")
+            val sentText = visible.takeIf { attachments.isEmpty() && display == null && it.isNotEmpty() }
             _state.update { state ->
                 val sent = state.copy(
                     running = true,
-                    messages = state.messages.updateUser(key) { it.copy(pending = false, queued = status == "queued") },
+                    messages = state.messages.updateUser(key) {
+                        it.copy(pending = false, queued = status == "queued", rowId = rowId, sentText = sentText)
+                    },
                 )
                 // What streamed before the correction stays above it; the rest of the turn continues below.
                 if (status in CORRECTION_STATUSES) sent.sealReplyBefore(key) else sent
@@ -309,6 +317,96 @@ class ChatSession(
         val shown = takeBack(key) ?: return null
         val outcome = submit(prompt?.text ?: shown, display = prompt?.display)
         return shown.takeIf { outcome == SendOutcome.NotSent }
+    }
+
+    /**
+     * Rewinds the chat to prompt [key] and sends [text] in its place: a regenerate sends the prompt's own text
+     * again, an edit a new one. The prompt and everything after it go, here and on the gateway, in one
+     * `prompt.submit` that cuts the stored transcript before the prompt's row, as Desktop's rewind does. Only
+     * between turns, and only for a prompt with a stored row ([ChatMessage.User.rowId]).
+     *
+     * Refused (busy, or the gateway can't find the row any more): nothing changed, and [SendOutcome.NotSent].
+     * When the link drops before the answer, the stored transcript says whether it went.
+     */
+    suspend fun rewind(key: String, text: String): SendOutcome {
+        val trimmed = text.trim()
+        val before = _state.value
+        val index = before.messages.indexOfFirst { it.key == key }
+        val rowId = (before.messages.getOrNull(index) as? ChatMessage.User)?.rowId
+        if (trimmed.isEmpty() || rowId == null || before.running) return SendOutcome.NotSent
+        val client = connectedClient() ?: run {
+            _state.update { it.copy(error = "$NOT_CONNECTED Try again once it reconnects.") }
+            return SendOutcome.NotSent
+        }
+        val newKey = "local-${before.keySeq}"
+        // Shown cut at once; put back as it was if the gateway turns it down.
+        _state.update {
+            it.copy(
+                messages = it.messages.take(index) + ChatMessage.User(newKey, trimmed, pending = true),
+                keySeq = it.keySeq + 1,
+                error = null,
+            )
+        }
+        ownTurnsPending++
+        var submitted = false
+        return try {
+            val runtimeId = ensureAttached(client)
+            submitted = true
+            val result = client.request(
+                "prompt.submit",
+                buildJsonObject {
+                    put("session_id", runtimeId)
+                    put("text", trimmed)
+                    put("truncate_before_row_id", rowId)
+                    put("confirm_truncate", true)
+                    // Cutting at the first prompt empties the transcript, which the gateway wants said outright.
+                    put("confirm_empty_truncate", true)
+                },
+            ) as? JsonObject
+            if (result.string("status") !in TURN_STARTING_STATUSES) ownTurnsPending = (ownTurnsPending - 1).coerceAtLeast(0)
+            // The stored rows decide once the turn is over, so what shows matches the gateway's transcript.
+            rewound = true
+            _state.update { state ->
+                state.copy(
+                    running = true,
+                    messages = state.messages.updateUser(newKey) {
+                        it.copy(pending = false, rowId = result.long("user_row_id"), sentText = trimmed)
+                    },
+                )
+            }
+            SendOutcome.Sent
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            ownTurnsPending = (ownTurnsPending - 1).coerceAtLeast(0)
+            if (submitted && e !is RpcException) {
+                // No answer: the cut may have happened. The transcript shows which, and its last prompt says whether this went.
+                _state.update { state -> state.copy(messages = state.messages.filterNot { it.key == newKey }) }
+                loadHistory()
+                val arrived = _state.value.historyError == null &&
+                    (_state.value.messages.lastOrNull { it is ChatMessage.User } as? ChatMessage.User)?.text == trimmed
+                if (arrived) {
+                    rewound = true
+                    return SendOutcome.Sent
+                }
+                _state.update { it.copy(error = "Lost the connection while sending. The chat shows what Hermes has.") }
+                return SendOutcome.NotSent
+            }
+            val stale = (e as? RpcException)?.code in STALE_REWIND_CODES
+            _state.update { state ->
+                state.copy(
+                    messages = before.messages,
+                    error = when {
+                        (e as? RpcException)?.code == BUSY -> "Wait for the reply to finish, then try again."
+                        stale -> "This message can't be changed any more."
+                        else -> e.message ?: "Couldn't send the message."
+                    },
+                )
+            }
+            // The gateway's transcript isn't what this chat shows; show it as it is.
+            if (stale) loadHistory()
+            SendOutcome.NotSent
+        }
     }
 
     /**
@@ -1040,8 +1138,9 @@ class ChatSession(
                     // Nothing can still wait on a person once the turn is over; this also clears a
                     // clarify answered on another client, which gets no request.cancel.
                     _state.update { it.copy(inputRequests = emptyList()) }
-                    if (foreignTurn) {
+                    if (foreignTurn || rewound) {
                         foreignTurn = false
+                        rewound = false
                         scope.launch { loadHistory() }
                     }
                 }
@@ -1083,7 +1182,7 @@ class ChatSession(
                 } else {
                     state.messages.filter { it.isLocalOnly }
                 }
-                val stored = historyToMessages(result.value.messages).withRisks(flagged)
+                val stored = historyToMessages(result.value.messages, result.value.sessionId).withRisks(flagged)
                 // A prompt sent without a reply that the transcript now has arrived after all.
                 val storedPrompts = stored.mapNotNullTo(HashSet()) { (it as? ChatMessage.User)?.text }
                 val unsettled = live.filterNot { it is ChatMessage.User && it.check != null && storedPrompts.any { p -> p.contains(it.text) } }
@@ -1210,6 +1309,15 @@ class ChatSession(
         const val UPLOAD_TIMEOUT_MS = 120_000L
 
         const val PDF_RENDER_UNAVAILABLE = 5028
+
+        /** The gateway's "busy": a turn is running, so nothing was cut. */
+        const val BUSY = 4009
+
+        /**
+         * A rewind the gateway can't place: the row isn't in what the live agent holds (4018: compressed
+         * away, cut elsewhere), the prompt count drifted (4030), or the target was malformed (4004).
+         */
+        val STALE_REWIND_CODES = setOf(4018, 4030, 4004)
 
         const val NOT_CONNECTED = "Not connected to the gateway."
 

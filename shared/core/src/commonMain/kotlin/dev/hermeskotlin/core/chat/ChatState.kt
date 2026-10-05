@@ -77,6 +77,10 @@ sealed interface ChatMessage {
         val queued: Boolean = false,
         val attachments: List<ShownAttachment> = emptyList(),
         val check: SendCheck? = null,
+        /** Its stored row (`messages.id`), where a regenerate or an edit cuts the chat; null when it can't be cut there. */
+        val rowId: Long? = null,
+        /** What went out for it, to send again; null when that can't be had (pictures or files rode along). */
+        val sentText: String? = null,
     ) : ChatMessage
 
     /** One reply: streamed text, reasoning and the tools it ran. [streaming] until `message.complete`. */

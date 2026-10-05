@@ -828,6 +828,121 @@ class ChatSessionTest {
         assertEquals("rt1", transport.sent.value.first { it.isCall("session.branch_whole") }.param("session_id"))
     }
 
+    private val threeTurns = """{"session_id":"stored-1","messages":[
+        {"id":1,"role":"user","content":"one"},{"id":2,"role":"assistant","content":"First"},
+        {"id":3,"role":"user","content":"two"},{"id":4,"role":"assistant","content":"Second"},
+        {"id":5,"role":"user","content":"three"},{"id":6,"role":"assistant","content":"Third"}]}"""
+
+    @Test
+    fun regeneratingCutsAtThePromptsRowAndEndsOnTheStoredTranscript() = runTest {
+        history = threeTurns
+        val (chat, transport) = resumedChat(backgroundScope, mapOf("prompt.submit" to """{"status":"streaming","user_row_id":7}"""))
+
+        assertEquals(SendOutcome.Sent, chat.rewind("row-3", "two"))
+
+        val submit = transport.sent.value.first { it.isCall("prompt.submit") }
+        assertEquals("rt1", submit.param("session_id"))
+        assertEquals("two", submit.param("text"))
+        assertEquals("3", submit.param("truncate_before_row_id"))
+        assertEquals("true", submit.param("confirm_truncate"))
+        assertEquals("true", submit.param("confirm_empty_truncate"))
+        val cut = chat.state.value
+        assertTrue(cut.running)
+        assertEquals(listOf("one", "First", "two"), cut.messages.map { it.textOf() })
+        val prompt = assertIs<ChatMessage.User>(cut.messages.last())
+        assertEquals(7L, prompt.rowId)
+        assertFalse(prompt.pending)
+
+        // The gateway's transcript after the turn: the cut, then the new exchange.
+        history = """{"session_id":"stored-1","messages":[
+            {"id":1,"role":"user","content":"one"},{"id":2,"role":"assistant","content":"First"},
+            {"id":7,"role":"user","content":"two"},{"id":8,"role":"assistant","content":"Second, again"}]}"""
+        transport.push(event("message.start", "rt1"))
+        transport.push(event("message.delta", "rt1", """{"text":"Second, again"}"""))
+        transport.push(event("message.complete", "rt1", """{"text":"Second, again","status":"complete"}"""))
+
+        val done = chat.state.first { s -> !s.running && s.messages.lastOrNull()?.key == "row-8" }
+        assertEquals(listOf("row-1", "row-2", "row-7", "row-8"), done.messages.map { it.key })
+    }
+
+    @Test
+    fun editingTheFirstPromptEmptiesTheChatBeforeTheNewOne() = runTest {
+        history = threeTurns
+        val (chat, transport) = resumedChat(backgroundScope, mapOf("prompt.submit" to """{"status":"streaming","user_row_id":7}"""))
+
+        assertEquals(SendOutcome.Sent, chat.rewind("row-1", "  uno "))
+
+        val submit = transport.sent.value.first { it.isCall("prompt.submit") }
+        assertEquals("uno", submit.param("text"))
+        assertEquals("1", submit.param("truncate_before_row_id"))
+        val prompt = assertIs<ChatMessage.User>(chat.state.value.messages.single())
+        assertEquals("uno", prompt.text)
+        assertEquals("uno", prompt.sentText)
+    }
+
+    @Test
+    fun aBusyGatewayLeavesTheChatAsItWas() = runTest {
+        history = threeTurns
+        val (chat, _) = resumedChat(backgroundScope, mapOf("prompt.submit" to "error:4009"))
+        val before = chat.state.value.messages
+
+        assertEquals(SendOutcome.NotSent, chat.rewind("row-3", "two"))
+
+        assertEquals(before, chat.state.value.messages)
+        assertTrue(chat.state.value.error!!.contains("Wait"))
+        assertFalse(chat.state.value.running)
+    }
+
+    @Test
+    fun aRowTheGatewayCantPlaceShowsItsTranscriptAgain() = runTest {
+        history = threeTurns
+        val (chat, _) = resumedChat(backgroundScope, mapOf("prompt.submit" to "error:4018"))
+        // Another client cut the chat meanwhile.
+        history = """{"session_id":"stored-1","messages":[{"id":1,"role":"user","content":"one"},{"id":2,"role":"assistant","content":"First"}]}"""
+
+        assertEquals(SendOutcome.NotSent, chat.rewind("row-3", "two"))
+
+        assertEquals(listOf("row-1", "row-2"), chat.state.value.messages.map { it.key })
+        assertTrue(chat.state.value.error!!.contains("can't be changed"))
+    }
+
+    @Test
+    fun aLostAnswerAsksTheTranscriptWhetherTheRewindWent() = runTest {
+        history = threeTurns
+        val (chat, transport) = resumedChat(backgroundScope, mapOf("prompt.submit" to SILENT))
+
+        val rewinding = backgroundScope.async { chat.rewind("row-5", "three") }
+        transport.awaitSent { it.isCall("prompt.submit") }
+        history = history.replace("""{"id":5,"role":"user","content":"three"},{"id":6,"role":"assistant","content":"Third"}""", """{"id":7,"role":"user","content":"three"}""")
+        transport.serverClose(1006)
+
+        assertEquals(SendOutcome.Sent, rewinding.await())
+        assertEquals(listOf("row-1", "row-2", "row-3", "row-4", "row-7"), chat.state.value.messages.map { it.key })
+    }
+
+    @Test
+    fun nothingRewindsWithoutAStoredRowOrMidTurn() = runTest {
+        val (chat, transport) = newChat(backgroundScope, mapOf("prompt.submit" to """{"status":"streaming"}"""))
+        assertTrue(chat.send("no row yet"))
+        val key = chat.state.value.messages.single().key
+
+        // No row id came back, and a turn is running besides.
+        assertEquals(SendOutcome.NotSent, chat.rewind(key, "again"))
+
+        assertEquals(1, transport.sent.value.count { it.isCall("prompt.submit") })
+    }
+
+    @Test
+    fun aSentPromptKeepsTheRowItWasWrittenTo() = runTest {
+        val (chat, _) = resumedChat(backgroundScope, mapOf("prompt.submit" to """{"status":"streaming","user_row_id":9}"""))
+
+        assertTrue(chat.send(" plain words "))
+
+        val prompt = assertIs<ChatMessage.User>(chat.state.value.messages.last())
+        assertEquals(9L, prompt.rowId)
+        assertEquals("plain words", prompt.sentText)
+    }
+
     private companion object {
         const val SILENT = "silent"
     }
