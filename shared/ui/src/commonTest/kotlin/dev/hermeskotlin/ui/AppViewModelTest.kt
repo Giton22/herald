@@ -20,6 +20,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -48,8 +49,15 @@ class AppViewModelTest {
     private val gateways = GatewayRepository(store)
     private val lastChats = LastChatStore(store)
 
-    // Every gateway call fails as unreachable: the connection keeps backing off, sign-out still wipes cookies.
-    private val client = createHttpClient(MockEngine { respond("", HttpStatusCode.ServiceUnavailable) }, cookies)
+    // The connection waits on its ticket for good (a retry loop would keep the test clock busy, so a missed
+    // route would hang instead of time out); every other call fails, and sign-out still wipes cookies.
+    private val client = createHttpClient(
+        MockEngine { request ->
+            if (request.url.encodedPath.endsWith("ws-ticket")) awaitCancellation()
+            respond("", HttpStatusCode.ServiceUnavailable)
+        },
+        cookies,
+    )
     private val auth = AuthApi(client, cookies)
 
     @BeforeTest fun setUp() = Dispatchers.setMain(dispatcher)
@@ -156,6 +164,26 @@ class AppViewModelTest {
 
         vm.awaitChat(home)
         assertEquals(listOf(home), gateways.all().gateways)
+    }
+
+    @Test
+    fun enteringASavedSignedOutAddressStillBacksOutToAdding() = runTest {
+        gateways.save(home)
+        gateways.save(work)
+        signedIn(work)
+        val vm = viewModel()
+        vm.awaitChat(work)
+
+        vm.addGateway()
+        vm.route.first { it is Route.Connect }
+        vm.onGatewayChosen(home)
+        assertTrue(vm.awaitSignIn(home).adding)
+
+        // Back goes to the add screen, not out of the app.
+        assertTrue(vm.back())
+        assertEquals(Route.Connect(canCancel = true), vm.route.first { it is Route.Connect })
+        assertTrue(vm.back())
+        vm.awaitChat(work)
     }
 
     @Test

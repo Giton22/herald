@@ -30,7 +30,7 @@ sealed interface Route {
     /** Enter a gateway address. [canCancel] when another gateway is saved to go back to. */
     data class Connect(val canCancel: Boolean = false) : Route
 
-    /** Sign in to [gateway]. [adding] while it isn't saved yet, i.e. it was just entered on [Connect]. */
+    /** Sign in to [gateway]. [adding] when it was just entered on [Connect], which Back returns to. */
     data class SignIn(val gateway: SavedGateway, val notice: String? = null, val adding: Boolean = false) : Route
 
     /** The signed-in home: one chat (stored, or new when `target.storedSessionId` is null) with the sessions sidebar beside it. */
@@ -101,7 +101,7 @@ class AppViewModel(
         viewModelScope.launch {
             val saved = gateways.all().find(gateway.url)
             if (saved != null && auth.hasStoredSession(saved.gatewayUrl)) open(saved)
-            else _route.value = Route.SignIn(saved ?: gateway, adding = saved == null)
+            else _route.value = Route.SignIn(saved ?: gateway, adding = true)
         }
     }
 
