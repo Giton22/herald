@@ -185,8 +185,11 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] In a Bot Chat, `/new` and `/reset` compress instead; `/title`, Rename, Pin, Archive and Delete are kept away from it
 - [x] Messages from other bots (`Message from 🤖 …`) show as the sender's note in every chat, not as the user's prompt
 - [x] Reopens the last bot's chat on launch; roster ordered as Desktop's (pinned, then newest activity or creation)
-- [ ] Transcript: delivery outcomes ("Reply from @x", "Still waiting", "Couldn't reach"), collapsed process rows, agent notes with faces, collapsed replies, hidden silence tokens, routine notes, `message_agent` calls, "open elsewhere" (4090)
-- [ ] Roster polish: thinking/working mood, ⚠ attention badge, long-press menu (Pin, Hide + "Hidden" section, Open recent session, New chat with this bot), bot header and empty state, refresh on `sessions.changed`
+- [x] Transcript: delivery outcomes ("Reply from X", "Still waiting", "Couldn't reach X · why"), folded process rows, other bots' notes with their faces, replies to them folded, silence tokens hidden, routine notes, "Messaged X" for `message_agent`, failed turns; the status line of a turn woken by a reply says so
+- [ ] "Open elsewhere" (4090 `SESSION_NOT_OWNED`) as its own state
+- [x] Roster: long-press menu (Pin, Hide with a "Hidden" section, Open recent session, New chat with this bot, Start fresh), Thinking/Working, previews that name the bot that wrote, `@handle` for same names, bot face in the chat header; refresh on `sessions.changed` (bots' chats watched) with a 30 s fallback
+- [x] Start fresh: archive the Bot Chat (kept, retired) and begin an empty one, from the roster or the chat menu; the open chat follows a bot whose chat was started over elsewhere
+- [ ] ⚠ attention badge for sign-in, quota or setup failures
 - [ ] Create and edit bots (`profiles.create`, SOUL, `profiles.configure` with `ui_meta` CAS, `profiles.set_asset`, `setup.runtime_check`, kickoff), duplicate, delete
 - [ ] Phone: per-bot notifications with direct reply, Needs-you inbox, shortcuts and `hermes://bot/` link, share-to-bot, voice, @mentions
 - [ ] Rooms: Desktop rooms read-only from the `hermes-bots-groups` mirror; hosted rooms (`groups.*`) to take part
