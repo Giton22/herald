@@ -31,6 +31,16 @@ fun ChatState.discardedAfter(key: String): Int {
     return messages.subList(nextPrompt, messages.size).count { it is ChatMessage.User || it is ChatMessage.Assistant }
 }
 
+/**
+ * Where prompt [key], stored at [rowId], is now: its key, or the key a reload gave the same row (a prompt sent from
+ * here has a local key until then). Null when it's gone from the chat.
+ */
+fun ChatState.promptNow(key: String, rowId: Long?): String? {
+    if (messages.any { it.key == key }) return key
+    rowId ?: return null
+    return messages.firstOrNull { it is ChatMessage.User && it.rowId == rowId }?.key
+}
+
 /** It has a stored row the gateway can cut at, and it settled: not on its way, queued, or in doubt. */
 private val ChatMessage.User.rewindable: Boolean
     get() = rowId != null && !pending && !queued && check == null

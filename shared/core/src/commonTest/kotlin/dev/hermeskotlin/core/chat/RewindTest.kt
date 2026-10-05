@@ -49,6 +49,16 @@ class RewindTest {
     }
 
     @Test
+    fun aPromptBeingEditedIsFollowedToItsStoredKey() {
+        // Sent from here as local-4 with row 4; a reload shows the same row under its stored key.
+        val reloaded = chat.copy(messages = chat.messages + ChatMessage.User("row-4", "p4", rowId = 4))
+        assertEquals("u2", reloaded.promptNow("u2", 2))
+        assertEquals("row-4", reloaded.promptNow("local-4", 4))
+        assertNull(reloaded.promptNow("local-4", null))
+        assertNull(chat.promptNow("u9", 9), "cut away")
+    }
+
+    @Test
     fun countsWhatComesAfterTheExchange() {
         // Prompt 1's exchange is replaced; prompts 2 and 3 with their replies go. Notices aren't messages.
         assertEquals(4, chat.discardedAfter("u1"))

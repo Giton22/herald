@@ -27,6 +27,7 @@ import dev.hermeskotlin.core.chat.ModelSwitch
 import dev.hermeskotlin.core.chat.OutgoingAttachment
 import dev.hermeskotlin.core.chat.SendOutcome
 import dev.hermeskotlin.core.chat.canEdit
+import dev.hermeskotlin.core.chat.promptNow
 import dev.hermeskotlin.core.chat.regenerateTarget
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.profiles.ProfilesApi
@@ -212,6 +213,9 @@ class ChatViewModel(
     /** What the composer held when the edit started, given back when it ends. */
     private var typedBeforeEdit = ""
 
+    /** The stored row of the prompt being edited, which outlasts its key. */
+    private var editingRowId: Long? = null
+
     private val _requests = Channel<ChatRequest>(Channel.BUFFERED)
 
     /** Commands the screen answers: a new chat, the model sheet, the sessions list. */
@@ -248,10 +252,12 @@ class ChatViewModel(
                 .collect { last -> target?.let { lastChats.set(it.gateway.gatewayUrl, last, it.profile) } }
         }
         viewModelScope.launch {
-            // The prompt being edited went (another client cut the chat): there's nothing left to replace.
-            combine(state, _editing) { chat, key -> key?.takeIf { chat.historyLoaded && chat.messages.none { it.key == key } } }
+            combine(state, _editing) { chat, key -> key?.takeIf { chat.historyLoaded }?.let { it to chat.promptNow(it, editingRowId) } }
                 .filterNotNull()
-                .collect { cancelEdit() }
+                .collect { (key, now) ->
+                    // A reload gives a prompt sent from here its stored key; it's still the same row.
+                    if (now == null) editGone() else if (now != key) _editing.value = now
+                }
         }
         viewModelScope.launch {
             snapshotFlow { composer.text.toString() }
@@ -785,6 +791,7 @@ class ChatViewModel(
         if (!canRewind(state) || !state.canEdit(key)) return
         val prompt = state.messages.firstOrNull { it.key == key } as? ChatMessage.User ?: return
         if (_editing.value == null) typedBeforeEdit = composer.text.toString()
+        editingRowId = prompt.rowId
         _editing.value = key
         composer.setTextAndPlaceCursorAtEnd(prompt.text)
     }
@@ -793,6 +800,17 @@ class ChatViewModel(
         if (_editing.value == null) return
         _editing.value = null
         composer.setTextAndPlaceCursorAtEnd(typedBeforeEdit)
+        typedBeforeEdit = ""
+    }
+
+    /**
+     * The prompt being edited went (another client, or a regenerate above it, cut the chat): there's nothing left to
+     * replace. What was typed for it stays, ahead of the text it put aside, to send as a new message or drop.
+     */
+    private fun editGone() {
+        val edited = composer.text.toString()
+        _editing.value = null
+        composer.setTextAndPlaceCursorAtEnd(listOf(edited, typedBeforeEdit).filter { it.isNotBlank() }.joinToString("\n\n"))
         typedBeforeEdit = ""
     }
 
