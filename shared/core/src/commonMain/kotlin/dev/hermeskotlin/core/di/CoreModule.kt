@@ -21,6 +21,8 @@ import dev.hermeskotlin.core.media.MediaApi
 import dev.hermeskotlin.core.models.ModelsApi
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.profiles.ProfileStore
+import dev.hermeskotlin.core.push.NtfyClient
+import dev.hermeskotlin.core.push.PushApi
 import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.rpc.openGatewaySocket
@@ -91,4 +93,7 @@ val coreModule = module {
     single(named(OUTSIDE_CLIENT)) { createHttpClient() }
     single { MediaApi(get(), get(named(OUTSIDE_CLIENT))) }
     single { UpdateChecker(get(named(OUTSIDE_CLIENT)), get()) }
+    // ntfy is someone else's server: never send it the gateway's cookies.
+    single { NtfyClient(get(named(OUTSIDE_CLIENT))) }
+    single { PushApi(get()) }
 }

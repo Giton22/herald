@@ -10,6 +10,8 @@ import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.network.ApiResult
+import dev.hermeskotlin.core.network.HermesJson
+import kotlinx.serialization.builtins.ListSerializer
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
@@ -62,6 +64,24 @@ class BotNotifier(
 
     fun picture(bot: Bot): ByteArray? = pictures[bot.name]
 
+    /**
+     * The bot named [name] as last seen, even before this process reached the gateway: the roster is kept
+     * across restarts, so a push received off the gateway's network still shows the bot's look and name.
+     */
+    fun knownBot(name: String): Bot? = (roster.ifEmpty { savedRoster() }).firstOrNull { it.name == name }
+
+    private val rosterPrefs by lazy { context.getSharedPreferences("bot_roster", Context.MODE_PRIVATE) }
+
+    private fun savedRoster(): List<Bot> = rosterPrefs.getString(KEY_ROSTER, null)?.let {
+        runCatching { HermesJson.decodeFromString(ListSerializer(Bot.serializer()), it) }.getOrNull()
+    }.orEmpty().also { if (it.isNotEmpty()) roster = it }
+
+    private fun saveRoster(bots: List<Bot>) {
+        // Only what notifications need: no session previews kept on disk.
+        val slim = bots.map { Bot(name = it.name, isDefault = it.isDefault, displayName = it.displayName, uiMeta = it.uiMeta, hasAvatar = it.hasAvatar) }
+        rosterPrefs.edit().putString(KEY_ROSTER, HermesJson.encodeToString(ListSerializer(Bot.serializer()), slim)).apply()
+    }
+
     fun start() {
         // A new socket: take stock without notifying, and ask the gateway to watch every bot's chats.
         scope.launch {
@@ -86,6 +106,7 @@ class BotNotifier(
         }
         roster = bots
         if (watch) {
+            saveRoster(bots)
             bots.forEach { bot -> scope.launch { runCatching { api.watch(bot.name) } } }
             loadPictures(bots)
             BotShortcuts.publish(context, bots.filterNot { it.meta.hidden }, pictures)
@@ -125,5 +146,6 @@ class BotNotifier(
     private companion object {
         const val DEBOUNCE_MS = 1_500L
         const val LAST_ROWS = 4
+        const val KEY_ROSTER = "roster"
     }
 }

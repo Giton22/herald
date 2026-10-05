@@ -52,6 +52,8 @@ data class AppSettings(
     val notifyRequests: Boolean = true,
     /** Keep the gateway connection up in the background, so turns started on other devices notify too. */
     val stayConnected: Boolean = false,
+    /** Bot messages reach the phone off the gateway's network too, end-to-end encrypted through ntfy (herald-push). */
+    val pushAnywhere: Boolean = false,
     /** Ask GitHub, where the app is published, whether a newer release is out. */
     val checkForUpdates: Boolean = true,
 )

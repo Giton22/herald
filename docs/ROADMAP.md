@@ -220,7 +220,9 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Stay connected: keeps the socket up in the background (quiet notification) so turns started on other devices reach the open chat
 - [ ] Gateway-pushed `notification.show`
 - [ ] Follow all sessions: notify for chats other than the open one (watch `session.active_list`, attach to sessions that start a turn)
-- [ ] ntfy integration as a push channel without Google services (Hermes ntfy platform adapter)
+- [x] Notifications anywhere: bot messages reach the phone off the gateway's network, end-to-end encrypted and signed through ntfy, without Google services. The herald-push plugin is installed from Settings in one tap ([protocol](push-protocol.md))
+- [ ] Reply and approve from a push notification when the gateway is out of reach (the `p2g` direction)
+- [ ] UnifiedPush distributor support, so the ntfy app holds the one connection instead of Herald's foreground service
 
 ### Auth & connectivity extras
 - [ ] Native OAuth sign-in (RFC 8252 PKCE via Custom Tab and a loopback redirect; `/auth/native/*`)

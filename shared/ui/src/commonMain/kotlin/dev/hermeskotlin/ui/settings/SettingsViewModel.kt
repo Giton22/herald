@@ -11,6 +11,8 @@ import kotlinx.coroutines.Job
 import dev.hermeskotlin.core.gateway.ProbeResult
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.ApiResult
+import dev.hermeskotlin.core.push.PushSetup
+import dev.hermeskotlin.core.push.PushStatus
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -33,6 +35,7 @@ class SettingsViewModel(
     private val auth: AuthApi,
     private val probe: GatewayProbe,
     private val connectionCheck: ConnectionCheck,
+    private val push: PushSetup,
 ) : ViewModel() {
 
     private val _check = MutableStateFlow(ConnectionCheckState())
@@ -73,4 +76,20 @@ class SettingsViewModel(
     }
 
     fun update(transform: (AppSettings) -> AppSettings) = store.update(transform)
+
+    /** Notifications anywhere: where its setup stands on this gateway. */
+    val pushStatus: StateFlow<PushStatus> = push.status
+
+    private val _pushTest = MutableStateFlow<Boolean?>(null)
+    /** The last "Send a test": true when the gateway sent it, false when it couldn't, null before or while sending. */
+    val pushTest: StateFlow<Boolean?> = _pushTest.asStateFlow()
+
+    fun setPushAnywhere(on: Boolean) {
+        viewModelScope.launch { if (on) push.enable() else push.disable() }
+    }
+
+    fun sendPushTest() {
+        _pushTest.value = null
+        viewModelScope.launch { _pushTest.value = push.test() }
+    }
 }

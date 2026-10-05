@@ -216,6 +216,14 @@ class ChatNotifications(private val context: Context) {
      */
     fun postBotMessage(bot: Bot, picture: ByteArray?, storedSessionId: String, text: String) {
         val preview = text.toPlainText().take(MAX_PREVIEW).ifBlank { return }
+        // The same message can come twice: over the gateway socket and through push.
+        val now = System.currentTimeMillis()
+        val key = bot.name + "\u0000" + preview.take(DEDUPE_PREFIX)
+        synchronized(recentBotMessages) {
+            recentBotMessages.values.removeAll { now - it > DEDUPE_WINDOW_MS }
+            if (recentBotMessages.containsKey(key)) return
+            recentBotMessages[key] = now
+        }
         val shortcut = BotShortcuts.push(context, bot, picture)
         val person = BotShortcuts.person(bot, picture)
         val me = Person.Builder().setName("You").build()
@@ -267,6 +275,20 @@ class ChatNotifications(private val context: Context) {
 
     /** Each bot's messages shown in its notification, oldest first, with when they came. */
     private val unreadBotMessages = mutableMapOf<String, List<Pair<String, Long>>>()
+
+    /** Bot messages posted lately (bot and opening words → when), so one message never notifies twice. */
+    private val recentBotMessages = LinkedHashMap<String, Long>()
+
+    /** "Send a test" from the push setup: proof that a push got through ntfy and decrypted. */
+    fun postPushTest() = post(
+        null,
+        PUSH_TEST_ID,
+        base(CHANNEL_BOTS)
+            .setContentTitle("Notifications anywhere work")
+            .setContentText("This came end-to-end encrypted through ntfy, not over your gateway connection.")
+            .setCategory(NotificationCompat.CATEGORY_STATUS)
+            .build(),
+    )
 
     private fun openBot(bot: Bot, storedSessionId: String): PendingIntent {
         val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)!!
@@ -327,6 +349,7 @@ class ChatNotifications(private val context: Context) {
         const val REPLY_ID = 2
         const val REQUEST_ID = 3
         const val BOT_ID = 4
+        const val PUSH_TEST_ID = 5
 
         /** On the launch intent of a notification about a chat: that chat's stored session id, and its title. */
         const val EXTRA_OPEN_SESSION = "open_session_id"
@@ -343,6 +366,8 @@ class ChatNotifications(private val context: Context) {
         private const val MAX_PREVIEW = 2_000
         private const val MAX_STACKED = 6
         private const val CHIP_LENGTH = 12
+        private const val DEDUPE_PREFIX = 200
+        private const val DEDUPE_WINDOW_MS = 15 * 60_000L
     }
 }
 

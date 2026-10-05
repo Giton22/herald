@@ -42,7 +42,7 @@ class ChatNotifier(
     fun start() {
         notifications.botName = { storedId -> bots.botWithChat(storedId)?.label }
         scope.launch {
-            combine(host.session, settings.settings) { session, prefs -> session to (prefs?.stayConnected == true) }
+            combine(host.session, settings.settings) { session, prefs -> session to (prefs?.keepsProcessUp == true) }
                 .distinctUntilChanged()
                 .collectLatest { (session, stay) ->
                     when {
@@ -68,7 +68,7 @@ class ChatNotifier(
                 val prefs = stored ?: AppSettings()
 
                 // Each change is a chance to start it: Android refuses while the app is in the background.
-                val wanted = state.running || prefs.stayConnected
+                val wanted = state.running || prefs.keepsProcessUp
                 if (wanted && !serviceStarted) serviceStarted = ChatService.start(context)
                 if (!wanted) stopService()
 
@@ -135,6 +135,9 @@ class ChatNotifier(
         serviceStarted = false
         ChatService.stop(context)
     }
+
+    /** Stay connected holds the socket; Notifications anywhere holds the ntfy stream. Either needs the process alive. */
+    private val AppSettings.keepsProcessUp: Boolean get() = stayConnected || pushAnywhere
 
     private data class WorkingKey(
         val running: Boolean,
