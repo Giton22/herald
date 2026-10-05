@@ -48,7 +48,6 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         val session = host.session.value
         val text = RemoteInput.getResultsFromIntent(intent)?.getCharSequence(KEY_TEXT)?.toString()?.trim()
         when (intent.action) {
-            ACTION_STOP -> session?.interrupt()
             ACTION_DISCONNECT -> {
                 // Whichever keeps the quiet notification up goes: the socket, and push with it.
                 val pushOn = settings.settings.value?.pushAnywhere == true
@@ -121,7 +120,6 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
     }
 
     companion object {
-        const val ACTION_STOP = "dev.hermeskotlin.action.STOP"
         const val ACTION_APPROVE = "dev.hermeskotlin.action.APPROVE"
         const val ACTION_CLARIFY = "dev.hermeskotlin.action.CLARIFY"
         const val ACTION_REPLY = "dev.hermeskotlin.action.REPLY"

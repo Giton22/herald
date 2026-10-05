@@ -16,7 +16,6 @@ import dev.hermeskotlin.core.bots.Bot
 import androidx.core.content.ContextCompat
 import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.chat.ApprovalChoice
-import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.connection.ConnectionState
 
@@ -26,16 +25,13 @@ class ChatNotifications(private val context: Context) {
     private val manager = NotificationManagerCompat.from(context)
 
     init {
+        // Running turns once had a louder channel of their own (a Live Update); everything ongoing is quiet now.
+        manager.deleteNotificationChannel(CHANNEL_WORKING_OLD)
         manager.createNotificationChannelsCompat(
             listOf(
-                NotificationChannelCompat.Builder(CHANNEL_WORKING, NotificationManagerCompat.IMPORTANCE_LOW)
-                    .setName("Running turns")
-                    .setDescription("Shown while the agent works, so the connection stays up in the background.")
-                    .setShowBadge(false)
-                    .build(),
                 NotificationChannelCompat.Builder(CHANNEL_CONNECTION, NotificationManagerCompat.IMPORTANCE_MIN)
                     .setName("Background connection")
-                    .setDescription("Shown while Stay connected keeps the gateway connection up.")
+                    .setDescription("Shown while Herald stays connected in the background, or works on a turn.")
                     .setShowBadge(false)
                     .build(),
                 NotificationChannelCompat.Builder(CHANNEL_REQUESTS, NotificationManagerCompat.IMPORTANCE_HIGH)
@@ -54,9 +50,6 @@ class ChatNotifications(private val context: Context) {
         )
     }
 
-    /** The name of the bot whose permanent chat a stored session is, when it is one (titled "Bot Chat" on the gateway). */
-    var botName: (String) -> String? = { null }
-
     val canPost: Boolean
         get() = manager.areNotificationsEnabled() && (
             android.os.Build.VERSION.SDK_INT < 33 ||
@@ -64,72 +57,34 @@ class ChatNotifications(private val context: Context) {
             )
 
     /**
-     * The ongoing notification of [ChatService]: what the agent is doing, with a Stop button, or a
-     * quiet connection line between turns when Stay connected keeps the service up.
+     * The ongoing notification of [ChatService], which Android requires while it keeps Herald up: one
+     * constant, quiet line in the shade's silent section, no status-bar icon. It says only whether Herald
+     * is connected, never what a turn is doing (that's the app's to show), so there's nothing in it to
+     * go stale. "Turn off" turns off whichever of Stay connected and Notifications anywhere keeps it up.
      */
-    fun working(state: ChatState?, connection: ConnectionState, pushAnywhere: Boolean = false): Notification {
-        if (state?.running != true) return connected(state, connection, pushAnywhere)
-        val waiting = state?.inputRequests?.isNotEmpty() == true
-        val runningTool = state?.messages?.lastOrNull()
-            ?.let { it as? dev.hermeskotlin.core.chat.ChatMessage.Assistant }
-            ?.tools?.lastOrNull { it.running }
+    fun ongoing(connection: ConnectionState, pushAnywhere: Boolean = false): Notification {
         val text = when {
-            waiting -> "Waiting for your answer"
-            // A turn woken by another bot's reply arriving: not the runner's command line.
-            state?.status?.contains("bot_mode_dm.py") == true -> "Reading another bot's reply"
-            !state?.status.isNullOrBlank() -> state.status
-            runningTool != null -> runningTool.detail?.let { "${runningTool.name}: $it" } ?: "Using ${runningTool.name}"
-            else -> "Working…"
+            connection is ConnectionState.Connected -> "Connected to Hermes"
+            connection is ConnectionState.Connecting || connection is ConnectionState.Reconnecting -> "Reconnecting to Hermes…"
+            // Notifications anywhere holds the ntfy stream instead, so no connection isn't something wrong.
+            pushAnywhere -> "Bot messages reach you through Notifications anywhere"
+            else -> "Not connected to Hermes"
         }
-        // The status-bar chip of a Live Update has room for a word or two.
-        val chip = when {
-            waiting -> "Waiting"
-            runningTool != null -> runningTool.name.take(CHIP_LENGTH)
-            else -> "Working"
-        }
-        val title = state?.storedSessionId?.let(botName) ?: state?.title
-        return base(CHANNEL_WORKING, state?.storedSessionId, title)
-            .setContentTitle(title?.takeIf { it.isNotBlank() } ?: "Hermes is working")
+        return base(CHANNEL_CONNECTION)
+            .setContentTitle("Herald")
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
             .setSilent(true)
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            // Android 16 Live Update: pinned to the top of the shade and the lock screen, with a chip
-            // in the status bar. Older versions ignore it and show a plain ongoing notification.
-            .setRequestPromotedOngoing(true)
-            .setShortCriticalText(chip)
-            .addAction(0, "Stop", action(NotificationActionReceiver.ACTION_STOP, "stop"))
-            .build()
-    }
-
-    fun postWorking(state: ChatState?, connection: ConnectionState, pushAnywhere: Boolean = false) =
-        post(null, WORKING_ID, working(state, connection, pushAnywhere))
-
-    /**
-     * The quiet line between turns. Stay connected holds the socket; Notifications anywhere holds the ntfy
-     * stream instead, so with no connection it says that, not that something is wrong. "Turn off" turns off
-     * whichever of the two keeps this up.
-     */
-    private fun connected(state: ChatState?, connection: ConnectionState, pushAnywhere: Boolean): Notification {
-        val following = (state?.storedSessionId?.let(botName) ?: state?.title)?.takeIf { it.isNotBlank() }?.let { "Following $it" }
-        val (title, text) = when {
-            connection is ConnectionState.Connected -> "Connected to Hermes" to (following ?: "Waiting for turns from any device")
-            connection is ConnectionState.Connecting || connection is ConnectionState.Reconnecting ->
-                "Reconnecting to Hermes…" to (following ?: "Waiting for turns from any device")
-            pushAnywhere -> "Notifications anywhere" to "Bot messages still reach you while Hermes is out of reach."
-            else -> "Not connected to Hermes" to (following ?: "Waiting for turns from any device")
-        }
-        return base(CHANNEL_CONNECTION)
-            .setContentTitle(title)
-            .setContentText(text)
-            .setOngoing(true)
-            .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_MIN)
-            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_DEFERRED)
+            // Shown at once: Android holds a deferred one back, and updates to it with it.
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
             .addAction(0, "Turn off", action(NotificationActionReceiver.ACTION_DISCONNECT, "disconnect"))
             .build()
     }
+
+    fun postOngoing(connection: ConnectionState, pushAnywhere: Boolean = false) =
+        post(null, WORKING_ID, ongoing(connection, pushAnywhere))
 
     /**
      * A question the agent is blocked on, answerable in place when it fits a notification. Every answer
@@ -369,14 +324,13 @@ class ChatNotifications(private val context: Context) {
         /** On the launch intent of a bot's notification or shortcut: the bot's profile. */
         const val EXTRA_OPEN_BOT = "open_bot"
 
-        private const val CHANNEL_WORKING = "working"
+        private const val CHANNEL_WORKING_OLD = "working"
         private const val CHANNEL_CONNECTION = "connection"
         private const val CHANNEL_REQUESTS = "requests"
         private const val CHANNEL_REPLIES = "replies"
         private const val CHANNEL_BOTS = "bots"
         private const val MAX_PREVIEW = 2_000
         private const val MAX_STACKED = 6
-        private const val CHIP_LENGTH = 12
         private const val DEDUPE_PREFIX = 200
         private const val DEDUPE_WINDOW_MS = 10 * 60_000L
     }
