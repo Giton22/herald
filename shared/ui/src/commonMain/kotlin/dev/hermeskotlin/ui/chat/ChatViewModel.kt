@@ -691,14 +691,17 @@ class ChatViewModel(
     override fun branchFrom(key: String) {
         val chat = session.value ?: return
         if (!state.value.canChangeChat(connectionState.value is ConnectionState.Connected)) return
-        val messages = state.value.messages
-        val index = messages.indexOfFirst { it.key == key }
-        if (index < 0) return
-        // The gateway keeps the first N user and assistant rows that have text, so count those.
-        val count = messages.take(index + 1).count {
-            (it is ChatMessage.User && it.text.isNotBlank()) || (it is ChatMessage.Assistant && it.text.isNotBlank())
-        }
+        if (state.value.messages.none { it.key == key }) return
         viewModelScope.launch {
+            // Counted from the first row, so the pages not scrolled back to yet are read first.
+            if (!chat.loadAllHistory()) return@launch
+            val messages = chat.state.value.messages
+            val index = messages.indexOfFirst { it.key == key }
+            if (index < 0) return@launch
+            // The gateway keeps the first N user and assistant rows that have text, so count those.
+            val count = messages.take(index + 1).count {
+                (it is ChatMessage.User && it.text.isNotBlank()) || (it is ChatMessage.Assistant && it.text.isNotBlank())
+            }
             chat.branch(count)?.let { (id, title) -> _requests.send(ChatRequest.OpenChat(id, title)) }
         }
     }
@@ -752,6 +755,11 @@ class ChatViewModel(
 
     override fun retry() {
         session.value?.retry()
+    }
+
+    override fun loadOlder() {
+        val chat = session.value ?: return
+        viewModelScope.launch { chat.loadOlder() }
     }
 
     override fun dismissError() {
