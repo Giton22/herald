@@ -262,7 +262,8 @@ class ChatViewModel(
         viewModelScope.launch {
             snapshotFlow { composer.text.toString() }
                 .debounce(DRAFT_SAVE_DEBOUNCE_MS)
-                .collect { text -> draftOf?.let { saveDraft(it, draftChat(it), text) } }
+                // An edit isn't the chat's draft: the text it put aside is, and that's what a restart brings back.
+                .collect { text -> draftOf?.let { saveDraft(it, draftChat(it), if (_editing.value != null) typedBeforeEdit else text) } }
         }
     }
 
