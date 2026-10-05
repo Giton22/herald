@@ -56,12 +56,25 @@ class MainActivity : ComponentActivity() {
         openLinkedChat(intent)
     }
 
-    /** A tapped notification about a chat opens that chat, not just the last one. */
+    /**
+     * A tapped notification about a chat opens that chat, not just the last one; a bot's notification,
+     * shortcut or `hermes://bot/<profile>` link opens that bot's chat.
+     */
     private fun openLinkedChat(intent: Intent?) {
-        val sessionId = intent?.getStringExtra(ChatNotifications.EXTRA_OPEN_SESSION) ?: return
-        links.open(sessionId, intent.getStringExtra(ChatNotifications.EXTRA_OPEN_TITLE))
+        intent ?: return
+        val bot = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_BOT)
+            ?: intent.data?.takeIf { it.scheme == "hermes" && it.host == "bot" }?.lastPathSegment
+        val sessionId = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_SESSION)
+        val title = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_TITLE)
+        when {
+            bot != null -> links.openBot(bot, title, sessionId)
+            sessionId != null -> links.open(sessionId, title)
+            else -> return
+        }
         // Handled once: a recreated activity must not jump back to it.
         intent.removeExtra(ChatNotifications.EXTRA_OPEN_SESSION)
+        intent.removeExtra(ChatNotifications.EXTRA_OPEN_BOT)
+        intent.data = null
     }
 
     override fun onStart() {

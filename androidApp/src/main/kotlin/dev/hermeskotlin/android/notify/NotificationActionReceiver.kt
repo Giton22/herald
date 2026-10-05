@@ -4,6 +4,7 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import androidx.core.app.RemoteInput
+import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.chat.ApprovalChoice
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatSession
@@ -28,6 +29,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
     private val notifications: ChatNotifications by inject()
     private val scope: CoroutineScope by inject()
     private val settings: SettingsStore by inject()
+    private val bots: BotsApi by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -54,6 +56,18 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 if (text.isNullOrEmpty()) return
                 answer(session, intent.getStringExtra(EXTRA_REQUEST_ID) ?: return) { request ->
                     (request as? InputRequest.Clarify)?.let { InputAnswers.clarify(it, listOf(listOf(text))) }
+                }
+            }
+            ACTION_BOT_REPLY -> {
+                val bot = intent.getStringExtra(EXTRA_BOT) ?: return
+                val storedId = intent.getStringExtra(EXTRA_SESSION_ID) ?: return
+                if (text.isNullOrEmpty()) return
+                notifications.cancelBot(bot)
+                awaitConnection()
+                // The bot's answer comes back as its next notification.
+                val sent = scope.async { runCatching { bots.sendToBot(bot, storedId, text) }.isSuccess }
+                if (withTimeoutOrNull(RECEIVER_BUDGET_MS) { sent.await() } == false) {
+                    notifications.postFailure(bot, ChatNotifications.BOT_ID, "Couldn't send it. Open Herald to try again.")
                 }
             }
             ACTION_REPLY -> {
@@ -104,6 +118,8 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         const val ACTION_CLARIFY = "dev.hermeskotlin.action.CLARIFY"
         const val ACTION_REPLY = "dev.hermeskotlin.action.REPLY"
         const val ACTION_DISCONNECT = "dev.hermeskotlin.action.DISCONNECT"
+        const val ACTION_BOT_REPLY = "dev.hermeskotlin.action.BOT_REPLY"
+        const val EXTRA_BOT = "bot"
 
         const val EXTRA_REQUEST_ID = "request_id"
         const val EXTRA_CHOICE = "choice"

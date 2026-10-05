@@ -10,7 +10,9 @@ import android.content.pm.PackageManager
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
+import androidx.core.app.Person
 import androidx.core.app.RemoteInput
+import dev.hermeskotlin.core.bots.Bot
 import androidx.core.content.ContextCompat
 import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.chat.ApprovalChoice
@@ -43,6 +45,10 @@ class ChatNotifications(private val context: Context) {
                 NotificationChannelCompat.Builder(CHANNEL_REPLIES, NotificationManagerCompat.IMPORTANCE_DEFAULT)
                     .setName("Finished replies")
                     .setDescription("A turn ended while the app was in the background.")
+                    .build(),
+                NotificationChannelCompat.Builder(CHANNEL_BOTS, NotificationManagerCompat.IMPORTANCE_DEFAULT)
+                    .setName("Bot messages")
+                    .setDescription("A bot wrote in its chat while the app was in the background.")
                     .build(),
             ),
         )
@@ -194,6 +200,52 @@ class ChatNotifications(private val context: Context) {
 
     fun cancelReply(storedSessionId: String) = manager.cancel(storedSessionId, REPLY_ID)
 
+    /**
+     * A message from [bot], as Android shows a conversation: the bot's face and name, its words, and an
+     * inline Reply that goes straight into its chat. Backed by the bot's shortcut, so it sits with
+     * conversations and can be prioritised or bubbled like a person's.
+     */
+    fun postBotMessage(bot: Bot, picture: ByteArray?, storedSessionId: String, text: String) {
+        val preview = text.toPlainText().take(MAX_PREVIEW).ifBlank { return }
+        val shortcut = BotShortcuts.push(context, bot, picture)
+        val person = BotShortcuts.person(bot, picture)
+        val me = Person.Builder().setName("You").build()
+        val input = RemoteInput.Builder(NotificationActionReceiver.KEY_TEXT).setLabel("Message ${bot.label}").build()
+        val notification = NotificationCompat.Builder(context, CHANNEL_BOTS)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setColor(ContextCompat.getColor(context, R.color.notification_accent))
+            .setContentIntent(openBot(bot, storedSessionId))
+            .setAutoCancel(true)
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setShortcutId(shortcut)
+            .setLargeIcon(BotIcons.icon(bot, picture).toIcon(context))
+            .setStyle(NotificationCompat.MessagingStyle(me).addMessage(preview, System.currentTimeMillis(), person))
+            .addAction(
+                NotificationCompat.Action.Builder(
+                    0,
+                    "Reply",
+                    action(NotificationActionReceiver.ACTION_BOT_REPLY, bot.name, mutable = true) {
+                        putExtra(NotificationActionReceiver.EXTRA_BOT, bot.name)
+                        putExtra(NotificationActionReceiver.EXTRA_SESSION_ID, storedSessionId)
+                    },
+                ).addRemoteInput(input).setAllowGeneratedReplies(true).setAuthenticationRequired(true)
+                    .setSemanticAction(NotificationCompat.Action.SEMANTIC_ACTION_REPLY).build(),
+            )
+            .build()
+        post(bot.name, BOT_ID, notification)
+    }
+
+    fun cancelBot(name: String) = manager.cancel(name, BOT_ID)
+
+    private fun openBot(bot: Bot, storedSessionId: String): PendingIntent {
+        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)!!
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra(EXTRA_OPEN_BOT, bot.name)
+            .putExtra(EXTRA_OPEN_SESSION, storedSessionId)
+            .putExtra(EXTRA_OPEN_TITLE, bot.label)
+        return PendingIntent.getActivity(context, "bot:${bot.name}".hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
     /** Replaces an answered-from-the-shade notification when the answer couldn't be delivered. */
     fun postFailure(tag: String?, id: Int, message: String) = post(
         tag,
@@ -242,15 +294,20 @@ class ChatNotifications(private val context: Context) {
         const val WORKING_ID = 1
         const val REPLY_ID = 2
         const val REQUEST_ID = 3
+        const val BOT_ID = 4
 
         /** On the launch intent of a notification about a chat: that chat's stored session id, and its title. */
         const val EXTRA_OPEN_SESSION = "open_session_id"
         const val EXTRA_OPEN_TITLE = "open_session_title"
 
+        /** On the launch intent of a bot's notification or shortcut: the bot's profile. */
+        const val EXTRA_OPEN_BOT = "open_bot"
+
         private const val CHANNEL_WORKING = "working"
         private const val CHANNEL_CONNECTION = "connection"
         private const val CHANNEL_REQUESTS = "requests"
         private const val CHANNEL_REPLIES = "replies"
+        private const val CHANNEL_BOTS = "bots"
         private const val MAX_PREVIEW = 2_000
         private const val CHIP_LENGTH = 12
     }

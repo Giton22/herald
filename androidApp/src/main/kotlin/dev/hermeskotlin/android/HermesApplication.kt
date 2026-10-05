@@ -1,6 +1,7 @@
 package dev.hermeskotlin.android
 
 import android.app.Application
+import dev.hermeskotlin.android.notify.BotNotifier
 import dev.hermeskotlin.android.notify.ChatNotifier
 import dev.hermeskotlin.android.notify.notifyModule
 import dev.hermeskotlin.ui.di.sharedModules
@@ -15,5 +16,6 @@ class HermesApplication : Application() {
             modules(sharedModules + notifyModule)
         }.koin
         koin.get<ChatNotifier>().start()
+        koin.get<BotNotifier>().start()
     }
 }

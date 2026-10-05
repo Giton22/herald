@@ -34,6 +34,7 @@ class ChatNotifier(
     private val visibility: AppVisibility,
     private val notifications: ChatNotifications,
     private val connection: GatewayConnection,
+    private val bots: BotNotifier,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private var serviceStarted = false
@@ -84,7 +85,14 @@ class ChatNotifier(
                         val reply = state.messages.lastOrNull() as? ChatMessage.Assistant
                         if (reply != null && reply.outcome != TurnOutcome.Interrupted) {
                             val failed = reply.outcome == TurnOutcome.Error
-                            notifications.postReply(storedId, state.title, if (failed) reply.error ?: reply.text else reply.text, failed)
+                            val text = if (failed) reply.error ?: reply.text else reply.text
+                            // A bot's chat is the bot talking: its face and name, not "Bot Chat".
+                            val bot = bots.botWithChat(storedId)
+                            if (bot != null && !failed) {
+                                notifications.postBotMessage(bot, bots.picture(bot), storedId, text)
+                            } else {
+                                notifications.postReply(storedId, bot?.label ?: state.title, text, failed)
+                            }
                         }
                     }
                 }

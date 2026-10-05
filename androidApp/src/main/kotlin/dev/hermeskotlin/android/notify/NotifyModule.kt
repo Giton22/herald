@@ -7,5 +7,6 @@ import org.koin.dsl.module
 val notifyModule = module {
     single { AppVisibility(androidApplication()) }
     single { ChatNotifications(androidContext()) }
-    single { ChatNotifier(androidContext(), get(), get(), get(), get(), get()) }
+    single { ChatNotifier(androidContext(), get(), get(), get(), get(), get(), get()) }
+    single { BotNotifier(androidContext(), get(), get(), get(), get(), get(), get(), get(), get()) }
 }
