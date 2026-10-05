@@ -36,8 +36,10 @@ val CronJob.routineTitle: String get() = Routines.title(name)
  */
 fun CronJob.isRoutineOf(bot: String): Boolean {
     val owner = profile ?: Routines.DEFAULT_PROFILE
-    if (owner.equals(bot, ignoreCase = true)) return true
-    return owner == Routines.DEFAULT_PROFILE && Routines.taggedBot(name) == bot.lowercase()
+    val tagged = Routines.taggedBot(name)
+    // The launch store also holds other bots' older routines, tagged for them: theirs, not the default's.
+    if (owner == Routines.DEFAULT_PROFILE) return (tagged ?: Routines.DEFAULT_PROFILE) == bot.lowercase()
+    return owner.equals(bot, ignoreCase = true)
 }
 
 /** Why a job isn't doing what it's set to do, in a line; null while it's fine. */
@@ -48,7 +50,12 @@ val CronJob.problem: String? get() {
         // The run worked, but its result never reached anyone: not a run to trust.
         "delivery_failed" -> "The last run's result wasn't delivered"
         "blocked_config" -> "Couldn't run: something isn't set up"
-        else -> return if (state == "error") reason ?: "Stopped after an error" else null
+        else -> return when {
+            state == "error" -> reason ?: "Stopped after an error"
+            // An older store, or a run that died before writing its status, leaves only the error.
+            lastStatus == null -> lastError?.takeIf { it.isNotBlank() }?.trim()?.lineSequence()?.firstOrNull()?.take(160)
+            else -> null
+        }
     }
     return listOfNotNull(headline, reason?.lineSequence()?.firstOrNull()?.take(160)).joinToString(": ")
 }

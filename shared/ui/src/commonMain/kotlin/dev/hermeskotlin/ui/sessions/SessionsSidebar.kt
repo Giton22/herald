@@ -217,7 +217,10 @@ fun SessionsSidebar(
         when {
             searchOpen -> closeSearch()
             scheduledOpen -> scheduledOpen = false
-            routinesOf != null -> routinesOf = null
+            routinesOf != null -> {
+                routinesOf = null
+                bots.refreshRoutines()
+            }
             capabilitiesOpen -> capabilitiesOpen = false
             insightsOpen -> insightsOpen = false
             else -> viewModel.setFilter(SessionListFilter.Recent)
@@ -273,7 +276,11 @@ fun SessionsSidebar(
                 gateway = gateway,
                 visible = visible,
                 selectedId = selectedId,
-                onBack = { routinesOf = null },
+                onBack = {
+                    routinesOf = null
+                    // What was fixed there shows on the roster at once.
+                    bots.refreshRoutines()
+                },
                 // A run is a session of the bot's own profile.
                 onOpenRun = { run -> onOpenBotSession(bot, run.id, run.title?.takeIf { it.isNotBlank() } ?: bot.label) },
                 onSessionExpired = onSessionExpired,
