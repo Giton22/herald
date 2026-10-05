@@ -27,8 +27,10 @@ import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.settings.ThemeMode
-import dev.hermeskotlin.designsystem.HermesTheme
+import dev.hermeskotlin.designsystem.AccentPalette
+import dev.hermeskotlin.designsystem.LocalAccentPalette
 import dev.hermeskotlin.designsystem.PureBlack
+import dev.hermeskotlin.designsystem.hermesTheme
 import dev.hermeskotlin.designsystem.components.LocalCodeWrap
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.colors
@@ -52,6 +54,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import dev.hermeskotlin.ui.connect.ConnectScreen
 import dev.hermeskotlin.ui.gateways.GatewaysSheet
+import dev.hermeskotlin.ui.sessions.ArchiveUndoToast
 import dev.hermeskotlin.ui.sessions.ChatMenu
 import dev.hermeskotlin.ui.sessions.SessionsSidebar
 import dev.hermeskotlin.ui.settings.AppLockCover
@@ -98,8 +101,10 @@ fun App(
         else -> ColorScheme.Dark
     }
     val density = LocalDensity.current
-    HermesTheme(scheme) {
+    val palette = AccentPalette.named(settings.accent)
+    hermesTheme(palette)(scheme) {
         CompositionLocalProvider(
+            LocalAccentPalette provides palette,
             LocalAppSettings provides settings,
             LocalCodeWrap provides settings.wrapCode,
             LocalAppVersion provides appVersion,
@@ -265,6 +270,8 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
             )
         }
     }
+
+    ArchiveUndoToast()
 
     ChatMenu(
         visible = menuOpen && openSessionId != null,

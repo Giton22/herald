@@ -17,6 +17,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -50,6 +51,10 @@ class SessionWatcherTest {
     private val live = MutableStateFlow(listOf<Row>())
     private var openRequests = "[]"
 
+    /** Whether `session.activate` says the turn runs, and how long it takes to answer. */
+    private var activateRunning = true
+    private var activateDelayMs = 0L
+
     /** Every socket the connection opened, newest last. */
     private val sockets = mutableListOf<FakeTransport>()
 
@@ -69,11 +74,13 @@ class SessionWatcherTest {
                     "session.active_list" -> live.value.joinToString(",", """{"sessions":[""", "]}") {
                         """{"id":"${it.runtime}","session_key":"${it.key}","status":"${it.status}","title":"${it.title}"}"""
                     }
-                    "session.activate" -> """{"session_id":"$sid","running":true,"open_requests":$openRequests}"""
+                    "session.activate" -> """{"session_id":"$sid","running":$activateRunning,"open_requests":$openRequests}"""
                     "session.resume" -> """{"session_id":"rt-$sid","running":false}"""
                     else -> "{}"
                 }
-                transport.push("""{"jsonrpc":"2.0","id":$id,"result":$result}""")
+                val reply = """{"jsonrpc":"2.0","id":$id,"result":$result}"""
+                if (method == "session.activate" && activateDelayMs > 0) launch { delay(activateDelayMs); transport.push(reply) }
+                else transport.push(reply)
             }
         }
     }
@@ -105,7 +112,9 @@ class SessionWatcherTest {
         val host = ChatHost(connection, SessionsApi(http), scope)
         val active = ActiveSessions(connection, scope, clock = clock)
         val tracker = AttentionTracker(connection, host, active, scope, clock)
-        return Setup(connection, host, tracker, SessionWatcher(connection, host, active, tracker, scope, maxWatched, clock))
+        // Following, as out of sight with notifications on.
+        val watcher = SessionWatcher(connection, host, active, tracker, scope, maxWatched, clock).also { it.follow(true) }
+        return Setup(connection, host, tracker, watcher)
     }
 
     private fun approval(id: String, runtimeId: String) =
@@ -330,5 +339,69 @@ class SessionWatcherTest {
 
         sockets.last().push(approval("srq-1", "rt-a"))
         watcher.chats.first { it["a2"]?.requests?.isNotEmpty() == true }
+    }
+
+    @Test
+    fun aChatIsAttachedOnlyWhileFollowingAndAtOnceWhenItStarts() = runTest {
+        live.value = listOf(Row("a", "working"))
+        val watcher = setup().watcher
+        // In sight, or with nothing to notify: attaching would only keep the session loaded on the gateway.
+        watcher.follow(false)
+        advanceTimeBy(10_001)
+        runCurrent()
+        assertTrue(sentMethods("session.activate").isEmpty())
+        assertTrue(watcher.chats.value.isEmpty())
+
+        // Out of sight: the chat is attached from the last list, without waiting for the next one.
+        val asked = sentMethods("session.active_list").size
+        watcher.follow(true)
+        watcher.chats.first { "a" in it }
+        assertEquals(asked, sentMethods("session.active_list").size)
+
+        // Off again: it stays (there's no detach), and nothing new is attached.
+        watcher.follow(false)
+        live.value = listOf(Row("a", "working"), Row("b", "working"))
+        advanceTimeBy(10_001)
+        runCurrent()
+        assertEquals(setOf("a"), watcher.chats.value.keys)
+        assertEquals(1, sentMethods("session.activate").size)
+    }
+
+    @Test
+    fun aTurnStartingInAWatchedChatIsTold() = runTest {
+        live.value = listOf(Row("a", "working"))
+        val watcher = setup().watcher
+        // Attached with its turn running: one start, for a turn begun before this socket attached.
+        assertEquals("a", watcher.turnStarts.first())
+        watcher.chats.first { "a" in it }
+        sockets.last().push(event("message.complete", "rt-a", """{"text":"Done.","status":"complete"}"""))
+        runCurrent()
+
+        val start = async { watcher.turnStarts.first() }
+        runCurrent()
+        sockets.last().push(event("message.start", "rt-a"))
+        assertEquals("a", start.await())
+    }
+
+    @Test
+    fun followingStoppedWhileAnAttachWaitsAttachesNoMore() = runTest {
+        activateDelayMs = 1_000
+        live.value = listOf(Row("a", "working"), Row("b", "working"), Row("c", "working"))
+        val watcher = setup().watcher
+        sockets.last().awaitSent { it["method"]?.jsonPrimitive?.contentOrNull == "session.activate" }
+        // Back in sight while the first attach is still out.
+        watcher.follow(false)
+        advanceTimeBy(5_000)
+        runCurrent()
+        assertEquals(1, sentMethods("session.activate").size)
+    }
+
+    @Test
+    fun aTurnThatEndedBeforeTheAttachStillSaysItFinished() = runTest {
+        // The list showed it running; by the time the attach went out, the turn was over.
+        activateRunning = false
+        live.value = listOf(Row("a", "working"))
+        val watcher = setup().watcher
+        assertEquals(WatchedTurnEnd("a", "Chat a", "", TurnOutcome.Complete, null), watcher.turnEnds.first())
     }
 }

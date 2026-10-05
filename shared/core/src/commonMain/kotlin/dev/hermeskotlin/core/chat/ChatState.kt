@@ -173,6 +173,8 @@ data class ChatState(
     val error: String? = null,
     /** The last prompt was turned away because the chat is busy elsewhere; cleared by the next send that goes. */
     val refused: SessionRefusal? = null,
+    /** The gateway's out-of-band notices for this chat (`notification.show`), oldest first, one per key. */
+    val notices: List<GatewayNotice> = emptyList(),
     /** Questions the agent is blocked on (approval, clarify, sudo, secret), oldest first. */
     val inputRequests: List<InputRequest> = emptyList(),
     /** The live agent's latest token totals. */

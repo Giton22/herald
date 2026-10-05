@@ -972,6 +972,10 @@ class ChatViewModel(
         session.value?.dismissError()
     }
 
+    override fun dismissNotice(key: String) {
+        session.value?.dismissNotice(key)
+    }
+
     override fun skipSpeech() = voice.skipSpeech()
 
     override fun stopVoiceChat() = voice.stopChat()

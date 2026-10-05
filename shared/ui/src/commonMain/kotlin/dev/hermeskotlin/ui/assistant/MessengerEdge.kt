@@ -20,6 +20,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
+import dev.hermeskotlin.designsystem.AccentPalette
+import dev.hermeskotlin.designsystem.LocalAccentPalette
 import dev.hermeskotlin.core.chat.ChatState
 import kotlinx.coroutines.flow.emptyFlow
 
@@ -50,7 +52,7 @@ internal fun trailIntensity(t: Float, heads: List<Float>, tail: Float): Float {
 }
 
 /**
- * Herald's answer to the assistant glow: Nous blue light running round the screen's edge. It strolls
+ * Herald's answer to the assistant glow: light in the accent color running round the screen's edge. It strolls
  * while the panel waits, swells with your voice while listening, races while Hermes works, and settles
  * to a still rim once the answer is in. Drawn over the app behind; it takes no touches.
  */
@@ -95,12 +97,13 @@ internal fun MessengerEdge(model: AssistantPanelModel, modifier: Modifier = Modi
         }
     }
 
+    val edge = LocalAccentPalette.current.edge
     Canvas(modifier) {
         val heads = listOf(phase.floatValue, (phase.floatValue + 0.5f) % 1f)
         val stops = Array(STOPS + 1) { i ->
             val t = i / STOPS.toFloat()
             val lit = trailIntensity(t, heads, TAIL) * glow
-            val color = if (lit > 0.6f) lerp(EdgeBright, EdgeHead, (lit - 0.6f) / 0.4f) else lerp(Nous, EdgeBright, lit / 0.6f)
+            val color = if (lit > 0.6f) lerp(edge.bright, edge.head, (lit - 0.6f) / 0.4f) else lerp(edge.deep, edge.bright, lit / 0.6f)
             t to color.copy(alpha = (rim + (1f - rim) * lit).coerceIn(0f, 1f))
         }
         val brush = Brush.sweepGradient(*stops, center = center)
@@ -113,10 +116,14 @@ internal fun MessengerEdge(model: AssistantPanelModel, modifier: Modifier = Modi
     }
 }
 
-private val Nous = Color(0xFF0053FD)
-/** The trail's light blue and its near-white head; the circling stroke is drawn in the same light. */
-internal val EdgeBright = Color(0xFF4A84FE)
-internal val EdgeHead = Color(0xFFD6E4FF)
+/**
+ * The edge in the chosen accent: [deep] on the unlit rim, the trail in [bright] and its near-white [head].
+ * The circling stroke is drawn in the same light. In Blue these are Nous blue, #4A84FE and about #D6E4FF.
+ */
+internal class EdgeColors(val deep: Color, val bright: Color, val head: Color)
+
+internal val AccentPalette.edge: EdgeColors
+    get() = EdgeColors(light.accent, dark.accent, lerp(Color.White, dark.accent, 0.22f))
 private const val STOPS = 72
 private const val TAIL = 0.32f
 private val CORNER = 36.dp

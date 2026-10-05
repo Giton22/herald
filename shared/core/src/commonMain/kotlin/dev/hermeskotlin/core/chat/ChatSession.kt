@@ -1217,6 +1217,9 @@ class ChatSession(
 
     fun dismissError() = _state.update { it.copy(error = null, refused = null) }
 
+    /** Hides a gateway notice on this phone (its ×). The gateway isn't told. */
+    fun dismissNotice(key: String) = _state.update { it.withoutNotice(key) }
+
     /** Shows a title set elsewhere (a REST rename) without waiting for the gateway to echo it. */
     fun showTitle(title: String?) = _state.update { it.copy(title = title) }
 
@@ -1333,7 +1336,7 @@ class ChatSession(
                 if (streamed != null && _state.value.running) {
                     _state.update { it.withInflight(streamed) }
                 } else if (!_state.value.running) {
-                    _state.update { it.withoutStaleReply() }
+                    _state.update { it.withoutStaleReply().withoutAgentNotices() }
                 }
             }
             val waiting = held.orEmpty()
@@ -1345,8 +1348,18 @@ class ChatSession(
     private fun apply(event: GatewayEvent) {
         event.seq?.let { lastSeq = it }
         val now = nowSeconds()
+        val noticesBefore = _state.value.notices
         _state.update { it.reduce(event, now) }
         when (event.type) {
+            // Timed here, not on screen, so it ends on time even while the chat isn't showing. A notice that
+            // replaced this one by the time it runs out has its own timer.
+            "notification.show" -> (_state.value.notices - noticesBefore.toSet()).forEach { notice ->
+                val ttl = notice.ttlMillis?.takeIf { notice.kind == GatewayNotice.Kind.Timed } ?: return@forEach
+                scope.launch {
+                    delay(ttl)
+                    _state.update { state -> if (notice in state.notices) state.withoutNotice(notice.key) else state }
+                }
+            }
             "tool.output_risk" -> flaggedOutput(event.payload as? JsonObject)?.let { (id, risk) ->
                 risks?.let { scope.launch { it.remember(id, risk) } }
             }
@@ -1579,6 +1592,8 @@ class ChatSession(
                 inputRequests = open.plusNew(claimUnclaimed(runtimeId)),
                 keySeq = state.keySeq + 1,
             ).withInfo(result["info"] as? JsonObject).withTodos(TodoList.parse(result["todo_state"] as? JsonObject))
+                // Nothing runs, so the agent is built; its clear may have gone while this phone was away.
+                .let { if (running || resumable) it else it.withoutAgentNotices() }
         }
         if (catchingUp) scope.launch { catchUp(client, runtimeId) }
         runtimeId
