@@ -26,6 +26,16 @@ class RoutinesTest {
         // Untagged jobs of the launch profile are the default bot's.
         assertTrue(CronJob(id = "a", name = "Briefing", profile = "default").isRoutineOf("default"))
         assertTrue(CronJob(id = "a", name = "Briefing").isRoutineOf("default"))
+        // Another bot's older routine sits in the launch store too, but it is that bot's, not the default's.
+        assertFalse(CronJob(id = "a", name = "[bot:scribe] Old", profile = "default").isRoutineOf("default"))
+        assertTrue(CronJob(id = "a", name = "[bot:default] Mine", profile = "default").isRoutineOf("default"))
+    }
+
+    @Test
+    fun anErrorWithoutAStatusIsStillSaid() {
+        // An older store, or a run that died before writing its status, leaves only the error.
+        assertEquals("402 insufficient credits", CronJob(id = "a", lastError = "402 insufficient credits\ntrace").problem)
+        assertNull(CronJob(id = "a", lastStatus = "ok", lastError = "an old one").problem)
     }
 
     @Test
