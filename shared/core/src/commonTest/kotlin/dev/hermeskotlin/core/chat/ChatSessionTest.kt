@@ -160,6 +160,23 @@ class ChatSessionTest {
     }
 
     @Test
+    fun aTimedNoticeGoesByItselfAndAStickyOneStays() = runTest {
+        val (connection, transport) = setup(backgroundScope, mapOf("session.resume" to """{"session_id":"rt1","running":false}"""))
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+
+        transport.push(event("notification.show", "rt1", """{"text":"✕ Credit access paused","level":"error","kind":"sticky","key":"credits.depleted"}"""))
+        transport.push(event("notification.show", "rt1", """{"text":"✓ Credit access restored","level":"success","kind":"ttl","ttl_ms":8000,"key":"credits.restored"}"""))
+        assertEquals(2, chat.state.first { it.notices.size == 2 }.notices.size)
+
+        // Nothing on screen runs the timer: the session does.
+        val after = chat.state.first { it.notices.none { n -> n.key == "credits.restored" } }
+        assertEquals(listOf("credits.depleted"), after.notices.map { it.key })
+        assertTrue(testScheduler.currentTime >= 8_000)
+    }
+
+    @Test
     fun aTurnStartedByAnotherClientPullsItsPromptFromTheTranscript() = runTest {
         val (connection, transport) = setup(backgroundScope, mapOf("session.resume" to """{"session_id":"rt1","running":false}"""))
         val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)

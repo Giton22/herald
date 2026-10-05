@@ -40,6 +40,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
 import com.composeunstyled.Text
 import com.composeunstyled.theme.Theme
+import dev.hermeskotlin.designsystem.LocalAccentPalette
 import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.label
 import dev.hermeskotlin.designsystem.typography
@@ -49,7 +50,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Herald's circle to search: the screen as it was when the assistant was called up, frozen and dimmed,
- * to circle (or tap) the part to ask about. The stroke is drawn in the edge's Nous blue; once the finger
+ * to circle (or tap) the part to ask about. The stroke is drawn in the edge's light; once the finger
  * lifts, what was picked lights up for a moment and goes to [onCircled].
  */
 @Composable
@@ -60,6 +61,7 @@ internal fun CircleOverlay(screen: ScreenCapture, onCircled: (ScreenRegion) -> U
     val scope = rememberCoroutineScope()
     val capture by rememberUpdatedState(screen)
     val circled by rememberUpdatedState(onCircled)
+    val edge = LocalAccentPalette.current.edge
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
         shot?.let { Image(it, contentDescription = "Your screen", contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize()) }
@@ -112,7 +114,7 @@ internal fun CircleOverlay(screen: ScreenCapture, onCircled: (ScreenRegion) -> U
                 val corner = CornerRadius(12.dp.toPx())
                 for ((width, alpha) in GLOW) {
                     drawRoundRect(
-                        EdgeBright,
+                        edge.bright,
                         topLeft = Offset(region.left, region.top),
                         size = Size(region.width, region.height),
                         cornerRadius = corner,
@@ -120,7 +122,7 @@ internal fun CircleOverlay(screen: ScreenCapture, onCircled: (ScreenRegion) -> U
                         alpha = alpha,
                     )
                 }
-                drawRoundRect(EdgeHead, Offset(region.left, region.top), Size(region.width, region.height), corner, Stroke(2.dp.toPx()))
+                drawRoundRect(edge.head, Offset(region.left, region.top), Size(region.width, region.height), corner, Stroke(2.dp.toPx()))
             }
             if (picked == null && stroke.size > 1) {
                 val path = Path().apply {
@@ -133,9 +135,9 @@ internal fun CircleOverlay(screen: ScreenCapture, onCircled: (ScreenRegion) -> U
                     lineTo(stroke.last().x, stroke.last().y)
                 }
                 for ((width, alpha) in GLOW) {
-                    drawPath(path, EdgeBright, alpha = alpha, style = Stroke(width.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                    drawPath(path, edge.bright, alpha = alpha, style = Stroke(width.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
                 }
-                drawPath(path, EdgeHead, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+                drawPath(path, edge.head, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
             }
         }
         Row(

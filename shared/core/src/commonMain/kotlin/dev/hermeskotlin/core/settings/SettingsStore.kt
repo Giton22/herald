@@ -14,6 +14,9 @@ import kotlinx.serialization.Serializable
 
 enum class ThemeMode { System, Light, Dark }
 
+/** The accent [AppSettings.accent] starts with: Desktop's blue. */
+const val DEFAULT_ACCENT = "Blue"
+
 /** How much bigger or smaller than the system font size the app draws text. */
 enum class TextSize(val scale: Float) {
     Small(0.9f),
@@ -52,6 +55,11 @@ data class AppSettings(
     val theme: ThemeMode = ThemeMode.System,
     /** Dark mode uses true black backgrounds (OLED). */
     val pureBlack: Boolean = false,
+    /**
+     * The accent preset's name (the design system's `AccentPalette`). A string, not an enum, so a preset that a
+     * newer version added reads as the default here instead of making the whole stored settings unreadable.
+     */
+    val accent: String = DEFAULT_ACCENT,
     val textSize: TextSize = TextSize.Default,
     /** How strongly the chat background (kept by [WallpaperStore]) shows, when there is one. */
     val wallpaperStrength: WallpaperStrength = WallpaperStrength.Faint,

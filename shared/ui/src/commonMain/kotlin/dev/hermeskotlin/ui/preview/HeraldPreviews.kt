@@ -48,7 +48,10 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.composeunstyled.theme.ColorScheme
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.settings.AppSettings
-import dev.hermeskotlin.designsystem.HermesTheme
+import dev.hermeskotlin.core.settings.DEFAULT_ACCENT
+import dev.hermeskotlin.designsystem.AccentPalette
+import dev.hermeskotlin.designsystem.LocalAccentPalette
+import dev.hermeskotlin.designsystem.hermesTheme
 import dev.hermeskotlin.ui.LocalAppSettings
 import dev.hermeskotlin.ui.chat.ChatView
 import dev.hermeskotlin.ui.chat.ModelPickerState
@@ -80,16 +83,22 @@ enum class PreviewScene(val label: String) {
     MidTask("Typing while a task runs"),
     ConnectionCheck("The connection check"),
     LongChat("A chat to scroll back through"),
+    Notices("Notices from the gateway"),
     Archived("Archived, with Undo"),
 }
 
-/** One scene full-screen in the app theme: Android Studio previews and the debug screenshot gallery both use it. */
+/**
+ * One scene full-screen in the app theme: Android Studio previews and the debug screenshot gallery both use it.
+ * [accent] is an [AccentPalette] name.
+ */
 @Composable
-fun HeraldPreview(scene: PreviewScene, dark: Boolean = true) {
-    HermesTheme(if (dark) ColorScheme.Dark else ColorScheme.Light) {
-        CompositionLocalProvider(LocalAppSettings provides AppSettings(showPet = false)) {
+fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DEFAULT_ACCENT) {
+    val palette = AccentPalette.named(accent)
+    hermesTheme(palette)(if (dark) ColorScheme.Dark else ColorScheme.Light) {
+        CompositionLocalProvider(LocalAccentPalette provides palette, LocalAppSettings provides AppSettings(showPet = false)) {
             when (scene) {
                 PreviewScene.Reply -> SampleChat(ChatSamples.reply)
+                PreviewScene.Notices -> SampleChat(ChatSamples.notices)
                 PreviewScene.Working -> SampleChat(ChatSamples.working)
                 PreviewScene.Approval -> SampleChat(ChatSamples.approval)
                 PreviewScene.LongApproval -> SampleChat(ChatSamples.longApproval)
@@ -159,7 +168,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true) {
                     ProcessesSheetView(visible = true, state = PageSamples.processes, onKill = {}, onDismiss = {}, initiallyExpanded = "proc_1")
                 }
                 PreviewScene.Settings -> SettingsView(
-                    settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light),
+                    settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light, accent = accent),
                     info = GatewayInfo(userLabel = ChatSamples.USER, version = "0.9.0"),
                     gatewayUrl = "https://hermes.example.ts.net",
                     onUpdate = {},
