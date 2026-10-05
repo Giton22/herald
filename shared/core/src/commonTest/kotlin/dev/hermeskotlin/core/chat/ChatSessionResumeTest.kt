@@ -9,7 +9,11 @@ import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.rpc.FakeTransport
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
+import io.ktor.client.HttpClient
 import io.ktor.client.engine.mock.MockEngine
+import io.ktor.client.engine.mock.MockEngineConfig
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlin.coroutines.ContinuationInterceptor
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -45,8 +49,14 @@ class ChatSessionResumeTest {
         if (id % 2 == 1) """{"id":$id,"role":"user","content":"p$id"}""" else """{"id":$id,"role":"assistant","content":"a$id"}"""
     }
 
-    private fun client() = createHttpClient(
-        MockEngine { request ->
+    /**
+     * On the test's own dispatcher: an answer coming on a real thread lets the test clock jump ahead while it
+     * waits, so a request's 30 s timeout or the heartbeat could lapse in no time and the test flake.
+     */
+    private fun CoroutineScope.client(): HttpClient {
+        val config = MockEngineConfig()
+        (coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher)?.let { config.dispatcher = it }
+        config.addHandler { request ->
             when (request.url.encodedPath) {
                 "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
                 "/api/sessions/stored-1/messages" -> {
@@ -59,8 +69,9 @@ class ChatSessionResumeTest {
                 }
                 else -> error("unexpected ${request.url}")
             }
-        },
-    )
+        }
+        return createHttpClient(MockEngine(config))
+    }
 
     /** How the fake gateway answers: a JSON result, `error:<code>`, or null to stay silent. */
     private var answer: (FakeTransport, String, JsonObject) -> String? = { _, _, _ -> "{}" }
@@ -91,7 +102,7 @@ class ChatSessionResumeTest {
     private fun connect(scope: CoroutineScope): Pair<GatewayConnection, List<FakeTransport>> {
         val transports = mutableListOf<FakeTransport>()
         val connection = GatewayConnection(
-            AuthApi(client(), PersistentCookiesStorage(InMemoryKeyValueStore())),
+            AuthApi(scope.client(), PersistentCookiesStorage(InMemoryKeyValueStore())),
             { _, _ ->
                 FakeTransport().also {
                     transports += it
@@ -137,7 +148,7 @@ class ChatSessionResumeTest {
             }
         }
         val (connection, transports) = connect(scope)
-        val chat = ChatSession(url, "stored-1", "Chat", connection, SessionsApi(client()), scope)
+        val chat = ChatSession(url, "stored-1", "Chat", connection, SessionsApi(scope.client()), scope)
         chat.start()
         chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
         val first = transports.last()
@@ -275,7 +286,7 @@ class ChatSessionResumeTest {
         }
         val (connection, transports) = connect(backgroundScope)
         connection.state.first { it is ConnectionState.Connected }
-        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        val chat = ChatSession(url, null, null, connection, SessionsApi(backgroundScope.client()), backgroundScope)
         chat.start()
         assertTrue(chat.send("hi"))
         val first = transports.last()
@@ -298,7 +309,7 @@ class ChatSessionResumeTest {
             }
         }
         val (connection, transports) = connect(backgroundScope)
-        val chat = ChatSession(url, "stored-1", "Chat", connection, SessionsApi(client()), backgroundScope)
+        val chat = ChatSession(url, "stored-1", "Chat", connection, SessionsApi(backgroundScope.client()), backgroundScope)
         chat.start()
         chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
 
@@ -314,7 +325,7 @@ class ChatSessionResumeTest {
     fun anIdleChatWithNothingToResumeFromReloadsTheTranscript() = runTest {
         answer = { _, method, _ -> if (method == "session.resume") """{"session_id":"rt1","running":false}""" else "{}" }
         val (connection, transports) = connect(backgroundScope)
-        val chat = ChatSession(url, "stored-1", "Chat", connection, SessionsApi(client()), backgroundScope)
+        val chat = ChatSession(url, "stored-1", "Chat", connection, SessionsApi(backgroundScope.client()), backgroundScope)
         chat.start()
         chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
         transcript = rowsUpTo(4)
@@ -332,7 +343,7 @@ class ChatSessionResumeTest {
         transcript = stored
         answer = { _, method, _ -> if (method == "session.resume") """{"session_id":"rt1","running":false}""" else "{}" }
         val (connection, transports) = connect(scope)
-        val chat = ChatSession(url, "stored-1", "Chat", connection, SessionsApi(client()), scope)
+        val chat = ChatSession(url, "stored-1", "Chat", connection, SessionsApi(scope.client()), scope)
         chat.start()
         chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
         return chat to transports
