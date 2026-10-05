@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Herald's fixed launcher shortcuts; each opens a hermes:// link (AppLink). Any dynamic shortcuts
+    share the launcher's slots with these, so they must leave room for them.
+    The targetPackage is the installed app id, so the dev build has its own copy (src/dev/res/xml).
+-->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_shortcut_new_chat"
+        android:shortcutId="new_chat"
+        android:shortcutLongLabel="@string/shortcut_new_chat"
+        android:shortcutShortLabel="@string/shortcut_new_chat">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="hermes://new-chat"
+            android:targetClass="dev.hermeskotlin.android.MainActivity"
+            android:targetPackage="dev.herald.android" />
+    </shortcut>
+    <shortcut
+        android:enabled="true"
+        android:icon="@mipmap/ic_shortcut_voice"
+        android:shortcutId="new_chat_voice"
+        android:shortcutLongLabel="@string/shortcut_voice"
+        android:shortcutShortLabel="@string/shortcut_voice_short">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="hermes://new-chat-voice"
+            android:targetClass="dev.hermeskotlin.android.MainActivity"
+            android:targetPackage="dev.herald.android" />
+    </shortcut>
+</shortcuts>

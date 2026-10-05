@@ -46,6 +46,22 @@ class HistoryToMessagesTest {
     }
 
     @Test
+    fun promptsKeepTheirTimeAndAMergedReplyTakesItsLastStepsTime() {
+        val messages = historyToMessages(
+            listOf(
+                SessionMessage(id = 1, role = "user", content = JsonPrimitive("list files"), timestamp = 1_000.0),
+                SessionMessage(id = 2, role = "assistant", content = JsonPrimitive(""), toolCalls = toolCall("terminal"), timestamp = 1_002.0),
+                SessionMessage(id = 3, role = "tool", content = JsonPrimitive("a.txt"), toolCallId = "c-terminal", timestamp = 1_003.0),
+                SessionMessage(id = 4, role = "assistant", content = JsonPrimitive("One file."), timestamp = 1_009.5),
+                // A step stored without a time leaves the reply dated by the one before.
+                SessionMessage(id = 5, role = "assistant", content = JsonPrimitive("Done.")),
+            ),
+        )
+        assertEquals(1_000.0, (messages[0] as ChatMessage.User).timestamp)
+        assertEquals(1_009.5, (messages[1] as ChatMessage.Assistant).timestamp)
+    }
+
+    @Test
     fun aNewUserPromptStartsANewReply() {
         val messages = historyToMessages(
             listOf(

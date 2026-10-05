@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The "New chat with voice" launcher shortcut, on the brand blue like the app icon. -->
+<adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
+    <background android:drawable="@color/launcher_background" />
+    <foreground android:drawable="@drawable/ic_shortcut_voice_foreground" />
+    <monochrome android:drawable="@drawable/ic_shortcut_voice_foreground" />
+</adaptive-icon>

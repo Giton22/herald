@@ -22,6 +22,13 @@ enum class TextSize(val scale: Float) {
     Largest(1.3f),
 }
 
+/** How much of the chat background shows through: [veil] is how opaque the app's background color lies over it. */
+enum class WallpaperStrength(val veil: Float) {
+    Faint(0.88f),
+    Medium(0.75f),
+    Strong(0.55f),
+}
+
 /**
  * How long a voice chat waits after you stop talking before it sends. Desktop's chat uses 1.25 s
  * and the terminal 3 s; on a phone people pause mid-thought, so the default sits between.
@@ -32,6 +39,13 @@ enum class VoicePause(val millis: Long) {
     Long(3_000),
 }
 
+/**
+ * What a message sent while a reply is running does: [Steer] slips it into the running turn (the model
+ * reads it after its current tool call), [Queue] holds it for the next turn, [StopAndSend] stops the
+ * reply and sends it as a fresh turn.
+ */
+enum class RunningSend { Steer, Queue, StopAndSend }
+
 /** App-side preferences, kept on the device (not on the gateway). New fields need defaults. */
 @Serializable
 data class AppSettings(
@@ -39,13 +53,21 @@ data class AppSettings(
     /** Dark mode uses true black backgrounds (OLED). */
     val pureBlack: Boolean = false,
     val textSize: TextSize = TextSize.Default,
+    /** How strongly the chat background (kept by [WallpaperStore]) shows, when there is one. */
+    val wallpaperStrength: WallpaperStrength = WallpaperStrength.Faint,
     val showReasoning: Boolean = true,
     val showToolActivity: Boolean = true,
     /** Tokens each reply took, under it. */
     val showUsage: Boolean = true,
+    /** The time under each prompt and finished reply. */
+    val showTimestamps: Boolean = true,
+    /** Long lines in code blocks wrap; off, a block scrolls sideways. */
+    val wrapCode: Boolean = false,
     /** Show the profile's pet (when the gateway has one on) above the composer. */
     val showPet: Boolean = true,
     val voicePause: VoicePause = VoicePause.Normal,
+    /** What tapping Send does while a reply is running; a long press on Send picks another for one message. */
+    val runningSend: RunningSend = RunningSend.Steer,
     /** Notify when a turn finishes while the app is in the background. */
     val notifyReplies: Boolean = true,
     /** Notify when the agent waits on an approval or a question while the app is in the background. */
@@ -54,6 +76,8 @@ data class AppSettings(
     val stayConnected: Boolean = false,
     /** Ask GitHub, where the app is published, whether a newer release is out. */
     val checkForUpdates: Boolean = true,
+    /** Ask for a fingerprint, face or the screen lock when Herald opens, and keep it out of Recents. */
+    val appLock: Boolean = false,
 )
 
 /**

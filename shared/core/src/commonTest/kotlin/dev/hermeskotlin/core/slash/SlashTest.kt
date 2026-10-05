@@ -50,6 +50,8 @@ class SlashTest {
         assertEquals(SlashRoute.Compress, SlashRoute.of("compact", catalog))
         assertEquals(SlashRoute.PickModel, SlashRoute.of("model", catalog))
         assertEquals(SlashRoute.Usage, SlashRoute.of("usage", catalog))
+        // Steered through session.steer here, not the slash worker.
+        assertEquals(SlashRoute.Steer, SlashRoute.of("steer", catalog))
         assertEquals(SlashRoute.Gateway, SlashRoute.of("goal", catalog))
         assertEquals(SlashRoute.Gateway, SlashRoute.of("work", null))
         assertIs<SlashRoute.Unavailable>(SlashRoute.of("paste", catalog))

@@ -32,11 +32,35 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTask"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- hermes://new-chat and new-chat-voice start a chat (the launcher shortcuts); session/<id> opens one. -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="hermes" />
+                <data android:host="new-chat" />
+                <data android:host="new-chat-voice" />
+                <data android:host="session" />
+            </intent-filter>
+            <!--
+                Text, links, pictures and files shared from other apps start a new chat with them as its draft.
+                Any type: the composer attaches any file, within its size limits.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <action android:name="android.intent.action.SEND_MULTIPLE" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="*/*" />
+            </intent-filter>
+            <meta-data
+                android:name="android.app.shortcuts"
+                android:resource="@xml/shortcuts" />
         </activity>
 
         <!-- Keeps the gateway socket alive while a turn runs, or always with Stay connected. -->
