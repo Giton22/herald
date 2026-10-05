@@ -22,6 +22,10 @@ import dev.hermeskotlin.core.cron.isRoutineOf
 import dev.hermeskotlin.core.cron.problem
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
+import dev.hermeskotlin.core.models.ModelOption
+import dev.hermeskotlin.core.models.ModelsApi
+import dev.hermeskotlin.ui.chat.ModelPickerState
+import dev.hermeskotlin.ui.chat.PendingSwitch
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.rpc.RpcException
@@ -87,6 +91,7 @@ class BotsViewModel(
     private val profiles: ProfilesApi,
     private val health: BotHealth,
     private val cron: CronApi,
+    private val models: ModelsApi,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(BotsUiState())
@@ -280,6 +285,54 @@ class BotsViewModel(
             }
         }
     }
+
+    private val _modelPicker = MutableStateFlow(ModelPickerState())
+
+    /** The models a bot can be set to, for its editor's picker; a pick waiting to be confirmed is in it too. */
+    val modelPicker: StateFlow<ModelPickerState> = _modelPicker.asStateFlow()
+
+    /** Reads what [bot] can run, its profile's providers and its current model marked. */
+    fun loadModels(bot: Bot) {
+        _modelPicker.update { it.copy(loading = true, error = null) }
+        viewModelScope.launch {
+            try {
+                val catalog = models.options(profile = bot.name)
+                _modelPicker.update { it.copy(catalog = catalog, loading = false) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _modelPicker.update { it.copy(loading = false, error = e.message ?: "Couldn't load the models.") }
+            }
+        }
+    }
+
+    /**
+     * Sets the model [bot] runs, for all its chats that follow its configuration. A pick the gateway wants
+     * confirmed waits in [modelPicker] until [setModel] comes again with [confirmed].
+     */
+    fun setModel(bot: Bot, model: ModelOption, confirmed: Boolean = false, onSaved: () -> Unit = {}) {
+        _modelPicker.update { it.copy(confirm = null) }
+        viewModelScope.launch {
+            try {
+                val warning = api.setModel(bot.name, model.id, model.provider, confirmed)
+                if (warning != null) {
+                    _modelPicker.update { it.copy(confirm = PendingSwitch(model, warning)) }
+                    return@launch
+                }
+                _modelPicker.update { it.copy(catalog = it.catalog?.copy(currentModel = model.id, currentProvider = model.provider)) }
+                // A model it can't use was the likeliest thing wrong with it.
+                health.recheck(bot.name)
+                refreshNow()
+                onSaved()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(notice = "Couldn't change ${bot.label}'s model. ${e.message.orEmpty()}".trim()) }
+            }
+        }
+    }
+
+    fun dismissModelConfirm() = _modelPicker.update { it.copy(confirm = null) }
 
     /** The bot's SOUL and description, for its editor; null when they couldn't be read. */
     suspend fun details(bot: Bot): BotDetails? = runCatching { api.describe(bot.name) }.getOrNull()

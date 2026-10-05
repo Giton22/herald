@@ -69,6 +69,9 @@ internal fun CapabilitiesPage(
     profile: String?,
     onBack: () -> Unit,
     onSessionExpired: () -> Unit,
+    title: String = "Capabilities",
+    /** A line above the tabs, e.g. on when changes take effect. */
+    note: String? = null,
     viewModel: CapabilitiesViewModel = koinViewModel(),
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
@@ -87,7 +90,7 @@ internal fun CapabilitiesPage(
             viewModel.dismissMessage()
         }
     }
-    CapabilitiesView(state, viewModel.skillQuery, viewModel, onBack = onBack)
+    CapabilitiesView(state, viewModel.skillQuery, viewModel, onBack = onBack, title = title, note = note)
 }
 
 /** What the Capabilities page can ask for; [CapabilitiesViewModel] does it all, previews nothing. */
@@ -103,9 +106,24 @@ interface CapabilitiesActions {
 
 /** The Capabilities page's layout, apart from its view model, so previews can draw it from sample data. */
 @Composable
-internal fun CapabilitiesView(state: CapabilitiesUiState, skillQuery: TextFieldState, actions: CapabilitiesActions, onBack: () -> Unit) {
+internal fun CapabilitiesView(
+    state: CapabilitiesUiState,
+    skillQuery: TextFieldState,
+    actions: CapabilitiesActions,
+    onBack: () -> Unit,
+    title: String = "Capabilities",
+    note: String? = null,
+) {
     Column(Modifier.fillMaxSize()) {
-        SubpageHeader("Capabilities", onBack = onBack)
+        SubpageHeader(title, onBack = onBack)
+        note?.let {
+            Text(
+                it,
+                style = Theme[typography][bodySmall],
+                color = Theme[colors][textSecondary],
+                modifier = Modifier.padding(start = 24.dp, end = 16.dp, bottom = 10.dp),
+            )
+        }
         SegmentedControl(
             options = CapabilityTab.entries,
             selected = state.tab,
