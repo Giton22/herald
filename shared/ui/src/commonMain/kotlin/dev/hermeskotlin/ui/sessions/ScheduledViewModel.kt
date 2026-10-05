@@ -87,8 +87,7 @@ class ScheduledViewModel(
     private var runsJob: Job? = null
 
     /** The bot whose routines these are; null for every scheduled job. */
-    var owner: RoutineOwner? = null
-        private set
+    private var owner: RoutineOwner? = null
 
     /** Counts the times the form opened or closed, so a save that outlives its form can tell. */
     private var editorGeneration = 0
