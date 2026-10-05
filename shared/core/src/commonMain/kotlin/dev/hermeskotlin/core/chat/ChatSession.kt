@@ -69,6 +69,8 @@ class ChatSession(
     private val risks: ToolRiskStore? = null,
     /** Dates what this device sends and sees finish; live events carry no time of their own. */
     private val clock: Clock = Clock.System,
+    /** For a new chat: the working folder it starts in (a project's), or null for the profile's default. */
+    private val cwd: String? = null,
 ) {
     private fun nowSeconds(): Double = clock.now().toEpochMilliseconds() / 1000.0
 
@@ -1596,6 +1598,7 @@ class ChatSession(
                 profile?.let { put("profile", it) }
                 put("source", CLIENT_SOURCE)
                 put("cols", TERMINAL_COLUMNS)
+                cwd?.let { put("cwd", it) }
                 // Picked before the first send; without them the profile defaults apply.
                 if (picks.model != null && picks.provider != null) {
                     put("model", picks.model)
