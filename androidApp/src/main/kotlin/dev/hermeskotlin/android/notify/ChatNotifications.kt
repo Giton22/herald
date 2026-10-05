@@ -219,9 +219,13 @@ class ChatNotifications(private val context: Context) {
         val shortcut = BotShortcuts.push(context, bot, picture)
         val person = BotShortcuts.person(bot, picture)
         val me = Person.Builder().setName("You").build()
+        // Messages stack like a messaging app's until the bot's notification is opened or cleared.
+        val history = (unreadBotMessages[bot.name].orEmpty() + (preview to System.currentTimeMillis())).takeLast(MAX_STACKED)
+        unreadBotMessages[bot.name] = history
         val input = RemoteInput.Builder(NotificationActionReceiver.KEY_TEXT).setLabel("Message ${bot.label}").build()
         val notification = NotificationCompat.Builder(context, CHANNEL_BOTS)
-            .setSmallIcon(R.drawable.ic_notification)
+            // The bot's own silhouette in the status bar, not Herald's.
+            .setSmallIcon(BotIcons.statusIcon(bot))
             .setColor(ContextCompat.getColor(context, R.color.notification_accent))
             .setContentIntent(openBot(bot, storedSessionId))
             .setAutoCancel(true)
@@ -230,10 +234,12 @@ class ChatNotifications(private val context: Context) {
             .setLargeIcon(BotIcons.icon(bot, picture).toIcon(context))
             // One-to-one: the conversation is the bot, its face and name the notification's own.
             .setStyle(
-                NotificationCompat.MessagingStyle(me)
-                    .setGroupConversation(false)
-                    .addMessage(preview, System.currentTimeMillis(), person),
+                NotificationCompat.MessagingStyle(me).setGroupConversation(false).also { style ->
+                    history.forEach { (text, at) -> style.addMessage(text, at, person) }
+                },
             )
+            .setNumber(history.size)
+            .setDeleteIntent(action(NotificationActionReceiver.ACTION_BOT_CLEARED, bot.name) { putExtra(NotificationActionReceiver.EXTRA_BOT, bot.name) })
             .addAction(
                 NotificationCompat.Action.Builder(
                     0,
@@ -249,7 +255,18 @@ class ChatNotifications(private val context: Context) {
         post(bot.name, BOT_ID, notification)
     }
 
-    fun cancelBot(name: String) = manager.cancel(name, BOT_ID)
+    fun cancelBot(name: String) {
+        unreadBotMessages.remove(name)
+        manager.cancel(name, BOT_ID)
+    }
+
+    /** The bot's notification was swiped away: its stack starts over. */
+    fun forgetBot(name: String) {
+        unreadBotMessages.remove(name)
+    }
+
+    /** Each bot's messages shown in its notification, oldest first, with when they came. */
+    private val unreadBotMessages = mutableMapOf<String, List<Pair<String, Long>>>()
 
     private fun openBot(bot: Bot, storedSessionId: String): PendingIntent {
         val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)!!
@@ -269,6 +286,7 @@ class ChatNotifications(private val context: Context) {
 
     /** Everything except the ongoing notification, once the user is looking at the app. */
     fun cancelAttention() {
+        unreadBotMessages.clear()
         manager.activeNotifications.filter { it.id != WORKING_ID }.forEach { manager.cancel(it.tag, it.id) }
     }
 
@@ -323,6 +341,7 @@ class ChatNotifications(private val context: Context) {
         private const val CHANNEL_REPLIES = "replies"
         private const val CHANNEL_BOTS = "bots"
         private const val MAX_PREVIEW = 2_000
+        private const val MAX_STACKED = 6
         private const val CHIP_LENGTH = 12
     }
 }

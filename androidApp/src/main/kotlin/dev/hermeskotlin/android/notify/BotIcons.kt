@@ -31,6 +31,33 @@ object BotIcons {
         return IconCompat.createWithBitmap(photo ?: framed(drawn(bot), bot))
     }
 
+    /**
+     * The bot's status-bar icon: Android draws those white from the alpha alone, so it's the bot's shape
+     * with its eyes cut out, the same silhouette whatever its colour or picture.
+     */
+    fun statusIcon(bot: Bot, size: Int = 96): IconCompat {
+        val look = botLook(bot)
+        val bitmap = createBitmap(size, size)
+        val canvas = Canvas(bitmap)
+        val w = size.toFloat()
+        // A little inset: status-bar icons sit inside a margin of their own.
+        canvas.translate(w * 0.06f, w * 0.06f)
+        canvas.scale(0.88f, 0.88f)
+        canvas.drawPath(shape(look.shape, w), Paint(Paint.ANTI_ALIAS_FLAG).apply { color = Color.WHITE })
+        val cut = Paint(Paint.ANTI_ALIAS_FLAG).apply { xfermode = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.CLEAR) }
+        val cy = when (look.shape) {
+            BotShape.Triangle, BotShape.Drop -> w * 0.64f
+            BotShape.Cloud -> w * 0.58f
+            else -> w * 0.5f
+        }
+        val ew = w * 0.12f
+        val eh = w * 0.2f
+        listOf(w / 2 - w * 0.14f, w / 2 + w * 0.14f).forEach { x ->
+            canvas.drawRoundRect(RectF(x - ew / 2, cy - eh / 2, x + ew / 2, cy + eh / 2), ew / 2, ew / 2, cut)
+        }
+        return IconCompat.createWithBitmap(bitmap)
+    }
+
     /** The drawn face on a soft disc of its colour, with room for a round crop. */
     private fun framed(face: Bitmap, bot: Bot, size: Int = 192): Bitmap {
         val look = botLook(bot)
