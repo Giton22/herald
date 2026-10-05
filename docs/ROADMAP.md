@@ -6,6 +6,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] implemented
 - [ ] not started
 - 🚧 in progress (written next to the item)
+- ⛔ not planned (written next to the item)
 
 ---
 
@@ -233,7 +234,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] The gateway's notices (`notification.show`, `notification.clear`): credits and "still starting the agent" show as banners above the composer, one per key, by level; timed ones go by themselves
 - [x] Follow all sessions: approvals, questions and finished replies notify for chats other than the open one, turns started on Desktop or the CLI included. Each chat that `session.active_list` shows running is attached with `session.activate` (never `session.close`, which would end it for every client). Approve, answer and reply from the notification. Needs the socket up: in sight, during a turn, or with Notifications anywhere
 - [x] Notifications anywhere: bot messages reach the phone off the gateway's network, end-to-end encrypted and signed through ntfy, without Google services. The herald-push plugin is installed from Settings in one tap ([protocol](push-protocol.md))
-- [ ] Reply and approve from a push notification when the gateway is out of reach (the `p2g` direction)
+- [ ] Reply and approve from a push notification when the gateway is out of reach (the `p2g` direction) ⛔
 - [ ] UnifiedPush distributor support, so the ntfy app holds the one connection instead of Herald's foreground service
 
 ### Auth & connectivity extras
