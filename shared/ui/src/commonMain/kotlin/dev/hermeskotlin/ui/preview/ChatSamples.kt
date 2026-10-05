@@ -4,6 +4,7 @@ import androidx.compose.foundation.text.input.TextFieldState
 import dev.hermeskotlin.core.chat.ApprovalChoice
 import dev.hermeskotlin.core.chat.Attachment
 import dev.hermeskotlin.core.chat.ChatMessage
+import dev.hermeskotlin.core.chat.GatewayNotice
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.DelegatedTask
 import dev.hermeskotlin.core.chat.InputRequest
@@ -104,6 +105,20 @@ internal object ChatSamples {
 
     /** A finished turn: reasoning, tools, a diff and a Markdown answer. */
     val reply: ChatState = connected.copy(messages = listOf(ask, answer))
+
+    /** The finished turn with the gateway's notices: credits, and the agent still starting. */
+    val notices: ChatState = reply.copy(
+        notices = listOf(
+            GatewayNotice("credits.depleted", "Credit access paused · run /topup to top up", GatewayNotice.Level.Error, GatewayNotice.Kind.Sticky),
+            GatewayNotice("credits.usage", "80% of this month's credit used", GatewayNotice.Level.Warning, GatewayNotice.Kind.Sticky),
+            GatewayNotice(
+                "agent.build.slow",
+                "Still starting the agent (tool discovery / model setup) — your message will be sent as soon as it's ready.",
+                GatewayNotice.Level.Info,
+                GatewayNotice.Kind.Agent,
+            ),
+        ),
+    )
 
     /** Two prompts that lost their reply: one the transcript couldn't settle, one it found missing. */
     val undelivered: ChatState = connected.copy(

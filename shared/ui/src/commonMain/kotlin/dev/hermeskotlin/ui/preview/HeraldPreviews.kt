@@ -78,6 +78,7 @@ enum class PreviewScene(val label: String) {
     MidTask("Typing while a task runs"),
     ConnectionCheck("The connection check"),
     LongChat("A chat to scroll back through"),
+    Notices("Notices from the gateway"),
 }
 
 /** One scene full-screen in the app theme: Android Studio previews and the debug screenshot gallery both use it. */
@@ -87,6 +88,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true) {
         CompositionLocalProvider(LocalAppSettings provides AppSettings(showPet = false)) {
             when (scene) {
                 PreviewScene.Reply -> SampleChat(ChatSamples.reply)
+                PreviewScene.Notices -> SampleChat(ChatSamples.notices)
                 PreviewScene.Working -> SampleChat(ChatSamples.working)
                 PreviewScene.Approval -> SampleChat(ChatSamples.approval)
                 PreviewScene.LongApproval -> SampleChat(ChatSamples.longApproval)
