@@ -184,9 +184,12 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Tapping a bot opens its one permanent Bot Chat in the bot's profile without changing the Chats profile; a bot that never had one gets it started (`session.create` hidden + `follow_profile_config`, `session.title "Bot Chat"`), never a second one when a lookup can't be trusted
 - [x] In a Bot Chat, `/new` and `/reset` compress instead; `/title`, Rename, Pin, Archive and Delete are kept away from it
 - [x] Messages from other bots (`Message from 🤖 …`) show as the sender's note in every chat, not as the user's prompt
-- [ ] Create and edit bots (`profiles.create`, `profiles.configure` with `ui_meta` CAS, `profiles.set_asset`, `setup.runtime_check`, kickoff prompt)
-- [ ] Group chats, read-only from Desktop's `hermes-bots-groups` mirror
-- [ ] Per-bot routines, @mention autocomplete, hosted rooms (`groups.*`)
+- [x] Reopens the last bot's chat on launch; roster ordered as Desktop's (pinned, then newest activity or creation)
+- [ ] Transcript: delivery outcomes ("Reply from @x", "Still waiting", "Couldn't reach"), collapsed process rows, agent notes with faces, collapsed replies, hidden silence tokens, routine notes, `message_agent` calls, "open elsewhere" (4090)
+- [ ] Roster polish: thinking/working mood, ⚠ attention badge, long-press menu (Pin, Hide + "Hidden" section, Open recent session, New chat with this bot), bot header and empty state, refresh on `sessions.changed`
+- [ ] Create and edit bots (`profiles.create`, SOUL, `profiles.configure` with `ui_meta` CAS, `profiles.set_asset`, `setup.runtime_check`, kickoff), duplicate, delete
+- [ ] Phone: per-bot notifications with direct reply, Needs-you inbox, shortcuts and `hermes://bot/` link, share-to-bot, voice, @mentions
+- [ ] Rooms: Desktop rooms read-only from the `hermes-bots-groups` mirror; hosted rooms (`groups.*`) to take part
 
 ### Automation & configuration
 - [x] Scheduled jobs in the sidebar (`GET /api/cron/jobs`): schedule in plain words, next run, state; a job page with its prompt, last error, Run now, Pause / Resume, and its runs (`/api/cron/jobs/{id}/runs`), each opening as a chat
