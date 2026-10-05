@@ -6,25 +6,43 @@ import kotlin.test.assertTrue
 
 class AppLockTimerTest {
 
+    /** The app opened in a new process, the way MainActivity's first onCreate reports it. */
+    private fun AppLockTimer.coldStart(enabled: Boolean) = apply { onLaunch(enabled, fresh = true) }
+
     @Test
     fun aColdStartIsLockedOnlyWithTheLockOn() {
-        assertTrue(AppLockTimer().apply { onColdStart(enabled = true) }.locked.value)
-        assertFalse(AppLockTimer().apply { onColdStart(enabled = false) }.locked.value)
+        assertTrue(AppLockTimer().coldStart(enabled = true).locked.value)
+        assertFalse(AppLockTimer().coldStart(enabled = false).locked.value)
     }
 
     @Test
-    fun aRecreatedScreenIsNotAColdStart() {
-        val lock = AppLockTimer()
-        lock.onColdStart(enabled = true)
+    fun aRecreatedScreenIsNotALaunch() {
+        val lock = AppLockTimer().coldStart(enabled = true)
         lock.onUnlocked()
-        lock.onColdStart(enabled = true)
+        lock.onLaunch(enabled = true, fresh = false)
         assertFalse(lock.locked.value)
     }
 
     @Test
+    fun aScreenRestoredInANewProcessIsLocked() {
+        // Android killed the process in the background and brought the screen back from its saved state.
+        assertTrue(AppLockTimer().apply { onLaunch(enabled = true, fresh = false) }.locked.value)
+    }
+
+    @Test
+    fun reopeningAfterClosingLocksEvenThoughTheProcessLived() {
+        // Swiped from Recents: a foreground service keeps the process, and the app opens again seconds later.
+        val lock = AppLockTimer().coldStart(enabled = true)
+        lock.onUnlocked()
+        lock.onBackground(now = 0)
+        lock.onLaunch(enabled = true, fresh = true)
+        lock.onForeground(now = 2_000)
+        assertTrue(lock.locked.value)
+    }
+
+    @Test
     fun locksAfterAMinuteAway() {
-        val lock = AppLockTimer()
-        lock.onColdStart(enabled = true)
+        val lock = AppLockTimer().coldStart(enabled = true)
         lock.onUnlocked()
 
         lock.onBackground(now = 1_000)
@@ -38,8 +56,7 @@ class AppLockTimerTest {
 
     @Test
     fun theTimeAwayCountsFromWhenTheAppFirstLeft() {
-        val lock = AppLockTimer(timeoutMillis = 10)
-        lock.onColdStart(enabled = true)
+        val lock = AppLockTimer(timeoutMillis = 10).coldStart(enabled = true)
         lock.onUnlocked()
         lock.onBackground(now = 0)
         lock.onBackground(now = 8)
@@ -49,8 +66,7 @@ class AppLockTimerTest {
 
     @Test
     fun turningTheLockOnDoesNotLockTheAppInHand() {
-        val lock = AppLockTimer()
-        lock.onColdStart(enabled = false)
+        val lock = AppLockTimer().coldStart(enabled = false)
         lock.setEnabled(true)
         assertFalse(lock.locked.value)
 
@@ -61,8 +77,7 @@ class AppLockTimerTest {
 
     @Test
     fun turningTheLockOffUnlocksAndStopsTheTimer() {
-        val lock = AppLockTimer()
-        lock.onColdStart(enabled = true)
+        val lock = AppLockTimer().coldStart(enabled = true)
         lock.setEnabled(false)
         assertFalse(lock.locked.value)
 
@@ -73,8 +88,7 @@ class AppLockTimerTest {
 
     @Test
     fun comingBackWithoutLeavingDoesNothing() {
-        val lock = AppLockTimer()
-        lock.onColdStart(enabled = true)
+        val lock = AppLockTimer().coldStart(enabled = true)
         lock.onUnlocked()
         lock.onForeground(now = 999_999)
         assertFalse(lock.locked.value)

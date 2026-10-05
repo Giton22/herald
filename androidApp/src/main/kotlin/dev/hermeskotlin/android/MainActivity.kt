@@ -69,7 +69,7 @@ class MainActivity : FragmentActivity() {
         if (windowPrefs.contains(KEY_DARK)) applyWindowTheme(windowPrefs.getBoolean(KEY_DARK, false))
         // The stored setting is read asynchronously; this copy decides the very first frame.
         val lockOn = windowPrefs.getBoolean(KEY_APP_LOCK, false)
-        appLock.onColdStart(lockOn)
+        appLock.onLaunch(lockOn, fresh = savedInstanceState == null)
         lockGate.hideFromRecents(lockOn)
         promptOnResume = appLock.locked.value
         followAppLockSetting()
