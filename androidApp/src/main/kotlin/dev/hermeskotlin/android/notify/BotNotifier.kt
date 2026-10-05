@@ -23,6 +23,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -95,7 +96,17 @@ class BotNotifier(
                 runCatching { check(notify = !visibility.visible.value, watch = false) }
             }
         }
+        // Leaving the app: a bot removed, renamed or hidden in it leaves the share sheet and launcher now,
+        // not at the next connection. Nothing notifies from this read.
+        scope.launch {
+            visibility.visible.drop(1).filter { !it }.collect {
+                if (connection.state.value is ConnectionState.Connected) runCatching { check(notify = false, watch = false) }
+            }
+        }
     }
+
+    /** The bots the shortcuts were last published for, by name, label and look: a change publishes them again. */
+    private var published: List<Bot>? = null
 
     private suspend fun check(notify: Boolean, watch: Boolean) = lock.withLock {
         val bots = try {
@@ -109,8 +120,15 @@ class BotNotifier(
         if (watch) {
             saveRoster(bots)
             bots.forEach { bot -> scope.launch { runCatching { api.watch(bot.name) } } }
-            loadPictures(bots)
-            BotShortcuts.publish(context, bots.filterNot { it.meta.hidden }, pictures)
+        }
+        // Shortcuts follow the roster: published on each connection, and again whenever a bot comes, goes,
+        // is renamed or hidden, so the share sheet never offers one that's gone.
+        val shown = bots.filterNot { it.meta.hidden }
+        val look = shown.map { Bot(name = it.name, isDefault = it.isDefault, displayName = it.displayName, uiMeta = it.uiMeta, hasAvatar = it.hasAvatar) }
+        if (watch || look != published) {
+            loadPictures(shown)
+            BotShortcuts.publish(context, shown, pictures)
+            published = look
         }
         val prefs = settings.settings.value ?: AppSettings()
         val open = host.session.value?.state?.value?.storedSessionId

@@ -29,4 +29,12 @@
             android:targetClass="dev.hermeskotlin.android.MainActivity"
             android:targetPackage="dev.herald.android" />
     </shortcut>
+    <!--
+        Bots in the share sheet: Android offers each bot's conversation shortcut (BotShortcuts, this
+        category) as a direct share target. The share opens that bot's chat with the content as a draft.
+    -->
+    <share-target android:targetClass="dev.hermeskotlin.android.MainActivity">
+        <data android:mimeType="*/*" />
+        <category android:name="dev.hermeskotlin.category.BOT_SHARE" />
+    </share-target>
 </shortcuts>

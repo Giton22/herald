@@ -25,4 +25,8 @@
             android:targetClass="dev.hermeskotlin.android.MainActivity"
             android:targetPackage="dev.herald.android.dev" />
     </shortcut>
+    <share-target android:targetClass="dev.hermeskotlin.android.MainActivity">
+        <data android:mimeType="*/*" />
+        <category android:name="dev.hermeskotlin.category.BOT_SHARE" />
+    </share-target>
 </shortcuts>
