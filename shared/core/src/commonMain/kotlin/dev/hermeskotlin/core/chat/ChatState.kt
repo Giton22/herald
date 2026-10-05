@@ -77,6 +77,8 @@ sealed interface ChatMessage {
         val queued: Boolean = false,
         val attachments: List<ShownAttachment> = emptyList(),
         val check: SendCheck? = null,
+        /** When it was sent, in epoch seconds: the stored row's time, or when this device sent it. */
+        val timestamp: Double? = null,
     ) : ChatMessage
 
     /** One reply: streamed text, reasoning and the tools it ran. [streaming] until `message.complete`. */
@@ -92,6 +94,11 @@ sealed interface ChatMessage {
         val usage: TurnUsage? = null,
         /** Something the gateway wants known about the finished turn, e.g. that it wasn't saved. */
         val warning: String? = null,
+        /**
+         * When it finished, in epoch seconds: its last stored row's time, or when this device saw it end
+         * (live events carry no time). Null while it streams.
+         */
+        val timestamp: Double? = null,
     ) : ChatMessage
 
     /**
