@@ -30,6 +30,7 @@ import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.settings.AppSettings
+import dev.hermeskotlin.core.settings.RunningSend
 import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.core.pet.PetApi
 import dev.hermeskotlin.core.journey.JourneyApi
@@ -155,6 +156,10 @@ class ChatViewModel(
 
     override val composer = TextFieldState()
     val connectionState: StateFlow<ConnectionState> = connection.state
+
+    override val runningSend: StateFlow<RunningSend> = settings.settings
+        .map { it?.runningSend ?: RunningSend.Steer }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, settings.settings.value?.runningSend ?: RunningSend.Steer)
 
     private var target: ChatTarget? = null
     private val session = MutableStateFlow<ChatSession?>(null)
@@ -503,6 +508,11 @@ class ChatViewModel(
                 SlashRoute.Compress -> chat.compress(arg)
                 SlashRoute.Status -> chat.status()
                 SlashRoute.Aside -> chat.askAside(arg)
+                SlashRoute.Steer -> if (arg.isEmpty()) {
+                    chat.showCommandOutput("/steer", "Usage: /steer <note>. The running reply reads it after its current step, without stopping.")
+                } else if (chat.steer(arg) == SendOutcome.NotSent) {
+                    giveBack("/steer $arg")
+                }
                 SlashRoute.Reasoning -> when (chat.reasoning(arg)) {
                     // The gateway's display words drive this app's own Thinking toggle too.
                     "show" -> settings.update { it.copy(showReasoning = true) }
@@ -629,10 +639,11 @@ class ChatViewModel(
     }
 
     /**
-     * Sends what's in the composer. Mid-turn it corrects the running turn, unless [queue] holds it for
-     * the next one.
+     * Sends what's in the composer. Mid-turn it goes the way [mode] says, or the "While a reply is running"
+     * setting when none was picked: steered into the running turn, queued for the next, or sent once the
+     * turn is stopped. A steer can't carry files, so with attachments it queues instead.
      */
-    override fun send(queue: Boolean) {
+    override fun send(mode: RunningSend?) {
         val chat = session.value ?: return
         val text = composer.text.toString()
         val attachments = _attachments.value
@@ -650,10 +661,22 @@ class ChatViewModel(
         _attachments.value = emptyList()
         _comments.value = emptyList()
         val outgoing = if (comments.isEmpty()) text else formatReview(comments, text)
+        val running = sendModeFor(state.value.running, mode, settings.settings.value?.runningSend, attachments.isNotEmpty())
         viewModelScope.launch {
+            val outcome = when (running) {
+                null -> chat.submit(outgoing, attachments)
+                RunningSend.Steer -> chat.steer(outgoing)
+                RunningSend.Queue -> chat.submit(outgoing, attachments, queue = true)
+                RunningSend.StopAndSend -> {
+                    val result = chat.stopAndSubmit(outgoing, attachments)
+                    // The stop drops what was queued behind the task; hand it back rather than lose it.
+                    result.dropped.filter { it.isNotBlank() }.takeIf { it.isNotEmpty() }?.let { giveBack(it.joinToString("\n\n")) }
+                    result.outcome
+                }
+            }
             // Give everything back if it never reached the gateway, so nothing typed or picked is lost. One
             // that may have arrived keeps its bubble to resend from instead, so it isn't in two places.
-            if (chat.submit(outgoing, attachments, queue = queue) == SendOutcome.NotSent) {
+            if (outcome == SendOutcome.NotSent) {
                 giveBack(text)
                 _attachments.update { attachments + it }
                 _comments.update { comments + it }
