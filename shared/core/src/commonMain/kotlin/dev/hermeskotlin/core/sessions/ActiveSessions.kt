@@ -32,7 +32,10 @@ import kotlinx.serialization.json.jsonObject
 enum class LiveStatus {
     Idle,
 
-    /** The agent is still being built: a turn is about to run. */
+    /**
+     * The agent is still being built. Not a turn: every cold `session.resume` builds one straight away (a chat
+     * opened here, on Desktop, a bot chat watched), and the gateway reports this over a turn's own `running`.
+     */
     Starting,
 
     /** A server request (approval, question, secret…) waits for an answer. The row doesn't say which kind. */
@@ -40,8 +43,11 @@ enum class LiveStatus {
     Working,
     ;
 
-    /** A turn is under way: it may be blocked on the user, but it hasn't ended. */
-    val running: Boolean get() = this != Idle
+    /**
+     * A turn is under way: it may be blocked on the user, but it hasn't ended. [Starting] can't tell a turn
+     * from a chat just opened, so it counts as none; a turn on a cold chat shows once its agent is built.
+     */
+    val running: Boolean get() = this == Working || this == Waiting
 
     companion object {
         /** `streaming` and `resuming` are in the contract but no handler sets them yet; both are a turn going. */

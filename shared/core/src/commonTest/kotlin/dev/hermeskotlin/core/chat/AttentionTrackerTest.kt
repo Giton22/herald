@@ -141,6 +141,14 @@ class AttentionTrackerTest {
     }
 
     @Test
+    fun aChatWhoseAgentIsStillBuildingIsNotRunning() = runTest {
+        // A cold `session.resume` (a chat opened on Desktop, a bot chat watched) builds the agent at once: no turn.
+        live = mapOf("stored-9" to "starting", "stored-8" to "waiting")
+        val (_, tracker, _) = setup(backgroundScope)
+        assertEquals(mapOf("stored-9" to false, "stored-8" to true), tracker.running.first { it.isNotEmpty() })
+    }
+
+    @Test
     fun aWaitingChatWhoseRequestThisPhoneNeverSawIsUnknown() = runTest {
         live = mapOf("stored-9" to "waiting")
         val (_, tracker, _) = setup(backgroundScope)
