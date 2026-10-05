@@ -5,6 +5,7 @@ import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
+import dev.hermeskotlin.core.network.HermesJson
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.rpc.FakeTransport
 import dev.hermeskotlin.core.sessions.SessionsApi
@@ -540,6 +541,37 @@ class ChatSessionTest {
     }
 
     @Test
+    fun vaultPromptsAreShownSkippedAndSavedAndWithdrawnOnTimeout() = runTest {
+        val (connection, transport) = setup(backgroundScope, mapOf("session.resume" to """{"session_id":"rt1","running":true}"""))
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" }
+
+        transport.push("""{"jsonrpc":"2.0","id":"srq-1","method":"vault.code","params":{"session_id":"rt1","site":"github.com","hint":""}}""")
+        transport.push("""{"jsonrpc":"2.0","id":"srq-2","method":"vault.save_login","params":{"session_id":"rt1","origin":"https://github.com","site":"github.com"}}""")
+        transport.push("""{"jsonrpc":"2.0","id":"srq-3","method":"vault.unlock_prompt","params":{"session_id":"rt1","backend":"bitwarden","display_name":"Bitwarden"}}""")
+
+        val asked = chat.state.first { it.inputRequests.size == 3 }
+        val code = assertIs<InputRequest.Secret>(asked.inputRequests[0])
+        assertEquals(InputRequest.Secret.Kind.VaultCode, code.kind)
+
+        // Skip: an empty value, and the turn goes on without the code.
+        assertTrue(chat.answer(code, InputAnswers.value("")))
+        val skipped = transport.awaitSent { it["id"]?.jsonPrimitive?.contentOrNull == "srq-1" }
+        assertEquals("", skipped["result"]!!.jsonObject["value"]!!.jsonPrimitive.contentOrNull)
+
+        val save = assertIs<InputRequest.VaultSaveLogin>(chat.state.value.inputRequests.first())
+        assertTrue(chat.answer(save, InputAnswers.saveLogin("ada@example.com", "hunter2")))
+        val saved = transport.awaitSent { it["id"]?.jsonPrimitive?.contentOrNull == "srq-2" }
+        val login = HermesJson.parseToJsonElement(saved["result"]!!.jsonObject["value"]!!.jsonPrimitive.content).jsonObject
+        assertEquals("hunter2", login["password"]!!.jsonPrimitive.contentOrNull)
+
+        // The gateway's 120 s wait ran out: it withdraws the request, and the panel goes.
+        transport.push(event("request.cancel", "rt1", """{"id":"srq-3","method":"vault.unlock_prompt","reason":"timeout"}"""))
+        chat.state.first { it.inputRequests.isEmpty() }
+    }
+
+    @Test
     fun resumeRestoresQuestionsAskedWhileAway() = runTest {
         val (connection, _) = setup(
             backgroundScope,
@@ -553,6 +585,22 @@ class ChatSessionTest {
         val attached = chat.state.first { it.runtimeSessionId == "rt1" }
         val clarify = assertIs<InputRequest.Clarify>(attached.inputRequests.single())
         assertEquals("Which branch?", clarify.questions.single().question)
+    }
+
+    @Test
+    fun resumeRestoresAVaultPromptAskedWhileAway() = runTest {
+        val (connection, _) = setup(
+            backgroundScope,
+            mapOf(
+                "session.resume" to """{"session_id":"rt1","running":true,"open_requests":[{"id":"srq-9","method":"vault.unlock_prompt","params":{"session_id":"rt1","backend":"bitwarden","display_name":"Bitwarden"}}]}""",
+            ),
+        )
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        val attached = chat.state.first { it.runtimeSessionId == "rt1" }
+        val unlock = assertIs<InputRequest.Secret>(attached.inputRequests.single())
+        assertEquals(InputRequest.Secret.Kind.VaultUnlock, unlock.kind)
     }
 
     @Test

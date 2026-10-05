@@ -60,6 +60,9 @@ enum class PreviewScene(val label: String) {
     Approval("An approval"),
     LongApproval("An approval for a long command"),
     BareApproval("An approval with no tool or purpose"),
+    VaultUnlock("A locked password manager"),
+    VaultCode("A sign-in code"),
+    VaultSaveLogin("A login to save"),
     Undelivered("Messages that lost their reply"),
     Subagents("Subagents"),
     Voice("Voice chat"),
@@ -88,6 +91,9 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true) {
                 PreviewScene.Approval -> SampleChat(ChatSamples.approval)
                 PreviewScene.LongApproval -> SampleChat(ChatSamples.longApproval)
                 PreviewScene.BareApproval -> SampleChat(ChatSamples.bareApproval)
+                PreviewScene.VaultUnlock -> SampleChat(ChatSamples.vaultUnlock)
+                PreviewScene.VaultCode -> SampleChat(ChatSamples.vaultCode)
+                PreviewScene.VaultSaveLogin -> SampleChat(ChatSamples.vaultSaveLogin)
                 PreviewScene.Undelivered -> SampleChat(ChatSamples.undelivered)
                 PreviewScene.Subagents -> SampleChat(ChatSamples.subagents)
                 PreviewScene.Voice -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.listening)

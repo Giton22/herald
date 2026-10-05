@@ -66,8 +66,8 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Connect to `/api/ws` with subprotocols `hermes-gateway-v1` and `hermes-gateway-ticket.<t>`
 - [x] Newline-delimited JSON-RPC 2.0: requests, responses, notifications
 - [x] Wait for `gateway.ready`, then send `client.capabilities {server_requests: true}`
-- [x] Handle server→client requests (`srq-<n>`) and answer them with the matching id (approval, clarify, sudo, secret)
-- [x] Methods the app can't show (`preview.*`, `terminal.read`, `window.read`, `tour`, `vault.*`) get the `4404` decline when the gateway counts declines (`client.capabilities` → `declines_not_shown`), so Desktop can still answer them and the agent stops waiting once every client declined; never `-32601`, which would settle them for Desktop too
+- [x] Handle server→client requests (`srq-<n>`) and answer them with the matching id (approval, clarify, sudo, secret, `vault.unlock_prompt`, `vault.code`, `vault.save_login`)
+- [x] Methods the app can't show (`preview.*`, `terminal.read`, `window.read`, `tour`) get the `4404` decline when the gateway counts declines (`client.capabilities` → `declines_not_shown`), so Desktop can still answer them and the agent stops waiting once every client declined; never `-32601`, which would settle them for Desktop too
 - [x] `gateway.ping` keepalive every 15 s, 45 s inbound deadline
 - [x] Automatic reconnect with backoff (fresh ticket each time)
 - [x] Re-attach (`session.resume`) and refetch the transcript after a reconnect; rebuild a running turn from `inflight`
@@ -127,8 +127,8 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] **Clarify**: single or batch questions, choices, multi-select and free text
 - [x] **Sudo** password prompt (masked)
 - [x] **Secret** env-var prompt (masked)
-- [x] Desktop-only requests (`preview.*`, `terminal.read`, `window.read`, `tour`, `vault.*`) are left unanswered for another client: an error reply would settle them for every client
-- [ ] Vault prompts (`vault.unlock_prompt`, `vault.code`, `vault.save_login`)
+- [x] Desktop-only requests (`preview.*`, `terminal.read`, `window.read`, `tour`) are left unanswered for another client: an error reply would settle them for every client
+- [x] Vault prompts: the password manager's master password (`vault.unlock_prompt`, masked), a sign-in code (`vault.code`, with one-time-code autofill) and a login to save for the page the agent is on (`vault.save_login`, with username and password autofill); Skip and Don't save send an empty value, and the notification opens the chat instead of answering inline
 
 ### 7. Settings (MVP)
 - [x] Model picker in the composer (`model.options`), switched per chat (`config.set model … --session`; picks before the first send go into `session.create`), with a confirm for expensive models
