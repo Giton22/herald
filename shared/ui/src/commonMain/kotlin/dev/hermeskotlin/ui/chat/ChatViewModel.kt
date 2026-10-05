@@ -85,6 +85,9 @@ data class ModelPickerState(
     val loading: Boolean = false,
     val error: String? = null,
     val confirm: PendingSwitch? = null,
+    /** A pick being saved where it takes a while (a bot's own model), and why the last one wasn't. */
+    val saving: Boolean = false,
+    val saveError: String? = null,
 )
 
 data class PendingSwitch(val model: ModelOption, val message: String)

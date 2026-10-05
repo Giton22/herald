@@ -47,6 +47,7 @@ import dev.hermeskotlin.designsystem.components.Dialog
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.components.Switch
 import dev.hermeskotlin.designsystem.components.TextField
+import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.heading
 import dev.hermeskotlin.designsystem.label
 import dev.hermeskotlin.designsystem.stroke
@@ -107,6 +108,15 @@ internal fun ModelSheet(
                 it,
                 style = Theme[typography][bodySmall],
                 color = Theme[colors][textSecondary],
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
+            )
+        }
+        val saveLine = if (picker.saving) "Saving…" else picker.saveError
+        saveLine?.let {
+            Text(
+                it,
+                style = Theme[typography][bodySmall],
+                color = if (picker.saving) Theme[colors][textSecondary] else Theme[colors][danger],
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
             )
         }
