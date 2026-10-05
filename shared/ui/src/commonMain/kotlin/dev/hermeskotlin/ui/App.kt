@@ -27,8 +27,9 @@ import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.settings.ThemeMode
-import dev.hermeskotlin.designsystem.HermesTheme
+import dev.hermeskotlin.designsystem.AccentPalette
 import dev.hermeskotlin.designsystem.PureBlack
+import dev.hermeskotlin.designsystem.hermesTheme
 import dev.hermeskotlin.designsystem.components.LocalCodeWrap
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.colors
@@ -98,7 +99,7 @@ fun App(
         else -> ColorScheme.Dark
     }
     val density = LocalDensity.current
-    HermesTheme(scheme) {
+    hermesTheme(AccentPalette.named(settings.accent))(scheme) {
         CompositionLocalProvider(
             LocalAppSettings provides settings,
             LocalCodeWrap provides settings.wrapCode,

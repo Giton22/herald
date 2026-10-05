@@ -20,7 +20,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -32,10 +35,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -59,6 +66,7 @@ import dev.hermeskotlin.core.settings.RunningSend
 import dev.hermeskotlin.core.settings.WallpaperStrength
 import dev.hermeskotlin.ui.chat.label
 import dev.hermeskotlin.ui.chat.summary
+import dev.hermeskotlin.designsystem.AccentPalette
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
@@ -199,6 +207,13 @@ internal fun SettingsView(
                         checked = settings.pureBlack,
                         onCheckedChange = { on -> onUpdate { it.copy(pureBlack = on) } },
                     )
+                    Divider()
+                    Field("Accent", detail = "Buttons, links and your own messages.") {
+                        AccentPicker(
+                            selected = AccentPalette.named(settings.accent),
+                            onSelect = { palette -> onUpdate { it.copy(accent = palette.name) } },
+                        )
+                    }
                     Divider()
                     Field("Text size", detail = "On top of your phone's own font size.") {
                         SegmentedControl(
@@ -448,6 +463,27 @@ private fun SwitchRow(title: String, detail: String?, checked: Boolean, onChecke
             if (detail != null) Text(detail, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
         }
         Switch(checked)
+    }
+}
+
+/** One swatch per accent preset, drawn in the accent the current light or dark scheme would use. */
+@Composable
+private fun AccentPicker(selected: AccentPalette, onSelect: (AccentPalette) -> Unit) {
+    val dark = Theme[colors][background].luminance() < 0.5f
+    Row(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        AccentPalette.all.forEach { palette ->
+            val isSelected = palette == selected
+            Box(
+                Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .selectable(selected = isSelected, role = Role.RadioButton, onClick = { onSelect(palette) })
+                    .semantics { contentDescription = palette.name }
+                    .border(2.dp, if (isSelected) Theme[colors][text] else Color.Transparent, CircleShape)
+                    .padding(5.dp)
+                    .background(if (dark) palette.dark.accent else palette.light.accent, CircleShape),
+            )
+        }
     }
 }
 
