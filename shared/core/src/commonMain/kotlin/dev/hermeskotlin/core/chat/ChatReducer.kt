@@ -91,7 +91,12 @@ fun ChatState.reduce(event: GatewayEvent, now: Double? = null): ChatState {
         "notice" -> payload.string("message")?.trim()?.takeIf { it.isNotEmpty() }?.let { text ->
             copy(messages = messages + ChatMessage.Notice("notice-$keySeq", text), keySeq = keySeq + 1)
         } ?: this
-        "message.complete" -> complete(payload, now)
+        // The turn has ended, so a notice about the agent being built is stale even if its clear never came.
+        "message.complete" -> complete(payload, now).let { done ->
+            done.copy(notices = done.notices.filterNot { it.kind == GatewayNotice.Kind.Agent })
+        }
+        "notification.show" -> showNotice(payload)
+        "notification.clear" -> withoutNotice(payload.string("key"))
         "status.update" -> copy(status = payload.string("text")?.takeIf { it.isNotBlank() })
         "error" -> copy(error = payload.string("message"))
         "session.title" -> copy(title = payload.string("title") ?: title)

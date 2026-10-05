@@ -1215,6 +1215,9 @@ class ChatSession(
 
     fun dismissError() = _state.update { it.copy(error = null, refused = null) }
 
+    /** Hides a gateway notice on this phone: its ×, or a timed one running out. The gateway isn't told. */
+    fun dismissNotice(key: String) = _state.update { it.withoutNotice(key) }
+
     /** Shows a title set elsewhere (a REST rename) without waiting for the gateway to echo it. */
     fun showTitle(title: String?) = _state.update { it.copy(title = title) }
 
