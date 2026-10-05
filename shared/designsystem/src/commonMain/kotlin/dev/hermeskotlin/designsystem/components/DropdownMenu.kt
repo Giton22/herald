@@ -42,14 +42,16 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.typography
 
 /**
- * A small menu that opens right under its [anchor], lined up with the anchor's end edge. Controlled: open with
- * [expanded]; picking an item, tapping outside or Back calls [onExpandedChange] with false.
+ * A small menu that opens right under its [anchor] (or above it, when [above], for an anchor at the bottom of
+ * the screen), lined up with the anchor's end edge. Controlled: open with [expanded]; picking an item, tapping
+ * outside or Back calls [onExpandedChange] with false.
  */
 @Composable
 fun DropdownMenu(
     expanded: Boolean,
     onExpandedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    above: Boolean = false,
     items: @Composable DropdownMenuPanelScope.() -> Unit,
     anchor: @Composable () -> Unit,
 ) {
@@ -58,7 +60,7 @@ fun DropdownMenu(
         expanded,
         onExpandedChange,
         modifier,
-        AnchorSide.Bottom,
+        if (above) AnchorSide.Top else AnchorSide.Bottom,
         AnchorAlignment.End,
         4.dp,
         0.dp,

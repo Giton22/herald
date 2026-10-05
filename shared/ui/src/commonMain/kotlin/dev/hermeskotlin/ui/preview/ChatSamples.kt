@@ -15,6 +15,7 @@ import dev.hermeskotlin.core.chat.TodoList
 import dev.hermeskotlin.core.chat.TodoStatus
 import dev.hermeskotlin.core.chat.ToolActivity
 import dev.hermeskotlin.core.chat.TurnUsage
+import dev.hermeskotlin.core.settings.RunningSend
 import dev.hermeskotlin.core.slash.SlashSuggestion
 import dev.hermeskotlin.ui.chat.ChatActions
 import dev.hermeskotlin.core.chat.Waiting
@@ -310,7 +311,7 @@ internal object ChatSamples {
 /** Does nothing: previews only draw. */
 internal class PreviewChatActions(text: String = "") : ChatActions {
     override val composer = TextFieldState(text)
-    override fun send(queue: Boolean) = Unit
+    override fun send(mode: RunningSend?) = Unit
     override fun interrupt() = Unit
     override fun removeAttachment(id: String) = Unit
     override fun addComment(source: CommentSource, anchor: SelectionAnchor) = 0L

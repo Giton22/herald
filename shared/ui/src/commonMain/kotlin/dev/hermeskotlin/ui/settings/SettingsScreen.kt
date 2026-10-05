@@ -53,7 +53,10 @@ import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.TextSize
 import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.core.settings.VoicePause
+import dev.hermeskotlin.core.settings.RunningSend
 import dev.hermeskotlin.core.settings.WallpaperStrength
+import dev.hermeskotlin.ui.chat.label
+import dev.hermeskotlin.ui.chat.summary
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
@@ -234,6 +237,18 @@ internal fun SettingsView(
                 }
 
                 Section("Chat") {
+                    Field(
+                        "While a reply is running, Send…",
+                        detail = "${settings.runningSend.summary}. Hold Send to pick another way for one message.",
+                    ) {
+                        SegmentedControl(
+                            options = RunningSend.entries,
+                            selected = settings.runningSend,
+                            onSelect = { mode -> onUpdate { it.copy(runningSend = mode) } },
+                            optionLabel = { it.label },
+                        )
+                    }
+                    Divider()
                     SwitchRow(
                         title = "Show reasoning",
                         detail = "The model's thinking, collapsed above each reply.",

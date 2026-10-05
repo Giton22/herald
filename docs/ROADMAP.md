@@ -66,7 +66,8 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Connect to `/api/ws` with subprotocols `hermes-gateway-v1` and `hermes-gateway-ticket.<t>`
 - [x] Newline-delimited JSON-RPC 2.0: requests, responses, notifications
 - [x] Wait for `gateway.ready`, then send `client.capabilities {server_requests: true}`
-- [x] Handle server→client requests (`srq-<n>`) and answer them with the matching id (unhandled ones get `-32601` right away so the agent never stalls)
+- [x] Handle server→client requests (`srq-<n>`) and answer them with the matching id (approval, clarify, sudo, secret)
+- [x] Methods the app can't show (`preview.*`, `terminal.read`, `window.read`, `tour`, `vault.*`) get the `4404` decline when the gateway counts declines (`client.capabilities` → `declines_not_shown`), so Desktop can still answer them and the agent stops waiting once every client declined; never `-32601`, which would settle them for Desktop too
 - [x] `gateway.ping` keepalive every 15 s, 45 s inbound deadline
 - [x] Automatic reconnect with backoff (fresh ticket each time)
 - [x] Re-attach (`session.resume`) and refetch the transcript after a reconnect; rebuild a running turn from `inflight`
@@ -104,7 +105,8 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Reasoning/thinking blocks, collapsible (`reasoning.delta`, `thinking.delta`, `reasoning.available`)
 - [x] Stop a running turn (`session.interrupt`): the Send button turns into Stop while a turn runs
 - [x] Prompts sent from another client (Desktop, CLI, messaging) show up live: a turn this client didn't start refetches the transcript at its start and end, since the gateway streams only the reply
-- [x] Steer a running turn: a message typed mid-turn offers labelled "Send now" (corrects the task) and "Send after this task" (holds it for the next turn) while Stop stays in place; `/steer` injects a note (`prompt.submit` busy modes, `session.steer`)
+- [x] Send while a reply runs, three ways: Steer (`session.steer`, the agent reads it after its current step; rejected → queued as the next prompt, a gateway without steering → plain `prompt.submit`), Queue (`prompt.submit {queued}`) and Stop & send (`session.interrupt`, wait for the turn to end, then `prompt.submit`). A Send button appears beside Stop; long-press it for a dropdown to pick the way for one message. `/steer <note>` uses `session.steer` too. A steer the turn ended before reading is requeued by the gateway and shows up as the next turn
+- [x] Setting "While a reply is running, Send…": Steer (default), Queue or Stop & send
 - [x] Voice chat has its own composer button instead of sharing the send button
 - [x] Token usage per turn (live turns) and per session with cost, context window and account limits (`session.usage`, `MessageCompletePayload.usage`, `GET /api/sessions/{id}`)
 - [x] Error banner and live status line (`error`, `status.update`, failed turns)

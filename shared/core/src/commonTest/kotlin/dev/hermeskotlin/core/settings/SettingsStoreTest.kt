@@ -27,6 +27,21 @@ class SettingsStoreTest {
     }
 
     @Test
+    fun sendWhileRunningSteersUnlessChangedAndRemembersTheChoice() = runTest {
+        val disk = InMemoryKeyValueStore()
+        // Settings saved before the option existed still read, with Steer.
+        disk.put("settings.v1", """{"theme":"Dark"}""")
+        val first = SettingsStore(disk, backgroundScope)
+        assertEquals(RunningSend.Steer, first.settings.filterNotNull().first().runningSend)
+        assertEquals(RunningSend.Steer, AppSettings().runningSend)
+
+        first.update { it.copy(runningSend = RunningSend.StopAndSend) }
+        advanceUntilIdle()
+
+        assertEquals(RunningSend.StopAndSend, SettingsStore(disk, backgroundScope).settings.filterNotNull().first().runningSend)
+    }
+
+    @Test
     fun unreadableStoredSettingsFallBackToDefaults() = runTest {
         val disk = InMemoryKeyValueStore().apply { put("settings.v1", """{"theme":"Neon"}""") }
         assertEquals(AppSettings(), SettingsStore(disk, backgroundScope).settings.filterNotNull().first())

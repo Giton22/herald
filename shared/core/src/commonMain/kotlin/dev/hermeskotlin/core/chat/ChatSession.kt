@@ -17,6 +17,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.first
 import dev.hermeskotlin.core.models.ReasoningEffort
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
@@ -851,20 +853,92 @@ class ChatSession(
     private fun removeMessage(key: String) = _state.update { state -> state.copy(messages = state.messages.filterNot { it.key == key }) }
 
     /**
+     * Slips [text] into the running turn with `session.steer`: the agent reads it after its current tool
+     * call, without stopping. With nothing running, or when the gateway turns it down (`rejected`), it goes
+     * as the next prompt instead; a gateway that can't steer (no such method, or an agent without it) gets a
+     * plain prompt, which its busy mode folds in as before.
+     *
+     * A steer the turn ended before reading isn't lost: the gateway queues the leftover as the next prompt,
+     * and that turn shows up like one started elsewhere, its prompt pulled from the transcript.
+     */
+    suspend fun steer(text: String): SendOutcome {
+        val trimmed = text.trim()
+        if (trimmed.isEmpty()) return SendOutcome.NotSent
+        val client = connectedClient()
+        val runtimeId = _state.value.runtimeSessionId
+        // Offline, submit says so and hands the text back.
+        if (!_state.value.running || client == null || runtimeId == null) return submit(trimmed, queue = true)
+        val key = "local-${_state.value.keySeq}"
+        _state.update {
+            it.copy(messages = it.messages + ChatMessage.User(key, trimmed, pending = true), keySeq = it.keySeq + 1, error = null)
+        }
+        val status = try {
+            (client.request("session.steer", buildJsonObject {
+                put("session_id", runtimeId)
+                put("text", trimmed)
+            }) as? JsonObject).string("status")
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: RpcException) {
+            removeMessage(key)
+            if (e.code in STEER_UNSUPPORTED) return submit(trimmed)
+            _state.update { it.copy(error = e.message.ifBlank { "Couldn't steer the reply." }) }
+            return SendOutcome.NotSent
+        } catch (e: Exception) {
+            // Out without a reply: the agent may have read it, so it isn't handed back to go twice. Like a
+            // lost correction, the bubble stays marked; a steer leaves nothing in the transcript to settle it.
+            return settleUnanswered(key, arrived = null, UnsettledPrompt(trimmed, display = null, startsTurn = false)) {}
+        }
+        if (status != STEER_ACCEPTED) {
+            // Turned down: the turn ended meanwhile, or the agent can't take it now. It runs next instead.
+            removeMessage(key)
+            return submit(trimmed, queue = true)
+        }
+        _state.update { state ->
+            // Like a correction: what streamed so far stays above it, the rest of the turn continues below.
+            state.copy(messages = state.messages.updateUser(key) { it.copy(pending = false) }).sealReplyBefore(key)
+        }
+        return SendOutcome.Sent
+    }
+
+    /**
+     * Stops the running reply (`session.interrupt`), waits for the turn to settle, then sends [text] as a
+     * fresh turn. The gateway drops the prompts queued behind the stopped turn; their text comes back in
+     * [StopAndSend.dropped]. A turn that won't settle in time gets the prompt queued behind it, so it still
+     * runs after it rather than folding into the turn it was meant to replace.
+     */
+    suspend fun stopAndSubmit(
+        text: String,
+        attachments: List<OutgoingAttachment> = emptyList(),
+        display: String? = null,
+    ): StopAndSend {
+        if (!_state.value.running) return StopAndSend(submit(text, attachments, display))
+        val dropped = interruptTurn() ?: run {
+            _state.update { it.copy(error = it.error ?: NOT_CONNECTED) }
+            return StopAndSend(SendOutcome.NotSent)
+        }
+        val settled = withTimeoutOrNull(STOP_SETTLE_TIMEOUT_MS) { _state.first { !it.running } } != null
+        return StopAndSend(submit(text, attachments, display, queue = !settled), dropped)
+    }
+
+    /**
      * Asks the gateway to stop the running turn; `message.complete {status: interrupted}` follows. The
      * gateway drops the prompts queued behind the turn too, so their bubbles go and their text comes back,
      * in order, for the composer.
      */
-    suspend fun interrupt(): List<String> {
-        val client = connectedClient() ?: return emptyList()
-        val runtimeId = _state.value.runtimeSessionId ?: return emptyList()
+    suspend fun interrupt(): List<String> = interruptTurn().orEmpty()
+
+    /** [interrupt], null when the turn couldn't be stopped (the reason is in [ChatState.error]). */
+    private suspend fun interruptTurn(): List<String>? {
+        val client = connectedClient() ?: return null
+        val runtimeId = _state.value.runtimeSessionId ?: return null
         try {
             client.request("session.interrupt", buildJsonObject { put("session_id", runtimeId) })
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
             _state.update { it.copy(error = e.message ?: "Couldn't stop the turn.") }
-            return emptyList()
+            return null
         }
         var dropped = emptyList<String>()
         _state.update { state ->
@@ -1216,6 +1290,15 @@ class ChatSession(
         /** `prompt.submit` statuses for text folded into the running turn (busy mode interrupt or steer). */
         val CORRECTION_STATUSES = setOf("redirected", "steered")
 
+        /** `session.steer`'s status for a steer the running turn took in. */
+        const val STEER_ACCEPTED = "queued"
+
+        /** `session.steer` errors for a gateway that can't steer: no such method, or an agent without `steer()`. */
+        val STEER_UNSUPPORTED = setOf(METHOD_NOT_FOUND, 4010)
+
+        /** How long Stop & send waits for the stopped turn's `message.complete` before queueing behind it. */
+        const val STOP_SETTLE_TIMEOUT_MS = 10_000L
+
         const val MAX_UNCLAIMED = 8
 
         /** Uploads of several MB over a phone link take a while. */
@@ -1251,6 +1334,9 @@ class ChatSession(
         val NOT_DISPATCHABLE = Regex("""not a quick/plugin/(?:bundle/)?skill command""", RegexOption.IGNORE_CASE)
     }
 }
+
+/** How [ChatSession.stopAndSubmit] went: the send's [outcome], and the queued prompts the stop dropped, to give back. */
+data class StopAndSend(val outcome: SendOutcome, val dropped: List<String> = emptyList())
 
 /** How [ChatSession.setModel] went. */
 sealed interface ModelSwitch {

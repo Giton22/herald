@@ -4,8 +4,14 @@ import androidx.compose.foundation.text.input.TextFieldState
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.InputRequest
+import dev.hermeskotlin.core.settings.RunningSend
 import dev.hermeskotlin.core.slash.SlashSuggestion
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.serialization.json.JsonObject
+
+private val DefaultRunningSend: StateFlow<RunningSend> = MutableStateFlow(RunningSend.Steer).asStateFlow()
 
 /**
  * What the chat's layout ([ChatView]) asks of whatever runs the chat: [ChatViewModel] in the app,
@@ -15,8 +21,14 @@ interface ChatActions {
     /** What's being typed. */
     val composer: TextFieldState
 
-    /** Sends the composer; mid-turn it corrects the running turn, unless [queue] holds it for the next one. */
-    fun send(queue: Boolean = false)
+    /**
+     * Sends the composer. Mid-turn it goes the way [mode] says (steered in, queued, or sent after a stop),
+     * or as [runningSend] says when no mode was picked for this message.
+     */
+    fun send(mode: RunningSend? = null)
+
+    /** What Send does while a reply runs, from Settings. */
+    val runningSend: StateFlow<RunningSend> get() = DefaultRunningSend
 
     fun interrupt()
 
