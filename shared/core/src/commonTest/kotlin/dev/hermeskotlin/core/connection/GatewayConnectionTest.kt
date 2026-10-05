@@ -100,4 +100,18 @@ class GatewayConnectionTest {
         assertIs<ConnectionState.Reconnecting>(connection.state.first { it is ConnectionState.Reconnecting })
         connection.stop()
     }
+
+    @Test
+    fun readyTimeoutSchedulesReconnect() = runTest {
+        // The socket connects but gateway.ready never arrives: that attempt must fail like any other
+        // and retry with a fresh ticket, not end the loop silently as a cancellation.
+        var opens = 0
+        val connection = GatewayConnection(auth(), { _, _ -> opens++; FakeTransport() }, backgroundScope, readyTimeoutMs = 50)
+        connection.start(url)
+
+        val second = connection.state.first { it is ConnectionState.Reconnecting && it.attempt >= 2 }
+
+        assertEquals(2, opens)
+        connection.stop()
+    }
 }
