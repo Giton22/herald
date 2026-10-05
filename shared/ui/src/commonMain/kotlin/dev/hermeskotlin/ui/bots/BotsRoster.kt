@@ -34,7 +34,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.BellRing
 import com.composables.icons.lucide.CalendarClock
+import dev.hermeskotlin.core.chat.Waiting
 import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Plus
@@ -139,7 +141,10 @@ fun BotsRoster(
     troubles: Map<String, BotTrouble> = emptyMap(),
     /** Each bot's routine whose last run went wrong, by profile. */
     failingRoutines: Map<String, CronJob> = emptyMap(),
+    /** The bots needing the user, most pressing first. */
+    needsYou: List<NeedsYou> = emptyList(),
 ) {
+    val heldUp = remember(needsYou) { needsYou.filterIsInstance<NeedsYou.Answer>().associate { it.bot.name to it.waiting } }
     var hiddenOpen by remember { mutableStateOf(false) }
     var startOver by remember { mutableStateOf<Bot?>(null) }
     var deleting by remember { mutableStateOf<Bot?>(null) }
@@ -160,6 +165,7 @@ fun BotsRoster(
             showHandle = bot.label.lowercase() in sameName,
             trouble = troubles[bot.name],
             failingRoutine = failingRoutines[bot.name],
+            waiting = heldUp[bot.name],
             actions = actions,
             onStartOver = { startOver = bot },
             onDelete = { deleting = bot },
@@ -171,6 +177,19 @@ fun BotsRoster(
             // Room to scroll the last rows out from under the floating footer.
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 96.dp),
         ) {
+            if (needsYou.isNotEmpty()) {
+                item(key = "needs-you-label") {
+                    SectionLabel("Needs you · ${needsYou.size}", Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp))
+                }
+                items(needsYou, key = { "needs-${it.bot.name}" }) { item ->
+                    NeedsYouRow(
+                        item,
+                        picture = avatars[item.bot.name]?.takeIf { showsPicture(item.bot, it) },
+                        // A failing routine is mended on its page; anything else in the bot's chat.
+                        onClick = { if (item is NeedsYou.Routine) actions.routines(item.bot) else actions.open(item.bot) },
+                    )
+                }
+            }
             item(key = "label") {
                 Row(Modifier.fillMaxWidth().padding(start = 12.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                     SectionLabel("Bots", Modifier.weight(1f))
@@ -255,6 +274,8 @@ private fun BotRow(
     showHandle: Boolean,
     trouble: BotTrouble?,
     failingRoutine: CronJob?,
+    /** Its chat is held up on the user. */
+    waiting: Waiting?,
     actions: BotActions,
     onStartOver: () -> Unit,
     onDelete: () -> Unit,
@@ -347,6 +368,8 @@ private fun BotRow(
                 }
                 val preview = bot.rosterPreview()
                 val (line, italic) = when {
+                    // Held up on the user beats everything: nothing moves until they answer.
+                    waiting != null -> waiting.label to false
                     thinking -> "Thinking…" to false
                     working -> "Working…" to false
                     // What's wrong outranks the last line: a phone has no hover to say it.
@@ -360,6 +383,7 @@ private fun BotRow(
                     line,
                     style = Theme[typography][bodySmall].copy(fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal),
                     color = when {
+                        waiting != null -> Theme[colors][accent]
                         working || thinking -> Theme[colors][success]
                         trouble != null || failingRoutine != null -> Theme[colors][warning]
                         else -> Theme[colors][textSecondary]
@@ -369,6 +393,40 @@ private fun BotRow(
                 )
             }
         }
+    }
+}
+
+/** One bot needing the user: its face, name and what it needs; tapping goes where it can be dealt with. */
+@Composable
+private fun NeedsYouRow(item: NeedsYou, picture: ByteArray?, onClick: () -> Unit) {
+    val urgent = item is NeedsYou.Answer
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = MinTouchTarget)
+            .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
+            .clickable(onClickLabel = "Open ${item.bot.label}", onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        BotAvatar(item.bot, picture, size = 28.dp)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
+            Text(item.bot.label, style = Theme[typography][body], color = Theme[colors][text], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                item.reason,
+                style = Theme[typography][bodySmall],
+                color = if (urgent) Theme[colors][accent] else Theme[colors][warning],
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        UnstyledIcon(
+            if (urgent) Lucide.BellRing else Lucide.TriangleAlert,
+            contentDescription = null,
+            tint = if (urgent) Theme[colors][accent] else Theme[colors][warning],
+            modifier = Modifier.size(16.dp),
+        )
     }
 }
 
