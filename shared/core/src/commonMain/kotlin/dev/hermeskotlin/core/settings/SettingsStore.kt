@@ -22,6 +22,13 @@ enum class TextSize(val scale: Float) {
     Largest(1.3f),
 }
 
+/** How much of the chat background shows through: [veil] is how opaque the app's background color lies over it. */
+enum class WallpaperStrength(val veil: Float) {
+    Faint(0.88f),
+    Medium(0.75f),
+    Strong(0.55f),
+}
+
 /**
  * How long a voice chat waits after you stop talking before it sends. Desktop's chat uses 1.25 s
  * and the terminal 3 s; on a phone people pause mid-thought, so the default sits between.
@@ -39,6 +46,8 @@ data class AppSettings(
     /** Dark mode uses true black backgrounds (OLED). */
     val pureBlack: Boolean = false,
     val textSize: TextSize = TextSize.Default,
+    /** How strongly the chat background (kept by [WallpaperStore]) shows, when there is one. */
+    val wallpaperStrength: WallpaperStrength = WallpaperStrength.Faint,
     val showReasoning: Boolean = true,
     val showToolActivity: Boolean = true,
     /** Tokens each reply took, under it. */

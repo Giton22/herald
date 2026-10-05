@@ -105,6 +105,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.AnnotatedString
@@ -323,6 +324,7 @@ fun ChatScreen(
         onOpenPets = { petsOpen = true },
         onViewImage = { viewing = it },
         onNotice = { notice = it },
+        wallpaper = rememberChatWallpaper(),
     )
 
     AttachSheet(visible = attachOpen, onDismiss = { attachOpen = false }, picker = attachmentPicker)
@@ -409,6 +411,8 @@ internal fun ChatView(
     onOpenPets: () -> Unit,
     onViewImage: (ViewerImage) -> Unit,
     onNotice: (String) -> Unit,
+    /** The chat background from Settings, drawn behind the conversation (and frosted under the composer). */
+    wallpaper: ImageBitmap? = null,
 ) {
     Box(
         Modifier
@@ -464,6 +468,7 @@ internal fun ChatView(
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
+                    if (wallpaper != null) ChatWallpaper(wallpaper, LocalAppSettings.current.wallpaperStrength, Modifier.fillMaxSize())
                     if (state.historyLoaded && state.messages.isNotEmpty()) {
                         CompositionLocalProvider(
                             LocalMediaLoader provides actions::loadMedia,

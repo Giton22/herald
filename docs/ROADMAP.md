@@ -132,6 +132,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Settings screen, opened from the account sheet
 - [x] Theme: system, light, dark, plus pure black; window and system bars follow it
 - [x] Text size on top of the system font scale
+- [x] Chat background: a photo behind the conversation (frosted under the composer), with how strongly it shows
 - [x] Show or hide reasoning and tool activity in the chat
 - [x] Account (sign out, change gateway) and about (app and gateway versions, update check)
 - [ ] Manage several saved gateways (add, edit, remove, choose primary)
