@@ -885,10 +885,9 @@ class ChatSession(
             _state.update { it.copy(error = e.message.ifBlank { "Couldn't steer the reply." }) }
             return SendOutcome.NotSent
         } catch (e: Exception) {
-            // A steer leaves no prompt in the transcript to look for, so there's nothing to check against.
-            removeMessage(key)
-            _state.update { it.copy(error = "Couldn't tell whether Hermes got that. It's back in the composer.") }
-            return SendOutcome.NotSent
+            // Out without a reply: the agent may have read it, so it isn't handed back to go twice. Like a
+            // lost correction, the bubble stays marked; a steer leaves nothing in the transcript to settle it.
+            return settleUnanswered(key, arrived = null, UnsettledPrompt(trimmed, display = null, startsTurn = false)) {}
         }
         if (status != STEER_ACCEPTED) {
             // Turned down: the turn ended meanwhile, or the agent can't take it now. It runs next instead.

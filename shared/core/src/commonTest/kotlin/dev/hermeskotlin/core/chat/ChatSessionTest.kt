@@ -359,6 +359,21 @@ class ChatSessionTest {
     }
 
     @Test
+    fun aSteerThatWentOutWithoutAReplyStaysAsUnknown() = runTest {
+        val (chat, transport) = runningChat(backgroundScope, mapOf("session.steer" to SILENT))
+
+        val steering = backgroundScope.async { chat.steer("use tabs") }
+        transport.awaitSent { it.isCall("session.steer") }
+        transport.serverClose(1006)
+
+        // The agent may have read it: not handed back to send twice, but kept, marked, to check or resend.
+        assertEquals(SendOutcome.Unsettled, steering.await())
+        val bubble = assertIs<ChatMessage.User>(chat.state.value.messages.single { it is ChatMessage.User && it.text == "use tabs" })
+        assertEquals(SendCheck.Unknown, bubble.check)
+        assertFalse(bubble.pending)
+    }
+
+    @Test
     fun steeringWithNothingRunningJustSends() = runTest {
         val (connection, transport) = setup(
             backgroundScope,
