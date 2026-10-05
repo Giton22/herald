@@ -305,6 +305,7 @@ fun ChatScreen(
         picker = picker,
         connected = connected,
         connectionLabel = connectionLabel(connection),
+        linkStatus = linkStatus(connection),
         attachments = attachments,
         attachmentError = attachmentError,
         comments = viewModel.comments.collectAsStateWithLifecycle().value,
@@ -393,6 +394,8 @@ internal fun ChatView(
     connected: Boolean,
     /** Which way the link is down, shown under the title while not [connected]. */
     connectionLabel: String = "No connection",
+    /** Shown in the chat while the link is being made again, so a reply that stopped streaming says why. */
+    linkStatus: String? = null,
     attachments: List<OutgoingAttachment>,
     attachmentError: String?,
     /** Comments on parts of the chat, waiting for the next send. */
@@ -482,6 +485,8 @@ internal fun ChatView(
                         ) {
                             Messages(
                                 state.messages,
+                                olderMessages = state.olderMessages,
+                                loadingOlder = state.loadingOlder,
                                 bottomInset = listInset,
                                 controlsInset = dockInset,
                                 fold = composerFold,
@@ -499,6 +504,21 @@ internal fun ChatView(
                                 }
                             else -> Greeting(onAttach = onAttach, onDictate = onDictate, connected = connected, dictation = dictation, canAttach = attachments.size < OutgoingAttachment.MAX_COUNT)
                         }
+                    }
+                }
+                // Over the top of the conversation: the link being made again, and an older page on its way.
+                var lastLinkStatus by remember { mutableStateOf("") }
+                if (linkStatus != null) lastLinkStatus = linkStatus
+                Column(
+                    Modifier.align(Alignment.TopCenter).padding(top = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    AnimatedVisibility(visible = linkStatus != null && state.messages.isNotEmpty(), enter = fadeIn(), exit = fadeOut()) {
+                        StatusPill(lastLinkStatus)
+                    }
+                    AnimatedVisibility(visible = state.loadingOlder, enter = fadeIn(), exit = fadeOut()) {
+                        StatusPill("Loading earlier messages…")
                     }
                 }
                 Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { dockHeight = it.height }) {
@@ -784,6 +804,9 @@ private val FOLLOW_UP_PROMPTS = listOf(
 @Composable
 private fun Messages(
     messages: List<ChatMessage>,
+    /** The conversation goes back further than [messages]; nearing the top loads the page before. */
+    olderMessages: Boolean,
+    loadingOlder: Boolean,
     bottomInset: Dp,
     /** How high the dock really stands, for what floats just above it. */
     controlsInset: Dp,
@@ -826,6 +849,11 @@ private fun Messages(
         }
     }
     LaunchedEffect(fold) { snapshotFlow { pinned }.collect { fold.following = it } }
+    // Nearing the top loads the page before. It goes in above, keyed, so the list keeps what's on screen in place.
+    val nearTop by remember { derivedStateOf { listState.firstVisibleItemIndex <= OLDER_PAGE_LEAD } }
+    LaunchedEffect(nearTop, olderMessages, loadingOlder, messages.size) {
+        if (nearTop && olderMessages && !loadingOlder) actions.loadOlder()
+    }
     val readBackTravel = with(LocalDensity.current) { READ_BACK_TRAVEL.toPx() }
     val readBack = remember(readBackTravel, fold) { ReadBackDetector(readBackTravel) { fold.heldOpen = false } }
     // A prompt just sent is always shown, wherever the reader was.
@@ -965,6 +993,9 @@ internal class ReadBackDetector(private val travel: Float, private val onReadBac
 /** A scroll offset past any message: the list stops it at the end of the last one. */
 private const val LIST_END = 1_000_000
 
+/** How many messages from the top the page before starts loading, so it's usually in before the reader gets there. */
+private const val OLDER_PAGE_LEAD = 3
+
 /** How far the end of the conversation lies below the visible area, in pixels (0 when it's in view). */
 private fun LazyListLayoutInfo.hiddenBelow(): Int {
     val last = visibleItemsInfo.lastOrNull() ?: return 0
@@ -1011,6 +1042,36 @@ private fun connectionLabel(state: ConnectionState): String = when (state) {
     is ConnectionState.Connecting, is ConnectionState.Reconnecting -> "No connection · connecting again…"
     ConnectionState.SessionExpired -> "Signed out · sign in again"
     is ConnectionState.Failed, ConnectionState.Idle, is ConnectionState.Connected -> "No connection"
+}
+
+/**
+ * What the chat says while the link is being made again: waiting for the network when the gateway can't be reached
+ * at all, else reconnecting. Null when it's up, or down for good (the title says so then).
+ */
+internal fun linkStatus(state: ConnectionState): String? = when (state) {
+    is ConnectionState.Reconnecting -> if (state.reason.startsWith(UNREACHABLE)) "Waiting for network…" else "Reconnecting…"
+    is ConnectionState.Connecting -> if (state.attempt > 1) "Reconnecting…" else null
+    is ConnectionState.Connected, ConnectionState.Idle, ConnectionState.SessionExpired, is ConnectionState.Failed -> null
+}
+
+/** GatewayConnection's reason when the ticket request never reached the gateway (no network, or it's down). */
+private const val UNREACHABLE = "Can't reach gateway"
+
+/** A small floating line with a spinner, for something under way. */
+@Composable
+private fun StatusPill(text: String) {
+    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    Row(
+        Modifier
+            .background(Theme[colors][surfaceElevated], shape)
+            .border(1.dp, Theme[colors][strokeStrong], shape)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Spinner(Modifier.size(12.dp))
+        Text(text, style = Theme[typography][caption], color = Theme[colors][textSecondary])
+    }
 }
 
 /** Desktop's turn marker: the prompt in a full-width box with a tinted fill and outline; replies run bare beneath. */

@@ -74,6 +74,9 @@ interface ChatActions {
 
     fun retry()
 
+    /** Loads the page of the conversation before what's shown, as the reader scrolls to the top. */
+    fun loadOlder() {}
+
     fun dismissError()
 
     fun dismissAttachmentError()

@@ -148,6 +148,10 @@ data class ChatState(
     val yolo: Boolean? = null,
     val historyLoaded: Boolean = false,
     val historyError: String? = null,
+    /** The transcript goes back further than what's loaded; scrolling to the top loads the page before. */
+    val olderMessages: Boolean = false,
+    /** An older page is being read. */
+    val loadingOlder: Boolean = false,
     val messages: List<ChatMessage> = emptyList(),
     val attachment: Attachment = Attachment.Detached,
     /** A turn is running on the gateway (ours or one started elsewhere). */
