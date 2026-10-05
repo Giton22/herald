@@ -43,7 +43,6 @@ import dev.hermeskotlin.ui.bots.BotFaces
 import dev.hermeskotlin.ui.bots.StartOverDialog
 import dev.hermeskotlin.ui.bots.BotsViewModel
 import dev.hermeskotlin.ui.bots.LocalBotFaces
-import dev.hermeskotlin.core.rooms.Room
 import dev.hermeskotlin.ui.chat.ChatScreen
 import dev.hermeskotlin.ui.rooms.RoomScreen
 import dev.hermeskotlin.ui.rooms.RoomsViewModel
@@ -189,8 +188,9 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     val bots: BotsViewModel = koinViewModel()
     val rooms: RoomsViewModel = koinViewModel()
 
-    /** The hosted room filling the content area; null shows the chat. */
-    var openRoom by remember { mutableStateOf<Room?>(null) }
+    // The hosted room filling the content area; null shows the chat. The view model owns it, so a
+    // gateway switch (which closes the room) brings the chat back on its own.
+    val openRoom by rooms.opened.collectAsStateWithLifecycle()
     val roster by bots.state.collectAsStateWithLifecycle()
     val pictures by bots.avatars.collectAsStateWithLifecycle()
     val faces = remember(roster.all, pictures) { BotFaces(roster.all, pictures) }
@@ -216,11 +216,23 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
         if (!sidebar.docked) scope.launch { sidebar.close() }
     }
 
+    /** Picking a chat in the sidebar leaves the open room, so the chat is what shows. */
+    fun closeDrawerToChat() {
+        rooms.close()
+        closeDrawer()
+    }
+
     PlatformBackHandler(enabled = sidebar.isOpen && !sidebar.docked) { closeDrawer() }
     // A hosted room closes back to the chat before anything else.
-    PlatformBackHandler(enabled = openRoom != null) {
-        rooms.close()
-        openRoom = null
+    PlatformBackHandler(enabled = openRoom != null) { rooms.close() }
+    // A chat opened from anywhere else (a notification, a link, the share sheet, a new bot) leaves the
+    // room too. Only a change counts: coming back to the same chat, e.g. after a rotation, keeps it open.
+    var shownTarget by remember { mutableStateOf(route.target) }
+    LaunchedEffect(route.target) {
+        if (route.target != shownTarget) {
+            shownTarget = route.target
+            rooms.close()
+        }
     }
     // On phones the keyboard makes way for the drawer.
     LaunchedEffect(sidebar) {
@@ -237,11 +249,11 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                 visible = sidebar.isOpen,
                 onOpenSession = {
                     if (it.id != openSessionId) app.openSession(it.id, it.displayTitle)
-                    closeDrawer()
+                    closeDrawerToChat()
                 },
                 onNewChat = { cwd ->
                     app.newChat(cwd = cwd)
-                    closeDrawer()
+                    closeDrawerToChat()
                 },
                 onDeleted = { if (it.id == openSessionId) app.newChat() },
                 onSessionExpired = app::onSessionExpired,
@@ -250,25 +262,24 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                 onOpenSettings = { settingsOpen = true },
                 onSwitchProfile = {
                     app.switchProfile(it)
-                    closeDrawer()
+                    closeDrawerToChat()
                 },
                 onOpenBot = { bot, storedSessionId ->
                     if (storedSessionId != openSessionId || route.target.bot == null) app.openBotChat(bot, storedSessionId)
-                    closeDrawer()
+                    closeDrawerToChat()
                 },
                 onOpenBotSession = { bot, id, title ->
                     app.openBotSession(bot, id, title)
-                    closeDrawer()
+                    closeDrawerToChat()
                 },
                 onNewBotChat = { bot ->
                     app.newBotChat(bot)
-                    closeDrawer()
+                    closeDrawerToChat()
                 },
                 onEditBot = { bot -> editing = BotEditing(bot) },
                 onBotDeleted = { bot -> if (route.target.bot?.name == bot.name || route.target.profile == bot.name) app.newChat() },
                 onOpenRoom = { room ->
                     rooms.open(room)
-                    openRoom = room
                     closeDrawer()
                 },
                 selectedRunning = chatState.running,
@@ -276,9 +287,8 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
         },
     ) {
         CompositionLocalProvider(LocalBotFaces provides faces) {
-            val shownRoom = openRoom
-            if (shownRoom != null) {
-                RoomScreen(viewModel = rooms, onBack = { rooms.close(); openRoom = null })
+            if (openRoom != null) {
+                RoomScreen(viewModel = rooms, onBack = rooms::close)
             } else {
                 ChatScreen(
                     target = route.target,
