@@ -229,8 +229,9 @@ class AppViewModel(
             val id = runCatching { botChats.open(Bot(name = bot)) }.getOrNull()
             when {
                 id != null -> _route.value = Route.Chat(botChatTarget(gateway, id, bot, name, draft))
-                // A share to a bot that's gone (an old shortcut) isn't lost: it waits in a new chat instead.
-                draft != null -> newChat(draft)
+                // A share to a bot that's gone (an old shortcut) isn't lost: it waits in a new chat instead,
+                // which says so, since a send from there goes to the profile's own assistant, not the bot.
+                draft != null -> newChat(draft.withNotice("Couldn't open $name's chat, so the share is in a new chat."))
             }
         }
     }

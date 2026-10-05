@@ -27,7 +27,11 @@ class ComposeDraft(
     val attachments: List<OutgoingAttachment> = emptyList(),
     val notice: String? = null,
     val dictate: Boolean = false,
-)
+) {
+    /** The same draft, telling [notice] first and then the notice it had. */
+    fun withNotice(notice: String) =
+        ComposeDraft(text, attachments, listOfNotNull(notice, this.notice).joinToString(" "), dictate)
+}
 
 /**
  * Hands a chat to open from outside the UI, like a tapped notification, to the screens. Only the latest
