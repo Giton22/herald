@@ -51,7 +51,8 @@ class HeartbeatTimeoutException : Exception("Gateway heartbeat timed out")
 /**
  * A server→client request (approval, clarify, sudo, secret…), answered with [JsonRpcClient.respond].
  * The gateway sends it to every client attached to [sessionId] and the first answer wins, so a
- * client answers only what it can show; the rest it leaves to the others.
+ * client answers only what it can show. A method no client of this kind can show is refused at once
+ * (see `JsonRpcClient.answers`), the way Desktop refuses what it has no handler for.
  */
 data class ServerRequest(
     val id: String,
@@ -73,6 +74,13 @@ class JsonRpcClient(
     private val heartbeatIntervalMs: Long = 15_000,
     private val heartbeatDeadlineMs: Long = 45_000,
     private val clock: () -> Long = { getTimeMillis() },
+    /**
+     * The server→client request methods this app can show. Any other is answered `-32601` at once, as
+     * Desktop's channel does, so the agent doesn't wait out its deadline on a question nobody here can
+     * answer. Window-owned ones ([WINDOW_OWNED]) are declined instead, which leaves them to a Desktop
+     * window showing the chat.
+     */
+    private val answers: (String) -> Boolean = { true },
 ) {
     private val sendMutex = Mutex()
     private val pending = mutableMapOf<String, CompletableDeferred<JsonElement>>()
@@ -80,6 +88,9 @@ class JsonRpcClient(
     private var nextId = 0L
     @kotlin.concurrent.Volatile private var lastInboundAt = clock()
     private var heartbeatJob: Job? = null
+
+    /** The gateway counts a [SESSION_NOT_SHOWN] decline instead of taking it as the answer (`client.capabilities`). */
+    @kotlin.concurrent.Volatile private var declinesNotShown = false
 
     /** Why [run] ended; set once the link is gone for good. */
     @kotlin.concurrent.Volatile private var closedWith: Throwable? = null
@@ -186,7 +197,12 @@ class JsonRpcClient(
         val payload = params["payload"]
         if (type == "gateway.ready") {
             val readyPayload = payload as? JsonObject ?: JsonObject(emptyMap())
-            scope.launch { runCatching { request("client.capabilities", buildJsonObject { put("server_requests", true) }) } }
+            scope.launch {
+                runCatching {
+                    val reply = request("client.capabilities", buildJsonObject { put("server_requests", true) }) as? JsonObject
+                    declinesNotShown = reply?.get("declines_not_shown")?.jsonPrimitive?.booleanOrNull == true
+                }
+            }
             if (readyPayload["heartbeat"]?.jsonPrimitive?.booleanOrNull == true) startHeartbeat(scope)
             ready.complete(readyPayload)
         }
@@ -201,7 +217,25 @@ class JsonRpcClient(
     }
 
     private suspend fun handleServerRequest(id: String, method: String, params: JsonElement?) {
-        _serverRequests.emit(ServerRequest(id, method, params as? JsonObject ?: JsonObject(emptyMap())))
+        when {
+            answers(method) -> _serverRequests.emit(ServerRequest(id, method, params as? JsonObject ?: JsonObject(emptyMap())))
+            // An error settles a request for every client, so a window-owned one gets the decline the gateway
+            // only counts (settling once every client declined). A gateway that doesn't count declines would
+            // take it as an answer and cut off the window that owns it: say nothing there.
+            method in WINDOW_OWNED -> if (declinesNotShown) respondError(id, SESSION_NOT_SHOWN, "No window here shows this chat.")
+            else -> respondError(id, METHOD_NOT_FOUND, "unknown method: $method")
+        }
+    }
+
+    private suspend fun respondError(id: String, code: Int, message: String) = runCatching {
+        send(buildJsonObject {
+            put("jsonrpc", "2.0")
+            put("id", id)
+            put("error", buildJsonObject {
+                put("code", code)
+                put("message", message)
+            })
+        })
     }
 
     private fun startHeartbeat(scope: CoroutineScope) {
@@ -235,7 +269,16 @@ class JsonRpcClient(
         calls.forEach { it.completeExceptionally(cause) }
     }
 
-    private companion object {
-        const val GOING_AWAY: Short = 1001
+    companion object {
+        private const val GOING_AWAY: Short = 1001
+
+        /** JSON-RPC "method not found". */
+        const val METHOD_NOT_FOUND = -32601
+
+        /** tui_gateway/server_requests.py `NOT_SHOWN_CODE`: no window of this client shows the request's chat. */
+        const val SESSION_NOT_SHOWN = 4404
+
+        /** Requests only the Desktop window showing the chat can answer (preview, terminal, window reads, the tour). */
+        val WINDOW_OWNED = setOf("preview.read", "preview.act", "terminal.read", "window.read", "tour")
     }
 }

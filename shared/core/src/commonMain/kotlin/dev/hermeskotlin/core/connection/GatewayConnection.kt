@@ -1,6 +1,7 @@
 package dev.hermeskotlin.core.connection
 
 import dev.hermeskotlin.core.auth.AuthApi
+import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.rpc.GatewayCloseCodes
@@ -178,7 +179,7 @@ class GatewayConnection(
      * dies. Never returns normally.
      */
     private suspend fun runSession(transport: RpcTransport, onConnected: () -> Unit): Nothing = coroutineScope {
-        val client = JsonRpcClient(transport)
+        val client = JsonRpcClient(transport, answers = InputRequest.METHODS::contains)
         val pump = async { client.run() }
         val ready = try {
             withTimeout(readyTimeoutMs) { client.ready.await() }
