@@ -153,7 +153,7 @@ fun SessionsSidebar(
     onDeleted: (SessionSummary) -> Unit,
     onSessionExpired: () -> Unit,
     onSignOut: () -> Unit,
-    onChangeGateway: () -> Unit,
+    onOpenGateways: () -> Unit,
     onOpenSettings: () -> Unit,
     onSwitchProfile: (String?) -> Unit,
     viewModel: SessionsViewModel = koinViewModel(),
@@ -404,7 +404,7 @@ fun SessionsSidebar(
         onRefresh = viewModel::refresh,
         onRetry = viewModel::retryConnection,
         onSignOut = onSignOut,
-        onChangeGateway = onChangeGateway,
+        onOpenGateways = onOpenGateways,
         onOpenSettings = onOpenSettings,
     )
     ProfileSheet(
@@ -941,7 +941,7 @@ private fun AccountSheet(
     onRefresh: () -> Unit,
     onRetry: () -> Unit,
     onSignOut: () -> Unit,
-    onChangeGateway: () -> Unit,
+    onOpenGateways: () -> Unit,
     onOpenSettings: () -> Unit,
 ) {
     BottomSheet(visible = visible, onDismiss = onDismiss) {
@@ -956,7 +956,7 @@ private fun AccountSheet(
             SheetAction("Retry connection now", Lucide.RefreshCw, onClick = onRetry)
         }
         SheetAction("Sign out", Lucide.LogOut, onClick = { onDismiss(); onSignOut() })
-        SheetAction("Use a different gateway", Lucide.ArrowLeftRight, onClick = { onDismiss(); onChangeGateway() })
+        SheetAction("Switch or add a gateway", Lucide.ArrowLeftRight, onClick = { onDismiss(); onOpenGateways() })
     }
 }
 

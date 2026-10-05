@@ -18,6 +18,7 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.ArrowRight
 import com.composables.icons.lucide.ChevronUp
 import com.composables.icons.lucide.CircleHelp
@@ -53,6 +54,8 @@ import org.koin.compose.viewmodel.koinViewModel
 @Composable
 fun ConnectScreen(
     onContinue: (SavedGateway) -> Unit,
+    /** Back to the gateway in use, when one is saved (adding another). */
+    onCancel: (() -> Unit)? = null,
     viewModel: ConnectViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
@@ -64,8 +67,9 @@ fun ConnectScreen(
     ScreenScaffold {
         ScreenHeader(
             icon = HeraldMark,
-            title = "Welcome to Herald",
-            subtitle = "Connect to your Hermes Agent gateway. Nothing is sent until you sign in.",
+            title = if (onCancel == null) "Welcome to Herald" else "Add a gateway",
+            subtitle = if (onCancel == null) "Connect to your Hermes Agent gateway. Nothing is sent until you sign in."
+            else "Connect to another Hermes Agent gateway. You stay signed in to the ones you saved.",
         )
 
         TextField(
@@ -142,6 +146,16 @@ fun ConnectScreen(
                 onClick = { onContinue(SavedGateway(result.url.value, provider = PASSWORD_PROVIDER)) },
                 leadingIcon = Lucide.ArrowRight,
                 size = ButtonSize.Large,
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+
+        if (onCancel != null) {
+            Button(
+                text = "Back to my gateway",
+                onClick = onCancel,
+                variant = ButtonVariant.Ghost,
+                leadingIcon = Lucide.ArrowLeft,
                 modifier = Modifier.fillMaxWidth(),
             )
         }
