@@ -13,6 +13,7 @@ import dev.hermeskotlin.core.rpc.RpcTransport
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.profiles.ProfilesApi
+import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import io.ktor.client.engine.mock.MockEngine
@@ -232,6 +233,19 @@ class SessionsViewModelTest {
         assertEquals(null, restored.undo)
         assertTrue(""""archived":true""" in patches[0], patches[0])
         assertTrue(""""archived":false""" in patches[1], patches[1])
+    }
+
+    @Test
+    fun aChatInNeitherListOffersNoUndo() = runTest(dispatcher) {
+        val patches = mutableListOf<String>()
+        val vm = viewModel(patches = patches)
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        // As the chat menu passes a chat opened from elsewhere: whether it's archived is only a guess.
+        vm.toggleArchived(SessionSummary("elsewhere", title = "Opened from a notification"))
+        vm.state.first { patches.size == 1 }
+        advanceTimeBy(1_000)
+        assertEquals(null, vm.state.value.undo)
     }
 
     @Test

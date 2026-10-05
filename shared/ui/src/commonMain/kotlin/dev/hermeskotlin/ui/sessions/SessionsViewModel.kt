@@ -42,6 +42,7 @@ import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlin.time.Clock
 
 data class SessionsUiState(
     val sessions: List<SessionSummary> = emptyList(),
@@ -63,9 +64,25 @@ data class SessionsUiState(
     val undo: ArchiveUndo? = null,
 )
 
-/** [session] as it was before it was archived (or unarchived), and where it sat in the list and the search results. */
-data class ArchiveUndo(val session: SessionSummary, val index: Int, val searchIndex: Int) {
+/**
+ * [session] as it was before it was archived (or unarchived), where it sat in the list and in the search
+ * results for [query], and the list it was in ([gateway], [profile], [filter]). [atMillis]: when the gateway
+ * agreed, so the offer doesn't start over when the screen comes back.
+ */
+data class ArchiveUndo(
+    val session: SessionSummary,
+    val index: Int,
+    val searchIndex: Int,
+    val gateway: GatewayUrl? = null,
+    val profile: String? = null,
+    val filter: SessionListFilter = SessionListFilter.Recent,
+    val query: String = "",
+    val atMillis: Long = 0,
+) {
     val message: String get() = if (session.archived) "Unarchived" else "Archived"
+
+    /** What a screen reader says: which chat, too. */
+    val spoken: String get() = "$message: ${session.displayTitle}"
 }
 
 /** The recent list narrowed to what's running, or to chats waiting on the user or with a reply not yet read. */
@@ -96,6 +113,9 @@ class SessionsViewModel(
     private val seenStore: SeenStore,
     private val drafts: DraftStore,
 ) : ViewModel() {
+
+    /** Stamps an archive's undo offer, so it runs out on time even if the screen goes and comes back. */
+    internal var clock: Clock = Clock.System
 
     val connectionState: StateFlow<ConnectionState> = connection.state
 
@@ -257,15 +277,25 @@ class SessionsViewModel(
      */
     fun toggleArchived(session: SessionSummary) {
         val before = _state.value
-        val undo = ArchiveUndo(
+        val index = before.sessions.indexOfFirst { it.id == session.id }
+        val searchIndex = before.searchResults?.indexOfFirst { it.id == session.id } ?: -1
+        // A chat in neither list (opened from a notification, or from the archive and then this list) is only
+        // a guess as to whether it's archived; undoing that guess could unarchive a chat the user archived.
+        val undo = if (index < 0 && searchIndex < 0) null else ArchiveUndo(
             session = session,
-            index = before.sessions.indexOfFirst { it.id == session.id },
-            searchIndex = before.searchResults?.indexOfFirst { it.id == session.id } ?: -1,
+            index = index,
+            searchIndex = searchIndex,
+            gateway = gateway?.gatewayUrl,
+            profile = profile,
+            filter = before.filter,
+            query = query.text.toString(),
+            atMillis = clock.now().toEpochMilliseconds(),
         )
         mutate(
             apply = { list -> list.filterNot { it.id == session.id } },
             call = { url, profile -> api.setArchived(url, session.id, !session.archived, profile) },
-            onSuccess = { _state.update { it.copy(undo = undo) } },
+            // Not when the list moved on (another profile, gateway or filter) while the gateway answered.
+            onSuccess = { if (undo != null && isCurrent(undo)) _state.update { it.copy(undo = undo) } },
         )
     }
 
@@ -273,13 +303,22 @@ class SessionsViewModel(
     fun undoArchive() {
         val undo = _state.value.undo ?: return
         _state.update { it.copy(undo = null) }
+        if (!isCurrent(undo)) return
         val session = undo.session
+        // A reload that started before the undo would bring back the list without the row.
+        loadJob?.cancel()
+        val sameSearch = query.text.toString() == undo.query
         mutate(
             apply = { list -> if (list.any { it.id == session.id }) list else list.withRowAt(session, undo.index) },
-            applySearch = { list -> if (undo.searchIndex < 0 || list.any { it.id == session.id }) list else list.withRowAt(session, undo.searchIndex) },
+            applySearch = { list ->
+                if (!sameSearch || undo.searchIndex < 0 || list.any { it.id == session.id }) list else list.withRowAt(session, undo.searchIndex)
+            },
             call = { url, profile -> api.setArchived(url, session.id, session.archived, profile) },
         )
     }
+
+    private fun isCurrent(undo: ArchiveUndo): Boolean =
+        undo.gateway == gateway?.gatewayUrl && undo.profile == profile && undo.filter == _state.value.filter
 
     fun dismissUndo() = _state.update { it.copy(undo = null) }
 
