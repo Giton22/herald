@@ -131,4 +131,4 @@ without Google services. Otherwise: foreground service holding the WS.
 ## 4. Prior art
 - Official Desktop (Electron/React): `apps/desktop/` — the reference for the remote-gateway flow.
 - Android: hermes android client v1.0.8 (Wi-Fi/Tailscale) — https://p.codekk.com/detail/6a720a32564c0c1097d45dfa
-- iOS: `andyst-dev/hermes-ios` (uses a dashboard mobile bridge `/api/mobile/chat` — **not present upstream**), Hermex (targets hermes-webui).
+- iOS: `andyst-dev/hermes-ios` (uses a dashboard mobile bridge `/api/mobile/chat` — **not present upstream**).

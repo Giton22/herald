@@ -12,7 +12,7 @@ marked. The emulator check of 2026-10-05 is in §11.
   both.
 - Users ask for Bot Mode without Desktop: #105317 (a remote-only client), #113695 (Bot Mode on the web dashboard)
   and #89995 (rooms "from mobile/remote without the desktop app running"). As far as we found, no other Hermes
-  mobile client (Hermex, hermes-android, HermesPilot, hermes-relay) does per-bot rosters. Hermex does hosted rooms.
+  mobile client (hermes-android, HermesPilot, hermes-relay, and others) does per-bot rosters.
 - The worst bug class upstream is a **forked or lost Bot Chat**. In #129518 one install lost a 930-message chat to
   7 forks in one morning; #126272, #130980, #131014 and #122063 are the same class. Phones hit the cold-start race
   more than Desktop does.
@@ -248,7 +248,7 @@ we need.
 - `groups.approve` takes **`once` or `deny` only**. `groups.stop`, `groups.retry`, `groups.rename` and
   `groups.disband` complete the set.
 - No push events. Poll `groups.state` every 2 s while working and every 10 s when idle, and read the log when
-  `latest_seq` moves. This is what Hermex does.
+  `latest_seq` moves.
 - Hosted rounds: round 0 goes to the mentioned members (or everyone); rounds 1–2 go only to members a bot cited.
   At most 10 member messages. No `@user`, no stop-word holds, no clarify.
 - Risk: hosted rooms don't appear in Desktop until #131723 lands.
