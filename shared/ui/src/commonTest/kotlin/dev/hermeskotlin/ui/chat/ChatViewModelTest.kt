@@ -112,6 +112,14 @@ class ChatViewModelTest {
         assertNotSame(first, assertNotNull(host.session.value))
     }
 
+    @Test
+    fun aBotsChatIsRememberedWhereTheChatsListWasTheLaunchProfileIncluded() {
+        // Opened from the launch profile's Chats list: the next launch reads the launch profile's last chat.
+        assertNull(ChatTarget(gateway, "b1", "Side", profile = "side", bot = BotIdentity("side", "Side")).rememberedIn)
+        assertEquals("work", ChatTarget(gateway, "b1", "Side", profile = "side", bot = BotIdentity("side", "Side", chatsProfile = "work")).rememberedIn)
+        assertEquals("work", ChatTarget(gateway, "s1", "Chat", profile = "work").rememberedIn)
+    }
+
     private fun attachment(id: String) = OutgoingAttachment(id, "$id.txt", "text/plain", byteArrayOf(1))
 
     @Test
