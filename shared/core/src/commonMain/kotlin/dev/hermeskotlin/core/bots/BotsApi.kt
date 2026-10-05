@@ -109,9 +109,20 @@ class BotsApi(private val connection: GatewayConnection) : BotChatBackend {
             timeoutMs = SLOW_MS,
         )
         updateMeta(draft.profile, draft.look() + mapOf("created" to JsonPrimitive(currentTimeMillis())))
-        val check = runCatching { client.request("setup.runtime_check", buildJsonObject { put("profile", draft.profile) }) as? JsonObject }.getOrNull()
-        val ok = (check?.get("ok") as? JsonPrimitive)?.booleanOrNull != false
-        return BotCreated(draft.profile, readyToChat = ok, problem = (check?.get("error") as? JsonPrimitive)?.contentOrNull)
+        val check = runCatching { runtimeCheck(draft.profile) }.getOrNull()
+        return BotCreated(draft.profile, readyToChat = check?.ok != false, problem = check?.error)
+    }
+
+    /**
+     * Whether [profile]'s model can be served now (`setup.runtime_check`, the resolver a new session uses).
+     * Never an RPC error on the gateway's side: an unknown profile or a refused key is `ok: false`.
+     */
+    suspend fun runtimeCheck(profile: String): RuntimeCheck {
+        val reply = client().request("setup.runtime_check", buildJsonObject { put("profile", profile) }) as? JsonObject
+        return RuntimeCheck(
+            ok = (reply?.get("ok") as? JsonPrimitive)?.booleanOrNull != false,
+            error = (reply?.get("error") as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() },
+        )
     }
 
     /**

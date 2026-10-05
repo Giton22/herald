@@ -48,12 +48,15 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageSquarePlus
 import com.composables.icons.lucide.Pin
 import com.composables.icons.lucide.PinOff
+import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.RotateCcw
+import com.composables.icons.lucide.TriangleAlert
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import com.composeunstyled.theme.rememberColoredIndication
 import dev.hermeskotlin.core.bots.Bot
+import dev.hermeskotlin.core.bots.BotTrouble
 import dev.hermeskotlin.core.bots.lastActivity
 import dev.hermeskotlin.core.bots.rosterPreview
 import dev.hermeskotlin.core.bots.showsPicture
@@ -79,6 +82,7 @@ import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.designsystem.warning
 import dev.hermeskotlin.ui.components.relativeTime
 import dev.hermeskotlin.ui.sessions.ListNotice
 import dev.hermeskotlin.ui.sessions.ListSpinner
@@ -105,6 +109,9 @@ interface BotActions {
 
     /** Delete the bot's profile for good; asked about first. */
     fun delete(bot: Bot)
+
+    /** Ask the gateway again whether the bot can work, e.g. after fixing its keys elsewhere. */
+    fun checkAgain(bot: Bot)
 }
 
 /**
@@ -123,6 +130,8 @@ fun BotsRoster(
     actions: BotActions,
     onRetry: () -> Unit,
     onDismissNotice: () -> Unit,
+    /** Bots that can't work until something is fixed, by profile. */
+    troubles: Map<String, BotTrouble> = emptyMap(),
 ) {
     var hiddenOpen by remember { mutableStateOf(false) }
     var startOver by remember { mutableStateOf<Bot?>(null) }
@@ -142,6 +151,7 @@ fun BotsRoster(
             opening = state.opening == bot.name,
             hidden = hidden,
             showHandle = bot.label.lowercase() in sameName,
+            trouble = troubles[bot.name],
             actions = actions,
             onStartOver = { startOver = bot },
             onDelete = { deleting = bot },
@@ -235,6 +245,7 @@ private fun BotRow(
     opening: Boolean,
     hidden: Boolean,
     showHandle: Boolean,
+    trouble: BotTrouble?,
     actions: BotActions,
     onStartOver: () -> Unit,
     onDelete: () -> Unit,
@@ -250,6 +261,7 @@ private fun BotRow(
         onExpandedChange = { menuOpen = it },
         items = {
             fun act(block: () -> Unit) = { menuOpen = false; block() }
+            if (trouble != null) MenuAction("Check again", Lucide.RefreshCw, act { actions.checkAgain(bot) })
             MenuAction(if (pinned) "Unpin" else "Pin to top", if (pinned) Lucide.PinOff else Lucide.Pin, act { actions.setPinned(bot, !pinned) })
             MenuAction(if (hidden) "Unhide" else "Hide", if (hidden) Lucide.Eye else Lucide.EyeOff, act { actions.setHidden(bot, !hidden) })
             if (recent != null) MenuAction("Open recent session", Lucide.History, act { actions.openRecent(bot) })
@@ -309,6 +321,14 @@ private fun BotRow(
                             Text("@${bot.name}", style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
                         }
                         if (unread) Box(Modifier.size(7.dp).background(Theme[colors][accent], CircleShape))
+                        if (trouble != null) {
+                            UnstyledIcon(
+                                Lucide.TriangleAlert,
+                                contentDescription = "Needs attention",
+                                tint = Theme[colors][warning],
+                                modifier = Modifier.size(14.dp),
+                            )
+                        }
                     }
                     when {
                         opening -> Spinner(Modifier.size(14.dp))
@@ -319,6 +339,8 @@ private fun BotRow(
                 val (line, italic) = when {
                     thinking -> "Thinking…" to false
                     working -> "Working…" to false
+                    // What's wrong outranks the last line: a phone has no hover to say it.
+                    trouble != null -> trouble.problem.hint to false
                     preview?.fromBot != null -> "${preview.fromBot}: ${preview.text}" to true
                     preview != null -> preview.text to false
                     else -> (bot.description?.takeIf { it.isNotBlank() } ?: "Say hello") to false
@@ -326,7 +348,11 @@ private fun BotRow(
                 Text(
                     line,
                     style = Theme[typography][bodySmall].copy(fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal),
-                    color = if (working || thinking) Theme[colors][success] else Theme[colors][textSecondary],
+                    color = when {
+                        working || thinking -> Theme[colors][success]
+                        trouble != null -> Theme[colors][warning]
+                        else -> Theme[colors][textSecondary]
+                    },
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )

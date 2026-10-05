@@ -182,6 +182,7 @@ fun SessionsSidebar(
     val mode by bots.mode.collectAsStateWithLifecycle()
     val botsState by bots.state.collectAsStateWithLifecycle()
     val avatars by bots.avatars.collectAsStateWithLifecycle()
+    val troubles by bots.troubles.collectAsStateWithLifecycle()
     LaunchedEffect(gateway) { bots.bind(gateway.gatewayUrl) }
     LaunchedEffect(visible) { bots.setVisible(visible) }
     LaunchedEffect(selectedId) { bots.setOpenSession(selectedId) }
@@ -322,10 +323,12 @@ fun SessionsSidebar(
                                 override fun edit(bot: Bot) = onEditBot(bot)
                                 override fun duplicate(bot: Bot) = bots.duplicate(bot)
                                 override fun delete(bot: Bot) = bots.delete(bot) { onBotDeleted(bot) }
+                                override fun checkAgain(bot: Bot) = bots.checkAgain(bot)
                             }
                         },
                         onRetry = bots::refresh,
                         onDismissNotice = bots::dismissNotice,
+                        troubles = troubles,
                     )
                     searchOpen && searchResults == null -> Unit
                     searchResults != null -> when {

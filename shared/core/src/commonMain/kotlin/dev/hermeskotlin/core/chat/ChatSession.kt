@@ -63,7 +63,8 @@ class ChatSession(
     private val connection: GatewayConnection,
     private val sessions: SessionsApi,
     private val scope: CoroutineScope,
-    private val profile: String? = null,
+    /** The profile the chat runs in; null for the gateway's launch profile. */
+    val profile: String? = null,
     /** Where flagged tool output is remembered, since the transcript forgets it. */
     private val risks: ToolRiskStore? = null,
     /** Dates what this device sends and sees finish; live events carry no time of their own. */

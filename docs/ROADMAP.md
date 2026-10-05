@@ -196,7 +196,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] "Open elsewhere" (4090 `SESSION_NOT_OWNED`, and the gateway's chat cap) as its own state above the composer, with Send again, in any chat
 - [x] Roster: long-press menu (Pin, Hide with a "Hidden" section, Open recent session, New chat with this bot, Start fresh), Thinking/Working, previews that name the bot that wrote, `@handle` for same names, bot face in the chat header; refresh on `sessions.changed` (bots' chats watched) with a 30 s fallback
 - [x] Start fresh: archive the Bot Chat (kept, retired) and begin an empty one, from the roster or the chat menu; the open chat follows a bot whose chat was started over elsewhere
-- [ ] ⚠ attention badge for sign-in, quota or setup failures
+- [x] ⚠ attention badge for sign-in, quota or setup failures: each bot's `setup.runtime_check` once per connection, plus its failed turns and failed deliveries to it seen while a chat is open (passing failures like rate limits never count); the hint replaces the row's last line, Check again in its menu
 - [x] New bot (the "+" by Bots): face (shape and colour), name → profile id as Desktop makes it, title, description, optional SOUL (else Desktop's generated persona, without the messaging section the gateway injects); `profiles.create` cloning the default's configuration with shared keys, look in `ui_meta`, `setup.runtime_check`, then its Bot Chat with the intro
 - [x] Edit a bot (face, title, description, SOUL) sending only what changed; Duplicate (`clone_from`, look copied, "(copy)"); Delete (`DELETE /api/profiles/{name}`, asked first, not for the default)
 - [ ] Avatar pictures (upload, `image.generate`), Desktop's blob faces, model picker per bot
