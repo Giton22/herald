@@ -287,7 +287,14 @@ class ChatViewModel(
     }
 
     fun open(target: ChatTarget) {
-        if (this.target == target) return
+        if (this.target == target) {
+            // An expired session or sign-out closes the host's chat; the same chat reopened after signing
+            // back in needs a fresh session, not the stopped one this view model still holds.
+            if (session.value !== host.session.value) {
+                session.value = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title, target.profile)
+            }
+            return
+        }
         stashDraft()
         this.target = target
         // A voice chat belongs to the chat it started in.

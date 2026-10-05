@@ -135,4 +135,15 @@ class SessionsViewModelTest {
         vm.bind(gateway)
         assertTrue(vm.state.first { it.sessionExpired }.sessionExpired)
     }
+
+    @Test
+    fun consumingTheExpiryFlagClearsItForTheNextMount() = runTest(dispatcher) {
+        val vm = viewModel(listStatus = HttpStatusCode.Unauthorized)
+        vm.bind(gateway)
+        assertTrue(vm.state.first { it.sessionExpired }.sessionExpired)
+
+        vm.consumeSessionExpired()
+
+        assertFalse(vm.state.value.sessionExpired)
+    }
 }
