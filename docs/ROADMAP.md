@@ -67,7 +67,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Newline-delimited JSON-RPC 2.0: requests, responses, notifications
 - [x] Wait for `gateway.ready`, then send `client.capabilities {server_requests: true}`
 - [x] Handle server→client requests (`srq-<n>`) and answer them with the matching id (approval, clarify, sudo, secret)
-- [x] Methods the app can't show get `-32601` right away so the agent never stalls; window-owned ones (`preview.*`, `terminal.read`, `window.read`, `tour`) get the `4404` decline when the gateway counts declines (`client.capabilities` → `declines_not_shown`), so a Desktop window showing the chat can still answer
+- [x] Methods the app can't show (`preview.*`, `terminal.read`, `window.read`, `tour`, `vault.*`) get the `4404` decline when the gateway counts declines (`client.capabilities` → `declines_not_shown`), so Desktop can still answer them and the agent stops waiting once every client declined; never `-32601`, which would settle them for Desktop too
 - [x] `gateway.ping` keepalive every 15 s, 45 s inbound deadline
 - [x] Automatic reconnect with backoff (fresh ticket each time)
 - [x] Re-attach (`session.resume`) and refetch the transcript after a reconnect; rebuild a running turn from `inflight`
