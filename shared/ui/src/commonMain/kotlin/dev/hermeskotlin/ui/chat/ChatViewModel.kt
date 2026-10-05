@@ -385,8 +385,9 @@ class ChatViewModel(
      */
     private fun takeDraft(draft: ComposeDraft) {
         if (target?.storedSessionId == null) draft.text?.takeIf { it.isNotBlank() }?.let(composer::setTextAndPlaceCursorAtEnd)
-        if (draft.attachments.isNotEmpty()) addAttachments(draft.attachments)
         draft.notice?.let(::showAttachmentError)
+        // After the notice: when the files overfill a tray that already held some, the tray limit is what to tell.
+        if (draft.attachments.isNotEmpty()) addAttachments(draft.attachments)
         if (draft.dictate) viewModelScope.launch { _requests.send(ChatRequest.StartDictation) }
     }
 

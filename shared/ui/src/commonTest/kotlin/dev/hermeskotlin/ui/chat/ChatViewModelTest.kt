@@ -219,6 +219,21 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun aShareThatOverfillsTheBotChatsTraySaysSo() = runTest(dispatcher) {
+        val (vm, _) = viewModel()
+        vm.open(ChatTarget(gateway, "b1", "Scribe", profile = "scribe", bot = scribe))
+        vm.addAttachments((1..3).map { attachment("old$it") })
+        val shared = (1..OutgoingAttachment.MAX_COUNT).map { attachment("f$it") }
+
+        // The share sheet sent more files than fit, and the tray already holds some.
+        vm.open(ChatTarget(gateway, "b1", "Scribe", profile = "scribe", bot = scribe, draft = ComposeDraft(attachments = shared, notice = "Only the first 10 files were attached.")))
+
+        assertEquals(OutgoingAttachment.MAX_COUNT, vm.attachments.value.size)
+        // Not "the first 10 were attached": only 7 of them were.
+        assertEquals("Up to ${OutgoingAttachment.MAX_COUNT} attachments per message.", vm.attachmentError.value)
+    }
+
+    @Test
     fun sharedFilesStopAtTheTrayLimit() = runTest(dispatcher) {
         val (vm, _) = viewModel()
         val many = (1..OutgoingAttachment.MAX_COUNT + 2).map { attachment("f$it") }
