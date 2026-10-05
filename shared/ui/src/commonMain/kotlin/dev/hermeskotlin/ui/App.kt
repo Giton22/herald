@@ -34,6 +34,9 @@ import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.SidebarLayout
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.components.rememberSidebarState
+import dev.hermeskotlin.ui.bots.BotFaces
+import dev.hermeskotlin.ui.bots.BotsViewModel
+import dev.hermeskotlin.ui.bots.LocalBotFaces
 import dev.hermeskotlin.ui.chat.ChatScreen
 import dev.hermeskotlin.ui.chat.ChatViewModel
 import dev.hermeskotlin.ui.connect.ConnectScreen
@@ -122,6 +125,10 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
     val chatsProfile by app.chatsProfile.collectAsStateWithLifecycle()
+    val bots: BotsViewModel = koinViewModel()
+    val roster by bots.state.collectAsStateWithLifecycle()
+    val pictures by bots.avatars.collectAsStateWithLifecycle()
+    val faces = remember(roster.bots, pictures) { BotFaces(roster.bots, pictures) }
 
     // The open chat, once it exists on the gateway (a new chat gets its row with the first prompt).
     val openSessionId = chatState.storedSessionId?.takeIf { route.target.storedSessionId != null || chatState.hasConversation }
@@ -168,15 +175,17 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
             )
         },
     ) {
-        ChatScreen(
-            target = route.target,
-            onOpenSidebar = { scope.launch { sidebar.toggle() } },
-            onNewChat = app::newChat,
-            onOpenMenu = openSessionId?.let { { menuOpen = true } },
-            onOpenChat = { id, title -> app.openSession(id, title ?: "Untitled session") },
-            onSwitchProfile = app::switchProfile,
-            viewModel = chat,
-        )
+        CompositionLocalProvider(LocalBotFaces provides faces) {
+            ChatScreen(
+                target = route.target,
+                onOpenSidebar = { scope.launch { sidebar.toggle() } },
+                onNewChat = app::newChat,
+                onOpenMenu = openSessionId?.let { { menuOpen = true } },
+                onOpenChat = { id, title -> app.openSession(id, title ?: "Untitled session") },
+                onSwitchProfile = app::switchProfile,
+                viewModel = chat,
+            )
+        }
     }
 
     ChatMenu(

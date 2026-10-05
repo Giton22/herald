@@ -1,6 +1,7 @@
 package dev.hermeskotlin.ui.chat
 
 import dev.hermeskotlin.core.chat.ChatMessage
+import dev.hermeskotlin.core.chat.TranscriptEvent
 
 /** The conversation as Markdown: each prompt and reply under its speaker, attachments listed by name. */
 internal fun transcriptMarkdown(title: String, messages: List<ChatMessage>): String = buildString {
@@ -19,6 +20,12 @@ internal fun transcriptMarkdown(title: String, messages: List<ChatMessage>): Str
                 appendLine("## Hermes")
                 appendLine()
                 appendLine(message.text.trim())
+            }
+            is ChatMessage.Event -> (message.event as? TranscriptEvent.FromBot)?.let { from ->
+                appendLine()
+                appendLine("## ${from.sender} (bot)")
+                appendLine()
+                appendLine(from.body.trim())
             }
             // Command output never reached the transcript; an export matches what the gateway stored.
             is ChatMessage.Command, is ChatMessage.Notice -> Unit

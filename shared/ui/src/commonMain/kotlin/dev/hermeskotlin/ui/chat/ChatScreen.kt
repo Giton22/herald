@@ -126,8 +126,7 @@ import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.ListEnd
 import com.composables.icons.lucide.Info
-import com.composables.icons.lucide.Bot
-import dev.hermeskotlin.core.chat.AgentMessage
+import dev.hermeskotlin.core.chat.MESSAGE_AGENT_TOOL
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PanelLeft
 import com.composables.icons.lucide.Pencil
@@ -843,28 +842,28 @@ private fun Messages(
         ) {
             items(messages, key = { it.key }) { message ->
                 when (message) {
-                    is ChatMessage.User -> {
-                        // Another bot's message lands as a user turn; it's theirs, not the user's.
-                        val fromAgent = remember(message.text) { AgentMessage.parse(message.text) }
-                        if (fromAgent != null) {
-                            AgentNote(fromAgent)
-                        } else {
-                            UserBubble(
+                    is ChatMessage.User -> UserBubble(
+                        message,
+                        actions,
+                        connected,
+                        // Not while the prompt is still on its way or its delivery is in doubt.
+                        onEdit = ask(MessageChange.EditLastPrompt, message.key)
+                            .takeIf { message.key == lastPrompt && !message.pending && message.check == null },
+                        onBranch = ask(MessageChange.Branch, message.key).takeIf { !message.pending && message.check == null },
+                    )
+                    is ChatMessage.Assistant -> {
+                        val reply = @Composable {
+                            AssistantReply(
                                 message,
-                                actions,
-                                connected,
-                                // Not while the prompt is still on its way or its delivery is in doubt.
-                                onEdit = ask(MessageChange.EditLastPrompt, message.key)
-                                    .takeIf { message.key == lastPrompt && !message.pending && message.check == null },
-                                onBranch = ask(MessageChange.Branch, message.key).takeIf { !message.pending && message.check == null },
+                                onBranch = ask(MessageChange.Branch, message.key),
+                                last = message.key == lastReply,
                             )
                         }
+                        // An answer to another bot's message folds under it; never while it's still being written.
+                        val to = message.repliedTo
+                        if (to != null && !message.streaming) RepliedToFold(to, reply) else reply()
                     }
-                    is ChatMessage.Assistant -> AssistantReply(
-                        message,
-                        onBranch = ask(MessageChange.Branch, message.key),
-                        last = message.key == lastReply,
-                    )
+                    is ChatMessage.Event -> TranscriptEventRow(message.event)
                     is ChatMessage.Command -> CommandOutput(message)
                     is ChatMessage.Notice -> NoticeLine(message)
                 }
@@ -1006,6 +1005,7 @@ private fun ChatMessage.contentSize(): Int = when (this) {
     is ChatMessage.Assistant -> text.length + reasoning.length + tools.size
     is ChatMessage.Command -> output.length
     is ChatMessage.Notice -> text.length
+    is ChatMessage.Event -> event.hashCode()
 }
 
 /** Tells apart the ways the link can be down: none, being re-made, or needing a new sign-in. */
@@ -1203,6 +1203,8 @@ private fun AssistantReply(
         if (showTools) Tools(message.tools, message.key)
         // Shown whatever the tool-activity setting: the work happens out of sight, in other agents.
         message.tools.filter { it.name == "delegate_task" }.forEach { DelegationCard(it) }
+        // Messages to other bots, said whatever the tool-activity setting: they're part of the conversation.
+        message.tools.filter { it.name == MESSAGE_AGENT_TOOL }.forEach { MessagedLine(it) }
         if (text.isNotBlank()) {
             // Named the way the agent will know it: the newest reply, or an older one by its first words.
             val source = remember(message.key, text, last) {
@@ -1262,37 +1264,6 @@ private fun NoticeLine(message: ChatMessage.Notice) {
     ) {
         UnstyledIcon(Lucide.Info, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.padding(top = 2.dp).size(13.dp))
         Text(message.text, style = Theme[typography][caption], color = Theme[colors][textTertiary])
-    }
-}
-
-/**
- * A message from another bot (Bot Mode's `message_agent`, a routine or `hermes peer`): the sender's name
- * over their words, in an outlined card at the left, Desktop's attributed agent note.
- */
-@Composable
-private fun AgentNote(message: AgentMessage) {
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .background(Theme[colors][surface], shape)
-            .border(1.dp, Theme[colors][stroke], shape)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            UnstyledIcon(Lucide.Bot, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(14.dp))
-            Text(
-                message.sender,
-                style = Theme[typography][bodySmall].copy(fontWeight = FontWeight.SemiBold),
-                color = Theme[colors][textColor],
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
-            )
-            Text("agent message", style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
-        }
-        if (message.body.isNotBlank()) MarkdownText(message.body)
     }
 }
 
@@ -1494,6 +1465,7 @@ private fun String.toolVerb(): String = when (this) {
     "web_search", "search" -> "Searching the web"
     "web_extract", "browser", "fetch" -> "Reading a web page"
     "delegate_task" -> "Working with subagents"
+    MESSAGE_AGENT_TOOL -> "Messaging another bot"
     else -> "Using ${replace('_', ' ')}"
 }
 

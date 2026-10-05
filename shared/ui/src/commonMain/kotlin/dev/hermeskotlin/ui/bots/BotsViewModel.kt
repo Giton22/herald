@@ -90,6 +90,13 @@ class BotsViewModel(
                 }
             }
         }
+        // Chats name bots too (their messages to each other), so the roster is read once per connection
+        // even while the Chats side shows.
+        viewModelScope.launch {
+            combine(gateway, connection.state) { url, conn -> url != null && conn is ConnectionState.Connected }
+                .distinctUntilChanged()
+                .collect { connected -> if (connected && _state.value.bots.isEmpty()) refreshNow() }
+        }
     }
 
     fun bind(url: GatewayUrl) {
