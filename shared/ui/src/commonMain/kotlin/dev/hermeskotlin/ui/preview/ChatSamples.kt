@@ -4,6 +4,8 @@ import androidx.compose.foundation.text.input.TextFieldState
 import dev.hermeskotlin.core.chat.ApprovalChoice
 import dev.hermeskotlin.core.chat.Attachment
 import dev.hermeskotlin.core.chat.ChatMessage
+import dev.hermeskotlin.core.chat.GatewayNotice
+import dev.hermeskotlin.core.projects.Project
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.DelegatedTask
 import dev.hermeskotlin.core.chat.InputRequest
@@ -104,6 +106,20 @@ internal object ChatSamples {
 
     /** A finished turn: reasoning, tools, a diff and a Markdown answer. */
     val reply: ChatState = connected.copy(messages = listOf(ask, answer))
+
+    /** The finished turn with the gateway's notices: credits, and the agent still starting. */
+    val notices: ChatState = reply.copy(
+        notices = listOf(
+            GatewayNotice("credits.depleted", "Credit access paused · run /topup to top up", GatewayNotice.Level.Error, GatewayNotice.Kind.Sticky),
+            GatewayNotice("credits.usage", "80% of this month's credit used", GatewayNotice.Level.Warning, GatewayNotice.Kind.Sticky),
+            GatewayNotice(
+                "agent-build-slow",
+                "Still starting the agent (tool discovery / model setup) — your message will be sent as soon as it's ready.",
+                GatewayNotice.Level.Info,
+                GatewayNotice.Kind.Agent,
+            ),
+        ),
+    )
 
     /** Two prompts that lost their reply: one the transcript couldn't settle, one it found missing. */
     val undelivered: ChatState = connected.copy(
@@ -310,6 +326,13 @@ internal object ChatSamples {
 
     /** Chats in [sessions] holding unsent text. */
     val sessionDrafts = setOf("s5")
+
+    /** Projects the sample chats sit in: two git roots and Home. */
+    val projects = listOf(
+        Project("/srv/backup", "backup", "/srv/backup", sessionCount = 6, isAuto = true),
+        Project("p-site", "website", "/srv/site", sessionCount = 3),
+        Project("__no_project__", "Home", null, sessionCount = 9, isNoProject = true),
+    )
 
     /** Two comments on [reply]'s answer, waiting in the composer with their notes. */
     fun comments(): List<PendingComment> {

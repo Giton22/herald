@@ -36,6 +36,7 @@ import dev.hermeskotlin.core.pet.PetApi
 import dev.hermeskotlin.core.bots.BotChats
 import dev.hermeskotlin.core.bots.BotHealth
 import dev.hermeskotlin.core.bots.BotsApi
+import dev.hermeskotlin.core.projects.ProjectsApi
 import dev.hermeskotlin.core.bots.SidebarModeStore
 import dev.hermeskotlin.core.rooms.RoomsApi
 import dev.hermeskotlin.core.voice.AudioApi
@@ -91,6 +92,7 @@ val coreModule = module {
     single { SlashApi(get()) }
     single { PetApi(get()) }
     single { BotsApi(get()) }
+    single { ProjectsApi(get()) }
     single { BotChats(get<BotsApi>()) }
     single { RoomsApi(get()) }
     single {

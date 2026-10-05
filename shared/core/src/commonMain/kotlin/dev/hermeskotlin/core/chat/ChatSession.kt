@@ -69,6 +69,8 @@ class ChatSession(
     private val risks: ToolRiskStore? = null,
     /** Dates what this device sends and sees finish; live events carry no time of their own. */
     private val clock: Clock = Clock.System,
+    /** For a new chat: the working folder it starts in (a project's), or null for the profile's default. */
+    private val cwd: String? = null,
 ) {
     private fun nowSeconds(): Double = clock.now().toEpochMilliseconds() / 1000.0
 
@@ -1215,6 +1217,9 @@ class ChatSession(
 
     fun dismissError() = _state.update { it.copy(error = null, refused = null) }
 
+    /** Hides a gateway notice on this phone (its ×). The gateway isn't told. */
+    fun dismissNotice(key: String) = _state.update { it.withoutNotice(key) }
+
     /** Shows a title set elsewhere (a REST rename) without waiting for the gateway to echo it. */
     fun showTitle(title: String?) = _state.update { it.copy(title = title) }
 
@@ -1331,7 +1336,7 @@ class ChatSession(
                 if (streamed != null && _state.value.running) {
                     _state.update { it.withInflight(streamed) }
                 } else if (!_state.value.running) {
-                    _state.update { it.withoutStaleReply() }
+                    _state.update { it.withoutStaleReply().withoutAgentNotices() }
                 }
             }
             val waiting = held.orEmpty()
@@ -1343,8 +1348,18 @@ class ChatSession(
     private fun apply(event: GatewayEvent) {
         event.seq?.let { lastSeq = it }
         val now = nowSeconds()
+        val noticesBefore = _state.value.notices
         _state.update { it.reduce(event, now) }
         when (event.type) {
+            // Timed here, not on screen, so it ends on time even while the chat isn't showing. A notice that
+            // replaced this one by the time it runs out has its own timer.
+            "notification.show" -> (_state.value.notices - noticesBefore.toSet()).forEach { notice ->
+                val ttl = notice.ttlMillis?.takeIf { notice.kind == GatewayNotice.Kind.Timed } ?: return@forEach
+                scope.launch {
+                    delay(ttl)
+                    _state.update { state -> if (notice in state.notices) state.withoutNotice(notice.key) else state }
+                }
+            }
             "tool.output_risk" -> flaggedOutput(event.payload as? JsonObject)?.let { (id, risk) ->
                 risks?.let { scope.launch { it.remember(id, risk) } }
             }
@@ -1577,6 +1592,8 @@ class ChatSession(
                 inputRequests = open.plusNew(claimUnclaimed(runtimeId)),
                 keySeq = state.keySeq + 1,
             ).withInfo(result["info"] as? JsonObject).withTodos(TodoList.parse(result["todo_state"] as? JsonObject))
+                // Nothing runs, so the agent is built; its clear may have gone while this phone was away.
+                .let { if (running || resumable) it else it.withoutAgentNotices() }
         }
         if (catchingUp) scope.launch { catchUp(client, runtimeId) }
         runtimeId
@@ -1596,6 +1613,7 @@ class ChatSession(
                 profile?.let { put("profile", it) }
                 put("source", CLIENT_SOURCE)
                 put("cols", TERMINAL_COLUMNS)
+                cwd?.let { put("cwd", it) }
                 // Picked before the first send; without them the profile defaults apply.
                 if (picks.model != null && picks.provider != null) {
                     put("model", picks.model)
@@ -1611,12 +1629,16 @@ class ChatSession(
             seqRuntime = runtimeId
             seqEpoch = readyEpoch(client)
         }
+        // The gateway takes a folder that's gone without an error and runs the chat in its own folder instead.
+        val ranIn = (result["info"] as? JsonObject).string("cwd")
+        val movedFrom = cwd?.takeIf { ranIn != null && ranIn.trimEnd('/', '\\') != it.trimEnd('/', '\\') }
         _state.update {
             it.copy(
                 attachment = Attachment.Attached(runtimeId),
                 storedSessionId = result.string("stored_session_id") ?: it.storedSessionId,
                 historyLoaded = true,
                 inputRequests = it.inputRequests.plusNew(claimUnclaimed(runtimeId)),
+                error = if (movedFrom != null) "The project's folder $movedFrom wasn't found, so this chat runs in $ranIn." else it.error,
             ).withInfo(result["info"] as? JsonObject)
         }
         runtimeId

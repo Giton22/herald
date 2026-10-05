@@ -42,6 +42,22 @@ class SettingsStoreTest {
     }
 
     @Test
+    fun theAccentIsRememberedAndAnUnknownOneKeepsTheOtherSettings() = runTest {
+        val disk = InMemoryKeyValueStore()
+        val first = SettingsStore(disk, backgroundScope)
+        assertEquals(DEFAULT_ACCENT, first.settings.filterNotNull().first().accent)
+        first.update { it.copy(accent = "Teal") }
+        advanceUntilIdle()
+        assertEquals("Teal", SettingsStore(disk, backgroundScope).settings.filterNotNull().first().accent)
+
+        // A preset from a newer version is only a name here; the rest still reads.
+        disk.put("settings.v1", """{"theme":"Dark","accent":"Neon"}""")
+        val restored = SettingsStore(disk, backgroundScope).settings.filterNotNull().first()
+        assertEquals(ThemeMode.Dark, restored.theme)
+        assertEquals("Neon", restored.accent)
+    }
+
+    @Test
     fun unreadableStoredSettingsFallBackToDefaults() = runTest {
         val disk = InMemoryKeyValueStore().apply { put("settings.v1", """{"theme":"Neon"}""") }
         assertEquals(AppSettings(), SettingsStore(disk, backgroundScope).settings.filterNotNull().first())

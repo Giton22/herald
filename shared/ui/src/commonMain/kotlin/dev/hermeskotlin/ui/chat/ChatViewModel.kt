@@ -116,7 +116,8 @@ sealed interface ChatRequest {
 /**
  * Identifies what the chat screen shows: a stored session, or a new chat (`storedSessionId == null`),
  * in [profile] (null: the gateway's launch profile). With [bot] it is that bot's permanent chat. A new
- * chat opened from outside (share sheet, shortcut) brings its [draft].
+ * chat opened from outside (share sheet, shortcut) brings its [draft]. A new chat started in a project
+ * runs in that project's folder, [cwd].
  */
 data class ChatTarget(
     val gateway: SavedGateway,
@@ -126,6 +127,7 @@ data class ChatTarget(
     val profile: String? = null,
     val bot: BotIdentity? = null,
     val draft: ComposeDraft? = null,
+    val cwd: String? = null,
 ) {
     /**
      * The profile whose last chat this is, which the next launch reads: a bot's chat counts where the Chats
@@ -352,7 +354,7 @@ class ChatViewModel(
             // An expired session or sign-out closes the host's chat; the same chat reopened after signing
             // back in needs a fresh session, not the stopped one this view model still holds.
             if (session.value !== host.session.value) {
-                session.value = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title, target.profile)
+                session.value = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title, target.profile, target.cwd)
             }
             return
         }
@@ -369,7 +371,7 @@ class ChatViewModel(
         restoreDraft(target, typed)
         target.draft?.let(::takeDraft)
         if (target.storedSessionId == null) viewModelScope.launch { lastChats.set(target.gateway.gatewayUrl, null, target.profile) }
-        session.value = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title, target.profile)
+        session.value = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title, target.profile, target.cwd)
         // The catalog marks the previous chat's model; a new chat must show the profile default instead.
         _picker.update { it.copy(catalog = null, confirm = null) }
         if (connectionState.value is ConnectionState.Connected) {
@@ -968,6 +970,10 @@ class ChatViewModel(
 
     override fun dismissError() {
         session.value?.dismissError()
+    }
+
+    override fun dismissNotice(key: String) {
+        session.value?.dismissNotice(key)
     }
 
     override fun skipSpeech() = voice.skipSpeech()

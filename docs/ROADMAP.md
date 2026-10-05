@@ -6,6 +6,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] implemented
 - [ ] not started
 - 🚧 in progress (written next to the item)
+- ⛔ not planned (written next to the item)
 
 ---
 
@@ -28,7 +29,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [ ] Coil 3 for images
 - [x] Unit tests (Ktor `MockEngine`, coroutines-test)
 - [x] CI on GitHub Actions: unit tests and a debug build on every push
-- [ ] Lint in CI
+- [x] Android lint in CI (`lintDebug`); a baseline holds the old issues, so only new ones fail the build
 - [x] Releases: a `v1.2.3` tag builds a signed APK into a draft GitHub release; the app offers newer releases
 
 ### Design system (`shared/designsystem`)
@@ -42,9 +43,10 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] `MarkdownText` (themed GFM via multiplatform-markdown-renderer core, no Material) and `CopyButton`
 - [x] `Switch` and `SegmentedControl`; a pure black dark scheme (`PureBlack`)
 - [x] The app mark (`HeraldMark`), also the launcher, themed and notification icons
-- [ ] Menu, toast, chat bubble, tool card, approval card
+- [x] `DropdownMenu`, and `Toast` with an action ("Archived · Undo")
+- [ ] Chat bubble, tool card, approval card as design-system components (they live in `shared/ui` for now)
 - [x] Theme picker (system / light / dark) and pure black
-- [ ] Accent color presets
+- [x] Accent color presets (Settings → Appearance → Accent): blue, violet, green, orange, pink and teal, each tuned for light, dark and pure black
 
 ---
 
@@ -219,7 +221,9 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Toolsets on the Capabilities page with their switches and a "needs setup" tag (`GET /api/tools/toolsets`, `PUT /api/tools/toolsets/{name}`)
 - [x] MCP servers on the Capabilities page: switch, and a connection test listing its tools (`/api/mcp/servers`, `…/{name}/enabled`, `…/{name}/test`). Adding servers and OAuth not yet
 - [ ] Config viewer and editor (`config.get`, `config.set`)
-- [ ] Projects and workspaces (`projects.*`)
+- [x] Projects in the chat list (`projects.tree`, `projects.project_sessions`): a chip per project with chats, as Desktop groups them by folder; a new chat started under one runs in its folder (`session.create` `cwd`)
+- [ ] A chat's working folder: show it, and change it with a folder picker (`complete.path`, `session.cwd.set`, `session.workspace.move`)
+- [ ] Create, rename and delete projects (`projects.create`, `projects.update`, `projects.delete`)
 - [x] Insights page in the sidebar, after Desktop's (`GET /api/analytics/usage`): cost, sessions, tokens and cache share over 7/30/90 days, tokens by day (tap a day), top models, tools and skills. `usage.bars` (subscription limits) not yet
 
 ### Notifications & background
@@ -230,10 +234,10 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Answer from the notification: approve/deny, clarify answers, inline reply to a finished turn (each asks for an unlock first)
 - [x] Notification toggles in Settings; permission asked on the first turn
 - [x] Notifications anywhere is the one background mode: it keeps Herald up (quiet notification) and comes back after a reboot or update. Stay connected was removed
-- [ ] Gateway-pushed `notification.show`
+- [x] The gateway's notices (`notification.show`, `notification.clear`): credits and "still starting the agent" show as banners above the composer, one per key, by level; timed ones go by themselves
 - [x] Follow all sessions: approvals, questions and finished replies notify for chats other than the open one, turns started on Desktop or the CLI included. Each chat that `session.active_list` shows running is attached with `session.activate` (never `session.close`, which would end it for every client). Approve, answer and reply from the notification. Needs the socket up: in sight, during a turn, or with Notifications anywhere
 - [x] Notifications anywhere: bot messages reach the phone off the gateway's network, end-to-end encrypted and signed through ntfy, without Google services. The herald-push plugin is installed from Settings in one tap ([protocol](push-protocol.md))
-- [ ] Reply and approve from a push notification when the gateway is out of reach (the `p2g` direction)
+- [ ] Reply and approve from a push notification when the gateway is out of reach (the `p2g` direction) ⛔
 - [ ] UnifiedPush distributor support, so the ntfy app holds the one connection instead of Herald's foreground service
 
 ### Auth & connectivity extras
