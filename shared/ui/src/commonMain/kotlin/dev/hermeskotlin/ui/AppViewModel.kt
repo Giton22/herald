@@ -188,10 +188,13 @@ class AppViewModel(
         _route.value = Route.Chat(ChatTarget(gateway, sessionId, title, profile = currentProfile()))
     }
 
-    /** A new chat in the picked profile; [draft] fills its composer (shared from another app, a shortcut). */
-    fun newChat(draft: ComposeDraft? = null) {
+    /**
+     * A new chat in the picked profile; [draft] fills its composer (shared from another app, a shortcut).
+     * [cwd] is the folder it runs in, when it starts in a project.
+     */
+    fun newChat(draft: ComposeDraft? = null, cwd: String? = null) {
         val gateway = signedInGateway() ?: return
-        _route.value = Route.Chat(newChatTarget(gateway, currentProfile()).copy(draft = draft))
+        _route.value = Route.Chat(newChatTarget(gateway, currentProfile()).copy(draft = draft, cwd = cwd))
     }
 
     /** Opens [bot]'s conversation [storedSessionId] that isn't its Bot Chat, in the bot's profile. */

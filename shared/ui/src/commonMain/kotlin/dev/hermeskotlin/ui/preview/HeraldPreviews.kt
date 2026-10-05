@@ -117,6 +117,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                         userLabel = ChatSamples.USER,
                         statuses = ChatSamples.sessionStatuses,
                         drafts = ChatSamples.sessionDrafts,
+                        projects = ChatSamples.projects,
                     )
                 }
                 PreviewScene.Archived -> Box(Modifier.fillMaxSize()) {

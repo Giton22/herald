@@ -31,9 +31,10 @@ class ChatHost(
 
     /**
      * The session for [storedSessionId] on [gateway] and [profile]: the open one when it is already that
-     * chat, else a fresh one replacing it. A null [storedSessionId] always starts a new chat.
+     * chat, else a fresh one replacing it. A null [storedSessionId] always starts a new chat, in [cwd] when
+     * given (a project's folder).
      */
-    fun open(gateway: GatewayUrl, storedSessionId: String?, title: String?, profile: String? = null): ChatSession {
+    fun open(gateway: GatewayUrl, storedSessionId: String?, title: String?, profile: String? = null, cwd: String? = null): ChatSession {
         val current = _session.value
         if (current != null && storedSessionId != null && this.gateway == gateway && this.profile == profile &&
             current.state.value.storedSessionId == storedSessionId
@@ -45,7 +46,7 @@ class ChatHost(
         this.gateway = gateway
         this.profile = profile
         sessionScope = childScope
-        return ChatSession(gateway, storedSessionId, title, connection, sessions, childScope, profile, risks)
+        return ChatSession(gateway, storedSessionId, title, connection, sessions, childScope, profile, risks, cwd = cwd)
             .also { it.start() }
             .also { _session.value = it }
     }

@@ -69,6 +69,8 @@ class ChatSession(
     private val risks: ToolRiskStore? = null,
     /** Dates what this device sends and sees finish; live events carry no time of their own. */
     private val clock: Clock = Clock.System,
+    /** For a new chat: the working folder it starts in (a project's), or null for the profile's default. */
+    private val cwd: String? = null,
 ) {
     private fun nowSeconds(): Double = clock.now().toEpochMilliseconds() / 1000.0
 
@@ -1611,6 +1613,7 @@ class ChatSession(
                 profile?.let { put("profile", it) }
                 put("source", CLIENT_SOURCE)
                 put("cols", TERMINAL_COLUMNS)
+                cwd?.let { put("cwd", it) }
                 // Picked before the first send; without them the profile defaults apply.
                 if (picks.model != null && picks.provider != null) {
                     put("model", picks.model)
@@ -1626,12 +1629,16 @@ class ChatSession(
             seqRuntime = runtimeId
             seqEpoch = readyEpoch(client)
         }
+        // The gateway takes a folder that's gone without an error and runs the chat in its own folder instead.
+        val ranIn = (result["info"] as? JsonObject).string("cwd")
+        val movedFrom = cwd?.takeIf { ranIn != null && ranIn.trimEnd('/', '\\') != it.trimEnd('/', '\\') }
         _state.update {
             it.copy(
                 attachment = Attachment.Attached(runtimeId),
                 storedSessionId = result.string("stored_session_id") ?: it.storedSessionId,
                 historyLoaded = true,
                 inputRequests = it.inputRequests.plusNew(claimUnclaimed(runtimeId)),
+                error = if (movedFrom != null) "The project's folder $movedFrom wasn't found, so this chat runs in $ranIn." else it.error,
             ).withInfo(result["info"] as? JsonObject)
         }
         runtimeId

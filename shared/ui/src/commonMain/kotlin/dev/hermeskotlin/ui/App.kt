@@ -227,8 +227,8 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                     if (it.id != openSessionId) app.openSession(it.id, it.displayTitle)
                     closeDrawer()
                 },
-                onNewChat = {
-                    app.newChat()
+                onNewChat = { cwd ->
+                    app.newChat(cwd = cwd)
                     closeDrawer()
                 },
                 onDeleted = { if (it.id == openSessionId) app.newChat() },

@@ -21,9 +21,13 @@ import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.profiles.ProfileRoster
 import dev.hermeskotlin.core.profiles.ProfilesApi
+import dev.hermeskotlin.core.projects.Project
+import dev.hermeskotlin.core.projects.ProjectsApi
+import dev.hermeskotlin.core.rpc.RpcException
 import dev.hermeskotlin.core.sessions.SessionListFilter
 import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.core.sessions.SessionsApi
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
@@ -62,7 +66,16 @@ data class SessionsUiState(
     val sessionExpired: Boolean = false,
     /** The last archive or unarchive, which "Undo" can take back for a few seconds. */
     val undo: ArchiveUndo? = null,
-)
+    /** The gateway's projects that have chats; empty when it has none or doesn't know projects. */
+    val projects: List<Project> = emptyList(),
+    /** The project the recent list is narrowed to; null for every chat. */
+    val project: Project? = null,
+    /** [project]'s chats; null while they load (or with no project picked). */
+    val projectSessions: List<SessionSummary>? = null,
+) {
+    /** The recent list as it shows: [project]'s chats, or every loaded chat. */
+    val listed: List<SessionSummary> get() = if (project != null) projectSessions.orEmpty() else sessions
+}
 
 /**
  * [session] as it was before it was archived (or unarchived), where it sat in the list and in the search
@@ -73,6 +86,9 @@ data class ArchiveUndo(
     val session: SessionSummary,
     val index: Int,
     val searchIndex: Int,
+    /** The project the list was narrowed to, and where the row sat in it. */
+    val projectId: String? = null,
+    val projectIndex: Int = -1,
     val gateway: GatewayUrl? = null,
     val profile: String? = null,
     val filter: SessionListFilter = SessionListFilter.Recent,
@@ -112,6 +128,7 @@ class SessionsViewModel(
     attention: AttentionTracker,
     private val seenStore: SeenStore,
     private val drafts: DraftStore,
+    private val projectsApi: ProjectsApi,
 ) : ViewModel() {
 
     /** Stamps an archive's undo offer, so it runs out on time even if the screen goes and comes back. */
@@ -163,7 +180,7 @@ class SessionsViewModel(
     val statuses: StateFlow<Map<String, RowStatus>> = visible.flatMapLatest { shown ->
         if (!shown) return@flatMapLatest emptyFlow()
         combine(_state, waiting, seen, running) { state, waiting, seen, running ->
-            (state.sessions + state.searchResults.orEmpty()).mapNotNull { session ->
+            (state.sessions + state.searchResults.orEmpty() + state.projectSessions.orEmpty()).mapNotNull { session ->
                 RowStatus(waiting[session.id], seen?.isUnread(session) == true, running[session.id] == true)
                     .takeIf { it.needsAttention || it.running }?.let { session.id to it }
             }.toMap()
@@ -173,6 +190,7 @@ class SessionsViewModel(
     /** The list is on screen (the sidebar open or docked), or no longer is. */
     fun setVisible(shown: Boolean) {
         visible.value = shown
+        if (shown && _state.value.filter == SessionListFilter.Recent) loadProjects()
     }
 
     val query = TextFieldState()
@@ -201,6 +219,11 @@ class SessionsViewModel(
         this.profile = profile
         bound.value = gateway.gatewayUrl to profile
         _state.value = SessionsUiState()
+        // The last list's projects mean nothing here; ask afresh.
+        projectsJob?.cancel()
+        projectSessionsJob?.cancel()
+        projectsAskedAt = 0
+        projectsAgain = false
         load(refresh = false)
         if (newGateway) {
             _user.value = null
@@ -227,8 +250,97 @@ class SessionsViewModel(
 
     fun setFilter(filter: SessionListFilter) {
         if (filter == _state.value.filter) return
-        _state.update { SessionsUiState(filter = filter) }
+        // The picked project stays for the way back; the archive isn't split by project.
+        _state.update { SessionsUiState(filter = filter, projects = it.projects, project = it.project, projectSessions = it.projectSessions) }
         load(refresh = false)
+    }
+
+    /** Narrows the recent list to [project]'s chats, or shows every chat again with null. */
+    fun selectProject(project: Project?) {
+        if (project?.id == _state.value.project?.id) return
+        _state.update { it.copy(project = project, projectSessions = null) }
+        loadProjectSessions()
+    }
+
+    private var projectsJob: Job? = null
+    private var projectSessionsJob: Job? = null
+
+    /** When the projects were last asked for (epoch ms), to ask at most every [PROJECTS_EVERY_MS] on changes. */
+    private var projectsAskedAt = 0L
+
+    /** A change came in while the projects were being asked for; ask once more when that answer is in. */
+    private var projectsAgain = false
+
+    /**
+     * The project list, again, since no event says a chat moved between projects. The gateway groups the
+     * newest sessions each time, so this is asked only while the list shows, at most every
+     * [PROJECTS_EVERY_MS] for a change, and at once on connect, on opening the list, or with [force].
+     */
+    private fun loadProjects(force: Boolean = false) {
+        if (connection.state.value !is ConnectionState.Connected) return
+        if (!force && !visible.value && _state.value.projects.isNotEmpty()) return
+        val now = getTimeMillis()
+        if (!force && now - projectsAskedAt < PROJECTS_EVERY_MS) return
+        if (projectsJob?.isActive == true) {
+            projectsAgain = true
+            return
+        }
+        val scope = bound.value
+        projectsAskedAt = now
+        projectsJob = viewModelScope.launch {
+            val projects = try {
+                projectsApi.projects(scope?.second)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: RpcException) {
+                // A gateway that doesn't know projects: no chips. Any other failure keeps what shows.
+                if (e.code == METHOD_NOT_FOUND) emptyList() else null
+            } catch (_: Exception) {
+                null
+            }
+            if (projects != null && bound.value == scope) {
+                // Only worth a filter when some chats are in a project, not all in Home.
+                val shown = projects.takeIf { list -> list.any { !it.isNoProject } }.orEmpty()
+                _state.update { state ->
+                    val picked = state.project?.let { p -> shown.firstOrNull { it.id == p.id } }
+                    state.copy(projects = shown, project = picked, projectSessions = state.projectSessions.takeIf { picked != null })
+                }
+                loadProjectSessions()
+            }
+            if (projectsAgain) {
+                projectsAgain = false
+                loadProjects(force = true)
+            }
+        }
+    }
+
+    private fun loadProjectSessions() {
+        val project = _state.value.project ?: return
+        val scope = bound.value
+        // A newer ask replaces an older one, so a late answer can't bring back a row since archived.
+        projectSessionsJob?.cancel()
+        projectSessionsJob = viewModelScope.launch {
+            val rows = try {
+                projectsApi.sessions(scope?.second, project.id)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update {
+                    if (bound.value == scope && it.project?.id == project.id) {
+                        it.copy(projectSessions = it.projectSessions ?: emptyList(), message = e.message)
+                    } else {
+                        it
+                    }
+                }
+                return@launch
+            }
+            _state.update { state ->
+                if (bound.value != scope || state.project?.id != project.id) return@update state
+                // The project's rows don't say which chats are pinned; the main list (pinned ones included) does.
+                val pinned = state.sessions.filter { it.pinned }.mapTo(HashSet()) { it.id }
+                state.copy(projectSessions = rows.map { if (it.id in pinned) it.copy(pinned = true) else it })
+            }
+        }
     }
 
     fun loadMore() {
@@ -279,12 +391,15 @@ class SessionsViewModel(
         val before = _state.value
         val index = before.sessions.indexOfFirst { it.id == session.id }
         val searchIndex = before.searchResults?.indexOfFirst { it.id == session.id } ?: -1
-        // A chat in neither list (opened from a notification, or from the archive and then this list) is only
+        val projectIndex = before.projectSessions?.indexOfFirst { it.id == session.id } ?: -1
+        // A chat in no list (opened from a notification, or from the archive and then this list) is only
         // a guess as to whether it's archived; undoing that guess could unarchive a chat the user archived.
-        val undo = if (index < 0 && searchIndex < 0) null else ArchiveUndo(
+        val undo = if (index < 0 && searchIndex < 0 && projectIndex < 0) null else ArchiveUndo(
             session = session,
             index = index,
             searchIndex = searchIndex,
+            projectId = before.project?.id,
+            projectIndex = projectIndex,
             gateway = gateway?.gatewayUrl,
             profile = profile,
             filter = before.filter,
@@ -308,10 +423,14 @@ class SessionsViewModel(
         // A reload that started before the undo would bring back the list without the row.
         loadJob?.cancel()
         val sameSearch = query.text.toString() == undo.query
+        val sameProject = _state.value.project?.id == undo.projectId
         mutate(
             apply = { list -> if (list.any { it.id == session.id }) list else list.withRowAt(session, undo.index) },
             applySearch = { list ->
                 if (!sameSearch || undo.searchIndex < 0 || list.any { it.id == session.id }) list else list.withRowAt(session, undo.searchIndex)
+            },
+            applyProject = { list ->
+                if (!sameProject || undo.projectIndex < 0 || list.any { it.id == session.id }) list else list.withRowAt(session, undo.projectIndex)
             },
             call = { url, profile -> api.setArchived(url, session.id, session.archived, profile) },
         )
@@ -332,17 +451,24 @@ class SessionsViewModel(
         },
     )
 
-    /** Optimistic row update: apply locally (list and search results), call the server, roll back on failure. */
+    /** Optimistic row update: apply locally (list, search results, project), call the server, roll back on failure. */
     private fun mutate(
         apply: (List<SessionSummary>) -> List<SessionSummary>,
         call: suspend (GatewayUrl, String?) -> ApiResult<Unit>,
         applySearch: (List<SessionSummary>) -> List<SessionSummary> = apply,
+        applyProject: (List<SessionSummary>) -> List<SessionSummary> = apply,
         onSuccess: () -> Unit = {},
     ) {
         val url = gateway?.gatewayUrl ?: return
         val profile = profile
         val before = _state.value
-        _state.update { it.copy(sessions = apply(it.sessions), searchResults = it.searchResults?.let(applySearch)) }
+        _state.update {
+            it.copy(
+                sessions = apply(it.sessions),
+                searchResults = it.searchResults?.let(applySearch),
+                projectSessions = it.projectSessions?.let(applyProject),
+            )
+        }
         viewModelScope.launch {
             val result = call(url, profile)
             if (result is ApiResult.Success) {
@@ -352,6 +478,7 @@ class SessionsViewModel(
                     it.copy(
                         sessions = before.sessions,
                         searchResults = before.searchResults,
+                        projectSessions = before.projectSessions.takeIf { _ -> it.project?.id == before.project?.id } ?: it.projectSessions,
                         message = result.errorMessage,
                         sessionExpired = result.isExpired,
                     )
@@ -366,6 +493,8 @@ class SessionsViewModel(
         // This may cancel a page fetch mid-flight, which would otherwise leave its spinner up for good.
         loadJob?.cancel()
         _state.update { (if (refresh) it.copy(refreshing = true) else it.copy(loading = it.sessions.isEmpty())).copy(loadingMore = false) }
+        // Pull to refresh asks at once; a change from the gateway waits its turn.
+        if (filter == SessionListFilter.Recent) loadProjects(force = refresh)
         loadJob = viewModelScope.launch {
             // Keep however many rows are already showing so a background refetch doesn't truncate the list.
             val limit = _state.value.sessions.size.coerceIn(SessionsApi.PAGE_SIZE, 100)
@@ -400,6 +529,12 @@ class SessionsViewModel(
                 .filter { it.type in REFRESH_EVENTS }
                 .debounce(400)
                 .collect { load(refresh = false) }
+        }
+        // Projects come over the socket, which may connect after the list (REST) has loaded.
+        viewModelScope.launch {
+            connection.state.map { it is ConnectionState.Connected }.distinctUntilChanged().filter { it }.collect {
+                if (gateway != null && _state.value.filter == SessionListFilter.Recent) loadProjects(force = true)
+            }
         }
         viewModelScope.launch {
             var wasConnected = true
@@ -447,7 +582,15 @@ class SessionsViewModel(
 
         /** Brief gaps (a screen rotating) keep the statuses collected. */
         const val STOP_AFTER_MS = 5_000L
+
+        /** How often a change on the gateway may ask for the projects again; a turn changes sessions every 2 s. */
+        const val PROJECTS_EVERY_MS = 30_000L
+
+        /** JSON-RPC's "method not found": a gateway from before projects. */
+        const val METHOD_NOT_FOUND = -32601
     }
+
+    private fun getTimeMillis(): Long = Clock.System.now().toEpochMilliseconds()
 }
 
 private val ApiResult<*>.isExpired: Boolean get() = this == ApiResult.SessionExpired

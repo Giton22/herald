@@ -1,6 +1,7 @@
 package dev.hermeskotlin.ui.sessions
 
 import dev.hermeskotlin.core.auth.AuthApi
+import dev.hermeskotlin.core.projects.ProjectsApi
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.chat.AttentionTracker
 import dev.hermeskotlin.core.chat.ChatHost
@@ -95,12 +96,12 @@ class SessionsViewModelTest {
         val attention = AttentionTracker(connection, ChatHost(connection, SessionsApi(client), scope), ActiveSessions(connection, scope), scope)
         return SessionsViewModel(
             SessionsApi(client), auth, connection, LastChatStore(InMemoryKeyValueStore()), ProfilesApi(client),
-            attention, SeenStore(InMemoryKeyValueStore()) { 0.0 }, DraftStore(InMemoryKeyValueStore()),
+            attention, SeenStore(InMemoryKeyValueStore()) { 0.0 }, DraftStore(InMemoryKeyValueStore()), ProjectsApi(connection),
         )
     }
 
     /** A gateway socket that says it's ready and lists [live] as live sessions (`stored id to status`). */
-    private class LiveGateway(private val live: Map<String, String>) : RpcTransport {
+    private class LiveGateway(private val live: Map<String, String>, private val projects: Map<String, String> = emptyMap()) : RpcTransport {
         private val inbound = Channel<String>(Channel.UNLIMITED).apply {
             trySend("""{"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready","payload":{}}}""")
         }
@@ -113,11 +114,13 @@ class SessionsViewModelTest {
         override suspend fun send(text: String) {
             val message = Json.parseToJsonElement(text).jsonObject
             val id = message["id"] ?: return
-            val result = if (message["method"]?.jsonPrimitive?.content == "session.active_list") {
+            val method = message["method"]?.jsonPrimitive?.content
+            val result = if (method == "session.active_list") {
                 asked++
                 live.entries.joinToString(",", """{"sessions":[""", "]}") { (key, status) -> """{"id":"rt-$key","session_key":"$key","status":"$status"}""" }
             } else {
-                "{}"
+                // One line each: the socket's messages are newline-delimited.
+                projects[method]?.replace("\n", "") ?: "{}"
             }
             inbound.send("""{"jsonrpc":"2.0","id":$id,"result":$result}""")
         }
@@ -175,6 +178,71 @@ class SessionsViewModelTest {
         assertEquals(stopped, socket.asked)
         assertEquals(mapOf("b" to RowStatus(running = true)), vm.statuses.value)
         collector.cancel()
+    }
+
+    @Test
+    fun aProjectNarrowsTheListToItsChats() = runTest(dispatcher) {
+        val socket = LiveGateway(
+            live = emptyMap(),
+            projects = mapOf(
+                "projects.tree" to """{"projects":[
+                    {"id":"__no_project__","label":"Home","isNoProject":true,"sessionCount":1},
+                    {"id":"p1","label":"herald","path":"/srv/herald","sessionCount":1}]}""",
+                "projects.project_sessions" to """{"project":{"id":"p1","repos":[{"groups":[{"sessions":[{"id":"z","title":"Older work","last_active":200},{"id":"a","title":"Alpha","last_active":100}]}]}]}}""",
+            ),
+        )
+        val vm = viewModel(socket = socket)
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        val projects = vm.state.first { it.projects.isNotEmpty() }.projects
+        assertEquals(listOf("p1", "__no_project__"), projects.map { it.id })
+
+        vm.selectProject(projects.first())
+        val narrowed = vm.state.first { it.projectSessions != null }
+        assertEquals(listOf("z", "a"), narrowed.listed.map { it.id })
+        // The project's rows don't carry `pinned`; the main list says "a" is pinned.
+        assertTrue(narrowed.listed.first { it.id == "a" }.pinned)
+        // The full list stays loaded for when the filter goes.
+        assertEquals(listOf("a", "b"), narrowed.sessions.map { it.id })
+
+        vm.selectProject(null)
+        assertEquals(listOf("a", "b"), vm.state.value.listed.map { it.id })
+    }
+
+    @Test
+    fun undoInsideAProjectPutsTheRowBackInTheProject() = runTest(dispatcher) {
+        val patches = mutableListOf<String>()
+        val socket = LiveGateway(
+            live = emptyMap(),
+            projects = mapOf(
+                "projects.tree" to """{"projects":[{"id":"p1","label":"herald","path":"/srv/herald","sessionIds":["z"]}]}""",
+                "projects.project_sessions" to """{"project":{"id":"p1","repos":[{"groups":[{"sessions":[{"id":"z","title":"Older work"}]}]}]}}""",
+            ),
+        )
+        val vm = viewModel(socket = socket, patches = patches)
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        vm.selectProject(vm.state.first { it.projects.isNotEmpty() }.projects.first())
+        val older = vm.state.first { it.projectSessions != null }.listed.single()
+
+        // "z" is only in the project's list, not in the loaded main list: Undo is still offered.
+        vm.toggleArchived(older)
+        assertTrue(vm.state.first { it.undo != null }.listed.isEmpty())
+        vm.undoArchive()
+        assertEquals(listOf("z"), vm.state.first { patches.size == 2 }.listed.map { it.id })
+    }
+
+    @Test
+    fun noChipsWhenEveryChatIsInHome() = runTest(dispatcher) {
+        val socket = LiveGateway(
+            live = emptyMap(),
+            projects = mapOf("projects.tree" to """{"projects":[{"id":"__no_project__","label":"Home","isNoProject":true,"sessionCount":2}]}"""),
+        )
+        val vm = viewModel(socket = socket)
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        advanceTimeBy(1_000)
+        assertTrue(vm.state.value.projects.isEmpty())
     }
 
     @Test
