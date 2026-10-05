@@ -25,6 +25,8 @@ import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
+import kotlin.time.Clock
+import kotlin.time.Instant
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
@@ -187,7 +189,9 @@ class ChatSessionTest {
             ),
         )
         connection.state.first { it is ConnectionState.Connected }
-        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        val sentAt = Instant.fromEpochSeconds(1_700_000_000)
+        val clock = object : Clock { override fun now() = sentAt }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope, clock = clock)
         chat.start()
 
         assertTrue(chat.send("  write a haiku "))
@@ -200,6 +204,8 @@ class ChatSessionTest {
         assertTrue(state.running)
         val user = assertIs<ChatMessage.User>(state.messages.single())
         assertFalse(user.pending)
+        // Dated when this device sent it.
+        assertEquals(1_700_000_000.0, user.timestamp)
     }
 
     @Test

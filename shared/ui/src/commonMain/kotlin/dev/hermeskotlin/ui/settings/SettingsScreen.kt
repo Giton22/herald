@@ -256,6 +256,20 @@ internal fun SettingsView(
                     )
                     Divider()
                     SwitchRow(
+                        title = "Message timestamps",
+                        detail = "The time under each prompt and finished reply.",
+                        checked = settings.showTimestamps,
+                        onCheckedChange = { on -> onUpdate { it.copy(showTimestamps = on) } },
+                    )
+                    Divider()
+                    SwitchRow(
+                        title = "Wrap code lines",
+                        detail = "Long lines in code blocks wrap instead of scrolling sideways.",
+                        checked = settings.wrapCode,
+                        onCheckedChange = { on -> onUpdate { it.copy(wrapCode = on) } },
+                    )
+                    Divider()
+                    SwitchRow(
                         title = "Show the pet",
                         detail = "The profile's pet sits on the composer and acts out what the agent is doing. Adopt one with /pet.",
                         checked = settings.showPet,

@@ -18,6 +18,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import dev.hermeskotlin.core.models.ReasoningEffort
+import kotlin.time.Clock
 import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.TimeSource
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,7 +59,11 @@ class ChatSession(
     private val profile: String? = null,
     /** Where flagged tool output is remembered, since the transcript forgets it. */
     private val risks: ToolRiskStore? = null,
+    /** Dates what this device sends and sees finish; live events carry no time of their own. */
+    private val clock: Clock = Clock.System,
 ) {
+    private fun nowSeconds(): Double = clock.now().toEpochMilliseconds() / 1000.0
+
     private val _state = MutableStateFlow(ChatState(storedSessionId = initialStoredId, title = initialTitle))
     val state: StateFlow<ChatState> = _state.asStateFlow()
 
@@ -131,7 +136,13 @@ class ChatSession(
         val key = "local-${_state.value.keySeq}"
         _state.update {
             it.copy(
-                messages = it.messages + ChatMessage.User(key, display ?: visible, pending = true, attachments = attachments.map { a -> a.toShown() }),
+                messages = it.messages + ChatMessage.User(
+                    key,
+                    display ?: visible,
+                    pending = true,
+                    attachments = attachments.map { a -> a.toShown() },
+                    timestamp = nowSeconds(),
+                ),
                 keySeq = it.keySeq + 1,
                 error = null,
             )
@@ -1024,7 +1035,8 @@ class ChatSession(
         connection.events.collect { event ->
             val runtimeId = _state.value.runtimeSessionId ?: return@collect
             if (event.sessionId != runtimeId) return@collect
-            _state.update { it.reduce(event) }
+            val now = nowSeconds()
+            _state.update { it.reduce(event, now) }
             when (event.type) {
                 "tool.output_risk" -> flaggedOutput(event.payload as? JsonObject)?.let { (id, risk) ->
                     risks?.let { scope.launch { it.remember(id, risk) } }
