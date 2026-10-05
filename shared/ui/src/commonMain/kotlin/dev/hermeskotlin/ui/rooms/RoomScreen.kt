@@ -114,10 +114,7 @@ fun RoomScreen(
             TopBar(
                 title = room.room.name,
                 titleFace = members.takeIf { it.isNotEmpty() }?.let { { RoomFaces(it, faces, size = 20.dp, max = 3) } },
-                subtitle = when {
-                    room.pendingActions.isNotEmpty() -> "Waiting on you"
-                    else -> room.error
-                },
+                subtitle = "Waiting on you".takeIf { room.pendingActions.isNotEmpty() },
                 onOpenSidebar = onOpenSidebar,
                 onNewChat = null,
                 onOpenMenu = null,
@@ -126,6 +123,8 @@ fun RoomScreen(
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 Transcript(room, faces)
             }
+            // A failed read in full, above whatever waits on the user; the loop keeps trying.
+            room.error?.let { ListNotice(it) }
             PendingActions(room, onApprove = viewModel::approve, onRetry = viewModel::retry)
             if (room.working && room.pendingActions.isEmpty()) {
                 Row(
@@ -170,7 +169,8 @@ private fun Transcript(room: OpenRoom, faces: BotFaces) {
                     } else {
                         // A bot that goes on talking keeps its face and name from its first line.
                         val previous = lines.getOrNull(index - 1) as? RoomLine.Message
-                        val continued = previous != null && !previous.fromUser && previous.profile == line.profile
+                        val continued = previous != null && !previous.fromUser &&
+                            previous.profile == line.profile && previous.speaker == line.speaker
                         MemberLine(line, continued, faces)
                     }
                     is RoomLine.System -> SystemLine(line)
