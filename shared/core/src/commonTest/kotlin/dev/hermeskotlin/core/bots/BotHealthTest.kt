@@ -18,8 +18,12 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.mock.MockEngineConfig
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
+import kotlin.coroutines.ContinuationInterceptor
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
@@ -39,14 +43,21 @@ class BotHealthTest {
     /** The stored transcript every chat opens with. */
     private var history = """{"session_id":"stored-1","messages":[]}"""
 
-    private fun client() = createHttpClient(
-        MockEngine { request ->
+    /**
+     * On the test's own dispatcher: an answer coming on a real thread lets the test clock jump ahead while it
+     * waits, so a request's timeout or the heartbeat could lapse in no time and the test flake.
+     */
+    private fun CoroutineScope.client(): HttpClient {
+        val config = MockEngineConfig()
+        (coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher)?.let { config.dispatcher = it }
+        config.addHandler { request ->
             when (request.url.encodedPath) {
                 "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
                 else -> respond(history, HttpStatusCode.OK, json)
             }
-        },
-    )
+        }
+        return createHttpClient(MockEngine(config))
+    }
 
     /** Methods the fake gateway turns down, with the error message it sends. */
     private val refusals = mutableMapOf<String, String>()
@@ -72,7 +83,7 @@ class BotHealthTest {
     private class Setup(val host: ChatHost, val health: BotHealth, val transport: FakeTransport, val checks: MutableList<String>)
 
     private suspend fun setup(scope: CoroutineScope, answer: suspend (String) -> RuntimeCheck = { RuntimeCheck(ok = true) }): Setup {
-        val http = client()
+        val http = scope.client()
         val transport = FakeTransport()
         val connection = GatewayConnection(AuthApi(http, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> transport }, scope)
         scope.serve(transport)
@@ -178,6 +189,8 @@ class BotHealthTest {
         val s = setup(backgroundScope)
         val chat = s.host.open(url, "stored-1", "Bot Chat", profile = "scribe")
         chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        // The watcher listens for the gateway's events from here on; an event sent before it does isn't heard.
+        testScheduler.runCurrent()
 
         s.transport.push(event("message.start"))
         s.transport.push(event("error", """{"message":"Error code: 401 - invalid api key"}"""))
@@ -199,6 +212,7 @@ class BotHealthTest {
         val s = setup(backgroundScope)
         val chat = s.host.open(url, "stored-1", "Bot Chat", profile = "scribe")
         chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        testScheduler.runCurrent()
 
         // The delivery's result wakes a turn; the chat reads its transcript again when that turn ends.
         history = failedDelivery
