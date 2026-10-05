@@ -193,7 +193,11 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] New bot (the "+" by Bots): face (shape and colour), name → profile id as Desktop makes it, title, description, optional SOUL (else Desktop's generated persona, without the messaging section the gateway injects); `profiles.create` cloning the default's configuration with shared keys, look in `ui_meta`, `setup.runtime_check`, then its Bot Chat with the intro
 - [x] Edit a bot (face, title, description, SOUL) sending only what changed; Duplicate (`clone_from`, look copied, "(copy)"); Delete (`DELETE /api/profiles/{name}`, asked first, not for the default)
 - [ ] Avatar pictures (upload, `image.generate`), Desktop's blob faces, model picker per bot
-- [ ] Phone: per-bot notifications with direct reply, Needs-you inbox, shortcuts and `hermes://bot/` link, share-to-bot, voice, @mentions
+- [x] Bot notifications: while out of sight, a bot writing in its chat arrives as an Android conversation notification from it (face, name, inline Reply into its chat); driven by `sessions.changed` on the open socket (Stay connected or a running turn), only for the bot's own words, never hidden bots
+- [x] Each bot a launcher conversation shortcut; `hermes://bot/<profile>` opens its chat
+- [x] @mentions: `@` in the composer offers the bots with their faces; picking inserts `@handle`
+- [x] Bot exchanges drawn as a conversation: the other bot speaking in its colour, this bot's messages to it as "To X" notes
+- [ ] Needs-you inbox across bots, share-to-bot, "ask <bot>" by voice, a Settings switch for bot notifications
 - [ ] Rooms: Desktop rooms read-only from the `hermes-bots-groups` mirror; hosted rooms (`groups.*`) to take part
 
 ### Automation & configuration
