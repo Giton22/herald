@@ -174,8 +174,12 @@ class BotHealth(
     private fun profileOf(target: String): String? =
         target.trim().removePrefix("@").takeIf { it.isNotEmpty() }?.let { if (it == "hermes") Bot.DEFAULT else it }
 
+    /** Bumped by [reset], so a check begun for the gateway before can't land on the one after. */
+    private var generation = 0
+
     /** Forgets everything: another gateway's bots are other bots. */
     fun reset() {
+        generation++
         checked.clear()
         _troubles.value = emptyMap()
     }
@@ -188,6 +192,7 @@ class BotHealth(
     /** Checks [profile] now, e.g. after its model or keys were changed. */
     fun recheck(profile: String) {
         checked.add(profile)
+        val asked = generation
         scope.launch {
             val result = try {
                 check(profile)
@@ -195,9 +200,10 @@ class BotHealth(
                 throw e
             } catch (e: Exception) {
                 // No verdict: asked again on the next connection.
-                checked.remove(profile)
+                if (asked == generation) checked.remove(profile)
                 return@launch
             }
+            if (asked != generation) return@launch
             _troubles.update { all ->
                 val current = all[profile]
                 val problem = if (result.ok) null else BotProblem.classify(result.error) ?: BotProblem.Setup

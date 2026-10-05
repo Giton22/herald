@@ -146,6 +146,23 @@ class BotHealthTest {
     }
 
     @Test
+    fun aCheckBegunBeforeAResetDoesNotLandAfterIt() = runTest {
+        val answer = CompletableDeferred<RuntimeCheck>()
+        val s = setup(backgroundScope) { answer.await() }
+        s.health.recheck("scout")
+        // The check is under way (background work runs on runCurrent, not advanceUntilIdle).
+        testScheduler.runCurrent()
+        assertEquals(listOf("scout"), s.checks)
+
+        // Another gateway: its bots are other bots, whatever the old one's check says.
+        s.health.reset()
+        answer.complete(RuntimeCheck(ok = false, error = "401 unauthorized"))
+        testScheduler.runCurrent()
+
+        assertTrue(s.health.troubles.value.isEmpty())
+    }
+
+    @Test
     fun aGoodTurnClearsWhatAFailedOneSaid() = runTest {
         val s = setup(backgroundScope)
         s.health.noteFailure("scribe", "provider_quota_limit")
