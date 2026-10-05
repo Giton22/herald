@@ -127,6 +127,8 @@ import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.ListEnd
 import com.composables.icons.lucide.Info
 import dev.hermeskotlin.core.chat.MESSAGE_AGENT_TOOL
+import dev.hermeskotlin.ui.bots.BotAvatar
+import dev.hermeskotlin.ui.bots.LocalBotFaces
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PanelLeft
 import com.composables.icons.lucide.Pencil
@@ -298,6 +300,9 @@ fun ChatScreen(
     ChatView(
         // A bot's chat is titled "Bot Chat" on the gateway; the bot's name says more.
         title = target.bot?.label ?: state.title?.takeIf { it.isNotBlank() } ?: target.title ?: "New chat",
+        titleFace = LocalBotFaces.current.let { faces ->
+            faces.find(target.bot?.name)?.let { bot -> { BotAvatar(bot, faces.picture(bot), size = 22.dp) } }
+        },
         state = state,
         picker = picker,
         connected = connected,
@@ -384,6 +389,8 @@ fun ChatScreen(
 @Composable
 internal fun ChatView(
     title: String,
+    /** Drawn beside the title, e.g. the face of the bot whose chat this is. */
+    titleFace: (@Composable () -> Unit)? = null,
     state: ChatState,
     picker: ModelPickerState,
     connected: Boolean,
@@ -421,6 +428,7 @@ internal fun ChatView(
         Column(Modifier.widthIn(max = 760.dp).fillMaxSize().imePadding()) {
             TopBar(
                 title = title,
+                titleFace = titleFace,
                 subtitle = when {
                     !connected -> connectionLabel
                     state.attachment is Attachment.Attaching -> "Opening…"
@@ -620,6 +628,7 @@ private fun ColumnScope.Dock(
 @Composable
 private fun TopBar(
     title: String,
+    titleFace: (@Composable () -> Unit)?,
     subtitle: String?,
     onOpenSidebar: () -> Unit,
     onNewChat: (() -> Unit)?,
@@ -634,14 +643,17 @@ private fun TopBar(
             BarButton(Lucide.PanelLeft, "Sessions", onClick = onOpenSidebar)
             Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
                 Column(Modifier.width(IntrinsicSize.Max), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(
-                        title.uppercase(),
-                        style = Theme[typography][label].copy(fontWeight = FontWeight.Bold, letterSpacing = 0.06.em),
-                        color = Theme[colors][textColor],
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
-                    )
+                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        titleFace?.invoke()
+                        Text(
+                            title.uppercase(),
+                            style = Theme[typography][label].copy(fontWeight = FontWeight.Bold, letterSpacing = 0.06.em),
+                            color = Theme[colors][textColor],
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
+                        )
+                    }
                     Box(Modifier.fillMaxWidth().height(2.dp).background(Theme[colors][accent]))
                 }
                 if (!subtitle.isNullOrBlank()) {
@@ -1194,13 +1206,15 @@ private fun AssistantReply(
 ) {
     val settings = LocalAppSettings.current
     val showReasoning = settings.showReasoning && message.reasoning.isNotBlank()
-    val showTools = settings.showToolActivity && message.tools.isNotEmpty()
+    // Messages to other bots get their own line below, so they aren't listed again among the tools.
+    val listedTools = message.tools.filter { it.name != MESSAGE_AGENT_TOOL }
+    val showTools = settings.showToolActivity && listedTools.isNotEmpty()
     // Pictures and files the reply delivered show as themselves, not as Markdown a renderer can't load.
     val (text, media) = remember(message.text) { extractReplyMedia(message.text) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         // What's happening now is said once, above the composer; the reply keeps only what it's made of.
         if (showReasoning) Reasoning(message.reasoning)
-        if (showTools) Tools(message.tools, message.key)
+        if (showTools) Tools(listedTools, message.key)
         // Shown whatever the tool-activity setting: the work happens out of sight, in other agents.
         message.tools.filter { it.name == "delegate_task" }.forEach { DelegationCard(it) }
         // Messages to other bots, said whatever the tool-activity setting: they're part of the conversation.
@@ -1453,9 +1467,15 @@ internal fun currentAction(state: ChatState): String {
         return if (detail != null) "${tool.name.toolVerb()}: $detail" else tool.name.toolVerb()
     }
     state.livePlan()?.items?.firstOrNull { it.status == TodoStatus.InProgress }?.let { return it.content }
-    state.status?.takeIf { it.isNotBlank() }?.let { return it }
+    state.status?.takeIf { it.isNotBlank() }?.let { status ->
+        // A turn woken by another bot's reply arriving says so, not the runner's command line.
+        return if (BOT_DELIVERY_STATUS.containsMatchIn(status)) "Reading another bot's reply" else status
+    }
     return state.thinkingFrame ?: "Thinking…"
 }
+
+/** The status of a turn started by a bot-to-bot delivery finishing (tools/bot_mode_dm.py's runner). */
+private val BOT_DELIVERY_STATUS = Regex("""Background Process Finished:.*(?:bot_mode_dm\.py|--run-delivery)""", RegexOption.IGNORE_CASE)
 
 /** "terminal" reads as "Running a command", and so on; other tools as "Using <name>". */
 private fun String.toolVerb(): String = when (this) {

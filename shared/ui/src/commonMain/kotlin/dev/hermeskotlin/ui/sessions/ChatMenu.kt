@@ -35,6 +35,8 @@ internal fun ChatMenu(
      * lose the bot its conversation. Those are left to Desktop, which asks first.
      */
     botChat: Boolean = false,
+    /** For a bot's chat: start it over (archived, a new one begun). */
+    onStartFresh: (() -> Unit)? = null,
     viewModel: SessionsViewModel = koinViewModel(),
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
@@ -58,6 +60,7 @@ internal fun ChatMenu(
         onCopyId = { clipboard.setText(AnnotatedString(it.id)) },
         onUsage = { onUsage() },
         onProcesses = { onProcesses() },
+        onStartFresh = onStartFresh?.let { start -> { _: SessionSummary -> start() } },
     )
     RenameDialog(
         renameTarget,

@@ -109,6 +109,18 @@ class AppViewModel(
         _route.value = Route.Chat(newChatTarget(gateway, currentProfile()))
     }
 
+    /** Opens [bot]'s conversation [storedSessionId] that isn't its Bot Chat, in the bot's profile. */
+    fun openBotSession(bot: Bot, storedSessionId: String, title: String) {
+        val gateway = signedInGateway() ?: return
+        _route.value = Route.Chat(ChatTarget(gateway, storedSessionId, title, profile = bot.name))
+    }
+
+    /** A new throwaway chat with [bot], apart from its permanent one. */
+    fun newBotChat(bot: Bot) {
+        val gateway = signedInGateway() ?: return
+        _route.value = Route.Chat(newChatTarget(gateway, bot.name))
+    }
+
     /** Opens [bot]'s permanent chat, the stored session [storedSessionId], in the bot's own profile. */
     fun openBotChat(bot: Bot, storedSessionId: String) {
         val gateway = signedInGateway() ?: return

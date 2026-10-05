@@ -153,7 +153,8 @@ private fun FromBotNote(event: TranscriptEvent.FromBot) {
 /** How a message to another bot ended, in words: their reply, that it's still on its way, or why it failed. */
 @Composable
 private fun DeliveryLine(event: TranscriptEvent.Delivery) {
-    val who = event.target?.let { "@$it" } ?: "the other bot"
+    val faces = LocalBotFaces.current
+    val who = event.target?.let { target -> faces.find(target)?.label ?: "@$target" } ?: "the other bot"
     when (val outcome = event.outcome) {
         is DeliveryOutcome.Replied -> FoldedLine(Lucide.MessageCircle, "Reply from $who", body = { MarkdownText(outcome.text) })
         DeliveryOutcome.NoReply -> FoldedLine(Lucide.MessageCircleOff, "$who read it and chose not to reply", body = null)
@@ -176,6 +177,8 @@ private fun DeliveryLine(event: TranscriptEvent.Delivery) {
 @Composable
 internal fun RepliedToFold(to: String, content: @Composable () -> Unit) {
     var open by remember { mutableStateOf(false) }
+    val faces = LocalBotFaces.current
+    val name = remember(faces, to) { faces.find(to)?.label ?: to }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
             Modifier
@@ -187,7 +190,7 @@ internal fun RepliedToFold(to: String, content: @Composable () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             UnstyledIcon(Lucide.CornerDownRight, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
-            Text("Replied to $to", style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
+            Text("Replied to $name", style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
             Chevron(open)
         }
         AnimatedVisibility(open) { content() }

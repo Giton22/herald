@@ -70,6 +70,7 @@ import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Pin
+import com.composables.icons.lucide.RotateCcw
 import com.composables.icons.lucide.PinOff
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
@@ -87,6 +88,7 @@ import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.bots.SidebarMode
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.designsystem.components.SegmentedControl
+import dev.hermeskotlin.ui.bots.BotActions
 import dev.hermeskotlin.ui.bots.BotsRoster
 import dev.hermeskotlin.ui.bots.BotsViewModel
 import dev.hermeskotlin.core.gateway.SavedGateway
@@ -163,6 +165,12 @@ fun SessionsSidebar(
     onSwitchProfile: (String?) -> Unit,
     /** Opens a bot's chat, by the bot and the stored session to resume. */
     onOpenBot: (Bot, String) -> Unit,
+    /** Opens one of a bot's other conversations, in the bot's profile, by id and title. */
+    onOpenBotSession: (Bot, String, String) -> Unit,
+    /** Starts a throwaway chat in a bot's profile. */
+    onNewBotChat: (Bot) -> Unit,
+    /** The open chat has a turn running. */
+    selectedRunning: Boolean = false,
     viewModel: SessionsViewModel = koinViewModel(),
     bots: BotsViewModel = koinViewModel(),
 ) {
@@ -286,10 +294,23 @@ fun SessionsSidebar(
                         state = botsState,
                         avatars = avatars,
                         selectedId = selectedId,
+                        selectedRunning = selectedRunning,
                         nowSeconds = bots.nowSeconds(),
-                        onOpen = { bot -> bots.open(bot) { id -> onOpenBot(bot, id) } },
+                        actions = remember(bots, onOpenBot, onOpenBotSession, onNewBotChat) {
+                            object : BotActions {
+                                override fun open(bot: Bot) = bots.open(bot) { id -> onOpenBot(bot, id) }
+                                override fun setPinned(bot: Bot, pinned: Boolean) = bots.setPinned(bot, pinned)
+                                override fun setHidden(bot: Bot, hidden: Boolean) = bots.setHidden(bot, hidden)
+                                override fun startFresh(bot: Bot) = bots.startFresh(bot) { id -> onOpenBot(bot, id) }
+                                override fun openRecent(bot: Bot) {
+                                    val recent = bot.lastSession ?: return
+                                    onOpenBotSession(bot, recent.id ?: return, recent.title?.takeIf { it.isNotBlank() } ?: bot.label)
+                                }
+                                override fun newChat(bot: Bot) = onNewBotChat(bot)
+                            }
+                        },
                         onRetry = bots::refresh,
-                        onDismissError = bots::dismissOpenError,
+                        onDismissNotice = bots::dismissNotice,
                     )
                     searchOpen && searchResults == null -> Unit
                     searchResults != null -> when {
@@ -878,6 +899,8 @@ internal fun SessionActionsSheet(
     onCopyId: ((SessionSummary) -> Unit)? = null,
     onUsage: ((SessionSummary) -> Unit)? = null,
     onProcesses: ((SessionSummary) -> Unit)? = null,
+    /** A bot's chat: archive it and begin an empty one. */
+    onStartFresh: ((SessionSummary) -> Unit)? = null,
 ) {
     // Keep the last target while the sheet animates out.
     var shown by remember { mutableStateOf(session) }
@@ -891,6 +914,7 @@ internal fun SessionActionsSheet(
         }
         SheetHeader(s.displayTitle, age)
         fun act(block: (SessionSummary) -> Unit) = { onDismiss(); block(s) }
+        onStartFresh?.let { SheetAction("Start fresh", Lucide.RotateCcw, act(it)) }
         onRename?.let { SheetAction("Rename", Lucide.Pencil, act(it)) }
         onTogglePinned?.let { SheetAction(if (s.pinned) "Unpin" else "Pin", if (s.pinned) Lucide.PinOff else Lucide.Pin, act(it)) }
         onUsage?.let { SheetAction("Usage and cost", Lucide.Gauge, act(it)) }
