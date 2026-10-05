@@ -134,6 +134,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Settings screen, opened from the account sheet
 - [x] Theme: system, light, dark, plus pure black; window and system bars follow it
 - [x] Text size on top of the system font scale
+- [x] Chat background: a photo behind the conversation (frosted under the composer), with how strongly it shows
 - [x] Show or hide reasoning and tool activity in the chat
 - [x] Account (sign out, change gateway) and about (app and gateway versions, update check)
 - [ ] Manage several saved gateways (add, edit, remove, choose primary)
@@ -150,7 +151,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Full-screen image viewer with pinch-zoom; Save (Pictures / Download `Herald`) and Share for pictures and files
 - [x] Chats open as the `desktop` surface (`source` on `session.create` / `session.resume`), so the agent knows Markdown and files render
 - [ ] Run `::preview` widgets inline (a WebView with Desktop's theme prelude)
-- [ ] Share sheet: "Send to Herald" from other apps
+- [x] Share sheet: text, links, pictures and files shared from other apps open a new chat with them as its draft (up to 10 files, through the composer's size limits); nothing sends until you do, and before sign-in the draft waits
 
 ### Voice
 - [x] Dictation into the composer (phone mic → `POST /api/audio/transcribe`)
@@ -210,6 +211,9 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 
 ### Platforms & polish
 - [x] 48dp touch targets (`MinTouchTarget`) on icon buttons, the composer, the top bar and the sidebar rows, without enlarging the icons
+- [x] Launcher shortcuts New chat and New chat with voice (starts dictating); links `hermes://new-chat`, `hermes://new-chat-voice` and `hermes://session/<id>`
+- [x] Web links in replies open in a Custom Tab in the app's colors, or the browser when there's none
+- [x] App lock (Settings → Privacy): fingerprint, face or screen lock on launch and after a minute away; content hidden in Recents
 - [ ] Tablet and foldable adaptive layout (list and detail side by side)
 - [ ] Home-screen widget and Quick Settings tile
 - [ ] Offline cache of sessions and messages
