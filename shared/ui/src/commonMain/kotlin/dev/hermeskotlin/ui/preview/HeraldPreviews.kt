@@ -25,7 +25,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import dev.hermeskotlin.designsystem.components.Toast
 import dev.hermeskotlin.core.capabilities.McpServer
 import dev.hermeskotlin.core.capabilities.Skill
 import dev.hermeskotlin.core.capabilities.Toolset
@@ -82,6 +84,7 @@ enum class PreviewScene(val label: String) {
     ConnectionCheck("The connection check"),
     LongChat("A chat to scroll back through"),
     Notices("Notices from the gateway"),
+    Archived("Archived, with Undo"),
 }
 
 /**
@@ -114,6 +117,23 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                         userLabel = ChatSamples.USER,
                         statuses = ChatSamples.sessionStatuses,
                         drafts = ChatSamples.sessionDrafts,
+                    )
+                }
+                PreviewScene.Archived -> Box(Modifier.fillMaxSize()) {
+                    OpenSidebar {
+                        SessionsSidebarSample(
+                            ChatSamples.sessions().filterNot { it.id == "s3" },
+                            selectedId = "s1",
+                            userLabel = ChatSamples.USER,
+                            statuses = ChatSamples.sessionStatuses,
+                            drafts = ChatSamples.sessionDrafts,
+                        )
+                    }
+                    Toast(
+                        "Archived",
+                        modifier = Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(start = 16.dp, end = 16.dp, top = 64.dp),
+                        actionLabel = "Undo",
+                        onDismiss = {},
                     )
                 }
                 PreviewScene.Comments -> SampleChat(ChatSamples.reply, comments = remember { ChatSamples.comments() })

@@ -54,6 +54,7 @@ import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.windowInsetsPadding
 import dev.hermeskotlin.ui.connect.ConnectScreen
 import dev.hermeskotlin.ui.gateways.GatewaysSheet
+import dev.hermeskotlin.ui.sessions.ArchiveUndoToast
 import dev.hermeskotlin.ui.sessions.ChatMenu
 import dev.hermeskotlin.ui.sessions.SessionsSidebar
 import dev.hermeskotlin.ui.settings.AppLockCover
@@ -269,6 +270,8 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
             )
         }
     }
+
+    ArchiveUndoToast()
 
     ChatMenu(
         visible = menuOpen && openSessionId != null,
