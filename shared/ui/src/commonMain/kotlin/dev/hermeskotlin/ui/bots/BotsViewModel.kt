@@ -304,18 +304,24 @@ class BotsViewModel(
 
     /** Reads what [bot] can run, its profile's providers and its current model marked. */
     fun loadModels(bot: Bot) {
+        // Another bot's catalog (and a pick of its waiting to be confirmed) mustn't show while this one's loads.
+        if (modelsOf != bot.name) _modelPicker.value = ModelPickerState()
+        modelsOf = bot.name
         _modelPicker.update { it.copy(loading = true, error = null) }
         viewModelScope.launch {
             try {
                 val catalog = models.options(profile = bot.name)
-                _modelPicker.update { it.copy(catalog = catalog, loading = false) }
+                if (modelsOf == bot.name) _modelPicker.update { it.copy(catalog = catalog, loading = false) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _modelPicker.update { it.copy(loading = false, error = e.message ?: "Couldn't load the models.") }
+                if (modelsOf == bot.name) _modelPicker.update { it.copy(loading = false, error = e.message ?: "Couldn't load the models.") }
             }
         }
     }
+
+    /** The bot [modelPicker] is for. */
+    private var modelsOf: String? = null
 
     /**
      * Sets the model [bot] runs, for all its chats that follow its configuration. A pick the gateway wants
