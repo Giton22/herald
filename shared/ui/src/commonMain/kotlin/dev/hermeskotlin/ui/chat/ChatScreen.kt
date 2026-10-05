@@ -159,6 +159,9 @@ import dev.hermeskotlin.core.chat.TodoList
 import dev.hermeskotlin.core.chat.TodoStatus
 import dev.hermeskotlin.core.chat.TurnOutcome
 import dev.hermeskotlin.core.chat.compactCount
+import dev.hermeskotlin.core.chat.canEdit
+import dev.hermeskotlin.core.chat.discardedAfter
+import dev.hermeskotlin.core.chat.regenerateTarget
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.models.displayModelName
 import dev.hermeskotlin.core.slash.SlashCommand
@@ -311,6 +314,7 @@ fun ChatScreen(
         placeholder = remember(target) { (if (target.storedSessionId == null) NEW_CHAT_PROMPTS else FOLLOW_UP_PROMPTS).random() },
         notice = notice,
         actions = viewModel,
+        editing = viewModel.editing.collectAsStateWithLifecycle().value,
         onOpenSidebar = onOpenSidebar,
         // Already on an untouched new chat: nothing to start over from.
         onNewChat = onNewChat.takeIf { target.storedSessionId != null || state.messages.isNotEmpty() },
@@ -398,6 +402,8 @@ internal fun ChatView(
     placeholder: String,
     notice: String?,
     actions: ChatActions,
+    /** The prompt being edited in the composer, whose send replaces it. */
+    editing: String? = null,
     onOpenSidebar: () -> Unit,
     onNewChat: (() -> Unit)?,
     onOpenMenu: (() -> Unit)?,
@@ -479,6 +485,7 @@ internal fun ChatView(
                                 actions = actions,
                                 connected = connected,
                                 canChange = state.canChangeChat(connected),
+                                editing = editing,
                             )
                         }
                     } else Box(Modifier.fillMaxSize().padding(bottom = dockInset)) {
@@ -506,6 +513,7 @@ internal fun ChatView(
                         dictation = dictation,
                         suggestions = suggestions,
                         notice = notice,
+                        editing = editing != null,
                         comments = comments,
                         focusComment = focusComment,
                         onCommentFocused = { focusComment = null },
@@ -547,6 +555,7 @@ private fun ColumnScope.Dock(
     dictation: DictationState,
     suggestions: List<SlashSuggestion>,
     notice: String?,
+    editing: Boolean,
     comments: List<PendingComment>,
     focusComment: Long?,
     onCommentFocused: () -> Unit,
@@ -587,6 +596,14 @@ private fun ColumnScope.Dock(
             var shown by remember { mutableStateOf(suggestions) }
             if (suggestions.isNotEmpty()) shown = suggestions
             SlashSuggestions(shown, hazeState, onPick = actions::pickSuggestion)
+        }
+        if (editing) {
+            Banner(
+                "Editing a message. Sending replaces it and everything after it.",
+                actionLabel = "Cancel",
+                onAction = actions::cancelEdit,
+                icon = Lucide.Pencil,
+            )
         }
         Composer(
             hazeState = hazeState,
@@ -783,13 +800,22 @@ private fun Messages(
     actions: ChatActions,
     connected: Boolean,
     canChange: Boolean,
+    editing: String?,
 ) {
     var confirm by remember { mutableStateOf<Pair<MessageChange, String>?>(null) }
     val lastPrompt = messages.lastOrNull { it is ChatMessage.User }?.key
     val lastReply = messages.lastOrNull { it is ChatMessage.Assistant && it.text.isNotBlank() }?.key
-    ConfirmChange(confirm, canChange, lastPrompt, actions, onDismiss = { confirm = null })
+    // The rewind rules read only the messages.
+    val chat = remember(messages) { ChatState(messages = messages) }
+    ConfirmChange(confirm, canChange, lastPrompt, chat, actions, onDismiss = { confirm = null })
     // Edit and branch only show while the chat can change; each asks before it does anything.
     fun ask(change: MessageChange, key: String): (() -> Unit)? = if (canChange) ({ confirm = change to key }) else null
+    // A rewind asks only when it throws away more than the exchange it redoes.
+    fun rewind(change: MessageChange, promptKey: String, key: String, run: () -> Unit): (() -> Unit)? = when {
+        !canChange -> null
+        chat.discardedAfter(promptKey) > 0 -> ({ confirm = change to key })
+        else -> run
+    }
     // Laid out top-down and opened at the end. A list holds its place by the top of what's on screen, so a reply
     // growing below the lines being read leaves them where they are; following the bottom is done here instead.
     val listState = rememberLazyListState(messages.lastIndex.coerceAtLeast(0), LIST_END)
@@ -844,14 +870,24 @@ private fun Messages(
                         message,
                         actions,
                         connected,
+                        // Any prompt with a stored row is edited in place; the last one without can still go through /undo.
                         // Not while the prompt is still on its way or its delivery is in doubt.
-                        onEdit = ask(MessageChange.EditLastPrompt, message.key)
-                            .takeIf { message.key == lastPrompt && !message.pending && message.check == null },
+                        editLabel = if (chat.canEdit(message.key)) "Edit" else "Edit last prompt",
+                        onEdit = if (chat.canEdit(message.key)) {
+                            rewind(MessageChange.Edit, message.key, message.key) { actions.startEdit(message.key) }
+                        } else {
+                            ask(MessageChange.EditLastPrompt, message.key)
+                                .takeIf { message.key == lastPrompt && !message.pending && message.check == null }
+                        }.takeIf { editing != message.key },
                         onBranch = ask(MessageChange.Branch, message.key).takeIf { !message.pending && message.check == null },
+                        editing = editing == message.key,
                     )
                     is ChatMessage.Assistant -> AssistantReply(
                         message,
                         onBranch = ask(MessageChange.Branch, message.key),
+                        onRegenerate = chat.regenerateTarget(message.key)?.let { prompt ->
+                            rewind(MessageChange.Regenerate, prompt.key, message.key) { actions.regenerate(message.key) }
+                        },
                         last = message.key == lastReply,
                     )
                     is ChatMessage.Command -> CommandOutput(message)
@@ -1010,8 +1046,11 @@ private fun UserBubble(
     message: ChatMessage.User,
     actions: ChatActions,
     connected: Boolean,
+    editLabel: String,
     onEdit: (() -> Unit)?,
     onBranch: (() -> Unit)?,
+    /** It's in the composer being edited. */
+    editing: Boolean,
 ) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
     val clipboard = LocalClipboard.current
@@ -1044,7 +1083,7 @@ private fun UserBubble(
                         )
                     })
                 }
-                onEdit?.let { MenuAction("Edit last prompt", Lucide.Pencil, onClick = { menuOpen = false; it() }) }
+                onEdit?.let { MenuAction(editLabel, Lucide.Pencil, onClick = { menuOpen = false; it() }) }
                 onBranch?.let { MenuAction("Branch from here", Lucide.GitBranch, onClick = { menuOpen = false; it() }) }
             },
         ) {
@@ -1054,7 +1093,8 @@ private fun UserBubble(
                     .alpha(if (message.pending || message.check == SendCheck.Checking) 0.6f else 1f)
                     .clip(shape)
                     .background(Theme[colors][userBubble], shape)
-                    .border(1.dp, Theme[colors][userBubbleStroke], shape)
+                    // The prompt being edited is outlined in the accent, tying it to the composer.
+                    .border(if (editing) 2.dp else 1.dp, if (editing) Theme[colors][accent] else Theme[colors][userBubbleStroke], shape)
                     .then(
                         if (hasMenu) {
                             Modifier.combinedClickable(
@@ -1081,6 +1121,9 @@ private fun UserBubble(
         }
         if (message.queued) {
             Text("Queued · sends after this task", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+        }
+        if (editing) {
+            Text("Editing in the composer", style = Theme[typography][caption], color = Theme[colors][accent])
         }
         when (message.check) {
             SendCheck.Checking -> Text("Checking whether Hermes got this…", style = Theme[typography][caption], color = Theme[colors][textTertiary])
@@ -1128,18 +1171,22 @@ private fun UnsettledActions(label: String, key: String, mayHaveArrived: Boolean
     )
 }
 
-/** The two message actions that change the conversation, so they ask first. */
-private enum class MessageChange { EditLastPrompt, Branch }
+/**
+ * The message actions that change the conversation, so they ask first. A regenerate or an edit asks only when it
+ * throws away later messages; their key is the reply or the prompt.
+ */
+private enum class MessageChange { EditLastPrompt, Branch, Regenerate, Edit }
 
 /**
- * Says what an edit or a branch does, and that no task starts, before doing it. Closes itself if the chat stops
- * [allowing][canChange] it while open, or another prompt becomes the last one to edit.
+ * Says what a change does before doing it: whether a task starts, and what an edit or a regenerate throws away.
+ * Closes itself if the chat stops [allowing][canChange] it while open, or another prompt becomes the last one to edit.
  */
 @Composable
 private fun ConfirmChange(
     pending: Pair<MessageChange, String>?,
     canChange: Boolean,
     lastPrompt: String?,
+    chat: ChatState,
     actions: ChatActions,
     onDismiss: () -> Unit,
 ) {
@@ -1149,27 +1196,51 @@ private fun ConfirmChange(
     // Keeps its words while it fades out, after [pending] has already gone.
     var shown by remember { mutableStateOf(pending) }
     if (pending != null) shown = pending
+    // Counted from the prompt a regenerate sends again; kept while the dialog fades out.
+    val promptKey = shown?.let { (change, key) -> if (change == MessageChange.Regenerate) chat.regenerateTarget(key)?.key else key }
+    var discarded by remember { mutableIntStateOf(0) }
+    if (pending != null && promptKey != null) discarded = chat.discardedAfter(promptKey)
+    val later = if (discarded == 1) "1 later message" else "$discarded later messages"
     Dialog(
         visible = pending != null,
         onDismissRequest = onDismiss,
-        title = if (shown?.first == MessageChange.Branch) "Branch from here?" else "Edit your last prompt?",
-        message = if (shown?.first == MessageChange.Branch) {
-            "Copies this chat up to this message into a new chat and opens it. This chat stays as it is. " +
-                "No task starts until you send something in the new chat."
-        } else {
-            "Takes your last message and Hermes's reply to it off this chat and puts the message back in the composer. " +
-                "No task starts until you send it again."
+        title = when (shown?.first) {
+            MessageChange.Branch -> "Branch from here?"
+            MessageChange.Regenerate -> "Regenerate this reply?"
+            MessageChange.Edit -> "Edit this message?"
+            else -> "Edit your last prompt?"
+        },
+        message = when (shown?.first) {
+            MessageChange.Branch ->
+                "Copies this chat up to this message into a new chat and opens it. This chat stays as it is. " +
+                    "No task starts until you send something in the new chat."
+            MessageChange.Regenerate ->
+                "This will discard $later, here and on Hermes, and send the prompt again."
+            MessageChange.Edit ->
+                "Sending the edit will discard $later, here and on Hermes. Nothing changes until you send it."
+            else ->
+                "Takes your last message and Hermes's reply to it off this chat and puts the message back in the composer. " +
+                    "No task starts until you send it again."
         },
         actions = {
             Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost)
-            Button(if (shown?.first == MessageChange.Branch) "Branch" else "Edit", onClick = {
-                onDismiss()
-                when (pending?.first) {
-                    MessageChange.Branch -> actions.branchFrom(pending.second)
-                    MessageChange.EditLastPrompt -> actions.editLastPrompt(pending.second)
-                    null -> {}
-                }
-            })
+            Button(
+                when (shown?.first) {
+                    MessageChange.Branch -> "Branch"
+                    MessageChange.Regenerate -> "Regenerate"
+                    else -> "Edit"
+                },
+                onClick = {
+                    onDismiss()
+                    when (pending?.first) {
+                        MessageChange.Branch -> actions.branchFrom(pending.second)
+                        MessageChange.EditLastPrompt -> actions.editLastPrompt(pending.second)
+                        MessageChange.Regenerate -> actions.regenerate(pending.second)
+                        MessageChange.Edit -> actions.startEdit(pending.second)
+                        null -> {}
+                    }
+                },
+            )
         },
     )
 }
@@ -1178,6 +1249,8 @@ private fun ConfirmChange(
 private fun AssistantReply(
     message: ChatMessage.Assistant,
     onBranch: (() -> Unit)?,
+    /** Drops this reply and what follows and sends its prompt again; null when it can't. */
+    onRegenerate: (() -> Unit)?,
     /** The newest reply, which comments call "your last reply". */
     last: Boolean,
 ) {
@@ -1225,6 +1298,9 @@ private fun AssistantReply(
                 if (!message.streaming && text.isNotBlank()) {
                     // Their padding trimmed off the start and top, the icons line up with the reply and sit close under it.
                     CopyButton(text, Modifier.trimStartTop(start = 8.dp, top = 4.dp))
+                    onRegenerate?.let {
+                        IconButton(Lucide.RefreshCw, contentDescription = "Regenerate", onClick = it, modifier = Modifier.trimStartTop(start = 0.dp, top = 4.dp))
+                    }
                     onBranch?.let {
                         IconButton(Lucide.GitBranch, contentDescription = "Branch from here", onClick = it, modifier = Modifier.trimStartTop(start = 0.dp, top = 4.dp))
                     }
@@ -1472,10 +1548,16 @@ private fun NoticeLine(text: String) {
 }
 
 @Composable
-private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit) {
+private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit, icon: ImageVector? = null) {
     Surface(Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth()) {
         Row(Modifier.padding(start = 14.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-            UnstyledIcon(Lucide.CircleAlert, contentDescription = null, tint = Theme[colors][danger], modifier = Modifier.size(16.dp))
+            // A problem by default; [icon] says it's a state instead.
+            UnstyledIcon(
+                icon ?: Lucide.CircleAlert,
+                contentDescription = null,
+                tint = if (icon == null) Theme[colors][danger] else Theme[colors][accent],
+                modifier = Modifier.size(16.dp),
+            )
             Text(
                 message,
                 style = Theme[typography][bodySmall],

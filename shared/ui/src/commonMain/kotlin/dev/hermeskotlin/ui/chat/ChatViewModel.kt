@@ -25,6 +25,8 @@ import dev.hermeskotlin.core.models.ModelsApi
 import dev.hermeskotlin.core.chat.ModelSwitch
 import dev.hermeskotlin.core.chat.OutgoingAttachment
 import dev.hermeskotlin.core.chat.SendOutcome
+import dev.hermeskotlin.core.chat.canEdit
+import dev.hermeskotlin.core.chat.regenerateTarget
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.sessions.SessionsApi
@@ -63,6 +65,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flatMapLatest
@@ -190,6 +193,14 @@ class ChatViewModel(
     private val _attachmentError = MutableStateFlow<String?>(null)
     val attachmentError: StateFlow<String?> = _attachmentError.asStateFlow()
 
+    private val _editing = MutableStateFlow<String?>(null)
+
+    /** The prompt being edited in the composer; the next send replaces it and everything after it. */
+    val editing: StateFlow<String?> = _editing.asStateFlow()
+
+    /** What the composer held when the edit started, given back when it ends. */
+    private var typedBeforeEdit = ""
+
     private val _requests = Channel<ChatRequest>(Channel.BUFFERED)
 
     /** Commands the screen answers: a new chat, the model sheet, the sessions list. */
@@ -224,6 +235,12 @@ class ChatViewModel(
                 .distinctUntilChanged()
                 .filterNotNull()
                 .collect { last -> target?.let { lastChats.set(it.gateway.gatewayUrl, last, it.profile) } }
+        }
+        viewModelScope.launch {
+            // The prompt being edited went (another client cut the chat): there's nothing left to replace.
+            combine(state, _editing) { chat, key -> key?.takeIf { chat.historyLoaded && chat.messages.none { it.key == key } } }
+                .filterNotNull()
+                .collect { cancelEdit() }
         }
         viewModelScope.launch {
             snapshotFlow { composer.text.toString() }
@@ -280,6 +297,8 @@ class ChatViewModel(
             }
             return
         }
+        // An edit belongs to its chat; what was typed before it is that chat's draft.
+        cancelEdit()
         stashDraft()
         this.target = target
         // A voice chat belongs to the chat it started in.
@@ -638,6 +657,7 @@ class ChatViewModel(
         val attachments = _attachments.value
         val comments = _comments.value
         if (text.isBlank() && attachments.isEmpty() && comments.isEmpty()) return
+        _editing.value?.let { key -> return sendEdit(chat, key, text, comments) }
         val command = SlashCommand.parse(text.trim())
         // Commands run at once either way; they never become a turn to queue. Waiting comments stay for the next prompt.
         if (command != null && attachments.isEmpty()) {
@@ -702,6 +722,58 @@ class ChatViewModel(
             chat.branch(count)?.let { (id, title) -> _requests.send(ChatRequest.OpenChat(id, title)) }
         }
     }
+
+    override fun regenerate(key: String) {
+        val chat = session.value ?: return
+        val state = state.value
+        // Asked for in a dialog that may have stayed open while the chat moved on.
+        if (!canRewind(state)) return
+        val prompt = state.regenerateTarget(key) ?: return
+        val text = prompt.sentText ?: return
+        viewModelScope.launch { chat.rewind(prompt.key, text) }
+    }
+
+    override fun startEdit(key: String) {
+        val state = state.value
+        if (!canRewind(state) || !state.canEdit(key)) return
+        val prompt = state.messages.firstOrNull { it.key == key } as? ChatMessage.User ?: return
+        if (_editing.value == null) typedBeforeEdit = composer.text.toString()
+        _editing.value = key
+        composer.setTextAndPlaceCursorAtEnd(prompt.text)
+    }
+
+    override fun cancelEdit() {
+        if (_editing.value == null) return
+        _editing.value = null
+        composer.setTextAndPlaceCursorAtEnd(typedBeforeEdit)
+        typedBeforeEdit = ""
+    }
+
+    /**
+     * Sends the edit of prompt [key]: it and everything after it go, and [text] (with any [comments]) is sent
+     * in its place. Files waiting in the composer stay for the next send. Turned down, the edit is back as it was.
+     */
+    private fun sendEdit(chat: ChatSession, key: String, text: String, comments: List<PendingComment>) {
+        if (text.isBlank() && comments.isEmpty()) return
+        val outgoing = if (comments.isEmpty()) text else formatReview(comments, text)
+        _comments.value = emptyList()
+        cancelEdit()
+        viewModelScope.launch {
+            if (chat.rewind(key, outgoing) != SendOutcome.NotSent) return@launch
+            // The prompt is back where it was if the gateway turned the edit down; carry on editing it.
+            _comments.update { comments + it }
+            if (state.value.messages.any { it.key == key }) {
+                typedBeforeEdit = composer.text.toString()
+                _editing.value = key
+                composer.setTextAndPlaceCursorAtEnd(text)
+            } else {
+                giveBack(text)
+            }
+        }
+    }
+
+    /** Regenerate and edit change the stored transcript, so only while it [can change][canChangeChat]. */
+    private fun canRewind(state: ChatState) = state.canChangeChat(connectionState.value is ConnectionState.Connected)
 
     override fun stopSubagent(subagentId: String) {
         val chat = session.value ?: return
