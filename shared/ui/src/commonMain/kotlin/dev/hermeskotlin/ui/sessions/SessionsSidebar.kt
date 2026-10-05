@@ -169,6 +169,10 @@ fun SessionsSidebar(
     onOpenBotSession: (Bot, String, String) -> Unit,
     /** Starts a throwaway chat in a bot's profile. */
     onNewBotChat: (Bot) -> Unit,
+    /** Opens the bot editor: null makes a new bot. */
+    onEditBot: (Bot?) -> Unit,
+    /** A bot was deleted, e.g. to leave its chat if it was open. */
+    onBotDeleted: (Bot) -> Unit,
     /** The open chat has a turn running. */
     selectedRunning: Boolean = false,
     viewModel: SessionsViewModel = koinViewModel(),
@@ -296,7 +300,7 @@ fun SessionsSidebar(
                         selectedId = selectedId,
                         selectedRunning = selectedRunning,
                         nowSeconds = bots.nowSeconds(),
-                        actions = remember(bots, onOpenBot, onOpenBotSession, onNewBotChat) {
+                        actions = remember(bots, onOpenBot, onOpenBotSession, onNewBotChat, onEditBot, onBotDeleted) {
                             object : BotActions {
                                 override fun open(bot: Bot) = bots.open(bot) { id -> onOpenBot(bot, id) }
                                 override fun setPinned(bot: Bot, pinned: Boolean) = bots.setPinned(bot, pinned)
@@ -307,6 +311,10 @@ fun SessionsSidebar(
                                     onOpenBotSession(bot, recent.id ?: return, recent.title?.takeIf { it.isNotBlank() } ?: bot.label)
                                 }
                                 override fun newChat(bot: Bot) = onNewBotChat(bot)
+                                override fun create() = onEditBot(null)
+                                override fun edit(bot: Bot) = onEditBot(bot)
+                                override fun duplicate(bot: Bot) = bots.duplicate(bot)
+                                override fun delete(bot: Bot) = bots.delete(bot) { onBotDeleted(bot) }
                             }
                         },
                         onRetry = bots::refresh,

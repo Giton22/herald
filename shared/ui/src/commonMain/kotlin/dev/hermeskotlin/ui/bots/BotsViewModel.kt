@@ -3,6 +3,10 @@ package dev.hermeskotlin.ui.bots
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.bots.Bot
+import dev.hermeskotlin.core.bots.BotDetails
+import dev.hermeskotlin.core.bots.BotDraft
+import dev.hermeskotlin.core.bots.displayNameFor
+import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.bots.BotChatUnavailableException
 import dev.hermeskotlin.core.bots.BotChats
 import dev.hermeskotlin.core.bots.BotsApi
@@ -74,6 +78,7 @@ class BotsViewModel(
     private val seenStore: SeenStore,
     private val modes: SidebarModeStore,
     private val sessions: SessionsApi,
+    private val profiles: ProfilesApi,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(BotsUiState())
@@ -209,6 +214,107 @@ class BotsViewModel(
             chats.forget(bot.name)
             _state.update { it.copy(opening = null) }
             open(bot.copy(canonicalSession = null), onOpened)
+        }
+    }
+
+    private val _busy = MutableStateFlow<String?>(null)
+
+    /** What the editor is waiting on ("Making Scribe…"), or null. */
+    val busy: StateFlow<String?> = _busy.asStateFlow()
+
+    /**
+     * Makes a bot from [draft] and opens its new chat, where it introduces itself. A bot whose machine has
+     * no model it can use is made all the same, without the intro, and the roster says why.
+     */
+    fun create(draft: BotDraft, onDone: () -> Unit, onOpened: (Bot, String) -> Unit) {
+        if (_busy.value != null) return
+        _busy.value = "Making ${displayNameFor(draft.profile, draft.title)}…"
+        viewModelScope.launch {
+            try {
+                val made = api.createBot(draft)
+                refreshNow()
+                onDone()
+                val bot = _state.value.all.firstOrNull { it.name == made.profile } ?: Bot(name = made.profile)
+                if (!made.readyToChat) {
+                    _state.update { it.copy(notice = "Made ${bot.label}, but it has no model it can use yet. ${made.problem.orEmpty()}".trim()) }
+                    return@launch
+                }
+                val stored = api.startWithIntro(made.profile)
+                chats.note(listOf(bot.copy(canonicalSession = dev.hermeskotlin.core.bots.BotSession(id = stored))))
+                openSession = stored
+                onOpened(bot, stored)
+                refreshNow()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(notice = "Couldn't make the bot. ${e.message.orEmpty()}".trim()) }
+                onDone()
+            } finally {
+                _busy.value = null
+            }
+        }
+    }
+
+    /** The bot's SOUL and description, for its editor; null when they couldn't be read. */
+    suspend fun details(bot: Bot): BotDetails? = runCatching { api.describe(bot.name) }.getOrNull()
+
+    /** Saves an edit; only what changed is sent, so an edit made on Desktop meanwhile isn't undone. */
+    fun save(bot: Bot, description: String?, soul: String?, look: Map<String, JsonElement?>, onDone: () -> Unit) {
+        if (_busy.value != null) return
+        _busy.value = "Saving…"
+        viewModelScope.launch {
+            try {
+                api.editBot(bot.name, description, soul, look)
+                onDone()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(notice = "Couldn't save ${bot.label}. ${e.message.orEmpty()}".trim()) }
+                onDone()
+            } finally {
+                _busy.value = null
+                refreshNow()
+            }
+        }
+    }
+
+    /** Copies [bot] (configuration, skills, SOUL and memory) as a new bot with the same look. */
+    fun duplicate(bot: Bot) {
+        if (_busy.value != null) return
+        _busy.value = "Copying ${bot.label}…"
+        _state.update { it.copy(notice = _busy.value) }
+        viewModelScope.launch {
+            try {
+                val name = api.duplicate(bot, _state.value.all.map { it.name }.toSet())
+                refreshNow()
+                _state.update { it.copy(notice = "Made $name, a full copy of ${bot.label}.") }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(notice = "Couldn't copy ${bot.label}. ${e.message.orEmpty()}".trim()) }
+            } finally {
+                _busy.value = null
+            }
+        }
+    }
+
+    /** Deletes [bot]'s profile for good, chats and memory included. [onDeleted] runs once it's gone. */
+    fun delete(bot: Bot, onDeleted: () -> Unit) {
+        val url = gateway.value ?: return
+        if (_busy.value != null) return
+        _busy.value = "Deleting ${bot.label}…"
+        _state.update { it.copy(notice = _busy.value) }
+        viewModelScope.launch {
+            when (val result = profiles.delete(url, bot.name)) {
+                is ApiResult.Success -> {
+                    chats.forget(bot.name)
+                    _state.update { it.regroup(it.all.filterNot { b -> b.name == bot.name }).copy(notice = "Deleted ${bot.label}.") }
+                    onDeleted()
+                }
+                else -> _state.update { it.copy(notice = "Couldn't delete ${bot.label}. ${result.errorMessage.orEmpty()}".trim()) }
+            }
+            _busy.value = null
+            refreshNow()
         }
     }
 

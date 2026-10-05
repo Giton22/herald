@@ -34,6 +34,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.Copy
+import com.composables.icons.lucide.Pencil
+import com.composables.icons.lucide.Plus
+import com.composables.icons.lucide.Trash2
+import dev.hermeskotlin.designsystem.components.IconButton
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Eye
@@ -93,6 +98,13 @@ interface BotActions {
 
     /** A throwaway chat with the bot, apart from its permanent one. */
     fun newChat(bot: Bot)
+
+    fun create()
+    fun edit(bot: Bot)
+    fun duplicate(bot: Bot)
+
+    /** Delete the bot's profile for good; asked about first. */
+    fun delete(bot: Bot)
 }
 
 /**
@@ -114,6 +126,7 @@ fun BotsRoster(
 ) {
     var hiddenOpen by remember { mutableStateOf(false) }
     var startOver by remember { mutableStateOf<Bot?>(null) }
+    var deleting by remember { mutableStateOf<Bot?>(null) }
     // Two bots that read the same get their @handles, like Desktop's roster.
     val sameName = remember(state.all) { state.all.groupBy { it.label.lowercase() }.filterValues { it.size > 1 }.keys }
     val row: @Composable (Bot, Boolean) -> Unit = { bot, hidden ->
@@ -131,6 +144,7 @@ fun BotsRoster(
             showHandle = bot.label.lowercase() in sameName,
             actions = actions,
             onStartOver = { startOver = bot },
+            onDelete = { deleting = bot },
         )
     }
     Box(Modifier.fillMaxSize()) {
@@ -139,7 +153,12 @@ fun BotsRoster(
             // Room to scroll the last rows out from under the floating footer.
             contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 96.dp),
         ) {
-            item(key = "label") { SectionLabel("Bots", Modifier.padding(start = 12.dp, top = 16.dp, bottom = 8.dp)) }
+            item(key = "label") {
+                Row(Modifier.fillMaxWidth().padding(start = 12.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                    SectionLabel("Bots", Modifier.weight(1f))
+                    IconButton(Lucide.Plus, contentDescription = "New bot", onClick = actions::create)
+                }
+            }
             when {
                 state.loading && state.all.isEmpty() -> item(key = "loading") { ListSpinner() }
                 state.unsupported -> item(key = "unsupported") {
@@ -183,6 +202,25 @@ fun BotsRoster(
         }
     }
     StartOverDialog(startOver, onDismiss = { startOver = null }, onConfirm = actions::startFresh)
+    DeleteBotDialog(deleting, onDismiss = { deleting = null }, onConfirm = actions::delete)
+}
+
+@Composable
+private fun DeleteBotDialog(bot: Bot?, onDismiss: () -> Unit, onConfirm: (Bot) -> Unit) {
+    var shown by remember { mutableStateOf(bot) }
+    if (bot != null) shown = bot
+    val b = shown ?: return
+    Dialog(
+        visible = bot != null,
+        onDismissRequest = onDismiss,
+        title = "Delete ${b.label}?",
+        message = "The ${b.name} profile is removed from the gateway with its chats, memory, skills and settings. " +
+            "This can't be undone.",
+        actions = {
+            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button("Delete", onClick = { onDismiss(); onConfirm(b) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
+        },
+    )
 }
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -199,6 +237,7 @@ private fun BotRow(
     showHandle: Boolean,
     actions: BotActions,
     onStartOver: () -> Unit,
+    onDelete: () -> Unit,
 ) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
     val haptics = LocalHapticFeedback.current
@@ -216,6 +255,10 @@ private fun BotRow(
             if (recent != null) MenuAction("Open recent session", Lucide.History, act { actions.openRecent(bot) })
             MenuAction("New chat with ${bot.label}", Lucide.MessageSquarePlus, act { actions.newChat(bot) })
             if (bot.canonicalSession != null) MenuAction("Start fresh", Lucide.RotateCcw, act(onStartOver))
+            MenuAction("Edit", Lucide.Pencil, act { actions.edit(bot) })
+            MenuAction("Duplicate", Lucide.Copy, act { actions.duplicate(bot) })
+            // The gateway keeps its primary profile.
+            if (bot.name != Bot.DEFAULT) MenuAction("Delete", Lucide.Trash2, act(onDelete))
         },
     ) {
         Row(

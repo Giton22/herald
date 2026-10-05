@@ -35,6 +35,7 @@ import dev.hermeskotlin.designsystem.components.SidebarLayout
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.components.rememberSidebarState
 import dev.hermeskotlin.core.bots.Bot
+import dev.hermeskotlin.ui.bots.BotEditor
 import dev.hermeskotlin.ui.bots.BotFaces
 import dev.hermeskotlin.ui.bots.StartOverDialog
 import dev.hermeskotlin.ui.bots.BotsViewModel
@@ -116,6 +117,9 @@ private fun Routes() {
     }
 }
 
+/** The bot editor's subject: [bot] to change, or null for a new one. */
+private class BotEditing(val bot: Bot?)
+
 /** The signed-in home: the chat, with the sessions sidebar to its left (a drawer on phones, docked on wide screens). */
 @Composable
 private fun Home(route: Route.Chat, app: AppViewModel) {
@@ -134,6 +138,7 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
     // The bot whose chat is open, as the roster knows it now.
     val openBot = route.target.bot?.let { open -> roster.all.firstOrNull { it.name == open.name } }
     var startOver by remember { mutableStateOf<Bot?>(null) }
+    var editing by remember { mutableStateOf<BotEditing?>(null) }
 
     // The open chat, once it exists on the gateway (a new chat gets its row with the first prompt).
     val openSessionId = chatState.storedSessionId?.takeIf { route.target.storedSessionId != null || chatState.hasConversation }
@@ -195,6 +200,8 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
                     app.newBotChat(bot)
                     closeDrawer()
                 },
+                onEditBot = { bot -> editing = BotEditing(bot) },
+                onBotDeleted = { bot -> if (route.target.bot?.name == bot.name || route.target.profile == bot.name) app.newChat() },
                 selectedRunning = chatState.running,
             )
         },
@@ -227,6 +234,26 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
     )
     StartOverDialog(startOver, onDismiss = { startOver = null }) { bot ->
         bots.startFresh(bot) { id -> app.openBotChat(bot, id) }
+    }
+
+    editing?.let { target ->
+        val busy by bots.busy.collectAsStateWithLifecycle()
+        BotEditor(
+            bot = target.bot,
+            taken = roster.all.map { it.name }.toSet(),
+            busy = busy,
+            loadDetails = { target.bot?.let { bots.details(it) } },
+            onBack = { editing = null },
+            onCreate = { draft ->
+                bots.create(draft, onDone = { editing = null }) { bot, id ->
+                    app.openBotChat(bot, id)
+                    closeDrawer()
+                }
+            },
+            onSave = { description, soul, look ->
+                target.bot?.let { bot -> bots.save(bot, description, soul, look) { editing = null } }
+            },
+        )
     }
 
     if (settingsOpen) {
