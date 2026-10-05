@@ -127,6 +127,10 @@ import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.ListEnd
 import com.composables.icons.lucide.Info
 import dev.hermeskotlin.core.chat.MESSAGE_AGENT_TOOL
+import dev.hermeskotlin.core.bots.Bot
+import dev.hermeskotlin.core.bots.handle
+import dev.hermeskotlin.core.bots.mentionQuery
+import dev.hermeskotlin.core.bots.mentionable
 import dev.hermeskotlin.ui.bots.BotAvatar
 import dev.hermeskotlin.ui.bots.LocalBotFaces
 import com.composables.icons.lucide.Lucide
@@ -297,6 +301,14 @@ fun ChatScreen(
         }
     }
 
+    // The `@word` at the cursor, read in a derived state so typing only redraws the chat when the list changes.
+    val faces = LocalBotFaces.current
+    val mention by remember(viewModel) {
+        derivedStateOf { viewModel.composer.let { mentionQuery(it.text.toString(), it.selection.end) } }
+    }
+    val mentions = remember(mention, faces, target.bot) {
+        mention?.let { faces.bots.mentionable(it.query, self = target.bot?.name) }.orEmpty()
+    }
     ChatView(
         // A bot's chat is titled "Bot Chat" on the gateway; the bot's name says more.
         title = target.bot?.label ?: state.title?.takeIf { it.isNotBlank() } ?: target.title ?: "New chat",
@@ -313,6 +325,11 @@ fun ChatScreen(
         voiceChat = viewModel.voice.chat.collectAsStateWithLifecycle().value,
         dictation = viewModel.voice.dictation.collectAsStateWithLifecycle().value,
         suggestions = viewModel.suggestions.collectAsStateWithLifecycle().value,
+        mentions = mentions,
+        onMention = { bot ->
+            val typed = mention ?: return@ChatView
+            viewModel.composer.edit { replace(typed.start, typed.end, "@${bot.handle} ") }
+        },
         sprite = viewModel.pets.sprite.collectAsStateWithLifecycle().value,
         // Re-rolled per conversation, kept while a new chat gets its stored id.
         placeholder = remember(target) { (if (target.storedSessionId == null) NEW_CHAT_PROMPTS else FOLLOW_UP_PROMPTS).random() },
@@ -403,6 +420,9 @@ internal fun ChatView(
     voiceChat: VoiceChatState,
     dictation: DictationState,
     suggestions: List<SlashSuggestion>,
+    /** Bots matching the `@word` being typed, to pick one to mention. */
+    mentions: List<Bot> = emptyList(),
+    onMention: (Bot) -> Unit = {},
     sprite: PetSprite?,
     placeholder: String,
     notice: String?,
@@ -515,6 +535,8 @@ internal fun ChatView(
                         voiceChat = voiceChat,
                         dictation = dictation,
                         suggestions = suggestions,
+                        mentions = mentions,
+                        onMention = onMention,
                         notice = notice,
                         comments = comments,
                         focusComment = focusComment,
@@ -556,6 +578,8 @@ private fun ColumnScope.Dock(
     voiceChat: VoiceChatState,
     dictation: DictationState,
     suggestions: List<SlashSuggestion>,
+    mentions: List<Bot>,
+    onMention: (Bot) -> Unit,
     notice: String?,
     comments: List<PendingComment>,
     focusComment: Long?,
@@ -597,6 +621,11 @@ private fun ColumnScope.Dock(
             var shown by remember { mutableStateOf(suggestions) }
             if (suggestions.isNotEmpty()) shown = suggestions
             SlashSuggestions(shown, hazeState, onPick = actions::pickSuggestion)
+        }
+        AnimatedVisibility(visible = mentions.isNotEmpty() && suggestions.isEmpty(), enter = fadeIn(), exit = fadeOut()) {
+            var shown by remember { mutableStateOf(mentions) }
+            if (mentions.isNotEmpty()) shown = mentions
+            MentionSuggestions(shown, hazeState, onPick = onMention)
         }
         Composer(
             hazeState = hazeState,
@@ -1376,6 +1405,43 @@ private fun SlashSuggestions(suggestions: List<SlashSuggestion>, hazeState: Haze
                         )
                     }
                 }
+            }
+        }
+    }
+}
+
+/** The `@` list over the composer: bots to mention, with their faces, names and handles. */
+@Composable
+private fun MentionSuggestions(bots: List<Bot>, hazeState: HazeState, onPick: (Bot) -> Unit) {
+    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
+    val page = Theme[colors][background]
+    val faces = LocalBotFaces.current
+    val frosted = remember(page) {
+        HazeBlurStyle {
+            blurEnabled(true)
+            blurRadius(20.dp)
+            backgroundColor(page)
+        }
+    }
+    Column(
+        Modifier
+            .padding(start = 12.dp, end = 12.dp, top = 6.dp)
+            .fillMaxWidth()
+            .clip(shape)
+            .hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)
+            .background(Theme[colors][surfaceElevated].copy(alpha = 0.85f))
+            .border(1.dp, Theme[colors][strokeStrong], shape)
+            .padding(vertical = 6.dp),
+    ) {
+        bots.forEach { bot ->
+            Row(
+                Modifier.fillMaxWidth().clickable(onClickLabel = "Mention ${bot.label}") { onPick(bot) }.padding(horizontal = 14.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                BotAvatar(bot, faces.picture(bot), size = 24.dp)
+                Text(bot.label, style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][textColor], maxLines = 1)
+                Text("@${bot.handle}", style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1, modifier = Modifier.weight(1f))
             }
         }
     }

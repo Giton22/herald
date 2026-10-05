@@ -5,7 +5,7 @@ import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.bots.showsPicture
 
 /** The gateway's bots and their pictures, for drawing a bot wherever it's named (e.g. its messages to another). */
-class BotFaces(private val bots: List<Bot> = emptyList(), private val pictures: Map<String, ByteArray> = emptyMap()) {
+class BotFaces(val bots: List<Bot> = emptyList(), private val pictures: Map<String, ByteArray> = emptyMap()) {
 
     /** The bot a message names, by `@handle` or name; `hermes` is the primary bot. */
     fun find(handleOrName: String?): Bot? {
