@@ -30,18 +30,23 @@ object BotShortcuts {
         runCatching { ShortcutManagerCompat.setDynamicShortcuts(context, infos) }
     }
 
+    /**
+     * The bot as a person in its conversation. Not marked as a bot: Android keeps conversations whose
+     * other side is only bots out of the Conversations section (NotificationRecord.isOnlyBots), and these
+     * are exactly the ones the user wants to read like a contact's.
+     */
     fun person(bot: Bot, picture: ByteArray?): Person = Person.Builder()
         .setName(bot.label)
         .setKey("bot:${bot.name}")
-        .setBot(true)
         .setIcon(BotIcons.icon(bot, picture))
         .build()
 
     private fun info(context: Context, bot: Bot, picture: ByteArray?, rank: Int): ShortcutInfoCompat =
         ShortcutInfoCompat.Builder(context, "bot:${bot.name}")
+            // The conversation's name and face in the shade come from here, so both are just the bot's.
             .setShortLabel(bot.label)
-            .setLongLabel("Chat with ${bot.label}")
-            .setIcon(BotIcons.icon(bot, picture, adaptive = true))
+            .setLongLabel(bot.label)
+            .setIcon(BotIcons.icon(bot, picture))
             .setIntent(Intent(Intent.ACTION_VIEW, Uri.parse("hermes://bot/${Uri.encode(bot.name)}"), context, MainActivity::class.java))
             .setLongLived(true)
             .setPerson(person(bot, picture))

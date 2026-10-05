@@ -25,8 +25,22 @@ import kotlin.math.sin
 object BotIcons {
 
     fun icon(bot: Bot, picture: ByteArray?, adaptive: Boolean = false): IconCompat {
-        val bitmap = picture?.takeIf { showsPicture(bot, it) }?.let { BitmapFactory.decodeByteArray(it, 0, it.size) } ?: drawn(bot)
-        return if (adaptive) IconCompat.createWithAdaptiveBitmap(padded(bitmap, bot)) else IconCompat.createWithBitmap(bitmap)
+        val photo = picture?.takeIf { showsPicture(bot, it) }?.let { BitmapFactory.decodeByteArray(it, 0, it.size) }
+        if (adaptive) return IconCompat.createWithAdaptiveBitmap(padded(photo ?: drawn(bot), bot))
+        // Android crops conversation faces to a circle: a drawn face sits inside one, on its own tint.
+        return IconCompat.createWithBitmap(photo ?: framed(drawn(bot), bot))
+    }
+
+    /** The drawn face on a soft disc of its colour, with room for a round crop. */
+    private fun framed(face: Bitmap, bot: Bot, size: Int = 192): Bitmap {
+        val look = botLook(bot)
+        val bitmap = createBitmap(size, size)
+        val canvas = Canvas(bitmap)
+        canvas.drawColor(Color.rgb(28, 28, 32))
+        canvas.drawColor(Color.argb(60, look.color shr 16 and 0xFF, look.color shr 8 and 0xFF, look.color and 0xFF))
+        val inset = size * 0.2f
+        canvas.drawBitmap(face, null, RectF(inset, inset, size - inset, size - inset), Paint(Paint.FILTER_BITMAP_FLAG))
+        return bitmap
     }
 
     private fun drawn(bot: Bot, size: Int = 192): Bitmap {

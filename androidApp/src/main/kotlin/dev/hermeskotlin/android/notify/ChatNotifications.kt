@@ -54,6 +54,9 @@ class ChatNotifications(private val context: Context) {
         )
     }
 
+    /** The name of the bot whose permanent chat a stored session is, when it is one (titled "Bot Chat" on the gateway). */
+    var botName: (String) -> String? = { null }
+
     val canPost: Boolean
         get() = manager.areNotificationsEnabled() && (
             android.os.Build.VERSION.SDK_INT < 33 ||
@@ -72,6 +75,8 @@ class ChatNotifications(private val context: Context) {
             ?.tools?.lastOrNull { it.running }
         val text = when {
             waiting -> "Waiting for your answer"
+            // A turn woken by another bot's reply arriving: not the runner's command line.
+            state?.status?.contains("bot_mode_dm.py") == true -> "Reading another bot's reply"
             !state?.status.isNullOrBlank() -> state.status
             runningTool != null -> runningTool.detail?.let { "${runningTool.name}: $it" } ?: "Using ${runningTool.name}"
             else -> "Working…"
@@ -82,8 +87,9 @@ class ChatNotifications(private val context: Context) {
             runningTool != null -> runningTool.name.take(CHIP_LENGTH)
             else -> "Working"
         }
-        return base(CHANNEL_WORKING, state?.storedSessionId, state?.title)
-            .setContentTitle(state?.title?.takeIf { it.isNotBlank() } ?: "Hermes is working")
+        val title = state?.storedSessionId?.let(botName) ?: state?.title
+        return base(CHANNEL_WORKING, state?.storedSessionId, title)
+            .setContentTitle(title?.takeIf { it.isNotBlank() } ?: "Hermes is working")
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -107,7 +113,10 @@ class ChatNotifications(private val context: Context) {
         }
         return base(CHANNEL_CONNECTION)
             .setContentTitle(title)
-            .setContentText(state?.title?.takeIf { it.isNotBlank() }?.let { "Following $it" } ?: "Waiting for turns from any device")
+            .setContentText(
+                (state?.storedSessionId?.let(botName) ?: state?.title)?.takeIf { it.isNotBlank() }?.let { "Following $it" }
+                    ?: "Waiting for turns from any device",
+            )
             .setOngoing(true)
             .setSilent(true)
             .setPriority(NotificationCompat.PRIORITY_MIN)
@@ -219,7 +228,12 @@ class ChatNotifications(private val context: Context) {
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
             .setShortcutId(shortcut)
             .setLargeIcon(BotIcons.icon(bot, picture).toIcon(context))
-            .setStyle(NotificationCompat.MessagingStyle(me).addMessage(preview, System.currentTimeMillis(), person))
+            // One-to-one: the conversation is the bot, its face and name the notification's own.
+            .setStyle(
+                NotificationCompat.MessagingStyle(me)
+                    .setGroupConversation(false)
+                    .addMessage(preview, System.currentTimeMillis(), person),
+            )
             .addAction(
                 NotificationCompat.Action.Builder(
                     0,

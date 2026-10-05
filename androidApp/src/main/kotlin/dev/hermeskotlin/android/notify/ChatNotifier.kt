@@ -40,10 +40,19 @@ class ChatNotifier(
     private var serviceStarted = false
 
     fun start() {
+        notifications.botName = { storedId -> bots.botWithChat(storedId)?.label }
         scope.launch {
-            host.session.collectLatest { session ->
-                if (session == null) stopService() else follow(session)
-            }
+            combine(host.session, settings.settings) { session, prefs -> session to (prefs?.stayConnected == true) }
+                .distinctUntilChanged()
+                .collectLatest { (session, stay) ->
+                    when {
+                        session != null -> follow(session)
+                        // No chat open (the app started in the background after an update or reboot):
+                        // Stay connected still keeps the socket up, for bot notifications.
+                        stay -> keepConnected()
+                        else -> stopService()
+                    }
+                }
         }
         scope.launch {
             visibility.visible.collect { visible -> if (visible) notifications.cancelAttention() }
@@ -114,6 +123,11 @@ class ChatNotifier(
                 if (serviceStarted) notifications.postWorking(session.state.value, connection.state.value)
                 delay(1_000)
             }
+    }
+
+    private suspend fun keepConnected() {
+        if (!serviceStarted) serviceStarted = ChatService.start(context)
+        connection.state.collect { state -> if (serviceStarted) notifications.postWorking(null, state) }
     }
 
     private fun stopService() {

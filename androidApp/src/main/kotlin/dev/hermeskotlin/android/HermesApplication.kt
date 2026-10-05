@@ -1,6 +1,7 @@
 package dev.hermeskotlin.android
 
 import android.app.Application
+import dev.hermeskotlin.android.notify.BackgroundConnection
 import dev.hermeskotlin.android.notify.BotNotifier
 import dev.hermeskotlin.android.notify.ChatNotifier
 import dev.hermeskotlin.android.notify.notifyModule
@@ -17,5 +18,6 @@ class HermesApplication : Application() {
         }.koin
         koin.get<ChatNotifier>().start()
         koin.get<BotNotifier>().start()
+        koin.get<BackgroundConnection>().start()
     }
 }
