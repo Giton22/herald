@@ -2,6 +2,8 @@
 
 # Herald
 
+[![GitHub stars](https://img.shields.io/github/stars/Giton22/herald?style=flat&logo=github)](https://github.com/Giton22/herald/stargazers)
+
 An Android app for [Hermes Agent](https://github.com/NousResearch/hermes-agent): chat with your own
 agent from your phone, approve what it wants to do, and follow its work while you're away from the
 computer. Herald connects to the `hermes dashboard` you already run on your server, homelab, VPS or
@@ -132,6 +134,10 @@ The version comes from the tag (`1.2.3` → version code `10203`), so tags must 
 The workflow needs these repository secrets: `ANDROID_KEYSTORE_BASE64` (the keystore, base64-encoded),
 `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. Local release builds read
 the same values from an untracked `keystore.properties` at the repository root.
+
+## Star history
+
+[![Star History Chart](https://api.star-history.com/svg?repos=Giton22/herald&type=Date)](https://star-history.com/#Giton22/herald&Date)
 
 ## License
 
