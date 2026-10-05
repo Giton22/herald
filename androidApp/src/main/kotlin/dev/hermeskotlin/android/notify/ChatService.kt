@@ -13,7 +13,7 @@ import dev.hermeskotlin.core.settings.SettingsStore
 import org.koin.android.ext.android.inject
 
 /**
- * Keeps the process in the foreground while a turn runs (or all the time with Stay connected), so
+ * Keeps the process in the foreground while a turn runs (or all the time with Notifications anywhere), so
  * Android doesn't cut the gateway socket when the app is in the background. Its notification is one
  * constant, quiet line ([ChatNotifications.ongoing]), kept current by [ChatNotifier].
  *

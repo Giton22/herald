@@ -60,7 +60,7 @@ class ChatNotifications(private val context: Context) {
      * The ongoing notification of [ChatService], which Android requires while it keeps Herald up: one
      * constant, quiet line in the shade's silent section, no status-bar icon. It says only whether Herald
      * is connected, never what a turn is doing (that's the app's to show), so there's nothing in it to
-     * go stale. "Turn off" turns off whichever of Stay connected and Notifications anywhere keeps it up.
+     * go stale. "Turn off" turns off Notifications anywhere, which keeps it up between turns.
      */
     fun ongoing(connection: ConnectionState, pushAnywhere: Boolean = false): Notification {
         val text = when {

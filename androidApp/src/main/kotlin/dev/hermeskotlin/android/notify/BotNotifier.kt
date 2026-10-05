@@ -36,7 +36,8 @@ import kotlinx.coroutines.sync.withLock
  * roster then shows which chat moved. A notification is only posted when the newest message really is the
  * bot's, never for something the user wrote on another device. Hidden bots stay quiet, as on Desktop.
  * Also keeps the launcher's bot shortcuts current. Only hears anything while the socket is up, which in
- * the background means while a turn runs or Stay connected is on.
+ * the background means while a turn runs or Notifications anywhere keeps Herald up (which also brings bot
+ * messages through ntfy when the socket can't).
  */
 @OptIn(FlowPreview::class)
 class BotNotifier(

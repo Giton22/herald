@@ -72,9 +72,10 @@ data class AppSettings(
     val notifyReplies: Boolean = true,
     /** Notify when the agent waits on an approval or a question while the app is in the background. */
     val notifyRequests: Boolean = true,
-    /** Keep the gateway connection up in the background, so turns started on other devices notify too. */
-    val stayConnected: Boolean = false,
-    /** Bot messages reach the phone off the gateway's network too, end-to-end encrypted through ntfy (herald-push). */
+    /**
+     * Bot messages reach the phone off the gateway's network too, end-to-end encrypted through ntfy (herald-push).
+     * The one thing that keeps Herald up in the background, with a quiet notification.
+     */
     val pushAnywhere: Boolean = false,
     /** Ask GitHub, where the app is published, whether a newer release is out. */
     val checkForUpdates: Boolean = true,

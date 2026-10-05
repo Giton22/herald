@@ -331,14 +331,6 @@ internal fun SettingsView(
                     )
                     Divider()
                     SwitchRow(
-                        title = "Stay connected",
-                        detail = "Also catch turns started on other devices, like Hermes Desktop. " +
-                            "Keeps a quiet notification and uses more battery.",
-                        checked = settings.stayConnected,
-                        onCheckedChange = { on -> onUpdate { it.copy(stayConnected = on) } },
-                    )
-                    Divider()
-                    SwitchRow(
                         title = "Notifications anywhere",
                         detail = pushDetail(settings.pushAnywhere, push),
                         checked = settings.pushAnywhere,

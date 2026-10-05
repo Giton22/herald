@@ -4,10 +4,9 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
-    <uses-permission android:name="android.permission.POST_PROMOTED_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
-    <!-- With Stay connected, reconnect after the phone restarts. -->
+    <!-- With Notifications anywhere, pick the ntfy stream up again after the phone restarts. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
     <!-- The assistant names the app it was called up over; apps are hidden from Herald unless it says which it looks up. -->
@@ -69,7 +68,7 @@
                 android:resource="@xml/shortcuts" />
         </activity>
 
-        <!-- Wakes the app after a reboot or an update, to reconnect when Stay connected is on. -->
+        <!-- Wakes the app after a reboot or an update, so Notifications anywhere listens again. -->
         <receiver
             android:name=".notify.RestartReceiver"
             android:exported="false">
@@ -79,7 +78,7 @@
             </intent-filter>
         </receiver>
 
-        <!-- Keeps the gateway socket alive while a turn runs, or always with Stay connected. -->
+        <!-- Keeps the gateway socket alive while a turn runs, and the process up with Notifications anywhere. -->
         <service
             android:name=".notify.ChatService"
             android:exported="false"

@@ -47,7 +47,7 @@ class ChatNotifier(
                     when {
                         session != null -> follow(session)
                         // No chat open (the app started in the background after an update or reboot):
-                        // Stay connected still keeps the socket up, for bot notifications.
+                        // Notifications anywhere still needs the process up, for its ntfy stream.
                         stay -> keepConnected()
                         else -> stopService()
                     }
@@ -136,8 +136,8 @@ class ChatNotifier(
         ChatService.stop(context)
     }
 
-    /** Stay connected holds the socket; Notifications anywhere holds the ntfy stream. Either needs the process alive. */
-    private val AppSettings.keepsProcessUp: Boolean get() = stayConnected || pushAnywhere
+    /** Notifications anywhere holds the ntfy stream, which needs the process alive between turns too. */
+    private val AppSettings.keepsProcessUp: Boolean get() = pushAnywhere
 
     private data class Quad(val state: ChatState, val visible: Boolean, val settings: AppSettings?, val link: ConnectionState)
 

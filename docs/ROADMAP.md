@@ -203,7 +203,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Model per bot: the editor's Model row (`profiles.configure` model + provider, the expensive-model confirmation), and a model picked in a Bot Chat's composer becomes the bot's own instead of pinning the chat (#129460)
 - [x] Skills, toolsets and MCP servers per bot: the editor opens the Capabilities page on the bot's profile, saying a running Bot Chat may keep its old tools (#124211)
 - [ ] Avatar pictures (upload, `image.generate`), Desktop's blob faces
-- [x] Bot notifications: while out of sight, a bot writing in its chat arrives as an Android conversation notification from it (face, name, inline Reply into its chat); driven by `sessions.changed` on the open socket (Stay connected or a running turn), only for the bot's own words, never hidden bots
+- [x] Bot notifications: while out of sight, a bot writing in its chat arrives as an Android conversation notification from it (face, name, inline Reply into its chat); driven by `sessions.changed` on the open socket (Notifications anywhere or a running turn), only for the bot's own words, never hidden bots
 - [x] Each bot a launcher conversation shortcut; `hermes://bot/<profile>` opens its chat
 - [x] @mentions: `@` in the composer offers the bots with their faces; picking inserts `@handle`
 - [x] Bot exchanges drawn as a conversation: the other bot speaking in its colour, this bot's messages to it as "To X" notes
@@ -223,12 +223,12 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 
 ### Notifications & background
 - [x] Foreground service that keeps the WS alive during long runs
-- [x] Live Update while a turn runs (Android 16 status-bar chip): current tool or status, Stop button
+- [x] One constant, quiet ongoing notification ("Herald · Connected to Hermes") in place of a Live Update; what a turn does shows in the app
 - [x] Local notifications: approval waiting, run finished; tapping one opens its chat
 - [x] Session list filters All / Running / Needs attention, with text labels for a waiting approval or question (tracked across chats this phone has opened), "Running" and "New reply" (read state kept per gateway and profile)
 - [x] Answer from the notification: approve/deny, clarify answers, inline reply to a finished turn (each asks for an unlock first)
 - [x] Notification toggles in Settings; permission asked on the first turn
-- [x] Stay connected: keeps the socket up in the background (quiet notification) so turns started on other devices reach the open chat
+- [x] Notifications anywhere is the one background mode: it keeps Herald up (quiet notification) and comes back after a reboot or update. Stay connected was removed
 - [ ] Gateway-pushed `notification.show`
 - [ ] Follow all sessions: notify for chats other than the open one (watch `session.active_list`, attach to sessions that start a turn)
 - [x] Notifications anywhere: bot messages reach the phone off the gateway's network, end-to-end encrypted and signed through ntfy, without Google services. The herald-push plugin is installed from Settings in one tap ([protocol](push-protocol.md))
