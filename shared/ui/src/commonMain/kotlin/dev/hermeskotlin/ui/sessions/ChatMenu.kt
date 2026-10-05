@@ -30,6 +30,11 @@ internal fun ChatMenu(
     onDeleted: () -> Unit,
     onUsage: () -> Unit,
     onProcesses: () -> Unit,
+    /**
+     * A bot's permanent chat: its title is what makes it the bot's, so Rename, Archive and Delete would
+     * lose the bot its conversation. Those are left to Desktop, which asks first.
+     */
+    botChat: Boolean = false,
     viewModel: SessionsViewModel = koinViewModel(),
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
@@ -45,10 +50,10 @@ internal fun ChatMenu(
     SessionActionsSheet(
         session = session.takeIf { visible },
         onDismiss = onDismiss,
-        onTogglePinned = viewModel::togglePinned,
-        onRename = { renameTarget = it },
-        onToggleArchived = viewModel::toggleArchived,
-        onDelete = { deleteTarget = it },
+        onTogglePinned = viewModel::togglePinned.takeUnless { botChat },
+        onRename = { s: SessionSummary -> renameTarget = s }.takeUnless { botChat },
+        onToggleArchived = viewModel::toggleArchived.takeUnless { botChat },
+        onDelete = { s: SessionSummary -> deleteTarget = s }.takeUnless { botChat },
         onExport = { media.share(transcriptMarkdown(title, messages).encodeToByteArray(), transcriptFileName(title, it.id)) },
         onCopyId = { clipboard.setText(AnnotatedString(it.id)) },
         onUsage = { onUsage() },

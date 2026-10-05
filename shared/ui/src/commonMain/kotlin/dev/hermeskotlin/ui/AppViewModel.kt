@@ -3,6 +3,8 @@ package dev.hermeskotlin.ui
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.auth.AuthApi
+import dev.hermeskotlin.core.bots.Bot
+import dev.hermeskotlin.ui.chat.BotIdentity
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatLinks
 import dev.hermeskotlin.core.chat.LastChatStore
@@ -43,6 +45,14 @@ class AppViewModel(
 
     private val _route = MutableStateFlow<Route>(Route.Loading)
     val route: StateFlow<Route> = _route.asStateFlow()
+
+    private val _chatsProfile = MutableStateFlow<String?>(null)
+
+    /**
+     * The profile picked for chats (null: the launch profile). A bot's chat runs in the bot's own profile
+     * without changing this, so the chat list and the next new chat stay where they were.
+     */
+    val chatsProfile: StateFlow<String?> = _chatsProfile.asStateFlow()
 
     private var newChatCount = 0L
 
@@ -92,6 +102,14 @@ class AppViewModel(
     fun newChat() {
         val gateway = signedInGateway() ?: return
         _route.value = Route.Chat(newChatTarget(gateway, currentProfile()))
+    }
+
+    /** Opens [bot]'s permanent chat, the stored session [storedSessionId], in the bot's own profile. */
+    fun openBotChat(bot: Bot, storedSessionId: String) {
+        val gateway = signedInGateway() ?: return
+        _route.value = Route.Chat(
+            ChatTarget(gateway, storedSessionId, bot.label, profile = bot.name, bot = BotIdentity(bot.name, bot.label)),
+        )
     }
 
     /**
@@ -148,6 +166,7 @@ class AppViewModel(
     /** The last chat the user had open on [gateway] in its picked profile, or a fresh one. */
     private suspend fun home(gateway: SavedGateway): Route.Chat {
         val profile = profiles.get(gateway.gatewayUrl)
+        _chatsProfile.value = profile
         val last = lastChats.get(gateway.gatewayUrl, profile)
         return Route.Chat(last?.let { ChatTarget(gateway, it.sessionId, it.title, profile = profile) } ?: newChatTarget(gateway, profile))
     }
@@ -158,7 +177,7 @@ class AppViewModel(
 
     private fun signedInGateway(): SavedGateway? = (_route.value as? Route.Chat)?.gateway
 
-    private fun currentProfile(): String? = (_route.value as? Route.Chat)?.target?.profile
+    private fun currentProfile(): String? = _chatsProfile.value
 
     private fun currentGateway(): SavedGateway? = (_route.value as? Route.SignIn)?.gateway ?: signedInGateway()
 }

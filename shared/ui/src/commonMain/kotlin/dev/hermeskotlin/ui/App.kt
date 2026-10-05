@@ -121,6 +121,7 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
     val focusManager = LocalFocusManager.current
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
     var menuOpen by remember { mutableStateOf(false) }
+    val chatsProfile by app.chatsProfile.collectAsStateWithLifecycle()
 
     // The open chat, once it exists on the gateway (a new chat gets its row with the first prompt).
     val openSessionId = chatState.storedSessionId?.takeIf { route.target.storedSessionId != null || chatState.hasConversation }
@@ -140,7 +141,7 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
         sidebar = {
             SessionsSidebar(
                 gateway = route.gateway,
-                profile = route.target.profile,
+                profile = chatsProfile,
                 selectedId = openSessionId,
                 visible = sidebar.isOpen,
                 onOpenSession = {
@@ -160,6 +161,10 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
                     app.switchProfile(it)
                     closeDrawer()
                 },
+                onOpenBot = { bot, storedSessionId ->
+                    if (storedSessionId != openSessionId || route.target.bot == null) app.openBotChat(bot, storedSessionId)
+                    closeDrawer()
+                },
             )
         },
     ) {
@@ -177,13 +182,14 @@ private fun Home(route: Route.Chat, app: AppViewModel) {
     ChatMenu(
         visible = menuOpen && openSessionId != null,
         sessionId = openSessionId,
-        title = chatState.title?.takeIf { it.isNotBlank() } ?: route.target.title ?: "Untitled session",
+        title = route.target.bot?.label ?: chatState.title?.takeIf { it.isNotBlank() } ?: route.target.title ?: "Untitled session",
         messages = chatState.messages,
         onDismiss = { menuOpen = false },
         onRenamed = chat::showTitle,
         onDeleted = app::newChat,
         onUsage = chat::openUsage,
         onProcesses = chat::openProcesses,
+        botChat = route.target.bot != null,
     )
 
     if (settingsOpen) {

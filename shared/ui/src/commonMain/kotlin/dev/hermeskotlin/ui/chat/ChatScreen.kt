@@ -126,6 +126,8 @@ import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.ListEnd
 import com.composables.icons.lucide.Info
+import com.composables.icons.lucide.Bot
+import dev.hermeskotlin.core.chat.AgentMessage
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PanelLeft
 import com.composables.icons.lucide.Pencil
@@ -295,7 +297,8 @@ fun ChatScreen(
     }
 
     ChatView(
-        title = state.title?.takeIf { it.isNotBlank() } ?: target.title ?: "New chat",
+        // A bot's chat is titled "Bot Chat" on the gateway; the bot's name says more.
+        title = target.bot?.label ?: state.title?.takeIf { it.isNotBlank() } ?: target.title ?: "New chat",
         state = state,
         picker = picker,
         connected = connected,
@@ -840,15 +843,23 @@ private fun Messages(
         ) {
             items(messages, key = { it.key }) { message ->
                 when (message) {
-                    is ChatMessage.User -> UserBubble(
-                        message,
-                        actions,
-                        connected,
-                        // Not while the prompt is still on its way or its delivery is in doubt.
-                        onEdit = ask(MessageChange.EditLastPrompt, message.key)
-                            .takeIf { message.key == lastPrompt && !message.pending && message.check == null },
-                        onBranch = ask(MessageChange.Branch, message.key).takeIf { !message.pending && message.check == null },
-                    )
+                    is ChatMessage.User -> {
+                        // Another bot's message lands as a user turn; it's theirs, not the user's.
+                        val fromAgent = remember(message.text) { AgentMessage.parse(message.text) }
+                        if (fromAgent != null) {
+                            AgentNote(fromAgent)
+                        } else {
+                            UserBubble(
+                                message,
+                                actions,
+                                connected,
+                                // Not while the prompt is still on its way or its delivery is in doubt.
+                                onEdit = ask(MessageChange.EditLastPrompt, message.key)
+                                    .takeIf { message.key == lastPrompt && !message.pending && message.check == null },
+                                onBranch = ask(MessageChange.Branch, message.key).takeIf { !message.pending && message.check == null },
+                            )
+                        }
+                    }
                     is ChatMessage.Assistant -> AssistantReply(
                         message,
                         onBranch = ask(MessageChange.Branch, message.key),
@@ -1251,6 +1262,37 @@ private fun NoticeLine(message: ChatMessage.Notice) {
     ) {
         UnstyledIcon(Lucide.Info, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.padding(top = 2.dp).size(13.dp))
         Text(message.text, style = Theme[typography][caption], color = Theme[colors][textTertiary])
+    }
+}
+
+/**
+ * A message from another bot (Bot Mode's `message_agent`, a routine or `hermes peer`): the sender's name
+ * over their words, in an outlined card at the left, Desktop's attributed agent note.
+ */
+@Composable
+private fun AgentNote(message: AgentMessage) {
+    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .background(Theme[colors][surface], shape)
+            .border(1.dp, Theme[colors][stroke], shape)
+            .padding(horizontal = 12.dp, vertical = 10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            UnstyledIcon(Lucide.Bot, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(14.dp))
+            Text(
+                message.sender,
+                style = Theme[typography][bodySmall].copy(fontWeight = FontWeight.SemiBold),
+                color = Theme[colors][textColor],
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            Text("agent message", style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
+        }
+        if (message.body.isNotBlank()) MarkdownText(message.body)
     }
 }
 

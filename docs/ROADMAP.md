@@ -178,6 +178,16 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Background process list and kill, from the chat menu (`process.list`, `process.kill`; polled while open, with each one's output tail). Live `agent.terminal.output` streaming not used
 - [ ] Rollback / checkpoints (`rollback.list`, `rollback.diff`, `rollback.restore`)
 
+### Bots (Hermes Bot Mode; design in `docs/bot-mode-integration.md`)
+- [x] Chats | Bots switch at the top of the sidebar, remembered per gateway
+- [x] Bot roster (`profiles.list` over the socket, polled every 5 s while shown): Desktop's face (picture, or its shape and hue from the name), name, latest line of the Bot Chat, age, unread dot, working dot; hidden bots left out
+- [x] Tapping a bot opens its one permanent Bot Chat in the bot's profile without changing the Chats profile; a bot that never had one gets it started (`session.create` hidden + `follow_profile_config`, `session.title "Bot Chat"`), never a second one when a lookup can't be trusted
+- [x] In a Bot Chat, `/new` and `/reset` compress instead; `/title`, Rename, Pin, Archive and Delete are kept away from it
+- [x] Messages from other bots (`Message from 🤖 …`) show as the sender's note in every chat, not as the user's prompt
+- [ ] Create and edit bots (`profiles.create`, `profiles.configure` with `ui_meta` CAS, `profiles.set_asset`, `setup.runtime_check`, kickoff prompt)
+- [ ] Group chats, read-only from Desktop's `hermes-bots-groups` mirror
+- [ ] Per-bot routines, @mention autocomplete, hosted rooms (`groups.*`)
+
 ### Automation & configuration
 - [x] Scheduled jobs in the sidebar (`GET /api/cron/jobs`): schedule in plain words, next run, state; a job page with its prompt, last error, Run now, Pause / Resume, and its runs (`/api/cron/jobs/{id}/runs`), each opening as a chat
 - [x] Create, edit and delete cron jobs (`POST`/`PUT`/`DELETE /api/cron/jobs`): prompt, free-text schedule with presets, name, and delivery target (`/api/cron/delivery-targets`); refetch on `cron.changed`

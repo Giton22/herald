@@ -102,7 +102,7 @@ sealed interface ChatRequest {
 
 /**
  * Identifies what the chat screen shows: a stored session, or a new chat (`storedSessionId == null`),
- * in [profile] (null: the gateway's launch profile).
+ * in [profile] (null: the gateway's launch profile). With [bot] it is that bot's permanent chat.
  */
 data class ChatTarget(
     val gateway: SavedGateway,
@@ -110,7 +110,11 @@ data class ChatTarget(
     val title: String?,
     val nonce: Long = 0,
     val profile: String? = null,
+    val bot: BotIdentity? = null,
 )
+
+/** The bot whose permanent chat is open: its profile and the name it goes by. */
+data class BotIdentity(val name: String, val label: String)
 
 /**
  * Shows the [ChatSession] the app-wide [ChatHost] has open; opening another target replaces it.
@@ -223,7 +227,8 @@ class ChatViewModel(
                 // Distinct before dropping nulls, so returning to the same chat after a new one saves it again.
                 .distinctUntilChanged()
                 .filterNotNull()
-                .collect { last -> target?.let { lastChats.set(it.gateway.gatewayUrl, last, it.profile) } }
+                // A bot's chat is reached from the Bots list; launching back into it would lose that it's the bot's.
+                .collect { last -> target?.takeIf { it.bot == null }?.let { lastChats.set(it.gateway.gatewayUrl, last, it.profile) } }
         }
         viewModelScope.launch {
             snapshotFlow { composer.text.toString() }
@@ -487,7 +492,8 @@ class ChatViewModel(
                 if (composer.text.isEmpty()) composer.setTextAndPlaceCursorAtEnd(text)
             }
             when (val route = SlashRoute.of(command.name, catalog())) {
-                SlashRoute.NewChat -> _requests.send(ChatRequest.NewChat)
+                // A bot keeps one chat forever, so a fresh start there is a fresh context, as on Desktop.
+                SlashRoute.NewChat -> if (target?.bot != null) chat.compress(arg) else _requests.send(ChatRequest.NewChat)
                 // Like Desktop: bare opens the picker, `/model <name>` is for the gateway to parse.
                 SlashRoute.PickModel -> if (arg.isEmpty()) _requests.send(ChatRequest.PickModel) else onGateway()
                 SlashRoute.BrowseSessions -> if (arg.isEmpty()) _requests.send(ChatRequest.BrowseSessions) else resume(chat, arg)
@@ -503,7 +509,12 @@ class ChatViewModel(
                 }
                 SlashRoute.Yolo -> chat.toggleYolo()
                 // Bare `/title` reports the title, which the gateway's command does.
-                SlashRoute.Title -> if (arg.isEmpty()) onGateway() else chat.retitle(arg)
+                SlashRoute.Title -> when {
+                    arg.isEmpty() -> onGateway()
+                    // Its title is what makes it the bot's chat; renamed, the bot would start a new one.
+                    target?.bot != null -> chat.showCommandOutput("/title", "A bot's chat keeps its name, so the bot can find it.", failed = true)
+                    else -> chat.retitle(arg)
+                }
                 SlashRoute.Branch -> {
                     val count = arg.toIntOrNull()
                     if (arg.isNotEmpty() && (count == null || count < 1)) {

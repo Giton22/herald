@@ -83,7 +83,12 @@ import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.core.bots.Bot
+import dev.hermeskotlin.core.bots.SidebarMode
 import dev.hermeskotlin.core.connection.ConnectionState
+import dev.hermeskotlin.designsystem.components.SegmentedControl
+import dev.hermeskotlin.ui.bots.BotsRoster
+import dev.hermeskotlin.ui.bots.BotsViewModel
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.models.displayModelName
 import dev.hermeskotlin.core.profiles.Profile
@@ -156,9 +161,18 @@ fun SessionsSidebar(
     onChangeGateway: () -> Unit,
     onOpenSettings: () -> Unit,
     onSwitchProfile: (String?) -> Unit,
+    /** Opens a bot's chat, by the bot and the stored session to resume. */
+    onOpenBot: (Bot, String) -> Unit,
     viewModel: SessionsViewModel = koinViewModel(),
+    bots: BotsViewModel = koinViewModel(),
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
+    val mode by bots.mode.collectAsStateWithLifecycle()
+    val botsState by bots.state.collectAsStateWithLifecycle()
+    val avatars by bots.avatars.collectAsStateWithLifecycle()
+    LaunchedEffect(gateway) { bots.bind(gateway.gatewayUrl) }
+    LaunchedEffect(visible) { bots.setVisible(visible) }
+    LaunchedEffect(selectedId) { bots.setOpenSession(selectedId) }
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
     val user by viewModel.user.collectAsStateWithLifecycle()
     val roster by viewModel.roster.collectAsStateWithLifecycle()
@@ -251,15 +265,32 @@ fun SessionsSidebar(
                     title = state.filter.label,
                     onBack = { viewModel.setFilter(SessionListFilter.Recent) },
                 )
-                else -> MainHeader(onSearch = { searchOpen = true })
+                // Search looks through chats; the bot roster is short enough to read.
+                else -> MainHeader(onSearch = { searchOpen = true }.takeIf { mode == SidebarMode.Chats })
             }
             if (!searchOpen && state.filter == SessionListFilter.Recent) {
+                SegmentedControl(
+                    options = SidebarMode.entries,
+                    selected = mode,
+                    onSelect = bots::setMode,
+                    optionLabel = { it.name },
+                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+                )
                 UpdateBanner(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp))
             }
 
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 val searchResults = state.searchResults
                 when {
+                    !searchOpen && state.filter == SessionListFilter.Recent && mode == SidebarMode.Bots -> BotsRoster(
+                        state = botsState,
+                        avatars = avatars,
+                        selectedId = selectedId,
+                        nowSeconds = bots.nowSeconds(),
+                        onOpen = { bot -> bots.open(bot) { id -> onOpenBot(bot, id) } },
+                        onRetry = bots::refresh,
+                        onDismissError = bots::dismissOpenError,
+                    )
                     searchOpen && searchResults == null -> Unit
                     searchResults != null -> when {
                         state.searching && searchResults.isEmpty() -> CenteredSpinner()
@@ -482,7 +513,7 @@ private val SessionListFilter.label: String
     }
 
 @Composable
-private fun MainHeader(onSearch: () -> Unit) {
+private fun MainHeader(onSearch: (() -> Unit)?) {
     Row(
         Modifier.fillMaxWidth().padding(start = 24.dp, end = 12.dp, top = 12.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -493,7 +524,8 @@ private fun MainHeader(onSearch: () -> Unit) {
             color = Theme[colors][text],
             modifier = Modifier.weight(1f),
         )
-        SquareButton(Lucide.Search, "Search chats", onClick = onSearch)
+        // The header keeps its height without the button, so switching sides doesn't shift the list.
+        if (onSearch != null) SquareButton(Lucide.Search, "Search chats", onClick = onSearch) else Box(Modifier.size(MinTouchTarget))
     }
 }
 
@@ -837,10 +869,11 @@ internal fun ListNotice(text: String, action: String? = null, onAction: () -> Un
 internal fun SessionActionsSheet(
     session: SessionSummary?,
     onDismiss: () -> Unit,
-    onTogglePinned: (SessionSummary) -> Unit,
-    onRename: (SessionSummary) -> Unit,
-    onToggleArchived: (SessionSummary) -> Unit,
-    onDelete: (SessionSummary) -> Unit,
+    /** Null leaves Rename, Pin, Archive and Delete out, as for a bot's chat, whose title is what makes it the bot's. */
+    onTogglePinned: ((SessionSummary) -> Unit)?,
+    onRename: ((SessionSummary) -> Unit)?,
+    onToggleArchived: ((SessionSummary) -> Unit)?,
+    onDelete: ((SessionSummary) -> Unit)?,
     onExport: ((SessionSummary) -> Unit)? = null,
     onCopyId: ((SessionSummary) -> Unit)? = null,
     onUsage: ((SessionSummary) -> Unit)? = null,
@@ -858,14 +891,16 @@ internal fun SessionActionsSheet(
         }
         SheetHeader(s.displayTitle, age)
         fun act(block: (SessionSummary) -> Unit) = { onDismiss(); block(s) }
-        SheetAction("Rename", Lucide.Pencil, act(onRename))
-        SheetAction(if (s.pinned) "Unpin" else "Pin", if (s.pinned) Lucide.PinOff else Lucide.Pin, act(onTogglePinned))
+        onRename?.let { SheetAction("Rename", Lucide.Pencil, act(it)) }
+        onTogglePinned?.let { SheetAction(if (s.pinned) "Unpin" else "Pin", if (s.pinned) Lucide.PinOff else Lucide.Pin, act(it)) }
         onUsage?.let { SheetAction("Usage and cost", Lucide.Gauge, act(it)) }
         onProcesses?.let { SheetAction("Background processes", Lucide.SquareTerminal, act(it)) }
         onExport?.let { SheetAction("Export as Markdown", Lucide.Download, act(it)) }
         onCopyId?.let { SheetAction("Copy session ID", Lucide.Copy, act(it)) }
-        SheetAction(if (s.archived) "Unarchive" else "Archive", if (s.archived) Lucide.ArchiveRestore else Lucide.Archive, act(onToggleArchived))
-        SheetAction("Delete", Lucide.Trash2, act(onDelete), destructive = true)
+        onToggleArchived?.let {
+            SheetAction(if (s.archived) "Unarchive" else "Archive", if (s.archived) Lucide.ArchiveRestore else Lucide.Archive, act(it))
+        }
+        onDelete?.let { SheetAction("Delete", Lucide.Trash2, act(it), destructive = true) }
     }
 }
 
