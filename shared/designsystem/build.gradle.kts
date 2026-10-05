@@ -10,6 +10,7 @@ kotlin {
         namespace = "dev.hermeskotlin.designsystem"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
+        withHostTest {}
     }
 
     sourceSets {
@@ -21,7 +22,14 @@ kotlin {
             api(libs.compose.unstyled.colored.indication)
             api(libs.icons.lucide)
             implementation(libs.markdown.renderer)
+            implementation(libs.highlights)
             implementation(libs.compose.ui.tooling.preview)
+        }
+        androidMain.dependencies {
+            implementation(libs.jlatexmath.android)
+        }
+        commonTest.dependencies {
+            implementation(libs.kotlin.test)
         }
     }
 }

@@ -105,6 +105,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.AnnotatedString
@@ -226,6 +227,8 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
 import dev.hermeskotlin.ui.LocalAppSettings
 import dev.hermeskotlin.ui.components.EmptyState
+import dev.hermeskotlin.ui.components.messageTime
+import dev.hermeskotlin.ui.components.uses24HourClock
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
@@ -291,6 +294,7 @@ fun ChatScreen(
                 ChatRequest.OpenUsage -> usageOpen = true
                 ChatRequest.OpenProcesses -> processesOpen = true
                 ChatRequest.StartVoice -> startVoiceChat()
+                ChatRequest.StartDictation -> toggleDictation()
             }
         }
     }
@@ -323,6 +327,7 @@ fun ChatScreen(
         onOpenPets = { petsOpen = true },
         onViewImage = { viewing = it },
         onNotice = { notice = it },
+        wallpaper = rememberChatWallpaper(),
     )
 
     AttachSheet(visible = attachOpen, onDismiss = { attachOpen = false }, picker = attachmentPicker)
@@ -409,6 +414,8 @@ internal fun ChatView(
     onOpenPets: () -> Unit,
     onViewImage: (ViewerImage) -> Unit,
     onNotice: (String) -> Unit,
+    /** The chat background from Settings, drawn behind the conversation (and frosted under the composer). */
+    wallpaper: ImageBitmap? = null,
 ) {
     Box(
         Modifier
@@ -464,6 +471,7 @@ internal fun ChatView(
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
+                    if (wallpaper != null) ChatWallpaper(wallpaper, LocalAppSettings.current.wallpaperStrength, Modifier.fillMaxSize())
                     if (state.historyLoaded && state.messages.isNotEmpty()) {
                         CompositionLocalProvider(
                             LocalMediaLoader provides actions::loadMedia,
@@ -1080,6 +1088,7 @@ private fun UserBubble(
                 }
             }
         }
+        if (!message.pending) MessageTimeLabel(message.timestamp, Modifier.align(Alignment.End))
         if (message.queued) {
             Text("Queued · sends after this task", style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }
@@ -1221,7 +1230,8 @@ private fun AssistantReply(
             }
         }
         val usage = message.usage?.takeIf { settings.showUsage && !message.streaming }
-        if ((!message.streaming && text.isNotBlank()) || usage != null) {
+        val dated = settings.showTimestamps && !message.streaming && message.timestamp != null
+        if ((!message.streaming && text.isNotBlank()) || usage != null || dated) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (!message.streaming && text.isNotBlank()) {
                     // Their padding trimmed off the start and top, the icons line up with the reply and sit close under it.
@@ -1237,9 +1247,19 @@ private fun AssistantReply(
                         color = Theme[colors][textTertiary],
                     )
                 }
+                if (dated) MessageTimeLabel(message.timestamp)
             }
         }
     }
+}
+
+/** When a prompt was sent or a reply finished, in small type; nothing when the setting is off or there's no time. */
+@Composable
+private fun MessageTimeLabel(epochSeconds: Double?, modifier: Modifier = Modifier) {
+    if (!LocalAppSettings.current.showTimestamps || epochSeconds == null) return
+    val use24Hour = uses24HourClock()
+    val label = remember(epochSeconds, use24Hour) { messageTime(epochSeconds, use24Hour) }
+    if (label.isNotEmpty()) Text(label, style = Theme[typography][caption], color = Theme[colors][textTertiary], modifier = modifier)
 }
 
 /** A session notice: a centred quiet line between the messages. */

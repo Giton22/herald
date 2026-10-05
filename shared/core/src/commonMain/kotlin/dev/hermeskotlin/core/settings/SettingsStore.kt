@@ -22,6 +22,13 @@ enum class TextSize(val scale: Float) {
     Largest(1.3f),
 }
 
+/** How much of the chat background shows through: [veil] is how opaque the app's background color lies over it. */
+enum class WallpaperStrength(val veil: Float) {
+    Faint(0.88f),
+    Medium(0.75f),
+    Strong(0.55f),
+}
+
 /**
  * How long a voice chat waits after you stop talking before it sends. Desktop's chat uses 1.25 s
  * and the terminal 3 s; on a phone people pause mid-thought, so the default sits between.
@@ -46,10 +53,16 @@ data class AppSettings(
     /** Dark mode uses true black backgrounds (OLED). */
     val pureBlack: Boolean = false,
     val textSize: TextSize = TextSize.Default,
+    /** How strongly the chat background (kept by [WallpaperStore]) shows, when there is one. */
+    val wallpaperStrength: WallpaperStrength = WallpaperStrength.Faint,
     val showReasoning: Boolean = true,
     val showToolActivity: Boolean = true,
     /** Tokens each reply took, under it. */
     val showUsage: Boolean = true,
+    /** The time under each prompt and finished reply. */
+    val showTimestamps: Boolean = true,
+    /** Long lines in code blocks wrap; off, a block scrolls sideways. */
+    val wrapCode: Boolean = false,
     /** Show the profile's pet (when the gateway has one on) above the composer. */
     val showPet: Boolean = true,
     val voicePause: VoicePause = VoicePause.Normal,
@@ -63,6 +76,8 @@ data class AppSettings(
     val stayConnected: Boolean = false,
     /** Ask GitHub, where the app is published, whether a newer release is out. */
     val checkForUpdates: Boolean = true,
+    /** Ask for a fingerprint, face or the screen lock when Herald opens, and keep it out of Recents. */
+    val appLock: Boolean = false,
 )
 
 /**
