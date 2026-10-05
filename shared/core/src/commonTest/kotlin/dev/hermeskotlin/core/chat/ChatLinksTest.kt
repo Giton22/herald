@@ -29,6 +29,18 @@ class ChatLinksTest {
     }
 
     @Test
+    fun aShareToABotOpensItsChatWithTheDraft() {
+        val links = ChatLinks()
+        val draft = ComposeDraft(text = "look at this")
+        links.shareToBot("scribe", draft)
+        val link = assertNotNull(links.pending.value)
+        assertEquals("scribe", link.bot)
+        // The bot's chat is looked up when it opens.
+        assertNull(link.storedSessionId)
+        assertEquals(draft, link.draft)
+    }
+
+    @Test
     fun onlyTheLatestLinkIsKeptAndConsumedOnce() {
         val links = ChatLinks()
         links.newChat(ComposeDraft(text = "first"))

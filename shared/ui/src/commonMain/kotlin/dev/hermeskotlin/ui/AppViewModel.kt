@@ -107,7 +107,7 @@ class AppViewModel(
                     val bot = link.bot
                     val stored = link.storedSessionId
                     when {
-                        bot != null -> openBotLink(bot, link.title, stored)
+                        bot != null -> openBotLink(bot, link.title, stored, link.draft)
                         stored == null -> newChat(link.draft)
                         open != stored -> openSession(stored, link.title ?: "Chat")
                     }
@@ -215,23 +215,28 @@ class AppViewModel(
     /**
      * A bot's chat asked for from outside (notification, shortcut, link). With a known [storedSessionId] it
      * opens at once and is then checked against the gateway; without one it's looked up first, safely.
+     * [draft] (a share to the bot) goes into its composer, after what the user had typed there.
      */
-    private fun openBotLink(bot: String, label: String?, storedSessionId: String?) {
+    private fun openBotLink(bot: String, label: String?, storedSessionId: String?, draft: ComposeDraft? = null) {
         val gateway = signedInGateway() ?: return
         val name = label?.takeIf { it.isNotBlank() } ?: Bot(name = bot).label
         if (storedSessionId != null) {
-            _route.value = Route.Chat(botChatTarget(gateway, storedSessionId, bot, name).also(::followBotChat))
+            _route.value = Route.Chat(botChatTarget(gateway, storedSessionId, bot, name, draft).also(::followBotChat))
             return
         }
         viewModelScope.launch {
             connection.state.first { it is ConnectionState.Connected }
-            val id = runCatching { botChats.open(Bot(name = bot)) }.getOrNull() ?: return@launch
-            _route.value = Route.Chat(botChatTarget(gateway, id, bot, name))
+            val id = runCatching { botChats.open(Bot(name = bot)) }.getOrNull()
+            when {
+                id != null -> _route.value = Route.Chat(botChatTarget(gateway, id, bot, name, draft))
+                // A share to a bot that's gone (an old shortcut) isn't lost: it waits in a new chat instead.
+                draft != null -> newChat(draft)
+            }
         }
     }
 
-    private fun botChatTarget(gateway: SavedGateway, storedSessionId: String, name: String, label: String) =
-        ChatTarget(gateway, storedSessionId, label, profile = name, bot = BotIdentity(name, label, chatsProfile = currentProfile()))
+    private fun botChatTarget(gateway: SavedGateway, storedSessionId: String, name: String, label: String, draft: ComposeDraft? = null) =
+        ChatTarget(gateway, storedSessionId, label, profile = name, bot = BotIdentity(name, label, chatsProfile = currentProfile()), draft = draft)
 
     /**
      * A bot's chat reopened from a past launch may have moved on since (`/compress` continues it in a new

@@ -51,6 +51,11 @@ class ChatLinks {
         _pending.value = ChatLink(storedSessionId = null, title = null, draft = draft)
     }
 
+    /** Opens [bot]'s permanent chat with [draft] (shared from another app) added to its composer. */
+    fun shareToBot(bot: String, draft: ComposeDraft) {
+        _pending.value = ChatLink(storedSessionId = null, title = null, draft = draft, bot = bot)
+    }
+
     /** Opens what a `hermes://` [link] names. */
     fun follow(link: AppLink) = when (link) {
         AppLink.NewChat -> newChat()
