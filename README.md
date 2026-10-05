@@ -18,7 +18,7 @@ Herald is an independent project. It isn't made or endorsed by Nous Research.
 - **Comment on a reply**: select any part of it, or of a tool's output, to comment on, explain or ask about on the side; comments are highlighted and go out together
 - **Message actions**: copy, edit your last prompt, or branch the chat from any message
 - **Answer the agent**: approvals, questions, sudo and secret prompts, also from a notification
-- **Steer** a running turn with "Send now", queue the next prompt with "Send after this task", or stop it; switch model, thinking level and profile per chat
+- **Send while it works**: steer the running reply, queue the next prompt, or stop and send (pick a default in Settings, long-press Send for the others); switch model, thinking level and profile per chat
 - **Nothing lost**: each chat keeps its unsent draft, and a prompt that may not have arrived can be checked, resent or edited
 - **Sessions** in a sidebar: search, pin, rename, archive and export; filter to the chats that are running or need you
 - **Scheduled jobs**: create, edit, pause and run them, and open each run as a chat
