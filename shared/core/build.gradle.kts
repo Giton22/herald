@@ -37,3 +37,6 @@ kotlin {
         }
     }
 }
+
+// Lint only ever gets this module's test sources, and the app's lint ignores those (see androidApp).
+tasks.matching { it.name == "lintAnalyzeAndroidHostTest" }.configureEach { enabled = false }

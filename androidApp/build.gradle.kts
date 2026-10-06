@@ -53,12 +53,15 @@ android {
 
     // CI runs lintDebug. Warnings count as errors, and the baseline holds the issues that were there when
     // lint was added, so any new issue fails the build; regenerate it with :androidApp:updateLintBaseline
-    // after fixing some. Lint sees this module only: the shared KMP modules have no lint task of their own.
+    // after fixing some. Lint sees this module only: the shared KMP modules' one lint task reads just their
+    // test sources, and they turn it off.
     lint {
         baseline = file("lint-baseline.xml")
         abortOnError = true
         warningsAsErrors = true
         checkReleaseBuilds = false
+        // Test code isn't shipped, and analysing it was most of lint's time in CI.
+        ignoreTestSources = true
         disable += setOf(
             // Only fires on the untracked local.properties that Android Studio writes on Windows.
             "PropertyEscape",
