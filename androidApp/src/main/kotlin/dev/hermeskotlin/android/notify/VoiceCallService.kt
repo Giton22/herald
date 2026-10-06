@@ -5,6 +5,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.os.Build
 import android.os.IBinder
 import android.util.Log
 import androidx.core.app.ServiceCompat
@@ -35,7 +36,8 @@ class VoiceCallService : Service() {
                 this,
                 ChatNotifications.VOICE_ID,
                 notifications.voiceCall(end),
-                ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
+                // Types are Android 10+; the microphone one, 11+.
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE else 0,
             )
         } catch (e: Exception) {
             // Android 14+ refuses a microphone service without the permission, or from the background.
