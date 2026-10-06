@@ -44,6 +44,11 @@ data class VoiceChatState(
     val live: Boolean = false,
     /** The microphone is off in a live call. */
     val muted: Boolean = false,
+    /** The latest words said, as captions: yours, or the voice's when [captionIsVoice]. */
+    val caption: String? = null,
+    val captionIsVoice: Boolean = false,
+    /** The tool Hermes is running for the request, while it works. */
+    val working: String? = null,
 )
 
 data class DictationState(
@@ -229,7 +234,7 @@ class VoiceController(
         if (transcript.isBlank()) return true
         if (isVoiceStopCommand(transcript)) return false
 
-        _chat.update { it.copy(phase = VoicePhase.Thinking) }
+        _chat.update { it.copy(phase = VoicePhase.Thinking, caption = transcript.trim(), captionIsVoice = false) }
         val sentAt = session.state.value.messages.size
         if (!session.send(transcript)) {
             _chat.update { it.copy(error = session.state.value.error ?: "Couldn't send that.") }
@@ -242,7 +247,7 @@ class VoiceController(
         val text = reply?.text?.let(::speakableText).orEmpty()
         if (text.isEmpty()) return true
 
-        _chat.update { it.copy(phase = VoicePhase.Speaking) }
+        _chat.update { it.copy(phase = VoicePhase.Speaking, caption = text, captionIsVoice = true) }
         speak(text, gateway, profile)
         return true
     }

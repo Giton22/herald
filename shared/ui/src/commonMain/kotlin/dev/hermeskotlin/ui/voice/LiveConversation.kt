@@ -98,6 +98,7 @@ internal class LiveConversation(
                     is LiveEvent.Transcript -> {
                         transcript += event.fragment
                         if (transcript.size > MAX_FRAGMENTS) transcript.subList(0, transcript.size - KEPT_FRAGMENTS).clear()
+                        caption(event.fragment)
                         if (event.fragment.speaker != LiveFragment.Speaker.User) continue
                         // The voice answers a bare "stop" itself and never hands it over, so the whole utterance is
                         // judged once it settles: "stop" ends the call, "stop the container" is a request.
@@ -141,6 +142,15 @@ internal class LiveConversation(
         call.send(LiveCommands.mute(nextId(if (muted) "mute" else "unmute"), muted))
     }
 
+    /** Shows [fragment] as captions: the speaker's words so far, or theirs anew once the other one spoke. */
+    private fun caption(fragment: LiveFragment) = state.update {
+        val voice = fragment.speaker == LiveFragment.Speaker.Assistant
+        val words = (if (it.caption != null && it.captionIsVoice == voice) it.caption + fragment.text else fragment.text).trimStart()
+        // The tail that fits, from a word's start.
+        val shown = if (words.length <= CAPTION_CHARS) words else "…" + words.takeLast(CAPTION_CHARS).substringAfter(' ')
+        it.copy(caption = shown.ifBlank { null }, captionIsVoice = voice)
+    }
+
     /** The recent conversation, oldest first: the last five minutes, at most 80 pieces. */
     private fun contextWindow(): List<LiveFragment> {
         val last = transcript.lastOrNull() ?: return emptyList()
@@ -154,7 +164,10 @@ internal class LiveConversation(
             try {
                 answer(id, prompt, context)
             } finally {
-                if (delegationId == id) delegationId = null
+                if (delegationId == id) {
+                    delegationId = null
+                    state.update { it.copy(working = null) }
+                }
             }
         }
     }
@@ -195,6 +208,7 @@ internal class LiveConversation(
             val running = replies.lastOrNull()?.tools?.lastOrNull { it.running }?.let { it.detail ?: it.name }
             if (running != null && running != tool) {
                 tool = running
+                state.update { it.copy(working = running) }
                 send(LiveCommands.thinking(nextId("think"), id, "Hermes is working: $running. Not done yet."))
             }
             replies.forEachIndexed { i, reply ->
@@ -231,5 +245,6 @@ internal class LiveConversation(
         const val CONTEXT_FRAGMENTS = 80
         const val MAX_FRAGMENTS = 2_000
         const val KEPT_FRAGMENTS = 1_500
+        const val CAPTION_CHARS = 140
     }
 }

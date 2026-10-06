@@ -192,15 +192,14 @@ import dev.hermeskotlin.ui.pet.PetSheet
 import dev.hermeskotlin.ui.pet.PetView
 import dev.hermeskotlin.ui.pet.rememberPetState
 import dev.hermeskotlin.ui.voice.DictationState
-import kotlin.math.sqrt
 import dev.hermeskotlin.ui.voice.VoiceChatState
+import dev.hermeskotlin.ui.voice.VoicePanel
 import dev.hermeskotlin.ui.voice.VoicePhase
 import dev.hermeskotlin.ui.voice.rememberMicrophonePermission
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.composables.icons.lucide.AudioLines
 import com.composables.icons.lucide.Mic
-import com.composables.icons.lucide.MicOff
 import com.composables.icons.lucide.Paperclip
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.background
@@ -2217,80 +2216,6 @@ internal fun DictationButton(state: DictationState, onClick: () -> Unit, enabled
             tint = tint,
             modifier = Modifier.size(if (recording) 16.dp else 22.dp),
         )
-    }
-}
-
-/**
- * Takes the composer's place during a voice chat: what's happening now, a circle that swells with
- * your voice, and buttons to skip the reply being read or end the chat. What you say sends itself.
- * A GPT-Live call has Mute instead of Skip: you talk over the voice to cut it off.
- */
-@Composable
-private fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onSkip: () -> Unit, onMute: () -> Unit, onEnd: () -> Unit) {
-    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
-    val page = Theme[colors][background]
-    val frosted = remember(page) {
-        HazeBlurStyle {
-            blurEnabled(true)
-            blurRadius(20.dp)
-            backgroundColor(page)
-        }
-    }
-    val label = when (state.phase) {
-        VoicePhase.Connecting -> "Connecting…"
-        VoicePhase.Listening -> if (state.muted) "Muted" else if (state.hearing) "Hearing you…" else "Listening…"
-        VoicePhase.Transcribing -> "Catching that…"
-        VoicePhase.Thinking -> "Thinking…"
-        VoicePhase.Speaking -> "Speaking…"
-        VoicePhase.Off -> ""
-    }
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .navigationBarsPadding()
-            .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)
-            .clip(shape)
-            .hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)
-            .background(Theme[colors][surface].copy(alpha = 0.55f))
-            .border(1.dp, Theme[colors][strokeStrong], shape)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) {
-            when (state.phase) {
-                VoicePhase.Listening -> {
-                    // Square root, so a phone mic's quiet range still visibly moves the circle.
-                    val size = 16.dp + 24.dp * sqrt((state.level * 4f).coerceIn(0f, 1f))
-                    Box(Modifier.size(size).clip(CircleShape).background(Theme[colors][accent]))
-                }
-                VoicePhase.Speaking -> UnstyledIcon(Lucide.AudioLines, contentDescription = null, tint = Theme[colors][accent], modifier = Modifier.size(24.dp))
-                else -> Spinner(Modifier.size(18.dp))
-            }
-        }
-        Column(Modifier.weight(1f)) {
-            Text(label, style = Theme[typography][body], color = Theme[colors][textColor])
-            Text(
-                when {
-                    state.live && state.phase == VoicePhase.Speaking -> "Talk over it to cut in."
-                    state.live && state.phase == VoicePhase.Thinking -> "Hermes is on it."
-                    state.live -> "Live call · say “stop” to end"
-                    state.phase == VoicePhase.Listening -> "Just talk · say “stop” to end"
-                    state.phase == VoicePhase.Speaking -> "Tap skip to talk again."
-                    else -> "Voice chat"
-                },
-                style = Theme[typography][caption],
-                color = Theme[colors][textTertiary],
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
-        if (state.live && state.phase != VoicePhase.Connecting) {
-            IconButton(if (state.muted) Lucide.MicOff else Lucide.Mic, contentDescription = if (state.muted) "Unmute" else "Mute", onClick = onMute)
-        } else if (state.phase == VoicePhase.Speaking) {
-            Button("Skip", onClick = onSkip, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
-        }
-        IconButton(Lucide.X, contentDescription = "End voice chat", onClick = onEnd)
     }
 }
 
