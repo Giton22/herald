@@ -61,7 +61,7 @@ class UpdateChecker(
 }
 
 /**
- * A release names one APK per ABI (`herald-1.2.3-arm64-v8a.apk`) beside the universal one (`herald-1.2.3.apk`):
+ * A release names one APK per ABI (`herald-1.2.3_arm64-v8a.apk`) beside the universal one (`herald-1.2.3.apk`):
  * the one for the first of [abis] that has its own wins, then the universal one, then any APK.
  */
 internal fun parseRelease(release: JsonObject, abis: List<String>): AppUpdate? {
@@ -70,8 +70,8 @@ internal fun parseRelease(release: JsonObject, abis: List<String>): AppUpdate? {
     val apks = (release["assets"] as? JsonArray).orEmpty()
         .mapNotNull { it as? JsonObject }
         .mapNotNull { asset -> asset.text("name")?.takeIf { it.endsWith(".apk", ignoreCase = true) }?.let { it.dropLast(4) to asset } }
-    val forAbi = abis.firstNotNullOfOrNull { abi -> apks.firstOrNull { (name, _) -> name.endsWith("-$abi") } }
-    val universal = apks.firstOrNull { (name, _) -> APK_ABIS.none { name.endsWith("-$it") } }
+    val forAbi = abis.firstNotNullOfOrNull { abi -> apks.firstOrNull { (name, _) -> name.endsWith("_$abi") } }
+    val universal = apks.firstOrNull { (name, _) -> APK_ABIS.none { name.endsWith("_$it") } }
     val apk = (forAbi ?: universal ?: apks.firstOrNull())?.second?.text("browser_download_url")
     return AppUpdate(tag.removePrefix("v"), page, apk)
 }

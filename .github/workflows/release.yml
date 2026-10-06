@@ -58,12 +58,13 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         # The universal APK keeps the name every release had; one APK per ABI, about a third of its size, goes
-        # beside it. The universal one is uploaded first: app versions up to 0.5.1 offer the first APK listed.
+        # beside it after an underscore (herald-1.2.3_arm64-v8a.apk). GitHub lists assets by name and app versions
+        # up to 0.5.1 offer the first APK listed, so the universal one must sort first: "." comes before "_".
         run: |
           v="${GITHUB_REF_NAME#v}"
           out=androidApp/build/outputs/apk/release
           cp "$out/androidApp-universal-release.apk" "herald-$v.apk"
-          for abi in arm64-v8a armeabi-v7a x86_64 x86; do cp "$out/androidApp-$abi-release.apk" "herald-$v-$abi.apk"; done
+          for abi in arm64-v8a armeabi-v7a x86_64 x86; do cp "$out/androidApp-$abi-release.apk" "herald-${v}_$abi.apk"; done
           for apk in herald-*.apk; do sha256sum "$apk" > "$apk.sha256"; done
           # Above the generated changelog: which APK to take.
           cat > which-apk.md <<EOF
@@ -71,16 +72,16 @@ jobs:
 
           | Your device | Download |
           |---|---|
-          | **Almost any phone or tablet** (64-bit ARM, nearly every phone since 2017) | \`herald-$v-arm64-v8a.apk\` |
-          | An older or low-cost 32-bit phone | \`herald-$v-armeabi-v7a.apk\` |
-          | An emulator or Chromebook with an Intel or AMD chip | \`herald-$v-x86_64.apk\` |
-          | A 32-bit Intel or AMD device | \`herald-$v-x86.apk\` |
-          | Not sure | \`herald-$v.apk\`: runs on all of them, about 2.5× the size |
+          | **Almost any phone or tablet** (64-bit ARM, nearly every phone since 2017) | \`herald-${v}_arm64-v8a.apk\` |
+          | An older or low-cost 32-bit phone | \`herald-${v}_armeabi-v7a.apk\` |
+          | An emulator or Chromebook with an Intel or AMD chip | \`herald-${v}_x86_64.apk\` |
+          | A 32-bit Intel or AMD device | \`herald-${v}_x86.apk\` |
+          | Not sure | \`herald-$v.apk\`: runs on all of them, about 2.7× the size |
 
           Once Herald is installed, its update banner downloads the right one by itself.
           EOF
           gh release create "$GITHUB_REF_NAME" "herald-$v.apk" "herald-$v.apk.sha256" --draft --generate-notes --notes-file which-apk.md --title "$GITHUB_REF_NAME"
-          for abi in arm64-v8a armeabi-v7a x86_64 x86; do gh release upload "$GITHUB_REF_NAME" "herald-$v-$abi.apk" "herald-$v-$abi.apk.sha256"; done
+          for abi in arm64-v8a armeabi-v7a x86_64 x86; do gh release upload "$GITHUB_REF_NAME" "herald-${v}_$abi.apk" "herald-${v}_$abi.apk.sha256"; done
 
       - name: Remove the signing key
         if: always()

@@ -46,13 +46,14 @@ class UpdateCheckerTest {
 
     @Test
     fun theApkForThisDevicesAbiWinsThenTheUniversalOne() {
+        // In GitHub's order, by name. Versions up to 0.5.1 take the first APK, so the universal one has to sort
+        // first: release.yml puts the ABI after "_", which comes after the universal name's ".".
+        val names = listOf("herald-0.4.0.apk", "herald-0.4.0.apk.sha256", "herald-0.4.0_arm64-v8a.apk", "herald-0.4.0_armeabi-v7a.apk", "herald-0.4.0_x86_64.apk")
+        assertEquals(names, names.sorted())
+        val urls = listOf("universal.apk", "universal.sha256", "arm64.apk", "arm32.apk", "x86_64.apk")
         val split = HermesJson.parseToJsonElement(
-            """{"tag_name":"v0.4.0","html_url":"https://github.com/o/r/releases/tag/v0.4.0","assets":[
-                {"name":"herald-0.4.0.apk","browser_download_url":"https://x/universal.apk"},
-                {"name":"herald-0.4.0.apk.sha256","browser_download_url":"https://x/universal.sha256"},
-                {"name":"herald-0.4.0-arm64-v8a.apk","browser_download_url":"https://x/arm64.apk"},
-                {"name":"herald-0.4.0-armeabi-v7a.apk","browser_download_url":"https://x/arm32.apk"},
-                {"name":"herald-0.4.0-x86_64.apk","browser_download_url":"https://x/x86_64.apk"}]}""",
+            """{"tag_name":"v0.4.0","html_url":"https://github.com/o/r/releases/tag/v0.4.0","assets":[""" +
+                names.zip(urls).joinToString(",") { (name, url) -> """{"name":"$name","browser_download_url":"https://x/$url"}""" } + "]}",
         ) as JsonObject
 
         assertEquals("https://x/arm64.apk", parseRelease(split, listOf("arm64-v8a", "armeabi-v7a", "armeabi"))?.apkUrl)
