@@ -6,6 +6,7 @@ import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.voice.AudioApi
+import dev.hermeskotlin.core.voice.LiveCalls
 import dev.hermeskotlin.core.voice.SpeechPlayer
 import dev.hermeskotlin.core.voice.SpokenAudio
 import dev.hermeskotlin.core.voice.VoiceActivity
@@ -28,7 +29,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-enum class VoicePhase { Off, Listening, Transcribing, Thinking, Speaking }
+enum class VoicePhase { Off, Connecting, Listening, Transcribing, Thinking, Speaking }
 
 data class VoiceChatState(
     val phase: VoicePhase = VoicePhase.Off,
@@ -38,6 +39,10 @@ data class VoiceChatState(
     val hearing: Boolean = false,
     /** The last thing that went wrong; the conversation carries on where it can. */
     val error: String? = null,
+    /** A GPT-Live call rather than Desktop's listen, send and read aloud. */
+    val live: Boolean = false,
+    /** The microphone is off in a live call. */
+    val muted: Boolean = false,
 )
 
 data class DictationState(
@@ -55,6 +60,9 @@ data class DictationState(
  *
  * Dictation drops a transcript into the composer. A voice chat loops: listen until you stop talking,
  * send what you said, wait for the reply, read it aloud, listen again; saying "stop" ends it.
+ *
+ * When the profile picked GPT-Live (`voice.voice_chat_mode: gpt-live`) and the device can make the call
+ * ([liveCalls]), a voice chat is a live call instead: see [LiveConversation].
  */
 class VoiceController(
     private val audio: AudioApi,
@@ -63,6 +71,7 @@ class VoiceController(
     private val scope: CoroutineScope,
     /** Outlives the screen, so the speech engine lease is released even as it closes. */
     private val appScope: CoroutineScope,
+    private val liveCalls: LiveCalls? = null,
 ) {
     private val _chat = MutableStateFlow(VoiceChatState())
     val chat: StateFlow<VoiceChatState> = _chat.asStateFlow()
@@ -74,6 +83,7 @@ class VoiceController(
     private var stoppedByUser = false
     private var speechJob: Job? = null
     private var dictationJob: Job? = null
+    private var live: LiveConversation? = null
 
     /** [pauseMs] is how long a quiet spell after speech has to last before it's sent. */
     fun startChat(session: ChatSession, gateway: GatewayUrl, profile: String?, pauseMs: Long = VoiceActivity().silenceMs) {
@@ -82,6 +92,7 @@ class VoiceController(
         _chat.value = VoiceChatState(VoicePhase.Listening)
         stoppedByUser = false
         chatJob = scope.launch {
+            if (startLive(session, gateway, profile)) return@launch
             appScope.launch { audio.ttsLease(gateway, active = true, profile) }
             var failures = 0
             try {
@@ -98,6 +109,60 @@ class VoiceController(
                 appScope.launch { audio.ttsLease(gateway, active = false, profile) }
             }
         }
+    }
+
+    /**
+     * Runs a GPT-Live call when the profile picked it and it can start; false to fall back to the chained chat
+     * (another mode, no OpenAI key on the gateway, an older gateway, or no WebRTC on this device).
+     */
+    private suspend fun startLive(session: ChatSession, gateway: GatewayUrl, profile: String?): Boolean {
+        val calls = liveCalls ?: return false
+        val status = audio.voiceLiveStatus(gateway, profile)
+        if (status !is ApiResult.Success || !status.value.live) return false
+        val call = calls.create() ?: return false
+        _chat.value = VoiceChatState(VoicePhase.Connecting, live = true)
+        val conversation = LiveConversation(call, session, _chat)
+        live = conversation
+        var error: String? = null
+        try {
+            error = conversation.run {
+                call.connect { offer ->
+                    when (val answer = audio.startVoiceLive(gateway, offer, conversation.history(), profile)) {
+                        is ApiResult.Success -> answer.value.ifBlank { error("GPT-Live sent no answer.") }
+                        else -> error(liveFailure(answer))
+                    }
+                }
+            }
+        } finally {
+            live = null
+            _chat.value = VoiceChatState(error = error.takeUnless { stoppedByUser })
+        }
+        return true
+    }
+
+    /**
+     * Why the call couldn't start, in a line: the vendor's own message when the gateway passed one on (no
+     * credits, a bad key), rather than the raw JSON under "Can't reach the gateway".
+     */
+    private fun liveFailure(result: ApiResult<*>): String {
+        val raw = when (result) {
+            is ApiResult.Unavailable -> result.message
+            is ApiResult.Failed -> result.message
+            else -> null
+        }
+        val vendor = raw?.let { VENDOR_MESSAGE.find(it)?.groupValues?.get(1) }
+        return when {
+            vendor != null -> "GPT-Live couldn't start: $vendor"
+            else -> result.errorMessage ?: "Couldn't start the live call."
+        }
+    }
+
+    /** Turns the microphone off or on in a live call. */
+    fun toggleMute() {
+        val conversation = live ?: return
+        val muted = !_chat.value.muted
+        conversation.setMuted(muted)
+        _chat.update { it.copy(muted = muted) }
     }
 
     fun stopChat() {
@@ -243,6 +308,7 @@ class VoiceController(
     }
 
     private companion object {
+        val VENDOR_MESSAGE = Regex(""""message"\s*:\s*"((?:[^"\\]|\\.)*)"""")
         const val MAX_FAILURES = 3
         const val RETRY_PAUSE_MS = 1_000L
         const val TURN_START_MS = 15_000L

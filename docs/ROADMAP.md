@@ -163,7 +163,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] An empty chat offers "Attach" and "Dictate" under the wordmark, as one split capsule as wide as the lettering
 - [x] Voice chat: listen, transcribe, send, read the reply aloud (`/api/audio/speak`, `tts-lease`), say "stop" to end; `/voice`
 - [ ] Talk over the reply to interrupt it (barge-in) and speak while the reply streams (`/api/audio/speak-stream`)
-- [ ] Live voice mode (`/api/audio/voice-live/*`)
+- [x] Live voice mode, Desktop's GPT-Live (`voice.voice_chat_mode: gpt-live`): the voice button opens a WebRTC call with OpenAI's voice model through the gateway (`/api/audio/voice-live/status`, `/api/audio/voice-live/session`); each request it hands over (`session.delegation.created`) is a Hermes turn in the chat (`prompt.submit` with `surface: voice-live` and the spoken context), and the reply streams back a sentence at a time (`session.commentary.append`) with the running tool as quiet progress; talk over it to cut in, Mute, say "stop" to end. Another mode, no OpenAI key on the gateway, or an older gateway keeps the voice chat above
 - [ ] Wake word (phone mic → `wake.feed`, `wake.detected`)
 
 ### Slash commands & composer

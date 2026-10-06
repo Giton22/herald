@@ -98,7 +98,7 @@ class ChatViewModelTest {
             connection, chatHost, LastChatStore(InMemoryKeyValueStore()), drafts,
             ModelsApi(connection), MediaApi(client), SlashApi(connection), sessions, ProfilesApi(client),
             SettingsStore(InMemoryKeyValueStore(), scope), PetApi(connection), JourneyApi(client), AudioApi(client),
-            NoRecorder, NoPlayer, scope, BotsApi(connection),
+            NoRecorder, NoPlayer, scope, BotsApi(connection), { null },
         )
         viewModels.put("chat", vm)
         return vm to chatHost

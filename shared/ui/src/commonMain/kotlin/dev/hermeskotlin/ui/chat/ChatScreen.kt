@@ -200,6 +200,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
 import com.composables.icons.lucide.AudioLines
 import com.composables.icons.lucide.Mic
+import com.composables.icons.lucide.MicOff
 import com.composables.icons.lucide.Paperclip
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.background
@@ -675,6 +676,7 @@ private fun ColumnScope.Dock(
             hazeState = hazeState,
             state = voiceChat,
             onSkip = actions::skipSpeech,
+            onMute = actions::toggleVoiceMute,
             onEnd = actions::stopVoiceChat,
         )
     } else {
@@ -2221,9 +2223,10 @@ internal fun DictationButton(state: DictationState, onClick: () -> Unit, enabled
 /**
  * Takes the composer's place during a voice chat: what's happening now, a circle that swells with
  * your voice, and buttons to skip the reply being read or end the chat. What you say sends itself.
+ * A GPT-Live call has Mute instead of Skip: you talk over the voice to cut it off.
  */
 @Composable
-private fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onSkip: () -> Unit, onEnd: () -> Unit) {
+private fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onSkip: () -> Unit, onMute: () -> Unit, onEnd: () -> Unit) {
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     val page = Theme[colors][background]
     val frosted = remember(page) {
@@ -2234,7 +2237,8 @@ private fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onSkip: () -
         }
     }
     val label = when (state.phase) {
-        VoicePhase.Listening -> if (state.hearing) "Hearing you…" else "Listening…"
+        VoicePhase.Connecting -> "Connecting…"
+        VoicePhase.Listening -> if (state.muted) "Muted" else if (state.hearing) "Hearing you…" else "Listening…"
         VoicePhase.Transcribing -> "Catching that…"
         VoicePhase.Thinking -> "Thinking…"
         VoicePhase.Speaking -> "Speaking…"
@@ -2267,9 +2271,12 @@ private fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onSkip: () -
         Column(Modifier.weight(1f)) {
             Text(label, style = Theme[typography][body], color = Theme[colors][textColor])
             Text(
-                when (state.phase) {
-                    VoicePhase.Listening -> "Just talk · say “stop” to end"
-                    VoicePhase.Speaking -> "Tap skip to talk again."
+                when {
+                    state.live && state.phase == VoicePhase.Speaking -> "Talk over it to cut in."
+                    state.live && state.phase == VoicePhase.Thinking -> "Hermes is on it."
+                    state.live -> "Live call · say “stop” to end"
+                    state.phase == VoicePhase.Listening -> "Just talk · say “stop” to end"
+                    state.phase == VoicePhase.Speaking -> "Tap skip to talk again."
                     else -> "Voice chat"
                 },
                 style = Theme[typography][caption],
@@ -2278,7 +2285,9 @@ private fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onSkip: () -
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        if (state.phase == VoicePhase.Speaking) {
+        if (state.live && state.phase != VoicePhase.Connecting) {
+            IconButton(if (state.muted) Lucide.MicOff else Lucide.Mic, contentDescription = if (state.muted) "Unmute" else "Mute", onClick = onMute)
+        } else if (state.phase == VoicePhase.Speaking) {
             Button("Skip", onClick = onSkip, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
         }
         IconButton(Lucide.X, contentDescription = "End voice chat", onClick = onEnd)

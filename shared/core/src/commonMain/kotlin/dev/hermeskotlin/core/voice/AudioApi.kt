@@ -7,6 +7,7 @@ import dev.hermeskotlin.core.network.map
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.timeout
+import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
@@ -34,6 +35,31 @@ private data class SpeakResponse(@SerialName("data_url") val dataUrl: String = "
 
 @Serializable
 private data class LeaseRequest(val lease: String, val active: Boolean)
+
+/**
+ * Which voice chat the profile picked (`voice.voice_chat_mode`): Desktop's chained listen → send → read
+ * aloud, or GPT-Live, and whether GPT-Live can start (an OpenAI key resolves on the gateway).
+ */
+@Serializable
+data class VoiceLiveStatus(
+    val mode: String = "chained",
+    val available: Boolean = false,
+    val reason: String? = null,
+    val model: String? = null,
+    val voice: String? = null,
+) {
+    /** GPT-Live is picked and can start. */
+    val live: Boolean get() = mode == "gpt-live" && available
+}
+
+@Serializable
+private data class LiveSessionRequest(val sdp: String, val history: List<LiveHistoryMessage>)
+
+@Serializable
+private data class LiveTransport(val sdp: String = "")
+
+@Serializable
+private data class LiveSessionResponse(val transport: LiveTransport? = null)
 
 /**
  * The gateway's voice relay, the endpoints Desktop's voice chat uses: speech-to-text and
@@ -67,6 +93,26 @@ class AudioApi(private val client: HttpClient) {
         SpokenAudio(Base64.decode(body.dataUrl.substringAfter("base64,")), mime)
     }
 
+    /** The profile's voice chat mode; an older gateway without GPT-Live fails, which means chained. */
+    suspend fun voiceLiveStatus(url: GatewayUrl, profile: String?): ApiResult<VoiceLiveStatus> = apiCall {
+        client.get(url.resolve("api/audio/voice-live/status")) {
+            profile?.let { parameter("profile", it) }
+        }
+    }.map { it.body<VoiceLiveStatus>() }
+
+    /**
+     * Trades this device's WebRTC offer for GPT-Live's answer. The gateway makes the call with the OpenAI key,
+     * which never reaches the phone, and opens the call with [history], the chat so far. Blank: no answer came.
+     */
+    suspend fun startVoiceLive(url: GatewayUrl, offerSdp: String, history: List<LiveHistoryMessage>, profile: String?): ApiResult<String> = apiCall {
+        client.post(url.resolve("api/audio/voice-live/session")) {
+            profile?.let { parameter("profile", it) }
+            contentType(ContentType.Application.Json)
+            setBody(LiveSessionRequest(offerSdp, history))
+            timeout { requestTimeoutMillis = LIVE_SESSION_MS }
+        }
+    }.map { it.body<LiveSessionResponse>().transport?.sdp.orEmpty() }
+
     /**
      * Tells the gateway a voice surface is active, so it warms the speech engine before the first
      * reply (a local model load would otherwise be dead air), and releases it after.
@@ -83,6 +129,7 @@ class AudioApi(private val client: HttpClient) {
     private companion object {
         const val SLOW_MS = 120_000L
         const val LEASE_MS = 180_000L
+        const val LIVE_SESSION_MS = 45_000L
         const val LEASE = "android:conversation"
     }
 }
