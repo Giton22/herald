@@ -38,6 +38,9 @@ import dev.hermeskotlin.core.bots.BotHealth
 import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.projects.ProjectsApi
 import dev.hermeskotlin.core.bots.SidebarModeStore
+import dev.hermeskotlin.core.rooms.RoomLinks
+import dev.hermeskotlin.core.rooms.RoomSeenStore
+import dev.hermeskotlin.core.rooms.RoomsApi
 import dev.hermeskotlin.core.voice.AudioApi
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.CoroutineScope
@@ -93,6 +96,9 @@ val coreModule = module {
     single { BotsApi(get()) }
     single { ProjectsApi(get()) }
     single { BotChats(get<BotsApi>()) }
+    single { RoomsApi(get()) }
+    single { RoomSeenStore(get()) }
+    single { RoomLinks() }
     single {
         val bots = get<BotsApi>()
         BotHealth(get(), get(), get()) { bots.runtimeCheck(it) }

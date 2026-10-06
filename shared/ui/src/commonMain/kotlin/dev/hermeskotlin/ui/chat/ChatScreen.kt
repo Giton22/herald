@@ -147,6 +147,7 @@ import com.composables.icons.lucide.MessageSquare
 import com.composables.icons.lucide.RotateCw
 import com.composables.icons.lucide.SearchCheck
 import com.composables.icons.lucide.TriangleAlert
+import com.composables.icons.lucide.Users
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Square
@@ -689,7 +690,11 @@ private fun ColumnScope.Dock(
         AnimatedVisibility(visible = mentions.isNotEmpty() && suggestions.isEmpty(), enter = fadeIn(), exit = fadeOut()) {
             var shown by remember { mutableStateOf(mentions) }
             if (mentions.isNotEmpty()) shown = mentions
-            MentionSuggestions(shown, hazeState, onPick = onMention)
+            MentionSuggestions(
+                remember(shown) { shown.map { MentionChoice(it.label, it.handle, it) } },
+                hazeState,
+                onPick = { choice -> choice.bot?.let(onMention) },
+            )
         }
         if (editing) {
             Banner(
@@ -728,13 +733,15 @@ private fun ColumnScope.Dock(
  * button on the left and new chat with the chat's options grouped on the right.
  */
 @Composable
-private fun TopBar(
+internal fun TopBar(
     title: String,
     titleFace: (@Composable () -> Unit)?,
     subtitle: String?,
     onOpenSidebar: () -> Unit,
     onNewChat: (() -> Unit)?,
     onOpenMenu: (() -> Unit)?,
+    /** In place of New chat and the menu, e.g. a room's own buttons. */
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxWidth()) {
         Row(
@@ -764,8 +771,12 @@ private fun TopBar(
             }
             val shape = RoundedCornerShape(Theme[radii][radiusMedium])
             Row(Modifier.clip(shape).border(1.dp, Theme[colors][stroke], shape)) {
-                BarButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null)
-                BarButton(Lucide.EllipsisVertical, "Chat options", onClick = { onOpenMenu?.invoke() }, enabled = onOpenMenu != null)
+                if (trailing != null) {
+                    trailing()
+                } else {
+                    BarButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null)
+                    BarButton(Lucide.EllipsisVertical, "Chat options", onClick = { onOpenMenu?.invoke() }, enabled = onOpenMenu != null)
+                }
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(Theme[colors][stroke]))
@@ -774,7 +785,7 @@ private fun TopBar(
 
 /** A 44dp square icon button with no fill, the top bar's style. */
 @Composable
-private fun BarButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean = true) {
+internal fun BarButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean = true) {
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
@@ -1499,7 +1510,7 @@ private fun AssistantReply(
 
 /** When a prompt was sent or a reply finished, in small type; nothing when the setting is off or there's no time. */
 @Composable
-private fun MessageTimeLabel(epochSeconds: Double?, modifier: Modifier = Modifier) {
+internal fun MessageTimeLabel(epochSeconds: Double?, modifier: Modifier = Modifier) {
     if (!LocalAppSettings.current.showTimestamps || epochSeconds == null) return
     val use24Hour = uses24HourClock()
     val label = remember(epochSeconds, use24Hour) { messageTime(epochSeconds, use24Hour) }
@@ -1619,9 +1630,15 @@ private fun SlashSuggestions(suggestions: List<SlashSuggestion>, hazeState: Haze
     }
 }
 
-/** The `@` list over the composer: bots to mention, with their faces, names and handles. */
+/** One row of the `@` list: who, the handle a pick inserts, and the bot whose face it shows (none for everyone). */
+internal data class MentionChoice(val label: String, val handle: String, val bot: Bot?)
+
+/**
+ * The `@` list over a composer: who to mention, with faces, names and handles. Frosted over [hazeState]'s
+ * content when there is one, else on a plain elevated surface.
+ */
 @Composable
-private fun MentionSuggestions(bots: List<Bot>, hazeState: HazeState, onPick: (Bot) -> Unit) {
+internal fun MentionSuggestions(choices: List<MentionChoice>, hazeState: HazeState?, onPick: (MentionChoice) -> Unit) {
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     val page = Theme[colors][background]
     val faces = LocalBotFaces.current
@@ -1637,20 +1654,26 @@ private fun MentionSuggestions(bots: List<Bot>, hazeState: HazeState, onPick: (B
             .padding(start = 12.dp, end = 12.dp, top = 6.dp)
             .fillMaxWidth()
             .clip(shape)
-            .hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)
-            .background(Theme[colors][surfaceElevated].copy(alpha = 0.85f))
+            .then(if (hazeState != null) Modifier.hazeBlur(input = HazeInput.Sources(hazeState), style = frosted) else Modifier)
+            .background(Theme[colors][surfaceElevated].copy(alpha = if (hazeState != null) 0.85f else 1f))
             .border(1.dp, Theme[colors][strokeStrong], shape)
             .padding(vertical = 6.dp),
     ) {
-        bots.forEach { bot ->
+        choices.forEach { choice ->
             Row(
-                Modifier.fillMaxWidth().clickable(onClickLabel = "Mention ${bot.label}") { onPick(bot) }.padding(horizontal = 14.dp, vertical = 8.dp),
+                Modifier.fillMaxWidth().clickable(onClickLabel = "Mention ${choice.label}") { onPick(choice) }.padding(horizontal = 14.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                BotAvatar(bot, faces.picture(bot), size = 24.dp)
-                Text(bot.label, style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][textColor], maxLines = 1)
-                Text("@${bot.handle}", style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1, modifier = Modifier.weight(1f))
+                if (choice.bot != null) {
+                    BotAvatar(choice.bot, faces.picture(choice.bot), size = 24.dp)
+                } else {
+                    Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                        UnstyledIcon(Lucide.Users, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(18.dp))
+                    }
+                }
+                Text(choice.label, style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][textColor], maxLines = 1)
+                Text("@${choice.handle}", style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1, modifier = Modifier.weight(1f))
             }
         }
     }
