@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -29,6 +30,7 @@ import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -140,7 +142,7 @@ fun RoomScreen(
                 },
             )
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                Transcript(room, faces)
+                Transcript(room, faces, onLoadEarlier = viewModel::loadEarlier)
             }
             // A failed read in full, above whatever waits on the user; the loop keeps trying.
             room.error?.let { ListNotice(it) }
@@ -163,37 +165,78 @@ fun RoomScreen(
     }
 }
 
-/** The transcript: messages, system lines, and nothing of the room's machinery. */
+/**
+ * The transcript: messages, system lines, and nothing of the room's machinery. Reaching its top reads
+ * the lines before it, while the log goes back further.
+ */
 @Composable
-private fun Transcript(room: OpenRoom, faces: BotFaces) {
+private fun Transcript(room: OpenRoom, faces: BotFaces, onLoadEarlier: () -> Unit) {
     val listState = rememberLazyListState()
     val lines = room.lines
-    // A new line brings the end of the conversation into view.
-    LaunchedEffect(lines.size) {
-        if (lines.isNotEmpty()) listState.animateScrollToItem(lines.size - 1)
+    // A newer line brings the end of the conversation into view; older ones read in above don't move the reader.
+    val newest = lines.lastOrNull()?.seq
+    // Whether the first jump to the end is done: before it, the list starts at its top without the reader there.
+    var atEndOnce by remember { mutableStateOf(false) }
+    LaunchedEffect(newest) {
+        if (newest == null) return@LaunchedEffect
+        listState.animateScrollToItem(lines.size - 1)
+        atEndOnce = true
+    }
+    // The line the reader is on when older lines are asked for, and how far down it sits, to put them back there.
+    var anchor by remember { mutableStateOf<Pair<Int, Int>?>(null) }
+    LaunchedEffect(room.loadingEarlier) {
+        if (room.loadingEarlier) {
+            anchor = lines.getOrNull(listState.firstVisibleItemIndex)?.let { it.seq to listState.firstVisibleItemScrollOffset }
+        }
+    }
+    val oldest = lines.firstOrNull()?.seq
+    LaunchedEffect(oldest) {
+        val (seq, offset) = anchor ?: return@LaunchedEffect
+        anchor = null
+        val index = lines.indexOfFirst { it.seq == seq }
+        if (index > 0) listState.scrollToItem(index, offset)
+    }
+    // At the top (or with nothing to show yet), read further back while there's more. Once older lines are
+    // in, the reader is back on their line, off the top, so the next read waits for them to scroll up again.
+    val atTop by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
+    LaunchedEffect(atTop, atEndOnce, lines.isEmpty(), room.canLoadEarlier, room.loadingEarlier, room.loading) {
+        val wanted = lines.isEmpty() || (atTop && atEndOnce)
+        if (wanted && room.canLoadEarlier && !room.loadingEarlier && !room.loading) onLoadEarlier()
     }
     when {
-        room.loading && lines.isEmpty() -> ListSpinner()
+        (room.loading || room.loadingEarlier || room.canLoadEarlier) && lines.isEmpty() -> ListSpinner()
         lines.isEmpty() -> ListNotice("The room is quiet. Say something to start it.")
-        else -> LazyColumn(
-            state = listState,
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(14.dp),
-        ) {
-            itemsIndexed(lines, key = { _, line -> line.seq }) { index, line ->
-                when (line) {
-                    is RoomLine.Message -> if (line.fromUser) {
-                        UserLine(line)
-                    } else {
-                        // A bot that goes on talking keeps its face and name from its first line.
-                        val previous = lines.getOrNull(index - 1) as? RoomLine.Message
-                        val continued = previous != null && !previous.fromUser &&
-                            previous.profile == line.profile && previous.speaker == line.speaker
-                        MemberLine(line, continued, faces)
-                    }
-                    is RoomLine.System -> SystemLine(line)
+        else -> Box(Modifier.fillMaxSize()) {
+            TranscriptList(lines, listState, faces)
+            // Over the list, not in it: a row on top would hold the scroll there and pull the reader up.
+            if (room.loadingEarlier) {
+                Spinner(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).size(18.dp))
+            }
+        }
+    }
+}
+
+/** The transcript's lines, keyed by seq. */
+@Composable
+private fun TranscriptList(lines: List<RoomLine>, listState: LazyListState, faces: BotFaces) {
+    LazyColumn(
+        state = listState,
+        modifier = Modifier.fillMaxSize(),
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+    ) {
+        itemsIndexed(lines, key = { _, line -> line.seq }) { index, line ->
+            when (line) {
+                is RoomLine.Message -> if (line.fromUser) {
+                    UserLine(line)
+                } else {
+                    // A bot that goes on talking keeps its face and name from its first line.
+                    val previous = lines.getOrNull(index - 1) as? RoomLine.Message
+                    val continued = previous != null && !previous.fromUser &&
+                        previous.profile == line.profile && previous.speaker == line.speaker
+                    MemberLine(line, continued, faces)
                 }
+                is RoomLine.System -> SystemLine(line)
             }
         }
     }

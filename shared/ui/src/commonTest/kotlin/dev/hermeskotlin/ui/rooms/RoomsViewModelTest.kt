@@ -318,6 +318,147 @@ class RoomsViewModelTest {
         vm.close()
     }
 
+    /**
+     * A room of six member lines, read two at a time ([perPage] at most per page, as a gateway near its byte
+     * cap serves), and [stuckBelow] as a seq it can't read past (a page that comes back empty).
+     */
+    private fun sixLineRoom(
+        perPage: Int = 2,
+        stuckBelow: Int? = null,
+        /** Below seq 4, only a request for this many events or fewer gets an answer (a gateway at its byte cap). */
+        servesBelowFourAtMost: Int? = null,
+        /** Holds the answer for a read below seq 4 until completed. */
+        gate: CompletableDeferred<Unit>? = null,
+    ) = RoomsGateway(CoroutineScope(dispatcher)) { method, params ->
+        fun event(seq: Int) =
+            """{"room_id":"a","seq":$seq,"event_id":"e:$seq","kind":"message.member","actor":{"kind":"member","id":"ops"},"payload":{"text":"line $seq","member_id":"ops"}}"""
+        when (method) {
+            "groups.capabilities" -> """{"protocol_version":2,"driver":true,"max_log_limit":2}"""
+            "groups.list" -> """{"rooms":[]}"""
+            "groups.state" -> """{"room":{"room_id":"a","name":"Room A","members":[],"latest_seq":6}}"""
+            "groups.log" -> {
+                val since = params["since_seq"]!!.jsonPrimitive.int
+                val limit = params["limit"]!!.jsonPrimitive.int
+                if (since < 4) gate?.await()
+                val capped = servesBelowFourAtMost != null && since < 4 && limit > servesBelowFourAtMost
+                val seqs = if ((stuckBelow != null && since < stuckBelow) || capped) emptyList() else (since + 1..6).take(minOf(limit, perPage))
+                val cursor = seqs.lastOrNull() ?: since
+                """{"events":[${seqs.joinToString(",") { event(it) }}],"cursor":$cursor,"latest_seq":6,"has_more":${cursor < 6}}"""
+            }
+            else -> "{}"
+        }
+    }
+
+    private suspend fun RoomsViewModel.openSixLineRoom() {
+        bind(gateway.gatewayUrl)
+        setVisible(true)
+        state.first { it.available }
+        setVisible(false)
+        open(roomA.copy(latestSeq = 6))
+        opened.first { it?.loading == false }
+    }
+
+    private fun RoomsViewModel.shownTexts() = opened.value?.lines.orEmpty().map { (it as RoomLine.Message).text }
+
+    @Test
+    fun scrollingUpReadsTheRoomBackToItsFirstLine() = runTest(dispatcher) {
+        val vm = viewModel(sixLineRoom())
+        try {
+            vm.openSixLineRoom()
+            assertEquals(listOf("line 5", "line 6"), vm.shownTexts())
+            assertTrue(vm.opened.value!!.canLoadEarlier)
+
+            vm.loadEarlier()
+            vm.opened.first { it?.loadingEarlier == false && it.lines.size == 4 }
+            assertEquals(listOf("line 3", "line 4", "line 5", "line 6"), vm.shownTexts())
+
+            vm.loadEarlier()
+            vm.opened.first { it?.loadingEarlier == false && it.lines.size == 6 }
+            assertEquals((1..6).map { "line $it" }, vm.shownTexts())
+            // The first line is in: nothing further back to read.
+            assertFalse(vm.opened.value!!.canLoadEarlier)
+        } finally {
+            vm.close()
+        }
+    }
+
+    @Test
+    fun aWindowServedInSmallPagesIsReadWhole() = runTest(dispatcher) {
+        val socket = sixLineRoom(perPage = 1)
+        val vm = viewModel(socket)
+        try {
+            vm.openSixLineRoom()
+            vm.loadEarlier()
+            vm.opened.first { it?.loadingEarlier == false && it.lines.size == 4 }
+            assertEquals(listOf("line 3", "line 4", "line 5", "line 6"), vm.shownTexts())
+            // Each page asks only for what's left of the window, never past what's shown.
+            val earlier = socket.sent("groups.log").filter { it["since_seq"]!!.jsonPrimitive.int < 4 }
+            assertEquals(listOf(2 to 2, 3 to 1), earlier.map { it["since_seq"]!!.jsonPrimitive.int to it["limit"]!!.jsonPrimitive.int })
+        } finally {
+            vm.close()
+        }
+    }
+
+    @Test
+    fun aWindowTooBigToComeWholeIsTriedSmallerAfterThePoll() = runTest(dispatcher) {
+        val vm = viewModel(sixLineRoom(servesBelowFourAtMost = 1))
+        try {
+            vm.openSixLineRoom()
+            vm.loadEarlier()
+            vm.opened.first { it?.loadingEarlier == false && it.canLoadEarlier == false }
+            assertEquals(listOf("line 5", "line 6"), vm.shownTexts())
+
+            // The room's next poll allows it again, and the next window is half the size: it comes whole.
+            vm.opened.first { it?.canLoadEarlier == true }
+            vm.loadEarlier()
+            vm.opened.first { it?.loadingEarlier == false && it.lines.size == 3 }
+            assertEquals(listOf("line 4", "line 5", "line 6"), vm.shownTexts())
+        } finally {
+            vm.close()
+        }
+    }
+
+    @Test
+    fun anOlderReadFromBeforeTheRoomWasReopenedStaysOut() = runTest(dispatcher) {
+        val gate = CompletableDeferred<Unit>()
+        val vm = viewModel(sixLineRoom(gate = gate))
+        try {
+            vm.openSixLineRoom()
+            vm.loadEarlier()
+            // The older read waits on the gateway while the user leaves and comes back.
+            vm.close()
+            vm.open(roomA.copy(latestSeq = 6))
+            gate.complete(Unit)
+            vm.opened.first { it?.loading == false }
+
+            assertEquals(listOf("line 5", "line 6"), vm.shownTexts())
+            // The new opening still reads back from its own start.
+            vm.loadEarlier()
+            vm.opened.first { it?.loadingEarlier == false && it.lines.size == 4 }
+            assertEquals(listOf("line 3", "line 4", "line 5", "line 6"), vm.shownTexts())
+        } finally {
+            vm.close()
+        }
+    }
+
+    @Test
+    fun aWindowThatDoesntAllComeLeavesNoGapAndDoesntRetryAtOnce() = runTest(dispatcher) {
+        val socket = sixLineRoom(stuckBelow = 4)
+        val vm = viewModel(socket)
+        try {
+            vm.openSixLineRoom()
+            vm.loadEarlier()
+            vm.opened.first { it?.loadingEarlier == false && it.canLoadEarlier == false }
+            assertEquals(listOf("line 5", "line 6"), vm.shownTexts())
+            // Paused until the room's next poll, so a reader parked at the top doesn't loop.
+            val asked = socket.sent("groups.log").size
+            vm.loadEarlier()
+            assertEquals(asked, socket.sent("groups.log").size)
+        } finally {
+            vm.close()
+        }
+    }
+
     @Test
     fun deletingTheOpenRoomClosesItAndTakesItOffTheList() = runTest(dispatcher) {
         var disbanded = false
