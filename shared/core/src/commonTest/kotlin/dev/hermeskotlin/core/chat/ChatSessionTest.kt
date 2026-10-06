@@ -178,6 +178,32 @@ class ChatSessionTest {
     }
 
     @Test
+    fun aVoiceLiveDelegationTellsTheGatewayItWasSpoken() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","message_count":0,"messages":[],"info":{}}""",
+                "prompt.submit" to """{"status":"streaming"}""",
+            ),
+        )
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        assertEquals(SendOutcome.Sent, chat.submit("Thursday, not Friday.", voiceLive = VoiceLiveTurn("User: Book it for Friday.\nUser: Thursday, not Friday.")))
+
+        val submit = transport.awaitSent { it.isCall("prompt.submit") }
+        assertEquals("Thursday, not Friday.", submit.param("text"))
+        assertEquals("voice-live", submit.param("surface"))
+        assertEquals("User: Book it for Friday.\nUser: Thursday, not Friday.", submit.param("voice_context"))
+        // A typed prompt carries neither.
+        chat.send("typed")
+        val typed = transport.sent.first { sent -> sent.count { it.isCall("prompt.submit") } == 2 }.last { it.isCall("prompt.submit") }
+        assertNull(typed.param("surface"))
+        assertNull(typed.param("voice_context"))
+    }
+
+    @Test
     fun aCorrectionMidTurnSplitsTheReplyAroundIt() = runTest {
         val (connection, transport) = setup(
             backgroundScope,

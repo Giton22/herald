@@ -28,6 +28,7 @@ import dev.hermeskotlin.core.voice.Recording
 import dev.hermeskotlin.core.voice.SpeechPlayer
 import dev.hermeskotlin.core.voice.SpokenAudio
 import dev.hermeskotlin.core.voice.VoiceActivity
+import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.core.voice.VoiceRecorder
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockEngineConfig
@@ -98,7 +99,11 @@ class ChatViewModelTest {
             connection, chatHost, LastChatStore(InMemoryKeyValueStore()), drafts,
             ModelsApi(connection), MediaApi(client), SlashApi(connection), sessions, ProfilesApi(client),
             SettingsStore(InMemoryKeyValueStore(), scope), PetApi(connection), JourneyApi(client), AudioApi(client),
-            NoRecorder, NoPlayer, scope, BotsApi(connection),
+            NoRecorder, NoPlayer, scope, BotsApi(connection), { null },
+            object : VoiceKeepAlive {
+                override fun hold(onEnd: () -> Unit, onLost: () -> Unit) = false
+                override fun release() = Unit
+            },
         )
         viewModels.put("chat", vm)
         return vm to chatHost

@@ -6,6 +6,8 @@ import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.voice.AudioApi
+import dev.hermeskotlin.core.voice.LiveCalls
+import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.core.voice.SpeechPlayer
 import dev.hermeskotlin.core.voice.SpokenAudio
 import dev.hermeskotlin.core.voice.VoiceActivity
@@ -18,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -25,10 +28,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
-enum class VoicePhase { Off, Listening, Transcribing, Thinking, Speaking }
+enum class VoicePhase { Off, Connecting, Listening, Transcribing, Thinking, Speaking }
 
 data class VoiceChatState(
     val phase: VoicePhase = VoicePhase.Off,
@@ -38,6 +42,15 @@ data class VoiceChatState(
     val hearing: Boolean = false,
     /** The last thing that went wrong; the conversation carries on where it can. */
     val error: String? = null,
+    /** A GPT-Live call rather than Desktop's listen, send and read aloud. */
+    val live: Boolean = false,
+    /** The microphone is off in a live call. */
+    val muted: Boolean = false,
+    /** The latest words said, as captions: yours, or the voice's when [captionIsVoice]. */
+    val caption: String? = null,
+    val captionIsVoice: Boolean = false,
+    /** The tool Hermes is running for the request, while it works. */
+    val working: String? = null,
 )
 
 data class DictationState(
@@ -55,6 +68,9 @@ data class DictationState(
  *
  * Dictation drops a transcript into the composer. A voice chat loops: listen until you stop talking,
  * send what you said, wait for the reply, read it aloud, listen again; saying "stop" ends it.
+ *
+ * When the profile picked GPT-Live (`voice.voice_chat_mode: gpt-live`) and the device can make the call
+ * ([liveCalls]), a voice chat is a live call instead: see [LiveConversation].
  */
 class VoiceController(
     private val audio: AudioApi,
@@ -63,6 +79,9 @@ class VoiceController(
     private val scope: CoroutineScope,
     /** Outlives the screen, so the speech engine lease is released even as it closes. */
     private val appScope: CoroutineScope,
+    /** Keeps a voice chat going with the screen off or another app in front. */
+    private val keepAlive: VoiceKeepAlive? = null,
+    private val liveCalls: LiveCalls? = null,
 ) {
     private val _chat = MutableStateFlow(VoiceChatState())
     val chat: StateFlow<VoiceChatState> = _chat.asStateFlow()
@@ -74,6 +93,10 @@ class VoiceController(
     private var stoppedByUser = false
     private var speechJob: Job? = null
     private var dictationJob: Job? = null
+    private var live: LiveConversation? = null
+    private var held = false
+    /** Herald went out of sight since the chat started. */
+    private var away = false
 
     /** [pauseMs] is how long a quiet spell after speech has to last before it's sent. */
     fun startChat(session: ChatSession, gateway: GatewayUrl, profile: String?, pauseMs: Long = VoiceActivity().silenceMs) {
@@ -81,23 +104,117 @@ class VoiceController(
         cancelDictation()
         _chat.value = VoiceChatState(VoicePhase.Listening)
         stoppedByUser = false
-        chatJob = scope.launch {
-            appScope.launch { audio.ttsLease(gateway, active = true, profile) }
-            var failures = 0
+        // Held now, on the tap: Android only lets the microphone go to the background from the foreground.
+        away = false
+        held = keepAlive?.hold(
+            onEnd = ::stopChat,
+            onLost = {
+                held = false
+                // Refused after the app already went away: it can't listen from there.
+                if (away) stopChat()
+            },
+        ) == true
+        val job = scope.launch {
             try {
-                while (isActive) {
-                    if (!converseOnce(session, gateway, profile, VoiceActivity(silenceMs = pauseMs))) break
-                    failures = if (_chat.value.error == null) 0 else failures + 1
-                    // A provider that keeps failing would loop forever; give up after a few in a row.
-                    if (failures >= MAX_FAILURES) break
-                    if (failures > 0) delay(RETRY_PAUSE_MS)
-                }
+                if (startLive(session, gateway, profile)) return@launch
+                converseChained(session, gateway, profile, pauseMs)
             } finally {
-                // An ending the person chose needs no explanation; one forced by an error keeps it.
-                _chat.update { VoiceChatState(error = it.error.takeUnless { stoppedByUser }) }
-                appScope.launch { audio.ttsLease(gateway, active = false, profile) }
+                // Also a chat ended before it found its mode (End during the status check). An ending the person
+                // chose needs no explanation; one forced by an error keeps it. A newer chat keeps its own.
+                if (chatJob == null || chatJob === coroutineContext.job) {
+                    _chat.update { VoiceChatState(error = it.error.takeUnless { stoppedByUser }) }
+                }
             }
         }
+        chatJob = job
+        job.invokeOnCompletion {
+            // A newer chat may already hold it again.
+            if (chatJob === job || chatJob == null) {
+                held = false
+                keepAlive?.release()
+            }
+        }
+    }
+
+    /** Desktop's chained voice chat: listen, send what you said, read the reply aloud, until it ends. */
+    private suspend fun converseChained(session: ChatSession, gateway: GatewayUrl, profile: String?, pauseMs: Long) {
+        appScope.launch { audio.ttsLease(gateway, active = true, profile) }
+        var failures = 0
+        try {
+            while (currentCoroutineContext().isActive) {
+                if (!converseOnce(session, gateway, profile, VoiceActivity(silenceMs = pauseMs))) break
+                failures = if (_chat.value.error == null) 0 else failures + 1
+                // A provider that keeps failing would loop forever; give up after a few in a row.
+                if (failures >= MAX_FAILURES) break
+                if (failures > 0) delay(RETRY_PAUSE_MS)
+            }
+        } finally {
+            appScope.launch { audio.ttsLease(gateway, active = false, profile) }
+        }
+    }
+
+    /**
+     * Herald went out of sight. Dictation stops; a voice chat carries on when it's held up, like a call,
+     * and stops otherwise, since Android doesn't let the app listen from the background.
+     */
+    fun onBackground() {
+        away = true
+        cancelDictation()
+        if (!held) stopChat()
+    }
+
+    /**
+     * Runs a GPT-Live call when the profile picked it and it can start; false to fall back to the chained chat
+     * (another mode, no OpenAI key on the gateway, an older gateway, or no WebRTC on this device).
+     */
+    private suspend fun startLive(session: ChatSession, gateway: GatewayUrl, profile: String?): Boolean {
+        val calls = liveCalls ?: return false
+        val status = audio.voiceLiveStatus(gateway, profile)
+        if (status !is ApiResult.Success || !status.value.live) return false
+        val call = calls.create() ?: return false
+        _chat.value = VoiceChatState(VoicePhase.Connecting, live = true)
+        val conversation = LiveConversation(call, session, _chat)
+        live = conversation
+        var error: String? = null
+        try {
+            error = conversation.run {
+                call.connect { offer ->
+                    when (val answer = audio.startVoiceLive(gateway, offer, conversation.history(), profile)) {
+                        is ApiResult.Success -> answer.value.ifBlank { error("GPT-Live sent no answer.") }
+                        else -> error(liveFailure(answer))
+                    }
+                }
+            }
+        } finally {
+            live = null
+            _chat.value = VoiceChatState(error = error.takeUnless { stoppedByUser })
+        }
+        return true
+    }
+
+    /**
+     * Why the call couldn't start, in a line: the vendor's own message when the gateway passed one on (no
+     * credits, a bad key), rather than the raw JSON under "Can't reach the gateway".
+     */
+    private fun liveFailure(result: ApiResult<*>): String {
+        val raw = when (result) {
+            is ApiResult.Unavailable -> result.message
+            is ApiResult.Failed -> result.message
+            else -> null
+        }
+        val vendor = raw?.let { VENDOR_MESSAGE.find(it)?.groupValues?.get(1) }
+        return when {
+            vendor != null -> "GPT-Live couldn't start: $vendor"
+            else -> result.errorMessage ?: "Couldn't start the live call."
+        }
+    }
+
+    /** Turns the microphone off or on in a live call. */
+    fun toggleMute() {
+        val conversation = live ?: return
+        val muted = !_chat.value.muted
+        conversation.setMuted(muted)
+        _chat.update { it.copy(muted = muted) }
     }
 
     fun stopChat() {
@@ -141,7 +258,7 @@ class VoiceController(
         if (transcript.isBlank()) return true
         if (isVoiceStopCommand(transcript)) return false
 
-        _chat.update { it.copy(phase = VoicePhase.Thinking) }
+        _chat.update { it.copy(phase = VoicePhase.Thinking, caption = transcript.trim(), captionIsVoice = false) }
         val sentAt = session.state.value.messages.size
         if (!session.send(transcript)) {
             _chat.update { it.copy(error = session.state.value.error ?: "Couldn't send that.") }
@@ -154,7 +271,7 @@ class VoiceController(
         val text = reply?.text?.let(::speakableText).orEmpty()
         if (text.isEmpty()) return true
 
-        _chat.update { it.copy(phase = VoicePhase.Speaking) }
+        _chat.update { it.copy(phase = VoicePhase.Speaking, caption = text, captionIsVoice = true) }
         speak(text, gateway, profile)
         return true
     }
@@ -243,6 +360,7 @@ class VoiceController(
     }
 
     private companion object {
+        val VENDOR_MESSAGE = Regex(""""message"\s*:\s*"((?:[^"\\]|\\.)*)"""")
         const val MAX_FAILURES = 3
         const val RETRY_PAUSE_MS = 1_000L
         const val TURN_START_MS = 15_000L

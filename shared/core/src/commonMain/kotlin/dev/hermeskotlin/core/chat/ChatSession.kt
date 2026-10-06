@@ -162,12 +162,18 @@ class ChatSession(
         queue: Boolean = false,
     ): Boolean = submit(text, attachments, display, queue) == SendOutcome.Sent
 
-    /** [send], telling a prompt that's gone apart from one whose bubble stays [SendOutcome.Unsettled]. */
+    /**
+     * [send], telling a prompt that's gone apart from one whose bubble stays [SendOutcome.Unsettled].
+     *
+     * A [voiceLive] prompt is a GPT-Live delegation: the gateway adds a note that the text was spoken and the
+     * reply will be, with the recent spoken exchange it refers to (`surface: voice-live`, `voice_context`).
+     */
     suspend fun submit(
         text: String,
         attachments: List<OutgoingAttachment> = emptyList(),
         display: String? = null,
         queue: Boolean = false,
+        voiceLive: VoiceLiveTurn? = null,
     ): SendOutcome {
         val trimmed = text.trim()
         if (trimmed.isEmpty() && attachments.isEmpty()) return SendOutcome.NotSent
@@ -216,6 +222,10 @@ class ChatSession(
                     // Like Desktop: the file references first, then what was typed.
                     put("text", (refs + visible).filter { it.isNotEmpty() }.joinToString("\n\n"))
                     if (queue) put("queued", true)
+                    if (voiceLive != null) {
+                        put("surface", "voice-live")
+                        if (voiceLive.context.isNotBlank()) put("voice_context", voiceLive.context)
+                    }
                 },
             ) as? JsonObject
             rowExists = true
@@ -1058,14 +1068,15 @@ class ChatSession(
         text: String,
         attachments: List<OutgoingAttachment> = emptyList(),
         display: String? = null,
+        voiceLive: VoiceLiveTurn? = null,
     ): StopAndSend {
-        if (!_state.value.running) return StopAndSend(submit(text, attachments, display))
+        if (!_state.value.running) return StopAndSend(submit(text, attachments, display, voiceLive = voiceLive))
         val dropped = interruptTurn() ?: run {
             _state.update { it.copy(error = it.error ?: NOT_CONNECTED) }
             return StopAndSend(SendOutcome.NotSent)
         }
         val settled = withTimeoutOrNull(STOP_SETTLE_TIMEOUT_MS) { _state.first { !it.running } } != null
-        return StopAndSend(submit(text, attachments, display, queue = !settled), dropped)
+        return StopAndSend(submit(text, attachments, display, queue = !settled, voiceLive = voiceLive), dropped)
     }
 
     /**
@@ -1727,6 +1738,9 @@ class ChatSession(
 
 /** How [ChatSession.stopAndSubmit] went: the send's [outcome], and the queued prompts the stop dropped, to give back. */
 data class StopAndSend(val outcome: SendOutcome, val dropped: List<String> = emptyList())
+
+/** A prompt that came from a GPT-Live voice call; [context] is the recent spoken exchange, newest last. */
+data class VoiceLiveTurn(val context: String)
 
 /** How [ChatSession.setModel] went. */
 sealed interface ModelSwitch {
