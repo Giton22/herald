@@ -7,9 +7,10 @@ package dev.hermeskotlin.core.voice
 interface VoiceKeepAlive {
     /**
      * Holds the voice chat up until [release]. [onEnd] runs when the person ends it from outside the app (the
-     * notification's End). False when the platform refused, so the chat should end when the app goes away.
+     * notification's End). False when the platform refused at once, and [onLost] runs when it refuses later;
+     * either way the chat should end when the app goes away.
      */
-    fun hold(onEnd: () -> Unit): Boolean
+    fun hold(onEnd: () -> Unit, onLost: () -> Unit = {}): Boolean
 
     fun release()
 }

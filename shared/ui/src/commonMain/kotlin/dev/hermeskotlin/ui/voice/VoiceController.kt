@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -27,6 +28,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -93,6 +95,8 @@ class VoiceController(
     private var dictationJob: Job? = null
     private var live: LiveConversation? = null
     private var held = false
+    /** Herald went out of sight since the chat started. */
+    private var away = false
 
     /** [pauseMs] is how long a quiet spell after speech has to last before it's sent. */
     fun startChat(session: ChatSession, gateway: GatewayUrl, profile: String?, pauseMs: Long = VoiceActivity().silenceMs) {
@@ -101,23 +105,25 @@ class VoiceController(
         _chat.value = VoiceChatState(VoicePhase.Listening)
         stoppedByUser = false
         // Held now, on the tap: Android only lets the microphone go to the background from the foreground.
-        held = keepAlive?.hold(onEnd = ::stopChat) == true
+        away = false
+        held = keepAlive?.hold(
+            onEnd = ::stopChat,
+            onLost = {
+                held = false
+                // Refused after the app already went away: it can't listen from there.
+                if (away) stopChat()
+            },
+        ) == true
         val job = scope.launch {
-            if (startLive(session, gateway, profile)) return@launch
-            appScope.launch { audio.ttsLease(gateway, active = true, profile) }
-            var failures = 0
             try {
-                while (isActive) {
-                    if (!converseOnce(session, gateway, profile, VoiceActivity(silenceMs = pauseMs))) break
-                    failures = if (_chat.value.error == null) 0 else failures + 1
-                    // A provider that keeps failing would loop forever; give up after a few in a row.
-                    if (failures >= MAX_FAILURES) break
-                    if (failures > 0) delay(RETRY_PAUSE_MS)
-                }
+                if (startLive(session, gateway, profile)) return@launch
+                converseChained(session, gateway, profile, pauseMs)
             } finally {
-                // An ending the person chose needs no explanation; one forced by an error keeps it.
-                _chat.update { VoiceChatState(error = it.error.takeUnless { stoppedByUser }) }
-                appScope.launch { audio.ttsLease(gateway, active = false, profile) }
+                // Also a chat ended before it found its mode (End during the status check). An ending the person
+                // chose needs no explanation; one forced by an error keeps it. A newer chat keeps its own.
+                if (chatJob == null || chatJob === coroutineContext.job) {
+                    _chat.update { VoiceChatState(error = it.error.takeUnless { stoppedByUser }) }
+                }
             }
         }
         chatJob = job
@@ -130,11 +136,29 @@ class VoiceController(
         }
     }
 
+    /** Desktop's chained voice chat: listen, send what you said, read the reply aloud, until it ends. */
+    private suspend fun converseChained(session: ChatSession, gateway: GatewayUrl, profile: String?, pauseMs: Long) {
+        appScope.launch { audio.ttsLease(gateway, active = true, profile) }
+        var failures = 0
+        try {
+            while (currentCoroutineContext().isActive) {
+                if (!converseOnce(session, gateway, profile, VoiceActivity(silenceMs = pauseMs))) break
+                failures = if (_chat.value.error == null) 0 else failures + 1
+                // A provider that keeps failing would loop forever; give up after a few in a row.
+                if (failures >= MAX_FAILURES) break
+                if (failures > 0) delay(RETRY_PAUSE_MS)
+            }
+        } finally {
+            appScope.launch { audio.ttsLease(gateway, active = false, profile) }
+        }
+    }
+
     /**
      * Herald went out of sight. Dictation stops; a voice chat carries on when it's held up, like a call,
      * and stops otherwise, since Android doesn't let the app listen from the background.
      */
     fun onBackground() {
+        away = true
         cancelDictation()
         if (!held) stopChat()
     }

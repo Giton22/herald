@@ -25,6 +25,8 @@ import io.ktor.client.engine.mock.toByteArray
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.Flow
@@ -176,6 +178,10 @@ class LiveConversationTest {
         call.sent.first { sent -> sent.any { it["type"]?.jsonPrimitive?.contentOrNull == "session.commentary.append" } }
         assertEquals(listOf("It's sunny and 34 degrees."), call.said("session.commentary.append"))
         assertEquals(listOf("Hermes is working: weather Al Khobar. Not done yet."), call.said("session.thinking.append"))
+        assertEquals("weather Al Khobar", voice.chat.value.working)
+        // The chip goes once the tool is done, while the reply still streams.
+        socket.event("tool.complete", """{"tool_id":"t1"}""")
+        voice.chat.first { it.working == null }
 
         socket.event("message.delta", """{"text":" wind"}""")
         socket.event("message.complete", """{"text":"It's **sunny** and 34 degrees. Light wind","status":"complete"}""")
@@ -328,9 +334,11 @@ class LiveConversationTest {
     private class Keeper(private val grants: Boolean) : VoiceKeepAlive {
         var holding = false
         var onEnd: (() -> Unit)? = null
-        override fun hold(onEnd: () -> Unit): Boolean {
+        var onLost: (() -> Unit)? = null
+        override fun hold(onEnd: () -> Unit, onLost: () -> Unit): Boolean {
             holding = grants
             this.onEnd = onEnd
+            this.onLost = onLost
             return grants
         }
 
@@ -358,6 +366,50 @@ class LiveConversationTest {
         assertEquals(VoiceChatState(), voice.chat.first { it.phase == VoicePhase.Off })
         assertTrue(call.closed)
         assertFalse(keeper.holding)
+    }
+
+    @Test
+    fun endingWhileTheModeIsStillBeingCheckedClosesThePanel() = runTest {
+        val statusAsked = CompletableDeferred<Unit>()
+        val client = createHttpClient(
+            MockEngine { request ->
+                if (request.url.encodedPath == "/api/audio/voice-live/status") {
+                    statusAsked.complete(Unit)
+                    awaitCancellation()
+                }
+                respond("""{"ok":true}""", HttpStatusCode.OK, json)
+            },
+            PersistentCookiesStorage(InMemoryKeyValueStore()),
+        )
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> Socket() }, backgroundScope)
+        val session = ChatSession(gateway, null, null, connection, SessionsApi(client), backgroundScope)
+        val keeper = Keeper(grants = true)
+        val voice = VoiceController(AudioApi(client), NoRecorder, Silent, backgroundScope, backgroundScope, keeper) { FakeCall() }
+
+        voice.startChat(session, gateway, null)
+        statusAsked.await()
+        voice.stopChat()
+        assertEquals(VoiceChatState(), voice.chat.first { it.phase == VoicePhase.Off })
+        assertFalse(keeper.holding)
+    }
+
+    @Test
+    fun aHoldRefusedAfterTheAppWentAwayEndsTheCall() = runTest {
+        val client = http("gpt-live", mutableListOf())
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> Socket() }, backgroundScope)
+        val session = ChatSession(gateway, null, null, connection, SessionsApi(client), backgroundScope)
+        val call = FakeCall()
+        val keeper = Keeper(grants = true)
+        val voice = VoiceController(AudioApi(client), NoRecorder, Silent, backgroundScope, backgroundScope, keeper) { call }
+
+        voice.startChat(session, gateway, null)
+        voice.chat.first { it.live && it.phase == VoicePhase.Listening }
+        voice.onBackground()
+        assertTrue(voice.chat.value.live)
+        // Android refused the service only once it started.
+        keeper.onLost!!()
+        voice.chat.first { it.phase == VoicePhase.Off }
+        assertTrue(call.closed)
     }
 
     @Test

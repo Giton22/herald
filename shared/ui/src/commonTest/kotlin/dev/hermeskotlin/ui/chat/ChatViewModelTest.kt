@@ -101,7 +101,7 @@ class ChatViewModelTest {
             SettingsStore(InMemoryKeyValueStore(), scope), PetApi(connection), JourneyApi(client), AudioApi(client),
             NoRecorder, NoPlayer, scope, BotsApi(connection), { null },
             object : VoiceKeepAlive {
-                override fun hold(onEnd: () -> Unit) = false
+                override fun hold(onEnd: () -> Unit, onLost: () -> Unit) = false
                 override fun release() = Unit
             },
         )
