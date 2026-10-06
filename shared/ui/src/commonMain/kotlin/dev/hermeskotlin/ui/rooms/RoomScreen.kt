@@ -28,9 +28,18 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
+import dev.hermeskotlin.core.bots.mentionQuery
+import dev.hermeskotlin.core.rooms.mentionable
+import dev.hermeskotlin.core.rooms.mentionsEveryone
+import dev.hermeskotlin.core.rooms.roomRecipients
+import dev.hermeskotlin.ui.chat.MentionChoice
+import dev.hermeskotlin.ui.chat.MentionSuggestions
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -157,6 +166,7 @@ fun RoomScreen(
                     Text("The room is talking it over…", style = Theme[typography][caption], color = Theme[colors][textTertiary])
                 }
             }
+            RoomMentions(room, viewModel, faces)
             RoomComposer(room, viewModel)
         }
         room.notice?.let { message ->
@@ -381,8 +391,12 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomsViewModel) {
             )
         }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            // Who answers first, by the gateway's own @ rule: everyone, unless the message names someone.
+            val members = room.room.members
+            val recipients by remember(members) { derivedStateOf { roomRecipients(viewModel.composer.text.toString(), members) } }
             Text(
-                room.room.members.joinToString(" · ") { it.label },
+                if (recipients.size == members.size) members.joinToString(" · ") { it.label }
+                else "To ${recipients.joinToString(", ") { it.label }}",
                 style = Theme[typography][caption],
                 color = Theme[colors][textTertiary],
                 maxLines = 1,
@@ -395,6 +409,34 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomsViewModel) {
             } else {
                 SendButton(SendIcon.Send, onClick = viewModel::send, enabled = hasText && !room.sending)
             }
+        }
+    }
+}
+
+/**
+ * The `@` list over the room's composer: "Everyone" and the members that what's typed after `@` can mean.
+ * A pick puts the member's room handle in, which is what the gateway matches (not the chat's `@hermes`).
+ */
+@Composable
+private fun RoomMentions(room: OpenRoom, viewModel: RoomsViewModel, faces: BotFaces) {
+    val members = room.room.members
+    val mention by remember(viewModel) {
+        derivedStateOf { viewModel.composer.let { mentionQuery(it.text.toString(), it.selection.end) } }
+    }
+    val choices = remember(mention, members, faces) {
+        val typed = mention ?: return@remember emptyList()
+        val everyone = MentionChoice("Everyone", "all", bot = null).takeIf { mentionsEveryone(typed.query) }
+        listOfNotNull(everyone) + members.mentionable(typed.query).mapNotNull { member ->
+            member.handle?.let { MentionChoice(member.label, it, faces.roomBot(member.profile ?: member.memberId)) }
+        }
+    }
+    AnimatedVisibility(visible = choices.isNotEmpty(), enter = fadeIn(), exit = fadeOut()) {
+        // Kept through the fade-out, so the list doesn't empty before it leaves.
+        var shown by remember { mutableStateOf(choices) }
+        if (choices.isNotEmpty()) shown = choices
+        MentionSuggestions(shown, hazeState = null) { choice ->
+            val typed = mention ?: return@MentionSuggestions
+            viewModel.composer.edit { replace(typed.start, typed.end, "@${choice.handle} ") }
         }
     }
 }
