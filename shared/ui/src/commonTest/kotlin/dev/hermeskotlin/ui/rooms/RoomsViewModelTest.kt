@@ -10,6 +10,7 @@ import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.rooms.Room
 import dev.hermeskotlin.core.rooms.RoomLine
+import dev.hermeskotlin.core.rooms.RoomSeenStore
 import dev.hermeskotlin.core.rooms.RoomsApi
 import dev.hermeskotlin.core.rpc.RpcTransport
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
@@ -100,6 +101,9 @@ class RoomsViewModelTest {
         fun sent(method: String): List<JsonObject> = requests.filter { it.first == method }.map { it.second }
     }
 
+    /** What the user has seen in each room; shared by a test's view models, as the app's single store is. */
+    private val seenStore = RoomSeenStore(InMemoryKeyValueStore())
+
     private suspend fun viewModel(socket: RoomsGateway): RoomsViewModel {
         val config = MockEngineConfig()
         config.dispatcher = dispatcher
@@ -109,7 +113,7 @@ class RoomsViewModelTest {
         val connection = GatewayConnection(AuthApi(client, cookies), { _, _ -> socket }, CoroutineScope(dispatcher))
         connection.start(gateway.gatewayUrl)
         connection.state.first { it is ConnectionState.Connected }
-        return RoomsViewModel(RoomsApi(connection), connection)
+        return RoomsViewModel(RoomsApi(connection), connection, seenStore)
     }
 
     /** The answers of a quiet room: empty state and log, whatever [roomId] is asked about. */
@@ -527,6 +531,53 @@ class RoomsViewModelTest {
             vm.renameRoom(roomA, "  Release room ")
             assertEquals("Release room", vm.state.first { it.rooms.single().name != "Room A" }.rooms.single().name)
             assertEquals("Release room", vm.opened.value?.room?.name)
+        } finally {
+            vm.close()
+        }
+    }
+
+    @Test
+    fun aRoomThatMovesOnIsUnreadUntilItsOpened() = runTest(dispatcher) {
+        var latest = 2
+        val socket = RoomsGateway(CoroutineScope(dispatcher)) { method, params ->
+            when (method) {
+                "groups.capabilities" -> """{"protocol_version":2,"driver":true}"""
+                "groups.list" -> """{"rooms":[{"room_id":"a","name":"Room A","members":[],"latest_seq":$latest}]}"""
+                "groups.state" -> """{"room":{"room_id":"a","name":"Room A","members":[],"latest_seq":$latest}}"""
+                "groups.log" -> """{"events":[],"cursor":$latest,"latest_seq":$latest,"has_more":false}"""
+                else -> quietRoom(method, params) ?: "{}"
+            }
+        }
+        val vm = viewModel(socket)
+        try {
+            vm.bind(gateway.gatewayUrl)
+            vm.setVisible(true)
+            // First met: read so far, not unread.
+            assertTrue(vm.state.first { it.available }.unread.isEmpty())
+            vm.setVisible(false)
+
+            latest = 5
+            vm.setVisible(true)
+            assertEquals(setOf("a"), vm.state.first { it.unread.isNotEmpty() }.unread)
+            vm.setVisible(false)
+
+            vm.open(roomA)
+            vm.opened.first { it?.loading == false }
+            assertTrue(vm.state.first { it.unread.isEmpty() }.unread.isEmpty())
+        } finally {
+            vm.close()
+        }
+    }
+
+    @Test
+    fun aRoomOpenedFromANotificationAtLaunchStaysOpen() = runTest(dispatcher) {
+        val socket = RoomsGateway(CoroutineScope(dispatcher)) { method, params -> quietRoom(method, params) ?: "{}" }
+        val vm = viewModel(socket)
+        try {
+            // The tap opens the room before the sidebar binds the gateway: the first bind isn't a switch.
+            vm.openById("a", "Room A")
+            vm.bind(gateway.gatewayUrl)
+            assertEquals("a", vm.opened.value?.room?.roomId)
         } finally {
             vm.close()
         }

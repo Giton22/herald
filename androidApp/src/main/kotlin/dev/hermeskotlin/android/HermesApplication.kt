@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.Intent
 import dev.hermeskotlin.android.notify.BotNotifier
 import dev.hermeskotlin.android.notify.ChatNotifier
+import dev.hermeskotlin.android.notify.RoomNotifier
 import dev.hermeskotlin.android.notify.WatchNotifier
 import dev.hermeskotlin.android.notify.notifyModule
 import dev.hermeskotlin.android.push.PushListener
@@ -32,6 +33,7 @@ class HermesApplication : Application() {
         }.koin
         koin.get<ChatNotifier>().start()
         koin.get<BotNotifier>().start()
+        koin.get<RoomNotifier>().start()
         koin.get<WatchNotifier>().start()
         koin.get<PushSetup>().start()
         koin.get<PushListener>().start()

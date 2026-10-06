@@ -377,6 +377,7 @@ fun SessionsSidebar(
                             needsYou = needsYou,
                             rooms = roomsState.rooms,
                             roomsAvailable = roomsState.available,
+                            unreadRooms = roomsState.unread,
                             onOpenRoom = onOpenRoom,
                             onNewRoom = {
                                 rooms.dismissNotice()
