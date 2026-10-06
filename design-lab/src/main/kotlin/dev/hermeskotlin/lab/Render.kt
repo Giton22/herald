@@ -18,6 +18,11 @@ val screens: List<Pair<String, @Composable () -> Unit>> = listOf(
             "${look.ordinal}-${look.name.lowercase()}-approval" to @Composable { SignalTheme { ApprovalScreen(look) } },
         )
     }.toTypedArray(),
+    "5-refined-reply" to { SignalTheme { RefinedReply() } },
+    "5-refined-working" to { SignalTheme { RefinedWorking() } },
+    "5-refined-approval" to { SignalTheme { RefinedApproval() } },
+    "5-refined-newchat" to { SignalTheme { RefinedNewChat() } },
+    "5-refined-sidebar" to { SignalTheme { RefinedSidebar() } },
 )
 
 /** Renders at a Pixel 9's 1080×2424 at 2.625x density (411×923dp). */
