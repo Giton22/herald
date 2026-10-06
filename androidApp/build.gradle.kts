@@ -56,6 +56,10 @@ android {
         abortOnError = true
         warningsAsErrors = true
         checkReleaseBuilds = false
+        // Test code isn't shipped, and analysing it was most of lint's time in CI. The shared modules only ever
+        // gave lint their test sources, so lint skips them too.
+        ignoreTestSources = true
+        checkDependencies = false
         disable += setOf(
             // Only fires on the untracked local.properties that Android Studio writes on Windows.
             "PropertyEscape",
