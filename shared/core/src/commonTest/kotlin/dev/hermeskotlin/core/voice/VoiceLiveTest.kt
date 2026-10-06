@@ -57,6 +57,24 @@ class VoiceLiveTest {
     }
 
     @Test
+    fun aStreamingReplyIsCutOnlyWhereNothingIsLeftOpen() {
+        assertEquals(0, speakableCut("Still going"))
+        assertEquals("It's sunny. ".length, speakableCut("It's sunny. Light"))
+        // An open code fence holds the cut before it, even at a "sentence" inside the code.
+        val prose = "Run this.\n"
+        assertEquals(prose.length, speakableCut("$prose```sh\nrm -f a. b\n"))
+        val closed = "$prose```sh\nrm -f a. b\n```\n"
+        assertEquals("${closed}Then restart. ".length, speakableCut("${closed}Then restart. It"))
+        // Nor inside a link or a table row still coming in.
+        assertEquals("See it. ".length, speakableCut("See it. Read [the docs. More](https://exa"))
+        assertEquals("Here.\n".length, speakableCut("Here.\n| a. b | c"))
+        // Spoken in pieces at the cuts, it sounds the same as the whole reply.
+        val reply = "${closed}Then restart. Done."
+        val cut = speakableCut(reply)
+        assertEquals(speakableText(reply), "${speakableText(reply.substring(0, cut))} ${speakableText(reply.substring(cut))}")
+    }
+
+    @Test
     fun theOpeningHistoryKeepsTheNewestTurnsThatFit() {
         val turns = listOf(
             LiveFragment.Speaker.User to "old question",

@@ -14,6 +14,7 @@ import dev.hermeskotlin.core.voice.delegationPrompt
 import dev.hermeskotlin.core.voice.isVoiceStopCommand
 import dev.hermeskotlin.core.voice.liveHistory
 import dev.hermeskotlin.core.voice.parseLiveEvent
+import dev.hermeskotlin.core.voice.speakableCut
 import dev.hermeskotlin.core.voice.speakableText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -165,36 +166,42 @@ internal class LiveConversation(
             state.update { it.copy(error = session.state.value.error ?: "Couldn't send that to Hermes.") }
             return
         }
+        // The prompt just sent; a queued one waits behind the turn still running, so that turn isn't the answer.
+        val askedKey = session.state.value.messages.lastOrNull { it is ChatMessage.User }?.key
         withTimeoutOrNull(TURN_START_MS) { session.state.first { it.running } }
-        var spoken = 0
+        // How far each reply of the turn was spoken, in its markdown, cut only where nothing is left open.
+        val spokenTo = HashMap<String, Int>()
+        var spokeAny = false
         var tool: String? = null
         session.state.first { chat ->
-            val asked = chat.messages.indexOfLast { it is ChatMessage.User }
-            val reply = chat.messages.drop(asked + 1).lastOrNull { it is ChatMessage.Assistant } as? ChatMessage.Assistant
-            val running = reply?.tools?.lastOrNull { it.running }?.let { it.detail ?: it.name }
+            val asked = chat.messages.indexOfFirst { it.key == askedKey }
+            val queued = (chat.messages.getOrNull(asked) as? ChatMessage.User)?.queued == true
+            val replies = if (asked < 0 || queued) emptyList() else chat.messages.drop(asked + 1).filterIsInstance<ChatMessage.Assistant>()
+            val running = replies.lastOrNull()?.tools?.lastOrNull { it.running }?.let { it.detail ?: it.name }
             if (running != null && running != tool) {
                 tool = running
                 send(LiveCommands.thinking(nextId("think"), id, "Hermes is working: $running. Not done yet."))
             }
-            val text = reply?.text?.let(::speakableText).orEmpty()
-            if (chat.running) {
-                // Only whole sentences while it streams; the rest goes once the turn ends.
-                val end = text.lastIndexOf(". ", text.length - 2) + 1
-                if (end > spoken) {
-                    speak(id, text.substring(spoken, end))
-                    spoken = end
+            for (reply in replies) {
+                // A reply still streaming goes a whole sentence at a time; a finished one goes to its end.
+                val end = if (reply.streaming && chat.running) speakableCut(reply.text) else reply.text.length
+                val from = spokenTo[reply.key] ?: 0
+                if (end > from) {
+                    spokeAny = speak(id, reply.text.substring(from, end)) || spokeAny
+                    spokenTo[reply.key] = end
                 }
-                false
-            } else {
-                if (text.length > spoken) speak(id, text.substring(spoken))
-                else if (spoken == 0) send(LiveCommands.thinking(nextId("think"), id, "Hermes finished that request without a spoken result."))
-                true
             }
+            val done = !chat.running && !queued
+            if (done && !spokeAny) send(LiveCommands.thinking(nextId("think"), id, "Hermes finished that request without a spoken result."))
+            done
         }
     }
 
-    private fun speak(delegationId: String, text: String) {
-        for (chunk in commentaryChunks(text)) send(LiveCommands.commentary(nextId("say"), delegationId, chunk))
+    /** Hands [markdown] to the voice as it should sound; false when none of it is speakable. */
+    private fun speak(delegationId: String, markdown: String): Boolean {
+        val chunks = commentaryChunks(speakableText(markdown))
+        for (chunk in chunks) send(LiveCommands.commentary(nextId("say"), delegationId, chunk))
+        return chunks.isNotEmpty()
     }
 
     private fun send(event: String) {

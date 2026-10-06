@@ -126,6 +126,36 @@ fun commentaryChunks(text: String, limit: Int = LIVE_APPEND_CHARS): List<String>
     return chunks
 }
 
+/**
+ * How much of a reply still streaming can be spoken: up to the last sentence or line end with nothing left
+ * open before it (a code fence, a link, a table row). Markdown only turns quiet once it's closed, so the
+ * part before the cut reads the same when the reply is done. 0 when there is no such place yet.
+ */
+fun speakableCut(markdown: String): Int {
+    var cut = 0
+    var fenced = false
+    var lineStart = 0
+    while (lineStart < markdown.length) {
+        val newline = markdown.indexOf('\n', lineStart)
+        val lineEnd = if (newline < 0) markdown.length else newline + 1
+        val line = markdown.substring(lineStart, lineEnd)
+        val trimmed = line.trimStart()
+        when {
+            trimmed.startsWith("```") -> fenced = !fenced
+            fenced || trimmed.startsWith("|") -> Unit
+            else -> for (end in SENTENCE_BREAK.findAll(line)) {
+                val before = line.substring(0, end.range.last + 1)
+                val linkOpen = before.count { it == '[' } > before.count { it == ']' } ||
+                    before.lastIndexOf("](") > before.lastIndexOf(')')
+                if (!linkOpen) cut = lineStart + end.range.last + 1
+            }
+        }
+        if (newline >= 0 && !fenced) cut = lineEnd
+        lineStart = lineEnd
+    }
+    return cut
+}
+
 /** The chat so far as the call's opening history: the newest text turns that fit, oldest first. */
 fun liveHistory(turns: List<Pair<LiveFragment.Speaker, String>>, maxMessages: Int = 24, maxChars: Int = 6_000): List<LiveHistoryMessage> {
     val out = ArrayDeque<LiveHistoryMessage>()
@@ -196,3 +226,4 @@ fun interface LiveCalls {
 
 private val WHITESPACE = Regex("""\s+""")
 private val SENTENCE_END = Regex("""(?<=[.!?])\s+""")
+private val SENTENCE_BREAK = Regex("""[.!?] """)

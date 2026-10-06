@@ -2,6 +2,7 @@ package dev.hermeskotlin.ui.voice
 
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
+import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatSession
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
@@ -58,7 +59,10 @@ class LiveConversationTest {
             val id = message["id"] ?: return
             val result = when (message["method"]?.jsonPrimitive?.contentOrNull) {
                 "session.create" -> """{"session_id":"rt9","stored_session_id":"stored-9","message_count":0,"messages":[],"info":{}}"""
-                "prompt.submit" -> """{"status":"streaming"}""".also { submits.update { it + message } }
+                "prompt.submit" -> {
+                    val queued = message["params"]?.jsonObject?.get("queued")?.jsonPrimitive?.contentOrNull == "true"
+                    """{"status":"${if (queued) "queued" else "streaming"}"}""".also { submits.update { it + message } }
+                }
                 else -> "{}"
             }
             inbound.trySend("""{"jsonrpc":"2.0","id":$id,"result":$result}""")
@@ -180,6 +184,47 @@ class LiveConversationTest {
         voice.stopChat()
         voice.chat.first { it.phase == VoicePhase.Off }
         assertTrue(call.closed)
+    }
+
+    @Test
+    fun aRequestQueuedBehindATurnThatWontStopIsAnsweredByItsOwnTurn() = runTest {
+        val client = http("gpt-live", mutableListOf())
+        val socket = Socket()
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> socket }, backgroundScope)
+        connection.start(gateway)
+        connection.state.first { it is ConnectionState.Connected }
+        val session = ChatSession(gateway, null, null, connection, SessionsApi(client), backgroundScope)
+        session.start()
+        val call = FakeCall()
+        val voice = VoiceController(AudioApi(client), NoRecorder, Silent, backgroundScope, backgroundScope) { call }
+        voice.startChat(session, gateway, null)
+        voice.chat.first { it.live && it.phase == VoicePhase.Listening }
+
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Check the logs","start_ms":0,"end_ms":900}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d1"}}""")
+        socket.submits.first { it.size == 1 }
+        socket.event("message.start")
+        socket.event("message.delta", """{"text":"Reading the old logs"}""")
+        session.state.first { it.running }
+
+        // The running turn ignores the stop, so the newer request is queued behind it.
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Actually check disk space","start_ms":2000,"end_ms":3000}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
+        socket.submits.first { it.size == 2 }
+        session.state.first { state -> state.messages.any { it is ChatMessage.User && it.queued } }
+
+        // The old turn ends; it isn't d2's answer, and d2 doesn't give up on it.
+        socket.event("message.complete", """{"text":"Reading the old logs. Nothing new.","status":"complete"}""")
+        session.state.first { !it.running }
+        assertTrue(call.sent.value.none { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d2" })
+
+        socket.event("message.start")
+        socket.event("message.complete", """{"text":"The disk is 40% full.","status":"complete"}""")
+        call.sent.first { sent -> sent.any { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d2" } }
+        val toD2 = call.sent.value.filter { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d2" }
+        assertEquals(listOf("session.commentary.append"), toD2.map { it["type"]!!.jsonPrimitive.content })
+        assertEquals("The disk is 40% full.", toD2.single()["content"]!!.jsonPrimitive.content)
+        voice.stopChat()
     }
 
     @Test
