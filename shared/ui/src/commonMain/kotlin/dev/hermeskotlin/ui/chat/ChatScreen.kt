@@ -726,13 +726,15 @@ private fun ColumnScope.Dock(
  * button on the left and new chat with the chat's options grouped on the right.
  */
 @Composable
-private fun TopBar(
+internal fun TopBar(
     title: String,
     titleFace: (@Composable () -> Unit)?,
     subtitle: String?,
     onOpenSidebar: () -> Unit,
     onNewChat: (() -> Unit)?,
     onOpenMenu: (() -> Unit)?,
+    /** In place of New chat and the menu, e.g. a room's own buttons. */
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     Column(Modifier.fillMaxWidth()) {
         Row(
@@ -762,8 +764,12 @@ private fun TopBar(
             }
             val shape = RoundedCornerShape(Theme[radii][radiusMedium])
             Row(Modifier.clip(shape).border(1.dp, Theme[colors][stroke], shape)) {
-                BarButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null)
-                BarButton(Lucide.EllipsisVertical, "Chat options", onClick = { onOpenMenu?.invoke() }, enabled = onOpenMenu != null)
+                if (trailing != null) {
+                    trailing()
+                } else {
+                    BarButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null)
+                    BarButton(Lucide.EllipsisVertical, "Chat options", onClick = { onOpenMenu?.invoke() }, enabled = onOpenMenu != null)
+                }
             }
         }
         Box(Modifier.fillMaxWidth().height(1.dp).background(Theme[colors][stroke]))
@@ -772,7 +778,7 @@ private fun TopBar(
 
 /** A 44dp square icon button with no fill, the top bar's style. */
 @Composable
-private fun BarButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean = true) {
+internal fun BarButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean = true) {
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
@@ -1497,7 +1503,7 @@ private fun AssistantReply(
 
 /** When a prompt was sent or a reply finished, in small type; nothing when the setting is off or there's no time. */
 @Composable
-private fun MessageTimeLabel(epochSeconds: Double?, modifier: Modifier = Modifier) {
+internal fun MessageTimeLabel(epochSeconds: Double?, modifier: Modifier = Modifier) {
     if (!LocalAppSettings.current.showTimestamps || epochSeconds == null) return
     val use24Hour = uses24HourClock()
     val label = remember(epochSeconds, use24Hour) { messageTime(epochSeconds, use24Hour) }

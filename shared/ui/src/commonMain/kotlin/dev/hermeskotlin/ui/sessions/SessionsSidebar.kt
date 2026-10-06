@@ -141,6 +141,9 @@ import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.relativeTime
 import dev.hermeskotlin.ui.update.UpdateBanner
 import kotlinx.coroutines.delay
+import dev.hermeskotlin.core.rooms.Room
+import dev.hermeskotlin.ui.rooms.CreateRoomDialog
+import dev.hermeskotlin.ui.rooms.RoomsViewModel
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -174,10 +177,13 @@ fun SessionsSidebar(
     onEditBot: (Bot?) -> Unit,
     /** A bot was deleted, e.g. to leave its chat if it was open. */
     onBotDeleted: (Bot) -> Unit,
+    /** Opens a hosted room from the Rooms section. */
+    onOpenRoom: (Room) -> Unit = {},
     /** The open chat has a turn running. */
     selectedRunning: Boolean = false,
     viewModel: SessionsViewModel = koinViewModel(),
     bots: BotsViewModel = koinViewModel(),
+    rooms: RoomsViewModel = koinViewModel(),
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
     val mode by bots.mode.collectAsStateWithLifecycle()
@@ -186,11 +192,16 @@ fun SessionsSidebar(
     val troubles by bots.troubles.collectAsStateWithLifecycle()
     val failingRoutines by bots.failingRoutines.collectAsStateWithLifecycle()
     val needsYou by bots.needsYou.collectAsStateWithLifecycle()
-    LaunchedEffect(gateway) { bots.bind(gateway.gatewayUrl) }
+    val roomsState by rooms.state.collectAsStateWithLifecycle()
+    LaunchedEffect(gateway) {
+        bots.bind(gateway.gatewayUrl)
+        rooms.bind(gateway.gatewayUrl)
+    }
     // The sidebar stays composed while closed: the live statuses (a gateway poll) are worked out only while it shows.
     LaunchedEffect(visible) {
         bots.setVisible(visible)
         viewModel.setVisible(visible)
+        rooms.setVisible(visible)
     }
     LaunchedEffect(selectedId) { bots.setOpenSession(selectedId) }
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
@@ -211,6 +222,7 @@ fun SessionsSidebar(
     var renameTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var deleteTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var accountOpen by remember { mutableStateOf(false) }
+    var newRoomOpen by remember { mutableStateOf(false) }
 
     fun closeSearch() {
         searchOpen = false
@@ -330,39 +342,68 @@ fun SessionsSidebar(
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 val searchResults = state.searchResults
                 when {
-                    !searchOpen && state.filter == SessionListFilter.Recent && mode == SidebarMode.Bots -> BotsRoster(
-                        state = botsState,
-                        avatars = avatars,
-                        selectedId = selectedId,
-                        selectedRunning = selectedRunning,
-                        nowSeconds = bots.nowSeconds(),
-                        actions = remember(bots, onOpenBot, onOpenBotSession, onNewBotChat, onEditBot, onBotDeleted) {
-                            object : BotActions {
-                                override fun open(bot: Bot) = bots.open(bot) { id -> onOpenBot(bot, id) }
-                                override fun setPinned(bot: Bot, pinned: Boolean) = bots.setPinned(bot, pinned)
-                                override fun setHidden(bot: Bot, hidden: Boolean) = bots.setHidden(bot, hidden)
-                                override fun startFresh(bot: Bot) = bots.startFresh(bot) { id -> onOpenBot(bot, id) }
-                                override fun openRecent(bot: Bot) {
-                                    val recent = bot.lastSession ?: return
-                                    onOpenBotSession(bot, recent.id ?: return, recent.title?.takeIf { it.isNotBlank() } ?: bot.label)
+                    !searchOpen && state.filter == SessionListFilter.Recent && mode == SidebarMode.Bots -> {
+                        BotsRoster(
+                            state = botsState,
+                            avatars = avatars,
+                            selectedId = selectedId,
+                            selectedRunning = selectedRunning,
+                            nowSeconds = bots.nowSeconds(),
+                            actions = remember(bots, onOpenBot, onOpenBotSession, onNewBotChat, onEditBot, onBotDeleted) {
+                                object : BotActions {
+                                    override fun open(bot: Bot) = bots.open(bot) { id -> onOpenBot(bot, id) }
+                                    override fun setPinned(bot: Bot, pinned: Boolean) = bots.setPinned(bot, pinned)
+                                    override fun setHidden(bot: Bot, hidden: Boolean) = bots.setHidden(bot, hidden)
+                                    override fun startFresh(bot: Bot) = bots.startFresh(bot) { id -> onOpenBot(bot, id) }
+                                    override fun openRecent(bot: Bot) {
+                                        val recent = bot.lastSession ?: return
+                                        onOpenBotSession(bot, recent.id ?: return, recent.title?.takeIf { it.isNotBlank() } ?: bot.label)
+                                    }
+                                    override fun newChat(bot: Bot) = onNewBotChat(bot)
+                                    override fun create() = onEditBot(null)
+                                    override fun edit(bot: Bot) = onEditBot(bot)
+                                    override fun duplicate(bot: Bot) = bots.duplicate(bot)
+                                    override fun delete(bot: Bot) = bots.delete(bot) { onBotDeleted(bot) }
+                                    override fun checkAgain(bot: Bot) = bots.checkAgain(bot)
+                                    override fun routines(bot: Bot) {
+                                        routinesOf = bot
+                                    }
                                 }
-                                override fun newChat(bot: Bot) = onNewBotChat(bot)
-                                override fun create() = onEditBot(null)
-                                override fun edit(bot: Bot) = onEditBot(bot)
-                                override fun duplicate(bot: Bot) = bots.duplicate(bot)
-                                override fun delete(bot: Bot) = bots.delete(bot) { onBotDeleted(bot) }
-                                override fun checkAgain(bot: Bot) = bots.checkAgain(bot)
-                                override fun routines(bot: Bot) {
-                                    routinesOf = bot
+                            },
+                            onRetry = bots::refresh,
+                            onDismissNotice = bots::dismissNotice,
+                            troubles = troubles,
+                            failingRoutines = failingRoutines,
+                            needsYou = needsYou,
+                            rooms = roomsState.rooms,
+                            roomsAvailable = roomsState.available,
+                            onOpenRoom = onOpenRoom,
+                            onNewRoom = {
+                                rooms.dismissNotice()
+                                newRoomOpen = true
+                            },
+                            onRenameRoom = rooms::renameRoom,
+                            onDeleteRoom = rooms::deleteRoom,
+                            roomsNotice = roomsState.actionNotice,
+                            onDismissRoomsNotice = rooms::dismissActionNotice,
+                        )
+                        CreateRoomDialog(
+                            visible = newRoomOpen,
+                            bots = botsState.all,
+                            busy = roomsState.busy,
+                            error = roomsState.notice,
+                            onDismiss = {
+                                newRoomOpen = false
+                                rooms.dismissNotice()
+                            },
+                            onCreate = { name, members ->
+                                rooms.createRoom(name, members) { room ->
+                                    newRoomOpen = false
+                                    onOpenRoom(room)
                                 }
-                            }
-                        },
-                        onRetry = bots::refresh,
-                        onDismissNotice = bots::dismissNotice,
-                        troubles = troubles,
-                        failingRoutines = failingRoutines,
-                        needsYou = needsYou,
-                    )
+                            },
+                        )
+                    }
                     searchOpen && searchResults == null -> Unit
                     searchResults != null -> when {
                         state.searching && searchResults.isEmpty() -> CenteredSpinner()

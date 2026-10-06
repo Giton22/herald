@@ -60,6 +60,7 @@ import com.composeunstyled.theme.Theme
 import com.composeunstyled.theme.rememberColoredIndication
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.bots.BotTrouble
+import dev.hermeskotlin.core.rooms.Room
 import dev.hermeskotlin.core.cron.CronJob
 import dev.hermeskotlin.core.bots.lastActivity
 import dev.hermeskotlin.core.bots.rosterPreview
@@ -88,6 +89,10 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
 import dev.hermeskotlin.ui.components.relativeTime
+import dev.hermeskotlin.ui.rooms.RoomAsk
+import dev.hermeskotlin.ui.rooms.RoomAskDialogs
+import dev.hermeskotlin.ui.rooms.RoomFaces
+import dev.hermeskotlin.ui.rooms.RoomMenuActions
 import dev.hermeskotlin.ui.sessions.ListNotice
 import dev.hermeskotlin.ui.sessions.ListSpinner
 import dev.hermeskotlin.ui.sessions.MessageBanner
@@ -143,13 +148,30 @@ fun BotsRoster(
     failingRoutines: Map<String, CronJob> = emptyMap(),
     /** The bots needing the user, most pressing first. */
     needsYou: List<NeedsYou> = emptyList(),
+    /** The gateway's hosted rooms; the section is drawn only when the gateway hosts them. */
+    rooms: List<Room> = emptyList(),
+    /** Whether this gateway hosts rooms at all (`groups.capabilities`). */
+    roomsAvailable: Boolean = false,
+    /** Opens a room's conversation. */
+    onOpenRoom: (Room) -> Unit = {},
+    /** Starts a new room: name it and pick its bots. */
+    onNewRoom: () -> Unit = {},
+    onRenameRoom: (Room, String) -> Unit = { _, _ -> },
+    onDeleteRoom: (Room) -> Unit = {},
+    /** Why a room's rename or delete didn't work. */
+    roomsNotice: String? = null,
+    onDismissRoomsNotice: () -> Unit = {},
 ) {
     val heldUp = remember(needsYou) { needsYou.filterIsInstance<NeedsYou.Answer>().associate { it.bot.name to it.waiting } }
+    var roomAsk by remember { mutableStateOf<RoomAsk?>(null) }
+    RoomAskDialogs(roomAsk, onDismiss = { roomAsk = null }, onRename = onRenameRoom, onDelete = onDeleteRoom)
     var hiddenOpen by remember { mutableStateOf(false) }
     var startOver by remember { mutableStateOf<Bot?>(null) }
     var deleting by remember { mutableStateOf<Bot?>(null) }
     // Two bots that read the same get their @handles, like Desktop's roster.
     val sameName = remember(state.all) { state.all.groupBy { it.label.lowercase() }.filterValues { it.size > 1 }.keys }
+    // A room's members are drawn with the same faces as their bots' rows.
+    val roomFaces = remember(state.all, avatars) { BotFaces(state.all, avatars) }
     val row: @Composable (Bot, Boolean) -> Unit = { bot, hidden ->
         val chat = bot.canonicalSession
         val selected = selectedId != null && chat != null && (selectedId == chat.id || selectedId == chat.openId)
@@ -189,6 +211,30 @@ fun BotsRoster(
                         // A failing routine is mended on its page; anything else in the bot's chat.
                         onClick = { if (item is NeedsYou.Routine) actions.routines(item.bot) else actions.open(item.bot) },
                     )
+                }
+            }
+            if (roomsAvailable) {
+                item(key = "rooms-label") {
+                    Row(Modifier.fillMaxWidth().padding(start = 12.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+                        SectionLabel("Rooms", Modifier.weight(1f))
+                        IconButton(Lucide.Plus, contentDescription = "New room", onClick = onNewRoom)
+                    }
+                }
+                roomsNotice?.let { message ->
+                    item(key = "rooms-notice") { MessageBanner(message, onDismiss = onDismissRoomsNotice, modifier = Modifier.padding(vertical = 4.dp)) }
+                }
+                if (rooms.isEmpty()) {
+                    item(key = "rooms-empty") { ListNotice("No rooms yet. New room starts one with 2\u20136 bots.") }
+                } else {
+                    items(rooms, key = { "room:${it.roomId}" }) { room ->
+                        RoomRow(
+                            room,
+                            roomFaces,
+                            onClick = { onOpenRoom(room) },
+                            onRename = { roomAsk = RoomAsk.Rename(room) },
+                            onDelete = { roomAsk = RoomAsk.Delete(room) },
+                        )
+                    }
                 }
             }
             item(key = "label") {
@@ -448,4 +494,83 @@ internal fun StartOverDialog(bot: Bot?, onDismiss: () -> Unit, onConfirm: (Bot) 
             Button("Start fresh", onClick = { onDismiss(); onConfirm(b) }, variant = ButtonVariant.Primary, size = ButtonSize.Small)
         },
     )
+}
+
+/**
+ * One hosted room: its members' faces, its name, who's in it, and when it last moved. A long press
+ * opens its actions, as a bot's row does.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun RoomRow(room: Room, faces: BotFaces, onClick: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
+    val haptics = LocalHapticFeedback.current
+    var menuOpen by remember { mutableStateOf(false) }
+    DropdownMenu(
+        expanded = menuOpen,
+        onExpandedChange = { menuOpen = it },
+        items = {
+            RoomMenuActions(
+                onRename = { menuOpen = false; onRename() },
+                onDelete = { menuOpen = false; onDelete() },
+            )
+        },
+    ) {
+        RoomRowContent(
+            room,
+            faces,
+            Modifier.combinedClickable(
+                onClick = onClick,
+                onClickLabel = "Open room ${room.name}",
+                onLongClick = {
+                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                    menuOpen = true
+                },
+                onLongClickLabel = "${room.name} actions",
+                interactionSource = null,
+                indication = rememberColoredIndication(Theme[colors][text]),
+            ),
+        )
+    }
+}
+
+@Composable
+private fun RoomRowContent(room: Room, faces: BotFaces, clicks: Modifier) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = MinTouchTarget)
+            .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
+            .then(clicks)
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RoomFaces(room.members, faces, size = 26.dp, max = 3)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                room.name,
+                style = Theme[typography][body].copy(fontSize = 15.sp, fontWeight = FontWeight.Medium),
+                color = Theme[colors][text],
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(
+                roomSubtitle(room),
+                style = Theme[typography][bodySmall],
+                color = Theme[colors][textSecondary],
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        val last = relativeTime(room.updatedAt)
+        if (last.isNotBlank()) {
+            Text(last, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
+        }
+    }
+}
+
+/** "Ops, Scribe, Cadence": the faces show how many, the names say who. */
+private fun roomSubtitle(room: Room): String {
+    if (room.members.isEmpty()) return "No members"
+    return room.members.joinToString(", ") { it.label }
 }
