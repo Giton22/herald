@@ -59,6 +59,7 @@ Everything shown is sample data, not a real gateway.
 ## Install
 
 1. Download the APK from the latest [release](../../releases/latest) on your Android phone (Android 8 or newer).
+   On almost any phone that is the `arm64-v8a` one; the release notes say which fits other devices.
 2. Open it and allow installing from your browser when Android asks.
 3. Herald tells you when a new release is out. Install it over the old one; your sign-in and settings stay.
 
@@ -131,8 +132,8 @@ The scenes are `Reply`, `Working`, `Approval`, `LongApproval`, `BareApproval`, `
 
 ## Releasing
 
-Pushing a tag such as `v0.3.0` runs the tests, builds an APK signed with the release key and attaches
-it, with its SHA-256, to a draft release. Publishing the draft makes it the update the app offers.
+Pushing a tag such as `v0.3.0` runs the tests, builds APKs signed with the release key and attaches
+them, each with its SHA-256, to a draft release: a universal one and one per ABI, about a third of its size. Publishing the draft makes it the update the app offers.
 The version comes from the tag (`1.2.3` → version code `10203`), so tags must only go up.
 
 The workflow needs these repository secrets: `ANDROID_KEYSTORE_BASE64` (the keystore, base64-encoded),

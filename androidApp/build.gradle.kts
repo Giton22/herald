@@ -46,6 +46,17 @@ android {
     // WebRTC's native library is 7–16 MB per ABI; compressed in the APK it is about a third of that.
     packaging { jniLibs.useLegacyPackaging = true }
 
+    // A published release also gets one APK per ABI, each with only its own WebRTC library, beside the
+    // universal one; the in-app update offers the one for the device. Other builds stay one APK.
+    splits {
+        abi {
+            isEnable = releasesRepo.isNotEmpty()
+            reset()
+            include("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
+            isUniversalApk = true
+        }
+    }
+
     buildFeatures {
         compose = true
         buildConfig = true

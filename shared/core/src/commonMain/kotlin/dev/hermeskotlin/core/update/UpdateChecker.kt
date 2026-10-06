@@ -17,11 +17,19 @@ import kotlinx.serialization.json.contentOrNull
 /** A release newer than the installed app. [apkUrl] is the APK attached to it, when there is one. */
 data class AppUpdate(val version: String, val pageUrl: String, val apkUrl: String?)
 
+/** The ABIs this device runs, most preferred first (`Build.SUPPORTED_ABIS`). */
+internal expect fun deviceAbis(): List<String>
+
 /**
  * Looks for a newer release of the app on GitHub, where it is published (`releases/latest`, which
  * skips drafts and pre-releases). Nothing is sent but the request itself; a failure just means no update.
+ * [abis] picks which of the release's APKs to offer.
  */
-class UpdateChecker(private val client: HttpClient, private val store: KeyValueStore) {
+class UpdateChecker(
+    private val client: HttpClient,
+    private val store: KeyValueStore,
+    private val abis: List<String> = deviceAbis(),
+) {
 
     /** The latest release of [repo] (`owner/name`) when it is newer than [current], unless it was dismissed. */
     suspend fun check(repo: String, current: String): AppUpdate? {
@@ -38,7 +46,7 @@ class UpdateChecker(private val client: HttpClient, private val store: KeyValueS
         } catch (e: Exception) {
             null
         } ?: return null
-        val update = parseRelease(release) ?: return null
+        val update = parseRelease(release, abis) ?: return null
         if (!isNewer(update.version, current)) return null
         if (store.get(DISMISSED_KEY) == update.version) return null
         return update
@@ -52,15 +60,24 @@ class UpdateChecker(private val client: HttpClient, private val store: KeyValueS
     }
 }
 
-internal fun parseRelease(release: JsonObject): AppUpdate? {
+/**
+ * A release names one APK per ABI (`herald-1.2.3_arm64-v8a.apk`) beside the universal one (`herald-1.2.3.apk`):
+ * the one for the first of [abis] that has its own wins, then the universal one, then any APK.
+ */
+internal fun parseRelease(release: JsonObject, abis: List<String>): AppUpdate? {
     val tag = release.text("tag_name") ?: return null
     val page = release.text("html_url") ?: return null
-    val apk = (release["assets"] as? JsonArray).orEmpty()
+    val apks = (release["assets"] as? JsonArray).orEmpty()
         .mapNotNull { it as? JsonObject }
-        .firstOrNull { it.text("name")?.endsWith(".apk", ignoreCase = true) == true }
-        ?.text("browser_download_url")
+        .mapNotNull { asset -> asset.text("name")?.takeIf { it.endsWith(".apk", ignoreCase = true) }?.let { it.dropLast(4) to asset } }
+    val forAbi = abis.firstNotNullOfOrNull { abi -> apks.firstOrNull { (name, _) -> name.endsWith("_$abi") } }
+    val universal = apks.firstOrNull { (name, _) -> APK_ABIS.none { name.endsWith("_$it") } }
+    val apk = (forAbi ?: universal ?: apks.firstOrNull())?.second?.text("browser_download_url")
     return AppUpdate(tag.removePrefix("v"), page, apk)
 }
+
+/** The ABIs a release builds an APK of its own for; see androidApp's `splits`. */
+private val APK_ABIS = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
 
 /** True when [candidate] is a higher `major.minor.patch` than [current]; a leading `v` and any `-suffix` are ignored. */
 internal fun isNewer(candidate: String, current: String): Boolean {

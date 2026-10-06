@@ -25,6 +25,7 @@ class UpdateCheckerTest {
     private fun checker(status: HttpStatusCode = HttpStatusCode.OK, body: String = release) = UpdateChecker(
         createHttpClient(MockEngine { respond(body, status, headersOf(HttpHeaders.ContentType, "application/json")) }),
         InMemoryKeyValueStore(),
+        abis = listOf("arm64-v8a"),
     )
 
     @Test
@@ -38,9 +39,29 @@ class UpdateCheckerTest {
 
     @Test
     fun aReleaseNamesItsApk() {
-        val update = parseRelease(HermesJson.parseToJsonElement(release) as JsonObject)!!
+        val update = parseRelease(HermesJson.parseToJsonElement(release) as JsonObject, listOf("arm64-v8a"))!!
         assertEquals("0.3.0", update.version)
         assertEquals("https://x/app.apk", update.apkUrl)
+    }
+
+    @Test
+    fun theApkForThisDevicesAbiWinsThenTheUniversalOne() {
+        // In GitHub's order, by name. Versions up to 0.5.1 take the first APK, so the universal one has to sort
+        // first: release.yml puts the ABI after "_", which comes after the universal name's ".".
+        val names = listOf("herald-0.4.0.apk", "herald-0.4.0.apk.sha256", "herald-0.4.0_arm64-v8a.apk", "herald-0.4.0_armeabi-v7a.apk", "herald-0.4.0_x86_64.apk")
+        assertEquals(names, names.sorted())
+        val urls = listOf("universal.apk", "universal.sha256", "arm64.apk", "arm32.apk", "x86_64.apk")
+        val split = HermesJson.parseToJsonElement(
+            """{"tag_name":"v0.4.0","html_url":"https://github.com/o/r/releases/tag/v0.4.0","assets":[""" +
+                names.zip(urls).joinToString(",") { (name, url) -> """{"name":"$name","browser_download_url":"https://x/$url"}""" } + "]}",
+        ) as JsonObject
+
+        assertEquals("https://x/arm64.apk", parseRelease(split, listOf("arm64-v8a", "armeabi-v7a", "armeabi"))?.apkUrl)
+        assertEquals("https://x/arm32.apk", parseRelease(split, listOf("armeabi-v7a", "armeabi"))?.apkUrl)
+        assertEquals("https://x/x86_64.apk", parseRelease(split, listOf("x86_64", "arm64-v8a"))?.apkUrl)
+        // No APK of its own (x86 here), or no ABI known: the universal one.
+        assertEquals("https://x/universal.apk", parseRelease(split, listOf("x86"))?.apkUrl)
+        assertEquals("https://x/universal.apk", parseRelease(split, emptyList())?.apkUrl)
     }
 
     @Test
