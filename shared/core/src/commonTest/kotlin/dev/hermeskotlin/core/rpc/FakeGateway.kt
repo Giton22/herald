@@ -64,7 +64,8 @@ class FakeGateway(private val scope: CoroutineScope, private val reconnects: Boo
     /** Every socket the connection opened, newest last. */
     val sockets = mutableListOf<FakeTransport>()
 
-    val socket get() = sockets.last()
+    /** The newest socket; without reconnects the one socket, made here if the connection hasn't opened it yet. */
+    val socket get() = if (reconnects) sockets.last() else sockets.firstOrNull() ?: open()
 
     /** Every call the client sent, on any socket. */
     val sent get() = sockets.flatMap { it.sent.value }
@@ -89,14 +90,17 @@ class FakeGateway(private val scope: CoroutineScope, private val reconnects: Boo
 
     val connection = GatewayConnection(
         AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())),
-        { _, _ -> if (reconnects || sockets.isEmpty()) open() else socket },
+        { _, _ -> if (reconnects) open() else socket },
         scope,
     )
 
-    /** Starts the [connection] and waits until it is connected. */
-    suspend fun start(): GatewayConnection {
+    /**
+     * Starts the [connection] and waits until it is connected. With `awaitConnected = false` it returns while the
+     * link is still coming up, so what the test starts next sees it connect.
+     */
+    suspend fun start(awaitConnected: Boolean = true): GatewayConnection {
         connection.start(URL)
-        connection.state.first { it is ConnectionState.Connected }
+        if (awaitConnected) connection.state.first { it is ConnectionState.Connected }
         return connection
     }
 

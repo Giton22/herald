@@ -1,5 +1,6 @@
 package dev.hermeskotlin.core.chat
 
+import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.rpc.FakeGateway
 import dev.hermeskotlin.core.rpc.FakeTransport
@@ -58,7 +59,8 @@ class ChatSessionResumeTest {
                 val page = transcript.reversed().drop(offset).take(limit).reversed()
                 json("""{"session_id":"stored-1","messages":[${page.joinToString(",")}]}""")
             }
-            start()
+            // Not waited on: the chat started next sees the link come up.
+            start(awaitConnected = false)
         }
         return gateway.connection to gateway.sockets
     }
@@ -259,6 +261,7 @@ class ChatSessionResumeTest {
             }
         }
         val (connection, transports) = connect(backgroundScope)
+        connection.state.first { it is ConnectionState.Connected }
         val chat = ChatSession(url, null, null, connection, SessionsApi(backgroundScope.client()), backgroundScope)
         chat.start()
         assertTrue(chat.send("hi"))

@@ -46,7 +46,7 @@ class BotHealthTest {
         return Setup(host, health, gateway.socket, checks)
     }
 
-    private fun event(type: String, payload: String = "{}") = event(type, "rt1", payload)
+    private fun rt1Event(type: String, payload: String = "{}") = event(type, sessionId = "rt1", payload = payload)
 
     @Test
     fun lastingFailuresAreToldApartFromPassingOnes() {
@@ -156,13 +156,13 @@ class BotHealthTest {
         // The watcher listens for the gateway's events from here on; an event sent before it does isn't heard.
         testScheduler.runCurrent()
 
-        s.transport.push(event("message.start"))
-        s.transport.push(event("error", """{"message":"Error code: 401 - invalid api key"}"""))
+        s.transport.push(rt1Event("message.start"))
+        s.transport.push(rt1Event("error", """{"message":"Error code: 401 - invalid api key"}"""))
         assertEquals(BotProblem.SignIn, s.health.troubles.first { "scribe" in it }["scribe"]?.problem)
 
-        s.transport.push(event("message.start"))
-        s.transport.push(event("message.delta", """{"text":"Back again."}"""))
-        s.transport.push(event("message.complete", """{"text":"Back again."}"""))
+        s.transport.push(rt1Event("message.start"))
+        s.transport.push(rt1Event("message.delta", """{"text":"Back again."}"""))
+        s.transport.push(rt1Event("message.complete", """{"text":"Back again."}"""))
 
         s.health.troubles.first { it.isEmpty() }
     }
@@ -180,9 +180,9 @@ class BotHealthTest {
 
         // The delivery's result wakes a turn; the chat reads its transcript again when that turn ends.
         history = failedDelivery
-        s.transport.push(event("message.start"))
+        s.transport.push(rt1Event("message.start"))
         chat.state.first { it.running }
-        s.transport.push(event("message.complete", """{"text":""}"""))
+        s.transport.push(rt1Event("message.complete", """{"text":""}"""))
 
         val trouble = s.health.troubles.first { "researcher" in it }["researcher"]
         assertEquals(BotProblem.Quota, trouble?.problem)
@@ -201,9 +201,9 @@ class BotHealthTest {
         assertIs<DeliveryOutcome.Failed>(delivery.outcome)
 
         // Something later in the chat, so the watcher has run over the opening transcript.
-        s.transport.push(event("message.start"))
+        s.transport.push(rt1Event("message.start"))
         chat.state.first { it.running }
-        s.transport.push(event("message.complete", """{"text":"ok"}"""))
+        s.transport.push(rt1Event("message.complete", """{"text":"ok"}"""))
         chat.state.first { !it.running }
 
         assertTrue(s.health.troubles.value.isEmpty())

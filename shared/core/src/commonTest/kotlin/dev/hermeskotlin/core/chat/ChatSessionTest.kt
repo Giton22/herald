@@ -1,5 +1,6 @@
 package dev.hermeskotlin.core.chat
 
+import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.network.HermesJson
 import dev.hermeskotlin.core.rpc.FakeGateway
@@ -47,7 +48,7 @@ class ChatSessionTest {
 
     /**
      * A gateway answering each call with the canned result for its method (`{}` otherwise, [SILENT] never answers;
-     * see [FakeGateway.answer]), connected.
+     * see [FakeGateway.answer]). Started but not waited on: a chat started next sees the link come up.
      */
     private suspend fun gateway(scope: CoroutineScope, results: Map<String, String>, reconnects: Boolean) =
         FakeGateway(scope, reconnects).also { gateway = it }.apply {
@@ -60,7 +61,7 @@ class ChatSessionTest {
                     else -> json(history)
                 }
             }
-            start()
+            start(awaitConnected = false)
         }
 
     private suspend fun setup(scope: CoroutineScope, results: Map<String, String>): Pair<GatewayConnection, FakeTransport> =
@@ -156,6 +157,7 @@ class ChatSessionTest {
                 "prompt.submit" to """{"status":"streaming"}""",
             ),
         )
+        connection.state.first { it is ConnectionState.Connected }
         val sentAt = Instant.fromEpochSeconds(1_700_000_000)
         val clock = object : Clock { override fun now() = sentAt }
         val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope, clock = clock)
@@ -588,6 +590,7 @@ class ChatSessionTest {
                 "prompt.submit" to """{"status":"streaming"}""",
             ),
         )
+        connection.state.first { it is ConnectionState.Connected }
         val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
         chat.start()
 
@@ -647,6 +650,7 @@ class ChatSessionTest {
                 "prompt.submit" to """{"status":"streaming"}""",
             ),
         )
+        connection.state.first { it is ConnectionState.Connected }
         val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
         chat.start()
 
@@ -678,6 +682,7 @@ class ChatSessionTest {
                 "prompt.submit" to "error:5000",
             ),
         )
+        connection.state.first { it is ConnectionState.Connected }
         val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
         chat.start()
 
@@ -876,6 +881,7 @@ class ChatSessionTest {
                 "prompt.submit" to SILENT,
             ),
         )
+        connection.state.first { it is ConnectionState.Connected }
         val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
         chat.start()
         historyFails = true
@@ -943,6 +949,7 @@ class ChatSessionTest {
 
     private suspend fun newChat(scope: CoroutineScope, results: Map<String, String>): Pair<ChatSession, FakeTransport> {
         val (connection, transport) = setup(scope, mapOf("session.create" to """{"session_id":"rt9","info":{}}""") + results)
+        connection.state.first { it is ConnectionState.Connected }
         val chat = ChatSession(url, null, null, connection, SessionsApi(client()), scope)
         chat.start()
         return chat to transport
