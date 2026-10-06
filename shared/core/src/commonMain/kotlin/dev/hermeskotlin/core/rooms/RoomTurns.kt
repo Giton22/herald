@@ -12,11 +12,15 @@ fun waitingFor(events: List<RoomEvent>, members: List<RoomMember>): List<RoomMem
     val asked = events.lastOrNull { it.kind == "message.user" } ?: return emptyList()
     val about = events.filter { it.payload.payloadText("discussion_event_id") == asked.eventId }
     if (about.any { it.kind == "room.activity" && it.payload.payloadText("status") in SETTLED }) return emptyList()
-    val answered = about
-        .filter { it.kind in ANSWERS && it.payload.payloadInt("round_index") == 0 }
-        .mapNotNull { it.payload.payloadText("member_id") }
-        .toSet()
-    return roomRecipients(asked.messageText.orEmpty(), members).filter { it.memberId !in answered }
+    val firstRound = about.filter { it.payload.payloadInt("round_index") == 0 }
+    val answered = firstRound.filter { it.kind in ANSWERS }.mapNotNull { it.payload.payloadText("member_id") }.toSet()
+    // A turn put off for later runs again, but after the others: the next one is working meanwhile.
+    val putOff = firstRound.groupBy { it.payload.payloadText("member_id") }
+        .filterValues { turns -> turns.last().kind == "turn.deferred" }.keys
+    return roomRecipients(asked.messageText.orEmpty(), members)
+        // A roster row with no member id (a legacy room) can't be told apart in the log: leave it out.
+        .filter { it.memberId != null && it.memberId !in answered }
+        .sortedBy { it.memberId in putOff }
 }
 
 /** What the transcript's status line says while the room works, from [waitingFor]: who's replying, and who's next. */

@@ -62,6 +62,13 @@ class RoomTurnsTest {
     }
 
     @Test
+    fun aPutOffTurnGoesLastAndARowWithNoIdIsLeftOut() {
+        assertEquals(listOf("side", "default"), waiting(asked(1, "hi"), answer(2, "turn.deferred", 1, "default")))
+        val legacy = RoomMember(memberId = null, handle = "old", displayName = "Old")
+        assertEquals(listOf("default", "side"), waitingFor(listOf(asked(1, "hi")), members + legacy).map { it.memberId })
+    }
+
+    @Test
     fun aSettledDiscussionWaitsForNoOne() {
         assertEquals(emptyList(), waiting(asked(1, "hi"), settled(2, 1)))
         assertEquals(emptyList(), waiting())
