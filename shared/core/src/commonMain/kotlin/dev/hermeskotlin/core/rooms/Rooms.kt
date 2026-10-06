@@ -4,6 +4,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.intOrNull
 
@@ -180,6 +181,9 @@ fun roomLine(event: RoomEvent, members: List<RoomMember>): RoomLine? {
             val reason = event.payload.payloadText("reason")
             RoomLine.System(event.seq, "Turn stopped${if (reason.isNullOrBlank()) "." else ": $reason"}")
         }
+        // A member that chose to say nothing (its turn settles with `passed`): quiet, but not silent.
+        "turn.settled" -> RoomLine.System(event.seq, "${member(event.payload.payloadText("member_id"))} had nothing to add.")
+            .takeIf { (event.payload["passed"] as? JsonPrimitive)?.booleanOrNull == true }
         "room.stop_requested" -> RoomLine.System(event.seq, "Stopping the room was asked for.")
         "room.renamed" -> event.payload.payloadText("name")?.let { RoomLine.System(event.seq, "Renamed to \u201c$it\u201d.") }
         else -> null
