@@ -31,6 +31,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
@@ -186,8 +187,12 @@ class LiveConversationTest {
         assertTrue(call.closed)
     }
 
-    @Test
-    fun aRequestQueuedBehindATurnThatWontStopIsAnsweredByItsOwnTurn() = runTest {
+    private data class Queued(val socket: Socket, val session: ChatSession, val call: FakeCall, val voice: VoiceController) {
+        fun toD2() = call.sent.value.filter { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d2" }
+    }
+
+    /** A call where request d2 is queued behind d1's turn, which ignored the stop. */
+    private suspend fun TestScope.queuedBehindATurn(): Queued {
         val client = http("gpt-live", mutableListOf())
         val socket = Socket()
         val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> socket }, backgroundScope)
@@ -207,24 +212,40 @@ class LiveConversationTest {
         socket.event("message.delta", """{"text":"Reading the old logs"}""")
         session.state.first { it.running }
 
-        // The running turn ignores the stop, so the newer request is queued behind it.
         call.receive("""{"type":"session.input_transcript.delta","delta":"Actually check disk space","start_ms":2000,"end_ms":3000}""")
         call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
         socket.submits.first { it.size == 2 }
         session.state.first { state -> state.messages.any { it is ChatMessage.User && it.queued } }
+        return Queued(socket, session, call, voice)
+    }
+
+    @Test
+    fun aRequestQueuedBehindATurnThatWontStopIsAnsweredByItsOwnTurn() = runTest {
+        val queued = queuedBehindATurn()
+        val (socket, session, call, voice) = queued
 
         // The old turn ends; it isn't d2's answer, and d2 doesn't give up on it.
         socket.event("message.complete", """{"text":"Reading the old logs. Nothing new.","status":"complete"}""")
         session.state.first { !it.running }
-        assertTrue(call.sent.value.none { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d2" })
+        assertTrue(queued.toD2().isEmpty())
 
         socket.event("message.start")
         socket.event("message.complete", """{"text":"The disk is 40% full.","status":"complete"}""")
-        call.sent.first { sent -> sent.any { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d2" } }
-        val toD2 = call.sent.value.filter { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d2" }
-        assertEquals(listOf("session.commentary.append"), toD2.map { it["type"]!!.jsonPrimitive.content })
-        assertEquals("The disk is 40% full.", toD2.single()["content"]!!.jsonPrimitive.content)
+        call.sent.first { queued.toD2().isNotEmpty() }
+        assertEquals(listOf("session.commentary.append"), queued.toD2().map { it["type"]!!.jsonPrimitive.content })
+        assertEquals("The disk is 40% full.", queued.toD2().single()["content"]!!.jsonPrimitive.content)
         voice.stopChat()
+    }
+
+    @Test
+    fun aQueuedRequestDroppedByAStopSaysSoInsteadOfFinished() = runTest {
+        val queued = queuedBehindATurn()
+        // Stop in the chat drops the queue, then the old turn ends.
+        queued.session.interrupt()
+        queued.socket.event("message.complete", """{"text":"Reading the old logs.","status":"interrupted"}""")
+        queued.call.sent.first { queued.toD2().isNotEmpty() }
+        assertEquals(listOf("That request was dropped before Hermes ran it."), queued.toD2().map { it["content"]!!.jsonPrimitive.content })
+        queued.voice.stopChat()
     }
 
     @Test

@@ -2,6 +2,7 @@ package dev.hermeskotlin.ui.voice
 
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatSession
+import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.SendOutcome
 import dev.hermeskotlin.core.chat.VoiceLiveTurn
 import dev.hermeskotlin.core.voice.LiveCall
@@ -166,34 +167,46 @@ internal class LiveConversation(
             state.update { it.copy(error = session.state.value.error ?: "Couldn't send that to Hermes.") }
             return
         }
-        // The prompt just sent; a queued one waits behind the turn still running, so that turn isn't the answer.
+        // The prompt just sent. A history reload swaps its key for its stored row's; then it's the last prompt.
         val askedKey = session.state.value.messages.lastOrNull { it is ChatMessage.User }?.key
+        fun asked(chat: ChatState) = chat.messages.indexOfFirst { it.key == askedKey }.takeIf { it >= 0 }
+            ?: chat.messages.indexOfLast { it is ChatMessage.User }
+        fun queued(chat: ChatState) = chat.messages.any { it.key == askedKey && it is ChatMessage.User && it.queued }
+        // A prompt queued behind a turn that wouldn't stop: that turn isn't its answer. Its own turn starts
+        // once that one ends, or the prompt was dropped (a Stop in the chat drops the queue).
+        if (queued(session.state.value)) {
+            session.state.first { !queued(it) || !it.running }
+            withTimeoutOrNull(TURN_START_MS) { session.state.first { !queued(it) } }
+            val chat = session.state.value
+            when {
+                queued(chat) -> return send(LiveCommands.thinking(nextId("think"), id, "That request is still waiting in Hermes's queue."))
+                chat.messages.none { it.key == askedKey } -> return send(LiveCommands.thinking(nextId("think"), id, "That request was dropped before Hermes ran it."))
+            }
+        }
         withTimeoutOrNull(TURN_START_MS) { session.state.first { it.running } }
-        // How far each reply of the turn was spoken, in its markdown, cut only where nothing is left open.
-        val spokenTo = HashMap<String, Int>()
+        // The markdown spoken so far of each reply of the turn, in order. A reply reloaded from history that
+        // no longer starts with it counts as spoken, so nothing is said twice.
+        val spoken = mutableListOf<String>()
         var spokeAny = false
         var tool: String? = null
         session.state.first { chat ->
-            val asked = chat.messages.indexOfFirst { it.key == askedKey }
-            val queued = (chat.messages.getOrNull(asked) as? ChatMessage.User)?.queued == true
-            val replies = if (asked < 0 || queued) emptyList() else chat.messages.drop(asked + 1).filterIsInstance<ChatMessage.Assistant>()
+            val asked = asked(chat)
+            val replies = if (asked < 0) emptyList() else chat.messages.drop(asked + 1).filterIsInstance<ChatMessage.Assistant>()
             val running = replies.lastOrNull()?.tools?.lastOrNull { it.running }?.let { it.detail ?: it.name }
             if (running != null && running != tool) {
                 tool = running
                 send(LiveCommands.thinking(nextId("think"), id, "Hermes is working: $running. Not done yet."))
             }
-            for (reply in replies) {
+            replies.forEachIndexed { i, reply ->
+                val before = spoken.getOrNull(i).orEmpty()
+                val from = if (reply.text.startsWith(before)) before.length else reply.text.length
                 // A reply still streaming goes a whole sentence at a time; a finished one goes to its end.
-                val end = if (reply.streaming && chat.running) speakableCut(reply.text) else reply.text.length
-                val from = spokenTo[reply.key] ?: 0
-                if (end > from) {
-                    spokeAny = speak(id, reply.text.substring(from, end)) || spokeAny
-                    spokenTo[reply.key] = end
-                }
+                val end = maxOf(from, if (reply.streaming && chat.running) speakableCut(reply.text) else reply.text.length)
+                if (end > from) spokeAny = speak(id, reply.text.substring(from, end)) || spokeAny
+                if (i < spoken.size) spoken[i] = reply.text.substring(0, end) else spoken += reply.text.substring(0, end)
             }
-            val done = !chat.running && !queued
-            if (done && !spokeAny) send(LiveCommands.thinking(nextId("think"), id, "Hermes finished that request without a spoken result."))
-            done
+            if (!chat.running && !spokeAny) send(LiveCommands.thinking(nextId("think"), id, "Hermes finished that request without a spoken result."))
+            !chat.running
         }
     }
 

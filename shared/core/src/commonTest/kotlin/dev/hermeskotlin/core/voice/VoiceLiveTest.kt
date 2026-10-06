@@ -68,10 +68,13 @@ class VoiceLiveTest {
         // Nor inside a link or a table row still coming in.
         assertEquals("See it. ".length, speakableCut("See it. Read [the docs. More](https://exa"))
         assertEquals("Here.\n".length, speakableCut("Here.\n| a. b | c"))
+        // A fence opened mid-line holds the cut too.
+        assertEquals(0, speakableCut("Run: ```sh\nrm a. b\n"))
         // Spoken in pieces at the cuts, it sounds the same as the whole reply.
-        val reply = "${closed}Then restart. Done."
-        val cut = speakableCut(reply)
-        assertEquals(speakableText(reply), "${speakableText(reply.substring(0, cut))} ${speakableText(reply.substring(cut))}")
+        for (reply in listOf("${closed}Then restart. Done.", "Run: ```sh\nrm a. b\nc\n```\nThen restart. Done.")) {
+            val cut = speakableCut(reply)
+            assertEquals(speakableText(reply), "${speakableText(reply.substring(0, cut))} ${speakableText(reply.substring(cut))}".trim())
+        }
     }
 
     @Test

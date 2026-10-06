@@ -139,10 +139,11 @@ fun speakableCut(markdown: String): Int {
         val newline = markdown.indexOf('\n', lineStart)
         val lineEnd = if (newline < 0) markdown.length else newline + 1
         val line = markdown.substring(lineStart, lineEnd)
-        val trimmed = line.trimStart()
+        // speakableText pairs fences wherever they sit, not only at a line's start.
+        val fences = Regex("```").findAll(line).count()
         when {
-            trimmed.startsWith("```") -> fenced = !fenced
-            fenced || trimmed.startsWith("|") -> Unit
+            fences > 0 -> if (fences % 2 == 1) fenced = !fenced
+            fenced || line.trimStart().startsWith("|") -> Unit
             else -> for (end in SENTENCE_BREAK.findAll(line)) {
                 val before = line.substring(0, end.range.last + 1)
                 val linkOpen = before.count { it == '[' } > before.count { it == ']' } ||
