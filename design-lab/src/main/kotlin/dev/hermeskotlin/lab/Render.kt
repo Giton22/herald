@@ -23,6 +23,11 @@ val screens: List<Pair<String, @Composable () -> Unit>> = listOf(
     "5-refined-approval" to { SignalTheme { RefinedApproval() } },
     "5-refined-newchat" to { SignalTheme { RefinedNewChat() } },
     "5-refined-sidebar" to { SignalTheme { RefinedSidebar() } },
+    "6-glass-reply" to { SignalTheme { RefinedReply(glass = true) } },
+    "6-glass-working" to { SignalTheme { RefinedWorking(glass = true) } },
+    "6-glass-approval" to { SignalTheme { RefinedApproval(glass = true) } },
+    "6-glass-newchat" to { SignalTheme { RefinedNewChat(glass = true) } },
+    "6-glass-sidebar" to { SignalTheme { RefinedSidebar(glass = true) } },
 )
 
 /** Renders at a Pixel 9's 1080×2424 at 2.625x density (411×923dp). */

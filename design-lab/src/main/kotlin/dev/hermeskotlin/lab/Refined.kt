@@ -60,6 +60,15 @@ import com.composables.icons.lucide.ShieldAlert
 import com.composables.icons.lucide.SquarePen
 import com.composables.icons.lucide.Terminal
 import com.composables.icons.lucide.Wrench
+import androidx.compose.foundation.layout.BoxScope
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.Shape
+import dev.chrisbanes.haze.HazeState
+import dev.chrisbanes.haze.hazeSource
+import dev.chrisbanes.haze.rememberHazeState
 
 /*
  * "Refined": today's Herald, kept recognisable (Roboto, spaced capitals, Nous blue, checker marks),
@@ -73,9 +82,37 @@ private val codeR = RoundedCornerShape(10.dp)
 
 // ---------------------------------------------------------------- shared chrome
 
+/** Set when the screen is drawn in the Glass treatment: bars and panels frost what's behind them. */
+private val LocalGlass = staticCompositionLocalOf<HazeState?> { null }
+
+/** A panel: frosted with [tint] in Glass, else solid [color]. Both keep the [stroke]. */
+@Composable
+private fun Modifier.panel(shape: Shape, color: Color, stroke: Color, tint: Color = color.copy(alpha = 0.62f)): Modifier {
+    val haze = LocalGlass.current
+    return if (haze != null) this.clip(shape).then(Modifier.glass(haze, shape, tint)).border(1.dp, stroke, shape)
+    else this.clip(shape).background(color).border(1.dp, stroke, shape)
+}
+
+/** Draws [content] as the scrolling layer (blurred by the bars in Glass), then [bars] on top. */
+@Composable
+private fun BoxScope.Layers(glass: Boolean, glow: Offset? = Offset(0.5f, -0.1f), content: @Composable BoxScope.() -> Unit, bars: @Composable BoxScope.() -> Unit) {
+    val haze = if (glass) rememberHazeState() else null
+    Box(Modifier.fillMaxSize().then(if (haze != null) Modifier.hazeSource(haze) else Modifier)) {
+        if (glass && glow != null) DitherGlow(S.signal, Modifier.fillMaxWidth().height(300.dp), center = glow, radius = 0.7f, strength = 0.5f, falloff = 2.5f, cell = 2.dp, squash = 1.6f)
+        // A low glow under the composer, so the frosted dock has something to frost.
+        if (glass) DitherGlow(S.signal, Modifier.fillMaxSize(), center = Offset(0.5f, 1.02f), radius = 0.55f, strength = 0.7f, falloff = 2.2f, cell = 2.dp, squash = 2.4f)
+        content()
+    }
+    CompositionLocalProvider(LocalGlass provides haze) { Box(Modifier.fillMaxSize()) { bars() } }
+}
+
+@Composable
+private fun topPad(): androidx.compose.ui.unit.Dp = 124.dp
+
 @Composable
 private fun RTopBar(title: String, subtitle: String?, live: Boolean = false) {
-    Column(Modifier.fillMaxWidth().background(S.bg)) {
+    val haze = LocalGlass.current
+    Column(Modifier.fillMaxWidth().then(if (haze != null) Modifier.glass(haze, RectangleShape, S.bg.copy(alpha = 0.5f)) else Modifier.background(S.bg))) {
         Spacer(Modifier.height(40.dp))
         Row(Modifier.fillMaxWidth().height(64.dp).padding(horizontal = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.size(48.dp), contentAlignment = Alignment.Center) { Icon(Lucide.PanelLeft, S.text2, 22.dp) }
@@ -92,7 +129,7 @@ private fun RTopBar(title: String, subtitle: String?, live: Boolean = false) {
             Box(Modifier.size(44.dp), contentAlignment = Alignment.Center) { Icon(Lucide.SquarePen, S.text2, 20.dp) }
             Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Icon(Lucide.EllipsisVertical, S.text2, 20.dp) }
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(S.line))
+        if (haze == null) Box(Modifier.fillMaxWidth().height(1.dp).background(S.line))
     }
 }
 
@@ -155,7 +192,7 @@ private fun RBullet(text: AnnotatedString) {
 @Composable
 private fun RComposer(placeholder: String, running: Boolean = false) {
     val shape = RoundedCornerShape(16.dp)
-    Column(Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(shape).background(S.s1).border(1.dp, S.line2, shape).padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 8.dp)) {
+    Column(Modifier.padding(horizontal = 12.dp).fillMaxWidth().panel(shape, S.s1, S.line2, S.s2.copy(alpha = 0.6f)).padding(start = 16.dp, end = 8.dp, top = 14.dp, bottom = 8.dp)) {
         T(placeholder, L.body(), S.text3)
         Spacer(Modifier.height(10.dp))
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -183,26 +220,29 @@ private fun RComposer(placeholder: String, running: Boolean = false) {
 // ---------------------------------------------------------------- reply
 
 @Composable
-fun RefinedReply() = Phone {
-    Column(Modifier.fillMaxSize().padding(top = 124.dp, start = 16.dp, end = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        RUser("The nightly backup to the NAS failed again. Can you find out why and fix it?")
-        RActivity("terminal, patch", "6s")
-        val p = reply(L, S.s2, S.text)
-        T(p[0], L.body())
-        T(p[1], L.body())
-        RBullet(buildAnnotatedString { append("It now keeps the "); withStyle(SpanStyle(fontWeight = FontWeight(700))) { append("last 14 snapshots") }; append(" and removes older ones after each run.") })
-        RBullet(AnnotatedString("Nothing else changes: same source, same schedule."))
-        RCode(pruneCode)
-        T("Tonight's run will free about 1.3 TB. Want me to run it now instead?", L.body())
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(Lucide.Copy, S.text3, 18.dp); Spacer(Modifier.width(22.dp))
-            Icon(Lucide.GitBranch, S.text3, 18.dp); Spacer(Modifier.width(22.dp))
-            T("18.4k in · 612 out · $0.06", L.caption(), S.text3)
+fun RefinedReply(glass: Boolean = false) = Phone {
+    Layers(glass, glow = Offset(0.5f, -0.1f), content = {
+        Column(Modifier.fillMaxSize().padding(top = if (glass) 72.dp else 124.dp, start = 16.dp, end = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            RUser("The nightly backup to the NAS failed again. Can you find out why and fix it?")
+            RActivity("terminal, patch", "6s")
+            val p = reply(L, S.s2, S.text)
+            T(p[0], L.body())
+            T(p[1], L.body())
+            RBullet(buildAnnotatedString { append("It now keeps the "); withStyle(SpanStyle(fontWeight = FontWeight(700))) { append("last 14 snapshots") }; append(" and removes older ones after each run.") })
+            RBullet(AnnotatedString("Nothing else changes: same source, same schedule."))
+            RCode(pruneCode)
+            T("Tonight's run will free about 1.3 TB. Want me to run it now instead?", L.body())
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(Lucide.Copy, S.text3, 18.dp); Spacer(Modifier.width(22.dp))
+                Icon(Lucide.GitBranch, S.text3, 18.dp); Spacer(Modifier.width(22.dp))
+                T("18.4k in · 612 out · $0.06", L.caption(), S.text3)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { RChip("Run it now"); RChip("Keep 30 instead") }
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) { RChip("Run it now"); RChip("Keep 30 instead") }
+    }) {
+        Box(Modifier.align(Alignment.TopCenter)) { RTopBar("Fix the nightly backup", "Sonnet 5.5 · done 2m ago") }
+        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 22.dp)) { RComposer("Send a follow-up") }
     }
-    Box(Modifier.align(Alignment.TopCenter)) { RTopBar("Fix the nightly backup", "Sonnet 5.5 · done 2m ago") }
-    Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 22.dp)) { RComposer("Send a follow-up") }
 }
 
 @Composable
@@ -213,37 +253,40 @@ private fun RChip(text: String) {
 // ---------------------------------------------------------------- at work
 
 @Composable
-fun RefinedWorking() = Phone {
-    Column(
-        Modifier.fillMaxSize().padding(top = 124.dp, bottom = 250.dp, start = 16.dp, end = 16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.Bottom),
-    ) {
-        RUser("The nightly backup to the NAS failed again. Can you find out why and fix it?")
-        // Steps listed while the turn runs, instead of one "Used ..." line.
-        Column(Modifier.fillMaxWidth().clip(cardR).background(S.s1).border(1.dp, S.line, cardR).padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            RStep(true, Lucide.Terminal, "Read the backup log", "found ENOSPC at 02:14", "0.4s")
-            RStep(null, Lucide.Terminal, "Reading /opt/backup/backup.sh", null, "")
-            RStep(false, Lucide.Terminal, "Check the disk, patch, run once", null, "")
-        }
-    }
-    Box(Modifier.align(Alignment.TopCenter)) { RTopBar("Fix the nightly backup", "Sonnet 5.5 · working 24s", live = true) }
-    Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 22.dp)) {
-        // Status line: same place, now with progress and its own Stop.
-        Row(
-            Modifier.padding(horizontal = 12.dp).fillMaxWidth().clip(cardR).background(S.signalSoft).border(1.dp, S.signal.copy(alpha = 0.3f), cardR).padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+fun RefinedWorking(glass: Boolean = false) = Phone {
+    Layers(glass, glow = Offset(0.5f, -0.1f), content = {
+        Column(
+            Modifier.fillMaxSize().padding(top = 124.dp, bottom = 250.dp, start = 16.dp, end = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.Bottom),
         ) {
-            PixelSpinner(S.signal, 12.dp, phase = 5); Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                T("Reading a file", L.label(), S.text)
-                Spacer(Modifier.height(5.dp))
-                Segments(5, 1, S.signal, Modifier.width(120.dp), height = 3.dp)
+            RUser("The nightly backup to the NAS failed again. Can you find out why and fix it?")
+            // Steps listed while the turn runs, instead of one "Used ..." line.
+            Column(Modifier.fillMaxWidth().clip(cardR).background(S.s1).border(1.dp, S.line, cardR).padding(horizontal = 14.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                RStep(true, Lucide.Terminal, "Read the backup log", "found ENOSPC at 02:14", "0.4s")
+                RStep(null, Lucide.Terminal, "Reading /opt/backup/backup.sh", null, "")
+                RStep(false, Lucide.Terminal, "Check the disk, patch, run once", null, "")
             }
-            T("2/5", L.small(), S.text2); Spacer(Modifier.width(10.dp))
-            Icon(Lucide.ChevronUp, S.text3, 16.dp)
         }
-        Spacer(Modifier.height(8.dp))
-        RComposer("Steer, or queue what's next", running = true)
+    }) {
+        Box(Modifier.align(Alignment.TopCenter)) { RTopBar("Fix the nightly backup", "Sonnet 5.5 · working 24s", live = true) }
+        Column(Modifier.align(Alignment.BottomCenter).padding(bottom = 22.dp)) {
+            // Status line: same place, now with progress and its own Stop.
+            Row(
+                Modifier.padding(horizontal = 12.dp).fillMaxWidth().panel(cardR, S.signalSoft, S.signal.copy(alpha = 0.3f), S.signalSoft.copy(alpha = 0.6f)).padding(start = 14.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                PixelSpinner(S.signal, 12.dp, phase = 5); Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    T("Reading a file", L.label(), S.text)
+                    Spacer(Modifier.height(5.dp))
+                    Segments(5, 1, S.signal, Modifier.width(120.dp), height = 3.dp)
+                }
+                T("2/5", L.small(), S.text2); Spacer(Modifier.width(10.dp))
+                Icon(Lucide.ChevronUp, S.text3, 16.dp)
+            }
+            Spacer(Modifier.height(8.dp))
+            RComposer("Steer, or queue what's next", running = true)
+        }
     }
 }
 
@@ -269,45 +312,48 @@ private fun RStep(done: Boolean?, icon: ImageVector, text: String, detail: Strin
 // ---------------------------------------------------------------- approval
 
 @Composable
-fun RefinedApproval() = Phone {
-    Column(Modifier.fillMaxSize().padding(top = 124.dp, start = 16.dp, end = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        RCode(pruneCode)
-        T("Tonight's run will free about 1.3 TB. Want me to run it now instead?", L.body())
-        RUser("Yes, run it now.")
-    }
-    Box(Modifier.align(Alignment.TopCenter)) { RTopBar("Fix the nightly backup", "Sonnet 5.5 · waiting for you", live = false) }
-    Column(
-        Modifier.align(Alignment.BottomCenter).padding(start = 12.dp, end = 12.dp, bottom = 22.dp).fillMaxWidth()
-            .clip(RoundedCornerShape(16.dp)).background(S.s1).border(1.dp, S.ember.copy(alpha = 0.45f), RoundedCornerShape(16.dp)),
-    ) {
-        // Header strip replaces the separate "Waiting for your answer" bar.
-        Row(Modifier.fillMaxWidth().background(S.emberSoft).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Checker(S.ember, 8.dp); Spacer(Modifier.width(10.dp))
-            T("WAITING FOR YOUR ANSWER", L.eyebrow(), S.ember)
-            Grow()
-            Icon(Lucide.CircleStop, S.text2, 15.dp); Spacer(Modifier.width(6.dp)); T("Stop task", L.small(), S.text2)
+fun RefinedApproval(glass: Boolean = false) = Phone {
+    Layers(glass, glow = Offset(0.5f, -0.1f), content = {
+        Column(Modifier.fillMaxSize().padding(top = if (glass) 72.dp else 124.dp, start = 16.dp, end = 16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            RCode(pruneCode)
+            T("Tonight's run will free about 1.3 TB. Want me to run it now instead?", L.body())
+            RUser("Yes, run it now.")
         }
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Icon(Lucide.ShieldAlert, S.ember, 20.dp); Spacer(Modifier.width(10.dp))
-                T("Allow this command?", L.body().copy(fontSize = 18.sp, fontWeight = FontWeight(600)))
+    }) {
+        Box(Modifier.align(Alignment.TopCenter)) { RTopBar("Fix the nightly backup", "Sonnet 5.5 · waiting for you", live = false) }
+        Column(
+            Modifier.align(Alignment.BottomCenter).padding(start = 12.dp, end = 12.dp, bottom = 22.dp).fillMaxWidth()
+                .panel(RoundedCornerShape(16.dp), S.s1, S.ember.copy(alpha = 0.45f), S.s1.copy(alpha = 0.7f)),
+        ) {
+            // Header strip replaces the separate "Waiting for your answer" bar.
+            Row(Modifier.fillMaxWidth().background(S.emberSoft).padding(horizontal = 16.dp, vertical = 10.dp), verticalAlignment = Alignment.CenterVertically) {
+                Checker(S.ember, 8.dp); Spacer(Modifier.width(10.dp))
+                T("WAITING FOR YOUR ANSWER", L.eyebrow(), S.ember)
+                Grow()
+                Icon(Lucide.CircleStop, S.text2, 15.dp); Spacer(Modifier.width(6.dp)); T("Stop task", L.small(), S.text2)
             }
-            T("Hermes wants to run this with terminal. Run the backup now so the old snapshots are cleared.", L.small().copy(fontSize = 15.sp), S.text2)
-            Row(Modifier.fillMaxWidth().clip(codeR).background(S.bg).border(1.dp, S.line, codeR).padding(start = 12.dp, end = 10.dp, top = 11.dp, bottom = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                T(buildAnnotatedString { withStyle(SpanStyle(color = S.ok)) { append("$ ") }; withStyle(SpanStyle(color = S.ember)) { append("sudo ") }; append("systemctl start backup.service") }, L.code().copy(fontSize = 13.5.sp), maxLines = 1, modifier = Modifier.weight(1f))
-                Icon(Lucide.Copy, S.text3, 16.dp)
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Box(Modifier.weight(1f).clip(btnR).border(1.dp, S.line2, btnR).padding(vertical = 13.dp), contentAlignment = Alignment.Center) { T("Deny", L.label().copy(fontSize = 15.sp)) }
-                Box(Modifier.weight(1.4f).clip(btnR).background(S.signal).padding(vertical = 13.dp), contentAlignment = Alignment.Center) { T("Allow once", L.label().copy(fontSize = 15.sp), S.onSignal) }
-            }
-            // Broader permissions folded into one row; tap opens the two choices.
-            Row(Modifier.fillMaxWidth().clip(btnR).background(S.s2).padding(horizontal = 12.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    T("More ways to allow", L.label())
-                    T("For this chat, or always", L.caption(), S.text3)
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Lucide.ShieldAlert, S.ember, 20.dp); Spacer(Modifier.width(10.dp))
+                    T("Allow this command?", L.body().copy(fontSize = 18.sp, fontWeight = FontWeight(600)))
                 }
-                Icon(Lucide.ChevronDown, S.text3, 18.dp)
+                T("Hermes wants to run this with terminal. Run the backup now so the old snapshots are cleared.", L.small().copy(fontSize = 15.sp), S.text2)
+                Row(Modifier.fillMaxWidth().clip(codeR).background(S.bg).border(1.dp, S.line, codeR).padding(start = 12.dp, end = 10.dp, top = 11.dp, bottom = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                    T(buildAnnotatedString { withStyle(SpanStyle(color = S.ok)) { append("$ ") }; withStyle(SpanStyle(color = S.ember)) { append("sudo ") }; append("systemctl start backup.service") }, L.code().copy(fontSize = 13.5.sp), maxLines = 1, modifier = Modifier.weight(1f))
+                    Icon(Lucide.Copy, S.text3, 16.dp)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Box(Modifier.weight(1f).clip(btnR).border(1.dp, S.line2, btnR).padding(vertical = 13.dp), contentAlignment = Alignment.Center) { T("Deny", L.label().copy(fontSize = 15.sp)) }
+                    Box(Modifier.weight(1.4f).clip(btnR).background(S.signal).padding(vertical = 13.dp), contentAlignment = Alignment.Center) { T("Allow once", L.label().copy(fontSize = 15.sp), S.onSignal) }
+                }
+                // Broader permissions folded into one row; tap opens the two choices.
+                Row(Modifier.fillMaxWidth().clip(btnR).background(S.s2).padding(horizontal = 12.dp, vertical = 11.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        T("More ways to allow", L.label())
+                        T("For this chat, or always", L.caption(), S.text3)
+                    }
+                    Icon(Lucide.ChevronDown, S.text3, 18.dp)
+                }
             }
         }
     }
@@ -316,33 +362,36 @@ fun RefinedApproval() = Phone {
 // ---------------------------------------------------------------- new chat
 
 @Composable
-fun RefinedNewChat() = Phone {
-    Column(
-        Modifier.fillMaxSize().padding(top = 110.dp, bottom = 190.dp, start = 20.dp, end = 20.dp),
-        horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
-    ) {
-        T("HERALD", TextStyle(fontFamily = Roboto, fontWeight = FontWeight(900), fontSize = 58.sp, letterSpacing = 0.08.em), Color(0xFFD1D7DE))
-        Spacer(Modifier.height(10.dp))
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            Dot(S.ok, 6.dp); T("Connected to homelab.tail", L.small(), S.text3)
+fun RefinedNewChat(glass: Boolean = false) = Phone {
+    Layers(glass, glow = Offset(0.5f, 0.75f), content = {
+        Column(
+            Modifier.fillMaxSize().padding(top = 110.dp, bottom = 190.dp, start = 20.dp, end = 20.dp),
+            horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center,
+        ) {
+            T("HERALD", TextStyle(fontFamily = Roboto, fontWeight = FontWeight(900), fontSize = 58.sp, letterSpacing = 0.08.em), Color(0xFFD1D7DE))
+            Spacer(Modifier.height(10.dp))
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                Dot(S.ok, 6.dp); T("Connected to homelab.tail", L.small(), S.text3)
+            }
+            Spacer(Modifier.height(30.dp))
+            // Starters as a short list under the wordmark; Attach and Dictate stay.
+            Column(Modifier.fillMaxWidth().clip(cardR).background(S.s1).border(1.dp, S.line, cardR)) {
+                Starter("Check free space on the NAS")
+                Box(Modifier.fillMaxWidth().padding(start = 16.dp).height(1.dp).background(S.line))
+                Starter("What ran overnight?")
+                Box(Modifier.fillMaxWidth().padding(start = 16.dp).height(1.dp).background(S.line))
+                Starter("Draft a reply to the landlord")
+            }
+            Spacer(Modifier.height(14.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                RAction(Lucide.Paperclip, "Attach", Modifier.weight(1f))
+                RAction(Lucide.Mic, "Dictate", Modifier.weight(1f))
+            }
         }
-        Spacer(Modifier.height(30.dp))
-        // Starters as a short list under the wordmark; Attach and Dictate stay.
-        Column(Modifier.fillMaxWidth().clip(cardR).background(S.s1).border(1.dp, S.line, cardR)) {
-            Starter("Check free space on the NAS")
-            Box(Modifier.fillMaxWidth().padding(start = 16.dp).height(1.dp).background(S.line))
-            Starter("What ran overnight?")
-            Box(Modifier.fillMaxWidth().padding(start = 16.dp).height(1.dp).background(S.line))
-            Starter("Draft a reply to the landlord")
-        }
-        Spacer(Modifier.height(14.dp))
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            RAction(Lucide.Paperclip, "Attach", Modifier.weight(1f))
-            RAction(Lucide.Mic, "Dictate", Modifier.weight(1f))
-        }
+    }) {
+        Box(Modifier.align(Alignment.TopCenter)) { RTopBar("New chat", "hermes · Sonnet 5.5") }
+        Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 22.dp)) { RComposer("What are we building?") }
     }
-    Box(Modifier.align(Alignment.TopCenter)) { RTopBar("New chat", "hermes · Sonnet 5.5") }
-    Box(Modifier.align(Alignment.BottomCenter).padding(bottom = 22.dp)) { RComposer("What are we building?") }
 }
 
 @Composable
@@ -363,12 +412,16 @@ private fun RAction(icon: ImageVector, text: String, modifier: Modifier) {
 // ---------------------------------------------------------------- sidebar
 
 @Composable
-fun RefinedSidebar() = Phone(background = S.bg) {
-    Box(Modifier.fillMaxSize()) { RefinedReply() }
-    Box(Modifier.fillMaxSize().background(S.void.copy(alpha = 0.55f)))
-    val drawer = RoundedCornerShape(topEnd = 18.dp, bottomEnd = 18.dp)
-    Box(Modifier.fillMaxHeight().width(338.dp).clip(drawer).background(Sidebar).border(1.dp, S.line, drawer)) {
-        Column(Modifier.fillMaxSize().padding(top = 40.dp)) {
+fun RefinedSidebar(glass: Boolean = false) = Phone(background = S.bg) {
+    val behind = rememberHazeState()
+    Box(Modifier.fillMaxSize().hazeSource(behind)) { RefinedReply(glass) }
+    Box(Modifier.fillMaxSize().background(S.void.copy(alpha = if (glass) 0.3f else 0.55f)))
+    val drawer = if (glass) RoundedCornerShape(26.dp) else RoundedCornerShape(topEnd = 18.dp, bottomEnd = 18.dp)
+    val drawerMod = if (glass) Modifier.padding(start = 8.dp, top = 44.dp, bottom = 10.dp).glass(behind, drawer, Sidebar.copy(alpha = 0.6f))
+    else Modifier.clip(drawer).background(Sidebar).border(1.dp, S.line, drawer)
+    Box(Modifier.fillMaxHeight().width(338.dp).then(drawerMod)) {
+        if (glass) DitherGlow(S.signal, Modifier.fillMaxWidth().height(220.dp), center = Offset(0f, 0f), radius = 0.8f, strength = 0.45f, falloff = 2.6f, cell = 2.dp)
+        Column(Modifier.fillMaxSize().padding(top = if (glass) 0.dp else 40.dp)) {
             Row(Modifier.fillMaxWidth().padding(start = 22.dp, end = 10.dp, top = 18.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     T("HERALD", TextStyle(fontFamily = Roboto, fontWeight = FontWeight(900), fontSize = 24.sp, letterSpacing = 0.08.em))
@@ -396,7 +449,7 @@ fun RefinedSidebar() = Phone(background = S.bg) {
             Spacer(Modifier.height(8.dp))
             sessions().take(6).forEachIndexed { i, s -> RSession(s, i == 0) }
         }
-        Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 14.dp, vertical = 22.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(horizontal = 14.dp, vertical = if (glass) 14.dp else 22.dp), verticalAlignment = Alignment.CenterVertically) {
             Row(Modifier.weight(1f).clip(btnR).background(S.signal).padding(vertical = 13.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                 Icon(Lucide.SquarePen, S.onSignal, 18.dp); Spacer(Modifier.width(9.dp)); T("New session", L.label().copy(fontSize = 16.sp), S.onSignal)
             }
