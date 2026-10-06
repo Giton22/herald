@@ -10,7 +10,9 @@ class MentionsTest {
     fun findsTheWordBeingTyped() {
         assertEquals(MentionQuery(0, 1, ""), mentionQuery("@", 1))
         assertEquals(MentionQuery(4, 8, "tes"), mentionQuery("ask @tes", 8))
-        assertEquals(MentionQuery(4, 6, "t"), mentionQuery("ask @test1 now", 6))
+        // The cursor back inside a word: the query is what's before it, the range is the whole word,
+        // so a pick replaces "@test1", not just "@t".
+        assertEquals(MentionQuery(4, 10, "t"), mentionQuery("ask @test1 now", 6))
         // Not an e-mail address, not after the word ended.
         assertNull(mentionQuery("mail me@host", 12))
         assertNull(mentionQuery("ask @test1 now", 14))
