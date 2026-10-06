@@ -160,6 +160,8 @@ internal class LiveConversation(
     private fun CoroutineScope.delegate(id: String, prompt: String, context: String) {
         delegation?.cancel()
         delegationId = id
+        // The request it replaces doesn't clear its tool once it's no longer the current one.
+        state.update { it.copy(working = null) }
         delegation = launch {
             try {
                 answer(id, prompt, context)
@@ -206,10 +208,11 @@ internal class LiveConversation(
             val asked = asked(chat)
             val replies = if (asked < 0) emptyList() else chat.messages.drop(asked + 1).filterIsInstance<ChatMessage.Assistant>()
             val running = replies.lastOrNull()?.tools?.lastOrNull { it.running }?.let { it.detail ?: it.name }
-            if (running != null && running != tool) {
+            // The chip follows the tool running now, and goes once it's done.
+            if (running != tool) {
                 tool = running
                 state.update { it.copy(working = running) }
-                send(LiveCommands.thinking(nextId("think"), id, "Hermes is working: $running. Not done yet."))
+                if (running != null) send(LiveCommands.thinking(nextId("think"), id, "Hermes is working: $running. Not done yet."))
             }
             replies.forEachIndexed { i, reply ->
                 val before = spoken.getOrNull(i).orEmpty()
