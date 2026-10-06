@@ -20,6 +20,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,18 +49,27 @@ data class ScreenCapture(
     /** The display's size in pixels, which [items] and circled regions are measured in; 0 when unknown. */
     val displayWidth: Int = 0,
     val displayHeight: Int = 0,
+    /**
+     * The platform said the screen was coming and none of it came. That is what Android does when
+     * the screen switches ("Use text from screen", "Use screenshot") are off in the digital assistant settings.
+     */
+    val missed: Boolean = false,
 ) {
     val context: ScreenContext get() = ScreenContext(app, items.map { it.text }, screenshot)
 
     fun withText(callUp: Int, app: String?, items: List<ScreenItem>): ScreenCapture =
-        if (callUp != this.callUp) this else copy(app = app ?: this.app, items = items, pending = (pending - 1).coerceAtLeast(0))
+        if (callUp != this.callUp) this else copy(app = app ?: this.app, items = items, pending = (pending - 1).coerceAtLeast(0), missed = false)
 
     fun withScreenshot(callUp: Int, jpeg: ByteArray?, displayWidth: Int, displayHeight: Int): ScreenCapture =
         if (callUp != this.callUp) {
             this
         } else {
-            copy(screenshot = jpeg, displayWidth = displayWidth, displayHeight = displayHeight, pending = (pending - 1).coerceAtLeast(0))
+            copy(screenshot = jpeg, displayWidth = displayWidth, displayHeight = displayHeight, pending = (pending - 1).coerceAtLeast(0), missed = false)
         }
+
+    /** Stops waiting for parts of [callUp] that never came; a part that still turns up later is taken. */
+    fun givenUp(callUp: Int): ScreenCapture =
+        if (callUp != this.callUp || pending == 0) this else copy(pending = 0, missed = context.isEmpty)
 }
 
 /**
@@ -159,7 +169,15 @@ class AssistantPanelModel(
         _circling.value = false
         _circledPart.value = null
         circledFull = null
-        _screen.value = ScreenCapture(pending = listOf(expectText, expectScreenshot).count { it }, callUp = _screen.value.callUp + 1)
+        val callUp = _screen.value.callUp + 1
+        _screen.value = ScreenCapture(pending = listOf(expectText, expectScreenshot).count { it }, callUp = callUp)
+        // With the assistant's screen settings off, Android still says the screen is coming and never sends it.
+        scope.launch {
+            delay(SCREEN_GIVE_UP_MS)
+            _screen.update { it.givenUp(callUp) }
+            // "Add" on a screen that never came would send nothing with the question.
+            if (_screen.value.let { it.callUp == callUp && it.missed }) _includeScreen.value = false
+        }
         // The panel outlives a call-up, and Herald may have switched gateways since: the socket is shared, so
         // the chat must move along with it.
         val current = gateways.list.value.current
@@ -331,5 +349,8 @@ class AssistantPanelModel(
         const val SCREEN_ONLY_PROMPT = "What's on my screen?"
         const val CIRCLED_PROMPT = "What's this?"
         private const val SCREEN_WAIT_MS = 2_000L
+
+        /** Long past a slow app's text and screenshot, which take well under a second. */
+        private const val SCREEN_GIVE_UP_MS = 4_000L
     }
 }

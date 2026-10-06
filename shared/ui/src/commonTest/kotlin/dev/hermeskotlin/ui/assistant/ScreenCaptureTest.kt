@@ -2,8 +2,10 @@ package dev.hermeskotlin.ui.assistant
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertSame
+import kotlin.test.assertTrue
 
 class ScreenCaptureTest {
 
@@ -17,6 +19,31 @@ class ScreenCaptureTest {
         val both = text.withScreenshot(3, byteArrayOf(1), 1344, 2992)
         assertEquals(0, both.pending)
         assertEquals(1344 to 2992, both.displayWidth to both.displayHeight)
+    }
+
+    @Test
+    fun aScreenThatNeverComesIsGivenUpAndMarkedMissed() {
+        // Android's assistant settings off: the flags promise both parts and neither arrives.
+        val given = waiting.givenUp(3)
+        assertEquals(0, given.pending)
+        assertTrue(given.missed)
+        // A part that turns up after all is still taken.
+        val late = given.withText(3, "Settings", listOf(ScreenItem("Apps")))
+        assertFalse(late.missed)
+        assertEquals(listOf("Apps"), late.items.map { it.text })
+        val lateShot = given.withScreenshot(3, byteArrayOf(1), 1344, 2992)
+        assertFalse(lateShot.missed)
+        assertEquals(1344, lateShot.displayWidth)
+    }
+
+    @Test
+    fun givingUpKeepsWhatCameAndLeavesOtherCallUpsAlone() {
+        val textOnly = waiting.withText(3, "Settings", listOf(ScreenItem("Apps"))).givenUp(3)
+        assertEquals(0, textOnly.pending)
+        assertFalse(textOnly.missed)
+        assertSame(waiting, waiting.givenUp(2))
+        val arrived = ScreenCapture(callUp = 3)
+        assertSame(arrived, arrived.givenUp(3))
     }
 
     @Test
