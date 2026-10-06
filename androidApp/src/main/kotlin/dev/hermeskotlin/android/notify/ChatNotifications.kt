@@ -46,6 +46,11 @@ class ChatNotifications(private val context: Context) {
                     .setName("Bot messages")
                     .setDescription("A bot wrote in its chat while the app was in the background.")
                     .build(),
+                NotificationChannelCompat.Builder(CHANNEL_VOICE, NotificationManagerCompat.IMPORTANCE_LOW)
+                    .setName("Voice chat")
+                    .setDescription("Shown while a voice chat goes on with the screen off or another app open.")
+                    .setShowBadge(false)
+                    .build(),
             ),
         )
     }
@@ -82,6 +87,18 @@ class ChatNotifications(private val context: Context) {
             .addAction(0, "Turn off", action(NotificationActionReceiver.ACTION_DISCONNECT, "disconnect"))
             .build()
     }
+
+    /** The ongoing notification of a voice chat kept up like a call ([VoiceCallService]): back to it, or [end] it. */
+    fun voiceCall(end: PendingIntent): Notification = base(CHANNEL_VOICE)
+        .setContentTitle("Voice chat")
+        .setContentText("Talking with Hermes")
+        .setCategory(NotificationCompat.CATEGORY_CALL)
+        .setOngoing(true)
+        .setAutoCancel(false)
+        .setSilent(true)
+        .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
+        .addAction(0, "End", end)
+        .build()
 
     fun postOngoing(connection: ConnectionState, pushAnywhere: Boolean = false) =
         post(null, WORKING_ID, ongoing(connection, pushAnywhere))
@@ -286,7 +303,7 @@ class ChatNotifications(private val context: Context) {
     /** Everything except the ongoing notification, once the user is looking at the app. */
     fun cancelAttention() {
         unreadBotMessages.clear()
-        manager.activeNotifications.filter { it.id != WORKING_ID }.forEach { manager.cancel(it.tag, it.id) }
+        manager.activeNotifications.filter { it.id != WORKING_ID && it.id != VOICE_ID }.forEach { manager.cancel(it.tag, it.id) }
     }
 
     /** Tapping it opens Herald on [storedSessionId]'s chat, when the notification is about one. */
@@ -327,6 +344,7 @@ class ChatNotifications(private val context: Context) {
         const val REQUEST_ID = 3
         const val BOT_ID = 4
         const val PUSH_TEST_ID = 5
+        const val VOICE_ID = 6
 
         /** On the launch intent of a notification about a chat: that chat's stored session id, and its title. */
         const val EXTRA_OPEN_SESSION = "open_session_id"
@@ -340,6 +358,7 @@ class ChatNotifications(private val context: Context) {
         private const val CHANNEL_REQUESTS = "requests"
         private const val CHANNEL_REPLIES = "replies"
         private const val CHANNEL_BOTS = "bots"
+        private const val CHANNEL_VOICE = "voice"
         private const val MAX_PREVIEW = 2_000
         private const val MAX_STACKED = 6
         private const val DEDUPE_PREFIX = 200

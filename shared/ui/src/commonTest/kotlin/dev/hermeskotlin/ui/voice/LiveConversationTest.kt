@@ -17,6 +17,7 @@ import dev.hermeskotlin.core.voice.Recording
 import dev.hermeskotlin.core.voice.SpeechPlayer
 import dev.hermeskotlin.core.voice.SpokenAudio
 import dev.hermeskotlin.core.voice.VoiceActivity
+import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.core.voice.VoiceRecorder
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
@@ -40,6 +41,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class LiveConversationTest {
@@ -321,5 +323,55 @@ class LiveConversationTest {
         voice.stopChat()
 
         assertEquals(0, calls)
+    }
+
+    private class Keeper(private val grants: Boolean) : VoiceKeepAlive {
+        var holding = false
+        var onEnd: (() -> Unit)? = null
+        override fun hold(onEnd: () -> Unit): Boolean {
+            holding = grants
+            this.onEnd = onEnd
+            return grants
+        }
+
+        override fun release() {
+            holding = false
+        }
+    }
+
+    @Test
+    fun aHeldCallGoesOnOutOfSightAndItsNotificationEndsIt() = runTest {
+        val client = http("gpt-live", mutableListOf())
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> Socket() }, backgroundScope)
+        val session = ChatSession(gateway, null, null, connection, SessionsApi(client), backgroundScope)
+        val call = FakeCall()
+        val keeper = Keeper(grants = true)
+        val voice = VoiceController(AudioApi(client), NoRecorder, Silent, backgroundScope, backgroundScope, keeper) { call }
+
+        voice.startChat(session, gateway, null)
+        voice.chat.first { it.live && it.phase == VoicePhase.Listening }
+        assertTrue(keeper.holding)
+        voice.onBackground()
+        assertTrue(voice.chat.value.live && !call.closed)
+
+        keeper.onEnd!!()
+        assertEquals(VoiceChatState(), voice.chat.first { it.phase == VoicePhase.Off })
+        assertTrue(call.closed)
+        assertFalse(keeper.holding)
+    }
+
+    @Test
+    fun aCallThatCouldntBeHeldEndsWhenTheAppGoesAway() = runTest {
+        val client = http("gpt-live", mutableListOf())
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> Socket() }, backgroundScope)
+        val session = ChatSession(gateway, null, null, connection, SessionsApi(client), backgroundScope)
+        val call = FakeCall()
+        val voice = VoiceController(AudioApi(client), NoRecorder, Silent, backgroundScope, backgroundScope, Keeper(grants = false)) { call }
+
+        voice.startChat(session, gateway, null)
+        voice.chat.first { it.live && it.phase == VoicePhase.Listening }
+        voice.onBackground()
+        voice.chat.first { it.phase == VoicePhase.Off }
+        assertTrue(call.closed)
     }
 }

@@ -5,6 +5,7 @@ import dev.hermeskotlin.android.push.PushListener
 import dev.hermeskotlin.android.push.PushStore
 import dev.hermeskotlin.core.push.PushKeys
 import dev.hermeskotlin.core.push.PushSetup
+import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import org.koin.android.ext.koin.androidApplication
 import org.koin.android.ext.koin.androidContext
 import org.koin.dsl.bind
@@ -13,6 +14,7 @@ import org.koin.dsl.module
 val notifyModule = module {
     single { AppVisibility(androidApplication()) }
     single { ChatNotifications(androidContext()) }
+    single { VoiceCallKeeper(androidContext()) } bind VoiceKeepAlive::class
     single { ChatNotifier(androidContext(), get(), get(), get(), get(), get(), get()) }
     single { WatchNotifier(get(), get(), get(), get(), get(), get(), get()) }
     single { BotNotifier(androidContext(), get(), get(), get(), get(), get(), get(), get(), get()) }

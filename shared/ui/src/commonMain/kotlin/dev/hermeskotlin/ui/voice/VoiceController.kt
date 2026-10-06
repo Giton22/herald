@@ -7,6 +7,7 @@ import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.voice.AudioApi
 import dev.hermeskotlin.core.voice.LiveCalls
+import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.core.voice.SpeechPlayer
 import dev.hermeskotlin.core.voice.SpokenAudio
 import dev.hermeskotlin.core.voice.VoiceActivity
@@ -71,6 +72,8 @@ class VoiceController(
     private val scope: CoroutineScope,
     /** Outlives the screen, so the speech engine lease is released even as it closes. */
     private val appScope: CoroutineScope,
+    /** Keeps a voice chat going with the screen off or another app in front. */
+    private val keepAlive: VoiceKeepAlive? = null,
     private val liveCalls: LiveCalls? = null,
 ) {
     private val _chat = MutableStateFlow(VoiceChatState())
@@ -84,6 +87,7 @@ class VoiceController(
     private var speechJob: Job? = null
     private var dictationJob: Job? = null
     private var live: LiveConversation? = null
+    private var held = false
 
     /** [pauseMs] is how long a quiet spell after speech has to last before it's sent. */
     fun startChat(session: ChatSession, gateway: GatewayUrl, profile: String?, pauseMs: Long = VoiceActivity().silenceMs) {
@@ -91,7 +95,9 @@ class VoiceController(
         cancelDictation()
         _chat.value = VoiceChatState(VoicePhase.Listening)
         stoppedByUser = false
-        chatJob = scope.launch {
+        // Held now, on the tap: Android only lets the microphone go to the background from the foreground.
+        held = keepAlive?.hold(onEnd = ::stopChat) == true
+        val job = scope.launch {
             if (startLive(session, gateway, profile)) return@launch
             appScope.launch { audio.ttsLease(gateway, active = true, profile) }
             var failures = 0
@@ -109,6 +115,23 @@ class VoiceController(
                 appScope.launch { audio.ttsLease(gateway, active = false, profile) }
             }
         }
+        chatJob = job
+        job.invokeOnCompletion {
+            // A newer chat may already hold it again.
+            if (chatJob === job || chatJob == null) {
+                held = false
+                keepAlive?.release()
+            }
+        }
+    }
+
+    /**
+     * Herald went out of sight. Dictation stops; a voice chat carries on when it's held up, like a call,
+     * and stops otherwise, since Android doesn't let the app listen from the background.
+     */
+    fun onBackground() {
+        cancelDictation()
+        if (!held) stopChat()
     }
 
     /**

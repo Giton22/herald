@@ -300,8 +300,8 @@ fun ChatScreen(
             viewModel.toggleDictation()
         }
     }
-    // Recording stops when the app leaves the screen; Android doesn't let it listen from the background.
-    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.voice.stopAll() }
+    // Dictation stops when the app leaves the screen; a voice chat goes on like a call (VoiceController.onBackground).
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { viewModel.voice.onBackground() }
     LaunchedEffect(viewModel) {
         viewModel.requests.collect { request ->
             when (request) {
