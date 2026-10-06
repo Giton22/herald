@@ -395,7 +395,7 @@ private fun ScreenUnavailable(onOpenSettings: () -> Unit) {
         Column(Modifier.weight(1f, fill = false)) {
             Text("Herald can't see the screen", style = Theme[typography][label], color = Theme[colors][textColor])
             Text(
-                "Turn on \"Use screen and app data\"",
+                "Turn on \"Use text from screen\"",
                 style = Theme[typography][caption],
                 color = Theme[colors][textTertiary],
                 maxLines = 1,

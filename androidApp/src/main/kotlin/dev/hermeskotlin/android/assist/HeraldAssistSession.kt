@@ -3,6 +3,7 @@ package dev.hermeskotlin.android.assist
 import android.Manifest
 import android.app.assist.AssistContent
 import android.app.assist.AssistStructure
+import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -176,9 +177,13 @@ class HeraldAssistSession(context: Context) :
         context.startActivity(Intent(context, MicrophonePermissionActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
-    /** The digital assistant settings, where "Use screen and app data" lets the screen through. */
+    /** The digital assistant settings, where the screen switches let the screen through; Settings on a phone without them. */
     private fun openScreenSettings() {
-        context.startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        try {
+            context.startActivity(Intent(Settings.ACTION_VOICE_INPUT_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        } catch (_: ActivityNotFoundException) {
+            context.startActivity(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        }
         hide()
     }
 

@@ -31,6 +31,9 @@ class ScreenCaptureTest {
         val late = given.withText(3, "Settings", listOf(ScreenItem("Apps")))
         assertFalse(late.missed)
         assertEquals(listOf("Apps"), late.items.map { it.text })
+        val lateShot = given.withScreenshot(3, byteArrayOf(1), 1344, 2992)
+        assertFalse(lateShot.missed)
+        assertEquals(1344, lateShot.displayWidth)
     }
 
     @Test

@@ -51,7 +51,7 @@ data class ScreenCapture(
     val displayHeight: Int = 0,
     /**
      * The platform said the screen was coming and none of it came. That is what Android does when
-     * "Use screen and app data" is off in the digital assistant settings.
+     * the screen switches ("Use text from screen", "Use screenshot") are off in the digital assistant settings.
      */
     val missed: Boolean = false,
 ) {
