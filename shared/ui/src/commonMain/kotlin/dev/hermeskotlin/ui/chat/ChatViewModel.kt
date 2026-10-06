@@ -42,6 +42,8 @@ import dev.hermeskotlin.core.journey.JourneyApi
 import dev.hermeskotlin.ui.pet.PetController
 import dev.hermeskotlin.ui.journey.JourneyController
 import dev.hermeskotlin.core.voice.AudioApi
+import dev.hermeskotlin.core.voice.LiveCalls
+import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.core.voice.SpeechPlayer
 import dev.hermeskotlin.core.voice.VoiceRecorder
 import dev.hermeskotlin.ui.voice.VoiceController
@@ -167,10 +169,12 @@ class ChatViewModel(
     player: SpeechPlayer,
     appScope: CoroutineScope,
     private val bots: BotsApi,
+    liveCalls: LiveCalls,
+    voiceKeepAlive: VoiceKeepAlive,
 ) : ViewModel(), ChatActions {
 
     /** Dictation and voice chat for the open chat. */
-    val voice = VoiceController(audioApi, recorder, player, viewModelScope, appScope)
+    val voice = VoiceController(audioApi, recorder, player, viewModelScope, appScope, voiceKeepAlive, liveCalls)
 
     /** The profile's pet and its gallery. */
     val pets = PetController(petApi, viewModelScope)
@@ -979,6 +983,8 @@ class ChatViewModel(
     override fun skipSpeech() = voice.skipSpeech()
 
     override fun stopVoiceChat() = voice.stopChat()
+
+    override fun toggleVoiceMute() = voice.toggleMute()
 
     override fun dismissVoiceChatError() = voice.dismissChatError()
 

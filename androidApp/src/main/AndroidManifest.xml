@@ -3,9 +3,15 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- A GPT-Live call switches the audio to call mode and the speaker. -->
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
+    <!-- WebRTC watches the network for the call; without this it aborts as the call starts. -->
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
+    <!-- A voice chat goes on with the screen off, like a call (VoiceCallService). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
     <!-- With Notifications anywhere, pick the ntfy stream up again after the phone restarts. -->
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
@@ -92,6 +98,11 @@
         <receiver
             android:name=".notify.NotificationActionReceiver"
             android:exported="false" />
+
+        <service
+            android:name=".notify.VoiceCallService"
+            android:exported="false"
+            android:foregroundServiceType="microphone" />
 
         <!-- Herald as the phone's digital assistant: the assist gesture opens a panel over the current app. -->
         <service
