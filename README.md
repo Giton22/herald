@@ -140,9 +140,15 @@ The workflow needs these repository secrets: `ANDROID_KEYSTORE_BASE64` (the keys
 `ANDROID_KEYSTORE_PASSWORD`, `ANDROID_KEY_ALIAS` and `ANDROID_KEY_PASSWORD`. Local release builds read
 the same values from an untracked `keystore.properties` at the repository root.
 
-## Star history
+## Star History
 
-[![Star History Chart](https://api.star-history.com/svg?repos=Giton22/herald&type=Date)](https://star-history.com/#Giton22/herald&Date)
+<a href="https://www.star-history.com/?type=date&repos=Giton22%2Fherald">
+ <picture>
+   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/chart?repos=Giton22/herald&type=date&theme=dark&legend=top-left" />
+   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/chart?repos=Giton22/herald&type=date&legend=top-left" />
+   <img alt="Star History Chart" src="https://api.star-history.com/chart?repos=Giton22/herald&type=date&legend=top-left" />
+ </picture>
+</a>
 
 ## License
 
