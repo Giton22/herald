@@ -27,8 +27,8 @@ import kotlin.math.min
 import kotlin.math.sqrt
 
 /**
- * A GPT-Live call over WebRTC: the phone's microphone with the platform's echo cancelling (the voice comes out
- * of the speaker, so without it the model hears itself), the voice played as a call, and the `oai-events`
+ * A GPT-Live call over WebRTC: the phone's microphone with WebRTC's echo cancelling (the voice comes out of the
+ * speaker, so without it the model hears itself), the voice played as a call, and the `oai-events`
  * data channel. Desktop's VoiceLiveSession, on Android.
  */
 class AndroidLiveCall(context: Context) : LiveCall {
@@ -54,9 +54,11 @@ class AndroidLiveCall(context: Context) : LiveCall {
     override suspend fun connect(answer: suspend (offerSdp: String) -> String) {
         initialize(appContext)
         routeAudio()
+        // WebRTC's own echo canceller rather than the phone's: with the voice on the speaker, many phones'
+        // cancellers go half-duplex and all but mute the microphone while it talks, so you can't cut in.
         val adm = JavaAudioDeviceModule.builder(appContext)
-            .setUseHardwareAcousticEchoCanceler(true)
-            .setUseHardwareNoiseSuppressor(true)
+            .setUseHardwareAcousticEchoCanceler(false)
+            .setUseHardwareNoiseSuppressor(false)
             .setSamplesReadyCallback { samples -> micLevel = level(samples.data) }
             .createAudioDeviceModule()
         this.adm = adm
@@ -90,7 +92,13 @@ class AndroidLiveCall(context: Context) : LiveCall {
         ) ?: error("Couldn't set up the call.")
         this.peer = peer
 
-        val source = factory.createAudioSource(MediaConstraints())
+        val source = factory.createAudioSource(
+            MediaConstraints().apply {
+                for (name in listOf("googEchoCancellation", "googNoiseSuppression", "googAutoGainControl", "googHighpassFilter")) {
+                    mandatory += MediaConstraints.KeyValuePair(name, "true")
+                }
+            },
+        )
         audioSource = source
         val track = factory.createAudioTrack("mic", source)
         audioTrack = track
