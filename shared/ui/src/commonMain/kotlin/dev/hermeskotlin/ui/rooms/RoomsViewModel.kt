@@ -192,6 +192,7 @@ class RoomsViewModel(
         unansweredSend = null
         unansweredCreate = null
         disbandIds.clear()
+        quietChecked.clear()
         // The first bind isn't a switch: a room opened from a notification at launch stays open.
         if (previous != null) close()
     }
@@ -488,6 +489,9 @@ class RoomsViewModel(
             if (listEdits != edits) return
             // Rooms first met now count as read so far: only what comes after is new.
             seen.takeStock(url, rooms)
+            settleQuietRooms(url, rooms)
+            // Stored meanwhile: the same checks again, as a switch or an edit may have landed during it.
+            if (gateway.value != url || listEdits != edits) return
             _state.update { it.copy(rooms = rooms, loading = false, error = null, available = true).withUnread() }
         } catch (e: CancellationException) {
             throw e
@@ -503,6 +507,32 @@ class RoomsViewModel(
             _state.update { it.copy(loading = false, error = e.message ?: "Couldn't load the rooms.") }
         }
     }
+
+    /**
+     * A room's newest seq counts every event, the bookkeeping too (a rename, a turn settling after its
+     * reply, a stop): only a bot's line makes a room unread. For a room past its seen mark, reads what's new
+     * once per new seq, and when it holds no bot line, moves the mark up to it.
+     */
+    private suspend fun settleQuietRooms(url: GatewayUrl, rooms: List<Room>) {
+        for (room in rooms) {
+            val read = seenSeqs[room.roomId] ?: continue
+            val latest = room.latestSeq ?: continue
+            if (latest <= read || quietChecked[room.roomId] == latest) continue
+            quietChecked[room.roomId] = latest
+            val page = try {
+                api.log(room.roomId, sinceSeq = read, limit = logLimit)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                quietChecked.remove(room.roomId)
+                continue
+            }
+            if (page.cursor >= latest && page.events.none { it.kind == "message.member" }) seen.markSeen(url, room.roomId, latest)
+        }
+    }
+
+    /** The newest seq [settleQuietRooms] read each room up to, so a room waiting to be read isn't read again. */
+    private val quietChecked = mutableMapOf<String, Int>()
 
     /** Reads the open room once, right away, e.g. after an action the driver should notice at once. */
     private fun readRoomSoon(roomId: String) {

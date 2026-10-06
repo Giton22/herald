@@ -544,7 +544,12 @@ class RoomsViewModelTest {
                 "groups.capabilities" -> """{"protocol_version":2,"driver":true}"""
                 "groups.list" -> """{"rooms":[{"room_id":"a","name":"Room A","members":[],"latest_seq":$latest}]}"""
                 "groups.state" -> """{"room":{"room_id":"a","name":"Room A","members":[],"latest_seq":$latest}}"""
-                "groups.log" -> """{"events":[],"cursor":$latest,"latest_seq":$latest,"has_more":false}"""
+                "groups.log" -> {
+                    // A bot's line at the newest seq: something to read.
+                    val since = params["since_seq"]!!.jsonPrimitive.int
+                    val line = """{"room_id":"a","seq":$latest,"event_id":"e:$latest","kind":"message.member","actor":{"kind":"member","id":"ops"},"payload":{"member_id":"ops","text":"hi"}}"""
+                    """{"events":[${if (since < latest) line else ""}],"cursor":$latest,"latest_seq":$latest,"has_more":false}"""
+                }
                 else -> quietRoom(method, params) ?: "{}"
             }
         }
@@ -567,6 +572,46 @@ class RoomsViewModelTest {
         } finally {
             vm.close()
         }
+    }
+
+    @Test
+    fun onlyABotsLineMakesARoomUnreadNotItsBookkeeping() = runTest(dispatcher) {
+        var latest = 2
+        fun event(seq: Int, kind: String, payload: String) =
+            """{"room_id":"a","seq":$seq,"event_id":"e:$seq","kind":"$kind","actor":{"kind":"gateway","id":"gw"},"payload":$payload}"""
+        val log = mapOf(
+            3 to event(3, "room.renamed", """{"name":"Room A"}"""),
+            4 to event(4, "message.member", """{"member_id":"ops","text":"hi"}"""),
+        )
+        val socket = RoomsGateway(CoroutineScope(dispatcher)) { method, params ->
+            when (method) {
+                "groups.capabilities" -> """{"protocol_version":2,"driver":true}"""
+                "groups.list" -> """{"rooms":[{"room_id":"a","name":"Room A","members":[],"latest_seq":$latest}]}"""
+                "groups.log" -> {
+                    val since = params["since_seq"]!!.jsonPrimitive.int
+                    val events = (since + 1..latest).mapNotNull { log[it] }
+                    """{"events":[${events.joinToString(",")}],"cursor":$latest,"latest_seq":$latest,"has_more":false}"""
+                }
+                else -> "{}"
+            }
+        }
+        val vm = viewModel(socket)
+        vm.bind(gateway.gatewayUrl)
+        suspend fun readList() {
+            vm.setVisible(true)
+            vm.state.first { it.available && it.rooms.single().latestSeq == latest }
+            vm.setVisible(false)
+        }
+        readList()
+
+        // A rename (the user's own, or from elsewhere) moves the seq on, but there's nothing to read.
+        latest = 3
+        readList()
+        assertTrue(vm.state.value.unread.isEmpty())
+
+        latest = 4
+        readList()
+        assertEquals(setOf("a"), vm.state.first { it.unread.isNotEmpty() }.unread)
     }
 
     @Test

@@ -49,50 +49,73 @@ class RoomNotifier(
      */
     fun isRoomTurn(title: String?): Boolean = roomOfTurnSession(title, roomIds) != null
 
+    /** Whether this stretch out of sight has taken stock yet: only after that does anything notify. */
+    private var stockTaken = false
+
     fun start() {
+        // Back in sight, the user sees the rooms: the next stretch out of sight takes stock anew.
+        scope.launch {
+            visibility.visible.collect { shown ->
+                if (shown) {
+                    notified.clear()
+                    stockTaken = false
+                }
+            }
+        }
         scope.launch {
             combine(connection.state, visibility.visible) { state, shown -> state is ConnectionState.Connected && !shown }
                 .distinctUntilChanged()
                 .collectLatest { watching ->
                     if (!watching) return@collectLatest
-                    check(notify = false)
+                    // A reconnect out of sight carries on from the marks it had, so lines written while the
+                    // socket was down still notify; only a stock-take that went through starts the telling.
                     while (true) {
+                        if (stockTaken) check(notify = true) else stockTaken = check(notify = false)
                         delay(POLL_MS)
-                        check(notify = true)
                     }
                 }
         }
     }
 
-    private suspend fun check(notify: Boolean) {
+    /** Reads the rooms, and with [notify] tells their new lines; false when the list couldn't be read. */
+    private suspend fun check(notify: Boolean): Boolean {
         val rooms = try {
             api.list()
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
             // An older gateway without rooms, or the socket dropping: nothing to tell.
-            return
+            return false
         }
         roomIds = rooms.mapTo(HashSet()) { it.roomId }
         val prefs = settings.settings.value ?: AppSettings()
         for (room in rooms) {
             val latest = room.latestSeq ?: continue
-            val before = notified.put(room.roomId, latest)
-            if (!notify || before == null || latest <= before || !prefs.notifyReplies) continue
+            if (!notify || !prefs.notifyReplies) {
+                notified[room.roomId] = latest
+                continue
+            }
+            // A room that appeared since stock was taken (made on another device) is new from its start.
+            val since = notified[room.roomId] ?: 0
+            if (latest <= since) continue
             val page = try {
-                api.log(room.roomId, sinceSeq = before, limit = MAX_READ)
+                api.log(room.roomId, sinceSeq = since, limit = MAX_READ)
             } catch (e: CancellationException) {
                 throw e
             } catch (_: Exception) {
+                // The mark stays, so the next check tries these lines again.
                 continue
             }
-            val lines = roomNewLines(page.events, room.members, before).map { line ->
+            val lines = roomNewLines(page.events, room.members, since).map { line ->
                 val profile = line.member?.profile ?: line.memberId
                 val bot = bots.knownBot(profile) ?: Bot(name = profile, displayName = line.member?.displayName)
                 RoomNotice(bot, bots.picture(bot), line.text, (line.createdAt * 1000).toLong())
             }
             if (lines.isNotEmpty()) notifications.postRoomMessages(room.roomId, room.name, lines)
+            // Up to what was read: a busier stretch than one read tells the rest next time.
+            notified[room.roomId] = if (page.events.isEmpty()) latest else page.cursor
         }
+        return true
     }
 
     private companion object {
