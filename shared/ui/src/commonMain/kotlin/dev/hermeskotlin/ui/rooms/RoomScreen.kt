@@ -38,6 +38,7 @@ import dev.hermeskotlin.core.bots.mentionQuery
 import dev.hermeskotlin.core.rooms.mentionable
 import dev.hermeskotlin.core.rooms.mentionsEveryone
 import dev.hermeskotlin.core.rooms.roomRecipients
+import dev.hermeskotlin.core.rooms.waitingLine
 import dev.hermeskotlin.ui.chat.MentionChoice
 import dev.hermeskotlin.ui.chat.MentionSuggestions
 import androidx.compose.runtime.getValue
@@ -163,7 +164,14 @@ fun RoomScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     Spinner(Modifier.size(14.dp))
-                    Text("The room is talking it over…", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                    // Who's replying to the user's message; past its first round, bots answering each other.
+                    Text(
+                        waitingLine(room.waiting) ?: "The room is talking it over…",
+                        style = Theme[typography][caption],
+                        color = Theme[colors][textTertiary],
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
             }
             RoomMentions(room, viewModel, faces)

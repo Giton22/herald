@@ -11,6 +11,8 @@ import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.rooms.Room
 import dev.hermeskotlin.core.rooms.RoomEvent
 import dev.hermeskotlin.core.rooms.RoomLine
+import dev.hermeskotlin.core.rooms.RoomMember
+import dev.hermeskotlin.core.rooms.waitingFor
 import dev.hermeskotlin.core.rooms.RoomMemberInput
 import dev.hermeskotlin.core.rooms.RoomPendingAction
 import dev.hermeskotlin.core.rooms.RoomSeenStore
@@ -81,6 +83,8 @@ data class OpenRoom(
     val canLoadEarlier: Boolean = false,
     /** Older lines are being read right now. */
     val loadingEarlier: Boolean = false,
+    /** The members still to answer the user's newest message, in turn order ([waitingFor]). */
+    val waiting: List<RoomMember> = emptyList(),
 )
 
 /**
@@ -319,7 +323,9 @@ class RoomsViewModel(
                 // Only what was sent goes: a draft typed meanwhile (or in the room reopened since) stays.
                 if (composer.text.toString().trim() == text) composer.clearText()
                 openEvents = mergeRoomEvents(openEvents, listOf(event))
-                _opened.update { it?.copy(lines = roomLines(openEvents, it.room.members)) }
+                _opened.update {
+                    it?.copy(lines = roomLines(openEvents, it.room.members), waiting = waitingFor(openEvents, it.room.members))
+                }
                 readRoomSoon(roomId)
             } catch (e: CancellationException) {
                 throw e
@@ -573,6 +579,7 @@ class RoomsViewModel(
                 open?.copy(
                     room = state.room,
                     lines = roomLines(openEvents, state.room.members),
+                    waiting = waitingFor(openEvents, state.room.members),
                     working = state.driverStatus?.working == true,
                     pendingActions = state.driverStatus?.pendingActions.orEmpty(),
                     loading = false,
