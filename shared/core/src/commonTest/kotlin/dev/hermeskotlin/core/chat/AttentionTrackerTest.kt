@@ -1,20 +1,11 @@
 package dev.hermeskotlin.core.chat
 
-import dev.hermeskotlin.core.auth.AuthApi
-import dev.hermeskotlin.core.auth.PersistentCookiesStorage
-import dev.hermeskotlin.core.connection.ConnectionState
-import dev.hermeskotlin.core.connection.GatewayConnection
-import dev.hermeskotlin.core.gateway.GatewayUrl
-import dev.hermeskotlin.core.network.createHttpClient
+import dev.hermeskotlin.core.rpc.FakeGateway
 import dev.hermeskotlin.core.rpc.FakeTransport
+import dev.hermeskotlin.core.rpc.event
+import dev.hermeskotlin.core.rpc.json
 import dev.hermeskotlin.core.sessions.ActiveSessions
 import dev.hermeskotlin.core.sessions.SessionsApi
-import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
-import io.ktor.client.engine.mock.MockEngine
-import io.ktor.client.engine.mock.respond
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.headersOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -22,70 +13,40 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class AttentionTrackerTest {
 
-    private val url = GatewayUrl.parse("https://hermes.example.ts.net")
-    private val json = headersOf(HttpHeaders.ContentType, "application/json")
-
-    private fun client() = createHttpClient(
-        MockEngine { request ->
-            when (request.url.encodedPath) {
-                "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
-                else -> respond("""{"messages":[]}""", HttpStatusCode.OK, json)
-            }
-        },
-    )
+    private val url = FakeGateway.URL
 
     /** The rows `session.active_list` answers with, as `stored id to status`. */
     private var live: Map<String, String> = emptyMap()
 
     /** Resumes `stored-N` as runtime `rtN` and lists [live]; everything else answers `{}`. */
-    private fun CoroutineScope.serve(transport: FakeTransport) = launch {
-        var answered = 0
-        transport.sent.collect { sent ->
-            sent.drop(answered).forEach { message ->
-                answered++
-                val id = message["id"] ?: return@forEach
-                val method = message["method"]?.jsonPrimitive?.contentOrNull
-                val stored = message["params"]?.jsonObject?.get("session_id")?.jsonPrimitive?.contentOrNull.orEmpty()
-                val result = when (method) {
-                    "session.resume" -> """{"session_id":"rt${stored.removePrefix("stored-")}","running":true}"""
+    private suspend fun TestScope.setup(scope: CoroutineScope): Triple<ChatHost, AttentionTracker, FakeTransport> {
+        val gateway = FakeGateway(scope, reconnects = false).apply {
+            ready = { FakeGateway.QUIET_READY }
+            http = { json("""{"messages":[]}""") }
+            answer = { call ->
+                when (call.method) {
+                    "session.resume" -> """{"session_id":"rt${call.param("session_id").orEmpty().removePrefix("stored-")}","running":true}"""
                     "session.active_list" -> live.entries.joinToString(",", """{"sessions":[""", "]}") { (key, status) ->
                         """{"id":"live-$key","session_key":"$key","status":"$status"}"""
                     }
                     else -> "{}"
                 }
-                transport.push("""{"jsonrpc":"2.0","id":$id,"result":$result}""")
             }
         }
-    }
-
-    private suspend fun TestScope.setup(scope: CoroutineScope): Triple<ChatHost, AttentionTracker, FakeTransport> {
-        val http = client()
-        val transport = FakeTransport()
-        val connection = GatewayConnection(AuthApi(http, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> transport }, scope)
-        scope.serve(transport)
-        connection.start(url)
-        // No heartbeat: moving the test clock must not trip it.
-        transport.push("""{"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready","payload":{}}}""")
-        connection.state.first { it is ConnectionState.Connected }
-        val host = ChatHost(connection, SessionsApi(http), scope)
+        val connection = gateway.start()
+        val host = ChatHost(connection, SessionsApi(gateway.client), scope)
         val clock = { testScheduler.currentTime + 1 }
         val active = ActiveSessions(connection, scope, clock = clock)
-        return Triple(host, AttentionTracker(connection, host, active, scope, clock), transport)
+        return Triple(host, AttentionTracker(connection, host, active, scope, clock), gateway.socket)
     }
 
     private fun approval(id: String, runtimeId: String) =
         """{"jsonrpc":"2.0","id":"$id","method":"approval","params":{"session_id":"$runtimeId","command":"rm -rf build","choices":["once","deny"]}}"""
-
-    private fun event(type: String, runtimeId: String, payload: String = "{}") =
-        """{"jsonrpc":"2.0","method":"event","params":{"type":"$type","session_id":"$runtimeId","payload":$payload}}"""
 
     @Test
     fun aChatLeftWaitingStaysMarkedAfterOpeningAnother() = runTest {

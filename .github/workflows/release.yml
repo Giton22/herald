@@ -51,7 +51,7 @@ jobs:
       - name: Test and build
         run: >
           ./gradlew --no-daemon
-          :shared:core:testAndroidHostTest :shared:ui:testAndroidHostTest :androidApp:assembleRelease
+          :shared:core:testAndroidHostTest :shared:designsystem:testAndroidHostTest :shared:ui:testAndroidHostTest :androidApp:assembleRelease
           -PappVersion="${GITHUB_REF_NAME#v}" -PreleasesRepo="$GITHUB_REPOSITORY"
 
       - name: Draft release

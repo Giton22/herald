@@ -1,27 +1,21 @@
 package dev.hermeskotlin.core.chat
 
-import dev.hermeskotlin.core.auth.AuthApi
-import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
-import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.HermesJson
-import dev.hermeskotlin.core.network.createHttpClient
+import dev.hermeskotlin.core.rpc.FakeGateway
 import dev.hermeskotlin.core.rpc.FakeTransport
+import dev.hermeskotlin.core.rpc.event
+import dev.hermeskotlin.core.rpc.isCall
+import dev.hermeskotlin.core.rpc.json
+import dev.hermeskotlin.core.rpc.param
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.slash.SlashCommand
-import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
-import io.ktor.client.engine.mock.MockEngine
-import io.ktor.client.engine.mock.respond
-import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
-import io.ktor.http.headersOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -36,8 +30,7 @@ import kotlin.test.assertTrue
 
 class ChatSessionTest {
 
-    private val url = GatewayUrl.parse("https://hermes.example.ts.net")
-    private val json = headersOf(HttpHeaders.ContentType, "application/json")
+    private val url = FakeGateway.URL
 
     private var history = """{"session_id":"stored-1","messages":[
         {"id":1,"role":"user","content":"hello"},{"id":2,"role":"assistant","content":"Hi! What next?"}]}"""
@@ -48,45 +41,35 @@ class ChatSessionTest {
     /** The stored row doesn't exist yet while this is set, as for a new chat before its first prompt. */
     private var historyMissing = false
 
-    private fun client() = createHttpClient(
-        MockEngine { request ->
-            when (request.url.encodedPath) {
-                "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
-                "/api/sessions/stored-1/messages" -> when {
-                    historyFails -> respond("{}", HttpStatusCode.InternalServerError, json)
-                    historyMissing -> respond("{}", HttpStatusCode.NotFound, json)
-                    else -> respond(history, HttpStatusCode.OK, json)
-                }
-                else -> error("unexpected ${request.url}")
-            }
-        },
-    )
+    /** The gateway of the latest [setup]; its client reads [history]. */
+    private lateinit var gateway: FakeGateway
 
-    /** Answers every client request with the canned result for its method (`{}` otherwise). */
-    private fun CoroutineScope.serve(transport: FakeTransport, results: Map<String, String>) = launch {
-        var answered = 0
-        transport.sent.collect { sent ->
-            sent.drop(answered).forEach { message ->
-                answered++
-                val id = message["id"] ?: return@forEach
-                val method = message["method"]?.jsonPrimitive?.contentOrNull ?: return@forEach
-                val canned = results[method] ?: "{}"
-                // "silent" never answers, like a gateway that stopped responding.
-                if (canned == SILENT) return@forEach
-                // "error:<code>" answers with a JSON-RPC error instead; "error:<code>:<reason>" adds `data.reason`.
-                transport.push(
-                    if (canned.startsWith("error:")) {
-                        val code = canned.removePrefix("error:").substringBefore(':')
-                        val data = canned.removePrefix("error:").substringAfter(':', "").takeIf { it.isNotEmpty() }
-                            ?.let { ""","data":{"reason":"$it"}""" }.orEmpty()
-                        """{"jsonrpc":"2.0","id":$id,"error":{"code":$code,"message":"nope"$data}}"""
-                    } else {
-                        """{"jsonrpc":"2.0","id":$id,"result":$canned}"""
-                    },
-                )
+    private fun client() = gateway.client
+
+    /**
+     * A gateway answering each call with the canned result for its method (`{}` otherwise, [SILENT] never answers;
+     * see [FakeGateway.answer]). Started but not waited on: a chat started next sees the link come up.
+     */
+    private suspend fun gateway(scope: CoroutineScope, results: Map<String, String>, reconnects: Boolean) =
+        FakeGateway(scope, reconnects).also { gateway = it }.apply {
+            answer = { call -> (results[call.method] ?: "{}").takeIf { it != SILENT } }
+            http = { request ->
+                when {
+                    request.url.encodedPath != "/api/sessions/stored-1/messages" -> error("unexpected ${request.url}")
+                    historyFails -> json("{}", HttpStatusCode.InternalServerError)
+                    historyMissing -> json("{}", HttpStatusCode.NotFound)
+                    else -> json(history)
+                }
             }
+            start(awaitConnected = false)
         }
-    }
+
+    private suspend fun setup(scope: CoroutineScope, results: Map<String, String>): Pair<GatewayConnection, FakeTransport> =
+        gateway(scope, results, reconnects = false).let { it.connection to it.socket }
+
+    /** Like [setup], but every connect opens a fresh transport, so a dropped link comes back; the latest is last. */
+    private suspend fun reconnectingSetup(scope: CoroutineScope, results: Map<String, String>): Pair<GatewayConnection, List<FakeTransport>> =
+        gateway(scope, results, reconnects = true).let { it.connection to it.sockets }
 
     private fun ChatMessage.textOf() = when (this) {
         is ChatMessage.User -> text
@@ -94,42 +77,6 @@ class ChatSessionTest {
         is ChatMessage.Command -> output
         is ChatMessage.Notice -> text
         is ChatMessage.Event -> event.toString()
-    }
-
-    private fun JsonObject.isCall(method: String) = this["method"]?.jsonPrimitive?.contentOrNull == method
-
-    private fun JsonObject.param(name: String) = this["params"]?.jsonObject?.get(name)?.jsonPrimitive?.contentOrNull
-
-    private fun event(type: String, sessionId: String, payload: String = "{}") =
-        """{"jsonrpc":"2.0","method":"event","params":{"type":"$type","session_id":"$sessionId","payload":$payload}}"""
-
-    private fun setup(scope: CoroutineScope, results: Map<String, String>): Pair<GatewayConnection, FakeTransport> {
-        val cookies = PersistentCookiesStorage(InMemoryKeyValueStore())
-        val http = client()
-        val transport = FakeTransport()
-        val connection = GatewayConnection(AuthApi(http, cookies), { _, _ -> transport }, scope)
-        scope.serve(transport, results)
-        connection.start(url)
-        transport.push(FakeTransport.READY)
-        return connection to transport
-    }
-
-    /** Like [setup], but every connect opens a fresh transport, so a dropped link comes back; the latest is last. */
-    private fun reconnectingSetup(scope: CoroutineScope, results: Map<String, String>): Pair<GatewayConnection, List<FakeTransport>> {
-        val transports = mutableListOf<FakeTransport>()
-        val connection = GatewayConnection(
-            AuthApi(client(), PersistentCookiesStorage(InMemoryKeyValueStore())),
-            { _, _ ->
-                FakeTransport().also {
-                    transports += it
-                    scope.serve(it, results)
-                    it.push(FakeTransport.READY)
-                }
-            },
-            scope,
-        )
-        connection.start(url)
-        return connection to transports
     }
 
     @Test
@@ -500,12 +447,9 @@ class ChatSessionTest {
 
     @Test
     fun sendWhileOfflineReportsAndLeavesNoBubble() = runTest {
-        val connection = GatewayConnection(
-            AuthApi(client(), PersistentCookiesStorage(InMemoryKeyValueStore())),
-            { _, _ -> error("offline") },
-            backgroundScope,
-        )
-        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        // Never started, so never connected.
+        gateway = FakeGateway(backgroundScope)
+        val chat = ChatSession(url, null, null, gateway.connection, SessionsApi(client()), backgroundScope)
 
         assertFalse(chat.send("hello?"))
 
