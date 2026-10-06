@@ -1,18 +1,7 @@
 package dev.hermeskotlin.core.sessions
 
-import dev.hermeskotlin.core.auth.AuthApi
-import dev.hermeskotlin.core.auth.PersistentCookiesStorage
-import dev.hermeskotlin.core.connection.ConnectionState
-import dev.hermeskotlin.core.connection.GatewayConnection
-import dev.hermeskotlin.core.gateway.GatewayUrl
-import dev.hermeskotlin.core.network.createHttpClient
-import dev.hermeskotlin.core.rpc.FakeTransport
-import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
-import io.ktor.client.engine.mock.MockEngine
-import io.ktor.client.engine.mock.respond
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.headersOf
+import dev.hermeskotlin.core.rpc.FakeGateway
+import dev.hermeskotlin.core.rpc.event
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -20,61 +9,41 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class ActiveSessionsTest {
 
-    private val url = GatewayUrl.parse("https://hermes.example.ts.net")
-    private val json = headersOf(HttpHeaders.ContentType, "application/json")
-
-    /** `gateway.ready` without the heartbeat, so moving the test clock never trips it. */
-    private val ready = """{"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready","payload":{}}}"""
-
-    private class Gateway(val transport: FakeTransport, val connection: GatewayConnection) {
+    private class Gateway(private val fake: FakeGateway) {
         /** What `session.active_list` answers next: a result object, or an `"error":{…}` member. */
         var answer: String = """{"sessions":[]}"""
         var asked = 0
+        val transport get() = fake.socket
+        val connection get() = fake.connection
     }
 
     private fun row(key: String, status: String) =
         """{"id":"rt-$key","session_key":"$key","status":"$status","title":"","preview":"","current":false}"""
 
     private suspend fun connect(scope: CoroutineScope): Gateway {
-        val http = createHttpClient(MockEngine { respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json) })
-        val transport = FakeTransport()
-        val connection = GatewayConnection(AuthApi(http, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> transport }, scope)
-        val gateway = Gateway(transport, connection)
-        scope.launch {
-            var answered = 0
-            transport.sent.collect { sent ->
-                sent.drop(answered).forEach { message ->
-                    answered++
-                    val id = message["id"] ?: return@forEach
-                    val method = message["method"]?.jsonPrimitive?.contentOrNull
-                    val body = if (method == "session.active_list") {
-                        gateway.asked++
-                        gateway.answer.takeIf { it.startsWith(""""error"""") } ?: """"result":${gateway.answer}"""
-                    } else {
-                        """"result":{}"""
-                    }
-                    transport.push("""{"jsonrpc":"2.0","id":$id,$body}""")
-                }
+        val fake = FakeGateway(scope, reconnects = false).apply { ready = { FakeGateway.QUIET_READY } }
+        val gateway = Gateway(fake)
+        fake.answer = { call ->
+            if (call.method != "session.active_list") {
+                "{}"
+            } else {
+                gateway.asked++
+                gateway.answer.takeIf { it.startsWith(""""error"""") }?.let { """{"jsonrpc":"2.0","id":${call.id},$it}""" } ?: gateway.answer
             }
         }
-        connection.start(url)
-        transport.push(ready)
-        connection.state.first { it is ConnectionState.Connected }
+        fake.start()
         return gateway
     }
 
     private fun TestScope.active(gateway: Gateway) =
         ActiveSessions(gateway.connection, backgroundScope, pollMs = 10_000, settleMs = 500, clock = { testScheduler.currentTime + 1 })
 
-    private fun event(type: String) = """{"jsonrpc":"2.0","method":"event","params":{"type":"$type","payload":{}}}"""
 
     @Test
     fun eachStatusMapsByStoredId() = runTest {

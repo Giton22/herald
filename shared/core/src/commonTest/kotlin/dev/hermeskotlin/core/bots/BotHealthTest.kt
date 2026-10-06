@@ -1,34 +1,18 @@
 package dev.hermeskotlin.core.bots
 
-import dev.hermeskotlin.core.auth.AuthApi
-import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.DeliveryOutcome
 import dev.hermeskotlin.core.chat.TranscriptEvent
-import dev.hermeskotlin.core.connection.ConnectionState
-import dev.hermeskotlin.core.connection.GatewayConnection
-import dev.hermeskotlin.core.gateway.GatewayUrl
-import dev.hermeskotlin.core.network.createHttpClient
+import dev.hermeskotlin.core.rpc.FakeGateway
 import dev.hermeskotlin.core.rpc.FakeTransport
+import dev.hermeskotlin.core.rpc.event
+import dev.hermeskotlin.core.rpc.json
 import dev.hermeskotlin.core.sessions.SessionsApi
-import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
-import io.ktor.client.engine.mock.MockEngine
-import io.ktor.client.engine.mock.respond
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.headersOf
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.mock.MockEngineConfig
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
-import kotlin.coroutines.ContinuationInterceptor
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -37,67 +21,32 @@ import kotlin.test.assertTrue
 
 class BotHealthTest {
 
-    private val url = GatewayUrl.parse("https://hermes.example.ts.net")
-    private val json = headersOf(HttpHeaders.ContentType, "application/json")
+    private val url = FakeGateway.URL
 
     /** The stored transcript every chat opens with. */
     private var history = """{"session_id":"stored-1","messages":[]}"""
 
-    /**
-     * On the test's own dispatcher: an answer coming on a real thread lets the test clock jump ahead while it
-     * waits, so a request's timeout or the heartbeat could lapse in no time and the test flake.
-     */
-    private fun CoroutineScope.client(): HttpClient {
-        val config = MockEngineConfig()
-        (coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher)?.let { config.dispatcher = it }
-        config.addHandler { request ->
-            when (request.url.encodedPath) {
-                "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
-                else -> respond(history, HttpStatusCode.OK, json)
-            }
-        }
-        return createHttpClient(MockEngine(config))
-    }
-
     /** Methods the fake gateway turns down, with the error message it sends. */
     private val refusals = mutableMapOf<String, String>()
-
-    private fun CoroutineScope.serve(transport: FakeTransport) = launch {
-        var answered = 0
-        transport.sent.collect { sent ->
-            sent.drop(answered).forEach { message ->
-                answered++
-                val id = message["id"] ?: return@forEach
-                val method = message["method"]?.jsonPrimitive?.contentOrNull
-                val refusal = refusals[method]
-                if (refusal != null) {
-                    transport.push("""{"jsonrpc":"2.0","id":$id,"error":{"code":5000,"message":"$refusal"}}""")
-                    return@forEach
-                }
-                val result = if (method == "session.resume") """{"session_id":"rt1","running":false}""" else "{}"
-                transport.push("""{"jsonrpc":"2.0","id":$id,"result":$result}""")
-            }
-        }
-    }
 
     private class Setup(val host: ChatHost, val health: BotHealth, val transport: FakeTransport, val checks: MutableList<String>)
 
     private suspend fun setup(scope: CoroutineScope, answer: suspend (String) -> RuntimeCheck = { RuntimeCheck(ok = true) }): Setup {
-        val http = scope.client()
-        val transport = FakeTransport()
-        val connection = GatewayConnection(AuthApi(http, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> transport }, scope)
-        scope.serve(transport)
-        connection.start(url)
-        transport.push(FakeTransport.READY)
-        connection.state.first { it is ConnectionState.Connected }
-        val host = ChatHost(connection, SessionsApi(http), scope)
+        val gateway = FakeGateway(scope, reconnects = false).apply {
+            http = { json(history) }
+            this.answer = { call ->
+                refusals[call.method]?.let { call.error(5000, it) }
+                    ?: if (call.method == "session.resume") """{"session_id":"rt1","running":false}""" else "{}"
+            }
+        }
+        val connection = gateway.start()
+        val host = ChatHost(connection, SessionsApi(gateway.client), scope)
         val checks = mutableListOf<String>()
         val health = BotHealth(connection, host, scope) { profile -> checks += profile; answer(profile) }
-        return Setup(host, health, transport, checks)
+        return Setup(host, health, gateway.socket, checks)
     }
 
-    private fun event(type: String, payload: String = "{}") =
-        """{"jsonrpc":"2.0","method":"event","params":{"type":"$type","session_id":"rt1","payload":$payload}}"""
+    private fun rt1Event(type: String, payload: String = "{}") = event(type, sessionId = "rt1", payload = payload)
 
     @Test
     fun lastingFailuresAreToldApartFromPassingOnes() {
@@ -207,13 +156,13 @@ class BotHealthTest {
         // The watcher listens for the gateway's events from here on; an event sent before it does isn't heard.
         testScheduler.runCurrent()
 
-        s.transport.push(event("message.start"))
-        s.transport.push(event("error", """{"message":"Error code: 401 - invalid api key"}"""))
+        s.transport.push(rt1Event("message.start"))
+        s.transport.push(rt1Event("error", """{"message":"Error code: 401 - invalid api key"}"""))
         assertEquals(BotProblem.SignIn, s.health.troubles.first { "scribe" in it }["scribe"]?.problem)
 
-        s.transport.push(event("message.start"))
-        s.transport.push(event("message.delta", """{"text":"Back again."}"""))
-        s.transport.push(event("message.complete", """{"text":"Back again."}"""))
+        s.transport.push(rt1Event("message.start"))
+        s.transport.push(rt1Event("message.delta", """{"text":"Back again."}"""))
+        s.transport.push(rt1Event("message.complete", """{"text":"Back again."}"""))
 
         s.health.troubles.first { it.isEmpty() }
     }
@@ -231,9 +180,9 @@ class BotHealthTest {
 
         // The delivery's result wakes a turn; the chat reads its transcript again when that turn ends.
         history = failedDelivery
-        s.transport.push(event("message.start"))
+        s.transport.push(rt1Event("message.start"))
         chat.state.first { it.running }
-        s.transport.push(event("message.complete", """{"text":""}"""))
+        s.transport.push(rt1Event("message.complete", """{"text":""}"""))
 
         val trouble = s.health.troubles.first { "researcher" in it }["researcher"]
         assertEquals(BotProblem.Quota, trouble?.problem)
@@ -252,9 +201,9 @@ class BotHealthTest {
         assertIs<DeliveryOutcome.Failed>(delivery.outcome)
 
         // Something later in the chat, so the watcher has run over the opening transcript.
-        s.transport.push(event("message.start"))
+        s.transport.push(rt1Event("message.start"))
         chat.state.first { it.running }
-        s.transport.push(event("message.complete", """{"text":"ok"}"""))
+        s.transport.push(rt1Event("message.complete", """{"text":"ok"}"""))
         chat.state.first { !it.running }
 
         assertTrue(s.health.troubles.value.isEmpty())

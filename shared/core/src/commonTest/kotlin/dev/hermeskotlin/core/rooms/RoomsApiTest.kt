@@ -1,21 +1,8 @@
 package dev.hermeskotlin.core.rooms
 
-import dev.hermeskotlin.core.auth.AuthApi
-import dev.hermeskotlin.core.auth.PersistentCookiesStorage
-import dev.hermeskotlin.core.connection.ConnectionState
-import dev.hermeskotlin.core.connection.GatewayConnection
-import dev.hermeskotlin.core.gateway.GatewayUrl
-import dev.hermeskotlin.core.network.createHttpClient
-import dev.hermeskotlin.core.rpc.FakeTransport
-import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
-import io.ktor.client.engine.mock.MockEngine
-import io.ktor.client.engine.mock.respond
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.headersOf
+import dev.hermeskotlin.core.rpc.FakeGateway
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
@@ -29,42 +16,20 @@ import kotlin.test.assertTrue
 
 class RoomsApiTest {
 
-    private val url = GatewayUrl.parse("https://hermes.example.ts.net")
-    private val json = headersOf(HttpHeaders.ContentType, "application/json")
-
     /** Every room call the gateway was sent, as (method, params); the client's own handshake is left out. */
     private val requests = mutableListOf<Pair<String, JsonObject>>()
 
     /**
-     * Answers every request the client sends, [answer] for `groups.*` and a plain `{}` for the client's
-     * own handshake. Runs beside the test, so it must not throw: the tests assert what was sent from
-     * their own threads after the call returns.
+     * Answers every request the client sends with [answer]. Runs beside the test, so it must not throw: the
+     * tests assert what was sent from their own threads after the call returns.
      */
-    private fun CoroutineScope.serve(transport: FakeTransport, answer: (String, JsonObject) -> String) = launch {
-        var answered = 0
-        transport.sent.collect { messages ->
-            messages.drop(answered).forEach { message ->
-                answered++
-                val id = message["id"] ?: return@forEach
-                val method = message["method"]?.jsonPrimitive?.contentOrNull ?: return@forEach
-                val params = message["params"]?.jsonObject ?: JsonObject(emptyMap())
-                if (method.startsWith("groups.")) requests += method to params
-                // One line per frame, the way the gateway sends them: the client reads frames line by line.
-                val frame = """{"jsonrpc":"2.0","id":$id,"result":${answer(method, params)}}"""
-                transport.push(frame.replace('\n', ' ').replace('\r', ' '))
-            }
-        }
-    }
-
     private suspend fun api(scope: CoroutineScope, answer: (String, JsonObject) -> String): RoomsApi {
-        val http = createHttpClient(MockEngine { respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json) })
-        val transport = FakeTransport()
-        val connection = GatewayConnection(AuthApi(http, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> transport }, scope)
-        scope.serve(transport, answer)
-        connection.start(url)
-        transport.push(FakeTransport.READY)
-        connection.state.first { it is ConnectionState.Connected }
-        return RoomsApi(connection)
+        val gateway = FakeGateway(scope, reconnects = false)
+        gateway.answer = { call ->
+            if (call.method.startsWith("groups.")) requests += call.method to call.params
+            answer(call.method, call.params)
+        }
+        return RoomsApi(gateway.start())
     }
 
     /** The one room request whose method is [method], with its params. */

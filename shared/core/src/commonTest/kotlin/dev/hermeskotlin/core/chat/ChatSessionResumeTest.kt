@@ -1,32 +1,18 @@
 package dev.hermeskotlin.core.chat
 
-import dev.hermeskotlin.core.auth.AuthApi
-import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
-import dev.hermeskotlin.core.gateway.GatewayUrl
-import dev.hermeskotlin.core.network.createHttpClient
+import dev.hermeskotlin.core.rpc.FakeGateway
 import dev.hermeskotlin.core.rpc.FakeTransport
+import dev.hermeskotlin.core.rpc.isCall
+import dev.hermeskotlin.core.rpc.json
+import dev.hermeskotlin.core.rpc.param
 import dev.hermeskotlin.core.sessions.SessionsApi
-import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
-import io.ktor.client.HttpClient
-import io.ktor.client.engine.mock.MockEngine
-import io.ktor.client.engine.mock.MockEngineConfig
-import kotlinx.coroutines.CoroutineDispatcher
-import kotlin.coroutines.ContinuationInterceptor
-import io.ktor.client.engine.mock.respond
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.headersOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
-import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -36,8 +22,7 @@ import kotlin.test.assertTrue
 /** Picking the event stream up after a drop (`session.events.since`) and reading the transcript a page at a time. */
 class ChatSessionResumeTest {
 
-    private val url = GatewayUrl.parse("https://hermes.example.ts.net")
-    private val json = headersOf(HttpHeaders.ContentType, "application/json")
+    private val url = FakeGateway.URL
 
     /** The stored transcript: odd ids are prompts `p<id>`, even ids replies `a<id>`. */
     private var transcript: List<String> = rowsUpTo(2)
@@ -49,71 +34,35 @@ class ChatSessionResumeTest {
         if (id % 2 == 1) """{"id":$id,"role":"user","content":"p$id"}""" else """{"id":$id,"role":"assistant","content":"a$id"}"""
     }
 
-    /**
-     * On the test's own dispatcher: an answer coming on a real thread lets the test clock jump ahead while it
-     * waits, so a request's 30 s timeout or the heartbeat could lapse in no time and the test flake.
-     */
-    private fun CoroutineScope.client(): HttpClient {
-        val config = MockEngineConfig()
-        (coroutineContext[ContinuationInterceptor] as? CoroutineDispatcher)?.let { config.dispatcher = it }
-        config.addHandler { request ->
-            when (request.url.encodedPath) {
-                "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
-                "/api/sessions/stored-1/messages" -> {
-                    val limit = request.url.parameters["limit"]!!.toInt()
-                    val offset = request.url.parameters["offset"]?.toInt() ?: 0
-                    reads += "$limit/$offset"
-                    // order=latest: the offset and limit count back from the newest row.
-                    val page = transcript.reversed().drop(offset).take(limit).reversed()
-                    respond("""{"session_id":"stored-1","messages":[${page.joinToString(",")}]}""", HttpStatusCode.OK, json)
-                }
-                else -> error("unexpected ${request.url}")
-            }
-        }
-        return createHttpClient(MockEngine(config))
-    }
+    /** The gateway of the latest [connect]; its client reads [transcript] a page at a time. */
+    private lateinit var gateway: FakeGateway
 
-    /** How the fake gateway answers: a JSON result, `error:<code>`, or null to stay silent. */
+    private fun CoroutineScope.client() = gateway.client
+
+    /** How the fake gateway answers (see [FakeGateway.answer]): socket, method, params. */
     private var answer: (FakeTransport, String, JsonObject) -> String? = { _, _, _ -> "{}" }
-
-    private fun CoroutineScope.serve(transport: FakeTransport) = launch {
-        var answered = 0
-        transport.sent.collect { sent ->
-            sent.drop(answered).forEach { message ->
-                answered++
-                val id = message["id"] ?: return@forEach
-                val method = message["method"]?.jsonPrimitive?.contentOrNull ?: return@forEach
-                val canned = answer(transport, method, message["params"]?.jsonObject ?: JsonObject(emptyMap())) ?: return@forEach
-                transport.push(
-                    if (canned.startsWith("error:")) {
-                        """{"jsonrpc":"2.0","id":$id,"error":{"code":${canned.removePrefix("error:")},"message":"nope"}}"""
-                    } else {
-                        """{"jsonrpc":"2.0","id":$id,"result":$canned}"""
-                    },
-                )
-            }
-        }
-    }
 
     /** The replay epoch the next connection's `gateway.ready` names. */
     private var epoch = "e1"
 
     /** Every connect opens a fresh transport, so a dropped link comes back; the latest is last. */
-    private fun connect(scope: CoroutineScope): Pair<GatewayConnection, List<FakeTransport>> {
-        val transports = mutableListOf<FakeTransport>()
-        val connection = GatewayConnection(
-            AuthApi(scope.client(), PersistentCookiesStorage(InMemoryKeyValueStore())),
-            { _, _ ->
-                FakeTransport().also {
-                    transports += it
-                    scope.serve(it)
-                    it.push("""{"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready","payload":{"replay_epoch":"$epoch"}}}""")
-                }
-            },
-            scope,
-        )
-        connection.start(url)
-        return connection to transports
+    private suspend fun connect(scope: CoroutineScope): Pair<GatewayConnection, List<FakeTransport>> {
+        gateway = FakeGateway(scope).apply {
+            answer = { call -> this@ChatSessionResumeTest.answer(call.socket, call.method, call.params) }
+            ready = { """{"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready","payload":{"replay_epoch":"$epoch"}}}""" }
+            http = { request ->
+                require(request.url.encodedPath == "/api/sessions/stored-1/messages") { "unexpected ${request.url}" }
+                val limit = request.url.parameters["limit"]!!.toInt()
+                val offset = request.url.parameters["offset"]?.toInt() ?: 0
+                reads += "$limit/$offset"
+                // order=latest: the offset and limit count back from the newest row.
+                val page = transcript.reversed().drop(offset).take(limit).reversed()
+                json("""{"session_id":"stored-1","messages":[${page.joinToString(",")}]}""")
+            }
+            // Not waited on: the chat started next sees the link come up.
+            start(awaitConnected = false)
+        }
+        return gateway.connection to gateway.sockets
     }
 
     private fun event(type: String, seq: Long?, payload: String = "{}") =
@@ -126,10 +75,6 @@ class ChatSessionResumeTest {
 
     private fun since(vararg events: String, latest: Long, truncated: Boolean = false, epoch: String = "e1") =
         """{"events":[${events.joinToString(",")}],"latest_seq":$latest,"truncated":$truncated,"count":${events.size},"epoch":"$epoch","open_requests":[]}"""
-
-    private fun JsonObject.isCall(method: String) = this["method"]?.jsonPrimitive?.contentOrNull == method
-
-    private fun JsonObject.param(name: String) = this["params"]?.jsonObject?.get(name)?.jsonPrimitive?.contentOrNull
 
     private fun ChatState.reply() = messages.last() as? ChatMessage.Assistant
 
