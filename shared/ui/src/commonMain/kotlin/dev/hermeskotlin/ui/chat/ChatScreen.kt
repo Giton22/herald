@@ -147,6 +147,7 @@ import com.composables.icons.lucide.MessageSquare
 import com.composables.icons.lucide.RotateCw
 import com.composables.icons.lucide.SearchCheck
 import com.composables.icons.lucide.TriangleAlert
+import com.composables.icons.lucide.Users
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Square
@@ -687,7 +688,11 @@ private fun ColumnScope.Dock(
         AnimatedVisibility(visible = mentions.isNotEmpty() && suggestions.isEmpty(), enter = fadeIn(), exit = fadeOut()) {
             var shown by remember { mutableStateOf(mentions) }
             if (mentions.isNotEmpty()) shown = mentions
-            MentionSuggestions(shown, hazeState, onPick = onMention)
+            MentionSuggestions(
+                remember(shown) { shown.map { MentionChoice(it.label, it.handle, it) } },
+                hazeState,
+                onPick = { choice -> choice.bot?.let(onMention) },
+            )
         }
         if (editing) {
             Banner(
@@ -1623,9 +1628,15 @@ private fun SlashSuggestions(suggestions: List<SlashSuggestion>, hazeState: Haze
     }
 }
 
-/** The `@` list over the composer: bots to mention, with their faces, names and handles. */
+/** One row of the `@` list: who, the handle a pick inserts, and the bot whose face it shows (none for everyone). */
+internal data class MentionChoice(val label: String, val handle: String, val bot: Bot?)
+
+/**
+ * The `@` list over a composer: who to mention, with faces, names and handles. Frosted over [hazeState]'s
+ * content when there is one, else on a plain elevated surface.
+ */
 @Composable
-private fun MentionSuggestions(bots: List<Bot>, hazeState: HazeState, onPick: (Bot) -> Unit) {
+internal fun MentionSuggestions(choices: List<MentionChoice>, hazeState: HazeState?, onPick: (MentionChoice) -> Unit) {
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     val page = Theme[colors][background]
     val faces = LocalBotFaces.current
@@ -1641,20 +1652,26 @@ private fun MentionSuggestions(bots: List<Bot>, hazeState: HazeState, onPick: (B
             .padding(start = 12.dp, end = 12.dp, top = 6.dp)
             .fillMaxWidth()
             .clip(shape)
-            .hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)
-            .background(Theme[colors][surfaceElevated].copy(alpha = 0.85f))
+            .then(if (hazeState != null) Modifier.hazeBlur(input = HazeInput.Sources(hazeState), style = frosted) else Modifier)
+            .background(Theme[colors][surfaceElevated].copy(alpha = if (hazeState != null) 0.85f else 1f))
             .border(1.dp, Theme[colors][strokeStrong], shape)
             .padding(vertical = 6.dp),
     ) {
-        bots.forEach { bot ->
+        choices.forEach { choice ->
             Row(
-                Modifier.fillMaxWidth().clickable(onClickLabel = "Mention ${bot.label}") { onPick(bot) }.padding(horizontal = 14.dp, vertical = 8.dp),
+                Modifier.fillMaxWidth().clickable(onClickLabel = "Mention ${choice.label}") { onPick(choice) }.padding(horizontal = 14.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                BotAvatar(bot, faces.picture(bot), size = 24.dp)
-                Text(bot.label, style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][textColor], maxLines = 1)
-                Text("@${bot.handle}", style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1, modifier = Modifier.weight(1f))
+                if (choice.bot != null) {
+                    BotAvatar(choice.bot, faces.picture(choice.bot), size = 24.dp)
+                } else {
+                    Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
+                        UnstyledIcon(Lucide.Users, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(18.dp))
+                    }
+                }
+                Text(choice.label, style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][textColor], maxLines = 1)
+                Text("@${choice.handle}", style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1, modifier = Modifier.weight(1f))
             }
         }
     }
