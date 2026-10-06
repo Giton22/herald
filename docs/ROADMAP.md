@@ -214,6 +214,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [ ] "Ask <bot>" by voice, a Settings switch for bot notifications
 - [ ] Rooms: Desktop rooms read-only from the `hermes-bots-groups` mirror; hosted rooms (`groups.*`) to take part
 - [x] Rooms: scroll up for older messages (`groups.log` read back a window at a time, the reader's place kept)
+- [x] Rooms: notifications for bots' lines while Herald is out of sight (one conversation per room, a tap opens it), and an unread dot on room rows
 
 ### Automation & configuration
 - [x] Scheduled jobs in the sidebar (`GET /api/cron/jobs`): schedule in plain words, next run, state; a job page with its prompt, last error, Run now, Pause / Resume, and its runs (`/api/cron/jobs/{id}/runs`), each opening as a chat
