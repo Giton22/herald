@@ -152,6 +152,8 @@ fun BotsRoster(
     rooms: List<Room> = emptyList(),
     /** Whether this gateway hosts rooms at all (`groups.capabilities`). */
     roomsAvailable: Boolean = false,
+    /** The rooms with lines the user hasn't seen, by id. */
+    unreadRooms: Set<String> = emptySet(),
     /** Opens a room's conversation. */
     onOpenRoom: (Room) -> Unit = {},
     /** Starts a new room: name it and pick its bots. */
@@ -230,6 +232,7 @@ fun BotsRoster(
                         RoomRow(
                             room,
                             roomFaces,
+                            unread = room.roomId in unreadRooms,
                             onClick = { onOpenRoom(room) },
                             onRename = { roomAsk = RoomAsk.Rename(room) },
                             onDelete = { roomAsk = RoomAsk.Delete(room) },
@@ -502,7 +505,7 @@ internal fun StartOverDialog(bot: Bot?, onDismiss: () -> Unit, onConfirm: (Bot) 
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RoomRow(room: Room, faces: BotFaces, onClick: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
+private fun RoomRow(room: Room, faces: BotFaces, unread: Boolean, onClick: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
     val haptics = LocalHapticFeedback.current
     var menuOpen by remember { mutableStateOf(false) }
     DropdownMenu(
@@ -518,6 +521,7 @@ private fun RoomRow(room: Room, faces: BotFaces, onClick: () -> Unit, onRename: 
         RoomRowContent(
             room,
             faces,
+            unread,
             Modifier.combinedClickable(
                 onClick = onClick,
                 onClickLabel = "Open room ${room.name}",
@@ -534,7 +538,7 @@ private fun RoomRow(room: Room, faces: BotFaces, onClick: () -> Unit, onRename: 
 }
 
 @Composable
-private fun RoomRowContent(room: Room, faces: BotFaces, clicks: Modifier) {
+private fun RoomRowContent(room: Room, faces: BotFaces, unread: Boolean, clicks: Modifier) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -547,13 +551,18 @@ private fun RoomRowContent(room: Room, faces: BotFaces, clicks: Modifier) {
     ) {
         RoomFaces(room.members, faces, size = 26.dp, max = 3)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                room.name,
-                style = Theme[typography][body].copy(fontSize = 15.sp, fontWeight = FontWeight.Medium),
-                color = Theme[colors][text],
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
+            // New lines since the user last looked: bold and a dot, as a bot's row shows them.
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    room.name,
+                    style = Theme[typography][body].copy(fontSize = 15.sp, fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Medium),
+                    color = Theme[colors][text],
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (unread) Box(Modifier.size(7.dp).background(Theme[colors][accent], CircleShape))
+            }
             Text(
                 roomSubtitle(room),
                 style = Theme[typography][bodySmall],

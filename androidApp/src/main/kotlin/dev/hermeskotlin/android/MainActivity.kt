@@ -27,6 +27,7 @@ import dev.hermeskotlin.android.notify.ChatNotifications
 import dev.hermeskotlin.core.chat.AppLink
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatLinks
+import dev.hermeskotlin.core.rooms.RoomLinks
 import dev.hermeskotlin.core.chat.ComposeDraft
 import dev.hermeskotlin.core.chat.SharedContent
 import dev.hermeskotlin.core.connection.ConnectionState
@@ -54,6 +55,7 @@ class MainActivity : FragmentActivity() {
     private val host: ChatHost by inject()
     private val connection: GatewayConnection by inject()
     private val links: ChatLinks by inject()
+    private val roomLinks: RoomLinks by inject()
     private val settings: SettingsStore by inject()
     private val appScope: CoroutineScope by inject()
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
@@ -126,14 +128,17 @@ class MainActivity : FragmentActivity() {
 
     /**
      * A tapped notification about a chat opens that chat, not just the last one; a bot's notification or
-     * shortcut opens that bot's chat; a `hermes://` link opens what it names (a new chat, a stored one, a bot).
+     * shortcut opens that bot's chat; a room's notification opens that room; a `hermes://` link opens what it
+     * names (a new chat, a stored one, a bot).
      */
     private fun openLinkedChat(intent: Intent) {
         val bot = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_BOT)
+        val room = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_ROOM)
         val sessionId = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_SESSION)
         val title = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_TITLE)
         val link = intent.data?.let { AppLink.parse(it.toString()) }
         when {
+            room != null -> roomLinks.open(room, title)
             bot != null -> links.openBot(bot, title, sessionId)
             sessionId != null -> links.open(sessionId, title)
             link != null -> links.follow(link)
@@ -142,6 +147,7 @@ class MainActivity : FragmentActivity() {
         // Handled once: a recreated activity must not jump back to it.
         intent.removeExtra(ChatNotifications.EXTRA_OPEN_SESSION)
         intent.removeExtra(ChatNotifications.EXTRA_OPEN_BOT)
+        intent.removeExtra(ChatNotifications.EXTRA_OPEN_ROOM)
         intent.data = null
     }
 

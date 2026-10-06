@@ -13,12 +13,15 @@ import dev.hermeskotlin.core.rooms.RoomEvent
 import dev.hermeskotlin.core.rooms.RoomLine
 import dev.hermeskotlin.core.rooms.RoomMemberInput
 import dev.hermeskotlin.core.rooms.RoomPendingAction
+import dev.hermeskotlin.core.rooms.RoomSeenStore
 import dev.hermeskotlin.core.rooms.RoomsApi
+import dev.hermeskotlin.core.rooms.isUnread
 import dev.hermeskotlin.core.rooms.mergeRoomEvents
 import dev.hermeskotlin.core.rooms.messageText
 import dev.hermeskotlin.core.rooms.roomLines
 import dev.hermeskotlin.core.rpc.RpcException
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -27,6 +30,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -52,6 +57,8 @@ data class RoomsUiState(
     val busy: String? = null,
     /** Why deleting or renaming a room from the sidebar didn't work. */
     val actionNotice: String? = null,
+    /** The rooms with lines the user hasn't seen, by id. */
+    val unread: Set<String> = emptySet(),
 )
 
 /** The room open on screen: its transcript as far as it's read, and what it's waiting on. */
@@ -83,10 +90,11 @@ data class OpenRoom(
  * working or the room waits on the user, slower when it's quiet. A sent message is appended
  * idempotently, so a lost answer retries into the same line instead of a second one.
  */
-@OptIn(ExperimentalUuidApi::class)
+@OptIn(ExperimentalUuidApi::class, ExperimentalCoroutinesApi::class)
 class RoomsViewModel(
     private val api: RoomsApi,
     private val connection: GatewayConnection,
+    private val seen: RoomSeenStore,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(RoomsUiState())
@@ -152,10 +160,31 @@ class RoomsViewModel(
                 }
             }
         }
+        // Unread follows both the list and what the user has seen, on this gateway.
+        viewModelScope.launch {
+            gateway.filterNotNull().flatMapLatest { url -> seen.seen(url) }.collect { read ->
+                seenSeqs = read
+                _state.update { it.withUnread() }
+            }
+        }
+    }
+
+    /** Each room's seen seq on the bound gateway ([RoomSeenStore]). */
+    private var seenSeqs: Map<String, Int> = emptyMap()
+
+    private fun RoomsUiState.withUnread() = copy(unread = rooms.filter { it.isUnread(seenSeqs) }.map { it.roomId }.toSet())
+
+    /**
+     * Opens the room [roomId] from outside the screens (a tapped notification): as the list knows it, or
+     * by its id and [name] alone, the first read filling in the rest.
+     */
+    fun openById(roomId: String, name: String?) {
+        open(_state.value.rooms.firstOrNull { it.roomId == roomId } ?: Room(roomId = roomId, name = name ?: "Room"))
     }
 
     fun bind(url: GatewayUrl) {
-        if (gateway.value == url) return
+        val previous = gateway.value
+        if (previous == url) return
         // Another gateway's rooms are other rooms, whatever their names.
         gateway.value = url
         _state.value = RoomsUiState()
@@ -163,7 +192,9 @@ class RoomsViewModel(
         unansweredSend = null
         unansweredCreate = null
         disbandIds.clear()
-        close()
+        quietChecked.clear()
+        // The first bind isn't a switch: a room opened from a notification at launch stays open.
+        if (previous != null) close()
     }
 
     fun setVisible(shown: Boolean) {
@@ -456,7 +487,12 @@ class RoomsViewModel(
             if (gateway.value != url) return
             // A delete or rename landed while this was read: the list may predate it, so wait for the next.
             if (listEdits != edits) return
-            _state.update { it.copy(rooms = rooms, loading = false, error = null, available = true) }
+            // Rooms first met now count as read so far: only what comes after is new.
+            seen.takeStock(url, rooms)
+            settleQuietRooms(url, rooms)
+            // Stored meanwhile: the same checks again, as a switch or an edit may have landed during it.
+            if (gateway.value != url || listEdits != edits) return
+            _state.update { it.copy(rooms = rooms, loading = false, error = null, available = true).withUnread() }
         } catch (e: CancellationException) {
             throw e
         } catch (e: RpcException) {
@@ -471,6 +507,32 @@ class RoomsViewModel(
             _state.update { it.copy(loading = false, error = e.message ?: "Couldn't load the rooms.") }
         }
     }
+
+    /**
+     * A room's newest seq counts every event, the bookkeeping too (a rename, a turn settling after its
+     * reply, a stop): only a bot's line makes a room unread. For a room past its seen mark, reads what's new
+     * once per new seq, and when it holds no bot line, moves the mark up to it.
+     */
+    private suspend fun settleQuietRooms(url: GatewayUrl, rooms: List<Room>) {
+        for (room in rooms) {
+            val read = seenSeqs[room.roomId] ?: continue
+            val latest = room.latestSeq ?: continue
+            if (latest <= read || quietChecked[room.roomId] == latest) continue
+            quietChecked[room.roomId] = latest
+            val page = try {
+                api.log(room.roomId, sinceSeq = read, limit = logLimit)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                quietChecked.remove(room.roomId)
+                continue
+            }
+            if (page.cursor >= latest && page.events.none { it.kind == "message.member" }) seen.markSeen(url, room.roomId, latest)
+        }
+    }
+
+    /** The newest seq [settleQuietRooms] read each room up to, so a room waiting to be read isn't read again. */
+    private val quietChecked = mutableMapOf<String, Int>()
 
     /** Reads the open room once, right away, e.g. after an action the driver should notice at once. */
     private fun readRoomSoon(roomId: String) {
@@ -518,6 +580,8 @@ class RoomsViewModel(
                     canLoadEarlier = (loadedFrom ?: 0) > 0,
                 )
             }
+            // On screen, so read: the sidebar's dot and the next notification start after this.
+            gateway.value?.let { seen.markSeen(it, roomId, readThrough) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {

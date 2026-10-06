@@ -66,6 +66,7 @@ import dev.hermeskotlin.ui.update.LocalUpdateOffer
 import dev.hermeskotlin.ui.update.rememberUpdateOffer
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+import dev.hermeskotlin.core.rooms.RoomLinks
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -233,6 +234,15 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
             shownTarget = route.target
             rooms.close()
         }
+    }
+    // A room asked for from outside the screens (a tapped notification) opens over the chat.
+    val roomLinks = koinInject<RoomLinks>()
+    val roomLink by roomLinks.pending.collectAsStateWithLifecycle()
+    LaunchedEffect(roomLink) {
+        val link = roomLink ?: return@LaunchedEffect
+        rooms.openById(link.roomId, link.name)
+        roomLinks.consume(link)
+        closeDrawer()
     }
     // On phones the keyboard makes way for the drawer.
     LaunchedEffect(sidebar) {
