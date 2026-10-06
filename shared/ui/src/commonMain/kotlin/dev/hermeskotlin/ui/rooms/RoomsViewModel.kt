@@ -286,7 +286,13 @@ class RoomsViewModel(
                     earlierWindow = null
                     openEvents = mergeRoomEvents(openEvents, earlier)
                     loadedFrom = from
-                    updateOpen { it.copy(lines = roomLines(openEvents, it.room.members), canLoadEarlier = from > 0) }
+                    updateOpen {
+                        it.copy(
+                            lines = roomLines(openEvents, it.room.members),
+                            waiting = waitingFor(openEvents, it.room.members),
+                            canLoadEarlier = from > 0,
+                        )
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
