@@ -63,6 +63,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 }
             }
             ACTION_BOT_CLEARED -> intent.getStringExtra(EXTRA_BOT)?.let(notifications::forgetBot)
+            ACTION_ROOM_CLEARED -> intent.getStringExtra(ChatNotifications.EXTRA_OPEN_ROOM)?.let(notifications::forgetRoom)
             ACTION_BOT_REPLY -> {
                 val bot = intent.getStringExtra(EXTRA_BOT) ?: return
                 val storedId = intent.getStringExtra(EXTRA_SESSION_ID) ?: return
@@ -144,6 +145,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         const val ACTION_DISCONNECT = "dev.hermeskotlin.action.DISCONNECT"
         const val ACTION_BOT_REPLY = "dev.hermeskotlin.action.BOT_REPLY"
         const val ACTION_BOT_CLEARED = "dev.hermeskotlin.action.BOT_CLEARED"
+        const val ACTION_ROOM_CLEARED = "dev.hermeskotlin.action.ROOM_CLEARED"
         const val EXTRA_BOT = "bot"
 
         const val EXTRA_REQUEST_ID = "request_id"

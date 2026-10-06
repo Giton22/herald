@@ -30,6 +30,7 @@ class WatchNotifier(
     private val visibility: AppVisibility,
     private val notifications: ChatNotifications,
     private val bots: BotNotifier,
+    private val rooms: RoomNotifier,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
 
@@ -84,6 +85,8 @@ class WatchNotifier(
                 if (visibility.visible.value || !prefs.notifyReplies) return@collect
                 if (end.outcome == TurnOutcome.Interrupted || end.storedId == openChat()) return@collect
                 if (bots.botWithChat(end.storedId) != null) return@collect
+                // A room member's turn: its reply is the room's line, which RoomNotifier tells.
+                if (rooms.isRoomTurn(end.title)) return@collect
                 val failed = end.outcome == TurnOutcome.Error
                 val text = (if (failed) end.error ?: end.text else end.text).ifBlank { "Finished." }
                 notifications.postReply(end.storedId, end.title.ifBlank { null }, text, failed)

@@ -16,8 +16,9 @@ val notifyModule = module {
     single { ChatNotifications(androidContext()) }
     single { VoiceCallKeeper(androidContext()) } bind VoiceKeepAlive::class
     single { ChatNotifier(androidContext(), get(), get(), get(), get(), get(), get()) }
-    single { WatchNotifier(get(), get(), get(), get(), get(), get(), get()) }
+    single { WatchNotifier(get(), get(), get(), get(), get(), get(), get(), get()) }
     single { BotNotifier(androidContext(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { RoomNotifier(get(), get(), get(), get(), get(), get()) }
     single { PushStore(androidContext()) } bind PushKeys::class
     single { PushListener(get(), get(), get(), get(), get(), get(), get(), get()) }
     single { PushSetup(get(), get(), get(), get(), get(), get(), deviceName = { Build.MODEL ?: "Android phone" }) }

@@ -1,6 +1,9 @@
 package dev.hermeskotlin.core.bots
 
-/** An `@word` being typed: where it starts in the text and what's typed after the `@` so far. */
+/**
+ * An `@word` being typed: where it starts and ends in the text (the whole word, also past the cursor, so a
+ * pick replaces all of it), and what's typed after the `@` up to the cursor.
+ */
 data class MentionQuery(val start: Int, val end: Int, val query: String)
 
 /**
@@ -15,9 +18,13 @@ fun mentionQuery(text: String, cursor: Int): MentionQuery? {
     val at = start - 1
     if (at > 0 && !text[at - 1].isWhitespace()) return null
     val query = text.substring(start, cursor)
-    if (query.any { !it.isLetterOrDigit() && it != '-' && it != '_' }) return null
-    return MentionQuery(at, cursor, query)
+    if (query.any { !it.isHandleChar() }) return null
+    var end = cursor
+    while (end < text.length && text[end].isHandleChar()) end++
+    return MentionQuery(at, end, query)
 }
+
+private fun Char.isHandleChar() = isLetterOrDigit() || this == '-' || this == '_'
 
 /** The tag a bot answers to: `@hermes` for the primary bot, else its profile name (Bot Mode's handles). */
 val Bot.handle: String get() = if (name == Bot.DEFAULT) "hermes" else name

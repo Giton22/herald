@@ -213,6 +213,10 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Share-to-bot: bots show in the share sheet; a share opens the bot's chat with the content after what was typed there (nothing sends until you do). Shortcuts follow the roster, so a removed or renamed bot leaves the share sheet, and a share to one that's gone opens a new chat instead
 - [ ] "Ask <bot>" by voice, a Settings switch for bot notifications
 - [ ] Rooms: Desktop rooms read-only from the `hermes-bots-groups` mirror; hosted rooms (`groups.*`) to take part
+- [x] Rooms: scroll up for older messages (`groups.log` read back a window at a time, the reader's place kept)
+- [x] Rooms: notifications for bots' lines while Herald is out of sight (one conversation per room, a tap opens it), and an unread dot on room rows
+- [x] Rooms: @mention a member (`@` lists Everyone and the members with their faces; the composer says who answers first, by the gateway's own rule)
+- [x] Rooms: who's replying and who's next, read off the room's log; a member that passes says so
 
 ### Automation & configuration
 - [x] Scheduled jobs in the sidebar (`GET /api/cron/jobs`): schedule in plain words, next run, state; a job page with its prompt, last error, Run now, Pause / Resume, and its runs (`/api/cron/jobs/{id}/runs`), each opening as a chat

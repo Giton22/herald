@@ -20,6 +20,9 @@ import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.connection.ConnectionState
 
 /** Builds and posts every notification the app shows; the actions land in [NotificationActionReceiver]. */
+/** One bot's line in a room's notification, with when it was written. */
+data class RoomNotice(val bot: Bot, val picture: ByteArray?, val text: String, val at: Long)
+
 class ChatNotifications(private val context: Context) {
 
     private val manager = NotificationManagerCompat.from(context)
@@ -257,6 +260,47 @@ class ChatNotifications(private val context: Context) {
         post(bot.name, BOT_ID, notification)
     }
 
+    /**
+     * New lines in the hosted room [roomId], as a group conversation titled with the room's [name]: each
+     * line from its bot, with that bot's face. Stacks like a bot's messages until opened or cleared; a tap
+     * opens the room.
+     */
+    fun postRoomMessages(roomId: String, name: String, lines: List<RoomNotice>) {
+        val fresh = lines.mapNotNull { line -> line.text.toPlainText().take(MAX_PREVIEW).ifBlank { null }?.let { line.copy(text = it) } }
+        if (fresh.isEmpty()) return
+        val history = (unreadRoomLines[roomId].orEmpty() + fresh).takeLast(MAX_STACKED)
+        unreadRoomLines[roomId] = history
+        val me = Person.Builder().setName("You").build()
+        val notification = base(CHANNEL_BOTS)
+            .setContentIntent(openRoom(roomId, name))
+            .setCategory(NotificationCompat.CATEGORY_MESSAGE)
+            .setStyle(
+                NotificationCompat.MessagingStyle(me).setConversationTitle(name).setGroupConversation(true).also { style ->
+                    history.forEach { style.addMessage(it.text, it.at, BotShortcuts.person(it.bot, it.picture)) }
+                },
+            )
+            .setNumber(history.size)
+            .setDeleteIntent(action(NotificationActionReceiver.ACTION_ROOM_CLEARED, roomId) { putExtra(EXTRA_OPEN_ROOM, roomId) })
+            .build()
+        post(roomId, ROOM_ID, notification)
+    }
+
+    /** The room's notification was swiped away: its stack starts over. */
+    fun forgetRoom(roomId: String) {
+        unreadRoomLines.remove(roomId)
+    }
+
+    /** Each room's lines shown in its notification, oldest first. */
+    private val unreadRoomLines = mutableMapOf<String, List<RoomNotice>>()
+
+    private fun openRoom(roomId: String, name: String): PendingIntent {
+        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)!!
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra(EXTRA_OPEN_ROOM, roomId)
+            .putExtra(EXTRA_OPEN_TITLE, name)
+        return PendingIntent.getActivity(context, "room:$roomId".hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
     fun cancelBot(name: String) {
         unreadBotMessages.remove(name)
         manager.cancel(name, BOT_ID)
@@ -303,6 +347,7 @@ class ChatNotifications(private val context: Context) {
     /** Everything except the ongoing notification, once the user is looking at the app. */
     fun cancelAttention() {
         unreadBotMessages.clear()
+        unreadRoomLines.clear()
         manager.activeNotifications.filter { it.id != WORKING_ID && it.id != VOICE_ID }.forEach { manager.cancel(it.tag, it.id) }
     }
 
@@ -344,7 +389,11 @@ class ChatNotifications(private val context: Context) {
         const val REQUEST_ID = 3
         const val BOT_ID = 4
         const val PUSH_TEST_ID = 5
-        const val VOICE_ID = 6
+        const val ROOM_ID = 6
+        const val VOICE_ID = 7
+
+        /** On the launch intent of a room's notification: the hosted room's id (its name in [EXTRA_OPEN_TITLE]). */
+        const val EXTRA_OPEN_ROOM = "open_room"
 
         /** On the launch intent of a notification about a chat: that chat's stored session id, and its title. */
         const val EXTRA_OPEN_SESSION = "open_session_id"
