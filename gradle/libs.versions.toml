@@ -19,6 +19,7 @@ markdown-renderer = "0.45.0"
 highlights = "1.1.0"
 jlatexmath-android = "0.2.0"
 haze = "2.0.1"
+webrtc = "150.7871.01"
 
 android-compileSdk = "37"
 android-targetSdk = "36"
@@ -71,6 +72,9 @@ androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "core-ktx
 androidx-browser = { module = "androidx.browser:browser", version.ref = "browser" }
 androidx-biometric = { module = "androidx.biometric:biometric", version.ref = "biometric" }
 androidx-fragment = { module = "androidx.fragment:fragment", version.ref = "fragment" }
+
+# GPT-Live voice calls
+webrtc-android = { module = "io.github.webrtc-sdk:android", version.ref = "webrtc" }
 
 # Testing
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }

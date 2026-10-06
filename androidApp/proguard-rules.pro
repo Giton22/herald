@@ -6,3 +6,7 @@
 -keepclassmembers class androidx.compose.foundation.text.selection.SelectionState {
     public java.util.List getSelectableTexts();
 }
+
+# WebRTC (GPT-Live voice calls) is reached from native code by name, and its AAR ships no rules of its own.
+-keep class org.webrtc.** { *; }
+-dontwarn org.webrtc.**

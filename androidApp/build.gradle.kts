@@ -43,6 +43,9 @@ android {
         }
     }
 
+    // WebRTC's native library is 7–16 MB per ABI; compressed in the APK it is about a third of that.
+    packaging { jniLibs.useLegacyPackaging = true }
+
     buildFeatures {
         compose = true
         buildConfig = true
