@@ -29,6 +29,7 @@ import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -140,7 +141,7 @@ fun RoomScreen(
                 },
             )
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                Transcript(room, faces)
+                Transcript(room, faces, onLoadEarlier = viewModel::loadEarlier)
             }
             // A failed read in full, above whatever waits on the user; the loop keeps trying.
             room.error?.let { ListNotice(it) }
@@ -163,17 +164,32 @@ fun RoomScreen(
     }
 }
 
-/** The transcript: messages, system lines, and nothing of the room's machinery. */
+/**
+ * The transcript: messages, system lines, and nothing of the room's machinery. Reaching its top reads
+ * the lines before it, while the log goes back further.
+ */
 @Composable
-private fun Transcript(room: OpenRoom, faces: BotFaces) {
+private fun Transcript(room: OpenRoom, faces: BotFaces, onLoadEarlier: () -> Unit) {
     val listState = rememberLazyListState()
     val lines = room.lines
-    // A new line brings the end of the conversation into view.
-    LaunchedEffect(lines.size) {
-        if (lines.isNotEmpty()) listState.animateScrollToItem(lines.size - 1)
+    // A newer line brings the end of the conversation into view; older ones read in above don't move the reader.
+    val newest = lines.lastOrNull()?.seq
+    // Whether the first jump to the end is done: before it, the list starts at its top without the reader there.
+    var atEndOnce by remember { mutableStateOf(false) }
+    LaunchedEffect(newest) {
+        if (newest == null) return@LaunchedEffect
+        // The last line's index, past the "earlier" row when there is one.
+        listState.animateScrollToItem(lines.size - 1 + if (room.canLoadEarlier) 1 else 0)
+        atEndOnce = true
+    }
+    // At the top (or with nothing to show yet), read further back while there's more.
+    val atTop by remember { derivedStateOf { listState.firstVisibleItemIndex == 0 } }
+    LaunchedEffect(atTop, atEndOnce, lines.isEmpty(), room.canLoadEarlier, room.loadingEarlier, room.loading) {
+        val wanted = lines.isEmpty() || (atTop && atEndOnce)
+        if (wanted && room.canLoadEarlier && !room.loadingEarlier && !room.loading) onLoadEarlier()
     }
     when {
-        room.loading && lines.isEmpty() -> ListSpinner()
+        (room.loading || room.loadingEarlier || room.canLoadEarlier) && lines.isEmpty() -> ListSpinner()
         lines.isEmpty() -> ListNotice("The room is quiet. Say something to start it.")
         else -> LazyColumn(
             state = listState,
@@ -181,6 +197,13 @@ private fun Transcript(room: OpenRoom, faces: BotFaces) {
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
+            if (room.canLoadEarlier) {
+                item(key = "earlier") {
+                    Box(Modifier.fillMaxWidth().padding(vertical = 4.dp), contentAlignment = Alignment.Center) {
+                        Spinner(Modifier.size(18.dp))
+                    }
+                }
+            }
             itemsIndexed(lines, key = { _, line -> line.seq }) { index, line ->
                 when (line) {
                     is RoomLine.Message -> if (line.fromUser) {

@@ -70,6 +70,10 @@ data class OpenRoom(
     val notice: String? = null,
     /** A message is on its way out. */
     val sending: Boolean = false,
+    /** The log goes back further than what's read: scrolling up reads more. */
+    val canLoadEarlier: Boolean = false,
+    /** Older lines are being read right now. */
+    val loadingEarlier: Boolean = false,
 )
 
 /**
@@ -111,6 +115,9 @@ class RoomsViewModel(
 
     /** Where the open room's log has been read to (the page cursor). */
     private var readThrough = 0
+
+    /** Where the open room's read part starts (the `since_seq` of its oldest read); null before the first read. */
+    private var loadedFrom: Int? = null
 
     /** Counts deletes and renames that landed, so a list read from before one doesn't undo it. */
     private var listEdits = 0
@@ -168,8 +175,6 @@ class RoomsViewModel(
     fun open(room: Room) {
         if (_opened.value?.room?.roomId == room.roomId && roomJob?.isActive == true) return
         close()
-        openEvents = emptyList()
-        readThrough = 0
         _opened.value = OpenRoom(room = room)
         roomJob = viewModelScope.launch {
             while (true) {
@@ -189,7 +194,62 @@ class RoomsViewModel(
         _opened.value = null
         openEvents = emptyList()
         readThrough = 0
+        loadedFrom = null
         composer.clearText()
+    }
+
+    /**
+     * Reads the stretch of the open room's log just before what's shown, for a reader scrolling up. The
+     * gateway only reads forward, so this reads the window that ends where the shown part starts, and
+     * adds it only once it's all in: a page cut short never leaves a gap in the transcript.
+     */
+    fun loadEarlier() {
+        val open = _opened.value ?: return
+        if (!open.canLoadEarlier || open.loadingEarlier) return
+        val roomId = open.room.roomId
+        _opened.update { it?.copy(loadingEarlier = true) }
+        viewModelScope.launch {
+            readMutex.withLock {
+                try {
+                    val end = loadedFrom ?: return@withLock
+                    if (_opened.value?.room?.roomId != roomId || end <= 0) return@withLock
+                    val limit = logLimit
+                    val from = maxOf(0, end - limit)
+                    val earlier = mutableListOf<RoomEvent>()
+                    var since = from
+                    var pages = 0
+                    while (since < end && pages < MAX_PAGES_PER_READ) {
+                        val page = api.log(roomId, sinceSeq = since, limit = minOf(limit, end - since))
+                        if (_opened.value?.room?.roomId != roomId) return@withLock
+                        earlier += page.events.filter { it.seq <= end }
+                        if (page.cursor <= since) break
+                        since = page.cursor
+                        pages++
+                    }
+                    // Not all of it came: keep what's shown whole, and try again after the next poll.
+                    if (since < end) {
+                        pauseLoadingEarlier(roomId)
+                        return@withLock
+                    }
+                    openEvents = mergeRoomEvents(openEvents, earlier)
+                    loadedFrom = from
+                    _opened.update { current ->
+                        current?.takeIf { it.room.roomId == roomId }
+                            ?.let { it.copy(lines = roomLines(openEvents, it.room.members), canLoadEarlier = from > 0) } ?: current
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    _opened.update { current ->
+                        current?.takeIf { it.room.roomId == roomId }
+                            ?.copy(notice = "Couldn't read older messages. ${e.message.orEmpty()}".trim()) ?: current
+                    }
+                    pauseLoadingEarlier(roomId)
+                } finally {
+                    _opened.update { current -> current?.takeIf { it.room.roomId == roomId }?.copy(loadingEarlier = false) ?: current }
+                }
+            }
+        }
     }
 
     /** Sends what the composer holds into the open room. */
@@ -403,14 +463,19 @@ class RoomsViewModel(
         viewModelScope.launch { readRoom(roomId) }
     }
 
-    private suspend fun readRoom(roomId: String) = readMutex.withLock {
+    private suspend fun readRoom(roomId: String): Unit = readMutex.withLock {
         try {
             val state = api.state(roomId)
             if (_opened.value?.room?.roomId != roomId) return
             // Never ask for more than the gateway serves in one page.
             val limit = logLimit
-            // A first read starts a bounded way back from the end: a room's whole history can be long.
-            if (readThrough == 0) readThrough = maxOf(0, (state.room.latestSeq ?: 0) - limit)
+            // A first read starts a bounded way back from the end: a room's whole history can be long, and
+            // scrolling up reads the rest (loadEarlier).
+            if (loadedFrom == null) {
+                val from = maxOf(0, (state.room.latestSeq ?: 0) - limit)
+                loadedFrom = from
+                readThrough = from
+            }
             // A page that stops short of the end is followed right away, so the newest lines aren't a poll late.
             var pages = 0
             do {
@@ -436,6 +501,7 @@ class RoomsViewModel(
                     pendingActions = state.driverStatus?.pendingActions.orEmpty(),
                     loading = false,
                     error = null,
+                    canLoadEarlier = (loadedFrom ?: 0) > 0,
                 )
             }
         } catch (e: CancellationException) {
@@ -447,6 +513,13 @@ class RoomsViewModel(
             }
         }
     }
+
+    /**
+     * Stops reading older lines after a read that failed or came back short, so a reader parked at the top
+     * doesn't retry in a loop; the room's next poll allows it again.
+     */
+    private fun pauseLoadingEarlier(roomId: String) =
+        _opened.update { current -> current?.takeIf { it.room.roomId == roomId }?.copy(canLoadEarlier = false) ?: current }
 
     private fun newId(what: String): String = "$what-${Uuid.random()}"
 
