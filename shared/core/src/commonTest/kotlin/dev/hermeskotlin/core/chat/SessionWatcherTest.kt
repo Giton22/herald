@@ -1,21 +1,13 @@
 package dev.hermeskotlin.core.chat
 
-import dev.hermeskotlin.core.auth.AuthApi
-import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
-import dev.hermeskotlin.core.gateway.GatewayUrl
-import dev.hermeskotlin.core.network.createHttpClient
-import dev.hermeskotlin.core.rpc.FakeTransport
+import dev.hermeskotlin.core.rpc.FakeGateway
+import dev.hermeskotlin.core.rpc.event
+import dev.hermeskotlin.core.rpc.isCall
+import dev.hermeskotlin.core.rpc.json
 import dev.hermeskotlin.core.sessions.ActiveSessions
 import dev.hermeskotlin.core.sessions.SessionsApi
-import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
-import io.ktor.client.engine.mock.MockEngine
-import io.ktor.client.engine.mock.respond
-import io.ktor.http.HttpHeaders
-import io.ktor.http.HttpStatusCode
-import io.ktor.http.headersOf
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,12 +30,6 @@ import kotlin.test.assertTrue
 
 class SessionWatcherTest {
 
-    private val url = GatewayUrl.parse("https://hermes.example.ts.net")
-    private val json = headersOf(HttpHeaders.ContentType, "application/json")
-
-    /** `gateway.ready` without the heartbeat, so moving the test clock never trips it. */
-    private val ready = """{"jsonrpc":"2.0","method":"event","params":{"type":"gateway.ready","payload":{}}}"""
-
     /** A live row: stored id, status, title. Runtime ids are `rt-<stored id>` unless given. */
     private data class Row(val key: String, val status: String, val title: String = "Chat $key", val runtime: String = "rt-$key")
 
@@ -55,61 +41,37 @@ class SessionWatcherTest {
     private var activateRunning = true
     private var activateDelayMs = 0L
 
-    /** Every socket the connection opened, newest last. */
-    private val sockets = mutableListOf<FakeTransport>()
+    private lateinit var gateway: FakeGateway
 
-    private val sent get() = sockets.flatMap { it.sent.value }
-    private fun sentMethods(method: String) = sent.filter { it["method"]?.jsonPrimitive?.contentOrNull == method }
-
-    private fun CoroutineScope.serve(transport: FakeTransport) = launch {
-        var answered = 0
-        transport.sent.collect { all ->
-            all.drop(answered).forEach { message ->
-                answered++
-                val id = message["id"] ?: return@forEach
-                val method = message["method"]?.jsonPrimitive?.contentOrNull ?: return@forEach
-                val params = message["params"]?.jsonObject
-                val sid = params?.get("session_id")?.jsonPrimitive?.contentOrNull.orEmpty()
-                val result = when (method) {
-                    "session.active_list" -> live.value.joinToString(",", """{"sessions":[""", "]}") {
-                        """{"id":"${it.runtime}","session_key":"${it.key}","status":"${it.status}","title":"${it.title}"}"""
-                    }
-                    "session.activate" -> """{"session_id":"$sid","running":$activateRunning,"open_requests":$openRequests}"""
-                    "session.resume" -> """{"session_id":"rt-$sid","running":false}"""
-                    else -> "{}"
-                }
-                val reply = """{"jsonrpc":"2.0","id":$id,"result":$result}"""
-                if (method == "session.activate" && activateDelayMs > 0) launch { delay(activateDelayMs); transport.push(reply) }
-                else transport.push(reply)
-            }
-        }
-    }
+    private val sockets get() = gateway.sockets
+    private fun sentMethods(method: String) = gateway.sent(method)
 
     private class Setup(val connection: GatewayConnection, val host: ChatHost, val tracker: AttentionTracker, val watcher: SessionWatcher)
 
     private suspend fun TestScope.setup(maxWatched: Int = 10): Setup {
         val scope = backgroundScope
-        val http = createHttpClient(
-            MockEngine { request ->
-                if (request.url.encodedPath == "/api/auth/ws-ticket") respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
-                else respond("""{"messages":[]}""", HttpStatusCode.OK, json)
-            },
-        )
-        val connection = GatewayConnection(
-            AuthApi(http, PersistentCookiesStorage(InMemoryKeyValueStore())),
-            { _, _ ->
-                FakeTransport().also { transport ->
-                    sockets += transport
-                    scope.serve(transport)
-                    transport.push(ready)
+        gateway = FakeGateway(scope).apply {
+            ready = { FakeGateway.QUIET_READY }
+            http = { json("""{"messages":[]}""") }
+            answer = { call ->
+                val sid = call.param("session_id").orEmpty()
+                when (call.method) {
+                    "session.active_list" -> live.value.joinToString(",", """{"sessions":[""", "]}") {
+                        """{"id":"${it.runtime}","session_key":"${it.key}","status":"${it.status}","title":"${it.title}"}"""
+                    }
+                    "session.activate" -> {
+                        val result = """{"session_id":"$sid","running":$activateRunning,"open_requests":$openRequests}"""
+                        if (activateDelayMs == 0L) result
+                        else null.also { scope.launch { delay(activateDelayMs); call.socket.push(call.reply(result)) } }
+                    }
+                    "session.resume" -> """{"session_id":"rt-$sid","running":false}"""
+                    else -> "{}"
                 }
-            },
-            scope,
-        )
-        connection.start(url)
-        connection.state.first { it is ConnectionState.Connected }
+            }
+        }
+        val connection = gateway.start()
         val clock = { testScheduler.currentTime + 1 }
-        val host = ChatHost(connection, SessionsApi(http), scope)
+        val host = ChatHost(connection, SessionsApi(gateway.client), scope)
         val active = ActiveSessions(connection, scope, clock = clock)
         val tracker = AttentionTracker(connection, host, active, scope, clock)
         // Following, as out of sight with notifications on.
@@ -119,9 +81,6 @@ class SessionWatcherTest {
 
     private fun approval(id: String, runtimeId: String) =
         """{"jsonrpc":"2.0","id":"$id","method":"approval","params":{"session_id":"$runtimeId","command":"rm -rf build","choices":["once","deny"]}}"""
-
-    private fun event(type: String, runtimeId: String, payload: String = "{}") =
-        """{"jsonrpc":"2.0","method":"event","params":{"type":"$type","session_id":"$runtimeId","payload":$payload}}"""
 
     @Test
     fun aChatRunningElsewhereIsAttachedByItsRuntimeIdWithoutItsMessages() = runTest {
@@ -138,7 +97,7 @@ class SessionWatcherTest {
     @Test
     fun theOpenChatBotChatsAndChatsAlreadyWatchedAreSkipped() = runTest {
         val setup = setup()
-        setup.host.open(url, "open", null).state.first { it.runtimeSessionId == "rt-open" }
+        setup.host.open(FakeGateway.URL, "open", null).state.first { it.runtimeSessionId == "rt-open" }
         live.value = listOf(Row("open", "working"), Row("bot", "working", title = "Bot Chat"), Row("a", "waiting"))
         setup.watcher.chats.first { "a" in it }
         advanceTimeBy(10_001)
@@ -240,7 +199,7 @@ class SessionWatcherTest {
         setup.watcher.chats.first { "a" in it }
         runCurrent()
         assertEquals(2, sockets.size)
-        assertEquals(1, sockets.last().sent.value.count { it["method"]?.jsonPrimitive?.contentOrNull == "session.activate" })
+        assertEquals(1, sockets.last().sent.value.count { it.isCall("session.activate") })
     }
 
     private suspend fun TestScope.reconnect(setup: Setup) {
@@ -257,7 +216,7 @@ class SessionWatcherTest {
         val setup = setup()
         setup.watcher.chats.first { "a" in it }
         // Watched first, then opened: both hear its requests on the one socket.
-        val session = setup.host.open(url, "a", null)
+        val session = setup.host.open(FakeGateway.URL, "a", null)
         session.state.first { it.runtimeSessionId == "rt-a" }
         sockets.last().push(approval("srq-1", "rt-a"))
         val request = session.state.first { it.inputRequests.isNotEmpty() }.inputRequests.single()
@@ -266,7 +225,7 @@ class SessionWatcherTest {
         assertTrue(session.answer(request, InputAnswers.approval(ApprovalChoice.Once)))
         session.state.first { it.inputRequests.isEmpty() }
         runCurrent()
-        setup.host.open(url, "b", null)
+        setup.host.open(FakeGateway.URL, "b", null)
         runCurrent()
         // Else, once out of sight, the approval just given would notify again.
         assertTrue(setup.watcher.chats.value.getValue("a").requests.isEmpty())
@@ -283,7 +242,7 @@ class SessionWatcherTest {
         runCurrent()
 
         reconnect(setup)
-        assertEquals(1, sockets.last().sent.value.count { it["method"]?.jsonPrimitive?.contentOrNull == "session.activate" })
+        assertEquals(1, sockets.last().sent.value.count { it.isCall("session.activate") })
         // A gap would take its notification down and post it again, with a second heads-up.
         assertTrue(seen.all { it == listOf("srq-1") }, "requests seen: $seen")
     }
@@ -312,7 +271,7 @@ class SessionWatcherTest {
 
         assertEquals(setOf("a"), setup.watcher.chats.value.keys)
         assertTrue(setup.watcher.reply("a", "And then?"))
-        val submit = sockets.last().sent.value.single { it["method"]?.jsonPrimitive?.contentOrNull == "prompt.submit" }
+        val submit = sockets.last().sent.value.single { it.isCall("prompt.submit") }
         assertEquals("rt-a", submit["params"]!!.jsonObject["session_id"]?.jsonPrimitive?.contentOrNull)
     }
 
@@ -388,7 +347,7 @@ class SessionWatcherTest {
         activateDelayMs = 1_000
         live.value = listOf(Row("a", "working"), Row("b", "working"), Row("c", "working"))
         val watcher = setup().watcher
-        sockets.last().awaitSent { it["method"]?.jsonPrimitive?.contentOrNull == "session.activate" }
+        sockets.last().awaitSent { it.isCall("session.activate") }
         // Back in sight while the first attach is still out.
         watcher.follow(false)
         advanceTimeBy(5_000)
