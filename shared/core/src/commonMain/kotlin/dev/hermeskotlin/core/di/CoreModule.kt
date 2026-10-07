@@ -16,6 +16,7 @@ import dev.hermeskotlin.core.capabilities.CapabilitiesApi
 import dev.hermeskotlin.core.cron.CronApi
 import dev.hermeskotlin.core.insights.InsightsApi
 import dev.hermeskotlin.core.connection.GatewayConnection
+import dev.hermeskotlin.core.gateway.AccessTokens
 import dev.hermeskotlin.core.gateway.ConnectionCheck
 import dev.hermeskotlin.core.gateway.GatewayProbe
 import dev.hermeskotlin.core.gateway.GatewayRepository
@@ -58,7 +59,8 @@ expect val platformModule: Module
 val coreModule = module {
     single { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     single { PersistentCookiesStorage(get()) }
-    single { createHttpClient(cookies = get<PersistentCookiesStorage>()) }
+    single { AccessTokens(get()) }
+    single { createHttpClient(cookies = get<PersistentCookiesStorage>(), access = get()) }
     single { GatewayProbe(get()) }
     single {
         val client = get<HttpClient>()

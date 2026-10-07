@@ -46,6 +46,9 @@ class PersistentCookiesStorage(
     }
 
     override suspend fun addCookie(requestUrl: Url, cookie: Cookie): Unit = mutex.withLock {
+        // Cloudflare Access hands one out when the service token passes. Every request carries the token,
+        // so keeping it would only make the host look signed in to Hermes, and let a changed token go untested.
+        if (cookie.name.equals(CF_AUTHORIZATION, ignoreCase = true)) return@withLock
         val stored = cookie.toStored(requestUrl, clock())
         val cookies = load()
         cookies.removeAll { it.name == stored.name && it.domain == stored.domain && it.path == stored.path }
@@ -78,6 +81,7 @@ class PersistentCookiesStorage(
 
     private companion object {
         const val KEY = "cookies.v1"
+        const val CF_AUTHORIZATION = "CF_Authorization"
     }
 }
 
