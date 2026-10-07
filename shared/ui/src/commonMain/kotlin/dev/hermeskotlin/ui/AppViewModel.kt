@@ -15,6 +15,7 @@ import dev.hermeskotlin.core.chat.ComposeDraft
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
+import dev.hermeskotlin.core.gateway.AccessTokens
 import dev.hermeskotlin.core.gateway.GatewayList
 import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.gateway.SavedGateway
@@ -60,6 +61,7 @@ class AppViewModel(
     private val links: ChatLinks,
     private val botChats: BotChats,
     private val push: PushSetup,
+    private val access: AccessTokens,
 ) : ViewModel() {
 
     private val _route = MutableStateFlow<Route>(Route.Loading)
@@ -84,6 +86,8 @@ class AppViewModel(
 
     init {
         viewModelScope.launch {
+            // Before anything connects: drops tokens entered for an address that was tested but never signed in to.
+            forgetUnusedAccessTokens()
             val list = gateways.all()
             val saved = list.current ?: list.primary?.also { gateways.select(it.url) }
             _route.value = when {
@@ -175,12 +179,18 @@ class AppViewModel(
             }
             auth.signOut(gateway.gatewayUrl)
             gateways.remove(gateway.url)
+            forgetUnusedAccessTokens()
             sessionsChanged.update { it + 1 }
             if (wasCurrent) {
                 val next = gateways.all().primary
                 if (next == null) _route.value = Route.Connect() else open(next)
             }
         }
+    }
+
+    /** An Access token belongs to a host: it stays while a saved gateway uses that host, and goes with the last one. */
+    private suspend fun forgetUnusedAccessTokens() {
+        access.retainOnly(gateways.all().gateways.map { it.gatewayUrl.host })
     }
 
     fun openSession(sessionId: String, title: String) {

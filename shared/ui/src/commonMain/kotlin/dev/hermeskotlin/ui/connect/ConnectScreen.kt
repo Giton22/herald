@@ -11,8 +11,10 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -22,6 +24,7 @@ import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.ArrowRight
 import com.composables.icons.lucide.ChevronUp
 import com.composables.icons.lucide.CircleHelp
+import com.composables.icons.lucide.KeyRound
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PlugZap
 import com.composeunstyled.Text
@@ -93,6 +96,20 @@ fun ConnectScreen(
         if (guideOpen) AddressGuide(Modifier.padding(horizontal = 4.dp))
 
         val result = state.result
+        val accessSaved by viewModel.accessSaved.collectAsStateWithLifecycle()
+        var accessOpen by rememberSaveable { mutableStateOf(false) }
+        LaunchedEffect(result, state.accessError, accessSaved) {
+            if (result is ProbeResult.AccessBlocked || state.accessError != null || accessSaved) accessOpen = true
+        }
+        Button(
+            text = if (accessOpen) "Hide Cloudflare Access" else "Behind Cloudflare Access?",
+            onClick = { accessOpen = !accessOpen },
+            variant = ButtonVariant.Ghost,
+            size = ButtonSize.Small,
+            leadingIcon = if (accessOpen) Lucide.ChevronUp else Lucide.KeyRound,
+        )
+        if (accessOpen) AccessTokenFields(viewModel, state.accessError, accessSaved)
+
         val signInReady = result is ProbeResult.Reachable && result.status.authRequired && result.status.supportsPasswordLogin
         Button(
             text = if (state.testing) "Testing…" else "Test connection",
@@ -164,6 +181,44 @@ fun ConnectScreen(
 
 /** The bundled username/password provider (`auth_providers` entry). */
 private const val PASSWORD_PROVIDER = "basic"
+
+/** A Cloudflare Access service token, sent with every request to this gateway's address. */
+@Composable
+private fun AccessTokenFields(viewModel: ConnectViewModel, error: String?, saved: Boolean) {
+    Column(Modifier.padding(horizontal = 4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Hint(
+            "If Cloudflare Access protects this address, create a service token in Cloudflare Zero Trust " +
+                "(Access → Service credentials) and add a Service Auth policy for it to the Access application.",
+        )
+        if (saved) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                StatusDot(Status.Ok, "A service token is saved for this address")
+                Button(
+                    text = "Forget",
+                    onClick = viewModel::forgetAccessToken,
+                    variant = ButtonVariant.Ghost,
+                    size = ButtonSize.Small,
+                )
+            }
+            Hint("Leave the fields blank to keep using it, or enter a new token to replace it.")
+        }
+        TextField(
+            state = viewModel.accessClientId,
+            label = "Client ID",
+            placeholder = "….access",
+            error = error,
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Next),
+        )
+        TextField(
+            state = viewModel.accessClientSecret,
+            label = "Client Secret",
+            password = true,
+            supportingText = "Stored encrypted on this phone, and sent only to this address.",
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Go),
+            onKeyboardAction = { viewModel.testConnection() },
+        )
+    }
+}
 
 @Composable
 private fun ResultCard(result: ProbeResult.Reachable) {
