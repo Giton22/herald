@@ -61,6 +61,16 @@
                 <data android:host="bot" />
             </intent-filter>
             <!--
+                The browser sign-in ends at <applicationId>:/signed-in (AndroidLoopbackReceiver): it closes the browser
+                tab and brings Herald back. Named after the app ID, so Herald Dev doesn't catch Herald's.
+            -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="${applicationId}" />
+            </intent-filter>
+            <!--
                 Text, links, pictures and files shared from other apps start a new chat with them as its draft.
                 Any type: the composer attaches any file, within its size limits.
             -->
