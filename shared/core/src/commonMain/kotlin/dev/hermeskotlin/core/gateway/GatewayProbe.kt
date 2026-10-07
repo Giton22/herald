@@ -18,8 +18,8 @@ import kotlinx.serialization.SerializationException
 sealed interface ProbeResult {
     /** A Hermes dashboard answered `/api/status`. */
     data class Reachable(val url: GatewayUrl, val status: GatewayStatus) : ProbeResult {
-        /** A non-loopback dashboard without a password provider can't be signed into from the app. */
-        val canSignIn: Boolean get() = !status.authRequired || status.supportsPasswordLogin
+        /** A gated dashboard needs a password provider or browser sign-in for the app to get in. */
+        val canSignIn: Boolean get() = !status.authRequired || status.supportsPasswordLogin || status.supportsNativeSignIn
     }
 
     /** Something answered, but not like a Hermes dashboard. */
