@@ -110,7 +110,7 @@ fun ConnectScreen(
         )
         if (accessOpen) AccessTokenFields(viewModel, state.accessError, accessSaved)
 
-        val signInReady = result is ProbeResult.Reachable && result.status.authRequired && result.status.supportsPasswordLogin
+        val signInReady = result is ProbeResult.Reachable && result.status.authRequired && result.canSignIn
         Button(
             text = if (state.testing) "Testing…" else "Test connection",
             onClick = viewModel::testConnection,
@@ -133,7 +133,7 @@ fun ConnectScreen(
                         running = false,
                         pendingNote = { stage ->
                             when {
-                                !signInReady -> "Needs a username and password sign-in, which this dashboard doesn't offer yet."
+                                !signInReady -> "Needs a password or browser sign-in, which this dashboard doesn't offer."
                                 stage == CheckStage.SignIn -> "Tested when you sign in, next."
                                 else -> "Tested after sign-in: the chat shows whether it connects, and Settings → Check connection tests it on its own."
                             }
@@ -239,15 +239,17 @@ private fun ReachableContent(result: ProbeResult.Reachable) {
         "Sign-in",
         when {
             !status.authRequired -> "Not required"
+            status.supportsPasswordLogin && status.supportsNativeSignIn -> "Password or browser"
             status.supportsPasswordLogin -> "Username & password"
-            else -> "OAuth only"
+            status.supportsNativeSignIn -> "In the browser (SSO)"
+            else -> "Unsupported"
         },
     )
     if (status.profiles.isNotEmpty()) InfoRow("Profiles", status.profiles.joinToString())
 
     if (!result.canSignIn) {
-        StatusDot(Status.Warning, "No password provider configured")
-        Hint("This dashboard only offers OAuth sign-in, which the app doesn't support yet. Configure the username/password provider on the server.")
+        StatusDot(Status.Warning, "No sign-in the app can use")
+        Hint("This dashboard offers neither a username/password provider nor browser sign-in. Update Hermes, or configure the username/password provider on the server.")
     } else if (!status.authRequired) {
         StatusDot(Status.Warning, "Auth gate is off")
         Hint("The dashboard is bound to loopback, so other devices won't be allowed to chat. Bind it with --host 0.0.0.0 and configure a password provider.")
