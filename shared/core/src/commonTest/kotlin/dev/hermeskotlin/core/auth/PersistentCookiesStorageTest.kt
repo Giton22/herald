@@ -47,4 +47,23 @@ class PersistentCookiesStorageTest {
         assertTrue(storage.get(Url("https://hermes.example.ts.net/prefixed")).isEmpty())
         assertTrue(storage.get(Url("https://hermes.example.ts.net/")).isEmpty())
     }
+
+    @Test
+    fun setCookieValuesCarryWhatTheWebViewJarNeeds() = runTest {
+        storage.addCookie(https, Cookie("hermes_session_at", "abc=", path = "/", secure = true, httpOnly = true))
+        storage.addCookie(https, Cookie("scoped", "v", domain = "hermes.example.ts.net", path = "/", secure = true))
+        val values = storage.setCookieValues("https://hermes.example.ts.net/hermes-ofm-pipeline")
+
+        // A host-only cookie goes in without a Domain; one with an explicit scope keeps it.
+        assertTrue("hermes_session_at=abc=; Path=/; Secure; HttpOnly" in values)
+        assertTrue("scoped=v; Path=/; Domain=hermes.example.ts.net; Secure" in values)
+    }
+
+    @Test
+    fun setCookieValuesSkipWhatDoesNotMatch() = runTest {
+        storage.addCookie(https, Cookie("a", "1", path = "/", secure = true))
+        // A secure session cookie never goes to a plain-http view, and an unreadable URL gets nothing.
+        assertTrue(storage.setCookieValues("http://hermes.example.ts.net/").isEmpty())
+        assertTrue(storage.setCookieValues("not a url").isEmpty())
+    }
 }

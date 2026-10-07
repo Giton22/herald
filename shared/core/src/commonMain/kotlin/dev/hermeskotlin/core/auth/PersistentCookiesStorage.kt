@@ -64,6 +64,30 @@ class PersistentCookiesStorage(
 
     suspend fun hasCookies(url: Url): Boolean = get(url).isNotEmpty()
 
+    /**
+     * The stored cookies for [url] as `Set-Cookie` values, for a cookie store that has to be told each
+     * cookie by text (the in-app WebView's jar, which has no access to this module's Ktor types):
+     * session cookies go in as the gateway set them — host-only ones without a Domain, wider scopes
+     * with one. Empty when the URL can't be read; the caller just loads without cookies then.
+     */
+    suspend fun setCookieValues(url: String): List<String> {
+        val parsed = runCatching { Url(url) }.getOrNull() ?: return emptyList()
+        return mutex.withLock {
+            val now = clock()
+            val cookies = load()
+            if (cookies.removeAll { it.isExpired(now) }) save(cookies)
+            cookies.filter { it.matches(parsed) }.map { cookie ->
+                buildString {
+                    append(cookie.name).append('=').append(cookie.value)
+                    append("; Path=").append(cookie.path)
+                    if (!cookie.hostOnly) append("; Domain=").append(cookie.domain)
+                    if (cookie.secure) append("; Secure")
+                    if (cookie.httpOnly) append("; HttpOnly")
+                }
+            }
+        }
+    }
+
     override fun close() = Unit
 
     private suspend fun load(): MutableList<StoredCookie> = cache ?: run {
@@ -83,6 +107,17 @@ class PersistentCookiesStorage(
         const val KEY = "cookies.v1"
         const val CF_AUTHORIZATION = "CF_Authorization"
     }
+}
+
+/**
+ * The session cookies in text form, for surfaces outside this module: the plugin WebView has to hand a
+ * cookie store the cookies as `Set-Cookie` values, and must not need — or be able to reach — the Ktor
+ * types this module keeps to itself.
+ */
+class WebCookieJar(private val storage: PersistentCookiesStorage) {
+
+    /** The stored cookies for [url] as `Set-Cookie` values; empty when nothing matches or it can't be read. */
+    suspend fun cookiesFor(url: String): List<String> = storage.setCookieValues(url)
 }
 
 private fun StoredCookie.isExpired(now: Long) = expiresAt != null && expiresAt <= now

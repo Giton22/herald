@@ -61,6 +61,7 @@ import dev.hermeskotlin.ui.sessions.ChatMenu
 import dev.hermeskotlin.ui.sessions.SessionsSidebar
 import dev.hermeskotlin.ui.settings.AppLockCover
 import dev.hermeskotlin.ui.settings.SettingsScreen
+import dev.hermeskotlin.ui.plugins.PluginWebView
 import dev.hermeskotlin.ui.signin.SignInScreen
 import dev.hermeskotlin.ui.update.LocalUpdateOffer
 import dev.hermeskotlin.ui.update.rememberUpdateOffer
@@ -184,6 +185,9 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
     var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    // A plugin's page open over everything, served by the gateway itself; null when none is open.
+    var pluginUrl by rememberSaveable { mutableStateOf<String?>(null) }
+    var pluginLabel by rememberSaveable { mutableStateOf<String?>(null) }
     var menuOpen by remember { mutableStateOf(false) }
     val chatsProfile by app.chatsProfile.collectAsStateWithLifecycle()
     val bots: BotsViewModel = koinViewModel()
@@ -244,6 +248,11 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
         roomLinks.consume(link)
         closeDrawer()
     }
+    // Another gateway's plugins are other plugins.
+    LaunchedEffect(route.gateway.url) {
+        pluginUrl = null
+        pluginLabel = null
+    }
     // On phones the keyboard makes way for the drawer.
     LaunchedEffect(sidebar) {
         snapshotFlow { sidebar.fraction > 0f && !sidebar.docked }.filter { it }.collect { focusManager.clearFocus() }
@@ -291,6 +300,13 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                 onOpenRoom = { room ->
                     rooms.open(room)
                     closeDrawer()
+                },
+                onOpenPlugin = { plugin ->
+                    // The page lives on the gateway the app is signed in to; view it there.
+                    plugin.openPath?.let { path ->
+                        pluginUrl = route.gateway.gatewayUrl.resolve(path)
+                        pluginLabel = plugin.label
+                    }
                 },
                 selectedRunning = chatState.running,
             )
@@ -400,5 +416,11 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
             onSignOut = app::signOut,
             onOpenGateways = onOpenGateways,
         )
+    }
+
+    val openPluginUrl = pluginUrl
+    val openPluginTitle = pluginLabel
+    if (openPluginUrl != null && openPluginTitle != null) {
+        PluginWebView(url = openPluginUrl, title = openPluginTitle, onClose = { pluginUrl = null; pluginLabel = null })
     }
 }
