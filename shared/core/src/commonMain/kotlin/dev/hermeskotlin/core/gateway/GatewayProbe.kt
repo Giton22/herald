@@ -6,7 +6,9 @@ import io.ktor.client.plugins.HttpRequestTimeoutException
 import io.ktor.client.plugins.timeout
 import io.ktor.client.request.accept
 import io.ktor.client.request.get
+import io.ktor.client.statement.request
 import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import io.ktor.serialization.JsonConvertException
@@ -23,6 +25,12 @@ sealed interface ProbeResult {
     /** Something answered, but not like a Hermes dashboard. */
     data class NotHermes(val url: GatewayUrl, val httpStatus: Int?) : ProbeResult
 
+    /**
+     * Cloudflare Access stopped the request before it reached Hermes: a redirect to its login page, or a
+     * Cloudflare 403. [tokenSent] says whether a service token went with it, so whether it was turned down.
+     */
+    data class AccessBlocked(val url: GatewayUrl, val httpStatus: Int, val tokenSent: Boolean) : ProbeResult
+
     /** Nothing answered (DNS, refused, timeout, TLS...). */
     data class Unreachable(val url: GatewayUrl, val reason: String) : ProbeResult
 }
@@ -36,7 +44,12 @@ class GatewayProbe(private val client: HttpClient) {
             timeout { requestTimeoutMillis = PROBE_TIMEOUT_MS }
         }
         val isJson = response.contentType()?.match(ContentType.Application.Json) == true
-        if (!response.status.isSuccess() || !isJson) {
+        val code = response.status.value
+        val tokenSent = response.request.headers[CF_ACCESS_CLIENT_ID] != null
+        val cloudflareRefused = isCloudflareRefusal(code, response.headers[HttpHeaders.Server], isJson)
+        if (isAccessLoginRedirect(code, response.headers[HttpHeaders.Location]) || cloudflareRefused && tokenSent) {
+            ProbeResult.AccessBlocked(url, code, tokenSent)
+        } else if (!response.status.isSuccess() || !isJson) {
             ProbeResult.NotHermes(url, response.status.value)
         } else {
             val status = response.body<GatewayStatus>()

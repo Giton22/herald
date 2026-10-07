@@ -1,8 +1,13 @@
 package dev.hermeskotlin.core.network
 
+import dev.hermeskotlin.core.gateway.isAccessLoginRedirect
+import dev.hermeskotlin.core.gateway.isCloudflareRefusal
 import io.ktor.client.call.body
 import io.ktor.client.statement.HttpResponse
+import io.ktor.http.ContentType
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.contentType
 import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.Serializable
@@ -40,6 +45,9 @@ internal suspend fun apiCall(isLogin: Boolean = false, block: suspend () -> Http
             status == HttpStatusCode.Unauthorized ->
                 if (isLogin) ApiResult.InvalidCredentials else ApiResult.SessionExpired
             status == HttpStatusCode.TooManyRequests -> ApiResult.RateLimited
+            isAccessLoginRedirect(status.value, response.headers[HttpHeaders.Location]) ||
+                isCloudflareRefusal(status.value, response.headers[HttpHeaders.Server], response.isJson) ->
+                ApiResult.Failed(status.value, ACCESS_BLOCKED)
             status.value >= 500 -> ApiResult.Unavailable(response.errorMessage())
             else -> ApiResult.Failed(status.value, response.errorMessage())
         }
@@ -48,6 +56,12 @@ internal suspend fun apiCall(isLogin: Boolean = false, block: suspend () -> Http
     } catch (e: Exception) {
         ApiResult.Unavailable(e.message ?: e::class.simpleName ?: "Connection failed")
     }
+
+/** What a request stopped by Cloudflare Access fails with, on any gateway call. */
+const val ACCESS_BLOCKED =
+    "Cloudflare stopped the request before it reached Hermes. If Cloudflare Access protects this address, check its service token."
+
+private val HttpResponse.isJson: Boolean get() = contentType()?.match(ContentType.Application.Json) == true
 
 /** `detail` is FastAPI's error key; it is a plain string except for a few structured 503s. */
 private suspend fun HttpResponse.errorMessage(): String {

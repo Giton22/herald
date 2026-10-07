@@ -68,7 +68,8 @@ Everything shown is sample data, not a real gateway.
 - **Hermes Agent with its dashboard running** (`hermes dashboard`), reachable from your phone.
   Herald is built against Hermes Agent's main branch as of October 2026; older versions may lack some features.
 - **A way to reach it**: the same Wi-Fi, [Tailscale](https://tailscale.com), or an `https://` address.
-  Herald warns you if an address would send your password over the internet unencrypted.
+  Herald warns you if an address would send your password over the internet unencrypted. Behind
+  Cloudflare Access, add a service token under "Behind Cloudflare Access?" on the connect screen.
   If something doesn't connect, Settings → Check connection tests the server, the sign-in and the live
   connection one at a time and says what to fix.
 - **A dashboard login** (username and password). Token-only setups aren't supported yet.

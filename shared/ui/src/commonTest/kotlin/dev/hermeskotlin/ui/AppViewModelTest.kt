@@ -9,6 +9,8 @@ import dev.hermeskotlin.core.chat.ChatLinks
 import dev.hermeskotlin.core.chat.LastChat
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.connection.GatewayConnection
+import dev.hermeskotlin.core.gateway.AccessToken
+import dev.hermeskotlin.core.gateway.AccessTokens
 import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.createHttpClient
@@ -56,6 +58,7 @@ class AppViewModelTest {
     private val cookies = PersistentCookiesStorage(store)
     private val gateways = GatewayRepository(store)
     private val lastChats = LastChatStore(store)
+    private val access = AccessTokens(store)
 
     // The connection waits on its ticket for good (a retry loop would keep the test clock busy, so a missed
     // route would hang instead of time out); every other call fails, and sign-out still wipes cookies.
@@ -83,7 +86,7 @@ class AppViewModelTest {
         val connection = GatewayConnection(auth, openSocket = { _, _ -> error("no socket in tests") }, scope = backgroundScope)
         val host = ChatHost(connection, SessionsApi(client), backgroundScope)
         val push = PushSetup(PushApi(connection), NoPushKeys, connection, gateways, SettingsStore(store, backgroundScope), backgroundScope) { "Test" }
-        return AppViewModel(gateways, auth, connection, lastChats, host, ProfileStore(store), ChatLinks(), BotChats(NoBotChats), push)
+        return AppViewModel(gateways, auth, connection, lastChats, host, ProfileStore(store), ChatLinks(), BotChats(NoBotChats), push, access)
     }
 
     // Push was never set up and no bot is opened in these tests.
@@ -250,6 +253,41 @@ class AppViewModelTest {
         assertEquals(listOf(home), gateways.all().gateways)
         assertFalse(auth.hasStoredSession(work.gatewayUrl))
         assertTrue(auth.hasStoredSession(home.gatewayUrl))
+    }
+
+    @Test
+    fun removingAGatewayForgetsItsAccessTokenUnlessItsHostIsStillSaved() = runTest {
+        val workAgain = SavedGateway("https://hermes.work.example/other")
+        val token = AccessToken("id.access", "secret")
+        gateways.save(work)
+        gateways.save(workAgain)
+        gateways.save(home)
+        access.set(work.gatewayUrl.host, token)
+        signedIn(home)
+        val vm = viewModel()
+        vm.awaitChat(home)
+
+        vm.removeGateway(work)
+        gateways.list.first { it.gateways.size == 2 }
+        assertEquals(token, access.get(work.gatewayUrl.host), "another saved gateway still uses the host")
+
+        vm.removeGateway(workAgain)
+        gateways.list.first { it.gateways.size == 1 }
+        assertNull(access.get(work.gatewayUrl.host))
+    }
+
+    @Test
+    fun launchForgetsAccessTokensOfAddressesNeverSignedInTo() = runTest {
+        val token = AccessToken("id.access", "secret")
+        gateways.save(work)
+        signedIn(work)
+        access.set(work.gatewayUrl.host, token)
+        access.set("typo.example.com", token)
+
+        viewModel().awaitChat(work)
+
+        assertEquals(token, access.get(work.gatewayUrl.host))
+        assertNull(access.get("typo.example.com"))
     }
 
     @Test

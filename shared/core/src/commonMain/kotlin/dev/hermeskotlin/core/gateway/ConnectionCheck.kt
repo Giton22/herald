@@ -122,6 +122,11 @@ class ConnectionCheck(
                 "The gateway refused the chat connection (Host/Origin guard).",
                 "Use the exact address the dashboard is configured for, and check that embedded chat is enabled.",
             )
+        e is HandshakeRejectedException && e.status in 300..399 ->
+            StageResult.Failed(
+                "The chat connection was sent to a login page (HTTP ${e.status}).",
+                "Behind Cloudflare Access, add a service token for this gateway. Otherwise check that the proxy forwards /api/ws.",
+            )
         e is HandshakeRejectedException ->
             StageResult.Failed("The chat connection was refused (HTTP ${e.status}).", "Behind a proxy, allow WebSocket upgrades on /api/ws.")
         e is TransportClosedException && e.code == GatewayCloseCodes.TICKET_REJECTED ->
@@ -143,6 +148,13 @@ fun ProbeResult.toStageResult(): StageResult = when (this) {
     is ProbeResult.NotHermes -> StageResult.Failed(
         "Something answered at $url" + (httpStatus?.let { " (HTTP $it)" } ?: "") + ", but not a Hermes dashboard.",
         "Use the dashboard's own port, 9119 by default. Behind a proxy, check that it forwards to the dashboard.",
+    )
+    is ProbeResult.AccessBlocked -> if (tokenSent) StageResult.Failed(
+        "Cloudflare Access turned down this gateway's service token (HTTP $httpStatus).",
+        "Check the Client ID and Client Secret, and that the Access application has a Service Auth policy that includes this token.",
+    ) else StageResult.Failed(
+        "Cloudflare Access stopped the request before it reached Hermes (HTTP $httpStatus).",
+        "Add a Cloudflare Access service token for this gateway, and give the Access application a Service Auth policy that includes it.",
     )
     is ProbeResult.Unreachable -> StageResult.Failed("Can't reach $url: $reason", reachFix(url))
 }
