@@ -15,6 +15,8 @@ import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.bots.SidebarMode
 import dev.hermeskotlin.core.bots.SidebarModeStore
 import dev.hermeskotlin.core.bots.forRoster
+import dev.hermeskotlin.core.rooms.DesktopRoom
+import dev.hermeskotlin.core.rooms.parseDesktopRooms
 import dev.hermeskotlin.core.chat.AttentionTracker
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.connection.ConnectionState
@@ -70,6 +72,8 @@ data class BotsUiState(
     val unsupported: Boolean = false,
     /** Bots whose chat has something the user hasn't seen. */
     val unread: Set<String> = emptySet(),
+    /** Desktop's own group chats, from the default row's `hermes-bots-groups` mirror; read-only here. */
+    val desktopRooms: List<DesktopRoom> = emptyList(),
     /** The bot whose chat is being found or started. */
     val opening: String? = null,
     /** What the last action said: why a chat didn't open, that a change didn't save. */
@@ -468,7 +472,9 @@ class BotsViewModel(
             val ordered = roster.bots.forRoster()
             markOpenSeen(ordered)
             val unread = unread(url, ordered)
-            _state.update { it.regroup(ordered).copy(loading = false, error = null, unsupported = false, unread = unread) }
+            // Desktop's rooms ride the roster's default row, so they refresh without a call of their own.
+            val desktopRooms = parseDesktopRooms(roster.bots.firstOrNull { it.isDefault || it.name == Bot.DEFAULT }?.uiMeta)
+            _state.update { it.regroup(ordered).copy(loading = false, error = null, unsupported = false, unread = unread, desktopRooms = desktopRooms) }
             loadAvatars(ordered)
             watch(ordered)
             health.checkOnce(ordered.map { it.name })

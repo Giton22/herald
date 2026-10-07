@@ -16,6 +16,7 @@ import androidx.compose.ui.unit.dp
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.bots.botLook
+import dev.hermeskotlin.core.rooms.DesktopRoom
 import dev.hermeskotlin.core.rooms.RoomMember
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.colors
@@ -64,3 +65,7 @@ internal fun RoomFaces(members: List<RoomMember>, faces: BotFaces, size: Dp, max
         }
     }
 }
+
+/** A Desktop room's members as roster rows, so their faces draw exactly as their bots' rows do. */
+internal fun DesktopRoom.roomMembers(): List<RoomMember> =
+    members.map { RoomMember(memberId = it.name, profile = it.name, handle = it.handle, displayName = it.name) }

@@ -61,6 +61,7 @@ import com.composeunstyled.theme.rememberColoredIndication
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.bots.BotTrouble
 import dev.hermeskotlin.core.rooms.Room
+import dev.hermeskotlin.core.rooms.DesktopRoom
 import dev.hermeskotlin.core.cron.CronJob
 import dev.hermeskotlin.core.bots.lastActivity
 import dev.hermeskotlin.core.bots.rosterPreview
@@ -92,6 +93,7 @@ import dev.hermeskotlin.ui.components.relativeTime
 import dev.hermeskotlin.ui.rooms.RoomAsk
 import dev.hermeskotlin.ui.rooms.RoomAskDialogs
 import dev.hermeskotlin.ui.rooms.RoomFaces
+import dev.hermeskotlin.ui.rooms.roomMembers
 import dev.hermeskotlin.ui.rooms.RoomMenuActions
 import dev.hermeskotlin.ui.sessions.ListNotice
 import dev.hermeskotlin.ui.sessions.ListSpinner
@@ -156,6 +158,8 @@ fun BotsRoster(
     unreadRooms: Set<String> = emptySet(),
     /** Opens a room's conversation. */
     onOpenRoom: (Room) -> Unit = {},
+    /** Opens a Desktop room's mirrored copy; it stays read-only here. */
+    onOpenDesktopRoom: (DesktopRoom) -> Unit = {},
     /** Starts a new room: name it and pick its bots. */
     onNewRoom: () -> Unit = {},
     onRenameRoom: (Room, String) -> Unit = { _, _ -> },
@@ -174,6 +178,7 @@ fun BotsRoster(
     val sameName = remember(state.all) { state.all.groupBy { it.label.lowercase() }.filterValues { it.size > 1 }.keys }
     // A room's members are drawn with the same faces as their bots' rows.
     val roomFaces = remember(state.all, avatars) { BotFaces(state.all, avatars) }
+    val desktopRooms = state.desktopRooms
     val row: @Composable (Bot, Boolean) -> Unit = { bot, hidden ->
         val chat = bot.canonicalSession
         val selected = selectedId != null && chat != null && (selectedId == chat.id || selectedId == chat.openId)
@@ -215,28 +220,41 @@ fun BotsRoster(
                     )
                 }
             }
-            if (roomsAvailable) {
+            // Hosted rooms when the gateway runs them, and Desktop's own read-only copies beside them.
+            if (roomsAvailable || desktopRooms.isNotEmpty()) {
                 item(key = "rooms-label") {
                     Row(Modifier.fillMaxWidth().padding(start = 12.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                         SectionLabel("Rooms", Modifier.weight(1f))
-                        IconButton(Lucide.Plus, contentDescription = "New room", onClick = onNewRoom)
+                        // Only a gateway that hosts rooms can make one; Desktop's are made on Desktop.
+                        if (roomsAvailable) IconButton(Lucide.Plus, contentDescription = "New room", onClick = onNewRoom)
                     }
                 }
-                roomsNotice?.let { message ->
-                    item(key = "rooms-notice") { MessageBanner(message, onDismiss = onDismissRoomsNotice, modifier = Modifier.padding(vertical = 4.dp)) }
+                if (roomsAvailable) {
+                    roomsNotice?.let { message ->
+                        item(key = "rooms-notice") { MessageBanner(message, onDismiss = onDismissRoomsNotice, modifier = Modifier.padding(vertical = 4.dp)) }
+                    }
+                    if (rooms.isEmpty()) {
+                        // With Desktop rooms below, the page does have rooms to show; only say "none" when there are none.
+                        if (desktopRooms.isEmpty()) item(key = "rooms-empty") { ListNotice("No rooms yet. New room starts one with 2\u20136 bots.") }
+                    } else {
+                        items(rooms, key = { "room:${it.roomId}" }) { room ->
+                            RoomRow(
+                                room,
+                                roomFaces,
+                                unread = room.roomId in unreadRooms,
+                                onClick = { onOpenRoom(room) },
+                                onRename = { roomAsk = RoomAsk.Rename(room) },
+                                onDelete = { roomAsk = RoomAsk.Delete(room) },
+                            )
+                        }
+                    }
                 }
-                if (rooms.isEmpty()) {
-                    item(key = "rooms-empty") { ListNotice("No rooms yet. New room starts one with 2\u20136 bots.") }
-                } else {
-                    items(rooms, key = { "room:${it.roomId}" }) { room ->
-                        RoomRow(
-                            room,
-                            roomFaces,
-                            unread = room.roomId in unreadRooms,
-                            onClick = { onOpenRoom(room) },
-                            onRename = { roomAsk = RoomAsk.Rename(room) },
-                            onDelete = { roomAsk = RoomAsk.Delete(room) },
-                        )
+                if (desktopRooms.isNotEmpty()) {
+                    item(key = "desktop-rooms-label") {
+                        SectionLabel("On Desktop", Modifier.padding(start = 12.dp, top = 4.dp, bottom = 4.dp))
+                    }
+                    items(desktopRooms, key = { "desktop-room:${it.key}" }) { room ->
+                        DesktopRoomRow(room, roomFaces, onClick = { onOpenDesktopRoom(room) })
                     }
                 }
             }
@@ -582,4 +600,56 @@ private fun RoomRowContent(room: Room, faces: BotFaces, unread: Boolean, clicks:
 private fun roomSubtitle(room: Room): String {
     if (room.members.isEmpty()) return "No members"
     return room.members.joinToString(", ") { it.label }
+}
+
+/**
+ * One Desktop room: the mirror's copy, read-only — no room menu, since the room belongs to Desktop and
+ * continuing happens there. Its newest line is the second line, and a dot marks one whose newest member
+ * line asks for the user (`@user`), Desktop's own needs-you rule.
+ */
+@Composable
+private fun DesktopRoomRow(room: DesktopRoom, faces: BotFaces, onClick: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = MinTouchTarget)
+            .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
+            .clickable(onClickLabel = "Open room ${room.name}") { onClick() }
+            .padding(horizontal = 10.dp, vertical = 9.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RoomFaces(room.roomMembers(), faces, size = 26.dp, max = 3)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    room.name,
+                    style = Theme[typography][body].copy(fontSize = 15.sp, fontWeight = if (room.needsYou) FontWeight.SemiBold else FontWeight.Medium),
+                    color = Theme[colors][text],
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (room.needsYou) Box(Modifier.size(7.dp).background(Theme[colors][accent], CircleShape))
+            }
+            Text(
+                desktopRoomSubtitle(room),
+                style = Theme[typography][bodySmall],
+                color = Theme[colors][textSecondary],
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        // The mirror's times are epoch millis; rows read seconds like every other row.
+        val last = relativeTime(room.updatedAt?.div(1000.0))
+        if (last.isNotBlank()) {
+            Text(last, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
+        }
+    }
+}
+
+/** The room's newest line as "who: what", one line; "Continue on Desktop" while the copy has none. */
+private fun desktopRoomSubtitle(room: DesktopRoom): String {
+    val line = room.lines.lastOrNull() ?: return "Continue on Desktop"
+    return "${line.speaker}: ${line.text}".replace(Regex("\\s+"), " ").trim()
 }

@@ -45,6 +45,7 @@ import dev.hermeskotlin.ui.bots.BotsViewModel
 import dev.hermeskotlin.ui.bots.LocalBotFaces
 import dev.hermeskotlin.ui.chat.ChatScreen
 import dev.hermeskotlin.ui.rooms.RoomScreen
+import dev.hermeskotlin.ui.rooms.DesktopRoomScreen
 import dev.hermeskotlin.ui.rooms.RoomsViewModel
 import dev.hermeskotlin.ui.chat.ChatViewModel
 import dev.hermeskotlin.ui.chat.ModelConfirmDialog
@@ -195,6 +196,9 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     val roster by bots.state.collectAsStateWithLifecycle()
     val pictures by bots.avatars.collectAsStateWithLifecycle()
     val faces = remember(roster.all, pictures) { BotFaces(roster.all, pictures) }
+    // A Desktop room open from the sidebar's "On Desktop" group: read-only, so it is only local state.
+    var openDesktopRoom by rememberSaveable { mutableStateOf<String?>(null) }
+    val desktopRoom = openDesktopRoom?.let { key -> roster.desktopRooms.firstOrNull { it.key == key } }
     // The bot whose chat is open, as the roster knows it now.
     val openBot = route.target.bot?.let { open -> roster.all.firstOrNull { it.name == open.name } }
     var startOver by remember { mutableStateOf<Bot?>(null) }
@@ -220,12 +224,15 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     /** Picking a chat in the sidebar leaves the open room, so the chat is what shows. */
     fun closeDrawerToChat() {
         rooms.close()
+        openDesktopRoom = null
         closeDrawer()
     }
 
     PlatformBackHandler(enabled = sidebar.isOpen && !sidebar.docked) { closeDrawer() }
     // A hosted room closes back to the chat before anything else.
     PlatformBackHandler(enabled = openRoom != null) { rooms.close() }
+    // A Desktop room's read-only copy closes back to the chat too.
+    PlatformBackHandler(enabled = desktopRoom != null) { openDesktopRoom = null }
     // A chat opened from anywhere else (a notification, a link, the share sheet, a new bot) leaves the
     // room too. Only a change counts: coming back to the same chat, e.g. after a rotation, keeps it open.
     var shownTarget by remember { mutableStateOf(route.target) }
@@ -233,7 +240,15 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
         if (route.target != shownTarget) {
             shownTarget = route.target
             rooms.close()
+            openDesktopRoom = null
         }
+    }
+    // Another gateway has other rooms, and its own mirror.
+    LaunchedEffect(route.gateway.url) { openDesktopRoom = null }
+    // A room deleted on Desktop (or a mirror that went away) closes its copy here; a switched gateway
+    // clears it through the roster reset too, once the first read comes back.
+    LaunchedEffect(desktopRoom, roster.loading) {
+        if (openDesktopRoom != null && desktopRoom == null && !roster.loading) openDesktopRoom = null
     }
     // A room asked for from outside the screens (a tapped notification) opens over the chat.
     val roomLinks = koinInject<RoomLinks>()
@@ -241,6 +256,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     LaunchedEffect(roomLink) {
         val link = roomLink ?: return@LaunchedEffect
         rooms.openById(link.roomId, link.name)
+        openDesktopRoom = null
         roomLinks.consume(link)
         closeDrawer()
     }
@@ -292,15 +308,24 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                     rooms.open(room)
                     closeDrawer()
                 },
+                onOpenDesktopRoom = { room ->
+                    rooms.close()
+                    openDesktopRoom = room.key
+                    closeDrawer()
+                },
                 selectedRunning = chatState.running,
             )
         },
     ) {
         CompositionLocalProvider(LocalBotFaces provides faces) {
-            if (openRoom != null) {
-                RoomScreen(viewModel = rooms, onOpenSidebar = { scope.launch { sidebar.toggle() } }, onBack = rooms::close)
-            } else {
-                ChatScreen(
+            when {
+                openRoom != null -> RoomScreen(viewModel = rooms, onOpenSidebar = { scope.launch { sidebar.toggle() } }, onBack = rooms::close)
+                desktopRoom != null -> DesktopRoomScreen(
+                    room = desktopRoom,
+                    onOpenSidebar = { scope.launch { sidebar.toggle() } },
+                    onBack = { openDesktopRoom = null },
+                )
+                else -> ChatScreen(
                     target = route.target,
                     onOpenSidebar = { scope.launch { sidebar.toggle() } },
                     onNewChat = app::newChat,

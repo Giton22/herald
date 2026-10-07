@@ -142,6 +142,7 @@ import dev.hermeskotlin.ui.components.relativeTime
 import dev.hermeskotlin.ui.update.UpdateBanner
 import kotlinx.coroutines.delay
 import dev.hermeskotlin.core.rooms.Room
+import dev.hermeskotlin.core.rooms.DesktopRoom
 import dev.hermeskotlin.ui.rooms.CreateRoomDialog
 import dev.hermeskotlin.ui.rooms.RoomsViewModel
 import org.koin.compose.viewmodel.koinViewModel
@@ -179,6 +180,8 @@ fun SessionsSidebar(
     onBotDeleted: (Bot) -> Unit,
     /** Opens a hosted room from the Rooms section. */
     onOpenRoom: (Room) -> Unit = {},
+    /** Opens a Desktop room's read-only copy from the "On Desktop" group. */
+    onOpenDesktopRoom: (DesktopRoom) -> Unit = {},
     /** The open chat has a turn running. */
     selectedRunning: Boolean = false,
     viewModel: SessionsViewModel = koinViewModel(),
@@ -379,6 +382,7 @@ fun SessionsSidebar(
                             roomsAvailable = roomsState.available,
                             unreadRooms = roomsState.unread,
                             onOpenRoom = onOpenRoom,
+                            onOpenDesktopRoom = onOpenDesktopRoom,
                             onNewRoom = {
                                 rooms.dismissNotice()
                                 newRoomOpen = true
