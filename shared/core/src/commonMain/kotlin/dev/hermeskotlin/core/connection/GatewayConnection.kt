@@ -155,6 +155,14 @@ class GatewayConnection(
                         return
                     }
                 }
+                failure is HandshakeRejectedException && failure.status in 300..399 -> {
+                    // Hermes never redirects the upgrade; a login page in front of /api/ws won't go away by retrying.
+                    _state.value = ConnectionState.Failed(
+                        "The chat connection was sent to a login page (HTTP ${failure.status}). Behind Cloudflare " +
+                            "Access, add a service token for this gateway; otherwise check that the proxy forwards /api/ws.",
+                    )
+                    return
+                }
                 failure is HandshakeRejectedException && failure.status == 404 -> {
                     _state.value = ConnectionState.Failed("This dashboard has no chat endpoint (/api/ws). Update Hermes.")
                     return

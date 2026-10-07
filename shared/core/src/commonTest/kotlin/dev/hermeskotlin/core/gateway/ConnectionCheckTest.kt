@@ -87,6 +87,15 @@ class ConnectionCheckTest {
     }
 
     @Test
+    fun aChatUpgradeSentToALoginPagePointsAtCloudflareAccess() = runTest {
+        val report = check(openSocket = { _, _ -> throw HandshakeRejectedException(302, RuntimeException("302")) }).run(url)
+
+        val live = assertIs<StageResult.Failed>(report.results[CheckStage.Live])
+        assertTrue("login page" in live.problem)
+        assertTrue("Cloudflare Access" in live.fix)
+    }
+
+    @Test
     fun aSocketThatNeverSaysReadyFailsTheLiveStage() = runTest {
         val report = check(openSocket = { _, _ -> FakeTransport() }).run(url)
 

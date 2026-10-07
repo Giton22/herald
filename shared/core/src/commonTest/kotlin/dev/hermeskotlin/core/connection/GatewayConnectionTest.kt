@@ -19,6 +19,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
+import kotlin.test.assertTrue
 
 class GatewayConnectionTest {
 
@@ -78,6 +79,23 @@ class GatewayConnectionTest {
         connection.start(url)
         assertIs<ConnectionState.Failed>(connection.state.first { it is ConnectionState.Failed })
         assertEquals(3, attempts)
+    }
+
+    @Test
+    fun handshakeRedirectToALoginPageIsTerminal() = runTest {
+        var attempts = 0
+        val connection = GatewayConnection(
+            auth(),
+            { _, _ ->
+                attempts++
+                throw HandshakeRejectedException(302, IllegalStateException("Expected HTTP 101 response but was '302 Found'"))
+            },
+            backgroundScope,
+        )
+        connection.start(url)
+        val failed = assertIs<ConnectionState.Failed>(connection.state.first { it is ConnectionState.Failed })
+        assertEquals(1, attempts)
+        assertTrue("Cloudflare Access" in failed.reason)
     }
 
     @Test
