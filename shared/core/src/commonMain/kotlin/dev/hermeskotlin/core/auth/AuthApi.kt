@@ -58,7 +58,10 @@ class AuthApi(
             parameters.append("state", state)
         }.buildString()
 
-    /** `POST /auth/native/token`: the browser's one-time code and the PKCE verifier → bearer tokens, kept for [url]. */
+    /**
+     * `POST /auth/native/token`: the browser's one-time code and the PKCE verifier → bearer tokens, kept for [url].
+     * An old password session's cookies go, so the app can't look signed in on them once the tokens end.
+     */
     suspend fun redeemNativeCode(url: GatewayUrl, code: String, codeVerifier: String): ApiResult<Unit> =
         apiCall {
             client.post(url.resolve("auth/native/token")) {
@@ -66,7 +69,8 @@ class AuthApi(
                 setBody(NativeTokenBody(code, codeVerifier))
             }
         }.map { response ->
-            tokens.set(Url(url.value), response.body<NativeSession>().copy(baseUrl = url.value))
+            tokens.set(url, response.body<NativeSession>())
+            cookies.clear(Url(url.value).host)
         }
 
     /** `POST /auth/password-login` → session cookies. Old browser sign-in tokens would win over them, so they go. */
@@ -76,7 +80,7 @@ class AuthApi(
                 contentType(ContentType.Application.Json)
                 setBody(PasswordLoginBody(provider, username, password))
             }
-        }.map { tokens.set(Url(url.value), null) }
+        }.map { tokens.set(url, null) }
 
     /** `GET /api/auth/me` — cheap check that the stored session is still valid. */
     suspend fun me(url: GatewayUrl): ApiResult<AuthUser> =
@@ -99,9 +103,8 @@ class AuthApi(
             // Offline sign-out still clears the local session.
         }
         cookies.clear(Url(url.value).host)
-        tokens.set(Url(url.value), null)
+        tokens.set(url, null)
     }
 
-    suspend fun hasStoredSession(url: GatewayUrl): Boolean =
-        tokens.get(Url(url.value)) != null || cookies.hasCookies(Url(url.value))
+    suspend fun hasStoredSession(url: GatewayUrl): Boolean = tokens.get(url) != null || cookies.hasCookies(Url(url.value))
 }

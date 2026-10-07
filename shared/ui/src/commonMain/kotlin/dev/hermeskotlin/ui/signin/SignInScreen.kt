@@ -48,10 +48,12 @@ fun SignInScreen(
     val uriHandler = LocalUriHandler.current
     val methods = state.methods
 
+    // One view model serves every gateway's sign-in screen, so it starts over when the gateway changes. A
+    // browser sign-in still running goes on across a rotation, and only ever signs its own gateway in.
     LaunchedEffect(gateway.url) { viewModel.load(gateway) }
 
-    LaunchedEffect(state.signedIn) {
-        if (state.signedIn) {
+    LaunchedEffect(state.signedInUrl) {
+        if (state.signedInUrl == gateway.url) {
             viewModel.consumeSignedIn()
             onSignedIn()
         }

@@ -86,6 +86,7 @@ class AndroidLoopbackReceiver(private val returnUri: String) : LoopbackReceiver 
         const val PATH = "/callback"
         const val BACKLOG = 4
         const val ACCEPT_TIMEOUT_MS = 500
-        const val READ_TIMEOUT_MS = 10_000
+        /** Short: a browser's idle preconnect would otherwise hold the callback up behind it. */
+        const val READ_TIMEOUT_MS = 2_000
     }
 }

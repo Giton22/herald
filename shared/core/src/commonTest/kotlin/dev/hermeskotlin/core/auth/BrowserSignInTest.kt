@@ -75,7 +75,7 @@ class BrowserSignInTest {
         assertEquals(opened.parameters["code_challenge"], pkceChallenge(verifier))
         assertTrue("\"code\":\"GW-CODE\"" in body)
 
-        val session = assertNotNull(tokens.get(Url(url.value)))
+        val session = assertNotNull(tokens.get(url))
         assertEquals("AT1", session.accessToken)
         assertEquals("RT1", session.refreshToken)
         assertEquals(url.value, session.baseUrl)
@@ -83,21 +83,44 @@ class BrowserSignInTest {
     }
 
     @Test
-    fun aCallbackFromAnotherSignInIsRefused() = runTest {
-        val (browser, loopback) = signIn(tokenBody = { error("must not redeem") }) { mapOf("code" to "GW-CODE", "state" to "someone-else") }
+    fun strayCallbacksArePassedOverUntilTheRealOne() = runTest {
+        var calls = 0
+        var redeemed = 0
+        val (browser, loopback) = signIn(tokenBody = { redeemed++; assertTrue("\"code\":\"REAL\"" in it) }) { opened ->
+            when (calls++) {
+                0 -> mapOf("code" to "STRAY", "state" to "someone-else")
+                1 -> mapOf("state" to opened.parameters["state"]!!)
+                else -> mapOf("code" to "REAL", "state" to opened.parameters["state"]!!)
+            }
+        }
 
         val result = browser.signIn(url, provider = "self-hosted") { loopback.opened = Url(it) }
 
-        assertIs<ApiResult.Failed>(result)
+        assertIs<ApiResult.Success<Unit>>(result)
         assertEquals("self-hosted", loopback.opened!!.parameters["provider"])
-        assertNull(tokens.get(Url(url.value)))
-        assertTrue(loopback.closed)
+        assertEquals(1, redeemed)
     }
 
     @Test
-    fun aCallbackWithoutCodeFails() = runTest {
-        val (browser, loopback) = signIn(tokenBody = { error("must not redeem") }) { mapOf("state" to it.parameters["state"]!!) }
-        assertIs<ApiResult.Failed>(browser.signIn(url, null) { loopback.opened = Url(it) })
+    fun givesUpWhenTheBrowserNeverComesBack() = runTest {
+        val loopback = object : LoopbackReceiver {
+            override suspend fun start() = object : LoopbackListener {
+                override val redirectUri = "http://127.0.0.1:1/callback"
+                override suspend fun awaitCallback(): Map<String, String> = CompletableDeferred<Map<String, String>>().await()
+                override fun close() = Unit
+            }
+        }
+        val browser = BrowserSignIn(AuthApi(createHttpClient(MockEngine { error("no calls") }), cookies, tokens), loopback)
+        assertIs<ApiResult.Failed>(browser.signIn(url, null) {})
+        assertNull(tokens.get(url))
+    }
+
+    @Test
+    fun redeemingForgetsAnOldPasswordSession() = runTest {
+        cookies.addCookie(Url(url.value), io.ktor.http.Cookie("hermes_session_rt", "RT", maxAge = 100, path = "/"))
+        val (browser, loopback) = signIn { mapOf("code" to "C", "state" to it.parameters["state"]!!) }
+        assertIs<ApiResult.Success<Unit>>(browser.signIn(url, null) { loopback.opened = Url(it) })
+        assertTrue(cookies.get(Url(url.value)).isEmpty())
     }
 
     @Test

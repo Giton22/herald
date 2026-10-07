@@ -14,7 +14,6 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.Url
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
-import io.ktor.util.date.getTimeMillis
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.test.runTest
@@ -32,22 +31,23 @@ class NativeBearerTest {
     private val store = InMemoryKeyValueStore()
     private val cookies = PersistentCookiesStorage(store)
     private val tokens = NativeTokens(store)
-
-    /** Unix seconds; the access tokens expire relative to this. */
-    private val now = getTimeMillis() / 1000
+    private var clock = 0L
 
     private fun refreshed(at: String, rt: String) =
-        """{"access_token":"$at","refresh_token":"$rt","token_type":"Bearer","expires_at":${now + 900},"provider":"self-hosted","user_id":"u1"}"""
+        """{"access_token":"$at","refresh_token":"$rt","token_type":"Bearer","expires_at":1900000000,"provider":"self-hosted","user_id":"u1"}"""
 
-    private fun clientWith(handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData) =
-        AuthApi(createHttpClient(MockEngine(handler), cookies, bearer = tokens), cookies, tokens)
+    private fun clientWith(handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData): AuthApi {
+        val client = createHttpClient(MockEngine(handler), cookies).config { install(nativeBearer(tokens) { clock }) }
+        return AuthApi(client, cookies, tokens)
+    }
 
-    private suspend fun signedIn(expiresAt: Long = now + 900) = tokens.set(
-        Url(url.value),
-        NativeSession("AT1", "RT1", expiresAt, provider = "self-hosted", baseUrl = url.value),
-    )
+    private suspend fun signedIn(gateway: GatewayUrl = url, access: String = "AT1") =
+        tokens.set(gateway, NativeSession(access, "RT1", 1900000000, provider = "self-hosted"))
 
     private val HttpRequestData.bodyText get() = (body as? OutgoingContent.ByteArrayContent)?.bytes()?.decodeToString().orEmpty()
+
+    private val expired: suspend MockRequestHandleScope.() -> HttpResponseData =
+        { respond("""{"error":"session_expired"}""", HttpStatusCode.Unauthorized, json) }
 
     @Test
     fun sendsTheAccessTokenAndCountsAsSignedIn() = runTest {
@@ -63,7 +63,7 @@ class NativeBearerTest {
     }
 
     @Test
-    fun otherHostsGetNoToken() = runTest {
+    fun otherGatewaysGetNoToken() = runTest {
         signedIn()
         var auth: String? = "unset"
         val api = clientWith { request ->
@@ -75,6 +75,29 @@ class NativeBearerTest {
         // Same host, another port: another gateway.
         api.me(GatewayUrl.parse("http://100.64.0.1:9120"))
         assertNull(auth)
+    }
+
+    @Test
+    fun gatewaysBehindOneProxyKeepTheirOwnTokens() = runTest {
+        val a = GatewayUrl.parse("https://proxy.example.com/a")
+        val b = GatewayUrl.parse("https://proxy.example.com/b")
+        signedIn(a, "AT-A")
+        signedIn(b, "AT-B")
+        val seen = mutableMapOf<String, String?>()
+        val api = clientWith { request ->
+            seen[request.url.encodedPath] = request.headers[HttpHeaders.Authorization]
+            respond("""{"user_id":"u"}""", HttpStatusCode.OK, json)
+        }
+        api.me(a)
+        api.me(b)
+        api.me(GatewayUrl.parse("https://proxy.example.com/ab"))
+        assertEquals("Bearer AT-A", seen["/a/api/auth/me"])
+        assertEquals("Bearer AT-B", seen["/b/api/auth/me"])
+        assertNull(seen["/ab/api/auth/me"])
+
+        api.signOut(a)
+        assertNull(tokens.get(a))
+        assertEquals("AT-B", tokens.get(b)?.accessToken)
     }
 
     @Test
@@ -91,59 +114,48 @@ class NativeBearerTest {
                 else -> {
                     val auth = request.headers[HttpHeaders.Authorization]
                     seen += "me:$auth"
-                    if (auth == "Bearer AT1") respond("""{"error":"session_expired"}""", HttpStatusCode.Unauthorized, json)
-                    else respond("""{"user_id":"u1"}""", HttpStatusCode.OK, json)
+                    if (auth == "Bearer AT1") expired() else respond("""{"user_id":"u1"}""", HttpStatusCode.OK, json)
                 }
             }
         }
 
         assertIs<ApiResult.Success<AuthUser>>(api.me(url))
         assertEquals(listOf("me:Bearer AT1", "refresh:null", "me:Bearer AT2"), seen)
-        val stored = tokens.get(Url(url.value))!!
+        val stored = tokens.get(url)!!
         assertEquals("AT2", stored.accessToken)
         assertEquals("RT2", stored.refreshToken)
         assertEquals(url.value, stored.baseUrl)
     }
 
     @Test
-    fun refreshesBeforeTheTokenExpires() = runTest {
-        signedIn(expiresAt = now + 10)
-        val seen = mutableListOf<String>()
-        val client = createHttpClient(
-            MockEngine { request ->
-                seen += request.url.encodedPath + " " + request.headers[HttpHeaders.Authorization]
-                if (request.url.encodedPath == "/auth/native/refresh") respond(refreshed("AT2", "RT2"), HttpStatusCode.OK, json)
-                else respond("""{"user_id":"u1"}""", HttpStatusCode.OK, json)
-            },
-            cookies,
-        ).config { install(nativeBearer(tokens) { now * 1000 }) }
-        val api = AuthApi(client, cookies, tokens)
-
-        assertIs<ApiResult.Success<AuthUser>>(api.me(url))
-        assertEquals(listOf("/auth/native/refresh null", "/api/auth/me Bearer AT2"), seen)
-    }
-
-    @Test
     fun aRefusedRefreshForgetsTheTokens() = runTest {
         signedIn()
-        val api = clientWith { request ->
-            if (request.url.encodedPath == "/auth/native/refresh") respond("""{"error":"session_expired"}""", HttpStatusCode.Unauthorized, json)
-            else respond("""{"error":"session_expired"}""", HttpStatusCode.Unauthorized, json)
-        }
+        val api = clientWith { expired() }
         assertEquals(ApiResult.SessionExpired, api.me(url))
-        assertNull(tokens.get(Url(url.value)))
+        assertNull(tokens.get(url))
         assertFalse(api.hasStoredSession(url))
     }
 
     @Test
-    fun anUnreachableIdentityProviderKeepsTheTokens() = runTest {
+    fun anUnreachableIdentityProviderIsNotASignOut() = runTest {
         signedIn()
+        var refreshes = 0
         val api = clientWith { request ->
-            if (request.url.encodedPath == "/auth/native/refresh") respond("""{"detail":"Auth provider unreachable"}""", HttpStatusCode.ServiceUnavailable, json)
-            else respond("""{"error":"session_expired"}""", HttpStatusCode.Unauthorized, json)
+            if (request.url.encodedPath == "/auth/native/refresh") {
+                refreshes++
+                respond("""{"detail":"Auth provider unreachable"}""", HttpStatusCode.ServiceUnavailable, json)
+            } else expired()
         }
-        assertEquals(ApiResult.SessionExpired, api.me(url))
-        assertEquals("AT1", tokens.get(Url(url.value))?.accessToken)
+        assertIs<ApiResult.Unavailable>(api.me(url))
+        assertEquals("AT1", tokens.get(url)?.accessToken)
+
+        // Calls right after don't each ask again...
+        assertIs<ApiResult.Unavailable>(api.me(url))
+        assertEquals(1, refreshes)
+        // ...but a while later they do.
+        clock += 31_000
+        assertIs<ApiResult.Unavailable>(api.me(url))
+        assertEquals(2, refreshes)
     }
 
     @Test
@@ -156,8 +168,7 @@ class NativeBearerTest {
                     refreshes++
                     respond(refreshed("AT2", "RT2"), HttpStatusCode.OK, json)
                 }
-                request.headers[HttpHeaders.Authorization] == "Bearer AT1" ->
-                    respond("""{"error":"session_expired"}""", HttpStatusCode.Unauthorized, json)
+                request.headers[HttpHeaders.Authorization] == "Bearer AT1" -> expired()
                 else -> respond("""{"user_id":"u1"}""", HttpStatusCode.OK, json)
             }
         }
@@ -167,11 +178,15 @@ class NativeBearerTest {
     }
 
     @Test
-    fun signOutForgetsTheTokens() = runTest {
+    fun aWrongPasswordIsNotRetriedWithATokenRefresh() = runTest {
         signedIn()
-        val api = clientWith { respond("", HttpStatusCode.Found) }
-        api.signOut(url)
-        assertNull(tokens.get(Url(url.value)))
+        val seen = mutableListOf<String>()
+        val api = clientWith { request ->
+            seen += request.url.encodedPath + " " + request.headers[HttpHeaders.Authorization]
+            respond("""{"detail":"Invalid credentials"}""", HttpStatusCode.Unauthorized, json)
+        }
+        assertEquals(ApiResult.InvalidCredentials, api.signIn(url, "basic", "me", "wrong"))
+        assertEquals(listOf("/auth/password-login null"), seen)
     }
 
     @Test
@@ -179,7 +194,7 @@ class NativeBearerTest {
         signedIn()
         val api = clientWith { respond("""{"ok":true,"next":"/"}""", HttpStatusCode.OK, json) }
         assertIs<ApiResult.Success<Unit>>(api.signIn(url, "basic", "me", "pw"))
-        assertNull(tokens.get(Url(url.value)))
+        assertNull(tokens.get(url))
     }
 
     @Test
