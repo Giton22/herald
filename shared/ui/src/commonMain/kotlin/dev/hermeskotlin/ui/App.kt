@@ -426,6 +426,11 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     val openPluginUrl = pluginUrl
     val openPluginTitle = pluginLabel
     if (openPluginUrl != null && openPluginTitle != null) {
-        PluginWebView(url = openPluginUrl, title = openPluginTitle, onClose = { pluginUrl = null; pluginLabel = null })
+        PluginWebView(
+            url = openPluginUrl,
+            gateway = route.gateway.url,
+            title = openPluginTitle,
+            onClose = { pluginUrl = null; pluginLabel = null },
+        )
     }
 }
