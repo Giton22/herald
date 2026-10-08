@@ -75,6 +75,15 @@ class PersistentCookiesStorageTest {
     }
 
     @Test
+    fun aQuotedValueWithASpaceStillGoesOut() = runTest {
+        // The gateway's cookie library keeps a space inside the quotes. Raw, it goes back as the value itself
+        // (which the gateway's parser reads as sent), not as `my%20sso`, and sending doesn't throw.
+        storage.addCookie(https, parseServerSetCookieHeader("hermes_session_provider=\"my sso\"; HttpOnly; Path=/"))
+
+        assertEquals("hermes_session_provider=my sso", renderCookieHeader(storage.get(https).single()))
+    }
+
+    @Test
     fun cookieStoredBeforeEncodingFieldExistedIsReSentRaw() = runTest {
         // A v1 StoredCookie JSON with no `encoding` field (as persisted before the fix).
         val legacy = InMemoryKeyValueStore().apply {
