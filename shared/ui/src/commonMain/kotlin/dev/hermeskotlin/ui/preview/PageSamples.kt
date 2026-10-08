@@ -174,7 +174,7 @@ internal object PageSamples {
         ),
     )
 
-    /** Three providers, enough models that the picker offers search. */
+    /** Three providers, enough models that the picker offers search; OpenRouter also offers two Anthropic models. */
     val modelCatalog = ModelCatalog(
         providers = listOf(
             ModelProvider(
@@ -184,10 +184,11 @@ internal object PageSamples {
             ModelProvider(
                 "openrouter", "OpenRouter",
                 listOf(
+                    "anthropic/claude-opus-5.5" to "$5 / $25", "anthropic/claude-sonnet-5" to "$3 / $15",
                     "z-ai/glm-5.3-flash" to "$0.06 / $0.40", "deepseek/deepseek-v4" to "$0.27 / $1.10",
                     "moonshotai/kimi-k2.6" to "$0.60 / $2.50", "xiaomi/mimo-v2.6-pro" to "$0.40 / $1.60",
                     "qwen/qwen3-235b-a22b" to "$0.13 / $0.60", "google/gemini-3.8-flash" to "$0.30 / $2.50",
-                ).map { (id, price) -> ModelOption(id, "openrouter", price = price) },
+                ).map { (id, price) -> ModelOption(id, "openrouter", reasoning = true, price = price) },
             ),
             ModelProvider(
                 "openai-codex", "OpenAI Codex",
@@ -200,4 +201,7 @@ internal object PageSamples {
 
     /** Two models starred, one from each of two providers. */
     val starredModels = listOf("anthropic/claude-opus-5-5", "openrouter/z-ai/glm-5.3-flash")
+
+    /** Picked lately, newest first. */
+    val recentModels = listOf("openai-codex/gpt-6.1-sol", "openrouter/deepseek/deepseek-v4", "anthropic/claude-opus-5-5")
 }
