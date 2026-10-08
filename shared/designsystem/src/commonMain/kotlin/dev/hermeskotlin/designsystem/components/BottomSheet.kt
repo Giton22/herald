@@ -19,12 +19,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.unit.dp
 import com.composeunstyled.DragIndication
+import com.composeunstyled.ModalBottomSheetProperties
 import com.composeunstyled.Scrim
 import com.composeunstyled.Sheet
 import com.composeunstyled.SheetDetent
@@ -63,10 +67,30 @@ fun BottomSheet(
     LaunchedEffect(visible) {
         state.targetDetent = if (visible) SheetDetent.FullyExpanded else SheetDetent.Hidden
     }
+    // The sheet reports a dismiss once per showing and forgets that it did only when a new showing comes to rest,
+    // so a tap outside while it is still sliding in after an earlier dismiss hides it without calling onDismiss:
+    // [visible] stays true and the sheet can never be shown again. Taps outside wait until it has come to rest,
+    // and a sheet that ends up hidden while still meant to be visible reports the dismiss here.
+    val opened = state.isIdle && state.currentDetent != SheetDetent.Hidden
+    val stillVisible by rememberUpdatedState(visible)
+    val dismiss by rememberUpdatedState(onDismiss)
+    LaunchedEffect(state) {
+        var shown = false
+        snapshotFlow { state.isIdle && state.currentDetent == SheetDetent.Hidden && state.targetDetent == SheetDetent.Hidden }
+            .collect { hidden ->
+                if (!hidden) {
+                    shown = true
+                } else if (shown) {
+                    shown = false
+                    if (stillVisible) dismiss()
+                }
+            }
+    }
     val shape = RoundedCornerShape(topStart = Theme[radii][radiusLarge], topEnd = Theme[radii][radiusLarge])
 
     UnstyledModalBottomSheet(
         state = state,
+        properties = ModalBottomSheetProperties(dismissOnClickOutside = opened),
         onDismiss = onDismiss,
         overlay = { Scrim(scrimColor = Color.Black.copy(alpha = 0.45f), enter = fadeIn(), exit = fadeOut()) },
     ) {

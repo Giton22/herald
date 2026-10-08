@@ -89,6 +89,10 @@ data class AppSettings(
     val checkForUpdates: Boolean = true,
     /** Ask for a fingerprint, face or the screen lock when Herald opens, and keep it out of Recents. */
     val appLock: Boolean = false,
+    /** Models starred in the model picker (`provider/id`, see `ModelOption.starKey`), first starred first. */
+    val starredModels: List<String> = emptyList(),
+    /** Models last picked in the model picker (`provider/id`), newest first. */
+    val recentModels: List<String> = emptyList(),
 )
 
 /**
