@@ -65,6 +65,16 @@ class PersistentCookiesStorageTest {
     }
 
     @Test
+    fun quotedTokenFromTheGatewayGoesBackAsTheGatewayReadsIt() = runTest {
+        // The gateway's cookie library quotes a value containing '=', so the real header carries quotes (#67).
+        // They come off on the way in; the padding has to survive on the way out.
+        val token = "eyJzdWIiOiJoYW1vdWRpIn0.c2lnbmF0dXJl=="
+        storage.addCookie(https, parseServerSetCookieHeader("hermes_session_at=\"$token\"; HttpOnly; Max-Age=43200; Path=/; SameSite=lax"))
+
+        assertEquals("hermes_session_at=$token", renderCookieHeader(storage.get(https).single()))
+    }
+
+    @Test
     fun cookieStoredBeforeEncodingFieldExistedIsReSentRaw() = runTest {
         // A v1 StoredCookie JSON with no `encoding` field (as persisted before the fix).
         val legacy = InMemoryKeyValueStore().apply {
