@@ -91,6 +91,8 @@ data class AppSettings(
     val appLock: Boolean = false,
     /** Models starred in the model picker (`provider/id`, see `ModelOption.starKey`), first starred first. */
     val starredModels: List<String> = emptyList(),
+    /** Models last picked in the model picker (`provider/id`), newest first. */
+    val recentModels: List<String> = emptyList(),
 )
 
 /**
