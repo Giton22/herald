@@ -2,10 +2,14 @@ package dev.hermeskotlin.core.auth
 
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import io.ktor.http.Cookie
+import io.ktor.http.CookieEncoding
 import io.ktor.http.Url
+import io.ktor.http.parseServerSetCookieHeader
+import io.ktor.http.renderCookieHeader
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PersistentCookiesStorageTest {
@@ -38,6 +42,60 @@ class PersistentCookiesStorageTest {
         assertEquals(listOf("2"), storage.get(https).map { it.value })
         storage.addCookie(https, Cookie("a", "", maxAge = 0, path = "/"))
         assertTrue(storage.get(https).isEmpty())
+    }
+
+    @Test
+    fun base64urlTokenValueSurvivesStoreAndSendWithoutUriEncoding() = runTest {
+        // Hermes signs session tokens as padded base64url, so the cookie value ends in '='.
+        // Ktor's default URI encoding would send it as %3D and the server's HMAC check would fail.
+        val token = "eyJzdWIiOiJoYW1vdWRpIn0.c2lnbmF0dXJl=="
+        val setCookie = parseServerSetCookieHeader(
+            "hermes_session_at=$token; HttpOnly; Max-Age=43200; Path=/; SameSite=lax",
+        )
+        assertEquals(CookieEncoding.RAW, setCookie.encoding)
+
+        storage.addCookie(https, setCookie)
+        val sent = storage.get(https).single()
+
+        assertEquals(token, sent.value)
+        assertEquals(CookieEncoding.RAW, sent.encoding)
+        val header = renderCookieHeader(sent)
+        assertEquals("hermes_session_at=$token", header)
+        assertFalse(header.contains("%3D"), "value must not be URI-encoded on the wire")
+    }
+
+    @Test
+    fun quotedTokenFromTheGatewayGoesBackAsTheGatewayReadsIt() = runTest {
+        // The gateway's cookie library quotes a value containing '=', so the real header carries quotes (#67).
+        // They come off on the way in; the padding has to survive on the way out.
+        val token = "eyJzdWIiOiJoYW1vdWRpIn0.c2lnbmF0dXJl=="
+        storage.addCookie(https, parseServerSetCookieHeader("hermes_session_at=\"$token\"; HttpOnly; Max-Age=43200; Path=/; SameSite=lax"))
+
+        assertEquals("hermes_session_at=$token", renderCookieHeader(storage.get(https).single()))
+    }
+
+    @Test
+    fun aQuotedValueWithASpaceStillGoesOut() = runTest {
+        // The gateway's cookie library keeps a space inside the quotes. Raw, it goes back as the value itself
+        // (which the gateway's parser reads as sent), not as `my%20sso`, and sending doesn't throw.
+        storage.addCookie(https, parseServerSetCookieHeader("hermes_session_provider=\"my sso\"; HttpOnly; Path=/"))
+
+        assertEquals("hermes_session_provider=my sso", renderCookieHeader(storage.get(https).single()))
+    }
+
+    @Test
+    fun cookieStoredBeforeEncodingFieldExistedIsReSentRaw() = runTest {
+        // A v1 StoredCookie JSON with no `encoding` field (as persisted before the fix).
+        val legacy = InMemoryKeyValueStore().apply {
+            put(
+                "cookies.v1",
+                """[{"name":"hermes_session_at","value":"tok==","domain":"hermes.example.ts.net",""" +
+                    """"hostOnly":true,"path":"/","secure":true,"httpOnly":true,"expiresAt":null}]""",
+            )
+        }
+        val sent = PersistentCookiesStorage(legacy) { now }.get(https).single()
+        assertEquals(CookieEncoding.RAW, sent.encoding)
+        assertEquals("hermes_session_at=tok==", renderCookieHeader(sent))
     }
 
     @Test

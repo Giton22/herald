@@ -4,6 +4,7 @@ import dev.hermeskotlin.core.network.HermesJson
 import dev.hermeskotlin.core.storage.KeyValueStore
 import io.ktor.client.plugins.cookies.CookiesStorage
 import io.ktor.http.Cookie
+import io.ktor.http.CookieEncoding
 import io.ktor.http.URLProtocol
 import io.ktor.http.Url
 import io.ktor.util.date.getTimeMillis
@@ -144,6 +145,10 @@ private fun StoredCookie.matches(url: Url, anyPath: Boolean = false): Boolean {
 private fun StoredCookie.toCookie() = Cookie(
     name = name,
     value = value,
+    // Back out exactly as the gateway set it. Every cookie here came from a Set-Cookie header, which Ktor
+    // reads raw; its default URI encoding would turn the `=` padding on the gateway's base64url session
+    // tokens into `%3D`, which the gateway decodes into a different token, so the session fails (#67).
+    encoding = CookieEncoding.RAW,
     domain = domain,
     path = path,
     secure = secure,
