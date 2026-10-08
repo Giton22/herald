@@ -248,10 +248,15 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
         roomLinks.consume(link)
         closeDrawer()
     }
-    // Another gateway's plugins are other plugins.
+    // Another gateway's plugins are other plugins. Only a change counts: a rotation brings the same
+    // gateway back, and the open page with it.
+    var pluginGateway by rememberSaveable { mutableStateOf(route.gateway.url) }
     LaunchedEffect(route.gateway.url) {
-        pluginUrl = null
-        pluginLabel = null
+        if (route.gateway.url != pluginGateway) {
+            pluginGateway = route.gateway.url
+            pluginUrl = null
+            pluginLabel = null
+        }
     }
     // On phones the keyboard makes way for the drawer.
     LaunchedEffect(sidebar) {
