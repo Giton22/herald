@@ -19,7 +19,10 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
@@ -50,7 +53,7 @@ import dev.hermeskotlin.ui.chat.TopBar
 fun DesktopRoomScreen(room: DesktopRoom, onOpenSidebar: () -> Unit, onBack: () -> Unit) {
     val faces = LocalBotFaces.current
     val members = remember(room.key, room.members) { room.roomMembers() }
-    val lines = remember(room.lines) { room.lines.mapIndexed { index, line -> line.toRoomLine(index) } }
+    val lines = remember(room.lines) { room.roomLines() }
     Box(
         Modifier
             .fillMaxSize()
@@ -97,8 +100,16 @@ fun DesktopRoomScreen(room: DesktopRoom, onOpenSidebar: () -> Unit, onBack: () -
 private fun Transcript(room: DesktopRoom, lines: List<RoomLine.Message>, faces: BotFaces) {
     val listState = rememberLazyListState()
     val omittedRow = if (room.omitted > 0) 1 else 0
-    // The newest line is what an open room is read for; a copy this short lands at its end anyway.
-    LaunchedEffect(room.key) { if (lines.isNotEmpty()) listState.scrollToItem(lines.size - 1 + omittedRow) }
+    // The newest line is what an open room is read for: opening lands there, and a line synced in since
+    // brings the end into view, as the hosted room does.
+    val newest = lines.lastOrNull()?.eventId
+    var atEndOnce by remember(room.key) { mutableStateOf(false) }
+    LaunchedEffect(room.key, newest) {
+        if (newest == null) return@LaunchedEffect
+        val end = lines.size - 1 + omittedRow
+        if (atEndOnce) listState.animateScrollToItem(end) else listState.scrollToItem(end)
+        atEndOnce = true
+    }
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
@@ -116,7 +127,8 @@ private fun Transcript(room: DesktopRoom, lines: List<RoomLine.Message>, faces: 
                 )
             }
         }
-        itemsIndexed(lines, key = { _, line -> line.seq }) { index, line ->
+        // Keyed by message id: the copy is a sliding window, so a line's place in it moves as new ones come.
+        itemsIndexed(lines, key = { _, line -> line.eventId }) { index, line ->
             if (line.fromUser) {
                 UserLine(line)
             } else {
@@ -129,13 +141,25 @@ private fun Transcript(room: DesktopRoom, lines: List<RoomLine.Message>, faces: 
     }
 }
 
-/** The line as the transcript draws it; the mirror's times are epoch millis, the lines read seconds. */
-private fun DesktopLine.toRoomLine(index: Int): RoomLine.Message = RoomLine.Message(
+/**
+ * The copy's lines as the transcript draws them, each with a key of its own: the message id, or its place
+ * when a legacy entry has none (or repeats one).
+ */
+internal fun DesktopRoom.roomLines(): List<RoomLine.Message> {
+    val seen = mutableSetOf<String>()
+    return lines.mapIndexed { index, line -> line.toRoomLine(index, line.id?.takeIf { seen.add(it) } ?: "desktop:$index") }
+}
+
+/**
+ * The line as the transcript draws it; the mirror's times are epoch millis, the lines read seconds. The
+ * mirror names a member by its profile ("default"), so the name shown is the bot's own label.
+ */
+private fun DesktopLine.toRoomLine(index: Int, key: String): RoomLine.Message = RoomLine.Message(
     seq = index,
     fromUser = fromUser,
-    speaker = speaker.takeUnless { fromUser },
+    speaker = null,
     text = text,
-    eventId = id ?: "desktop:$index",
+    eventId = key,
     profile = speaker.takeUnless { fromUser },
     createdAt = at?.div(1000.0),
 )
