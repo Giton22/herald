@@ -6,6 +6,7 @@ import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.chat.BackgroundProcess
+import dev.hermeskotlin.core.chat.Checkpoint
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatSession
@@ -104,6 +105,7 @@ sealed interface ChatRequest {
     data object OpenJourney : ChatRequest
     data object OpenUsage : ChatRequest
     data object OpenProcesses : ChatRequest
+    data object OpenCheckpoints : ChatRequest
 
     /** `/voice`: the screen asks for the microphone, then starts a voice chat. */
     data object StartVoice : ChatRequest
@@ -187,6 +189,9 @@ class ChatViewModel(
 
     /** Background processes the agent started in the open chat. */
     val processes = ProcessesController(viewModelScope)
+
+    /** The folder snapshots Hermes took before the agent changed files in the open chat. */
+    val checkpoints = CheckpointsController(viewModelScope)
 
     override val composer = TextFieldState()
     val connectionState: StateFlow<ConnectionState> = connection.state
@@ -439,6 +444,17 @@ class ChatViewModel(
 
     fun killProcess(process: BackgroundProcess) = processes.kill(session.value, process)
 
+    /** Shows the checkpoints sheet (from the chat menu, or `/rollback`). */
+    fun openCheckpoints() {
+        viewModelScope.launch { _requests.send(ChatRequest.OpenCheckpoints) }
+    }
+
+    fun loadCheckpoints() = checkpoints.load(session.value)
+
+    fun checkpointDiff(checkpoint: Checkpoint) = checkpoints.loadDiff(session.value, checkpoint)
+
+    fun restoreCheckpoint(checkpoint: Checkpoint) = checkpoints.restore(session.value, checkpoint)
+
     fun loadUsage() {
         val target = target ?: return
         usage.load(target.gateway.gatewayUrl, state.value.storedSessionId, target.profile, session.value)
@@ -659,6 +675,7 @@ class ChatViewModel(
                 SlashRoute.Voice -> if (arg.lowercase() in setOf("off", "stop")) voice.stopChat() else _requests.send(ChatRequest.StartVoice)
                 // `/usage reset` and the like are the gateway's to run.
                 SlashRoute.Usage -> if (arg.isEmpty()) _requests.send(ChatRequest.OpenUsage) else onGateway()
+                SlashRoute.Rollback -> if (arg.isEmpty()) _requests.send(ChatRequest.OpenCheckpoints) else onGateway()
                 is SlashRoute.Unavailable -> chat.showCommandOutput("/${command.name}", route.message, failed = true)
                 SlashRoute.Gateway -> onGateway()
             }

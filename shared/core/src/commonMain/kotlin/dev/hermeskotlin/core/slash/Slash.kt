@@ -116,6 +116,9 @@ sealed interface SlashRoute {
     data object Voice : SlashRoute
     data object Usage : SlashRoute
 
+    /** `/rollback` with nothing after it opens the checkpoints; `/rollback diff 2` and the like run on the gateway. */
+    data object Rollback : SlashRoute
+
     /** Known, but there is nothing on this client to run it with. */
     data class Unavailable(val message: String) : SlashRoute
 
@@ -165,6 +168,7 @@ sealed interface SlashRoute {
             "pet" to Pet,
             "voice" to Voice,
             "usage" to Usage,
+            "rollback" to Rollback,
         )
 
         private val LOCAL_ALIASES = mapOf(

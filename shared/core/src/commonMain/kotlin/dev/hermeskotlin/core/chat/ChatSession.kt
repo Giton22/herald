@@ -759,6 +759,71 @@ class ChatSession(
         }
     }
 
+    /**
+     * The folder snapshots Hermes took before the agent changed files in this chat (`rollback.list`). Null when
+     * offline or for a chat with nothing on the gateway yet; a stored chat is attached first, as the call needs it live.
+     */
+    suspend fun checkpoints(): Checkpoints? {
+        val client = connectedClient() ?: return null
+        return try {
+            val runtimeId = liveIdForCheckpoints(client) ?: return null
+            Checkpoints.parse(client.request("rollback.list", buildJsonObject { put("session_id", runtimeId) }) as? JsonObject)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            null
+        }
+    }
+
+    /** What changed in the folder since [checkpoint] (`rollback.diff`). */
+    suspend fun checkpointDiff(checkpoint: Checkpoint): CheckpointDiff {
+        val client = connectedClient() ?: return CheckpointDiff(error = NOT_CONNECTED)
+        return try {
+            val runtimeId = liveIdForCheckpoints(client) ?: return CheckpointDiff(error = NOT_CONNECTED)
+            CheckpointDiff.parse(
+                client.request(
+                    "rollback.diff",
+                    buildJsonObject {
+                        put("session_id", runtimeId)
+                        put("hash", checkpoint.hash)
+                    },
+                ) as? JsonObject,
+            )
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            CheckpointDiff(error = e.message ?: "Couldn't read the changes.")
+        }
+    }
+
+    /**
+     * Puts the folder back as it was at [checkpoint] (`rollback.restore`), which also takes back the chat's last
+     * turn; the transcript is read again after. The gateway refuses while a reply runs. Says how it went.
+     */
+    suspend fun restoreCheckpoint(checkpoint: Checkpoint): String {
+        val client = connectedClient() ?: return NOT_CONNECTED
+        return try {
+            val runtimeId = liveIdForCheckpoints(client) ?: return NOT_CONNECTED
+            val result = client.request(
+                "rollback.restore",
+                buildJsonObject {
+                    put("session_id", runtimeId)
+                    put("hash", checkpoint.hash)
+                },
+            ) as? JsonObject
+            if (result.boolean("success") == true) scope.launch { loadHistory() }
+            restoreOutcome(result)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            e.message ?: "Couldn't restore the checkpoint."
+        }
+    }
+
+    /** The runtime id the `rollback.*` calls take: attaching a stored chat, but never creating one for an empty chat. */
+    private suspend fun liveIdForCheckpoints(client: JsonRpcClient): String? =
+        _state.value.runtimeSessionId ?: if (rowExists) ensureAttached(client) else null
+
     /** `/stop`: stops the reply, then the background processes the agent left running (`process.stop`). */
     suspend fun stopEverything() = runOnGateway("/stop") { client, runtimeId ->
         val lines = mutableListOf<String>()

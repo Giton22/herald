@@ -280,6 +280,7 @@ fun ChatScreen(
     var journeyOpen by remember { mutableStateOf(false) }
     var usageOpen by remember { mutableStateOf(false) }
     var processesOpen by remember { mutableStateOf(false) }
+    var checkpointsOpen by remember { mutableStateOf(false) }
     var viewing by remember { mutableStateOf<ViewerImage?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(notice) {
@@ -314,6 +315,7 @@ fun ChatScreen(
                 ChatRequest.OpenJourney -> journeyOpen = true
                 ChatRequest.OpenUsage -> usageOpen = true
                 ChatRequest.OpenProcesses -> processesOpen = true
+                ChatRequest.OpenCheckpoints -> checkpointsOpen = true
                 ChatRequest.StartVoice -> startVoiceChat()
                 ChatRequest.StartDictation -> toggleDictation()
             }
@@ -395,6 +397,15 @@ fun ChatScreen(
         onStart = viewModel::watchProcesses,
         onKill = viewModel::killProcess,
         onDismiss = { processesOpen = false },
+    )
+    CheckpointsSheet(
+        visible = checkpointsOpen,
+        controller = viewModel.checkpoints,
+        onLoad = viewModel::loadCheckpoints,
+        onDiff = viewModel::checkpointDiff,
+        onRestore = viewModel::restoreCheckpoint,
+        running = state.running,
+        onDismiss = { checkpointsOpen = false },
     )
     viewing?.let { image ->
         CompositionLocalProvider(LocalMediaLoader provides viewModel::loadMedia) {

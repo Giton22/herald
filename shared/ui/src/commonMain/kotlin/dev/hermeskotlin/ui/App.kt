@@ -359,6 +359,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
         onDeleted = app::newChat,
         onUsage = chat::openUsage,
         onProcesses = chat::openProcesses,
+        onCheckpoints = chat::openCheckpoints,
         botChat = route.target.bot != null,
         onStartFresh = openBot?.let { bot -> { startOver = bot } },
     )
