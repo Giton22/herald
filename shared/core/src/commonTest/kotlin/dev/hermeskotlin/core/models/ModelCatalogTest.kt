@@ -38,6 +38,38 @@ class ModelCatalogTest {
     }
 
     @Test
+    fun pricesFromARefreshFillTheGaps() {
+        val priced = ModelCatalog(
+            listOf(
+                ModelProvider("openrouter", "OpenRouter", listOf(ModelOption("a/m1", "openrouter", price = "$1 / $2"), ModelOption("a/m2", "openrouter"))),
+                ModelProvider("nous", "Nous Portal", listOf(ModelOption("a/m1", "nous", price = "$3 / $4"))),
+            ),
+        )
+        assertFalse(priced.missingPrices)
+        assertEquals(mapOf("openrouter/a/m1" to "$1 / $2", "nous/a/m1" to "$3 / $4"), priced.prices())
+
+        val bare = ModelCatalog(
+            listOf(
+                ModelProvider("openrouter", "OpenRouter", listOf(ModelOption("a/m1", "openrouter"), ModelOption("a/m2", "openrouter"))),
+                ModelProvider("nous", "Nous Portal", listOf(ModelOption("a/m1", "nous", price = "Free"))),
+            ),
+        )
+        // Nous has a price, OpenRouter none: one priced provider doesn't hide another's missing prices.
+        assertTrue(bare.missingPrices)
+        val filled = bare.withPrices(priced.prices())
+        assertEquals("$1 / $2", filled.find("openrouter", "a/m1")!!.price)
+        assertNull(filled.find("openrouter", "a/m2")!!.price)
+        // A price the catalog has already stays: the same id on another provider doesn't override it.
+        assertEquals("Free", filled.find("nous", "a/m1")!!.price)
+    }
+
+    @Test
+    fun providersTheGatewayNeverPricesDontCount() {
+        val subscription = ModelCatalog(listOf(ModelProvider("openai-codex", "OpenAI Codex", listOf(ModelOption("gpt-6", "openai-codex")))))
+        assertFalse(subscription.missingPrices)
+    }
+
+    @Test
     fun aRepeatedProviderSlugIsKeptOnce() {
         val catalog = parse(
             """{"providers":[
