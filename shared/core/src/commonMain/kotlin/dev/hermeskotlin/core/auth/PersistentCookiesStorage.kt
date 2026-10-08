@@ -1,11 +1,15 @@
 package dev.hermeskotlin.core.auth
 
+import dev.hermeskotlin.core.gateway.AccessTokens
+import dev.hermeskotlin.core.gateway.CF_ACCESS_CLIENT_ID
+import dev.hermeskotlin.core.gateway.CF_ACCESS_CLIENT_SECRET
 import dev.hermeskotlin.core.network.HermesJson
 import dev.hermeskotlin.core.storage.KeyValueStore
 import io.ktor.client.plugins.cookies.CookiesStorage
 import io.ktor.http.Cookie
 import io.ktor.http.URLProtocol
 import io.ktor.http.Url
+import io.ktor.http.isSecure
 import io.ktor.util.date.getTimeMillis
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -68,7 +72,9 @@ class PersistentCookiesStorage(
      * The stored cookies for [url] as `Set-Cookie` values, for a cookie store that has to be told each
      * cookie by text (the in-app WebView's jar, which has no access to this module's Ktor types):
      * session cookies go in as the gateway set them — host-only ones without a Domain, wider scopes
-     * with one. Empty when the URL can't be read; the caller just loads without cookies then.
+     * with one. Every path on the host goes in, each with its own Path: the page goes on to call routes
+     * (`/api/…`) other than the one it was opened at. Empty when the URL can't be read; the caller just
+     * loads without cookies then.
      */
     suspend fun setCookieValues(url: String): List<String> {
         val parsed = runCatching { Url(url) }.getOrNull() ?: return emptyList()
@@ -76,7 +82,7 @@ class PersistentCookiesStorage(
             val now = clock()
             val cookies = load()
             if (cookies.removeAll { it.isExpired(now) }) save(cookies)
-            cookies.filter { it.matches(parsed) }.map { cookie ->
+            cookies.filter { it.matches(parsed, anyPath = true) }.map { cookie ->
                 buildString {
                     append(cookie.name).append('=').append(cookie.value)
                     append("; Path=").append(cookie.path)
@@ -114,19 +120,31 @@ class PersistentCookiesStorage(
  * cookie store the cookies as `Set-Cookie` values, and must not need — or be able to reach — the Ktor
  * types this module keeps to itself.
  */
-class WebCookieJar(private val storage: PersistentCookiesStorage) {
+class WebCookieJar(private val storage: PersistentCookiesStorage, private val access: AccessTokens) {
 
     /** The stored cookies for [url] as `Set-Cookie` values; empty when nothing matches or it can't be read. */
     suspend fun cookiesFor(url: String): List<String> = storage.setCookieValues(url)
+
+    /**
+     * The headers the first load of [url] needs beyond cookies: the host's Cloudflare Access service token,
+     * over https only, as every other gateway request sends it. Access answers with its own cookie, which
+     * carries the page's later requests through. Empty when the host has no token.
+     */
+    suspend fun headersFor(url: String): Map<String, String> {
+        val parsed = runCatching { Url(url) }.getOrNull() ?: return emptyMap()
+        if (!parsed.protocol.isSecure()) return emptyMap()
+        val token = access.get(parsed.host) ?: return emptyMap()
+        return mapOf(CF_ACCESS_CLIENT_ID to token.clientId, CF_ACCESS_CLIENT_SECRET to token.clientSecret)
+    }
 }
 
 private fun StoredCookie.isExpired(now: Long) = expiresAt != null && expiresAt <= now
 
-private fun StoredCookie.matches(url: Url): Boolean {
+private fun StoredCookie.matches(url: Url, anyPath: Boolean = false): Boolean {
     val host = url.host.lowercase()
     val domainOk = if (hostOnly) host == domain else host == domain || host.endsWith(".$domain")
     val requestPath = url.encodedPath.ifEmpty { "/" }
-    val pathOk = requestPath == path ||
+    val pathOk = anyPath || requestPath == path ||
         (requestPath.startsWith(path) && (path.endsWith("/") || requestPath.getOrNull(path.length) == '/'))
     val secureOk = !secure || url.protocol == URLProtocol.HTTPS || url.protocol == URLProtocol.WSS
     return domainOk && pathOk && secureOk

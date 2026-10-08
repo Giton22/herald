@@ -1,5 +1,9 @@
 package dev.hermeskotlin.core.auth
 
+import dev.hermeskotlin.core.gateway.AccessToken
+import dev.hermeskotlin.core.gateway.AccessTokens
+import dev.hermeskotlin.core.gateway.CF_ACCESS_CLIENT_ID
+import dev.hermeskotlin.core.gateway.CF_ACCESS_CLIENT_SECRET
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import io.ktor.http.Cookie
 import io.ktor.http.Url
@@ -52,7 +56,7 @@ class PersistentCookiesStorageTest {
     fun setCookieValuesCarryWhatTheWebViewJarNeeds() = runTest {
         storage.addCookie(https, Cookie("hermes_session_at", "abc=", path = "/", secure = true, httpOnly = true))
         storage.addCookie(https, Cookie("scoped", "v", domain = "hermes.example.ts.net", path = "/", secure = true))
-        val values = storage.setCookieValues("https://hermes.example.ts.net/hermes-ofm-pipeline")
+        val values = storage.setCookieValues("https://hermes.example.ts.net/example-board")
 
         // A host-only cookie goes in without a Domain; one with an explicit scope keeps it.
         assertTrue("hermes_session_at=abc=; Path=/; Secure; HttpOnly" in values)
@@ -65,5 +69,28 @@ class PersistentCookiesStorageTest {
         // A secure session cookie never goes to a plain-http view, and an unreadable URL gets nothing.
         assertTrue(storage.setCookieValues("http://hermes.example.ts.net/").isEmpty())
         assertTrue(storage.setCookieValues("not a url").isEmpty())
+    }
+
+    @Test
+    fun setCookieValuesCarryCookiesForOtherPathsOnTheHost() = runTest {
+        // The page is opened at its own path but calls the gateway's API under /api, so an /api-scoped
+        // session cookie must reach the view's jar too, still scoped to /api.
+        storage.addCookie(https, Cookie("api_only", "v", path = "/api", secure = true))
+        val values = storage.setCookieValues("https://hermes.example.ts.net/example-board")
+        assertEquals(listOf("api_only=v; Path=/api; Secure"), values)
+    }
+
+    @Test
+    fun webJarSendsTheAccessTokenOverHttpsOnly() = runTest {
+        val access = AccessTokens(InMemoryKeyValueStore())
+        access.set("hermes.example.ts.net", AccessToken("id", "secret"))
+        val jar = WebCookieJar(storage, access)
+
+        assertEquals(
+            mapOf(CF_ACCESS_CLIENT_ID to "id", CF_ACCESS_CLIENT_SECRET to "secret"),
+            jar.headersFor("https://hermes.example.ts.net/example-board"),
+        )
+        assertTrue(jar.headersFor("http://hermes.example.ts.net/example-board").isEmpty())
+        assertTrue(jar.headersFor("https://other.ts.net/example-board").isEmpty())
     }
 }

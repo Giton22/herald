@@ -1,8 +1,13 @@
 package dev.hermeskotlin.ui.plugins
 
+import android.content.ActivityNotFoundException
+import android.content.Intent
+import android.net.Uri
+import android.view.ViewGroup
 import android.webkit.CookieManager
 import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.background
@@ -62,11 +67,33 @@ actual fun PluginWebView(url: String, title: String, onClose: () -> Unit) {
     val context = LocalContext.current
     var loading by remember { mutableStateOf(true) }
     var failed by remember { mutableStateOf(false) }
+    // What the first load sent beyond cookies; a retry sends it again, as a plain reload wouldn't.
+    var headers by remember { mutableStateOf(emptyMap<String, String>()) }
     val webView = remember {
         WebView(context).apply {
+            // AndroidView leaves a view at wrap_content, and a WebView that wraps its height gives the
+            // page a zero-high viewport: every vh/dvh is 0 and the dashboard's h-dvh shell draws nothing.
+            layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
             webViewClient = object : WebViewClient() {
+                override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                    // The gateway's own pages stay here; anywhere else is the browser's to show, not a
+                    // page passed off under this plugin's title. Embeds (iframes) load where they are.
+                    if (!request.isForMainFrame || sameOrigin(request.url, Uri.parse(url))) return false
+                    if (request.isRedirect) {
+                        // The gateway sent the page elsewhere (a sign-in in front of it): nothing to show here.
+                        loading = false
+                        failed = true
+                        return true
+                    }
+                    try {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, request.url))
+                    } catch (_: ActivityNotFoundException) {
+                    }
+                    return true
+                }
+
                 override fun onPageFinished(view: WebView, finishedUrl: String?) {
                     loading = false
                 }
@@ -78,6 +105,14 @@ actual fun PluginWebView(url: String, title: String, onClose: () -> Unit) {
                         failed = true
                     }
                 }
+
+                override fun onReceivedHttpError(view: WebView, request: WebResourceRequest, response: WebResourceResponse) {
+                    // The gateway refusing the page (signed out, plugin gone) is a failure too, not a JSON body to show.
+                    if (request.isForMainFrame && response.statusCode >= 400) {
+                        loading = false
+                        failed = true
+                    }
+                }
             }
         }
     }
@@ -85,24 +120,31 @@ actual fun PluginWebView(url: String, title: String, onClose: () -> Unit) {
         val cookieManager = CookieManager.getInstance()
         cookieManager.setAcceptCookie(true)
         val values = runCatching { cookies.cookiesFor(url) }.getOrDefault(emptyList())
+        headers = runCatching { cookies.headersFor(url) }.getOrDefault(emptyMap())
         if (values.isEmpty()) {
-            webView.loadUrl(url)
+            webView.loadUrl(url, headers)
         } else {
             // Load once the jar is in: every cookie's callback runs on this (main) thread, so the last
             // one releases the first navigation with the session already visible to the gateway.
             var pending = values.size
             values.forEach { value ->
                 cookieManager.setCookie(url, value) {
-                    if (--pending == 0) webView.loadUrl(url)
+                    if (--pending == 0) webView.loadUrl(url, headers)
                 }
             }
         }
         cookieManager.flush()
     }
     DisposableEffect(webView) {
-        onDispose { webView.destroy() }
+        onDispose {
+            webView.destroy()
+            // The view's jar is on disk and outlives the page: leave no copy of the session there once it
+            // closes. The app's own jar still has it, and the next page is handed it fresh.
+            CookieManager.getInstance().removeAllCookies(null)
+        }
     }
-    PlatformBackHandler(enabled = true) { onClose() }
+    // Back walks the page's own history first (the dashboard moves between its pages in place).
+    PlatformBackHandler(enabled = true) { if (webView.canGoBack()) webView.goBack() else onClose() }
     Column(
         Modifier
             .fillMaxSize()
@@ -137,10 +179,22 @@ actual fun PluginWebView(url: String, title: String, onClose: () -> Unit) {
                     Button("Try again", onClick = {
                         failed = false
                         loading = true
-                        webView.reload()
+                        webView.loadUrl(webView.url?.takeUnless { it == "about:blank" } ?: url, headers)
                     }, variant = ButtonVariant.Secondary)
                 }
             }
         }
     }
 }
+
+/** Same scheme, host and port: the gateway's origin, which the page may move around in. */
+private fun sameOrigin(a: Uri, b: Uri): Boolean =
+    a.scheme.equals(b.scheme, ignoreCase = true) && a.host.equals(b.host, ignoreCase = true) && a.effectivePort == b.effectivePort
+
+/** The port, with the scheme's default filled in: `https://host` and `https://host:443` are one origin. */
+private val Uri.effectivePort: Int
+    get() = port.takeIf { it != -1 } ?: when (scheme?.lowercase()) {
+        "https" -> 443
+        "http" -> 80
+        else -> -1
+    }

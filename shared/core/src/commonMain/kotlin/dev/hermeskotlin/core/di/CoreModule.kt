@@ -63,7 +63,7 @@ expect val platformModule: Module
 val coreModule = module {
     single { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     single { PersistentCookiesStorage(get()) }
-    single { WebCookieJar(get()) }
+    single { WebCookieJar(get(), get()) }
     single { AccessTokens(get()) }
     single { NativeTokens(get()) }
     single { createHttpClient(cookies = get<PersistentCookiesStorage>(), access = get(), bearer = get()) }
