@@ -64,6 +64,40 @@ class PersistentCookiesStorage(
 
     suspend fun hasCookies(url: Url): Boolean = get(url).isNotEmpty()
 
+    /**
+     * The stored cookies for [url] as `Set-Cookie` values, for a cookie store that has to be told each
+     * cookie by text (the in-app WebView's jar, which has no access to this module's Ktor types):
+     * session cookies go in as the gateway set them — host-only ones without a Domain, wider scopes
+     * with one. Every path on the host goes in, each with its own Path: the page goes on to call routes
+     * (`/api/…`) other than the one it was opened at.
+     *
+     * The refresh token stays here. The gateway rotates it whenever a request renews the session, and a
+     * provider with reuse detection revokes the whole session when a rotated token comes back. Only one
+     * holder may renew, and that is the app: the page gets the access token, which the app hands over
+     * again once it has renewed ([WebCookies.accessExpiresAt] says when). Nothing when the URL can't be read.
+     */
+    internal suspend fun webCookies(url: String): WebCookies {
+        val parsed = runCatching { Url(url) }.getOrNull() ?: return WebCookies(emptyList(), null)
+        return mutex.withLock {
+            val now = clock()
+            val cookies = load()
+            if (cookies.removeAll { it.isExpired(now) }) save(cookies)
+            val lent = cookies.filter { it.matches(parsed, anyPath = true) && it.bareName != SESSION_RT }
+            WebCookies(
+                values = lent.map { cookie ->
+                    buildString {
+                        append(cookie.name).append('=').append(cookie.value)
+                        append("; Path=").append(cookie.path)
+                        if (!cookie.hostOnly) append("; Domain=").append(cookie.domain)
+                        if (cookie.secure) append("; Secure")
+                        if (cookie.httpOnly) append("; HttpOnly")
+                    }
+                },
+                accessExpiresAt = lent.firstOrNull { it.bareName == SESSION_AT }?.expiresAt,
+            )
+        }
+    }
+
     override fun close() = Unit
 
     private suspend fun load(): MutableList<StoredCookie> = cache ?: run {
@@ -85,13 +119,23 @@ class PersistentCookiesStorage(
     }
 }
 
+/** Cookies lent to the page as `Set-Cookie` values, and when the access token among them lapses (epoch ms). */
+internal data class WebCookies(val values: List<String>, val accessExpiresAt: Long?)
+
+/** The gateway's session cookie names, without the `__Host-` / `__Secure-` prefix it adds over https. */
+internal const val SESSION_AT = "hermes_session_at"
+internal const val SESSION_RT = "hermes_session_rt"
+internal const val SESSION_PROVIDER = "hermes_session_provider"
+
+private val StoredCookie.bareName get() = name.removePrefix("__Host-").removePrefix("__Secure-")
+
 private fun StoredCookie.isExpired(now: Long) = expiresAt != null && expiresAt <= now
 
-private fun StoredCookie.matches(url: Url): Boolean {
+private fun StoredCookie.matches(url: Url, anyPath: Boolean = false): Boolean {
     val host = url.host.lowercase()
     val domainOk = if (hostOnly) host == domain else host == domain || host.endsWith(".$domain")
     val requestPath = url.encodedPath.ifEmpty { "/" }
-    val pathOk = requestPath == path ||
+    val pathOk = anyPath || requestPath == path ||
         (requestPath.startsWith(path) && (path.endsWith("/") || requestPath.getOrNull(path.length) == '/'))
     val secureOk = !secure || url.protocol == URLProtocol.HTTPS || url.protocol == URLProtocol.WSS
     return domainOk && pathOk && secureOk

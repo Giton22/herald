@@ -53,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.Archive
 import com.composables.icons.lucide.Blocks
+import com.composables.icons.lucide.Puzzle
 import com.composables.icons.lucide.ArchiveRestore
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.ArrowLeftRight
@@ -142,8 +143,10 @@ import dev.hermeskotlin.ui.components.relativeTime
 import dev.hermeskotlin.ui.update.UpdateBanner
 import kotlinx.coroutines.delay
 import dev.hermeskotlin.core.rooms.Room
+import dev.hermeskotlin.core.plugins.DashboardPlugin
 import dev.hermeskotlin.core.rooms.DesktopRoom
 import dev.hermeskotlin.ui.rooms.CreateRoomDialog
+import dev.hermeskotlin.ui.plugins.PluginsPage
 import dev.hermeskotlin.ui.rooms.RoomsViewModel
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -182,6 +185,8 @@ fun SessionsSidebar(
     onOpenRoom: (Room) -> Unit = {},
     /** Opens a Desktop room's read-only copy from the "On Desktop" group. */
     onOpenDesktopRoom: (DesktopRoom) -> Unit = {},
+    /** Opens a plugin's page over the app, from the Plugins page. */
+    onOpenPlugin: (DashboardPlugin) -> Unit = {},
     /** The open chat has a turn running. */
     selectedRunning: Boolean = false,
     viewModel: SessionsViewModel = koinViewModel(),
@@ -218,6 +223,7 @@ fun SessionsSidebar(
     var searchOpen by remember { mutableStateOf(false) }
     var scheduledOpen by remember { mutableStateOf(false) }
     var capabilitiesOpen by remember { mutableStateOf(false) }
+    var pluginsOpen by remember { mutableStateOf(false) }
     var insightsOpen by remember { mutableStateOf(false) }
     /** The bot whose routines are showing. */
     var routinesOf by remember { mutableStateOf<Bot?>(null) }
@@ -312,6 +318,14 @@ fun SessionsSidebar(
                 profile = profile,
                 onBack = { capabilitiesOpen = false },
                 onSessionExpired = onSessionExpired,
+            )
+        } else if (pluginsOpen && !searchOpen) {
+            PluginsPage(
+                gateway = gateway,
+                profile = profile,
+                onBack = { pluginsOpen = false },
+                onSessionExpired = onSessionExpired,
+                onOpenPlugin = onOpenPlugin,
             )
         } else if (insightsOpen && !searchOpen) {
             InsightsPage(
@@ -471,6 +485,7 @@ fun SessionsSidebar(
                                 NavRow(Lucide.CalendarClock, "Scheduled jobs") { scheduledOpen = true }
                                 NavRow(Lucide.ChartColumn, "Insights") { insightsOpen = true }
                                 NavRow(Lucide.Blocks, "Capabilities") { capabilitiesOpen = true }
+                                NavRow(Lucide.Puzzle, "Plugins") { pluginsOpen = true }
                                 NavRow(Lucide.Archive, "Archived") { viewModel.setFilter(SessionListFilter.Archived) }
                             }
                         }
@@ -605,6 +620,7 @@ internal fun SessionsSidebarSample(
                             NavRow(Lucide.CalendarClock, "Scheduled jobs") {}
                             NavRow(Lucide.ChartColumn, "Insights") {}
                             NavRow(Lucide.Blocks, "Capabilities") {}
+                            NavRow(Lucide.Puzzle, "Plugins") {}
                             NavRow(Lucide.Archive, "Archived") {}
                         }
                     }
