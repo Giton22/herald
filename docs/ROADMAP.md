@@ -247,7 +247,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [ ] UnifiedPush distributor support, so the ntfy app holds the one connection instead of Herald's foreground service
 
 ### Auth & connectivity extras
-- [ ] Native OAuth sign-in (RFC 8252 PKCE via Custom Tab and a loopback redirect; `/auth/native/*`)
+- [x] Browser sign-in for SSO/OIDC gateways (RFC 8252 PKCE via Custom Tab and a loopback redirect; `/auth/native/*`). Bearer tokens kept encrypted and refreshed before they expire
 - [ ] QR-code pairing
 - [ ] Tailscale / MagicDNS setup guide
 - [ ] Gateway API server "lite" mode (`:8642`, static bearer key, Runs API + SSE)

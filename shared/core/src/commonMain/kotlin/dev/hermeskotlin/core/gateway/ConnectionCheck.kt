@@ -72,7 +72,7 @@ class ConnectionCheck(
     suspend fun signIn(url: GatewayUrl): StageResult = when (val result = auth.me(url)) {
         is ApiResult.Success -> StageResult.Passed("Signed in as ${result.value.label}.")
         ApiResult.SessionExpired, ApiResult.InvalidCredentials ->
-            StageResult.Failed("This phone isn't signed in to the gateway, or the sign-in expired.", "Sign in again with your dashboard username and password.")
+            StageResult.Failed("This phone isn't signed in to the gateway, or the sign-in expired.", "Sign in again, with the dashboard password or in the browser.")
         ApiResult.RateLimited -> StageResult.Failed("The gateway is limiting sign-in attempts.", "Wait a minute, then try again.")
         is ApiResult.Unavailable -> StageResult.Failed("The sign-in check didn't get through: ${result.message}", reachFix(url))
         is ApiResult.Failed -> StageResult.Failed("The gateway turned the sign-in check down: ${result.message}", "Sign in again; if it keeps failing, update Hermes.")

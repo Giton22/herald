@@ -1,6 +1,8 @@
 package dev.hermeskotlin.core.di
 
 import dev.hermeskotlin.core.auth.AuthApi
+import dev.hermeskotlin.core.auth.BrowserSignIn
+import dev.hermeskotlin.core.auth.NativeTokens
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.auth.WebCookieJar
 import dev.hermeskotlin.core.chat.AttentionTracker
@@ -63,13 +65,15 @@ val coreModule = module {
     single { PersistentCookiesStorage(get()) }
     single { WebCookieJar(get()) }
     single { AccessTokens(get()) }
-    single { createHttpClient(cookies = get<PersistentCookiesStorage>(), access = get()) }
+    single { NativeTokens(get()) }
+    single { createHttpClient(cookies = get<PersistentCookiesStorage>(), access = get(), bearer = get()) }
     single { GatewayProbe(get()) }
     single {
         val client = get<HttpClient>()
         ConnectionCheck(get(), get(), openSocket = { url, ticket -> client.openGatewaySocket(url, ticket) })
     }
-    single { AuthApi(get(), get()) }
+    single { AuthApi(get(), get(), get()) }
+    single { BrowserSignIn(get(), get()) }
     single { GatewayRepository(get()) }
     single { SessionsApi(get()) }
     single { CronApi(get()) }
