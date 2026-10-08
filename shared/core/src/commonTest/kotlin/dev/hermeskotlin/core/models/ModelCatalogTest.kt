@@ -38,6 +38,17 @@ class ModelCatalogTest {
     }
 
     @Test
+    fun aRepeatedProviderSlugIsKeptOnce() {
+        val catalog = parse(
+            """{"providers":[
+                {"slug":"custom","name":"First","models":["m1"]},
+                {"slug":"custom","name":"Second","models":["m1","m2"]}
+            ]}""",
+        )
+        assertEquals(listOf("First"), catalog.providers.map { it.name })
+    }
+
+    @Test
     fun effortChoicesFollowTheModel() {
         val off = ModelOption("m", "p", reasoning = true, canDisableReasoning = true)
         assertEquals(ReasoningEffort.Off, ReasoningEffort.choicesFor(off).first())

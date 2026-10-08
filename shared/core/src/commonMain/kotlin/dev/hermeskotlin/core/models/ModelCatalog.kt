@@ -76,7 +76,7 @@ data class ModelCatalog(
                     featured = row.strings("featured_models").filter { f -> models.any { it.id == f } },
                     warning = row.string("warning")?.takeIf { it.isNotBlank() },
                 )
-            }
+            }.distinctBy { it.slug } // Picks and stars name a provider by slug: a second one could never be told apart.
             return ModelCatalog(
                 providers = providers,
                 currentModel = result.string("model")?.takeIf { it.isNotBlank() },
