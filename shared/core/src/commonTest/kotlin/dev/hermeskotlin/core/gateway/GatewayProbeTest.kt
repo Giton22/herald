@@ -39,12 +39,25 @@ class GatewayProbeTest {
     }
 
     @Test
-    fun gatedWithoutPasswordProviderCannotSignIn() = runTest {
+    fun gatedWithoutPasswordOrBrowserSignInCannotSignIn() = runTest {
         val engine = MockEngine {
             respond("""{"version":"0.42.0","auth_required":true,"auth_providers":["nous"]}""", HttpStatusCode.OK, json)
         }
         val result = assertIs<ProbeResult.Reachable>(probeWith(engine).probe(url))
         assertEquals(false, result.canSignIn)
+    }
+
+    @Test
+    fun anOidcOnlyGatewaySignsInThroughTheBrowser() = runTest {
+        val engine = MockEngine {
+            respond(
+                """{"version":"0.42.0","auth_required":true,"auth_providers":["self-hosted"],"auth_flows":["cookie","native_pkce"]}""",
+                HttpStatusCode.OK, json,
+            )
+        }
+        val result = assertIs<ProbeResult.Reachable>(probeWith(engine).probe(url))
+        assertEquals(false, result.status.supportsPasswordLogin)
+        assertTrue(result.canSignIn)
     }
 
     @Test
