@@ -55,6 +55,7 @@ import dev.hermeskotlin.designsystem.hermesTheme
 import dev.hermeskotlin.ui.LocalAppSettings
 import dev.hermeskotlin.ui.chat.ChatView
 import dev.hermeskotlin.ui.chat.ModelPickerState
+import dev.hermeskotlin.ui.chat.ModelSheet
 import dev.hermeskotlin.ui.voice.DictationState
 import dev.hermeskotlin.ui.voice.VoiceChatState
 
@@ -85,6 +86,8 @@ enum class PreviewScene(val label: String) {
     LongChat("A chat to scroll back through"),
     Notices("Notices from the gateway"),
     Archived("Archived, with Undo"),
+    Models("Starred models in the model picker"),
+    ModelSearch("A provider found by name in the model picker"),
 }
 
 /**
@@ -163,6 +166,23 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 PreviewScene.Usage -> Box(Modifier.fillMaxSize()) {
                     SampleChat(ChatSamples.reply)
                     UsageSheetView(visible = true, state = PageSamples.usage, live = PageSamples.liveUsage, onDismiss = {})
+                }
+                PreviewScene.Models, PreviewScene.ModelSearch -> Box(Modifier.fillMaxSize()) {
+                    SampleChat(ChatSamples.reply)
+                    CompositionLocalProvider(LocalAppSettings provides AppSettings(showPet = false, starredModels = PageSamples.starredModels)) {
+                        ModelSheet(
+                            visible = true,
+                            onDismiss = {},
+                            state = ChatState(),
+                            picker = ModelPickerState(catalog = PageSamples.modelCatalog),
+                            onRefresh = {},
+                            onSelectModel = {},
+                            onSelectEffort = {},
+                            onFast = {},
+                            onToggleStar = {},
+                            initialQuery = if (scene == PreviewScene.ModelSearch) "openrouter" else "",
+                        )
+                    }
                 }
                 PreviewScene.Processes -> Box(Modifier.fillMaxSize()) {
                     SampleChat(ChatSamples.reply)
@@ -317,3 +337,11 @@ private fun UsagePreview() = HeraldPreview(PreviewScene.Usage)
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun ProcessesPreview() = HeraldPreview(PreviewScene.Processes)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun ModelsPreview() = HeraldPreview(PreviewScene.Models)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun ModelSearchPreview() = HeraldPreview(PreviewScene.ModelSearch)

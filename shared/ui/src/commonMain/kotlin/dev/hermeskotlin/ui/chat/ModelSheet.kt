@@ -98,11 +98,14 @@ internal fun ModelSheet(
     onFast: (Boolean) -> Unit,
     modelOnly: Boolean = false,
     note: String? = null,
+    /** Stars or unstars a model; previews pass their own, since the default saves to the device's settings. */
+    onToggleStar: (ModelOption) -> Unit = starToggle(),
+    /** What the search box starts with, for previews. */
+    initialQuery: String = "",
 ) {
     LaunchedEffect(visible) { if (visible) onRefresh() }
     val selection = ModelSelection.of(state, picker.catalog)
-    val query = rememberTextFieldState()
-    val settings = koinInject<SettingsStore>()
+    val query = rememberTextFieldState(initialQuery)
 
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         Text(
@@ -201,12 +204,7 @@ internal fun ModelSheet(
                                     null
                                 },
                                 onClick = { onSelectModel(model) },
-                                onToggleStar = {
-                                    settings.update { s ->
-                                        val key = model.starKey
-                                        s.copy(starredModels = if (key in s.starredModels) s.starredModels - key else s.starredModels + key)
-                                    }
-                                },
+                                onToggleStar = { onToggleStar(model) },
                             )
                         }
                     }
@@ -222,6 +220,18 @@ internal fun ModelSheet(
                     }
                 }
             }
+        }
+    }
+}
+
+/** Stars a model that isn't starred and unstars one that is, in the device's settings. */
+@Composable
+private fun starToggle(): (ModelOption) -> Unit {
+    val settings = koinInject<SettingsStore>()
+    return { model ->
+        settings.update { s ->
+            val key = model.starKey
+            s.copy(starredModels = if (key in s.starredModels) s.starredModels - key else s.starredModels + key)
         }
     }
 }
