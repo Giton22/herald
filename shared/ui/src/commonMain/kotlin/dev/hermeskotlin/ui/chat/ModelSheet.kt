@@ -25,6 +25,13 @@ import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
+import com.composables.icons.lucide.Star
+import dev.hermeskotlin.core.models.pickerGroups
+import dev.hermeskotlin.core.models.starKey
+import dev.hermeskotlin.core.settings.SettingsStore
+import dev.hermeskotlin.designsystem.components.IconButton
+import dev.hermeskotlin.ui.LocalAppSettings
+import org.koin.compose.koinInject
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
@@ -95,6 +102,7 @@ internal fun ModelSheet(
     LaunchedEffect(visible) { if (visible) onRefresh() }
     val selection = ModelSelection.of(state, picker.catalog)
     val query = rememberTextFieldState()
+    val settings = koinInject<SettingsStore>()
 
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         Text(
@@ -168,32 +176,41 @@ internal fun ModelSheet(
                 if (total > SEARCH_THRESHOLD) {
                     TextField(
                         state = query,
-                        placeholder = "Search models",
+                        placeholder = "Search models or providers",
                         leadingIcon = Lucide.Search,
                         clearable = true,
                         modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp),
                     )
                 }
                 val needle = query.text.toString().trim()
-                val rows = catalog.providers.mapNotNull { provider ->
-                    val models = provider.models.filter {
-                        needle.isEmpty() || it.id.contains(needle, ignoreCase = true) ||
-                            displayModelName(it.id).contains(needle, ignoreCase = true)
-                    }
-                    if (models.isEmpty()) null else displayProviderName(provider.slug, provider.name) to models
-                }
+                val starred = LocalAppSettings.current.starredModels
+                val groups = catalog.pickerGroups(needle, starred)
+                val labelled = catalog.providers.size > 1 || groups.any { it.starred }
                 LazyColumn(Modifier.fillMaxWidth().heightIn(max = 440.dp).padding(top = 4.dp)) {
-                    rows.forEach { (providerName, models) ->
-                        if (catalog.providers.size > 1) item(key = "h-$providerName") { SectionLabel(providerName) }
-                        items(models, key = { "${it.provider}/${it.id}" }) { model ->
+                    groups.forEach { group ->
+                        val prefix = if (group.starred) "s" else "p"
+                        if (labelled) item(key = "h-$prefix-${group.title}") { SectionLabel(group.title) }
+                        items(group.models, key = { "$prefix-${it.starKey}" }) { model ->
                             ModelRow(
                                 model = model,
                                 selected = model.id == selection.model && (selection.provider == null || model.provider == selection.provider),
+                                starred = model.starKey in starred,
+                                provider = if (group.starred && catalog.providers.size > 1) {
+                                    catalog.providers.firstOrNull { it.slug == model.provider }?.let { displayProviderName(it.slug, it.name) }
+                                } else {
+                                    null
+                                },
                                 onClick = { onSelectModel(model) },
+                                onToggleStar = {
+                                    settings.update { s ->
+                                        val key = model.starKey
+                                        s.copy(starredModels = if (key in s.starredModels) s.starredModels - key else s.starredModels + key)
+                                    }
+                                },
                             )
                         }
                     }
-                    if (rows.isEmpty()) {
+                    if (groups.isEmpty()) {
                         item {
                             Text(
                                 "No models match \"$needle\".",
@@ -220,13 +237,20 @@ private fun SectionLabel(text: String) {
 }
 
 @Composable
-private fun ModelRow(model: ModelOption, selected: Boolean, onClick: () -> Unit) {
+private fun ModelRow(
+    model: ModelOption,
+    selected: Boolean,
+    starred: Boolean,
+    provider: String?,
+    onClick: () -> Unit,
+    onToggleStar: () -> Unit,
+) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 12.dp),
+        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(start = 20.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Column(Modifier.weight(1f)) {
+        Column(Modifier.weight(1f).padding(vertical = 8.dp)) {
             Text(
                 displayModelName(model.id),
                 style = Theme[typography][body],
@@ -234,12 +258,19 @@ private fun ModelRow(model: ModelOption, selected: Boolean, onClick: () -> Unit)
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
-            val details = listOfNotNull(model.id.takeIf { displayModelName(it) != it }, model.price).joinToString(" · ")
+            val details = listOfNotNull(provider, model.id.takeIf { displayModelName(it) != it }, model.price).joinToString(" · ")
             if (details.isNotEmpty()) {
                 Text(details, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         if (selected) UnstyledIcon(Lucide.Check, contentDescription = "Current", tint = Theme[colors][accent], modifier = Modifier.size(18.dp))
+        IconButton(
+            icon = Lucide.Star,
+            contentDescription = if (starred) "Unstar ${displayModelName(model.id)}" else "Star ${displayModelName(model.id)}",
+            onClick = onToggleStar,
+            tint = if (starred) Theme[colors][accent] else Theme[colors][textTertiary],
+            iconSize = 18.dp,
+        )
     }
 }
 
