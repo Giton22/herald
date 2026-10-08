@@ -252,6 +252,8 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
             openDesktopRoom = null
         }
     }
+    // The open copy is read from the roster, so the roster keeps refreshing while it shows, sidebar closed or not.
+    LaunchedEffect(openDesktopRoom != null) { bots.setDesktopRoomOpen(openDesktopRoom != null) }
     // A room deleted on Desktop (or a mirror that went away) closes its copy here; a switched gateway
     // clears it through the roster reset too, once the first read comes back.
     LaunchedEffect(desktopRoom, roster.loading) {

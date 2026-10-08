@@ -123,6 +123,9 @@ class BotsViewModel(
     /** Whether the sidebar is on screen ([setVisible]); it stays composed while closed. */
     private val visible = MutableStateFlow(false)
 
+    /** A Desktop room's copy fills the content area ([setDesktopRoomOpen]); it is read from the roster. */
+    private val desktopRoomOpen = MutableStateFlow(false)
+
     /**
      * The bots needing the user, most pressing first: the Needs-you section. Worked out only while the
      * sidebar shows, since that asks the gateway for live statuses; hidden, the last list stands.
@@ -152,10 +155,11 @@ class BotsViewModel(
     private var openSession: String? = null
 
     init {
-        // While the roster shows: read it now, then on every change the gateway reports, and slowly besides.
+        // While the roster shows, or a Desktop room's copy read from it: read it now, then on every change
+        // the gateway reports, and slowly besides.
         viewModelScope.launch {
-            combine(gateway, visible, _mode, connection.state) { url, shown, mode, conn ->
-                url != null && shown && mode == SidebarMode.Bots && conn is ConnectionState.Connected
+            combine(gateway, visible, _mode, desktopRoomOpen, connection.state) { url, shown, mode, desktop, conn ->
+                url != null && (shown && mode == SidebarMode.Bots || desktop) && conn is ConnectionState.Connected
             }.distinctUntilChanged().collectLatest { live ->
                 while (live) {
                     refreshNow()
@@ -165,7 +169,7 @@ class BotsViewModel(
         }
         viewModelScope.launch {
             connection.events
-                .filter { it.type == "sessions.changed" && visible.value && _mode.value == SidebarMode.Bots }
+                .filter { it.type == "sessions.changed" && (visible.value && _mode.value == SidebarMode.Bots || desktopRoomOpen.value) }
                 .debounce(EVENT_DEBOUNCE_MS)
                 .collect { refreshNow() }
         }
@@ -201,6 +205,10 @@ class BotsViewModel(
 
     fun setVisible(shown: Boolean) {
         visible.value = shown
+    }
+
+    fun setDesktopRoomOpen(open: Boolean) {
+        desktopRoomOpen.value = open
     }
 
     fun setMode(mode: SidebarMode) {
