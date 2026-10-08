@@ -144,6 +144,7 @@ import dev.hermeskotlin.ui.update.UpdateBanner
 import kotlinx.coroutines.delay
 import dev.hermeskotlin.core.rooms.Room
 import dev.hermeskotlin.core.plugins.DashboardPlugin
+import dev.hermeskotlin.core.rooms.DesktopRoom
 import dev.hermeskotlin.ui.rooms.CreateRoomDialog
 import dev.hermeskotlin.ui.plugins.PluginsPage
 import dev.hermeskotlin.ui.rooms.RoomsViewModel
@@ -182,6 +183,8 @@ fun SessionsSidebar(
     onBotDeleted: (Bot) -> Unit,
     /** Opens a hosted room from the Rooms section. */
     onOpenRoom: (Room) -> Unit = {},
+    /** Opens a Desktop room's read-only copy from the "On Desktop" group. */
+    onOpenDesktopRoom: (DesktopRoom) -> Unit = {},
     /** Opens a plugin's page over the app, from the Plugins page. */
     onOpenPlugin: (DashboardPlugin) -> Unit = {},
     /** The open chat has a turn running. */
@@ -393,6 +396,7 @@ fun SessionsSidebar(
                             roomsAvailable = roomsState.available,
                             unreadRooms = roomsState.unread,
                             onOpenRoom = onOpenRoom,
+                            onOpenDesktopRoom = onOpenDesktopRoom,
                             onNewRoom = {
                                 rooms.dismissNotice()
                                 newRoomOpen = true

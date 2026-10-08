@@ -260,9 +260,9 @@ private fun TranscriptList(lines: List<RoomLine>, listState: LazyListState, face
     }
 }
 
-/** The user's message: the chat's own prompt bubble. */
+/** The user's message: the chat's own prompt bubble. Shared with the Desktop room's read-only copy. */
 @Composable
-private fun UserLine(line: RoomLine.Message) {
+internal fun UserLine(line: RoomLine.Message) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Box(
@@ -281,7 +281,7 @@ private fun UserLine(line: RoomLine.Message) {
 
 /** A bot's message: its face and name, then what it said in a box tinted with its own color. */
 @Composable
-private fun MemberLine(line: RoomLine.Message, continued: Boolean, faces: BotFaces) {
+internal fun MemberLine(line: RoomLine.Message, continued: Boolean, faces: BotFaces) {
     val bot = remember(line.profile, faces) { faces.roomBot(line.profile) }
     val tint = bot.roomColor()
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
