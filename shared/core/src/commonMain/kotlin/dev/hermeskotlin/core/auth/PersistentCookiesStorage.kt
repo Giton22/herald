@@ -4,6 +4,7 @@ import dev.hermeskotlin.core.network.HermesJson
 import dev.hermeskotlin.core.storage.KeyValueStore
 import io.ktor.client.plugins.cookies.CookiesStorage
 import io.ktor.http.Cookie
+import io.ktor.http.CookieEncoding
 import io.ktor.http.URLProtocol
 import io.ktor.http.Url
 import io.ktor.util.date.getTimeMillis
@@ -24,6 +25,13 @@ internal data class StoredCookie(
     val httpOnly: Boolean,
     /** Epoch millis, or null for a session cookie. */
     val expiresAt: Long?,
+    /**
+     * [CookieEncoding] name to re-send the value with, so it goes back out exactly as it arrived.
+     * Server `Set-Cookie` headers (no `$x-enc`) parse as [CookieEncoding.RAW]; the default repairs
+     * cookies stored before this field existed, which Ktor would otherwise URI-encode — turning the
+     * `=` padding on Hermes' base64url session tokens into `%3D` and failing the HMAC check.
+     */
+    val encoding: String = CookieEncoding.RAW.name,
 )
 
 /**
@@ -100,6 +108,7 @@ private fun StoredCookie.matches(url: Url): Boolean {
 private fun StoredCookie.toCookie() = Cookie(
     name = name,
     value = value,
+    encoding = runCatching { CookieEncoding.valueOf(encoding) }.getOrDefault(CookieEncoding.RAW),
     domain = domain,
     path = path,
     secure = secure,
@@ -122,5 +131,6 @@ private fun Cookie.toStored(requestUrl: Url, now: Long): StoredCookie {
         secure = secure,
         httpOnly = httpOnly,
         expiresAt = expiresAt,
+        encoding = encoding.name,
     )
 }
