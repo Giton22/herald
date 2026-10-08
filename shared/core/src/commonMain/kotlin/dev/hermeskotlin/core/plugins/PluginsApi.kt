@@ -15,7 +15,7 @@ import kotlinx.serialization.json.Json
 /** The page a dashboard plugin adds, as its manifest declares it (`tab`). */
 @Serializable
 data class PluginTab(
-    /** Where the page lives on the gateway, e.g. `/hermes-ofm-pipeline`. */
+    /** Where the page lives on the gateway, e.g. `/kanban`. */
     val path: String,
     /** Where the dashboard places it (`end`, `after:skills`, …); the app lists flat, in its order. */
     val position: String? = null,

@@ -17,7 +17,6 @@ import kotlinx.coroutines.launch
 data class PluginsUiState(
     /** The gateway's dashboard plugins; null until the first answer. */
     val plugins: List<DashboardPlugin>? = null,
-    val loading: Boolean = true,
     val error: String? = null,
     val sessionExpired: Boolean = false,
 ) {
@@ -25,7 +24,7 @@ data class PluginsUiState(
     val openable: List<DashboardPlugin> get() = plugins.orEmpty().filter { it.openPath != null }
 }
 
-/** The gateway's dashboard plugins with a page — OFM Pipeline, Kanban, Dockyard — one tap from a view. */
+/** The gateway's dashboard plugins with a page — Kanban, Achievements — one tap from a view. */
 class PluginsViewModel(private val api: PluginsApi) : ViewModel() {
 
     private val _state = MutableStateFlow(PluginsUiState())
@@ -46,14 +45,13 @@ class PluginsViewModel(private val api: PluginsApi) : ViewModel() {
     fun refresh() {
         val url = gateway?.gatewayUrl ?: return
         loadJob?.cancel()
-        _state.update { it.copy(loading = true, error = null) }
+        _state.update { it.copy(error = null) }
         loadJob = viewModelScope.launch {
             val result = api.list(url, profile)
             _state.update { state ->
                 when (result) {
-                    is ApiResult.Success -> state.copy(plugins = result.value, loading = false)
+                    is ApiResult.Success -> state.copy(plugins = result.value)
                     else -> state.copy(
-                        loading = false,
                         error = result.errorMessage,
                         sessionExpired = result == ApiResult.SessionExpired,
                     )

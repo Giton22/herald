@@ -56,7 +56,7 @@ import org.koin.compose.viewmodel.koinViewModel
 
 /**
  * The sidebar's Plugins page: the gateway's dashboard plugins that bring a page of their own — Kanban,
- * OFM Pipeline, Dockyard. Tapping one opens its page in the app, served by the gateway itself.
+ * Achievements. Tapping one opens its page in the app, served by the gateway itself.
  */
 @Composable
 internal fun PluginsPage(
@@ -91,7 +91,7 @@ internal fun PluginsView(
     Column(Modifier.fillMaxSize()) {
         SubpageHeader("Plugins", onBack = onBack)
         Text(
-            "The gateway's dashboard plugins with a page of their own — Kanban, OFM Pipeline, Dockyard. One opens in the app.",
+            "The gateway's dashboard plugins with a page of their own, like Kanban. One opens in the app.",
             Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp),
             style = Theme[typography][caption],
             color = Theme[colors][textTertiary],
@@ -103,7 +103,7 @@ internal fun PluginsView(
                     Button("Try again", onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                 }
                 plugins == null -> CenteredSpinner()
-                state.openable.isEmpty() -> EmptyState(Lucide.Puzzle, "No plugin pages", "A plugin with a page — Kanban, OFM Pipeline — shows up here.")
+                state.openable.isEmpty() -> EmptyState(Lucide.Puzzle, "No plugin pages", "A plugin with a page, like Kanban, shows up here.")
                 else -> LazyColumn(Modifier.fillMaxSize()) {
                     items(state.openable, key = { it.name }) { plugin -> PluginRow(plugin) { onOpenPlugin(plugin) } }
                 }
