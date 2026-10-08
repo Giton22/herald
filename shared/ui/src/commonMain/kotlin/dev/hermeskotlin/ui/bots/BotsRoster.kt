@@ -62,6 +62,7 @@ import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.bots.BotTrouble
 import dev.hermeskotlin.core.rooms.Room
 import dev.hermeskotlin.core.rooms.DesktopRoom
+import dev.hermeskotlin.core.rooms.RoomMember
 import dev.hermeskotlin.core.cron.CronJob
 import dev.hermeskotlin.core.bots.lastActivity
 import dev.hermeskotlin.core.bots.rosterPreview
@@ -94,6 +95,7 @@ import dev.hermeskotlin.ui.rooms.RoomAsk
 import dev.hermeskotlin.ui.rooms.RoomAskDialogs
 import dev.hermeskotlin.ui.rooms.RoomFaces
 import dev.hermeskotlin.ui.rooms.roomMembers
+import dev.hermeskotlin.ui.rooms.rowSubtitle
 import dev.hermeskotlin.ui.rooms.RoomMenuActions
 import dev.hermeskotlin.ui.sessions.ListNotice
 import dev.hermeskotlin.ui.sessions.ListSpinner
@@ -557,6 +559,21 @@ private fun RoomRow(room: Room, faces: BotFaces, unread: Boolean, onClick: () ->
 
 @Composable
 private fun RoomRowContent(room: Room, faces: BotFaces, unread: Boolean, clicks: Modifier) {
+    // New lines since the user last looked: bold and a dot, as a bot's row shows them.
+    RoomRowLayout(room.members, room.name, roomSubtitle(room), room.updatedAt, faces, marked = unread, clicks = clicks)
+}
+
+/** A room's row, hosted or Desktop's: faces, the name (bold with a dot when [marked]), a subtitle and its time. */
+@Composable
+private fun RoomRowLayout(
+    members: List<RoomMember>,
+    name: String,
+    subtitle: String,
+    updatedAt: Double?,
+    faces: BotFaces,
+    marked: Boolean,
+    clicks: Modifier,
+) {
     Row(
         Modifier
             .fillMaxWidth()
@@ -567,29 +584,28 @@ private fun RoomRowContent(room: Room, faces: BotFaces, unread: Boolean, clicks:
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        RoomFaces(room.members, faces, size = 26.dp, max = 3)
+        RoomFaces(members, faces, size = 26.dp, max = 3)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            // New lines since the user last looked: bold and a dot, as a bot's row shows them.
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
-                    room.name,
-                    style = Theme[typography][body].copy(fontSize = 15.sp, fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Medium),
+                    name,
+                    style = Theme[typography][body].copy(fontSize = 15.sp, fontWeight = if (marked) FontWeight.SemiBold else FontWeight.Medium),
                     color = Theme[colors][text],
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                if (unread) Box(Modifier.size(7.dp).background(Theme[colors][accent], CircleShape))
+                if (marked) Box(Modifier.size(7.dp).background(Theme[colors][accent], CircleShape))
             }
             Text(
-                roomSubtitle(room),
+                subtitle,
                 style = Theme[typography][bodySmall],
                 color = Theme[colors][textSecondary],
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        val last = relativeTime(room.updatedAt)
+        val last = relativeTime(updatedAt)
         if (last.isNotBlank()) {
             Text(last, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
         }
@@ -609,47 +625,16 @@ private fun roomSubtitle(room: Room): String {
  */
 @Composable
 private fun DesktopRoomRow(room: DesktopRoom, faces: BotFaces, onClick: () -> Unit) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(min = MinTouchTarget)
-            .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
-            .clickable(onClickLabel = "Open room ${room.name}") { onClick() }
-            .padding(horizontal = 10.dp, vertical = 9.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        RoomFaces(room.roomMembers(), faces, size = 26.dp, max = 3)
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    room.name,
-                    style = Theme[typography][body].copy(fontSize = 15.sp, fontWeight = if (room.needsYou) FontWeight.SemiBold else FontWeight.Medium),
-                    color = Theme[colors][text],
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                if (room.needsYou) Box(Modifier.size(7.dp).background(Theme[colors][accent], CircleShape))
-            }
-            Text(
-                desktopRoomSubtitle(room),
-                style = Theme[typography][bodySmall],
-                color = Theme[colors][textSecondary],
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-            )
-        }
+    val members = remember(room.members) { room.roomMembers() }
+    val subtitle = remember(room, faces) { room.rowSubtitle(faces) }
+    RoomRowLayout(
+        members,
+        room.name,
+        subtitle,
         // The mirror's times are epoch millis; rows read seconds like every other row.
-        val last = relativeTime(room.updatedAt?.div(1000.0))
-        if (last.isNotBlank()) {
-            Text(last, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
-        }
-    }
-}
-
-/** The room's newest line as "who: what", one line; "Continue on Desktop" while the copy has none. */
-private fun desktopRoomSubtitle(room: DesktopRoom): String {
-    val line = room.lines.lastOrNull() ?: return "Continue on Desktop"
-    return "${line.speaker}: ${line.text}".replace(Regex("\\s+"), " ").trim()
+        room.updatedAt?.div(1000.0),
+        faces,
+        marked = room.needsYou,
+        clicks = Modifier.clickable(onClickLabel = "Open room ${room.name}") { onClick() },
+    )
 }
