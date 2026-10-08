@@ -243,8 +243,15 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
             openDesktopRoom = null
         }
     }
-    // Another gateway has other rooms, and its own mirror.
-    LaunchedEffect(route.gateway.url) { openDesktopRoom = null }
+    // Another gateway has other rooms, and its own mirror. Only a change counts here too: the effect also
+    // runs when Home is composed again (a rotation), and the open copy must survive that.
+    var shownGateway by remember { mutableStateOf(route.gateway.url) }
+    LaunchedEffect(route.gateway.url) {
+        if (route.gateway.url != shownGateway) {
+            shownGateway = route.gateway.url
+            openDesktopRoom = null
+        }
+    }
     // A room deleted on Desktop (or a mirror that went away) closes its copy here; a switched gateway
     // clears it through the roster reset too, once the first read comes back.
     LaunchedEffect(desktopRoom, roster.loading) {
