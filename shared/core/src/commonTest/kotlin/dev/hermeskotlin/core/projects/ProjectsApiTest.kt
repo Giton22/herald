@@ -1,8 +1,18 @@
 package dev.hermeskotlin.core.projects
 
 import dev.hermeskotlin.core.network.HermesJson
+import dev.hermeskotlin.core.rpc.FakeGateway
+import dev.hermeskotlin.core.rpc.RpcException
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ProjectsApiTest {
@@ -47,4 +57,56 @@ class ProjectsApiTest {
         assertEquals(listOf("b", "c", "a"), ProjectsApi.parseProjectSessions(project).map { it.id })
         assertEquals(emptyList(), ProjectsApi.parseProjectSessions(null))
     }
+
+    @Test
+    fun aProjectTheUserMadeShowsBeforeItHasChats() {
+        val projects = ProjectsApi.parseProjects(
+            HermesJson.parseToJsonElement(
+                """[
+                  {"id":"p_new","label":"Fresh","path":"/srv/fresh","isAuto":false,"isNoProject":false,"sessionCount":0,"sessionIds":[]},
+                  {"id":"/srv/auto","label":"auto","path":"/srv/auto","isAuto":true,"sessionCount":0,"sessionIds":[]},
+                  {"id":"__no_project__","label":"Home","isNoProject":true,"sessionCount":0}
+                ]""",
+            ),
+        )
+        assertEquals(listOf("p_new"), projects.map { it.id })
+        assertTrue(projects.single().isUserMade)
+    }
+
+    @Test
+    fun createRenameAndDeleteSendDesktopsCalls() = runTest {
+        val fake = FakeGateway(backgroundScope)
+        fake.answer = { call -> if (call.method == "projects.delete") """{"projects":[],"active_id":null}""" else """{"project":null}""" }
+        val api = ProjectsApi(fake.start())
+
+        api.create("work", "  Herald  ", " /srv/herald ")
+        val create = fake.sent("projects.create").single().params
+        assertEquals("Herald", create["name"]?.jsonPrimitive?.content)
+        assertEquals("work", create["profile"]?.jsonPrimitive?.content)
+        assertEquals(listOf("/srv/herald"), create["folders"]?.jsonArray?.map { it.jsonPrimitive.content })
+
+        api.create(null, "No folder", "  ")
+        val bare = fake.sent("projects.create").last().params
+        assertFalse("folders" in bare)
+        assertNull(bare["profile"])
+
+        api.rename(null, "p1", "Renamed ")
+        val update = fake.sent("projects.update").single().params
+        assertEquals("p1", update["id"]?.jsonPrimitive?.content)
+        assertEquals("Renamed", update["name"]?.jsonPrimitive?.content)
+
+        api.delete(null, "p1")
+        assertEquals("p1", fake.sent("projects.delete").single().params["id"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun aRefusedFolderComesBackAsTheGatewaysMessage() = runTest {
+        val fake = FakeGateway(backgroundScope)
+        fake.answer = { call -> call.error(5063, "folder already belongs to project 'herald'") }
+        val api = ProjectsApi(fake.start())
+        val e = assertFailsWith<RpcException> { api.create(null, "Dup", "/srv/herald") }
+        assertTrue(e.message.orEmpty().contains("already belongs"))
+    }
+
+    private val JsonObject.params get() = getValue("params").jsonObject
 }

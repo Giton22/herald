@@ -28,7 +28,10 @@ data class Project(
     val sessionCount: Int,
     val isAuto: Boolean = false,
     val isNoProject: Boolean = false,
-)
+) {
+    /** A stored project (`projects.db`), which can be renamed and deleted; the others are only groupings. */
+    val isUserMade: Boolean get() = !isAuto && !isNoProject
+}
 
 /**
  * The gateway's projects (`projects.*`, tui_gateway/methods_config.py and methods_projects.py), per profile.
@@ -38,7 +41,7 @@ data class Project(
 class ProjectsApi(private val connection: GatewayConnection) {
 
     /**
-     * `projects.tree`: every project that has chats, the busiest first, Home last. Projects the gateway only
+     * `projects.tree`: every project that has chats or that the user made, the busiest first, Home last. Projects the gateway only
      * discovered on disk, or that only old, cron or helper sessions used, are left out: their chip would
      * open an empty list.
      */
@@ -67,6 +70,44 @@ class ProjectsApi(private val connection: GatewayConnection) {
         return parseProjectSessions(reply?.get("project"))
     }
 
+    /**
+     * `projects.create`: a project named [name] over [folder] (its primary path; none for a project that only
+     * groups chats later). The gateway refuses a folder another project already has, with a message saying so.
+     */
+    suspend fun create(profile: String?, name: String, folder: String?) {
+        client().request(
+            "projects.create",
+            buildJsonObject {
+                profile?.let { put("profile", it) }
+                put("name", name.trim())
+                folder?.trim()?.takeIf { it.isNotEmpty() }?.let { put("folders", JsonArray(listOf(JsonPrimitive(it)))) }
+            },
+        )
+    }
+
+    /** `projects.update`: renames project [id]. */
+    suspend fun rename(profile: String?, id: String, name: String) {
+        client().request(
+            "projects.update",
+            buildJsonObject {
+                profile?.let { put("profile", it) }
+                put("id", id)
+                put("name", name.trim())
+            },
+        )
+    }
+
+    /** `projects.delete`: forgets project [id] and its folders. Its chats stay, and group by their folder again. */
+    suspend fun delete(profile: String?, id: String) {
+        client().request(
+            "projects.delete",
+            buildJsonObject {
+                profile?.let { put("profile", it) }
+                put("id", id)
+            },
+        )
+    }
+
     private fun client(): JsonRpcClient = (connection.state.value as? ConnectionState.Connected)?.client
         ?: throw RpcException(0, "Not connected to the gateway.")
 
@@ -93,7 +134,8 @@ class ProjectsApi(private val connection: GatewayConnection) {
                     isNoProject = (o["isNoProject"] as? JsonPrimitive)?.booleanOrNull == true || id == NO_PROJECT_ID,
                 )
             }
-                .filter { it.sessionCount > 0 }
+                // A project the user made shows with no chats yet, as on Desktop: it was made to start chats in.
+                .filter { it.sessionCount > 0 || it.isUserMade }
                 .sortedWith(compareBy<Project> { it.isNoProject }.thenByDescending { it.sessionCount })
 
         /** Every lane's rows of a hydrated project node, once each, newest first. */

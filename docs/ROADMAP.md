@@ -229,7 +229,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [ ] Config viewer and editor (`config.get`, `config.set`)
 - [x] Projects in the chat list (`projects.tree`, `projects.project_sessions`): a chip per project with chats, as Desktop groups them by folder; a new chat started under one runs in its folder (`session.create` `cwd`)
 - [ ] A chat's working folder: show it, and change it with a folder picker (`complete.path`, `session.cwd.set`, `session.workspace.move`)
-- [ ] Create, rename and delete projects (`projects.create`, `projects.update`, `projects.delete`)
+- [x] Create, rename and delete projects (`projects.create`, `projects.update`, `projects.delete`): a New project button beside the project chips (name and an optional folder on the gateway), and the picked project's options: Rename and Delete for one you made, "Save as project" for a folder the gateway only grouped chats by. A project you made shows before it has chats
 - [x] Insights page in the sidebar, after Desktop's (`GET /api/analytics/usage`): cost, sessions, tokens and cache share over 7/30/90 days, tokens by day (tap a day), top models, tools and skills. `usage.bars` (subscription limits) not yet
 
 ### Notifications & background

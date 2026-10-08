@@ -68,6 +68,8 @@ data class SessionsUiState(
     val undo: ArchiveUndo? = null,
     /** The gateway's projects that have chats; empty when it has none or doesn't know projects. */
     val projects: List<Project> = emptyList(),
+    /** The gateway answers `projects.*`, so a project can be made here even before there are any. */
+    val canMakeProjects: Boolean = false,
     /** The project the recent list is narrowed to; null for every chat. */
     val project: Project? = null,
     /** [project]'s chats; null while they load (or with no project picked). */
@@ -251,7 +253,15 @@ class SessionsViewModel(
     fun setFilter(filter: SessionListFilter) {
         if (filter == _state.value.filter) return
         // The picked project stays for the way back; the archive isn't split by project.
-        _state.update { SessionsUiState(filter = filter, projects = it.projects, project = it.project, projectSessions = it.projectSessions) }
+        _state.update {
+            SessionsUiState(
+                filter = filter,
+                projects = it.projects,
+                canMakeProjects = it.canMakeProjects,
+                project = it.project,
+                projectSessions = it.projectSessions,
+            )
+        }
         load(refresh = false)
     }
 
@@ -260,6 +270,61 @@ class SessionsViewModel(
         if (project?.id == _state.value.project?.id) return
         _state.update { it.copy(project = project, projectSessions = null) }
         loadProjectSessions()
+    }
+
+    /**
+     * Makes a project named [name] over [folder] and shows its chats; [onDone] runs once it's made, or with the
+     * gateway's reason it wasn't (a folder another project has, say), so a form can stay open on the error.
+     */
+    fun createProject(name: String, folder: String?, onDone: (error: String?) -> Unit) {
+        val scope = bound.value
+        viewModelScope.launch {
+            val error = projectCall { projectsApi.create(scope?.second, name, folder) }
+            onDone(error)
+            if (error == null && bound.value == scope) loadProjects(force = true)
+        }
+    }
+
+    /** Renames a project the user made; the chip shows the new name at once and goes back if the gateway says no. */
+    fun renameProject(project: Project, name: String) {
+        val scope = bound.value
+        val renamed = project.copy(label = name.trim())
+        _state.update { state ->
+            state.copy(
+                projects = state.projects.map { if (it.id == project.id) renamed else it },
+                project = state.project?.let { if (it.id == project.id) renamed else it },
+            )
+        }
+        viewModelScope.launch {
+            val error = projectCall { projectsApi.rename(scope?.second, project.id, name) }
+            if (error != null) _state.update { it.copy(message = error) }
+            if (bound.value == scope) loadProjects(force = true)
+        }
+    }
+
+    /** Deletes a project the user made. Its chats stay; the list shows every chat again if it was narrowed to it. */
+    fun deleteProject(project: Project) {
+        val scope = bound.value
+        viewModelScope.launch {
+            val error = projectCall { projectsApi.delete(scope?.second, project.id) }
+            if (error != null) {
+                _state.update { it.copy(message = error) }
+                return@launch
+            }
+            if (_state.value.project?.id == project.id) selectProject(null)
+            _state.update { state -> state.copy(projects = state.projects.filterNot { it.id == project.id }) }
+            if (bound.value == scope) loadProjects(force = true)
+        }
+    }
+
+    /** Runs a project change; null when it went through, else what to tell the user. */
+    private suspend fun projectCall(block: suspend () -> Unit): String? = try {
+        block()
+        null
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        e.message?.takeIf { it.isNotBlank() } ?: "Couldn't change the project."
     }
 
     private var projectsJob: Job? = null
@@ -288,12 +353,14 @@ class SessionsViewModel(
         val scope = bound.value
         projectsAskedAt = now
         projectsJob = viewModelScope.launch {
+            var supported = true
             val projects = try {
                 projectsApi.projects(scope?.second)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: RpcException) {
                 // A gateway that doesn't know projects: no chips. Any other failure keeps what shows.
+                supported = e.code != METHOD_NOT_FOUND
                 if (e.code == METHOD_NOT_FOUND) emptyList() else null
             } catch (_: Exception) {
                 null
@@ -303,7 +370,12 @@ class SessionsViewModel(
                 val shown = projects.takeIf { list -> list.any { !it.isNoProject } }.orEmpty()
                 _state.update { state ->
                     val picked = state.project?.let { p -> shown.firstOrNull { it.id == p.id } }
-                    state.copy(projects = shown, project = picked, projectSessions = state.projectSessions.takeIf { picked != null })
+                    state.copy(
+                        projects = shown,
+                        canMakeProjects = supported,
+                        project = picked,
+                        projectSessions = state.projectSessions.takeIf { picked != null },
+                    )
                 }
                 loadProjectSessions()
             }
