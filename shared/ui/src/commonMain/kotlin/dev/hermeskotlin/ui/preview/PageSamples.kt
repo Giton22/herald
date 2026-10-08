@@ -2,6 +2,9 @@ package dev.hermeskotlin.ui.preview
 
 import dev.hermeskotlin.core.capabilities.Skill
 import dev.hermeskotlin.core.chat.BackgroundProcess
+import dev.hermeskotlin.core.chat.Checkpoint
+import dev.hermeskotlin.core.chat.CheckpointDiff
+import dev.hermeskotlin.core.chat.Checkpoints
 import dev.hermeskotlin.core.chat.ContextBreakdown
 import dev.hermeskotlin.core.chat.ContextCategory
 import dev.hermeskotlin.core.chat.ContextFile
@@ -18,6 +21,7 @@ import dev.hermeskotlin.core.insights.UsageReport
 import dev.hermeskotlin.core.insights.UsageTotals
 import dev.hermeskotlin.core.insights.isoDateOf
 import dev.hermeskotlin.core.sessions.SessionTotals
+import dev.hermeskotlin.ui.chat.CheckpointsState
 import dev.hermeskotlin.ui.chat.ProcessesState
 import dev.hermeskotlin.ui.chat.UsageSheetState
 import dev.hermeskotlin.ui.sessions.CapabilitiesUiState
@@ -168,6 +172,32 @@ internal object PageSamples {
         CheckStage.Live to StageResult.Failed(
             problem = "The chat connection was refused at /api/ws.",
             fix = "Your proxy must pass WebSocket upgrades: forward the Upgrade and Connection headers to the dashboard.",
+        ),
+    )
+
+    /** Three snapshots of the backup chat's folder, the newest opened on what changed since. */
+    val checkpoints = CheckpointsState(
+        list = Checkpoints(
+            enabled = true,
+            checkpoints = listOf(
+                Checkpoint("9f2c1ab47e0d55aa", "2026-10-08T20:41:03+03:00", "before patch backup.sh"),
+                Checkpoint("4be07d19c2a3e810", "2026-10-08T20:36:47+03:00", "before write_file prune.sh"),
+                Checkpoint("11aa22bb33cc44dd", "2026-10-08T19:58:12+03:00", "before patch crontab"),
+            ),
+        ),
+        diffs = mapOf(
+            "9f2c1ab47e0d55aa" to CheckpointDiff(
+                stat = " backup.sh | 4 +++-\n 1 file changed, 3 insertions(+), 1 deletion(-)",
+                diff = """--- a/backup.sh
++++ b/backup.sh
+@@ -12,7 +12,9 @@ DEST=/mnt/nas/backups
+ rsync -a --delete "${'$'}SRC" "${'$'}DEST/${'$'}(date +%F)"
+-echo "done"
++# Keep the last 14 snapshots.
++ls -1d "${'$'}DEST"/20* | head -n -14 | xargs -r rm -rf
++echo "done, ${'$'}(ls -1d "${'$'}DEST"/20* | wc -l) kept"
+ exit 0""",
+            ),
         ),
     )
 }

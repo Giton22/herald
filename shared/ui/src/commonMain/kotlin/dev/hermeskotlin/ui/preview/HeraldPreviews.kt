@@ -31,6 +31,7 @@ import dev.hermeskotlin.designsystem.components.Toast
 import dev.hermeskotlin.core.capabilities.McpServer
 import dev.hermeskotlin.core.capabilities.Skill
 import dev.hermeskotlin.core.capabilities.Toolset
+import dev.hermeskotlin.ui.chat.CheckpointsSheetView
 import dev.hermeskotlin.ui.chat.ProcessesSheetView
 import dev.hermeskotlin.ui.chat.UsageSheetView
 import dev.hermeskotlin.ui.sessions.CapabilitiesActions
@@ -85,6 +86,7 @@ enum class PreviewScene(val label: String) {
     LongChat("A chat to scroll back through"),
     Notices("Notices from the gateway"),
     Archived("Archived, with Undo"),
+    Checkpoints("Checkpoints, one opened on its changes"),
 }
 
 /**
@@ -163,6 +165,18 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 PreviewScene.Usage -> Box(Modifier.fillMaxSize()) {
                     SampleChat(ChatSamples.reply)
                     UsageSheetView(visible = true, state = PageSamples.usage, live = PageSamples.liveUsage, onDismiss = {})
+                }
+                PreviewScene.Checkpoints -> Box(Modifier.fillMaxSize()) {
+                    SampleChat(ChatSamples.reply)
+                    CheckpointsSheetView(
+                        visible = true,
+                        state = PageSamples.checkpoints,
+                        onDiff = {},
+                        onRestore = {},
+                        running = false,
+                        onDismiss = {},
+                        initiallyExpanded = "9f2c1ab47e0d55aa",
+                    )
                 }
                 PreviewScene.Processes -> Box(Modifier.fillMaxSize()) {
                     SampleChat(ChatSamples.reply)
@@ -317,3 +331,7 @@ private fun UsagePreview() = HeraldPreview(PreviewScene.Usage)
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun ProcessesPreview() = HeraldPreview(PreviewScene.Processes)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun CheckpointsPreview() = HeraldPreview(PreviewScene.Checkpoints)
