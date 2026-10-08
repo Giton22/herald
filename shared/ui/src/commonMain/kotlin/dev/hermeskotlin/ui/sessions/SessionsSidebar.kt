@@ -42,6 +42,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Brush
@@ -612,6 +615,10 @@ internal fun SessionsSidebarSample(
     statuses: Map<String, RowStatus> = emptyMap(),
     drafts: Set<String> = emptySet(),
     projects: List<Project> = emptyList(),
+    /** The project the list is narrowed to, showing its options button. */
+    selectedProject: Project? = null,
+    /** The gateway can make projects, so New project shows. */
+    canMakeProjects: Boolean = false,
 ) {
     Box(
         Modifier
@@ -630,7 +637,11 @@ internal fun SessionsSidebarSample(
                     drafts = drafts,
                     sectioned = true,
                     status = {
-                        if (projects.isNotEmpty()) item(key = "projects") { ProjectFilters(projects, selected = null, onSelect = {}) }
+                        if (projects.isNotEmpty() || canMakeProjects) {
+                            item(key = "projects") {
+                                ProjectFilters(projects, selected = selectedProject, onSelect = {}, onNew = if (canMakeProjects) ({}) else null)
+                            }
+                        }
                         item(key = "filters") {
                             AttentionFilters(
                                 selected = AttentionFilter.All,
@@ -1028,16 +1039,35 @@ private fun ProjectFilters(
     onOptions: (Project) -> Unit = {},
 ) {
     Row(Modifier.fillMaxWidth().padding(end = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        val scroll = rememberScrollState()
+        // Where the picked chip sits in the row, so the row can scroll it into sight: its options button
+        // stays beside the row, and must never read as belonging to whichever chip happens to show.
+        var picked by remember { mutableStateOf<ClosedFloatingPointRange<Float>?>(null) }
+        val margin = with(LocalDensity.current) { 8.dp.toPx() }
+        LaunchedEffect(selected?.id, picked, scroll.viewportSize) {
+            val span = picked ?: return@LaunchedEffect
+            val viewport = scroll.viewportSize.takeIf { it > 0 } ?: return@LaunchedEffect
+            when {
+                span.endInclusive + margin > scroll.value + viewport -> scroll.animateScrollTo((span.endInclusive + margin - viewport).toInt())
+                span.start - margin < scroll.value -> scroll.animateScrollTo((span.start - margin).toInt().coerceAtLeast(0))
+            }
+        }
         Row(
-            Modifier.weight(1f).horizontalScroll(rememberScrollState()).padding(start = 8.dp, end = 8.dp),
+            Modifier.weight(1f).horizontalScroll(scroll).padding(start = 8.dp, end = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             if (projects.isNotEmpty()) Chip(text = "All projects", selected = selected == null, onClick = { onSelect(null) })
             projects.forEach { project ->
+                val isPicked = project.id == selected?.id
                 Chip(
                     text = "${project.label} · ${project.sessionCount}",
-                    selected = project.id == selected?.id,
+                    selected = isPicked,
                     onClick = { onSelect(project) },
+                    modifier = if (isPicked) {
+                        Modifier.onPlaced { picked = it.positionInParent().x.let { x -> x..(x + it.size.width) } }
+                    } else {
+                        Modifier
+                    },
                 )
             }
             if (projects.isEmpty() && onNew != null) Chip(text = "New project", selected = false, onClick = onNew)
