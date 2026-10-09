@@ -141,6 +141,9 @@ import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.CircleCheck
 import com.composables.icons.lucide.Clock
 import com.composables.icons.lucide.Sparkles
+import com.composables.icons.lucide.WifiOff
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.ui.semantics.selected
 import androidx.compose.foundation.layout.IntrinsicSize
@@ -374,6 +377,7 @@ fun ChatScreen(
         connected = connected,
         connectionLabel = connectionLabel(connection),
         linkStatus = linkStatus(connection),
+        onRetryConnection = viewModel::retryConnection,
         attachments = attachments,
         attachmentError = attachmentError,
         comments = viewModel.comments.collectAsStateWithLifecycle().value,
@@ -485,6 +489,8 @@ internal fun ChatView(
     connectionLabel: String = "No connection",
     /** Shown in the chat while the link is being made again, so a reply that stopped streaming says why. */
     linkStatus: String? = null,
+    /** Tries the gateway again now, from the offline banner. */
+    onRetryConnection: () -> Unit = {},
     attachments: List<OutgoingAttachment>,
     attachmentError: String?,
     /** Comments on parts of the chat, waiting for the next send. */
@@ -596,7 +602,7 @@ internal fun ChatView(
                         when {
                             !state.historyLoaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
                             state.historyError != null ->
-                                EmptyState(Lucide.CloudOff, "Couldn't load the conversation", state.historyError.orEmpty()) {
+                                EmptyState(Lucide.CloudOff, "Couldn't load the conversation", state.historyError.orEmpty(), error = true) {
                                     Button("Try again", onClick = actions::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                                 }
                             else -> Greeting(
@@ -620,8 +626,8 @@ internal fun ChatView(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    AnimatedVisibility(visible = linkStatus != null && state.messages.isNotEmpty(), enter = fadeIn(), exit = fadeOut()) {
-                        StatusPill(lastLinkStatus)
+                    AnimatedVisibility(visible = linkStatus != null, enter = fadeIn(), exit = fadeOut()) {
+                        OfflineBanner(place, lastLinkStatus, onRetry = onRetryConnection)
                     }
                     AnimatedVisibility(visible = state.loadingOlder, enter = fadeIn(), exit = fadeOut()) {
                         StatusPill("Loading earlier messages…")
@@ -1339,6 +1345,56 @@ internal fun linkStatus(state: ConnectionState): String? = when (state) {
 
 /** GatewayConnection's reason when the ticket request never reached the gateway (no network, or it's down). */
 private const val UNREACHABLE = "Can't reach gateway"
+
+/** The banner over the chat while the gateway can't be reached: where, what's being done about it, and Retry now. */
+@Composable
+private fun OfflineBanner(place: String?, status: String, onRetry: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp)
+            .background(Theme[colors][dangerSoft], RoundedCornerShape(Theme[radii][radiusMedium]))
+            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+            .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        UnstyledIcon(Lucide.WifiOff, contentDescription = null, tint = Theme[colors][danger], modifier = Modifier.size(16.dp))
+        Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
+            Text(offlineTitle(place), style = Theme[typography][bodySmall].copy(fontWeight = FontWeight.Medium), color = Theme[colors][textColor])
+            Text("$status Your draft is kept.", style = Theme[typography][caption], color = Theme[colors][textSecondary])
+        }
+        RetryChip("Retry now", onClick = onRetry)
+    }
+}
+
+/** What the offline banner leads with. */
+internal fun offlineTitle(place: String?): String = "Can't reach ${place?.takeIf { it.isNotBlank() } ?: "Hermes"}"
+
+/** A small pill button, drawn 30dp tall with the full touch height around it. */
+@Composable
+private fun RetryChip(text: String, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        Modifier
+            .heightIn(min = MinTouchTarget)
+            .clickable(interaction, indication = null, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text,
+            style = Theme[typography][caption].copy(fontWeight = FontWeight.Medium),
+            color = Theme[colors][textColor],
+            maxLines = 1,
+            modifier = Modifier
+                .heightIn(min = 30.dp)
+                .clip(CircleShape)
+                .background(Theme[colors][surface3], CircleShape)
+                .indication(interaction, rememberColoredIndication(Theme[colors][textColor]))
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+        )
+    }
+}
 
 /** A small floating line with a spinner, for something under way. */
 @Composable

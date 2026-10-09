@@ -22,6 +22,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.composables.icons.lucide.Archive
+import com.composables.icons.lucide.Lucide
 import dev.hermeskotlin.designsystem.components.Toast
 import kotlinx.coroutines.delay
 import kotlin.time.Clock
@@ -62,6 +64,7 @@ fun ArchiveUndoToast(viewModel: SessionsViewModel = koinViewModel()) {
             shown?.let {
                 Toast(
                     it.message,
+                    icon = Lucide.Archive,
                     actionLabel = "Undo",
                     onAction = viewModel::undoArchive,
                     onDismiss = viewModel::dismissUndo,

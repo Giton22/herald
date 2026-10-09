@@ -59,6 +59,7 @@ import dev.hermeskotlin.designsystem.title
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.chat.usd
 import dev.hermeskotlin.ui.components.EmptyState
+import dev.hermeskotlin.ui.components.ReportSkeleton
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.time.Clock
 
@@ -104,10 +105,10 @@ internal fun InsightsView(state: InsightsUiState, onBack: () -> Unit, onSelectPe
         val report = state.report
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
-                report == null && state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load insights", state.error) {
+                report == null && state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load insights", state.error, error = true) {
                     Button("Try again", onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                 }
-                report == null -> CenteredSpinner()
+                report == null -> ReportSkeleton()
                 report.totals.sessions == 0 && report.totals.apiCalls == 0 ->
                     EmptyState(Lucide.ChartColumn, "Nothing used yet", "Chats from this period, and what they cost, show up here.")
                 else -> Report(report)

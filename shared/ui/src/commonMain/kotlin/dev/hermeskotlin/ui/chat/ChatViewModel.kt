@@ -154,7 +154,7 @@ data class BotIdentity(val name: String, val label: String, val chatsProfile: St
  */
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class ChatViewModel(
-    connection: GatewayConnection,
+    private val connection: GatewayConnection,
     private val host: ChatHost,
     private val lastChats: LastChatStore,
     private val drafts: DraftStore,
@@ -1002,6 +1002,9 @@ class ChatViewModel(
     override fun retry() {
         session.value?.retry()
     }
+
+    /** Tries the gateway again now instead of waiting out the backoff. */
+    fun retryConnection() = connection.retry()
 
     override fun loadOlder() {
         val chat = session.value ?: return

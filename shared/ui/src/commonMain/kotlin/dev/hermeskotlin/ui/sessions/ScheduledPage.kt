@@ -60,6 +60,7 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.PlatformBackHandler
 import dev.hermeskotlin.ui.components.EmptyState
+import dev.hermeskotlin.ui.components.ListSkeleton
 import dev.hermeskotlin.ui.components.relativeTime
 import dev.hermeskotlin.ui.components.timeUntil
 import kotlinx.coroutines.delay
@@ -124,8 +125,8 @@ internal fun ScheduledPage(
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
-                    state.loading -> CenteredSpinner()
-                    state.error != null -> EmptyState(Lucide.CloudOff, if (routines) "Couldn't load routines" else "Couldn't load scheduled jobs", state.error) {
+                    state.loading -> ListSkeleton()
+                    state.error != null -> EmptyState(Lucide.CloudOff, if (routines) "Couldn't load routines" else "Couldn't load scheduled jobs", state.error, error = true) {
                         Button("Try again", onClick = viewModel::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                     }
                     state.jobs.isEmpty() && owner != null ->
