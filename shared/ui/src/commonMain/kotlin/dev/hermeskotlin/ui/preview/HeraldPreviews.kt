@@ -20,7 +20,16 @@ import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.SheetHeader
 import dev.hermeskotlin.ui.chat.PendingComment
+import dev.hermeskotlin.ui.connect.AccessToken
+import dev.hermeskotlin.ui.connect.ConnectUiState
+import dev.hermeskotlin.ui.connect.ConnectView
 import dev.hermeskotlin.ui.connect.ConnectionChecklist
+import dev.hermeskotlin.ui.signin.SignInMethods
+import dev.hermeskotlin.ui.signin.SignInUiState
+import dev.hermeskotlin.ui.signin.SignInView
+import dev.hermeskotlin.core.gateway.GatewayStatus
+import dev.hermeskotlin.core.gateway.GatewayUrl
+import dev.hermeskotlin.core.gateway.ProbeResult
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
@@ -110,6 +119,9 @@ enum class PreviewScene(val label: String) {
     EmptyPage("A page with nothing on it yet"),
     LoadError("A page that couldn't load"),
     Loading("A page loading"),
+    Connect("Connecting to a gateway that answered"),
+    ConnectFailed("A gateway that didn't answer"),
+    SignIn("Signing in"),
 }
 
 /**
@@ -220,6 +232,34 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                         }
                     }
                 }
+                PreviewScene.Connect -> SampleConnect(
+                    ProbeResult.Reachable(
+                        GatewayUrl.parse("https://hermes.example.ts.net"),
+                        GatewayStatus(
+                            version = "0.9.0",
+                            gatewayRunning = true,
+                            authRequired = true,
+                            authProviders = listOf("basic"),
+                            authFlows = listOf("native_pkce"),
+                            profiles = listOf("default", "work"),
+                        ),
+                    ),
+                )
+                PreviewScene.ConnectFailed -> SampleConnect(
+                    ProbeResult.Unreachable(GatewayUrl.parse("192.168.1.20:9119"), "Connection refused"),
+                    address = "192.168.1.20:9119",
+                )
+                PreviewScene.SignIn -> SignInView(
+                    host = "hermes.example.ts.net",
+                    notice = null,
+                    state = SignInUiState(methods = SignInMethods(password = true, browser = true)),
+                    username = remember { TextFieldState("alex") },
+                    password = remember { TextFieldState("correct-horse") },
+                    onSignIn = {},
+                    onSignInWithBrowser = {},
+                    onCancelBrowser = {},
+                    onChangeGateway = {},
+                )
                 PreviewScene.Loading -> OpenSidebar {
                     SidebarPage { InsightsView(InsightsUiState(), onBack = {}, onSelectPeriod = {}, onRetry = {}) }
                 }
@@ -456,3 +496,28 @@ private fun ModelSearchPreview() = HeraldPreview(PreviewScene.ModelSearch)
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun ModelsAllPreview() = HeraldPreview(PreviewScene.ModelsAll)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun ConnectPreview() = HeraldPreview(PreviewScene.Connect)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun ConnectFailedPreview() = HeraldPreview(PreviewScene.ConnectFailed)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun SignInPreview() = HeraldPreview(PreviewScene.SignIn)
+
+/** The welcome screen after a test of [address] came back with [result]. */
+@Composable
+private fun SampleConnect(result: ProbeResult, address: String = "hermes.example.ts.net") {
+    ConnectView(
+        url = remember { TextFieldState(address) },
+        state = ConnectUiState(result = result),
+        access = AccessToken(remember { TextFieldState() }, remember { TextFieldState() }, saved = false, onForget = {}),
+        onTest = {},
+        onContinue = {},
+        onCancel = null,
+    )
+}

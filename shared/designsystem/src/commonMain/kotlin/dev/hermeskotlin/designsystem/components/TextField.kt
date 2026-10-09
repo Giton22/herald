@@ -5,6 +5,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.size
@@ -30,6 +31,10 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.contentType
@@ -47,15 +52,18 @@ import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.UnstyledTextField
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.designsystem.accent
+import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.caption
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.danger
-import dev.hermeskotlin.designsystem.input
+import dev.hermeskotlin.designsystem.dangerSoft
 import dev.hermeskotlin.designsystem.label as labelStyle
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusMedium
-import dev.hermeskotlin.designsystem.stroke
+import dev.hermeskotlin.designsystem.strokeStrong
+import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
@@ -93,20 +101,24 @@ fun TextField(
     focusRequester: FocusRequester? = null,
     /** What autofill may offer here, e.g. [ContentType.SmsOtpCode]; null offers nothing. */
     contentType: ContentType? = null,
+    /** Something inside the field's end, like the connect screen's Test button. */
+    trailing: (@Composable () -> Unit)? = null,
 ) {
     var revealed by remember { mutableStateOf(false) }
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    val radius = Theme[radii][radiusMedium]
+    val shape = RoundedCornerShape(radius)
     val borderColor = when {
         error != null -> Theme[colors][danger]
-        focused -> Theme[colors][accent]
-        else -> Theme[colors][stroke]
+        focused -> Theme[colors][accentText]
+        else -> Theme[colors][strokeStrong]
     }
+    val focusRing = if (error != null) Theme[colors][dangerSoft] else Theme[colors][accentSoft]
 
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (label != null) {
-            Text(label, style = Theme[typography][labelStyle], color = Theme[colors][textSecondary])
+            Text(label, style = Theme[typography][labelStyle], color = Theme[colors][textSecondary], modifier = Modifier.padding(start = 4.dp))
         }
         UnstyledTextField(
             state = state,
@@ -130,18 +142,37 @@ fun TextField(
                 .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
                 .then(contentType?.let { type -> Modifier.semantics { this.contentType = type } } ?: Modifier)
                 .fillMaxWidth()
-                .defaultMinSize(minHeight = 48.dp)
-                .background(Theme[colors][input], shape)
+                .defaultMinSize(minHeight = 52.dp)
+                // Focused, a soft 4dp ring of the accent sits round the field, outside its edge.
+                .drawBehind {
+                    if (focused) {
+                        val out = 4.dp.toPx()
+                        drawRoundRect(
+                            focusRing,
+                            topLeft = Offset(-out, -out),
+                            size = Size(size.width + out * 2, size.height + out * 2),
+                            cornerRadius = CornerRadius(radius.toPx() + out),
+                        )
+                    }
+                }
+                .background(Theme[colors][surface], shape)
                 .border(if (focused) 1.5.dp else 1.dp, borderColor, shape)
-                .padding(horizontal = 14.dp, vertical = 12.dp),
+                // A trailing control brings its own 48dp touch target, so the field keeps to 52dp round it.
+                .padding(
+                    start = 16.dp,
+                    end = if (trailing != null) 6.dp else 16.dp,
+                    // A field of several lines keeps room above its first line and below its last.
+                    top = if (trailing != null) 2.dp else if (singleLine) 6.dp else 12.dp,
+                    bottom = if (trailing != null) 2.dp else if (singleLine) 6.dp else 12.dp,
+                ),
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.defaultMinSize(minHeight = 40.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (leadingIcon != null) {
                     UnstyledIcon(
                         leadingIcon,
                         contentDescription = null,
                         tint = Theme[colors][textTertiary],
-                        modifier = Modifier.padding(end = 10.dp).size(18.dp),
+                        modifier = Modifier.padding(end = 10.dp).size(16.dp),
                     )
                 }
                 TextInput(
@@ -174,9 +205,12 @@ fun TextField(
                             if (revealed) Lucide.EyeOff else Lucide.Eye,
                             contentDescription = if (revealed) "Hide password" else "Show password",
                             tint = Theme[colors][textTertiary],
-                            modifier = Modifier.size(20.dp),
+                            modifier = Modifier.size(18.dp),
                         )
                     }
+                }
+                if (trailing != null) {
+                    Box(Modifier.padding(start = 8.dp)) { trailing() }
                 }
             }
         }
@@ -186,6 +220,7 @@ fun TextField(
                 helper,
                 style = Theme[typography][caption],
                 color = if (error != null) Theme[colors][danger] else Theme[colors][textTertiary],
+                modifier = Modifier.padding(start = 4.dp),
             )
         }
     }

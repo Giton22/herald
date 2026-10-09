@@ -211,7 +211,7 @@ private fun ProcessRow(process: BackgroundProcess, expanded: Boolean, stopping: 
                 Text(process.statusLine(), style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 1)
             }
             if (process.running) {
-                Button("Stop", onClick = onKill, variant = ButtonVariant.Outline, size = ButtonSize.Small, loading = stopping, pill = true)
+                Button("Stop", onClick = onKill, variant = ButtonVariant.Outline, size = ButtonSize.Small, loading = stopping)
             }
         }
         if (expanded) {
