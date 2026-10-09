@@ -37,6 +37,8 @@ import dev.hermeskotlin.ui.sessions.InsightsUiState
 import dev.hermeskotlin.ui.sessions.JobEditor
 import dev.hermeskotlin.ui.sessions.Loadable
 import kotlin.time.Clock
+import dev.hermeskotlin.core.plugins.DashboardPlugin
+import dev.hermeskotlin.core.plugins.PluginTab
 
 /** Made-up data for the sidebar pages and the chat's sheets, in the same home-server story as [ChatSamples]. */
 internal object PageSamples {
@@ -278,6 +280,13 @@ internal object PageSamples {
 
     /** Two models starred, one from each of two providers. */
     val starredModels = listOf("anthropic/claude-opus-5-5", "openrouter/z-ai/glm-5.3-flash")
+
+    /** Dashboard plugins with a page, one bundled with Hermes and the rest installed on the gateway. */
+    val plugins = listOf(
+        DashboardPlugin("kanban", "Kanban", "Boards the agent and you share: cards move as work gets done.", "1.4.0", "bundled", PluginTab("/kanban")),
+        DashboardPlugin("achievements", "Achievements", "Badges for streaks, first runs and long tasks.", "0.3.2", "user", PluginTab("/achievements")),
+        DashboardPlugin("homelab-status", "Homelab status", "Disks, backups and containers on one page.", "2.0.1", "user", PluginTab("/homelab")),
+    )
 
     /** Picked lately, newest first. */
     val recentModels = listOf("openai-codex/gpt-6.1-sol", "openrouter/deepseek/deepseek-v4", "anthropic/claude-opus-5-5")

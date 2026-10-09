@@ -68,6 +68,8 @@ import dev.hermeskotlin.ui.bots.BotFaces
 import dev.hermeskotlin.ui.bots.LocalBotFaces
 import dev.hermeskotlin.ui.rooms.RoomActions
 import dev.hermeskotlin.ui.rooms.RoomView
+import dev.hermeskotlin.ui.plugins.PluginsUiState
+import dev.hermeskotlin.ui.plugins.PluginsView
 import dev.hermeskotlin.ui.sessions.ProjectDraft
 import dev.hermeskotlin.core.projects.FolderListing
 import dev.hermeskotlin.ui.sessions.ProjectActionsSheet
@@ -111,6 +113,7 @@ enum class PreviewScene(val label: String) {
     Settings("Settings"),
     Insights("Insights"),
     Capabilities("Capabilities"),
+    Plugins("Plugins with a page"),
     Scheduled("Scheduled jobs"),
     ScheduledJob("A scheduled job and its runs"),
     JobEditor("A new scheduled job"),
@@ -296,6 +299,9 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 }
                 PreviewScene.Capabilities -> OpenSidebar {
                     SidebarPage { CapabilitiesView(PageSamples.capabilities, remember { TextFieldState() }, PreviewCapabilitiesActions, onBack = {}) }
+                }
+                PreviewScene.Plugins -> OpenSidebar {
+                    SidebarPage { PluginsView(PluginsUiState(plugins = PageSamples.plugins), onBack = {}, onOpenPlugin = {}, onRetry = {}) }
                 }
                 PreviewScene.Scheduled, PreviewScene.ScheduledJob -> OpenSidebar {
                     SidebarPage {
