@@ -140,6 +140,13 @@ import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.CircleCheck
 import com.composables.icons.lucide.Clock
+import com.composables.icons.lucide.Sparkles
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.semantics.role
+import dev.hermeskotlin.designsystem.radiusXLarge
 import androidx.compose.ui.semantics.Role
 import dev.hermeskotlin.designsystem.surface2
 import com.composables.icons.lucide.CloudOff
@@ -2307,7 +2314,7 @@ private fun Composer(
     // Attachments or comments alone are sendable: the gateway gets Desktop's image prompt or the file references.
     val hasText = actions.composer.text.isNotBlank() || attachments.isNotEmpty() || comments.isNotEmpty()
     val runningSend by actions.runningSend.collectAsStateWithLifecycle()
-    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
+    val shape = RoundedCornerShape(Theme[radii][radiusXLarge])
     val page = Theme[colors][background]
     val frosted = remember(page) {
         HazeBlurStyle {
@@ -2389,37 +2396,43 @@ private fun Composer(
                             color = Theme[colors][textTertiary],
                             modifier = Modifier.padding(start = 12.dp, top = 10.dp),
                         )
-                    } else if (state.running && hasText) {
-                        MidTaskHint(command, runningMode)
+                    } else if (state.running && hasText && command) {
+                        CommandHint()
                     }
                     Row(
                         Modifier.fillMaxWidth().padding(top = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         // The buttons are full 48dp targets, which already space their icons apart.
                     ) {
-                        ComposerButton(
-                            icon = Lucide.Plus,
-                            contentDescription = "Add photos or files",
-                            onClick = onAttach,
-                            enabled = attachments.size < OutgoingAttachment.MAX_COUNT,
-                        )
-                        DictationButton(dictation, onClick = onDictate, enabled = connected)
-                        ComposerButton(
-                            icon = Lucide.AudioLines,
-                            contentDescription = "Start a voice chat",
-                            onClick = onVoiceChat,
-                            enabled = connected && !state.running && !dictation.active,
-                        )
-                        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { ModelPill(state, picker, onClick = onOpenModels) }
+                        AttachButton(onClick = onAttach, enabled = attachments.size < OutgoingAttachment.MAX_COUNT)
+                        Box(Modifier.weight(1f).padding(start = 2.dp), contentAlignment = Alignment.CenterStart) {
+                            ModelPill(state, picker, onClick = onOpenModels)
+                        }
+                        // Queue and Steer need the room mid-task; dictation already going keeps its button so it can be finished.
+                        val segments = state.running && hasText && !editing && !command
+                        if (!segments || dictation.active) DictationButton(dictation, onClick = onDictate, enabled = connected)
+                        // Voice chat waits for the task to end, so while one runs its place goes to the ways to send.
+                        if (!state.running) {
+                            ComposerButton(
+                                icon = Lucide.AudioLines,
+                                contentDescription = "Start a voice chat",
+                                onClick = onVoiceChat,
+                                enabled = connected && !dictation.active,
+                            )
+                        }
                         // Stop is on the live task card above; a message typed meanwhile is queued or steers the task.
                         if (state.running && hasText && !editing) {
-                            RunningSendButton(
-                                mode = runningMode,
+                            if (command) {
                                 // A command runs at once; there's nothing to choose.
-                                choices = if (command) emptyList() else RunningSend.entries.filterNot { it == RunningSend.Steer && attachments.isNotEmpty() },
-                                enabled = connected,
-                                onSend = actions::send,
-                            )
+                                SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected)
+                            } else {
+                                RunningSendSegments(
+                                    mode = runningMode,
+                                    attachments = attachments.isNotEmpty(),
+                                    enabled = connected,
+                                    onSend = actions::send,
+                                )
+                            }
                         } else {
                             // While a task runs this only waits: nothing typed yet, or an edit, which goes once it ends.
                             SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected && hasText && !state.running)
@@ -2450,11 +2463,13 @@ private fun Composer(
             .navigationBarsPadding()
             .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)
             .onSizeChanged { onShrink((openHeight[0] - it.height).coerceAtLeast(0)) }
+            // The dock floats over the chat on a soft shadow.
+            .dropShadow(shape, DockShadow)
             .clip(shape)
-            // Frosted: the conversation beneath is blurred, then tinted so the text on top stays clear.
+            // Nearly solid: the conversation beneath only just shows through, blurred.
             .hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)
-            .background(Theme[colors][surface].copy(alpha = 0.55f))
-            .border(1.dp, if (focused) Theme[colors][textTertiary] else Theme[colors][strokeStrong], shape)
+            .background(Theme[colors][surface].copy(alpha = 0.92f))
+            .border(1.dp, if (focused) Theme[colors][textTertiary] else Theme[colors][stroke], shape)
             .onFocusChanged { focused = it.hasFocus },
     ) { (openMeasurables, lineMeasurables), constraints ->
         val loose = constraints.copy(minHeight = 0)
@@ -2494,7 +2509,7 @@ private fun FoldedComposer(
         Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ComposerButton(icon = Lucide.Plus, contentDescription = "Add photos or files", onClick = onAttach, enabled = canAttach)
+        AttachButton(onClick = onAttach, enabled = canAttach)
         UnstyledButton(
             onClick = onOpen,
             modifier = Modifier.weight(1f).heightIn(min = MinTouchTarget).semantics { contentDescription = "Write a message" },
@@ -2521,40 +2536,39 @@ private fun FoldedComposer(
     }
 }
 
-/** Says what Send does with a message typed while a task runs, and that holding it offers the other ways. */
+/** Says that a command typed while a task runs goes at once, not into the task. */
 @Composable
-private fun MidTaskHint(command: Boolean, mode: RunningSend) {
-    Row(
-        Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (!command) UnstyledIcon(mode.icon, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
-        Text(
-            if (command) "Commands run right away." else "Send: ${mode.summary.replaceFirstChar { it.lowercase() }}. Hold Send for other ways.",
-            style = Theme[typography][caption],
-            color = Theme[colors][textTertiary],
-        )
-    }
+private fun CommandHint() {
+    Text(
+        "Commands run right away.",
+        style = Theme[typography][caption],
+        color = Theme[colors][textTertiary],
+        modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 10.dp),
+    )
 }
 
+/** The two ways a message typed mid-task is shown to go: Queue, and Steer or, when that's the setting, Stop & send. */
+internal fun runningSegments(mode: RunningSend): List<RunningSend> =
+    listOf(RunningSend.Queue, if (mode == RunningSend.StopAndSend) RunningSend.StopAndSend else RunningSend.Steer)
+
 /**
- * Send while a task runs: a tap sends the way [mode] says (the setting), a long press opens the [choices]
- * just above it to pick another way for this one message.
+ * Send while a task runs, as a segmented pill: each half sends the message its way, and the one [mode] picks
+ * (the setting) is filled. A steer can't carry files, so with [attachments] it's off. Holding either half
+ * offers the way that isn't shown.
  */
 @Composable
-private fun RunningSendButton(mode: RunningSend, choices: List<RunningSend>, enabled: Boolean, onSend: (RunningSend?) -> Unit) {
+private fun RunningSendSegments(mode: RunningSend, attachments: Boolean, enabled: Boolean, onSend: (RunningSend) -> Unit) {
     val haptics = LocalHapticFeedback.current
     var menuOpen by remember { mutableStateOf(false) }
-    val fill = if (enabled) Theme[colors][textColor] else Theme[colors][textColor].copy(alpha = 0.12f)
-    val tint = if (enabled) Theme[colors][background] else Theme[colors][textTertiary]
+    val shown = runningSegments(mode)
+    val others = RunningSend.entries.filter { it !in shown && !(it == RunningSend.Steer && attachments) }
     DropdownMenu(
         expanded = menuOpen,
         onExpandedChange = { menuOpen = it },
         // The composer sits at the bottom of the screen; the choices open upward, over the chat.
         above = true,
         items = {
-            choices.forEach { choice ->
+            others.forEach { choice ->
                 MenuAction(choice.label, choice.icon, onClick = {
                     menuOpen = false
                     onSend(choice)
@@ -2562,34 +2576,95 @@ private fun RunningSendButton(mode: RunningSend, choices: List<RunningSend>, ena
             }
         },
     ) {
-        Box(
+        // The pill is drawn 38dp tall behind the halves; each half takes taps over the full touch height.
+        val track = Theme[colors][surface3]
+        Row(
             Modifier
-                .size(MinTouchTarget)
-                .clip(CircleShape)
-                .combinedClickable(
-                    enabled = enabled,
-                    onClick = { onSend(null) },
-                    onLongClick = if (choices.isEmpty()) null else {
-                        {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            menuOpen = true
-                        }
-                    },
-                    onClickLabel = if (choices.isEmpty()) "Send" else mode.label,
-                    onLongClickLabel = "Other ways to send",
-                    interactionSource = null,
-                    indication = rememberColoredIndication(tint),
-                ),
-            contentAlignment = Alignment.Center,
+                .heightIn(min = MinTouchTarget)
+                .height(IntrinsicSize.Min)
+                .alpha(if (enabled) 1f else 0.45f)
+                .drawBehind {
+                    val h = 38.dp.toPx()
+                    drawRoundRect(track, topLeft = Offset(0f, (size.height - h) / 2), size = Size(size.width, h), cornerRadius = CornerRadius(h / 2))
+                }
+                .padding(horizontal = 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.size(40.dp).clip(CircleShape).background(fill), contentAlignment = Alignment.Center) {
-                UnstyledIcon(Lucide.ArrowUp, contentDescription = "Send", tint = tint, modifier = Modifier.size(20.dp))
+            shown.forEach { way ->
+                val on = way == mode
+                val usable = enabled && !(way == RunningSend.Steer && attachments)
+                val tint = Theme[colors][if (on) onUserBubble else textTertiary]
+                val interaction = remember { MutableInteractionSource() }
+                Box(
+                    Modifier
+                        .fillMaxHeight()
+                        .combinedClickable(
+                            enabled = usable,
+                            onClick = { onSend(way) },
+                            onLongClick = if (others.isEmpty()) null else {
+                                {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    menuOpen = true
+                                }
+                            },
+                            onClickLabel = "Send",
+                            onLongClickLabel = "Other ways to send",
+                            interactionSource = interaction,
+                            indication = null,
+                        )
+                        .semantics {
+                            contentDescription = "${way.label}: ${way.summary}"
+                            role = Role.Button
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(
+                        Modifier
+                            .clearAndSetSemantics {}
+                            .alpha(if (usable || !enabled) 1f else 0.45f)
+                            .heightIn(min = 32.dp)
+                            .clip(CircleShape)
+                            .then(if (on) Modifier.background(Theme[colors][userBubble], CircleShape) else Modifier)
+                            .indication(interaction, rememberColoredIndication(tint))
+                            .padding(horizontal = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        UnstyledIcon(way.icon, contentDescription = null, tint = tint, modifier = Modifier.size(13.dp))
+                        Text(
+                            way.label,
+                            style = Theme[typography][label].copy(fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium),
+                            color = tint,
+                            maxLines = 1,
+                        )
+                    }
+                }
             }
         }
     }
 }
 
-/** A plain square icon button inside the composer, like Desktop's +. */
+/** The dock's shadow: soft and wide, a little below it, so it floats over the chat. */
+private val DockShadow = Shadow(radius = 24.dp, color = Color.Black.copy(alpha = 0.18f), offset = DpOffset(0.dp, 8.dp))
+
+/** The composer's +: a 36dp disc, with the full touch target around it. */
+@Composable
+private fun AttachButton(onClick: () -> Unit, enabled: Boolean) {
+    val tint = if (enabled) Theme[colors][textSecondary] else Theme[colors][textTertiary].copy(alpha = 0.5f)
+    UnstyledButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(MinTouchTarget).clip(CircleShape),
+        indication = rememberColoredIndication(tint),
+    ) {
+        Box(Modifier.size(36.dp).background(Theme[colors][surface3], CircleShape), contentAlignment = Alignment.Center) {
+            UnstyledIcon(Lucide.Plus, contentDescription = "Add photos or files", tint = tint, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+/** A plain icon button inside the composer, like the microphone. */
 @Composable
 private fun ComposerButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean) {
     val tint = if (enabled) Theme[colors][textSecondary] else Theme[colors][textTertiary].copy(alpha = 0.5f)
@@ -2606,20 +2681,20 @@ private fun ComposerButton(icon: ImageVector, contentDescription: String, onClic
 internal enum class SendIcon { Send, Stop }
 
 /**
- * Desktop's round send: a disc in the text colour (white on dark) with the icon cut in the page colour.
+ * The round send: an accent disc that glows when there's something to send, a quiet grey one otherwise.
  * The disc stays 40dp; the button around it takes taps over the full [MinTouchTarget].
  */
 @Composable
 internal fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
-    val fill = if (enabled) Theme[colors][textColor] else Theme[colors][textColor].copy(alpha = 0.12f)
-    val tint = if (enabled) Theme[colors][background] else Theme[colors][textTertiary]
-    UnstyledButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.size(MinTouchTarget).clip(CircleShape),
-        indication = rememberColoredIndication(tint),
+    val (fill, tint) = sendColors(enabled)
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        Modifier
+            .size(MinTouchTarget)
+            .clickable(interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size(40.dp).clip(CircleShape).background(fill), contentAlignment = Alignment.Center) {
+        SendDisc(fill, tint, glow = enabled, interaction) {
             UnstyledIcon(
                 when (icon) {
                     SendIcon.Send -> Lucide.ArrowUp
@@ -2634,6 +2709,25 @@ internal fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
             )
         }
     }
+}
+
+/** Send's disc and icon colors: the accent when it can send, a quiet grey when it can't. */
+@Composable
+private fun sendColors(enabled: Boolean): Pair<Color, Color> =
+    if (enabled) Theme[colors][accent] to Theme[colors][onAccent] else Theme[colors][surface3] to Theme[colors][textMuted]
+
+/** Send's 40dp disc, which glows in its own color when it can send; a press on the button around it shows on the disc. */
+@Composable
+private fun SendDisc(fill: Color, tint: Color, glow: Boolean, interaction: MutableInteractionSource, content: @Composable () -> Unit) {
+    Box(
+        Modifier
+            .size(40.dp)
+            .then(if (glow) Modifier.dropShadow(CircleShape, bubbleGlow(fill)) else Modifier)
+            .background(fill, CircleShape)
+            .clip(CircleShape)
+            .indication(interaction, rememberColoredIndication(tint)),
+        contentAlignment = Alignment.Center,
+    ) { content() }
 }
 
 /** The composer's microphone: tap to dictate, tap again to finish; the ring follows your voice. */
@@ -2667,43 +2761,56 @@ internal fun DictationButton(state: DictationState, onClick: () -> Unit, enabled
     }
 }
 
-/** "Opus 5.5 ⌄  Medium ⌄" as quiet text, Desktop's composer selectors; opens the model sheet. */
+/** "✦ Opus 5.5 | Medium ⌄" in a pill, the model and thinking level; opens the model sheet. */
 @Composable
 private fun ModelPill(state: ChatState, picker: ModelPickerState, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val selection = ModelSelection.of(state, picker.catalog)
     val model = selection.model ?: return
     val effort = state.effort(selection.option)
-    val tint = Theme[colors][textSecondary]
-    Row(
+    val fast = state.fast == true
+    val name = displayModelName(model)
+    val interaction = remember { MutableInteractionSource() }
+    // Drawn 36dp tall; the full touch height around it takes the tap.
+    Box(
         modifier
-            .height(40.dp)
-            .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+            .heightIn(min = MinTouchTarget)
+            .clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
+            .semantics {
+                contentDescription = listOfNotNull(name, effort?.label, "fast mode".takeIf { fast }).joinToString(", ") + ". Change model"
+            },
+        contentAlignment = Alignment.CenterStart,
     ) {
-        if (state.fast == true) {
-            UnstyledIcon(Lucide.Zap, contentDescription = "Fast mode", tint = Theme[colors][warning], modifier = Modifier.size(14.dp))
-        }
-        Text(
-            displayModelName(model),
-            style = Theme[typography][bodySmall],
-            color = tint,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
-        if (effort != null) {
-            Text(
-                effort.label,
-                style = Theme[typography][bodySmall],
-                color = tint,
-                maxLines = 1,
-                modifier = Modifier.padding(start = 10.dp),
+        Row(
+            Modifier
+                .clearAndSetSemantics {}
+                .heightIn(min = 36.dp)
+                .clip(CircleShape)
+                .background(Theme[colors][surface3], CircleShape)
+                .indication(interaction, rememberColoredIndication(Theme[colors][textSecondary]))
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+            // Fast mode takes the sparkle's place.
+            UnstyledIcon(
+                if (fast) Lucide.Zap else Lucide.Sparkles,
+                contentDescription = null,
+                tint = Theme[colors][if (fast) warning else accentText],
+                modifier = Modifier.size(13.dp),
             )
-            UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
+            Text(
+                name,
+                style = Theme[typography][caption],
+                color = Theme[colors][textSecondary],
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (effort != null) {
+                Text("|", style = Theme[typography][caption], color = Theme[colors][textMuted])
+                Text(effort.label, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
+            }
+            UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textMuted], modifier = Modifier.size(12.dp))
         }
     }
 }
