@@ -29,9 +29,21 @@ class AccentPaletteTest {
     @Test
     fun everyAccentReadsAsLinkTextOnItsBackground() {
         for (palette in AccentPalette.all) {
-            assertTrue(contrast(palette.light.accent, Color.White) >= 4.5f, "${palette.name} on white")
-            assertTrue(contrast(palette.dark.accent, Color(0xFF0D1014)) >= 4.5f, "${palette.name} on the dark background")
-            assertTrue(contrast(palette.black.accent, Color.Black) >= 4.5f, "${palette.name} on black")
+            assertTrue(contrast(palette.light.text, Color(0xFFF7F7F9)) >= 4.5f, "${palette.name} on the light background")
+            assertTrue(contrast(palette.light.text, Color.White) >= 4.5f, "${palette.name} on a light card")
+            assertTrue(contrast(palette.dark.text, Color(0xFF0A0A0C)) >= 4.5f, "${palette.name} on the dark background")
+            assertTrue(contrast(palette.dark.text, Color(0xFF16161A)) >= 4.5f, "${palette.name} on a dark card")
+            assertTrue(contrast(palette.black.text, Color.Black) >= 4.5f, "${palette.name} on black")
+        }
+    }
+
+    @Test
+    fun textOnTheUsersBubbleIsReadable() {
+        for (palette in AccentPalette.all) {
+            for ((scheme, colors) in listOf("light" to palette.light, "dark" to palette.dark, "black" to palette.black)) {
+                val ratio = contrast(colors.onAccent, colors.bubble)
+                assertTrue(ratio >= 4.5f, "${palette.name} $scheme: bubble text is $ratio:1")
+            }
         }
     }
 

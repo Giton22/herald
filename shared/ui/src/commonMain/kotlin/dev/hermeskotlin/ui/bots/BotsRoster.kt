@@ -69,6 +69,7 @@ import dev.hermeskotlin.core.bots.rosterPreview
 import dev.hermeskotlin.core.bots.showsPicture
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
@@ -453,7 +454,7 @@ private fun BotRow(
                     line,
                     style = Theme[typography][bodySmall].copy(fontStyle = if (italic) FontStyle.Italic else FontStyle.Normal),
                     color = when {
-                        waiting != null -> Theme[colors][accent]
+                        waiting != null -> Theme[colors][accentText]
                         working || thinking -> Theme[colors][success]
                         trouble != null || failingRoutine != null -> Theme[colors][warning]
                         else -> Theme[colors][textSecondary]
@@ -486,7 +487,7 @@ private fun NeedsYouRow(item: NeedsYou, picture: ByteArray?, onClick: () -> Unit
             Text(
                 item.reason,
                 style = Theme[typography][bodySmall],
-                color = if (urgent) Theme[colors][accent] else Theme[colors][warning],
+                color = if (urgent) Theme[colors][accentText] else Theme[colors][warning],
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -494,7 +495,7 @@ private fun NeedsYouRow(item: NeedsYou, picture: ByteArray?, onClick: () -> Unit
         UnstyledIcon(
             if (urgent) Lucide.BellRing else Lucide.TriangleAlert,
             contentDescription = null,
-            tint = if (urgent) Theme[colors][accent] else Theme[colors][warning],
+            tint = if (urgent) Theme[colors][accentText] else Theme[colors][warning],
             modifier = Modifier.size(16.dp),
         )
     }

@@ -81,6 +81,7 @@ import dev.hermeskotlin.designsystem.components.Surface
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusLarge
 import dev.hermeskotlin.designsystem.radiusMedium
+import dev.hermeskotlin.designsystem.onUserBubble
 import dev.hermeskotlin.designsystem.strokeStrong
 import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.text
@@ -273,7 +274,7 @@ internal fun UserLine(line: RoomLine.Message) {
                 .border(1.dp, Theme[colors][userBubbleStroke], shape)
                 .padding(horizontal = 12.dp, vertical = 10.dp),
         ) {
-            Text(line.text, style = Theme[typography][body], color = Theme[colors][text])
+            Text(line.text, style = Theme[typography][body], color = Theme[colors][onUserBubble])
         }
         MessageTimeLabel(line.createdAt, Modifier.align(Alignment.End))
     }

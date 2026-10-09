@@ -48,6 +48,7 @@ import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.components.MarkdownText
 import dev.hermeskotlin.designsystem.components.highlightColor
 import dev.hermeskotlin.designsystem.label
+import dev.hermeskotlin.designsystem.onUserBubble
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.stroke
@@ -154,9 +155,9 @@ private fun Number(number: Int, modifier: Modifier = Modifier) {
 @Composable
 internal fun SentReviewContent(review: SentReview) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (review.before.isNotBlank()) Text(review.before, style = Theme[typography][body], color = Theme[colors][textColor])
+        if (review.before.isNotBlank()) Text(review.before, style = Theme[typography][body], color = Theme[colors][onUserBubble])
         review.comments.forEachIndexed { index, comment -> SentCommentCard(index + 1, comment) }
-        if (review.after.isNotBlank()) Text(review.after, style = Theme[typography][body], color = Theme[colors][textColor])
+        if (review.after.isNotBlank()) Text(review.after, style = Theme[typography][body], color = Theme[colors][onUserBubble])
     }
 }
 
@@ -167,7 +168,8 @@ private fun SentCommentCard(number: Int, comment: SentComment) {
     Row(
         Modifier
             .fillMaxWidth()
-            .background(Theme[colors][surface].copy(alpha = 0.6f), shape)
+            // Opaque, so it reads the same on the accent-filled bubble as anywhere else.
+            .background(Theme[colors][surface], shape)
             .border(1.dp, Theme[colors][stroke], shape)
             .padding(horizontal = 10.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),

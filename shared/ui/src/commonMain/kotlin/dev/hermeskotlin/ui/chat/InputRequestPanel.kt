@@ -64,6 +64,7 @@ import dev.hermeskotlin.core.chat.InputAnswers
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
@@ -304,7 +305,7 @@ private fun ClarifyContent(request: InputRequest.Clarify, more: String?, connect
     }
 
     val counter = if (questions.size > 1) "${index + 1} of ${questions.size}" else more
-    Header(Lucide.MessageCircleQuestion, Theme[colors][accent], "Hermes asks", counter, onStop)
+    Header(Lucide.MessageCircleQuestion, Theme[colors][accentText], "Hermes asks", counter, onStop)
     Text(question.question, style = Theme[typography][body], color = Theme[colors][textColor])
     if (question.choices.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -368,7 +369,7 @@ private fun ChoiceRow(choice: String, question: ClarifyQuestion, selected: Boole
         UnstyledIcon(
             icon,
             contentDescription = null,
-            tint = if (selected) Theme[colors][accent] else Theme[colors][textTertiary],
+            tint = if (selected) Theme[colors][accentText] else Theme[colors][textTertiary],
             modifier = Modifier.size(18.dp),
         )
         Text(choice, style = Theme[typography][bodySmall], color = Theme[colors][textColor])

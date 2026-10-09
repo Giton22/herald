@@ -38,7 +38,7 @@ import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.journey.JourneyNode
 import dev.hermeskotlin.core.journey.JourneyNodeDetail
-import dev.hermeskotlin.designsystem.accent
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
@@ -112,7 +112,7 @@ private fun NodeRow(node: JourneyNode, onClick: () -> Unit) {
         UnstyledIcon(
             if (node.isMemory) Lucide.Brain else Lucide.Sparkles,
             contentDescription = null,
-            tint = Theme[colors][if (node.isMemory) textSecondary else accent],
+            tint = Theme[colors][if (node.isMemory) textSecondary else accentText],
             modifier = Modifier.size(18.dp),
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {

@@ -68,6 +68,7 @@ import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.designsystem.StarFilled
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
@@ -410,7 +411,7 @@ private fun ModelRow(
             Text(
                 row.name,
                 style = Theme[typography][body],
-                color = if (selected) Theme[colors][accent] else Theme[colors][textColor],
+                color = if (selected) Theme[colors][accentText] else Theme[colors][textColor],
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
@@ -434,12 +435,12 @@ private fun ModelRow(
                 }
             }
         }
-        if (selected) UnstyledIcon(Lucide.Check, contentDescription = "Current", tint = Theme[colors][accent], modifier = Modifier.size(18.dp))
+        if (selected) UnstyledIcon(Lucide.Check, contentDescription = "Current", tint = Theme[colors][accentText], modifier = Modifier.size(18.dp))
         IconButton(
             icon = if (starred) StarFilled else Lucide.Star,
             contentDescription = if (starred) "Unstar ${row.name}" else "Star ${row.name}",
             onClick = onToggleStar,
-            tint = if (starred) Theme[colors][accent] else Theme[colors][textTertiary],
+            tint = if (starred) Theme[colors][accentText] else Theme[colors][textTertiary],
             iconSize = 18.dp,
         )
     }
@@ -461,7 +462,7 @@ private fun ProviderPill(text: String, selected: Boolean, onClick: () -> Unit) {
         Text(
             text,
             style = Theme[typography][caption],
-            color = if (selected) Theme[colors][accent] else Theme[colors][textSecondary],
+            color = if (selected) Theme[colors][accentText] else Theme[colors][textSecondary],
             maxLines = 1,
         )
     }
@@ -474,7 +475,7 @@ private fun BrowseAllRow(count: Int, onClick: () -> Unit) {
         Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("All models", style = Theme[typography][body], color = Theme[colors][accent], modifier = Modifier.weight(1f))
+        Text("All models", style = Theme[typography][body], color = Theme[colors][accentText], modifier = Modifier.weight(1f))
         Text("$count", style = Theme[typography][caption], color = Theme[colors][textTertiary])
         UnstyledIcon(Lucide.ChevronRight, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.padding(start = 6.dp).size(16.dp))
     }

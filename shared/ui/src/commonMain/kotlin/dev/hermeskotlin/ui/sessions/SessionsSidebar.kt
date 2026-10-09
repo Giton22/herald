@@ -107,6 +107,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.sp
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.components.SectionLabel
 import dev.hermeskotlin.designsystem.sidebar as sidebarColor
 import dev.hermeskotlin.designsystem.strokeStrong
@@ -983,7 +984,7 @@ internal fun SessionRow(
                 UnstyledIcon(Lucide.Pin, contentDescription = "Pinned", tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
             }
             if (draft) {
-                Text("Draft", style = Theme[typography][caption], color = Theme[colors][accent], maxLines = 1)
+                Text("Draft", style = Theme[typography][caption], color = Theme[colors][accentText], maxLines = 1)
             }
             if (!showSnippet) {
                 Text(relativeTime(session.activityAt), style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
@@ -993,7 +994,7 @@ internal fun SessionRow(
         val labels = buildList {
             status?.waiting?.let { add(it.label to Theme[colors][warning]) }
             if (status?.running == true) add("Running" to Theme[colors][success])
-            if (status?.unread == true) add("New reply" to Theme[colors][accent])
+            if (status?.unread == true) add("New reply" to Theme[colors][accentText])
         }
         if (labels.isNotEmpty()) {
             Row(Modifier.padding(start = 16.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -1294,7 +1295,7 @@ private fun ProfileRow(profile: Profile, checked: Boolean, onClick: () -> Unit) 
                 Text(sub, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        if (checked) UnstyledIcon(Lucide.Check, contentDescription = "Active", tint = Theme[colors][accent], modifier = Modifier.size(20.dp))
+        if (checked) UnstyledIcon(Lucide.Check, contentDescription = "Active", tint = Theme[colors][accentText], modifier = Modifier.size(20.dp))
     }
 }
 
@@ -1308,7 +1309,7 @@ internal fun MessageBanner(message: String, onDismiss: () -> Unit, modifier: Mod
     Surface(modifier.padding(horizontal = 16.dp).fillMaxWidth(), elevated = true) {
         Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(message, style = Theme[typography][bodySmall], color = Theme[colors][text], modifier = Modifier.weight(1f))
-            IconButton(Lucide.X, contentDescription = "Dismiss", onClick = onDismiss, tint = Theme[colors][accent])
+            IconButton(Lucide.X, contentDescription = "Dismiss", onClick = onDismiss, tint = Theme[colors][accentText])
         }
     }
 }

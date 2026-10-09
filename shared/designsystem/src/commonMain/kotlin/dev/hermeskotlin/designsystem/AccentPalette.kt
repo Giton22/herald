@@ -2,24 +2,28 @@ package dev.hermeskotlin.designsystem
 
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.lerp
 
 /** The accent the app is drawn in, for colors outside the theme's tokens (the assistant's edge light). */
 val LocalAccentPalette = staticCompositionLocalOf { AccentPalette.Blue }
 
-/** The colors one accent gives a scheme: [accent], [onAccent] and [accentSoft], and the user's bubble tinted with it. */
+/**
+ * The colors one accent gives a scheme: [accent] as a fill with [onAccent] on it, [text] for the accent as
+ * text or an icon, the [soft] tint, and the user's bubble, which is filled with the accent.
+ */
 class AccentColors(
     val accent: Color,
     val onAccent: Color,
+    val text: Color,
     val soft: Color,
-    val bubble: Color,
-    val bubbleStroke: Color,
+    val bubble: Color = accent,
+    val bubbleStroke: Color = accent,
 )
 
 /**
- * An accent the user can pick in Settings. [Blue] is Desktop's Nous blue, exactly as it was before presets;
- * the others mix their tints from the accent the same way, so a preset only needs a light and a dark accent.
- * Light accents carry white text and dark accents near-black text, each at 4.5:1 or more (AccentPaletteTest).
+ * An accent the user can pick in Settings. [Blue] is Herald blue #2F6BF5: one fill with white on it in both
+ * schemes, and a lighter blue for text on dark. The others use their accent as fill and text alike, so a preset
+ * only needs a light and a dark accent. Light accents carry white text and dark accents near-black text, each
+ * at 4.5:1 or more, and every accent's text reads at 4.5:1 on its background (AccentPaletteTest).
  */
 class AccentPalette private constructor(
     val name: String,
@@ -28,15 +32,15 @@ class AccentPalette private constructor(
     val black: AccentColors,
 ) {
     companion object {
-        private val Canvas = Color.White
-        private val Night = Color(0xFF0D1014)
-        private val DarkText = Color(0xFF0D1117)
+        private val DarkText = Color(0xFF0A0A0C)
+
+        private val HeraldBlue = Color(0xFF2F6BF5)
 
         val Blue = AccentPalette(
             "Blue",
-            light = AccentColors(Color(0xFF0053FD), Color.White, Color(0xFFE3EDFF), Color(0xFFEDF3FF), Color(0xFFC9D8F5)),
-            dark = AccentColors(Color(0xFF4A84FE), DarkText, Color(0xFF17243A), Color(0xFF0F1621), Color(0xFF1F2B41)),
-            black = AccentColors(Color(0xFF4A84FE), DarkText, Color(0xFF17243A), Color(0xFF0B121C), Color(0xFF1F2B41)),
+            light = AccentColors(HeraldBlue, Color.White, text = Color(0xFF1F56D6), soft = HeraldBlue.copy(alpha = 0.10f)),
+            dark = AccentColors(HeraldBlue, Color.White, text = Color(0xFF7AA5FF), soft = Color(0xFF4A84FE).copy(alpha = 0.14f)),
+            black = AccentColors(HeraldBlue, Color.White, text = Color(0xFF7AA5FF), soft = Color(0xFF4A84FE).copy(alpha = 0.14f)),
         )
         val Violet = mixed("Violet", light = Color(0xFF7C3AED), dark = Color(0xFFA78BFA))
         val Green = mixed("Green", light = Color(0xFF16803C), dark = Color(0xFF3FB950))
@@ -49,14 +53,14 @@ class AccentPalette private constructor(
         /** The palette called [name], or [Blue] for a name this version doesn't know. */
         fun named(name: String?): AccentPalette = all.firstOrNull { it.name == name } ?: Blue
 
-        // The fractions are the ones Blue's hand-picked tints sit at.
+        // The tints sit at Blue's alphas.
         private fun mixed(name: String, light: Color, dark: Color): AccentPalette {
-            val darkColors = AccentColors(dark, DarkText, lerp(Night, dark, 0.16f), lerp(Night, dark, 0.05f), lerp(Night, dark, 0.22f))
+            val darkColors = AccentColors(dark, DarkText, text = dark, soft = dark.copy(alpha = 0.14f))
             return AccentPalette(
                 name,
-                light = AccentColors(light, Color.White, lerp(Canvas, light, 0.11f), lerp(Canvas, light, 0.07f), lerp(Canvas, light, 0.22f)),
+                light = AccentColors(light, Color.White, text = light, soft = light.copy(alpha = 0.10f)),
                 dark = darkColors,
-                black = AccentColors(dark, DarkText, darkColors.soft, lerp(Color.Black, dark, 0.1f), darkColors.bubbleStroke),
+                black = darkColors,
             )
         }
     }
