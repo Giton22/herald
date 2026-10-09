@@ -209,7 +209,10 @@ internal object PageSamples {
         providers = listOf(
             ModelProvider(
                 "anthropic", "Anthropic",
-                listOf("claude-opus-5-5", "claude-sonnet-5", "claude-haiku-4-5").map { ModelOption(it, "anthropic", reasoning = true) },
+                // Opus has a priority tier, so the sheet shows its Fast mode card.
+                listOf("claude-opus-5-5", "claude-sonnet-5", "claude-haiku-4-5").map {
+                    ModelOption(it, "anthropic", reasoning = true, fast = it == "claude-opus-5-5")
+                },
             ),
             ModelProvider(
                 "openrouter", "OpenRouter",
