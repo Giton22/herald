@@ -1,6 +1,5 @@
 package dev.hermeskotlin.ui.sessions
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -12,7 +11,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldState
@@ -21,10 +19,32 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.key
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.accentText
+import dev.hermeskotlin.designsystem.code
+import dev.hermeskotlin.designsystem.eyebrow
+import dev.hermeskotlin.designsystem.radiusLarge
+import dev.hermeskotlin.designsystem.stroke
+import dev.hermeskotlin.designsystem.surface
+import dev.hermeskotlin.designsystem.surface3
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.Lucide
@@ -37,7 +57,6 @@ import dev.hermeskotlin.core.capabilities.McpTestResult
 import dev.hermeskotlin.core.capabilities.Skill
 import dev.hermeskotlin.core.capabilities.Toolset
 import dev.hermeskotlin.core.gateway.SavedGateway
-import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
 import dev.hermeskotlin.designsystem.colors
@@ -49,7 +68,6 @@ import dev.hermeskotlin.designsystem.components.Switch
 import dev.hermeskotlin.designsystem.components.TextField
 import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.radii
-import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.success
 import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textSecondary
@@ -116,28 +134,30 @@ internal fun CapabilitiesView(
     note: String? = null,
 ) {
     Column(Modifier.fillMaxSize()) {
-        SubpageHeader(title, onBack = onBack)
-        note?.let {
-            Text(
-                it,
-                style = Theme[typography][bodySmall],
-                color = Theme[colors][textSecondary],
-                modifier = Modifier.padding(start = 24.dp, end = 16.dp, bottom = 10.dp),
-            )
-        }
+        SubpageHeader(title, onBack = onBack, subtitle = note ?: "What the agent can use in new chats")
         SegmentedControl(
             options = CapabilityTab.entries,
             selected = state.tab,
             onSelect = actions::selectTab,
             optionLabel = { it.label },
-            modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+            // How many each tab holds, once loaded.
+            optionBadge = { tab ->
+                when (tab) {
+                    CapabilityTab.Skills -> state.skills.items?.size
+                    CapabilityTab.Tools -> state.toolsets.items?.size
+                    CapabilityTab.Mcp -> state.servers.items?.size
+                }?.toString()
+            },
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp),
         )
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (state.tab) {
                 CapabilityTab.Skills -> SkillsTab(state, skillQuery, actions)
                 CapabilityTab.Tools -> TabList(state.toolsets, empty = "No toolsets configured.", onRetry = actions::refresh) { toolsets ->
                     item(key = "note") { Hint("Toolsets the agent gets in new chats.") }
-                    items(toolsets, key = { it.name }) { ToolsetRow(it, onToggle = { on -> actions.setToolsetEnabled(it, on) }) }
+                    item(key = "toolsets") {
+                        RowCard(toolsets, key = { it.name }) { ToolsetRow(it, onToggle = { on -> actions.setToolsetEnabled(it, on) }) }
+                    }
                 }
                 CapabilityTab.Mcp -> TabList(
                     state.servers,
@@ -145,14 +165,16 @@ internal fun CapabilitiesView(
                     onRetry = actions::refresh,
                 ) { servers ->
                     item(key = "note") { Hint("Changes apply from the next chat.") }
-                    items(servers, key = { it.name }) { server ->
-                        ServerRow(
-                            server,
-                            test = state.tests[server.name],
-                            testing = server.name in state.tests && state.tests[server.name] == null,
-                            onToggle = { on -> actions.setServerEnabled(server, on) },
-                            onTest = { actions.testServer(server) },
-                        )
+                    item(key = "servers") {
+                        RowCard(servers, key = { it.name }) { server ->
+                            ServerRow(
+                                server,
+                                test = state.tests[server.name],
+                                testing = server.name in state.tests && state.tests[server.name] == null,
+                                onToggle = { on -> actions.setServerEnabled(server, on) },
+                                onTest = { actions.testServer(server) },
+                            )
+                        }
                     }
                 }
             }
@@ -182,12 +204,17 @@ private fun SkillsTab(state: CapabilitiesUiState, skillQuery: TextFieldState, ac
             item(key = "c-$category") {
                 Text(
                     category.uppercase(),
-                    style = Theme[typography][caption],
+                    style = Theme[typography][eyebrow],
                     color = Theme[colors][textTertiary],
-                    modifier = Modifier.padding(start = 12.dp, top = 12.dp, bottom = 4.dp),
+                    modifier = Modifier.padding(start = 6.dp, top = 12.dp, bottom = 6.dp).semantics {
+                        heading()
+                        contentDescription = category
+                    },
                 )
             }
-            items(inGroup, key = { "s-${it.name}" }) { skill -> SkillRow(skill, onToggle = { on -> actions.setSkillEnabled(skill, on) }) }
+            item(key = "g-$category") {
+                RowCard(inGroup, key = { "s-${it.name}" }) { skill -> SkillRow(skill, onToggle = { on -> actions.setSkillEnabled(skill, on) }) }
+            }
         }
     }
 }
@@ -214,7 +241,7 @@ private fun <T> TabList(loadable: Loadable<T>, empty: String, onRetry: () -> Uni
         items == null -> ListSkeleton()
         items.isEmpty() -> Box(Modifier.fillMaxSize().padding(12.dp)) { ListNotice(empty) }
         // 4dp on top leaves room for a focused search field's ring, which the list would clip.
-        else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 96.dp)) {
+        else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 96.dp)) {
             content(items)
         }
     }
@@ -261,9 +288,10 @@ private fun ServerRow(server: McpServer, test: McpTestResult?, testing: Boolean,
             checked = server.enabled,
             // A plugin's server is the plugin's to switch.
             onToggle = onToggle.takeIf { server.plugin == null },
+            lockedNote = "set by ${server.plugin}",
         )
         Row(
-            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+            Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -288,33 +316,69 @@ private fun ServerRow(server: McpServer, test: McpTestResult?, testing: Boolean,
     }
 }
 
-/** Title, detail and a small tag on the left, a switch on the right; a null [onToggle] locks it. */
+/** Rows on one ringed surface card, a hairline between each. */
 @Composable
-private fun SwitchRow(title: String, detail: String?, tag: String?, checked: Boolean, onToggle: ((Boolean) -> Unit)?) {
+private fun <T> RowCard(rows: List<T>, key: (T) -> Any, row: @Composable (T) -> Unit) {
+    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Theme[colors][surface])
+            .border(1.dp, Theme[colors][stroke], shape),
+    ) {
+        rows.forEachIndexed { i, item ->
+            key(key(item)) {
+                if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(Theme[colors][stroke]))
+                row(item)
+            }
+        }
+    }
+}
+
+/**
+ * The name in mono with a small tag pill, the detail under it, a switch on the right; a row switched off
+ * has its name in the secondary text. A null [onToggle] locks it, said as [lockedNote].
+ * "learned" — a skill the agent wrote itself — takes the accent.
+ */
+@Composable
+private fun SwitchRow(
+    title: String,
+    detail: String?,
+    tag: String?,
+    checked: Boolean,
+    onToggle: ((Boolean) -> Unit)?,
+    lockedNote: String = "can't be changed here",
+) {
     Row(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
-            .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
-            .then(if (onToggle != null) Modifier.clickable { onToggle(!checked) } else Modifier)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .then(
+                if (onToggle != null) {
+                    Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = onToggle)
+                } else {
+                    Modifier.semantics(mergeDescendants = true) { stateDescription = "${if (checked) "On" else "Off"}, $lockedNote" }
+                },
+            )
+            .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            // The tag goes under a name too long to leave it room.
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                 Text(
                     title,
-                    style = Theme[typography][body],
-                    color = Theme[colors][if (checked) text else textSecondary],
+                    style = Theme[typography][code].copy(fontSize = 13.5.sp, fontWeight = FontWeight.Medium),
+                    color = if (checked) Theme[colors][text] else Theme[colors][textSecondary],
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
                 )
-                tag?.let { Text(it, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1) }
+                tag?.let { Tag(it, accent = it == "learned") }
             }
             detail?.let {
-                Text(it, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary], maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text(it, style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp, lineHeight = 17.5.sp), color = Theme[colors][textTertiary], maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
         Switch(checked)
@@ -322,6 +386,19 @@ private fun SwitchRow(title: String, detail: String?, tag: String?, checked: Boo
 }
 
 @Composable
+private fun Tag(text: String, accent: Boolean) {
+    Text(
+        text,
+        style = Theme[typography][caption].copy(fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold),
+        color = if (accent) Theme[colors][accentText] else Theme[colors][textSecondary],
+        maxLines = 1,
+        modifier = Modifier
+            .background(if (accent) Theme[colors][accentSoft] else Theme[colors][surface3], CircleShape)
+            .padding(horizontal = 7.dp, vertical = 1.dp),
+    )
+}
+
+@Composable
 private fun Hint(text: String) {
-    Text(text, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary], modifier = Modifier.padding(horizontal = 12.dp, vertical = 4.dp))
+    Text(text, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary], modifier = Modifier.padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 8.dp))
 }

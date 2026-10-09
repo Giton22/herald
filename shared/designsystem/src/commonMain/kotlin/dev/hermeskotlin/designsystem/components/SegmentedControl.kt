@@ -32,6 +32,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -42,8 +43,10 @@ import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.code
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.label
+import dev.hermeskotlin.designsystem.textMuted
 import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.strokeStrong
 import dev.hermeskotlin.designsystem.text
@@ -64,9 +67,12 @@ fun <T> SegmentedControl(
     optionLabel: (T) -> String,
     modifier: Modifier = Modifier,
     optionIcon: (T) -> ImageVector? = { null },
+    /** A count beside the label, in mono, such as how many each tab holds. */
+    optionBadge: (T) -> String? = { null },
 ) {
     val track = Theme[colors][well]
     val ring = Theme[colors][stroke]
+    val badges = LocalDensity.current.fontScale <= 1.3f
     Row(
         modifier
             .fillMaxWidth()
@@ -117,7 +123,17 @@ fun <T> SegmentedControl(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
+                    // A large font leaves the label too little room beside it, and the count is extra.
+                    optionBadge(option)?.takeIf { badges }?.let {
+                        Text(
+                            it,
+                            style = Theme[typography][code].copy(fontSize = 11.sp),
+                            color = if (isSelected) Theme[colors][textTertiary] else Theme[colors][textMuted],
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }
