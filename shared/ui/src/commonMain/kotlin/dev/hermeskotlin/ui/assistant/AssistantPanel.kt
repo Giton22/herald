@@ -8,6 +8,10 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.isImeVisible
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -312,6 +316,10 @@ internal fun AssistantCard(
                     AssistantPhase.SignedOut -> BarStatus("Not signed in", StatusTone.Neutral)
                     AssistantPhase.Ready -> chatStatus(state.chat, connected, state.linkLabel, place = null)
                 },
+                // A question from Hermes takes the composer's place, and circling with it; the bar keeps it then.
+                onCircle = actions::startCircling.takeIf {
+                    state.phase == AssistantPhase.Ready && state.chat.inputRequests.isNotEmpty() && state.screen.screenshot != null
+                },
                 onOpenHerald = onOpenHerald,
                 onClose = onClose,
             )
@@ -326,7 +334,7 @@ internal fun AssistantCard(
 
 /** The chat's top bar in small: the mark, "Herald" over its status line, and Open and Close in a ringed pill. */
 @Composable
-private fun Header(status: BarStatus?, onOpenHerald: () -> Unit, onClose: () -> Unit) {
+private fun Header(status: BarStatus?, onCircle: (() -> Unit)?, onOpenHerald: () -> Unit, onClose: () -> Unit) {
     Row(
         Modifier.fillMaxWidth().padding(start = 4.dp, top = 2.dp, bottom = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -349,6 +357,7 @@ private fun Header(status: BarStatus?, onOpenHerald: () -> Unit, onClose: () -> 
                 .background(Theme[colors][surface], shape)
                 .border(1.dp, Theme[colors][stroke], shape),
         ) {
+            onCircle?.let { BarButton(Lucide.LassoSelect, "Circle part of the screen", onClick = it) }
             BarButton(Lucide.Maximize2, "Open in Herald", onClick = onOpenHerald)
             BarButton(Lucide.X, "Close", onClick = onClose)
         }
@@ -402,7 +411,8 @@ private fun ColumnScope.Ready(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Spinner(Modifier.size(14.dp))
+            // The action beside it says it all; "Loading" on top would only be read twice.
+            Spinner(Modifier.size(14.dp).clearAndSetSemantics {})
             Text(currentAction(chat), style = Theme[typography][caption], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
@@ -451,6 +461,7 @@ private fun Reply(message: ChatMessage.Assistant) {
  * The chat's composer: what goes along on top (the screen or the part circled), the field, and a row of
  * buttons under it, circling on the left, the microphone and Send on the right.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Composer(
     state: AssistantCardState,
@@ -469,6 +480,11 @@ private fun Composer(
     val hasText = actions.composer.text.isNotBlank()
     val shape = RoundedCornerShape(Theme[radii][radiusXLarge])
     var focused by remember { mutableStateOf(false) }
+    // As in the chat: Back hides the keyboard but leaves the field focused, which lights the edge and brings the
+    // keyboard back on the next relayout. Put away means done typing.
+    val imeVisible = WindowInsets.isImeVisible
+    val focusManager = LocalFocusManager.current
+    LaunchedEffect(imeVisible) { if (!imeVisible && focused) focusManager.clearFocus() }
     val tray: (@Composable () -> Unit)? = when {
         circled != null -> { { CircledChip(circled, onCircleAgain = actions::startCircling, onRemove = actions::dropCircled) } }
         !chat.hasConversation && screen.missed -> { { ScreenUnavailable(onOpenScreenSettings) } }
