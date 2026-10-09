@@ -21,6 +21,7 @@ import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.profiles.ProfileRoster
 import dev.hermeskotlin.core.profiles.ProfilesApi
+import dev.hermeskotlin.core.projects.FolderListing
 import dev.hermeskotlin.core.projects.Project
 import dev.hermeskotlin.core.projects.ProjectsApi
 import dev.hermeskotlin.core.rpc.RpcException
@@ -325,6 +326,10 @@ class SessionsViewModel(
             if (bound.value == scope) loadProjects(force = true)
         }
     }
+
+    /** The folders in [dir] on the gateway's machine starting with [prefix], for picking a project's folder; throws when it can't ask. */
+    suspend fun projectFolders(dir: String, prefix: String): FolderListing =
+        projectsApi.folders(bound.value?.second, dir, prefix)
 
     /** [id]'s chip and the picked project renamed to [label]; with [unless], only while they still show that. */
     private fun SessionsUiState.withProjectLabel(id: String, label: String, unless: String? = null): SessionsUiState {

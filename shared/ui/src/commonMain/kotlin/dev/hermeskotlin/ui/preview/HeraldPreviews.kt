@@ -43,6 +43,7 @@ import dev.hermeskotlin.designsystem.components.rememberSidebarState
 import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.ui.sessions.SessionsSidebarSample
 import dev.hermeskotlin.ui.sessions.ProjectDraft
+import dev.hermeskotlin.core.projects.FolderListing
 import dev.hermeskotlin.ui.sessions.ProjectActionsSheet
 import dev.hermeskotlin.ui.sessions.NewProjectDialog
 import dev.hermeskotlin.ui.settings.GatewayInfo
@@ -165,6 +166,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                             error = null,
                             onDismiss = {},
                             onCreate = { _, _ -> },
+                            listFolders = { _, _ -> FolderListing(emptyList()) },
                         )
                     }
                 }

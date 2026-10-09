@@ -564,6 +564,7 @@ fun SessionsSidebar(
                 if (error == null) newProject = null
             }
         },
+        listFolders = viewModel::projectFolders,
     )
     DeleteDialog(
         deleteTarget,
