@@ -266,7 +266,7 @@ private fun ServerRow(server: McpServer, test: McpTestResult?, testing: Boolean,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Button("Test", onClick = onTest, variant = ButtonVariant.Outline, size = ButtonSize.Small, loading = testing, pill = true)
+            Button("Test", onClick = onTest, variant = ButtonVariant.Outline, size = ButtonSize.Small, loading = testing)
             when {
                 test == null -> Unit
                 test.ok -> Text(

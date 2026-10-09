@@ -301,7 +301,6 @@ private fun CheckpointRow(
                 size = ButtonSize.Small,
                 loading = restoring,
                 enabled = canRestore,
-                pill = true,
             )
         }
         if (expanded) {

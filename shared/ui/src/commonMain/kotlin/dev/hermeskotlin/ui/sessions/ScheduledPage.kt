@@ -237,7 +237,7 @@ private fun JobSummary(job: CronJob, busy: Boolean, onRunNow: () -> Unit, onTogg
             Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger], maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button("Run now", onClick = onRunNow, size = ButtonSize.Small, leadingIcon = Lucide.Zap, loading = busy, pill = true)
+            Button("Run now", onClick = onRunNow, size = ButtonSize.Small, leadingIcon = Lucide.Zap, loading = busy)
             Button(
                 if (job.paused) "Resume" else "Pause",
                 onClick = onTogglePaused,
@@ -245,7 +245,6 @@ private fun JobSummary(job: CronJob, busy: Boolean, onRunNow: () -> Unit, onTogg
                 size = ButtonSize.Small,
                 leadingIcon = if (job.paused) Lucide.Play else Lucide.Pause,
                 enabled = !busy,
-                pill = true,
             )
         }
     }
