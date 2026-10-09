@@ -192,7 +192,8 @@ internal fun ModelSheet(
                 color = Theme[colors][textColor],
                 modifier = Modifier.weight(1f).semantics { heading() },
             )
-            if (!modelOnly) {
+            // A note says what a pick changes (a bot's model is for all its chats), so it doesn't also say this.
+            if (!modelOnly && note == null) {
                 Text(
                     "For this chat",
                     style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp),
@@ -247,6 +248,10 @@ internal fun ModelSheet(
         }
         if (option?.fast == true && !modelOnly) {
             FastModeCard(state.fast == true, onFast, Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp))
+        }
+        if (efforts.isNotEmpty() || (option?.fast == true && !modelOnly)) {
+            // A hairline after the chat's settings, so the model chips below don't read as more thinking levels.
+            Box(Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp).fillMaxWidth().height(1.dp).background(Theme[colors][stroke]))
         }
 
         val catalog = picker.catalog
@@ -507,7 +512,8 @@ private fun ModelRow(
                             modifier = Modifier.weight(1f, fill = false),
                         )
                     }
-                    if (price != null) PriceTag(price)
+                    // Both give way at large text, so neither pushes the other out of the row.
+                    if (price != null) PriceTag(price, Modifier.weight(1f, fill = false))
                 }
             }
             if (single == null) {
@@ -522,7 +528,8 @@ private fun ModelRow(
                 }
             }
         }
-        if (selected) UnstyledIcon(Lucide.Check, contentDescription = "Current", tint = Theme[colors][accentText], modifier = Modifier.size(18.dp))
+        // The row says it's selected; the check only shows it.
+        if (selected) UnstyledIcon(Lucide.Check, contentDescription = null, tint = Theme[colors][accentText], modifier = Modifier.size(18.dp))
         IconButton(
             icon = if (starred) StarFilled else Lucide.Star,
             contentDescription = if (starred) "Unstar ${row.name}" else "Star ${row.name}",
@@ -557,13 +564,14 @@ private fun ProviderPill(text: String, selected: Boolean, onClick: () -> Unit) {
 
 /** A model's price per million tokens, in mono on a small raised tag. */
 @Composable
-private fun PriceTag(price: String) {
+private fun PriceTag(price: String, modifier: Modifier = Modifier) {
     Text(
         price,
         style = Theme[typography][code].copy(fontSize = 10.5.sp),
         color = Theme[colors][textSecondary],
         maxLines = 1,
-        modifier = Modifier
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier
             .background(Theme[colors][surface3], RoundedCornerShape(Theme[radii][radiusXSmall]))
             .padding(horizontal = 6.dp, vertical = 1.dp),
     )
