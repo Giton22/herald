@@ -6,6 +6,11 @@ import dev.hermeskotlin.core.network.HermesJson
 import dev.hermeskotlin.core.rpc.JsonRpcClient
 import dev.hermeskotlin.core.rpc.RpcException
 import dev.hermeskotlin.core.sessions.SessionSummary
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -32,6 +37,9 @@ data class Project(
     /** A stored project (`projects.db`), which can be renamed and deleted; the others are only groupings. */
     val isUserMade: Boolean get() = !isAuto && !isNoProject
 }
+
+/** One folder's subfolders on the gateway; [more] when the gateway's page was full, so some may be missing. */
+data class FolderListing(val folders: List<String>, val more: Boolean = false)
 
 /**
  * The gateway's projects (`projects.*`, tui_gateway/methods_config.py and methods_projects.py), per profile.
@@ -110,12 +118,69 @@ class ProjectsApi(private val connection: GatewayConnection) {
         )
     }
 
+    /**
+     * `complete.path`, as a folder picker: the folders in [dir] on the gateway's machine (`~/`, or a path ending
+     * in `/`) whose names start with [prefix]. The gateway lists only the first [FOLDER_PAGE] entries, files and
+     * folders mixed, dot-files first. So a full page with no [prefix] is asked again once per first character, a
+     * few at a time, and the pages put together; with a [prefix], a full page is left for a longer one to narrow.
+     */
+    suspend fun folders(profile: String?, dir: String, prefix: String = ""): FolderListing {
+        val first = folderPage(profile, dir, prefix)
+        if (!first.more || prefix.isNotEmpty()) return first
+        val gate = Semaphore(FOLDER_ASKS_AT_ONCE)
+        val pages = coroutineScope {
+            NAME_STARTS.map { c ->
+                async {
+                    gate.withPermit {
+                        // One letter's page failing leaves the rest to show.
+                        try {
+                            folderPage(profile, dir, c.toString())
+                        } catch (e: RpcException) {
+                            FolderListing(emptyList())
+                        }
+                    }
+                }
+            }.awaitAll()
+        }
+        // Names starting with anything else (`@`, a space, a letter with an accent) weren't asked for.
+        return FolderListing((first.folders + pages.flatMap { it.folders }).distinct().sortedBy { it.lowercase() }, more = true)
+    }
+
+    private suspend fun folderPage(profile: String?, dir: String, prefix: String): FolderListing {
+        val reply = client().request(
+            "complete.path",
+            buildJsonObject {
+                profile?.let { put("profile", it) }
+                put("word", dir + prefix)
+            },
+        ) as? JsonObject
+        return parseFolders(reply?.get("items"))
+    }
+
     private fun client(): JsonRpcClient = (connection.state.value as? ConnectionState.Connected)?.client
         ?: throw RpcException(0, "Not connected to the gateway.")
 
     companion object {
         /** The id of Home, the bucket for chats with no project folder. */
         const val NO_PROJECT_ID = "__no_project__"
+
+        /** How many entries `complete.path` lists at most. */
+        const val FOLDER_PAGE = 30
+
+        /** What a folder name usually starts with; the gateway matches without case, so lowercase is enough. */
+        private const val NAME_STARTS = "abcdefghijklmnopqrstuvwxyz0123456789_-"
+
+        /** How many of those pages are asked for together; each is a directory read (a shell on a remote backend). */
+        private const val FOLDER_ASKS_AT_ONCE = 4
+
+        /** `complete.path` items: the folders by name (`display`, without its `/`), files left out. */
+        internal fun parseFolders(element: JsonElement?): FolderListing {
+            val items = (element as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+            val folders = items
+                .filter { it.text("meta") == "dir" }
+                .mapNotNull { it.text("display")?.removeSuffix("/")?.takeIf { name -> name.isNotEmpty() } }
+            return FolderListing(folders, more = items.size >= FOLDER_PAGE)
+        }
 
         /** The newest sessions the gateway groups; it reads 2000 by default, which is a lot for a phone to ask often. */
         const val SESSION_LIMIT = 500

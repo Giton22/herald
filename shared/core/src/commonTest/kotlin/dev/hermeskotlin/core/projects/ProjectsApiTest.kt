@@ -117,5 +117,57 @@ class ProjectsApiTest {
         assertTrue(e.message.orEmpty().contains("already belongs"))
     }
 
+    @Test
+    fun foldersAreTheDirectoriesCompletePathLists() = runTest {
+        val fake = FakeGateway(backgroundScope)
+        fake.answer = {
+            """{"items":[
+              {"text":"~/notes.txt","display":"notes.txt","meta":""},
+              {"text":"~/projects/","display":"projects/","meta":"dir"},
+              {"text":"~/src/","display":"src/","meta":"dir"}
+            ]}""".replace("\n", "")
+        }
+        val api = ProjectsApi(fake.start())
+
+        assertEquals(FolderListing(listOf("projects", "src")), api.folders("work", "~/", "pr"))
+        val sent = fake.sent("complete.path").single().params
+        assertEquals("~/pr", sent["word"]?.jsonPrimitive?.content)
+        assertEquals("work", sent["profile"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun aFullPageIsAskedAgainByFirstLetter() = runTest {
+        val fake = FakeGateway(backgroundScope)
+        // The first page is all dot-files; the folders after them only come back when asked for by letter.
+        val dotFiles = (1..ProjectsApi.FOLDER_PAGE).joinToString(",") { """{"display":".f$it","meta":""}""" }
+        fake.answer = { call ->
+            when (call.params["word"]?.jsonPrimitive?.content) {
+                "/srv/" -> """{"items":[$dotFiles]}"""
+                "/srv/s" -> """{"items":[{"display":"src/","meta":"dir"},{"display":"Site/","meta":"dir"}]}"""
+                "/srv/a" -> """{"items":[{"display":"app/","meta":"dir"}]}"""
+                "/srv/b" -> call.error(5021, "listing failed")
+                "/srv/x" -> """{"items":[$dotFiles]}"""
+                else -> """{"items":[]}"""
+            }
+        }
+        val api = ProjectsApi(fake.start())
+
+        // A letter whose page fails ("b") leaves the others; names starting elsewhere may still be missing.
+        assertEquals(FolderListing(listOf("app", "Site", "src"), more = true), api.folders(null, "/srv/"))
+        // With a filter, a full page isn't asked again letter by letter: a longer filter narrows it.
+        val asked = fake.sent("complete.path").size
+        assertEquals(FolderListing(emptyList(), more = true), api.folders(null, "/srv/", "x"))
+        assertEquals(asked + 1, fake.sent("complete.path").size)
+    }
+
+    @Test
+    fun aFullPageOfEntriesSaysThereMayBeMore() {
+        val full = HermesJson.parseToJsonElement(
+            (1..ProjectsApi.FOLDER_PAGE).joinToString(",", "[", "]") { """{"display":".dot$it/","meta":"dir"}""" },
+        )
+        assertTrue(ProjectsApi.parseFolders(full).more)
+        assertEquals(FolderListing(emptyList()), ProjectsApi.parseFolders(null))
+    }
+
     private val JsonObject.params get() = getValue("params").jsonObject
 }
