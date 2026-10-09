@@ -15,6 +15,10 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -85,7 +89,7 @@ import kotlin.math.sqrt
  * chained chat has Skip while it reads a reply. What you say sends itself; saying "stop" ends it.
  */
 @Composable
-internal fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onSkip: () -> Unit, onMute: () -> Unit, onEnd: () -> Unit) {
+internal fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onSkip: () -> Unit, onMute: () -> Unit, onEnd: () -> Unit, onExpand: () -> Unit) {
     val shape = RoundedCornerShape(28.dp)
     val page = Theme[colors][background]
     val frosted = remember(page) {
@@ -107,7 +111,15 @@ internal fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onSkip: () 
             .padding(horizontal = 20.dp, vertical = 16.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Orb(state, Modifier.size(112.dp))
+        // The orb opens the voice chat over the whole screen again.
+        Orb(
+            state,
+            Modifier
+                .size(112.dp)
+                .clip(CircleShape)
+                .clickable(role = Role.Button, onClickLabel = "Show voice chat full screen", onClick = onExpand)
+                .semantics { contentDescription = "Voice chat" },
+        )
         Text(
             label(state),
             style = Theme[typography][body],
@@ -154,7 +166,7 @@ internal fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onSkip: () 
     }
 }
 
-private fun label(state: VoiceChatState) = when (state.phase) {
+internal fun label(state: VoiceChatState) = when (state.phase) {
     VoicePhase.Connecting -> "Connecting…"
     VoicePhase.Listening -> if (state.muted) "Muted" else if (state.hearing) "Hearing you…" else "Listening…"
     VoicePhase.Transcribing -> "Catching that…"
@@ -164,7 +176,7 @@ private fun label(state: VoiceChatState) = when (state.phase) {
 }
 
 /** What to do now, while there are no words to show. */
-private fun hint(state: VoiceChatState) = when {
+internal fun hint(state: VoiceChatState) = when {
     state.muted -> "Tap the microphone to talk again"
     state.phase == VoicePhase.Connecting -> "Setting up the call"
     state.phase == VoicePhase.Thinking -> "Hermes is on it"

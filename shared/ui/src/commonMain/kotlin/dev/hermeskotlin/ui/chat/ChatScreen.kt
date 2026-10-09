@@ -231,6 +231,9 @@ import dev.hermeskotlin.ui.voice.DictationState
 import dev.hermeskotlin.ui.voice.VoiceChatState
 import dev.hermeskotlin.ui.voice.VoicePanel
 import dev.hermeskotlin.ui.voice.VoicePhase
+import dev.hermeskotlin.ui.voice.VoiceScreen
+import dev.hermeskotlin.core.voice.speakableText
+import androidx.compose.runtime.saveable.rememberSaveable
 import dev.hermeskotlin.ui.voice.rememberMicrophonePermission
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LifecycleEventEffect
@@ -530,11 +533,26 @@ internal fun ChatView(
         Modifier
             .fillMaxSize()
             .background(Theme[colors][background])
-            .then(if (wallpaper == null) Modifier.halo() else Modifier)
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
+            .then(if (wallpaper == null) Modifier.halo() else Modifier),
         contentAlignment = Alignment.TopCenter,
     ) {
-        Column(Modifier.widthIn(max = 760.dp).fillMaxSize().imePadding()) {
+        // A voice chat fills the screen until folded to the panel over the chat; each new one opens full.
+        var voiceFolded by rememberSaveable { mutableStateOf(false) }
+        var voiceCaptions by rememberSaveable { mutableStateOf(true) }
+        var typeAfterVoice by remember { mutableStateOf(false) }
+        val voiceOn = voiceChat.phase != VoicePhase.Off
+        val voiceFull = voiceOn && !voiceFolded
+        LaunchedEffect(voiceOn) { if (!voiceOn) voiceFolded = false }
+        Column(
+            Modifier
+                .widthIn(max = 760.dp)
+                .fillMaxSize()
+                // The insets pad the chat only, so the voice screen can reach under the status bar.
+                .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
+                .imePadding()
+                // Under the voice screen the chat is out of reach, TalkBack included.
+                .then(if (voiceFull) Modifier.clearAndSetSemantics {} else Modifier),
+        ) {
             TopBar(
                 title = title,
                 titleFace = titleFace,
@@ -558,6 +576,14 @@ internal fun ChatView(
             val composerFocus = remember { FocusRequester() }
             var focusComment by remember { mutableStateOf<Long?>(null) }
             val composerShown = state.inputRequests.isEmpty() && voiceChat.phase == VoicePhase.Off
+            // Type on the voice screen ends the call; the composer takes the keyboard once it's back.
+            // Once the call is over the wish is spent either way: a question waiting in the composer's place
+            // mustn't hand the keyboard over minutes later when it's answered.
+            LaunchedEffect(composerShown, typeAfterVoice, voiceOn) {
+                if (!typeAfterVoice || voiceOn) return@LaunchedEffect
+                typeAfterVoice = false
+                if (composerShown) composerFocus.requestFocus()
+            }
             val commentHost = remember(comments, actions, composerShown) {
                 if (!composerShown) return@remember null
                 object : CommentHost {
@@ -662,6 +688,8 @@ internal fun ChatView(
                         onAttach = onAttach,
                         onDictate = onDictate,
                         onVoiceChat = onVoiceChat,
+                        voiceFull = voiceFull,
+                        onExpandVoice = { voiceFolded = false },
                     )
                 }
                 // The pet sits on the composer's top edge, over the conversation rather than in the dock's height.
@@ -674,6 +702,28 @@ internal fun ChatView(
                     )
                 }
             }
+        }
+        AnimatedVisibility(visible = voiceFull, enter = fadeIn(), exit = fadeOut()) {
+            val replyText = (state.messages.lastOrNull { it is ChatMessage.Assistant && it.text.isNotBlank() } as? ChatMessage.Assistant)?.text
+            // Keyed on the text, so a streaming reply elsewhere in the list doesn't redo it every delta.
+            val lastReply = remember(replyText) { replyText?.let(::speakableText)?.takeIf { it.isNotBlank() } }
+            VoiceScreen(
+                // Not while it fades out after the call ends, or a Back then would fold the next call.
+                active = voiceFull,
+                chatTitle = title,
+                state = voiceChat,
+                lastReply = lastReply,
+                captions = voiceCaptions,
+                onToggleCaptions = { voiceCaptions = !voiceCaptions },
+                onMinimize = { voiceFolded = true },
+                onSkip = actions::skipSpeech,
+                onMute = actions::toggleVoiceMute,
+                onEnd = actions::stopVoiceChat,
+                onType = {
+                    typeAfterVoice = true
+                    actions.stopVoiceChat()
+                },
+            )
         }
     }
 }
@@ -706,6 +756,9 @@ private fun ColumnScope.Dock(
     onAttach: () -> Unit,
     onDictate: () -> Unit,
     onVoiceChat: () -> Unit,
+    /** The voice chat is open over the whole screen. */
+    voiceFull: Boolean,
+    onExpandVoice: () -> Unit,
 ) {
     (state.attachment as? Attachment.Failed)?.let {
         Banner(it.message, actionLabel = "Retry", onAction = actions::retry)
@@ -746,13 +799,17 @@ private fun ColumnScope.Dock(
         // The task's Stop is on the live task card above.
         InputRequestPanel(state.inputRequests, connected, onAnswer = actions::answer, onStop = null)
     } else if (voiceChat.phase != VoicePhase.Off) {
-        VoicePanel(
-            hazeState = hazeState,
-            state = voiceChat,
-            onSkip = actions::skipSpeech,
-            onMute = actions::toggleVoiceMute,
-            onEnd = actions::stopVoiceChat,
-        )
+        // Full screen, the voice screen has these; the panel would only animate unseen beneath it.
+        if (!voiceFull) {
+            VoicePanel(
+                hazeState = hazeState,
+                state = voiceChat,
+                onSkip = actions::skipSpeech,
+                onMute = actions::toggleVoiceMute,
+                onEnd = actions::stopVoiceChat,
+                onExpand = onExpandVoice,
+            )
+        }
     } else {
         AnimatedVisibility(visible = suggestions.isNotEmpty() && connected, enter = fadeIn(), exit = fadeOut()) {
             // Kept through the fade-out, so the list doesn't empty before it leaves.
