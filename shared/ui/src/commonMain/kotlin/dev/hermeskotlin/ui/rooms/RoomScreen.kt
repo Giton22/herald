@@ -56,13 +56,19 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.AtSign
 import com.composables.icons.lucide.Ellipsis
+import dev.hermeskotlin.designsystem.stroke
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
 import com.composeunstyled.Text
 import com.composeunstyled.TextInput
 import com.composeunstyled.UnstyledTextField
 import com.composeunstyled.theme.Theme
+import androidx.compose.foundation.text.input.TextFieldState
+import dev.hermeskotlin.core.rooms.Room
 import dev.hermeskotlin.core.rooms.RoomLine
 import dev.hermeskotlin.core.rooms.RoomPendingAction
 import dev.hermeskotlin.designsystem.accent
@@ -118,7 +124,26 @@ fun RoomScreen(
 ) {
     val open by viewModel.opened.collectAsStateWithLifecycle()
     val room = open ?: return
-    val faces = LocalBotFaces.current
+    RoomView(room, viewModel, LocalBotFaces.current, onOpenSidebar = onOpenSidebar, onBack = onBack)
+}
+
+/** What an open room can ask for; [RoomsViewModel] does it all, previews nothing. */
+interface RoomActions {
+    /** What the user is typing to the room. */
+    val composer: TextFieldState
+    fun send()
+    fun stop()
+    fun loadEarlier()
+    fun approve(action: RoomPendingAction, choice: String)
+    fun retry(action: RoomPendingAction)
+    fun renameRoom(room: Room, name: String)
+    fun deleteRoom(room: Room)
+    fun dismissRoomNotice()
+}
+
+/** An open room's layout, apart from the view model, so previews can draw it from sample data. */
+@Composable
+internal fun RoomView(room: OpenRoom, viewModel: RoomActions, faces: BotFaces, onOpenSidebar: () -> Unit, onBack: () -> Unit) {
     var ask by remember { mutableStateOf<RoomAsk?>(null) }
     RoomAskDialogs(ask, onDismiss = { ask = null }, onRename = viewModel::renameRoom, onDelete = viewModel::deleteRoom)
     Box(
@@ -133,7 +158,12 @@ fun RoomScreen(
             TopBar(
                 title = room.room.name,
                 titleFace = members.takeIf { it.isNotEmpty() }?.let { { RoomFaces(it, faces, size = 20.dp, max = 3) } },
-                status = BarStatus("Waiting on you", StatusTone.Waiting).takeIf { room.pendingActions.isNotEmpty() },
+                // Who's in it, unless the room waits on the user.
+                status = when {
+                    room.pendingActions.isNotEmpty() -> BarStatus("Waiting on you", StatusTone.Waiting)
+                    members.isNotEmpty() -> BarStatus(members.joinToString(", ") { it.label }, StatusTone.Neutral)
+                    else -> null
+                },
                 onOpenSidebar = onOpenSidebar,
                 onNewChat = null,
                 onOpenMenu = null,
@@ -263,42 +293,50 @@ private fun TranscriptList(lines: List<RoomLine>, listState: LazyListState, face
     }
 }
 
-/** The user's message: the chat's own prompt bubble. Shared with the Desktop room's read-only copy. */
+/**
+ * The user's message: a bubble on the right, its corner toward the user tucked in. Shared with the
+ * Desktop room's read-only copy.
+ */
 @Composable
 internal fun UserLine(line: RoomLine.Message) {
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .clip(shape)
-                .background(Theme[colors][userBubble], shape)
-                .border(1.dp, Theme[colors][userBubbleStroke], shape)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-        ) {
-            Text(line.text, style = Theme[typography][body], color = Theme[colors][onUserBubble])
+    val shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomEnd = 6.dp, bottomStart = 20.dp)
+    Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Box(Modifier.fillMaxWidth(0.84f), contentAlignment = Alignment.CenterEnd) {
+            Box(
+                Modifier
+                    .clip(shape)
+                    .background(Theme[colors][userBubble], shape)
+                    .border(1.dp, Theme[colors][userBubbleStroke], shape)
+                    .padding(horizontal = 14.dp, vertical = 9.dp),
+            ) {
+                Text(line.text, style = Theme[typography][body], color = Theme[colors][onUserBubble])
+            }
         }
-        MessageTimeLabel(line.createdAt, Modifier.align(Alignment.End))
+        MessageTimeLabel(line.createdAt)
     }
 }
 
-/** A bot's message: its face and name, then what it said in a box tinted with its own color. */
+/**
+ * A bot's message: its face, its name in its own color, then what it said in a ringed bubble, the corner
+ * toward its face tucked in.
+ */
 @Composable
 internal fun MemberLine(line: RoomLine.Message, continued: Boolean, faces: BotFaces) {
     val bot = remember(line.profile, faces) { faces.roomBot(line.profile) }
     val tint = bot.roomColor()
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    val shape = RoundedCornerShape(topStart = 6.dp, topEnd = 20.dp, bottomEnd = 20.dp, bottomStart = 20.dp)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
         Box(Modifier.size(FACE)) {
             if (!continued) RoomMemberFace(bot, faces, FACE)
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             if (!continued) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         line.speaker ?: bot.label,
-                        style = Theme[typography][bodySmall].copy(fontWeight = FontWeight.SemiBold),
-                        color = Theme[colors][text],
+                        style = Theme[typography][caption].copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
+                        // The bot's own color, drawn toward the text color so it reads on either theme.
+                        color = lerp(tint, Theme[colors][text], 0.25f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
@@ -308,11 +346,10 @@ internal fun MemberLine(line: RoomLine.Message, continued: Boolean, faces: BotFa
             }
             Box(
                 Modifier
-                    .fillMaxWidth()
                     .clip(shape)
-                    .background(tint.copy(alpha = 0.12f), shape)
-                    .border(1.dp, tint.copy(alpha = 0.45f), shape)
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                    .background(Theme[colors][surface], shape)
+                    .border(1.dp, Theme[colors][stroke], shape)
+                    .padding(horizontal = 13.dp, vertical = 9.dp),
             ) {
                 MarkdownText(line.text)
             }
@@ -369,7 +406,7 @@ private fun PendingActions(room: OpenRoom, onApprove: (RoomPendingAction, String
  * typed meanwhile).
  */
 @Composable
-private fun RoomComposer(room: OpenRoom, viewModel: RoomsViewModel) {
+private fun RoomComposer(room: OpenRoom, viewModel: RoomActions) {
     val hasText = viewModel.composer.text.isNotBlank()
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     var focused by remember { mutableStateOf(false) }
@@ -405,6 +442,14 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomsViewModel) {
             // Who answers first, by the gateway's own @ rule: everyone, unless the message names someone.
             val members = room.room.members
             val recipients by remember(members) { derivedStateOf { roomRecipients(viewModel.composer.text.toString(), members) } }
+            // Starts an @ where the cursor is, which brings up the members to pick from.
+            BarButton(Lucide.AtSign, "Mention a member", onClick = {
+                viewModel.composer.edit {
+                    val at = selection
+                    val before = if (at.start > 0 && !asCharSequence()[at.start - 1].isWhitespace()) " @" else "@"
+                    replace(at.start, at.end, before)
+                }
+            })
             Text(
                 if (recipients.size == members.size) members.joinToString(" · ") { it.label }
                 else "To ${recipients.joinToString(", ") { it.label }}",
@@ -412,7 +457,7 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomsViewModel) {
                 color = Theme[colors][textTertiary],
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f).padding(start = 12.dp, end = 8.dp),
+                modifier = Modifier.weight(1f).padding(start = 4.dp, end = 8.dp),
             )
             if (room.working) {
                 if (hasText) SendButton(SendIcon.Send, onClick = viewModel::send, enabled = !room.sending)
@@ -429,7 +474,7 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomsViewModel) {
  * A pick puts the member's room handle in, which is what the gateway matches (not the chat's `@hermes`).
  */
 @Composable
-private fun RoomMentions(room: OpenRoom, viewModel: RoomsViewModel, faces: BotFaces) {
+private fun RoomMentions(room: OpenRoom, viewModel: RoomActions, faces: BotFaces) {
     val members = room.room.members
     val mention by remember(viewModel) {
         derivedStateOf { viewModel.composer.let { mentionQuery(it.text.toString(), it.selection.end) } }
@@ -453,4 +498,4 @@ private fun RoomMentions(room: OpenRoom, viewModel: RoomsViewModel, faces: BotFa
 }
 
 /** How big a member's face is beside its lines. */
-private val FACE = 32.dp
+private val FACE = 30.dp

@@ -99,7 +99,7 @@ class RoomsViewModel(
     private val api: RoomsApi,
     private val connection: GatewayConnection,
     private val seen: RoomSeenStore,
-) : ViewModel() {
+) : ViewModel(), RoomActions {
 
     private val _state = MutableStateFlow(RoomsUiState())
     val state: StateFlow<RoomsUiState> = _state.asStateFlow()
@@ -110,7 +110,7 @@ class RoomsViewModel(
     val opened: StateFlow<OpenRoom?> = _opened.asStateFlow()
 
     /** The open room's composer. */
-    val composer = TextFieldState()
+    override val composer = TextFieldState()
 
     private val gateway = MutableStateFlow<GatewayUrl?>(null)
 
@@ -207,7 +207,7 @@ class RoomsViewModel(
 
     fun dismissNotice() = _state.update { it.copy(notice = null) }
 
-    fun dismissRoomNotice() = _opened.update { it?.copy(notice = null) }
+    override fun dismissRoomNotice() = _opened.update { it?.copy(notice = null) }
 
     /**
      * Opens [room]'s conversation: reads it from the end of its log and follows it while it's on
@@ -246,7 +246,7 @@ class RoomsViewModel(
      * gateway only reads forward, so this reads the window that ends where the shown part starts, and
      * adds it only once it's all in: a page cut short never leaves a gap in the transcript.
      */
-    fun loadEarlier() {
+    override fun loadEarlier() {
         val open = _opened.value ?: return
         if (!open.canLoadEarlier || open.loadingEarlier) return
         val roomId = open.room.roomId
@@ -308,7 +308,7 @@ class RoomsViewModel(
     }
 
     /** Sends what the composer holds into the open room. */
-    fun send() {
+    override fun send() {
         val open = _opened.value ?: return
         if (open.sending) return
         val text = composer.text.toString().trim()
@@ -346,7 +346,7 @@ class RoomsViewModel(
     }
 
     /** Asks the open room to stop what it's doing. */
-    fun stop() {
+    override fun stop() {
         val open = _opened.value ?: return
         viewModelScope.launch {
             try {
@@ -361,7 +361,7 @@ class RoomsViewModel(
     }
 
     /** Answers one pending approval: `once` or `deny`, exactly as the room's state carried it. */
-    fun approve(action: RoomPendingAction, choice: String) {
+    override fun approve(action: RoomPendingAction, choice: String) {
         val open = _opened.value ?: return
         val memberId = action.memberId
         val taskId = action.taskId
@@ -384,7 +384,7 @@ class RoomsViewModel(
     }
 
     /** Gives one failed turn another go. */
-    fun retry(action: RoomPendingAction) {
+    override fun retry(action: RoomPendingAction) {
         val open = _opened.value ?: return
         val taskId = action.taskId
         if (taskId == null) {
@@ -407,7 +407,7 @@ class RoomsViewModel(
      * Deletes [room] on the gateway, for every client: its work stops and it leaves the list. A try
      * again after a lost answer is the same ask, so it can't fail on a room already gone.
      */
-    fun deleteRoom(room: Room) {
+    override fun deleteRoom(room: Room) {
         val cancelId = disbandIds.getOrPut(room.roomId) { newId("disband") }
         viewModelScope.launch {
             try {
@@ -425,7 +425,7 @@ class RoomsViewModel(
     }
 
     /** Renames [room] to [name] on the gateway; the list and the open room follow. */
-    fun renameRoom(room: Room, name: String) {
+    override fun renameRoom(room: Room, name: String) {
         val newName = name.trim()
         if (newName.isEmpty() || newName == room.name) return
         viewModelScope.launch {
