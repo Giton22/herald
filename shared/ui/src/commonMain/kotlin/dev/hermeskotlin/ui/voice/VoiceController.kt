@@ -5,7 +5,10 @@ import dev.hermeskotlin.core.chat.ChatSession
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
+import dev.hermeskotlin.core.settings.DictationEngine
 import dev.hermeskotlin.core.voice.AudioApi
+import dev.hermeskotlin.core.voice.DeviceDictation
+import dev.hermeskotlin.core.voice.DeviceDictationUnavailable
 import dev.hermeskotlin.core.voice.LiveCalls
 import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.core.voice.SpeechPlayer
@@ -81,6 +84,8 @@ class VoiceController(
     private val appScope: CoroutineScope,
     /** Keeps a voice chat going with the screen off or another app in front. */
     private val keepAlive: VoiceKeepAlive? = null,
+    /** The phone's own speech recognizer, for dictation with [DictationEngine.Device]. */
+    private val deviceDictation: DeviceDictation? = null,
     private val liveCalls: LiveCalls? = null,
 ) {
     private val _chat = MutableStateFlow(VoiceChatState())
@@ -93,6 +98,10 @@ class VoiceController(
     private var stoppedByUser = false
     private var speechJob: Job? = null
     private var dictationJob: Job? = null
+    /** The recognizer the dictation in progress listens with; null when the gateway transcribes it. */
+    private var dictating: DeviceDictation? = null
+    /** The dictation in progress was asked to finish; a gateway fallback doesn't start recording then. */
+    private var dictationFinished = false
     private var live: LiveConversation? = null
     private var held = false
     /** Herald went out of sight since the chat started. */
@@ -310,12 +319,49 @@ class VoiceController(
         speechJob = null
     }
 
-    /** Starts dictating; the transcript goes to [onText]. Call [finishDictation] to stop early. */
-    fun startDictation(gateway: GatewayUrl, profile: String?, onText: (String) -> Unit) {
+    /**
+     * Starts dictating; the transcript goes to [onText]. Call [finishDictation] to stop early. With
+     * [DictationEngine.Device] and a recognizer on this device, the phone writes it down and [onPartial]
+     * gets the words so far as they are said; otherwise the gateway transcribes the recording.
+     * [onCancelled] runs when the dictation is cancelled rather than finished, so partial words can go.
+     */
+    fun startDictation(
+        gateway: GatewayUrl,
+        profile: String?,
+        engine: DictationEngine = DictationEngine.Gateway,
+        onPartial: (String) -> Unit = {},
+        onCancelled: () -> Unit = {},
+        onText: (String) -> Unit,
+    ) {
         if (dictationJob?.isActive == true || chatJob?.isActive == true) return
         _dictation.value = DictationState(recording = true)
+        val device = deviceDictation?.takeIf { engine == DictationEngine.Device && it.available() }
+        dictating = device
+        dictationFinished = false
         dictationJob = scope.launch {
             try {
+                if (device != null) {
+                    val text = try {
+                        device.listen(
+                            onPartial = onPartial,
+                            onLevel = { level -> _dictation.update { it.copy(level = level) } },
+                        ).trim()
+                    } catch (_: DeviceDictationUnavailable) {
+                        // No recognizer here could start (a missing language pack, say): the gateway writes it down.
+                        dictating = null
+                        null
+                    }
+                    if (text != null) {
+                        _dictation.value = DictationState(error = "Didn't catch anything.".takeIf { text.isEmpty() })
+                        if (text.isNotEmpty()) onText(text)
+                        return@launch
+                    }
+                    // Stopped while the recognizers were being tried: nothing to record.
+                    if (dictationFinished) {
+                        _dictation.value = DictationState(error = "Didn't catch anything.")
+                        return@launch
+                    }
+                }
                 // Pauses to think are fine here; a long quiet spell still ends it.
                 val recording = recorder.record(
                     VoiceActivity(silenceMs = DICTATION_SILENCE_MS, idleMs = DICTATION_IDLE_MS, maxMs = DICTATION_MAX_MS),
@@ -335,6 +381,7 @@ class VoiceController(
                 }
             } catch (e: CancellationException) {
                 _dictation.value = DictationState()
+                onCancelled()
                 throw e
             } catch (e: Exception) {
                 _dictation.value = DictationState(error = e.message ?: "Couldn't use the microphone.")
@@ -343,7 +390,9 @@ class VoiceController(
     }
 
     fun finishDictation() {
-        if (_dictation.value.recording) recorder.finish()
+        if (!_dictation.value.recording) return
+        dictationFinished = true
+        dictating?.finish() ?: recorder.finish()
     }
 
     fun cancelDictation() {

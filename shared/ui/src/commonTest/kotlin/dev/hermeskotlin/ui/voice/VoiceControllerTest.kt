@@ -8,7 +8,10 @@ import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
+import dev.hermeskotlin.core.settings.DictationEngine
 import dev.hermeskotlin.core.voice.AudioApi
+import dev.hermeskotlin.core.voice.DeviceDictation
+import dev.hermeskotlin.core.voice.DeviceDictationUnavailable
 import dev.hermeskotlin.core.voice.Recording
 import dev.hermeskotlin.core.voice.SpeechPlayer
 import dev.hermeskotlin.core.voice.SpokenAudio
@@ -82,6 +85,156 @@ class VoiceControllerTest {
         val upload = requests.single { it.url.encodedPath == "/api/audio/transcribe" }
         assertEquals("work", upload.url.parameters["profile"])
         assertEquals(DictationState(), voice.dictation.first { !it.active })
+    }
+
+    private class FakeDevice(private val available: Boolean = true, private val said: String = "open the logs") : DeviceDictation {
+        var listens = 0
+        val finished = CompletableDeferred<Unit>()
+        var waitForFinish = false
+        override fun available() = available
+        override suspend fun listen(onPartial: (String) -> Unit, onLevel: (Float) -> Unit): String {
+            listens++
+            onLevel(0.4f)
+            onPartial("open the")
+            if (waitForFinish) finished.await()
+            return said
+        }
+
+        override fun finish() {
+            finished.complete(Unit)
+        }
+    }
+
+    @Test
+    fun deviceDictationWritesAsYouTalkAndNeverUploads() = runTest {
+        val requests = mutableListOf<HttpRequestData>()
+        val recorder = FakeRecorder()
+        val device = FakeDevice()
+        val voice = VoiceController(audio("unused", requests), recorder, FakePlayer(), backgroundScope, backgroundScope, deviceDictation = device)
+        val partials = mutableListOf<String>()
+        val text = CompletableDeferred<String>()
+
+        voice.startDictation(gateway, "work", DictationEngine.Device, onPartial = { partials += it }) { text.complete(it) }
+
+        assertEquals("open the logs", text.await())
+        assertEquals(listOf("open the"), partials)
+        assertEquals(0, recorder.recordings)
+        assertTrue(requests.none { it.url.encodedPath == "/api/audio/transcribe" })
+        assertEquals(DictationState(), voice.dictation.first { !it.active })
+    }
+
+    @Test
+    fun deviceDictationFallsBackToTheGatewayWithoutARecognizer() = runTest {
+        val requests = mutableListOf<HttpRequestData>()
+        val device = FakeDevice(available = false)
+        val voice = VoiceController(audio("deploy the site", requests), FakeRecorder(), FakePlayer(), backgroundScope, backgroundScope, deviceDictation = device)
+        val text = CompletableDeferred<String>()
+
+        voice.startDictation(gateway, null, DictationEngine.Device) { text.complete(it) }
+
+        assertEquals("deploy the site", text.await())
+        assertEquals(0, device.listens)
+    }
+
+    @Test
+    fun aRecognizerThatCantStartHandsTheDictationToTheGateway() = runTest {
+        val requests = mutableListOf<HttpRequestData>()
+        val recorder = FakeRecorder()
+        val device = object : DeviceDictation {
+            override fun available() = true
+            override suspend fun listen(onPartial: (String) -> Unit, onLevel: (Float) -> Unit): String = throw DeviceDictationUnavailable()
+            override fun finish() = Unit
+        }
+        val voice = VoiceController(audio("deploy the site", requests), recorder, FakePlayer(), backgroundScope, backgroundScope, deviceDictation = device)
+        val text = CompletableDeferred<String>()
+
+        voice.startDictation(gateway, null, DictationEngine.Device) { text.complete(it) }
+
+        assertEquals("deploy the site", text.await())
+        assertEquals(1, recorder.recordings)
+    }
+
+    @Test
+    fun stoppingWhileTheRecognizersAreTriedDoesntStartAGatewayRecording() = runTest {
+        val recorder = FakeRecorder()
+        val trying = CompletableDeferred<Unit>()
+        val giveUp = CompletableDeferred<Unit>()
+        val device = object : DeviceDictation {
+            override fun available() = true
+            override suspend fun listen(onPartial: (String) -> Unit, onLevel: (Float) -> Unit): String {
+                trying.complete(Unit)
+                giveUp.await()
+                throw DeviceDictationUnavailable()
+            }
+            override fun finish() = Unit
+        }
+        val voice = VoiceController(audio("unused", mutableListOf()), recorder, FakePlayer(), backgroundScope, backgroundScope, deviceDictation = device)
+        var called = false
+
+        voice.startDictation(gateway, null, DictationEngine.Device) { called = true }
+        trying.await()
+        voice.finishDictation()
+        giveUp.complete(Unit)
+
+        assertEquals("Didn't catch anything.", voice.dictation.first { it.error != null }.error)
+        assertEquals(0, recorder.recordings)
+        assertTrue(!called)
+    }
+
+    @Test
+    fun aCancelledDeviceDictationSaysSoAndSendsNothing() = runTest {
+        val device = FakeDevice().apply { waitForFinish = true }
+        val voice = VoiceController(audio("unused", mutableListOf()), FakeRecorder(), FakePlayer(), backgroundScope, backgroundScope, deviceDictation = device)
+        val cancelled = CompletableDeferred<Unit>()
+        var called = false
+
+        voice.startDictation(gateway, null, DictationEngine.Device, onCancelled = { cancelled.complete(Unit) }) { called = true }
+        voice.dictation.first { it.level > 0f }
+        voice.cancelDictation()
+
+        cancelled.await()
+        assertTrue(!called)
+        assertEquals(DictationState(), voice.dictation.value)
+    }
+
+    @Test
+    fun gatewayDictationIgnoresTheDeviceRecognizer() = runTest {
+        val requests = mutableListOf<HttpRequestData>()
+        val device = FakeDevice()
+        val voice = VoiceController(audio("deploy the site", requests), FakeRecorder(), FakePlayer(), backgroundScope, backgroundScope, deviceDictation = device)
+        val text = CompletableDeferred<String>()
+
+        voice.startDictation(gateway, null, DictationEngine.Gateway) { text.complete(it) }
+
+        assertEquals("deploy the site", text.await())
+        assertEquals(0, device.listens)
+    }
+
+    @Test
+    fun finishingADeviceDictationStopsTheRecognizer() = runTest {
+        val device = FakeDevice().apply { waitForFinish = true }
+        val voice = VoiceController(audio("unused", mutableListOf()), FakeRecorder(), FakePlayer(), backgroundScope, backgroundScope, deviceDictation = device)
+        val text = CompletableDeferred<String>()
+
+        voice.startDictation(gateway, null, DictationEngine.Device) { text.complete(it) }
+        voice.dictation.first { it.level > 0f }
+        voice.finishDictation()
+
+        assertEquals("open the logs", text.await())
+    }
+
+    @Test
+    fun aDeviceDictationThatHeardNothingSaysSo() = runTest {
+        val voice = VoiceController(
+            audio("unused", mutableListOf()), FakeRecorder(), FakePlayer(), backgroundScope, backgroundScope,
+            deviceDictation = FakeDevice(said = " "),
+        )
+        var called = false
+
+        voice.startDictation(gateway, null, DictationEngine.Device) { called = true }
+
+        assertEquals("Didn't catch anything.", voice.dictation.first { it.error != null }.error)
+        assertTrue(!called)
     }
 
     @Test

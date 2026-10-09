@@ -11,7 +11,11 @@ import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.profiles.ProfileStore
 import dev.hermeskotlin.core.sessions.SessionsApi
+import dev.hermeskotlin.core.settings.AppSettings
+import dev.hermeskotlin.core.settings.DictationEngine
+import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.voice.AudioApi
+import dev.hermeskotlin.core.voice.DeviceDictation
 import dev.hermeskotlin.core.voice.SpeechPlayer
 import dev.hermeskotlin.core.voice.VoiceRecorder
 import dev.hermeskotlin.ui.voice.VoiceController
@@ -97,6 +101,9 @@ class AssistantPanelModel(
     recorder: VoiceRecorder,
     player: SpeechPlayer,
     appScope: CoroutineScope,
+    /** Where the dictation engine is picked; without it the gateway transcribes. */
+    private val settings: SettingsStore? = null,
+    deviceDictation: DeviceDictation? = null,
     private val cropper: ScreenCropper = ScreenCropper { null },
 ) {
     private val scope = CoroutineScope(appScope.coroutineContext + SupervisorJob(appScope.coroutineContext[Job]))
@@ -130,7 +137,7 @@ class AssistantPanelModel(
     val shows: StateFlow<Int> = _shows.asStateFlow()
 
     val composer = TextFieldState()
-    val voice = VoiceController(audio, recorder, player, scope, appScope)
+    val voice = VoiceController(audio, recorder, player, scope, appScope, deviceDictation = deviceDictation)
 
     val connectionState get() = connection.state
 
@@ -304,9 +311,25 @@ class AssistantPanelModel(
     fun toggleDictation() {
         val saved = gateway ?: return
         if (voice.dictation.value.recording) return voice.finishDictation()
-        voice.startDictation(saved.gatewayUrl, profile) { spoken ->
-            val typed = composer.text.toString().trim()
-            composer.setTextAndPlaceCursorAtEnd(listOf(typed, spoken.trim()).filter { it.isNotEmpty() }.joinToString(" "))
+        val engine = settings?.let { (it.settings.value ?: AppSettings()).dictationEngine } ?: DictationEngine.Gateway
+        val typed = composer.text.toString()
+        // The words so far show in the composer as they're said, unless the person edits it meanwhile.
+        var shown = typed
+        fun withSpoken(base: String, spoken: String) = listOf(base.trim(), spoken.trim()).filter { it.isNotEmpty() }.joinToString(" ")
+        voice.startDictation(
+            saved.gatewayUrl,
+            profile,
+            engine,
+            onPartial = { partial ->
+                if (composer.text.toString() == shown) {
+                    shown = withSpoken(typed, partial)
+                    composer.setTextAndPlaceCursorAtEnd(shown)
+                }
+            },
+            onCancelled = { if (shown != typed && composer.text.toString() == shown) composer.setTextAndPlaceCursorAtEnd(typed) },
+        ) { spoken ->
+            val current = composer.text.toString()
+            composer.setTextAndPlaceCursorAtEnd(withSpoken(if (current == shown) typed else current, spoken))
             send()
         }
     }

@@ -165,6 +165,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 
 ### Voice
 - [x] Dictation into the composer (phone mic → `POST /api/audio/transcribe`)
+- [x] Dictation with the phone's own speech recognizer (Settings → Voice → Dictation: Device or Gateway), words appear as you talk; falls back to the gateway when no recognizer can start
 - [x] An empty chat offers "Attach" and "Dictate" under the wordmark, as one split capsule as wide as the lettering
 - [x] Voice chat: listen, transcribe, send, read the reply aloud (`/api/audio/speak`, `tts-lease`), say "stop" to end; `/voice`
 - [ ] Talk over the reply to interrupt it (barge-in) and speak while the reply streams (`/api/audio/speak-stream`)

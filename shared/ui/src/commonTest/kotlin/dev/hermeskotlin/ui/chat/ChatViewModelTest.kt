@@ -24,6 +24,7 @@ import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.slash.SlashApi
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import dev.hermeskotlin.core.voice.AudioApi
+import dev.hermeskotlin.core.voice.NoDeviceDictation
 import dev.hermeskotlin.core.voice.Recording
 import dev.hermeskotlin.core.voice.SpeechPlayer
 import dev.hermeskotlin.core.voice.SpokenAudio
@@ -104,6 +105,7 @@ class ChatViewModelTest {
                 override fun hold(onEnd: () -> Unit, onLost: () -> Unit) = false
                 override fun release() = Unit
             },
+            NoDeviceDictation,
         )
         viewModels.put("chat", vm)
         return vm to chatHost

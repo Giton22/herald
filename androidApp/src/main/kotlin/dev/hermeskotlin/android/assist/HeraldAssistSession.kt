@@ -31,6 +31,8 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.hermeskotlin.android.MainActivity
 import dev.hermeskotlin.android.notify.ChatNotifications
+import dev.hermeskotlin.core.settings.SettingsStore
+import dev.hermeskotlin.core.voice.DeviceDictation
 import dev.hermeskotlin.ui.assistant.AssistantPanel
 import dev.hermeskotlin.ui.assistant.AssistantPanelModel
 import kotlinx.coroutines.CoroutineScope
@@ -76,7 +78,11 @@ class HeraldAssistSession(context: Context) :
         savedState.performRestore(null)
         lifecycleRegistry.handleLifecycleEvent(Lifecycle.Event.ON_CREATE)
         // Circled parts are cut from the full-size screenshot, not the smaller copy the panel shows.
-        model = AssistantPanelModel(get(), get(), get(), get(), get(), get(), get(), get(), get()) { region ->
+        model = AssistantPanelModel(
+            get(), get(), get(), get(), get(), get(), get(), get(), get(),
+            settings = get<SettingsStore>(),
+            deviceDictation = get<DeviceDictation>(),
+        ) { region ->
             screenshot?.let { shot -> withContext(Dispatchers.Default) { runCatching { ScreenReader.crop(shot, region) }.getOrNull() } }
         }
         // Edge to edge, so the panel sits on the navigation bar and rides up with the keyboard.
