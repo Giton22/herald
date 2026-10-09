@@ -42,6 +42,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Brush
@@ -67,6 +70,8 @@ import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.Gauge
 import com.composables.icons.lucide.LogOut
+import com.composables.icons.lucide.Ellipsis
+import com.composables.icons.lucide.FolderPlus
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Pin
@@ -230,6 +235,12 @@ fun SessionsSidebar(
     var actionTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var renameTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var deleteTarget by remember { mutableStateOf<SessionSummary?>(null) }
+    var projectActions by remember { mutableStateOf<Project?>(null) }
+    var renameProject by remember { mutableStateOf<Project?>(null) }
+    var deleteProject by remember { mutableStateOf<Project?>(null) }
+    var newProject by remember { mutableStateOf<ProjectDraft?>(null) }
+    var creatingProject by remember { mutableStateOf(false) }
+    var createProjectError by remember { mutableStateOf<String?>(null) }
     var accountOpen by remember { mutableStateOf(false) }
     var newRoomOpen by remember { mutableStateOf(false) }
 
@@ -448,9 +459,15 @@ fun SessionsSidebar(
                         drafts = drafts,
                         sectioned = true,
                         status = {
-                            if (!state.loading && state.error == null && state.projects.isNotEmpty()) {
+                            if (!state.loading && state.error == null && (state.projects.isNotEmpty() || state.canMakeProjects)) {
                                 item(key = "projects") {
-                                    ProjectFilters(state.projects, state.project, onSelect = viewModel::selectProject)
+                                    ProjectFilters(
+                                        state.projects,
+                                        state.project,
+                                        onSelect = viewModel::selectProject,
+                                        onNew = if (state.canMakeProjects) ({ newProject = ProjectDraft() }) else null,
+                                        onOptions = { projectActions = it },
+                                    )
                                 }
                             }
                             if (!state.loading && state.error == null && state.listed.isNotEmpty()) {
@@ -536,6 +553,34 @@ fun SessionsSidebar(
         onDelete = { deleteTarget = it },
     )
     RenameDialog(renameTarget, onDismiss = { renameTarget = null }, onRename = viewModel::rename)
+    ProjectActionsSheet(
+        project = projectActions,
+        onDismiss = { projectActions = null },
+        onRename = { renameProject = it },
+        onDelete = { deleteProject = it },
+        onSave = { newProject = ProjectDraft(name = it.label, folder = it.path.orEmpty()) },
+    )
+    RenameProjectDialog(renameProject, onDismiss = { renameProject = null }, onRename = viewModel::renameProject)
+    DeleteProjectDialog(deleteProject, onDismiss = { deleteProject = null }, onDelete = viewModel::deleteProject)
+    NewProjectDialog(
+        draft = newProject,
+        busy = creatingProject,
+        error = createProjectError,
+        onDismiss = {
+            newProject = null
+            createProjectError = null
+        },
+        onCreate = { name, folder ->
+            creatingProject = true
+            createProjectError = null
+            viewModel.createProject(name, folder.ifEmpty { null }) { error ->
+                creatingProject = false
+                createProjectError = error
+                if (error == null) newProject = null
+            }
+        },
+        listFolders = viewModel::projectFolders,
+    )
     DeleteDialog(
         deleteTarget,
         onDismiss = { deleteTarget = null },
@@ -586,6 +631,10 @@ internal fun SessionsSidebarSample(
     statuses: Map<String, RowStatus> = emptyMap(),
     drafts: Set<String> = emptySet(),
     projects: List<Project> = emptyList(),
+    /** The project the list is narrowed to, showing its options button. */
+    selectedProject: Project? = null,
+    /** The gateway can make projects, so New project shows. */
+    canMakeProjects: Boolean = false,
 ) {
     Box(
         Modifier
@@ -604,7 +653,11 @@ internal fun SessionsSidebarSample(
                     drafts = drafts,
                     sectioned = true,
                     status = {
-                        if (projects.isNotEmpty()) item(key = "projects") { ProjectFilters(projects, selected = null, onSelect = {}) }
+                        if (projects.isNotEmpty() || canMakeProjects) {
+                            item(key = "projects") {
+                                ProjectFilters(projects, selected = selectedProject, onSelect = {}, onNew = if (canMakeProjects) ({}) else null)
+                            }
+                        }
                         item(key = "filters") {
                             AttentionFilters(
                                 selected = AttentionFilter.All,
@@ -994,19 +1047,54 @@ private fun AttentionFilters(selected: AttentionFilter, running: Int, needsAtten
  * count, Home last. A new chat started under a project runs in its folder.
  */
 @Composable
-private fun ProjectFilters(projects: List<Project>, selected: Project?, onSelect: (Project?) -> Unit) {
-    Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 8.dp, end = 8.dp, bottom = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        Chip(text = "All projects", selected = selected == null, onClick = { onSelect(null) })
-        projects.forEach { project ->
-            Chip(
-                text = "${project.label} · ${project.sessionCount}",
-                selected = project.id == selected?.id,
-                onClick = { onSelect(project) },
-            )
+private fun ProjectFilters(
+    projects: List<Project>,
+    selected: Project?,
+    onSelect: (Project?) -> Unit,
+    /** Null when the gateway can't make projects. */
+    onNew: (() -> Unit)? = null,
+    onOptions: (Project) -> Unit = {},
+) {
+    Row(Modifier.fillMaxWidth().padding(end = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        val scroll = rememberScrollState()
+        // Where the picked chip sits in the row, so the row can scroll it into sight: its options button
+        // stays beside the row, and must never read as belonging to whichever chip happens to show.
+        // Keyed on the pick, so "All projects" doesn't scroll back to the chip picked before it.
+        var picked by remember(selected?.id) { mutableStateOf<ClosedFloatingPointRange<Float>?>(null) }
+        val margin = with(LocalDensity.current) { 8.dp.toPx() }
+        LaunchedEffect(selected?.id, picked, scroll.viewportSize) {
+            val span = picked ?: return@LaunchedEffect
+            val viewport = scroll.viewportSize.takeIf { it > 0 } ?: return@LaunchedEffect
+            when {
+                span.endInclusive + margin > scroll.value + viewport -> scroll.animateScrollTo((span.endInclusive + margin - viewport).toInt())
+                span.start - margin < scroll.value -> scroll.animateScrollTo((span.start - margin).toInt().coerceAtLeast(0))
+            }
         }
+        Row(
+            Modifier.weight(1f).horizontalScroll(scroll).padding(start = 8.dp, end = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (projects.isNotEmpty()) Chip(text = "All projects", selected = selected == null, onClick = { onSelect(null) })
+            projects.forEach { project ->
+                val isPicked = project.id == selected?.id
+                Chip(
+                    text = "${project.label} · ${project.sessionCount}",
+                    selected = isPicked,
+                    onClick = { onSelect(project) },
+                    modifier = if (isPicked) {
+                        Modifier.onPlaced { picked = it.positionInParent().x.let { x -> x..(x + it.size.width) } }
+                    } else {
+                        Modifier
+                    },
+                )
+            }
+            if (projects.isEmpty() && onNew != null) Chip(text = "New project", selected = false, onClick = onNew)
+        }
+        // The picked project's actions sit outside the scrolling chips, so they stay in reach.
+        if (selected != null && !selected.isNoProject && (selected.isUserMade || (selected.path != null && onNew != null))) {
+            IconButton(Lucide.Ellipsis, contentDescription = "${selected.label} options", onClick = { onOptions(selected) })
+        }
+        if (onNew != null && projects.isNotEmpty()) IconButton(Lucide.FolderPlus, contentDescription = "New project", onClick = onNew)
     }
 }
 
@@ -1067,7 +1155,8 @@ internal fun RenameDialog(session: SessionSummary?, onDismiss: () -> Unit, onRen
     if (session != null) shown = session
     val s = shown ?: return
     val title = rememberTextFieldState(s.title.orEmpty())
-    LaunchedEffect(s.id) { title.edit { replace(0, length, s.title.orEmpty()) } }
+    // On every open, so a cancelled edit doesn't come back.
+    LaunchedEffect(session != null, s.id) { if (session != null) title.edit { replace(0, length, s.title.orEmpty()) } }
     val submit = {
         onDismiss()
         onRename(s, title.text.toString())

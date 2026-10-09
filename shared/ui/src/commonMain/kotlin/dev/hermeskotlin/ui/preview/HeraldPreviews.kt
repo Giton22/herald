@@ -42,6 +42,10 @@ import dev.hermeskotlin.designsystem.components.SidebarLayout
 import dev.hermeskotlin.designsystem.components.rememberSidebarState
 import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.ui.sessions.SessionsSidebarSample
+import dev.hermeskotlin.ui.sessions.ProjectDraft
+import dev.hermeskotlin.core.projects.FolderListing
+import dev.hermeskotlin.ui.sessions.ProjectActionsSheet
+import dev.hermeskotlin.ui.sessions.NewProjectDialog
 import dev.hermeskotlin.ui.settings.GatewayInfo
 import dev.hermeskotlin.ui.settings.SettingsView
 import androidx.compose.ui.tooling.preview.Preview
@@ -87,6 +91,8 @@ enum class PreviewScene(val label: String) {
     LongChat("A chat to scroll back through"),
     Notices("Notices from the gateway"),
     Archived("Archived, with Undo"),
+    ProjectOptions("A project's options"),
+    NewProject("A new project"),
     Models("Your starred and recent models in the model picker"),
     ModelsAll("Every model, one row per model, in the model picker"),
     ModelSearch("A search in the model picker"),
@@ -141,6 +147,38 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                         actionLabel = "Undo",
                         onDismiss = {},
                     )
+                }
+                PreviewScene.ProjectOptions, PreviewScene.NewProject -> Box(Modifier.fillMaxSize()) {
+                    val site = ChatSamples.projects.first { it.id == "p-site" }
+                    OpenSidebar {
+                        SessionsSidebarSample(
+                            ChatSamples.sessions(),
+                            selectedId = "s1",
+                            userLabel = ChatSamples.USER,
+                            statuses = ChatSamples.sessionStatuses,
+                            drafts = ChatSamples.sessionDrafts,
+                            projects = ChatSamples.projects,
+                            selectedProject = site,
+                            canMakeProjects = true,
+                        )
+                    }
+                    if (scene == PreviewScene.ProjectOptions) {
+                        ProjectActionsSheet(site, onDismiss = {}, onRename = {}, onDelete = {}, onSave = {})
+                    } else {
+                        NewProjectDialog(
+                            ProjectDraft(name = "Herald", folder = "/home/you/projects/herald"),
+                            busy = false,
+                            error = null,
+                            onDismiss = {},
+                            onCreate = { _, _ -> },
+                            // Browse folders opens on sample folders, for the picker's screenshots.
+                            listFolders = { dir, _ ->
+                                FolderListing(
+                                    if (dir.endsWith("/projects/")) listOf("herald", "notes-app", "site") else listOf("androidApp", "docs", "shared"),
+                                )
+                            },
+                        )
+                    }
                 }
                 PreviewScene.Comments -> SampleChat(ChatSamples.reply, comments = remember { ChatSamples.comments() })
                 PreviewScene.LongChat -> SampleChat(ChatSamples.longChat)
@@ -341,6 +379,14 @@ private fun UsagePreview() = HeraldPreview(PreviewScene.Usage)
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun ProcessesPreview() = HeraldPreview(PreviewScene.Processes)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun ProjectOptionsPreview() = HeraldPreview(PreviewScene.ProjectOptions)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun NewProjectPreview() = HeraldPreview(PreviewScene.NewProject)
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable

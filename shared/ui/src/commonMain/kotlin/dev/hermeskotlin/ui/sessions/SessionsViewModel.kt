@@ -21,6 +21,7 @@ import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.profiles.ProfileRoster
 import dev.hermeskotlin.core.profiles.ProfilesApi
+import dev.hermeskotlin.core.projects.FolderListing
 import dev.hermeskotlin.core.projects.Project
 import dev.hermeskotlin.core.projects.ProjectsApi
 import dev.hermeskotlin.core.rpc.RpcException
@@ -68,6 +69,8 @@ data class SessionsUiState(
     val undo: ArchiveUndo? = null,
     /** The gateway's projects that have chats; empty when it has none or doesn't know projects. */
     val projects: List<Project> = emptyList(),
+    /** The gateway answers `projects.*`, so a project can be made here even before there are any. */
+    val canMakeProjects: Boolean = false,
     /** The project the recent list is narrowed to; null for every chat. */
     val project: Project? = null,
     /** [project]'s chats; null while they load (or with no project picked). */
@@ -224,6 +227,8 @@ class SessionsViewModel(
         projectSessionsJob?.cancel()
         projectsAskedAt = 0
         projectsAgain = false
+        selectAfterLoad = null
+        projectChangesMissing = false
         load(refresh = false)
         if (newGateway) {
             _user.value = null
@@ -251,7 +256,15 @@ class SessionsViewModel(
     fun setFilter(filter: SessionListFilter) {
         if (filter == _state.value.filter) return
         // The picked project stays for the way back; the archive isn't split by project.
-        _state.update { SessionsUiState(filter = filter, projects = it.projects, project = it.project, projectSessions = it.projectSessions) }
+        _state.update {
+            SessionsUiState(
+                filter = filter,
+                projects = it.projects,
+                canMakeProjects = it.canMakeProjects,
+                project = it.project,
+                projectSessions = it.projectSessions,
+            )
+        }
         load(refresh = false)
     }
 
@@ -261,6 +274,93 @@ class SessionsViewModel(
         _state.update { it.copy(project = project, projectSessions = null) }
         loadProjectSessions()
     }
+
+    /**
+     * Makes a project named [name] over [folder] and shows its chats; [onDone] runs once it's made, or with the
+     * gateway's reason it wasn't (a folder another project has, say), so a form can stay open on the error.
+     */
+    fun createProject(name: String, folder: String?, onDone: (error: String?) -> Unit) {
+        val scope = bound.value
+        viewModelScope.launch {
+            var id: String? = null
+            val error = projectCall { id = projectsApi.create(scope?.second, name, folder) }
+            onDone(error)
+            if (error == null && bound.value == scope) {
+                // Saving a folder as a project gives it a new id, so the picked chip would drop without this.
+                selectAfterLoad = id
+                loadProjects(force = true)
+            }
+        }
+    }
+
+    /** Renames a project the user made; the chip shows the new name at once and goes back if the gateway says no. */
+    fun renameProject(project: Project, name: String) {
+        val scope = bound.value
+        val label = name.trim()
+        _state.update { it.withProjectLabel(project.id, label) }
+        viewModelScope.launch {
+            val error = projectCall { projectsApi.rename(scope?.second, project.id, name) }
+            // Put the old name back here: the tree below isn't asked while the gateway is away.
+            if (error != null) _state.update { it.withProjectLabel(project.id, project.label, unless = label).copy(message = error) }
+            if (bound.value == scope) loadProjects(force = true)
+        }
+    }
+
+    /** Deletes a project the user made. Its chats stay; the list shows every chat again if it was narrowed to it. */
+    fun deleteProject(project: Project) {
+        val scope = bound.value
+        viewModelScope.launch {
+            val error = projectCall { projectsApi.delete(scope?.second, project.id) }
+            if (error != null) {
+                _state.update { it.copy(message = error) }
+                return@launch
+            }
+            _state.update { state ->
+                val wasOpen = state.project?.id == project.id
+                state.copy(
+                    projects = state.projects.filterNot { it.id == project.id },
+                    project = state.project.takeUnless { wasOpen },
+                    projectSessions = state.projectSessions.takeUnless { wasOpen },
+                )
+            }
+            if (bound.value == scope) loadProjects(force = true)
+        }
+    }
+
+    /** The folders in [dir] on the gateway's machine starting with [prefix], for picking a project's folder; throws when it can't ask. */
+    suspend fun projectFolders(dir: String, prefix: String): FolderListing =
+        projectsApi.folders(bound.value?.second, dir, prefix)
+
+    /** [id]'s chip and the picked project renamed to [label]; with [unless], only while they still show that. */
+    private fun SessionsUiState.withProjectLabel(id: String, label: String, unless: String? = null): SessionsUiState {
+        fun Project.relabeled() = if (this.id == id && (unless == null || this.label == unless)) copy(label = label) else this
+        return copy(projects = projects.map { it.relabeled() }, project = project?.relabeled())
+    }
+
+    /** Runs a project change; null when it went through, else what to tell the user. */
+    private suspend fun projectCall(block: suspend () -> Unit): String? = try {
+        block()
+        null
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: RpcException) {
+        if (e.code == METHOD_NOT_FOUND) {
+            // The tree answers but changes don't: stop offering them.
+            projectChangesMissing = true
+            _state.update { it.copy(canMakeProjects = false) }
+            "This gateway can't change projects."
+        } else {
+            e.message?.takeIf { it.isNotBlank() } ?: "Couldn't change the project."
+        }
+    } catch (e: Exception) {
+        e.message?.takeIf { it.isNotBlank() } ?: "Couldn't change the project."
+    }
+
+    /** A project just made, to pick once the tree shows it. */
+    private var selectAfterLoad: String? = null
+
+    /** The gateway turned down a project change as unknown, so New project, Rename and Delete stay hidden. */
+    private var projectChangesMissing = false
 
     private var projectsJob: Job? = null
     private var projectSessionsJob: Job? = null
@@ -288,12 +388,14 @@ class SessionsViewModel(
         val scope = bound.value
         projectsAskedAt = now
         projectsJob = viewModelScope.launch {
+            var supported = true
             val projects = try {
                 projectsApi.projects(scope?.second)
             } catch (e: CancellationException) {
                 throw e
             } catch (e: RpcException) {
                 // A gateway that doesn't know projects: no chips. Any other failure keeps what shows.
+                supported = e.code != METHOD_NOT_FOUND
                 if (e.code == METHOD_NOT_FOUND) emptyList() else null
             } catch (_: Exception) {
                 null
@@ -301,10 +403,19 @@ class SessionsViewModel(
             if (projects != null && bound.value == scope) {
                 // Only worth a filter when some chats are in a project, not all in Home.
                 val shown = projects.takeIf { list -> list.any { !it.isNoProject } }.orEmpty()
+                val made = selectAfterLoad
                 _state.update { state ->
-                    val picked = state.project?.let { p -> shown.firstOrNull { it.id == p.id } }
-                    state.copy(projects = shown, project = picked, projectSessions = state.projectSessions.takeIf { picked != null })
+                    val picked = made?.let { id -> shown.firstOrNull { it.id == id } }
+                        ?: state.project?.let { p -> shown.firstOrNull { it.id == p.id } }
+                    state.copy(
+                        projects = shown,
+                        canMakeProjects = supported && !projectChangesMissing,
+                        project = picked,
+                        projectSessions = state.projectSessions.takeIf { picked != null && picked.id == state.project?.id },
+                    )
                 }
+                // An older answer may not have the new project yet; the next one will.
+                if (made != null && _state.value.project?.id == made) selectAfterLoad = null
                 loadProjectSessions()
             }
             if (projectsAgain) {
