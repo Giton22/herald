@@ -102,7 +102,10 @@ class SessionsViewModelTest {
 
     /** A gateway socket that says it's ready and lists [live] as live sessions (`stored id to status`). */
     private class LiveGateway(private val live: Map<String, String>, projects: Map<String, String> = emptyMap()) : RpcTransport {
-        /** What each `projects.*` method answers; a value starting `error:` turns the call down with that message. */
+        /**
+         * What each `projects.*` method answers; a value starting `error:` turns the call down with that message,
+         * and `missing` answers as a gateway without the method.
+         */
         val projects = projects.toMutableMap()
 
         /** The method of every call sent, in order. */
@@ -124,6 +127,10 @@ class SessionsViewModelTest {
             method?.let { methods += it }
             projects[method]?.takeIf { it.startsWith("error:") }?.let { reason ->
                 inbound.send("""{"jsonrpc":"2.0","id":$id,"error":{"code":5063,"message":"${reason.removePrefix("error:")}"}}""")
+                return
+            }
+            if (projects[method] == "missing") {
+                inbound.send("""{"jsonrpc":"2.0","id":$id,"error":{"code":-32601,"message":"Method not found"}}""")
                 return
             }
             val result = if (method == "session.active_list") {
@@ -254,14 +261,85 @@ class SessionsViewModelTest {
         vm.awaitLoaded()
         assertTrue(vm.state.first { it.canMakeProjects }.projects.isEmpty())
 
-        // Made: the tree is asked again and the new, still empty project shows.
-        socket.projects["projects.tree"] = """{"projects":[{"id":"p_new","label":"Fresh","path":"/srv/fresh","sessionIds":[]},
+        // Made: the tree is asked again, and the new, still empty project shows, picked.
+        socket.projects["projects.create"] = """{"project":{"id":"p_new","name":"Fresh"}}"""
+        socket.projects["projects.tree"] = """{"projects":[{"id":"p_new","label":"Fresh","path":"/srv/fresh","isAuto":false,"sessionIds":[]},
             {"id":"__no_project__","label":"Home","isNoProject":true,"sessionCount":2}]}"""
         var done: String? = "not yet"
         vm.createProject("Fresh", "/srv/fresh") { done = it }
-        assertEquals(listOf("p_new", "__no_project__"), vm.state.first { it.projects.isNotEmpty() }.projects.map { it.id })
+        val made = vm.state.first { it.projects.isNotEmpty() }
+        assertEquals(listOf("p_new", "__no_project__"), made.projects.map { it.id })
+        assertEquals("p_new", vm.state.first { it.project != null }.project?.id)
         assertEquals(null, done)
         assertTrue("projects.create" in socket.methods)
+    }
+
+    @Test
+    fun savingTheOpenFolderAsAProjectKeepsItOpen() = runTest(dispatcher) {
+        val socket = LiveGateway(
+            live = emptyMap(),
+            projects = mapOf(
+                "projects.tree" to """{"projects":[{"id":"/srv/site","label":"site","path":"/srv/site","isAuto":true,"sessionIds":["z"]}]}""",
+                "projects.project_sessions" to """{"project":{"id":"x","repos":[{"groups":[{"sessions":[{"id":"z","title":"Older work"}]}]}]}}""",
+                "projects.create" to """{"project":{"id":"p_site","name":"site"}}""",
+            ),
+        )
+        val vm = viewModel(socket = socket)
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        vm.selectProject(vm.state.first { it.projects.isNotEmpty() }.projects.single())
+        vm.state.first { it.projectSessions != null }
+
+        // The saved folder comes back under a new id; the list stays on it rather than going back to every chat.
+        socket.projects["projects.tree"] = """{"projects":[{"id":"p_site","label":"site","path":"/srv/site","isAuto":false,"sessionIds":["z"]}]}"""
+        vm.createProject("site", "/srv/site") {}
+        val after = vm.state.first { it.projects.singleOrNull()?.id == "p_site" && it.projectSessions != null }
+        assertEquals("p_site", after.project?.id)
+        assertEquals(listOf("z"), after.projectSessions?.map { it.id })
+    }
+
+    @Test
+    fun aRefusedRenameGoesBackToTheOldName() = runTest(dispatcher) {
+        val socket = LiveGateway(
+            live = emptyMap(),
+            projects = mapOf(
+                "projects.tree" to """{"projects":[{"id":"p1","label":"herald","path":"/srv/herald","isAuto":false,"sessionIds":["z"]}]}""",
+                "projects.update" to "error:name taken",
+            ),
+        )
+        val vm = viewModel(socket = socket)
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        val project = vm.state.first { it.projects.isNotEmpty() }.projects.single()
+        // Even with no tree to ask again, the name goes back.
+        socket.projects["projects.tree"] = "error:tree down"
+        vm.renameProject(project, "Taken")
+        val after = vm.state.first { it.message != null }
+        assertEquals("herald", after.projects.single().label)
+        assertEquals("name taken", after.message)
+    }
+
+    @Test
+    fun aGatewayWithoutProjectChangesStopsOfferingThem() = runTest(dispatcher) {
+        val socket = LiveGateway(
+            live = emptyMap(),
+            projects = mapOf(
+                "projects.tree" to """{"projects":[{"id":"/srv/site","label":"site","path":"/srv/site","isAuto":true,"sessionIds":["z"]}]}""",
+                "projects.create" to "missing",
+            ),
+        )
+        val vm = viewModel(socket = socket)
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        vm.state.first { it.canMakeProjects }
+        var done: String? = null
+        vm.createProject("site", "/srv/site") { done = it }
+        assertFalse(vm.state.first { !it.canMakeProjects }.canMakeProjects)
+        assertEquals("This gateway can't change projects.", done)
+        // A later tree doesn't bring the button back.
+        vm.refresh()
+        vm.awaitLoaded()
+        assertFalse(vm.state.value.canMakeProjects)
     }
 
     @Test
