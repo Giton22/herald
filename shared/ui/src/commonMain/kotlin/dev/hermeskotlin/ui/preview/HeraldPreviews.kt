@@ -335,6 +335,7 @@ private fun SampleChat(
         onOpenPets = {},
         onViewImage = {},
         onNotice = {},
+        place = "homelab",
     )
 }
 

@@ -96,7 +96,9 @@ import dev.hermeskotlin.ui.bots.LocalBotFaces
 import dev.hermeskotlin.ui.chat.BarButton
 import dev.hermeskotlin.ui.chat.MessageTimeLabel
 import dev.hermeskotlin.ui.chat.SendButton
+import dev.hermeskotlin.ui.chat.BarStatus
 import dev.hermeskotlin.ui.chat.SendIcon
+import dev.hermeskotlin.ui.chat.StatusTone
 import dev.hermeskotlin.ui.chat.TopBar
 import dev.hermeskotlin.ui.sessions.ListNotice
 import dev.hermeskotlin.ui.sessions.ListSpinner
@@ -131,7 +133,7 @@ fun RoomScreen(
             TopBar(
                 title = room.room.name,
                 titleFace = members.takeIf { it.isNotEmpty() }?.let { { RoomFaces(it, faces, size = 20.dp, max = 3) } },
-                subtitle = "Waiting on you".takeIf { room.pendingActions.isNotEmpty() },
+                status = BarStatus("Waiting on you", StatusTone.Waiting).takeIf { room.pendingActions.isNotEmpty() },
                 onOpenSidebar = onOpenSidebar,
                 onNewChat = null,
                 onOpenMenu = null,
