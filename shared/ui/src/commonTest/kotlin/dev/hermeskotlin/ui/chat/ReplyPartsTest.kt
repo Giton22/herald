@@ -19,17 +19,17 @@ class ReplyPartsTest {
             ToolActivity("3", "patch"),
         )
 
-        assertEquals("Worked 42s" to "3 steps", workedLabel(tools))
+        assertEquals("Ran 3 tools" to "42s", workedLabel(tools))
     }
 
     @Test
-    fun withNoTimesThePillSaysOnlyThatToolsWereUsed() {
-        assertEquals("Used tools" to "1 step", workedLabel(listOf(ToolActivity("1", "terminal"))))
+    fun withNoTimesThePillSaysOnlyHowManyRan() {
+        assertEquals("Ran 1 tool" to null, workedLabel(listOf(ToolActivity("1", "terminal"))))
     }
 
     @Test
     fun aMinuteOrMoreIsInMinutes() {
-        assertEquals("Worked 1m 15s" to "2 steps", workedLabel(listOf(ToolActivity("1", "a", durationSeconds = 60.0), ToolActivity("2", "b", durationSeconds = 15.0))))
+        assertEquals("Ran 2 tools" to "1m 15s", workedLabel(listOf(ToolActivity("1", "a", durationSeconds = 60.0), ToolActivity("2", "b", durationSeconds = 15.0))))
     }
 
     @Test

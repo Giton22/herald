@@ -67,6 +67,10 @@ import dev.hermeskotlin.designsystem.userBubble
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.isImeVisible
@@ -162,7 +166,6 @@ import com.composables.icons.lucide.FileText
 import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.Image
 import com.composables.icons.lucide.ListTodo
-import com.composables.icons.lucide.MessageSquareQuote
 import com.composables.icons.lucide.SquareTerminal
 import com.composables.icons.lucide.Wrench
 import com.composables.icons.lucide.X
@@ -1575,15 +1578,6 @@ private fun AssistantReply(
     // Pictures image_generate made show where it ran, as on Desktop: the model may never name them.
     val generated = remember(message.tools) { message.tools.mapNotNull { it.generatedImage }.distinctBy { it.source } }
     val (text, media) = remember(message.text, generated, unservable) { extractReplyMedia(message.text, generated + unservable) }
-    // Named the way the agent will know it: the newest reply, or an older one by its first words.
-    val source = remember(message.key, text, last) {
-        CommentSource(
-            messageKey = message.key,
-            label = if (last) LAST_REPLY else "your earlier reply that starts “${openingWords(text)}”",
-            markdown = text,
-        )
-    }
-    val commentHost = LocalCommentHost.current
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ReplyHeader(message.timestamp.takeUnless { message.streaming })
         // What's happening now is said once, above the composer; the reply keeps only what it's made of.
@@ -1595,6 +1589,14 @@ private fun AssistantReply(
         // Messages to other bots, said whatever the tool-activity setting: they're part of the conversation.
         message.tools.filter { it.name == MESSAGE_AGENT_TOOL }.forEach { MessagedLine(it) }
         if (text.isNotBlank()) {
+            // Named the way the agent will know it: the newest reply, or an older one by its first words.
+            val source = remember(message.key, text, last) {
+                CommentSource(
+                    messageKey = message.key,
+                    label = if (last) LAST_REPLY else "your earlier reply that starts “${openingWords(text)}”",
+                    markdown = text,
+                )
+            }
             // Not while it streams: the text and its blocks are still changing under the selection.
             CommentableSelection(source.takeUnless { message.streaming }) { MarkdownText(text, streaming = message.streaming) }
         }
@@ -1620,14 +1622,9 @@ private fun AssistantReply(
                 if (actionable) {
                     // Their padding trimmed off the start and top, the icons line up with the reply and sit close under it.
                     val action = Modifier.trimStartTop(start = 0.dp, top = 4.dp)
-                    CopyButton(text, Modifier.trimStartTop(start = 8.dp, top = 4.dp))
+                    CopyButton(text, Modifier.trimStartTop(start = 16.dp, top = 4.dp).size(MinTouchTarget))
                     onRegenerate?.let { ReplyAction(Lucide.RefreshCw, "Regenerate", it, action) }
                     onBranch?.let { ReplyAction(Lucide.GitBranch, "Branch from here", it, action) }
-                    commentHost?.let { host ->
-                        ReplyAction(Lucide.MessageSquareQuote, "Comment on this reply", {
-                            host.onSelection(SelectionAction.Comment, source, SelectionAnchor.whole(text))
-                        }, action)
-                    }
                 }
                 Spacer(Modifier.weight(1f))
                 usage?.let {
@@ -1833,7 +1830,7 @@ internal fun MentionSuggestions(choices: List<MentionChoice>, hazeState: HazeSta
     }
 }
 
-/** A tappable one-line header that opens to show more, shared by reasoning and tool activity. */
+/** A tappable one-line header that opens to show more, as the reply's reasoning does. */
 @Composable
 private fun Disclosure(
     icon: @Composable () -> Unit,
@@ -1888,43 +1885,44 @@ private fun Reasoning(text: String) {
 private fun Tools(tools: List<ToolActivity>, messageKey: String) {
     var expanded by remember { mutableStateOf(false) }
     val icons = remember(tools) { tools.map { toolIcon(it.name) }.distinct().take(3) }
+    val (ran, took) = workedLabel(tools)
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        // A pill: up to three of the kinds of tool it used, overlapping, then how long it worked and in how many steps.
+        // A pill: up to three of the kinds of tool it used, overlapping, then how many ran and for how long.
+        // It's drawn 36dp tall, but the full touch height around it takes the tap.
         val pill = CircleShape
-        Row(
+        val interaction = remember { MutableInteractionSource() }
+        Box(
             Modifier
-                .heightIn(min = 36.dp)
-                .clip(pill)
-                .background(Theme[colors][surface], pill)
-                .border(1.dp, Theme[colors][stroke], pill)
-                .clickable(onClickLabel = if (expanded) "Hide the steps" else "Show the steps") { expanded = !expanded }
-                .padding(start = 6.dp, end = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .heightIn(min = MinTouchTarget)
+                .clickable(interaction, indication = null) { expanded = !expanded }
+                .semantics {
+                    contentDescription = listOfNotNull(ran, took).joinToString(", ")
+                    stateDescription = if (expanded) "Expanded" else "Collapsed"
+                },
+            contentAlignment = Alignment.CenterStart,
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy((-6).dp)) {
-                icons.forEach { icon ->
-                    Box(
-                        Modifier
-                            .size(24.dp)
-                            .border(2.dp, Theme[colors][surface], CircleShape)
-                            .padding(1.dp)
-                            .background(Theme[colors][surface3], CircleShape),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(11.dp))
-                    }
-                }
+            Row(
+                Modifier
+                    .clearAndSetSemantics {}
+                    .heightIn(min = 36.dp)
+                    .clip(pill)
+                    .background(Theme[colors][surface], pill)
+                    .border(1.dp, Theme[colors][stroke], pill)
+                    .indication(interaction, rememberColoredIndication(Theme[colors][textSecondary]))
+                    .padding(start = 6.dp, end = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy((-6).dp)) { icons.forEach { ToolKindIcon(it) } }
+                Text(ran, style = Theme[typography][caption], color = Theme[colors][textSecondary])
+                took?.let { Text("· $it", style = Theme[typography][caption], color = Theme[colors][textMuted]) }
+                UnstyledIcon(
+                    if (expanded) Lucide.ChevronDown else Lucide.ChevronRight,
+                    contentDescription = null,
+                    tint = Theme[colors][textMuted],
+                    modifier = Modifier.size(13.dp),
+                )
             }
-            val (worked, steps) = workedLabel(tools)
-            Text(worked, style = Theme[typography][caption], color = Theme[colors][textSecondary])
-            Text("· $steps", style = Theme[typography][caption], color = Theme[colors][textMuted])
-            UnstyledIcon(
-                if (expanded) Lucide.ChevronDown else Lucide.ChevronRight,
-                contentDescription = null,
-                tint = Theme[colors][textMuted],
-                modifier = Modifier.size(13.dp),
-            )
         }
         if (expanded) {
             Box(
@@ -1942,11 +1940,29 @@ private fun Tools(tools: List<ToolActivity>, messageKey: String) {
     }
 }
 
-/** "Worked 42s" (or "Used tools" when no call was timed) and "5 steps", for the reply's tool pill. */
-internal fun workedLabel(tools: List<ToolActivity>): Pair<String, String> {
+/** One kind of tool in the pill: its icon in a small circle, ringed in the pill's fill so the circles overlap cleanly. */
+@Composable
+private fun ToolKindIcon(icon: ImageVector) {
+    Box(
+        Modifier
+            .size(24.dp)
+            .border(2.dp, Theme[colors][surface], CircleShape)
+            .padding(1.dp)
+            .background(Theme[colors][surface3], CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(11.dp))
+    }
+}
+
+/**
+ * "Ran 3 tools" and the time they took between them ("42s"), for the reply's tool pill; no time when none
+ * was timed. It's the tools' own time added up, not the turn's: calls run side by side each count.
+ */
+internal fun workedLabel(tools: List<ToolActivity>): Pair<String, String?> {
     val timed = tools.mapNotNull { it.durationSeconds }
-    val worked = if (timed.isEmpty()) "Used tools" else "Worked ${formatDuration(timed.sum())}"
-    return worked to if (tools.size == 1) "1 step" else "${tools.size} steps"
+    val ran = if (tools.size == 1) "Ran 1 tool" else "Ran ${tools.size} tools"
+    return ran to timed.takeIf { it.isNotEmpty() }?.let { formatDuration(it.sum()) }
 }
 
 /** A tool's kind, as a small icon. */

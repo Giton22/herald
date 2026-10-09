@@ -136,7 +136,7 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier, streaming: Boolean
     val markdownColors = DefaultMarkdownColors(
         text = Theme[colors][textColor],
         codeBackground = Theme[colors][well],
-        inlineCodeBackground = Theme[colors][surface],
+        inlineCodeBackground = Theme[colors][surface2],
         dividerColor = Theme[colors][stroke],
         tableBackground = Theme[colors][surface],
     )
@@ -325,10 +325,11 @@ private fun WrappingTable(content: String, node: ASTNode, style: TextStyle) {
 @Composable
 private fun DotList(content: String, node: ASTNode, depth: Int) {
     val dot = Theme[colors][if (depth == 0) accentText else textMuted]
-    // Centers the dot on the first line of the item's text.
+    // Centers the dot on the first line of the item's text. Only the dot is pushed down: a task item's
+    // checkbox takes the same marker slot and sits on the line as it is.
     val top = with(LocalDensity.current) { ((Theme[typography][body].lineHeight.toDp() - BULLET_DOT) / 2) }
-    MarkdownListItems(content, node, depth, markerModifier = { Modifier.padding(top = top, start = 2.dp, end = 10.dp) }) { _, _, _ ->
-        Box(Modifier.size(BULLET_DOT).background(dot, CircleShape))
+    MarkdownListItems(content, node, depth, markerModifier = { Modifier.padding(start = 2.dp, end = 10.dp) }) { _, _, _ ->
+        Box(Modifier.padding(top = top).size(BULLET_DOT).background(dot, CircleShape))
     }
 }
 
@@ -444,7 +445,7 @@ private fun CopyPill(text: String) {
     val tint = Theme[colors][textTertiary]
     UnstyledButton(
         onClick = copy,
-        modifier = Modifier.height(36.dp).clip(RoundedCornerShape(Theme[radii][radiusSmall])),
+        modifier = Modifier.height(40.dp).clip(RoundedCornerShape(Theme[radii][radiusSmall])),
         indication = rememberColoredIndication(tint),
         contentPadding = PaddingValues(horizontal = 4.dp),
     ) {
