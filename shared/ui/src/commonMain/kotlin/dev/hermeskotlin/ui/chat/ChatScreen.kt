@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Ellipsis
 import dev.hermeskotlin.designsystem.HeraldBrandBlue
 import dev.hermeskotlin.designsystem.HeraldMark
+import dev.hermeskotlin.designsystem.components.glow
 import dev.hermeskotlin.designsystem.components.halo
 import dev.hermeskotlin.designsystem.dangerSoft
 import dev.hermeskotlin.designsystem.radiusSmall
@@ -1060,7 +1061,7 @@ internal fun AppMark(size: Dp, glow: Boolean = true) {
     Box(
         Modifier
             .size(size)
-            .then(if (glow) Modifier.dropShadow(shape, bubbleGlow(HeraldBrandBlue)) else Modifier)
+            .then(if (glow) Modifier.glow(shape, bubbleGlow(HeraldBrandBlue)) else Modifier)
             .background(HeraldBrandBlue, shape),
         contentAlignment = Alignment.Center,
     ) {
@@ -1599,7 +1600,7 @@ private fun UserBubble(
                         Modifier
                             .weight(1f, fill = false)
                             // A sent prompt glows faintly in its own color; one still on its way doesn't.
-                            .then(if (waiting) Modifier else Modifier.dropShadow(shape, bubbleGlow(Theme[colors][userBubble])))
+                            .then(if (waiting) Modifier else Modifier.glow(shape, bubbleGlow(Theme[colors][userBubble])))
                             .clip(shape)
                             .background(Theme[colors][if (waiting) accentSoft else userBubble], shape)
                             // The prompt being edited is outlined in the text color, which shows on the accent fill.
@@ -2931,7 +2932,7 @@ private fun SendDisc(fill: Color, tint: Color, glow: Boolean, interaction: Mutab
         Modifier
             .size(40.dp)
             // Tighter than the bubble's glow: Send sits near the dock's edge, which would cut a wider one off.
-            .then(if (glow) Modifier.dropShadow(CircleShape, Shadow(radius = 10.dp, color = fill.copy(alpha = 0.45f), offset = DpOffset(0.dp, 3.dp))) else Modifier)
+            .then(if (glow) Modifier.glow(CircleShape, Shadow(radius = 10.dp, color = fill.copy(alpha = 0.45f), offset = DpOffset(0.dp, 3.dp))) else Modifier)
             .background(fill, CircleShape)
             .clip(CircleShape)
             .indication(interaction, rememberColoredIndication(tint)),

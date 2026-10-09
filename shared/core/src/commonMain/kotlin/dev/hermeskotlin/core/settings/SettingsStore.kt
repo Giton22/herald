@@ -68,6 +68,11 @@ data class AppSettings(
      * newer version added reads as the default here instead of making the whole stored settings unreadable.
      */
     val accent: String = DEFAULT_ACCENT,
+    /**
+     * The colored glows: behind the top of each screen; under prompts, the app mark, Send, New chat, the main
+     * buttons and live subagent cards; on the voice screen; and the assistant edge's halo. Off, all flat.
+     */
+    val glow: Boolean = true,
     val textSize: TextSize = TextSize.Default,
     /** How strongly the chat background (kept by [WallpaperStore]) shows, when there is one. */
     val wallpaperStrength: WallpaperStrength = WallpaperStrength.Faint,

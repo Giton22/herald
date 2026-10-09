@@ -93,6 +93,8 @@ import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.components.LocalCodeWrap
+import dev.hermeskotlin.designsystem.components.LocalGlow
+import dev.hermeskotlin.designsystem.components.glow
 import dev.hermeskotlin.designsystem.components.MarkdownText
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.components.halo
@@ -171,6 +173,7 @@ fun AssistantPanel(
             LocalAccentPalette provides palette,
             LocalAppSettings provides settings,
             LocalCodeWrap provides settings.wrapCode,
+            LocalGlow provides settings.glow,
             LocalDensity provides Density(density.density, density.fontScale * settings.textSize.scale),
         ) {
             AssistantBackdrop(onClose) {
@@ -439,7 +442,7 @@ private fun Prompt(message: ChatMessage.User) {
                 style = Theme[typography][body],
                 color = Theme[colors][onUserBubble],
                 modifier = Modifier
-                    .dropShadow(shape, bubbleGlow(Theme[colors][userBubble]))
+                    .glow(shape, bubbleGlow(Theme[colors][userBubble]))
                     .clip(shape)
                     .background(Theme[colors][userBubble], shape)
                     .padding(horizontal = 14.dp, vertical = 9.dp),

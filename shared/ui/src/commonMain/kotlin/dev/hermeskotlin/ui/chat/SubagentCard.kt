@@ -27,7 +27,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.shadow.Shadow
@@ -66,6 +65,7 @@ import dev.hermeskotlin.designsystem.code
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import dev.hermeskotlin.designsystem.components.Spinner
+import dev.hermeskotlin.designsystem.components.glow
 import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.dangerSoft
 import dev.hermeskotlin.designsystem.radii
@@ -113,7 +113,7 @@ private fun SubagentCard(row: SubagentRow, onStop: (String) -> Unit) {
     Box(
         Modifier
             .fillMaxWidth()
-            .then(if (live) Modifier.dropShadow(shape, Shadow(radius = 20.dp, color = soft)) else Modifier)
+            .then(if (live) Modifier.glow(shape, Shadow(radius = 20.dp, color = soft)) else Modifier)
             .clip(shape)
             .background(Theme[colors][surface])
             .border(1.dp, if (live) soft else Theme[colors][stroke], shape)

@@ -18,6 +18,7 @@ import com.composables.icons.lucide.RefreshCw
 import dev.hermeskotlin.designsystem.components.BottomSheet
 import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonVariant
+import dev.hermeskotlin.designsystem.components.LocalGlow
 import dev.hermeskotlin.designsystem.components.SheetHeader
 import dev.hermeskotlin.ui.chat.PendingComment
 import dev.hermeskotlin.ui.connect.AccessToken
@@ -155,13 +156,17 @@ enum class PreviewScene(val label: String) {
 
 /**
  * One scene full-screen in the app theme: Android Studio previews and the debug screenshot gallery both use it.
- * [accent] is an [AccentPalette] name.
+ * [accent] is an [AccentPalette] name; [glow] is the Glow setting.
  */
 @Composable
-fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DEFAULT_ACCENT) {
+fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DEFAULT_ACCENT, glow: Boolean = true) {
     val palette = AccentPalette.named(accent)
     hermesTheme(palette)(if (dark) ColorScheme.Dark else ColorScheme.Light) {
-        CompositionLocalProvider(LocalAccentPalette provides palette, LocalAppSettings provides AppSettings(showPet = false)) {
+        CompositionLocalProvider(
+            LocalAccentPalette provides palette,
+            LocalAppSettings provides AppSettings(showPet = false, glow = glow),
+            LocalGlow provides glow,
+        ) {
             when (scene) {
                 PreviewScene.Reply -> SampleChat(ChatSamples.reply)
                 PreviewScene.Notices -> SampleChat(ChatSamples.notices)
@@ -409,7 +414,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 }
                 PreviewScene.Models, PreviewScene.ModelsAll, PreviewScene.ModelSearch -> Box(Modifier.fillMaxSize()) {
                     SampleChat(ChatSamples.reply)
-                    val settings = AppSettings(showPet = false, starredModels = PageSamples.starredModels, recentModels = PageSamples.recentModels)
+                    val settings = AppSettings(showPet = false, glow = glow, starredModels = PageSamples.starredModels, recentModels = PageSamples.recentModels)
                     CompositionLocalProvider(LocalAppSettings provides settings) {
                         ModelSheet(
                             visible = true,
@@ -431,7 +436,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                     ProcessesSheetView(visible = true, state = PageSamples.processes, onKill = {}, onDismiss = {}, initiallyExpanded = "proc_1")
                 }
                 PreviewScene.Settings -> SettingsView(
-                    settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light, accent = accent),
+                    settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light, accent = accent, glow = glow),
                     info = GatewayInfo(userLabel = ChatSamples.USER, version = "0.9.0"),
                     gatewayUrl = "https://hermes.example.ts.net",
                     gatewayName = "homelab",
@@ -442,7 +447,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 )
                 PreviewScene.ConnectionCheck -> Box(Modifier.fillMaxSize()) {
                     SettingsView(
-                        settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light),
+                        settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light, glow = glow),
                         info = GatewayInfo(userLabel = ChatSamples.USER, version = "0.9.0"),
                         gatewayUrl = "https://hermes.example.ts.net",
                         gatewayName = "homelab",

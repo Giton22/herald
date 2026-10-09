@@ -93,6 +93,7 @@ import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
 import dev.hermeskotlin.designsystem.colors
+import dev.hermeskotlin.designsystem.components.LocalGlow
 import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.danger
@@ -143,7 +144,7 @@ internal fun VoiceScreen(
     ) {
         // The orb gives way on a short screen (landscape, a large font) so the buttons always fit.
         val orb = (maxHeight * 0.24f).coerceAtMost(168.dp)
-        Canvas(Modifier.fillMaxSize()) {
+        if (LocalGlow.current) Canvas(Modifier.fillMaxSize()) {
             val radius = size.width * 0.9f
             drawCircle(
                 Brush.radialGradient(listOf(glow, Color.Transparent), center = Offset(size.width / 2, size.height * 0.82f), radius = radius),
@@ -333,6 +334,7 @@ private fun BigOrb(state: VoiceChatState, modifier: Modifier = Modifier) {
     val tint by animateColorAsState(if (muted) Theme[colors][textMuted] else Theme[colors][accent])
     val soft by animateColorAsState(if (muted) Theme[colors][surface3] else Theme[colors][accentSoft])
     val arc = Theme[colors][accentText]
+    val glow = LocalGlow.current
     val time by rememberInfiniteTransition().animateFloat(
         initialValue = 0f,
         targetValue = 1f,
@@ -353,11 +355,13 @@ private fun BigOrb(state: VoiceChatState, modifier: Modifier = Modifier) {
         drawCircle(soft, radius = outer * 0.76f)
         val core = outer * 0.62f
         // The glow under the ball, a little low, as if it were lit from above.
-        drawCircle(
-            Brush.radialGradient(listOf(tint.copy(alpha = 0.45f), Color.Transparent), center = Offset(center.x, center.y + 10.dp.toPx()), radius = core * 1.35f),
-            radius = core * 1.35f,
-            center = Offset(center.x, center.y + 10.dp.toPx()),
-        )
+        if (glow) {
+            drawCircle(
+                Brush.radialGradient(listOf(tint.copy(alpha = 0.45f), Color.Transparent), center = Offset(center.x, center.y + 10.dp.toPx()), radius = core * 1.35f),
+                radius = core * 1.35f,
+                center = Offset(center.x, center.y + 10.dp.toPx()),
+            )
+        }
         drawCircle(
             Brush.radialGradient(
                 listOf(lerp(tint, Color.White, 0.45f), tint),

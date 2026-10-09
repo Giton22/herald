@@ -27,6 +27,20 @@ class SettingsStoreTest {
     }
 
     @Test
+    fun glowIsOnUnlessTurnedOff() = runTest {
+        val disk = InMemoryKeyValueStore()
+        // Settings saved before the option existed keep the glow.
+        disk.put("settings.v1", """{"theme":"Dark"}""")
+        val first = SettingsStore(disk, backgroundScope)
+        assertEquals(true, first.settings.filterNotNull().first().glow)
+
+        first.update { it.copy(glow = false) }
+        advanceUntilIdle()
+
+        assertEquals(false, SettingsStore(disk, backgroundScope).settings.filterNotNull().first().glow)
+    }
+
+    @Test
     fun sendWhileRunningSteersUnlessChangedAndRemembersTheChoice() = runTest {
         val disk = InMemoryKeyValueStore()
         // Settings saved before the option existed still read, with Steer.
