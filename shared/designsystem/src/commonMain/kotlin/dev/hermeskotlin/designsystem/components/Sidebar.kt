@@ -5,8 +5,11 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.MutatorMutex
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.draggable
@@ -160,28 +163,43 @@ fun SidebarLayout(
                     },
                 ),
         ) {
-            // The content slides along with the drawer, like a push, and dims as it opens.
-            Box(Modifier.fillMaxSize().offset { IntOffset((widthPx * p).roundToInt(), 0) }) {
-                content()
-                if (p > 0f) {
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.4f * p))
-                            .pointerInput(Unit) { detectTapGestures { scope.launch { state.close() } } },
-                    )
-                }
+            // The content slides along with the drawer, like a push.
+            Box(Modifier.fillMaxSize().offset { IntOffset((widthPx * p).roundToInt(), 0) }) { content() }
+            // The dim covers the whole screen behind the drawer, so its rounded corners show dimmed ground too.
+            if (p > 0f) {
+                Box(
+                    Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.4f * p))
+                        .pointerInput(Unit) { detectTapGestures { scope.launch { state.close() } } },
+                )
             }
+            val edge = Theme[colors][stroke]
             Box(
                 Modifier
                     .requiredWidth(width)
                     .fillMaxHeight()
                     .align(Alignment.CenterStart)
                     .offset { IntOffset((-widthPx * (1f - p)).roundToInt(), 0) }
-                    // A sheet over the chat, its outer corners rounded; the ring shows the edge when both are black.
+                    // A sheet over the chat, its outer corners rounded.
                     .clip(DrawerShape)
                     .background(Theme[colors][sidebarColor], DrawerShape)
-                    .border(1.dp, Theme[colors][stroke], DrawerShape)
+                    // The dim alone doesn't show the edge when both are black (pure black theme): a hairline
+                    // along the end and its corners only, none along the screen's own edges.
+                    .drawWithContent {
+                        drawContent()
+                        val r = DRAWER_RADIUS.toPx()
+                        val s = 1.dp.toPx()
+                        val w = size.width - s / 2
+                        val h = size.height
+                        val path = Path().apply {
+                            moveTo(w - r, s / 2)
+                            arcTo(Rect(w - 2 * r, s / 2, w, 2 * r), -90f, 90f, false)
+                            lineTo(w, h - r)
+                            arcTo(Rect(w - 2 * r, h - 2 * r, w, h - s / 2), 0f, 90f, false)
+                        }
+                        drawPath(path, edge, style = Stroke(s))
+                    }
                     .then(hidden),
             ) {
                 sidebar()
@@ -192,4 +210,5 @@ fun SidebarLayout(
 
 private const val FLING_VELOCITY = 800f
 
-private val DrawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp)
+private val DRAWER_RADIUS = 28.dp
+private val DrawerShape = RoundedCornerShape(topEnd = DRAWER_RADIUS, bottomEnd = DRAWER_RADIUS)

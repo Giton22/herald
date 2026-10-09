@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.shadow.Shadow
@@ -572,6 +573,7 @@ fun SessionsSidebar(
 
         BottomBar(
             userLabel = user?.label,
+            connection = connection,
             message = state.message,
             onDismissMessage = viewModel::dismissMessage,
             onNewChat = {
@@ -724,6 +726,7 @@ internal fun SessionsSidebarSample(
         }
         BottomBar(
             userLabel = userLabel,
+            connection = null,
             message = null,
             onDismissMessage = {},
             onNewChat = {},
@@ -773,6 +776,7 @@ private fun MainHeader(
                     style = Theme[typography][heading].copy(fontSize = 17.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.02).em),
                     color = Theme[colors][text],
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
                     Box(Modifier.size(6.dp).background(connectionDot(connection), CircleShape))
@@ -789,8 +793,9 @@ private fun MainHeader(
             }
             IconButton(Lucide.Settings, contentDescription = "Settings", onClick = onSettings, tint = Theme[colors][textSecondary])
         }
-        // Search looks through chats; the bot roster is short enough to read.
-        if (onSearch != null) SearchPill(onSearch)
+        // Search looks through chats; the bot roster is short enough to read. The header keeps its height
+        // without the pill, so switching sides doesn't move the switch under the finger.
+        if (onSearch != null) SearchPill(onSearch) else Spacer(Modifier.height(MinTouchTarget))
     }
 }
 
@@ -942,6 +947,8 @@ private fun NavTile(link: NavLink, modifier: Modifier = Modifier) {
 @Composable
 private fun BottomBar(
     userLabel: String?,
+    /** Null in previews, which have no connection to report. */
+    connection: ConnectionState?,
     message: String?,
     onDismissMessage: () -> Unit,
     onNewChat: () -> Unit,
@@ -950,15 +957,18 @@ private fun BottomBar(
 ) {
     val ground = Theme[colors][sidebarColor]
     Column(modifier.fillMaxWidth()) {
-        if (message != null) MessageBanner(message, onDismiss = onDismissMessage, modifier = Modifier.padding(bottom = 8.dp))
         Box(Modifier.fillMaxWidth().height(16.dp).background(Brush.verticalGradient(listOf(ground.copy(alpha = 0f), ground))))
-        Row(
-            Modifier.fillMaxWidth().background(ground).padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            NewChatPill(onNewChat, Modifier.weight(1f))
-            Avatar(userLabel, onClick = onAccount)
+        // Opaque under the banner too, so no row shows around it.
+        Column(Modifier.fillMaxWidth().background(ground)) {
+            if (message != null) MessageBanner(message, onDismiss = onDismissMessage, modifier = Modifier.padding(top = 4.dp, bottom = 8.dp))
+            Row(
+                Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                NewChatPill(onNewChat, Modifier.weight(1f))
+                Avatar(userLabel, connection, onClick = onAccount)
+            }
         }
     }
 }
@@ -998,16 +1008,22 @@ private fun NewChatPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
     }
 }
 
-/** The user's initials on a 46dp disc, opening the account sheet. */
+/**
+ * The user's initials on a 46dp disc, opening the account sheet, with a dot when the connection isn't healthy:
+ * the header that also shows it is gone in search and on subpages.
+ */
 @Composable
-private fun Avatar(userLabel: String?, onClick: () -> Unit) {
+private fun Avatar(userLabel: String?, connection: ConnectionState?, onClick: () -> Unit) {
     val initials = userLabel?.initials()
     val interaction = remember { MutableInteractionSource() }
     Box(
         Modifier
             .size(MinTouchTarget)
             .clickable(interaction, indication = null, role = Role.Button, onClickLabel = "Account", onClick = onClick)
-            .semantics { contentDescription = "Account" },
+            .semantics {
+                contentDescription = "Account"
+                if (connection != null && connection !is ConnectionState.Connected) stateDescription = connectionWord(connection)
+            },
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -1024,6 +1040,16 @@ private fun Avatar(userLabel: String?, onClick: () -> Unit) {
             } else {
                 Text(initials, style = Theme[typography][label].copy(fontSize = 14.sp, fontWeight = FontWeight.SemiBold), color = Theme[colors][textSecondary])
             }
+        }
+        if (connection != null && connection !is ConnectionState.Connected) {
+            Box(
+                Modifier
+                    .size(14.dp)
+                    .align(Alignment.TopEnd)
+                    .background(Theme[colors][sidebarColor], CircleShape)
+                    .padding(2.dp)
+                    .background(connectionDot(connection), CircleShape),
+            )
         }
     }
 }
@@ -1258,7 +1284,7 @@ internal fun ListSpinner() {
 @Composable
 private fun AttentionFilters(selected: AttentionFilter, running: Int, needsAttention: Int, onSelect: (AttentionFilter) -> Unit) {
     Row(
-        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 6.dp, end = 6.dp, bottom = 2.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         AttentionFilter.entries.forEach { filter ->
@@ -1291,7 +1317,7 @@ private fun ProjectFilters(
     onNew: (() -> Unit)? = null,
     onOptions: (Project) -> Unit = {},
 ) {
-    Row(Modifier.fillMaxWidth().padding(end = 4.dp, top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+    Row(Modifier.fillMaxWidth().padding(end = 4.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         val scroll = rememberScrollState()
         // Where the picked chip sits in the row, so the row can scroll it into sight: its options button
         // stays beside the row, and must never read as belonging to whichever chip happens to show.
