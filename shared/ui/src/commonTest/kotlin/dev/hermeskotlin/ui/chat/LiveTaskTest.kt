@@ -32,22 +32,28 @@ class LiveTaskTest {
     }
 
     @Test
-    fun theTurnStartedWithThePromptItAnswers() {
+    fun theRunningTurnIsItsStreamingReply() {
         val state = ChatState(
             running = true,
             messages = listOf(
-                ChatMessage.User("u1", "first", timestamp = 100.0),
-                ChatMessage.Assistant("a1", timestamp = 110.0),
-                ChatMessage.User("u2", "second", timestamp = 200.0),
+                ChatMessage.User("u1", "first"),
+                ChatMessage.Assistant("a1"),
+                ChatMessage.User("u2", "second"),
                 ChatMessage.Assistant("a2", streaming = true),
-                ChatMessage.User("u3", "later", queued = true, timestamp = 250.0),
+                ChatMessage.User("u3", "later", queued = true),
             ),
         )
 
-        assertEquals(200.0, turnStartedAt(state))
-        assertNull(turnStartedAt(state.copy(running = false)))
-        // A turn whose reply hasn't started streaming here can't be timed.
-        assertNull(turnStartedAt(state.copy(messages = state.messages.take(3))))
+        assertEquals("a2", runningTurnKey(state))
+        assertNull(runningTurnKey(state.copy(running = false)))
+        // A turn whose reply hasn't opened here yet isn't timed.
+        assertNull(runningTurnKey(state.copy(messages = state.messages.take(3))))
+    }
+
+    @Test
+    fun aBlankDescriptionOrJsonListDoesNotHideOrBecomeTheDetail() {
+        assertEquals(LiveStep("Ran", "uptime"), toolDone(ToolActivity("1", "terminal", detail = " ", input = "\nuptime")))
+        assertEquals(LiveStep("Ran with terminal"), toolDone(ToolActivity("2", "terminal", input = """["a","b"]""")))
     }
 
     @Test

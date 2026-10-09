@@ -29,6 +29,10 @@ import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.surface3
 import dev.hermeskotlin.designsystem.textMuted
 import kotlin.time.Clock
+import androidx.compose.runtime.key
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -188,67 +192,30 @@ internal fun ProgressPanel(
     status: String?,
     tool: ToolActivity?,
     todos: TodoList?,
-    /** When the turn began (epoch seconds), for the running time; null hides it. */
-    startedAt: Double?,
+    /** The running turn, which the running time counts from when it showed here; null hides the time. */
+    turnKey: String?,
     onStop: () -> Unit,
-    connected: Boolean,
+    canStop: Boolean,
 ) {
     var expanded by remember { mutableStateOf(false) }
     val plan = todos?.takeIf { it.items.isNotEmpty() }
     val statusDetail = status?.takeIf { it.isNotBlank() && it != step.title }
     val toolDetail = tool?.let { t -> listOfNotNull(t.name, t.detail?.takeIf { it.isNotBlank() }).joinToString(": ") }
     val hasDetails = statusDetail != null || toolDetail != null || plan != null
-    ShimmerCard(
-        Modifier.then(
-            if (hasDetails) Modifier.clickable(onClickLabel = if (expanded) "Hide details" else "Show details") { expanded = !expanded } else Modifier,
-        ),
-    ) {
-        Row(
-            Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = if (plan != null) 0.dp else 6.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    ShimmerCard {
+        // The header opens and folds the details; the details themselves scroll without folding.
+        Column(
+            Modifier.then(
+                if (hasDetails) {
+                    Modifier
+                        .clickable(onClickLabel = if (expanded) "Hide details" else "Show details") { expanded = !expanded }
+                        .semantics { stateDescription = if (expanded) "Details shown" else "Details hidden" }
+                } else {
+                    Modifier
+                },
+            ),
         ) {
-            Box(
-                Modifier.size(30.dp).background(Theme[colors][accentSoft], RoundedCornerShape(Theme[radii][radiusSmall])),
-                contentAlignment = Alignment.Center,
-            ) {
-                Spinner(Modifier.size(14.dp), color = Theme[colors][accentText])
-            }
-            Column(Modifier.weight(1f)) {
-                Text(step.title, style = Theme[typography][label], color = Theme[colors][text], maxLines = 1, overflow = TextOverflow.Ellipsis)
-                step.detail?.let {
-                    Text(
-                        it,
-                        style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
-                        color = Theme[colors][accentText],
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-            }
-            startedAt?.let { RunningTime(it) }
-            StopButton(onStop, enabled = connected)
-        }
-        if (plan != null) {
-            Row(
-                Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 2.dp, bottom = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                PlanBar(plan.done.toFloat() / plan.total.coerceAtLeast(1), Modifier.weight(1f))
-                val inHand = planStep(plan)
-                Text(
-                    if (inHand != null) "Step $inHand of ${plan.total}" else "${plan.done} of ${plan.total} done",
-                    style = Theme[typography][caption],
-                    color = Theme[colors][textTertiary],
-                )
-                UnstyledIcon(
-                    if (expanded) Lucide.ChevronDown else Lucide.ChevronUp,
-                    contentDescription = null,
-                    tint = Theme[colors][textMuted],
-                    modifier = Modifier.size(13.dp),
-                )
-            }
+            CardHeader(step, turnKey, plan, hasDetails, expanded, onStop, canStop)
         }
         AnimatedVisibility(visible = expanded && hasDetails) {
             Column(
@@ -279,7 +246,7 @@ private fun DetailLine(name: String, value: String) {
 
 /** The live task card: an opaque surface inside a 1dp edge whose accent highlight sweeps round while the task runs. */
 @Composable
-private fun ShimmerCard(modifier: Modifier, content: @Composable ColumnScope.() -> Unit) {
+private fun ShimmerCard(content: @Composable ColumnScope.() -> Unit) {
     val radius = Theme[radii][radiusLarge]
     val soft = Theme[colors][accentSoft]
     val bright = Theme[colors][accentText]
@@ -301,26 +268,94 @@ private fun ShimmerCard(modifier: Modifier, content: @Composable ColumnScope.() 
             }
             .padding(1.dp)
             .clip(RoundedCornerShape(radius - 1.dp))
-            .background(Theme[colors][surface])
-            .then(modifier),
+            .background(Theme[colors][surface]),
         content = content,
     )
 }
 
-/** How long the turn has run, "0:42", ticking each second. */
+/** The card's top: the spinner tile, the step, the running time and Stop; then the plan's progress, when there's a plan. */
 @Composable
-private fun RunningTime(startedAt: Double) {
-    var now by remember { mutableStateOf(Clock.System.now().toEpochMilliseconds()) }
-    LaunchedEffect(startedAt) {
+private fun CardHeader(step: LiveStep, turnKey: String?, plan: TodoList?, hasDetails: Boolean, expanded: Boolean, onStop: () -> Unit, canStop: Boolean) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = if (plan != null) 0.dp else 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(30.dp)
+                .background(Theme[colors][accentSoft], RoundedCornerShape(Theme[radii][radiusSmall]))
+                // The title says it's working; "Loading" from the spinner would only repeat it.
+                .clearAndSetSemantics {},
+            contentAlignment = Alignment.Center,
+        ) {
+            Spinner(Modifier.size(14.dp), color = Theme[colors][accentText])
+        }
+        Column(Modifier.weight(1f)) {
+            Text(step.title, style = Theme[typography][label], color = Theme[colors][text], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            step.detail?.let {
+                Text(
+                    it,
+                    style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
+                    color = Theme[colors][accentText],
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        turnKey?.let { key(it) { RunningTime() } }
+        // Without a plan row below, the header says it opens.
+        if (plan == null && hasDetails) DetailsChevron(expanded)
+        StopButton(onStop, enabled = canStop)
+    }
+    if (plan != null) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 2.dp, bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PlanBar(plan.done.toFloat() / plan.total.coerceAtLeast(1), Modifier.weight(1f))
+            val inHand = planStep(plan)
+            Text(
+                if (inHand != null) "Step $inHand of ${plan.total}" else "${plan.done} of ${plan.total} done",
+                style = Theme[typography][caption],
+                color = Theme[colors][textTertiary],
+            )
+            DetailsChevron(expanded)
+        }
+    }
+}
+
+@Composable
+private fun DetailsChevron(expanded: Boolean) {
+    UnstyledIcon(
+        if (expanded) Lucide.ChevronDown else Lucide.ChevronUp,
+        contentDescription = null,
+        tint = Theme[colors][textMuted],
+        modifier = Modifier.size(13.dp),
+    )
+}
+
+/**
+ * How long the turn has run since it showed here, "0:42", ticking on the second. Screen readers skip it:
+ * read out, it would change under them every second.
+ */
+@Composable
+private fun RunningTime() {
+    val started = remember { Clock.System.now().toEpochMilliseconds() }
+    var now by remember { mutableStateOf(started) }
+    LaunchedEffect(Unit) {
         while (true) {
             now = Clock.System.now().toEpochMilliseconds()
-            delay(1_000)
+            // To the next whole second since the start, so no second is skipped or shown twice.
+            delay(1_000 - (now - started) % 1_000)
         }
     }
     Text(
-        runningTime(((now / 1000.0) - startedAt).toLong()),
+        runningTime((now - started) / 1_000),
         style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
         color = Theme[colors][textTertiary],
+        modifier = Modifier.clearAndSetSemantics {},
     )
 }
 
