@@ -2,6 +2,17 @@ package dev.hermeskotlin.ui.bots
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.accentText
+import dev.hermeskotlin.designsystem.radiusLarge
+import dev.hermeskotlin.designsystem.surface
+import dev.hermeskotlin.designsystem.surface2
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -208,18 +219,29 @@ fun BotEditor(
                 // What it runs and can do: each saved as soon as it's picked, apart from the form.
                 if (bot != null) {
                     val now = live ?: bot
-                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         SectionLabel("How it works")
-                        SettingRow(
-                            Lucide.Cpu,
-                            "Model",
-                            now.model?.takeIf { it.isNotBlank() }?.let { model ->
-                                listOfNotNull(displayModelName(model), now.provider?.takeIf { it.isNotBlank() }?.let { displayProviderName(it) })
-                                    .joinToString(" · ")
-                            } ?: "The gateway's default",
-                            onClick = onPickModel,
-                        )
-                        SettingRow(Lucide.Blocks, "Skills, tools and connectors", "What ${bot.label} can use in its chats", onClick = onCapabilities)
+                        // The two settings on one ringed card, split by a hairline.
+                        val card = RoundedCornerShape(Theme[radii][radiusLarge])
+                        Column(
+                            Modifier
+                                .fillMaxWidth()
+                                .clip(card)
+                                .background(Theme[colors][surface])
+                                .border(1.dp, Theme[colors][stroke], card),
+                        ) {
+                            SettingRow(
+                                Lucide.Cpu,
+                                "Model",
+                                now.model?.takeIf { it.isNotBlank() }?.let { model ->
+                                    listOfNotNull(displayModelName(model), now.provider?.takeIf { it.isNotBlank() }?.let { displayProviderName(it) })
+                                        .joinToString(" · ")
+                                } ?: "The gateway's default",
+                                onClick = onPickModel,
+                            )
+                            Box(Modifier.fillMaxWidth().height(1.dp).background(Theme[colors][stroke]))
+                            SettingRow(Lucide.Blocks, "Skills, tools and connectors", "What ${bot.label} can use in its chats", onClick = onCapabilities)
+                        }
                     }
                 }
                 busy?.let { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary]) }
@@ -283,30 +305,34 @@ private fun SettingRow(icon: ImageVector, title: String, value: String, onClick:
         Modifier
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
-            .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
             .clickable(onClick = onClick)
-            .padding(vertical = 10.dp, horizontal = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+            .padding(vertical = 12.dp, horizontal = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(20.dp))
+        Box(Modifier.size(34.dp).background(Theme[colors][surface2], RoundedCornerShape(10.dp)), contentAlignment = Alignment.Center) {
+            UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(18.dp))
+        }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(title, style = Theme[typography][body], color = Theme[colors][text])
+            Text(title, style = Theme[typography][body].copy(fontWeight = FontWeight.Medium), color = Theme[colors][text])
             Text(value, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         UnstyledIcon(Lucide.ChevronRight, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp))
     }
 }
 
+/** A face or color tile: picked, it sits on the accent tint with an accent edge, as the job editor's choices do. */
 @Composable
 private fun Choice(selected: Boolean, label: String, onClick: () -> Unit, content: @Composable () -> Unit) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
     Box(
         Modifier
-            .size(48.dp)
+            .size(52.dp)
             .clip(shape)
-            .border(if (selected) 2.dp else 1.dp, if (selected) Theme[colors][accent] else Theme[colors][stroke], shape)
-            .clickable(onClickLabel = label, onClick = onClick),
+            .background(if (selected) Theme[colors][accentSoft] else Theme[colors][surface2], shape)
+            .border(if (selected) 1.5.dp else 1.dp, if (selected) Theme[colors][accentText] else Theme[colors][stroke], shape)
+            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+            .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) { content() }
 }
