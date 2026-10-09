@@ -17,7 +17,7 @@ import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.onAccent
-import dev.hermeskotlin.designsystem.strokeStrong
+import dev.hermeskotlin.designsystem.surface3
 import dev.hermeskotlin.designsystem.text
 
 /**
@@ -26,7 +26,8 @@ import dev.hermeskotlin.designsystem.text
  */
 @Composable
 fun Switch(checked: Boolean, modifier: Modifier = Modifier) {
-    val track by animateColorAsState(if (checked) Theme[colors][accent] else Theme[colors][strokeStrong])
+    // Both tracks are opaque, so the thumb never shows what's behind the switch.
+    val track by animateColorAsState(if (checked) Theme[colors][accent] else Theme[colors][surface3])
     val thumb = if (checked) Theme[colors][onAccent] else Theme[colors][text].copy(alpha = 0.7f).compositeOver(track)
     val offset by animateDpAsState(if (checked) 20.dp else 0.dp)
     Box(modifier.size(width = 46.dp, height = 26.dp).background(track, CircleShape).padding(3.dp)) {

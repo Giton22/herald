@@ -38,6 +38,7 @@ import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.designsystem.accent
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
@@ -145,7 +146,7 @@ private fun GatewayRow(
                 Text(sub, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        if (active) UnstyledIcon(Lucide.Check, contentDescription = "In use", tint = Theme[colors][accent], modifier = Modifier.size(20.dp))
+        if (active) UnstyledIcon(Lucide.Check, contentDescription = "In use", tint = Theme[colors][accentText], modifier = Modifier.size(20.dp))
         DropdownMenu(
             expanded = menuOpen,
             onExpandedChange = { menuOpen = it },

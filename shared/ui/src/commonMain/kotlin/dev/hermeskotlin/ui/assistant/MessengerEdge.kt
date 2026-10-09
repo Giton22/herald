@@ -118,12 +118,13 @@ internal fun MessengerEdge(model: AssistantPanelModel, modifier: Modifier = Modi
 
 /**
  * The edge in the chosen accent: [deep] on the unlit rim, the trail in [bright] and its near-white [head].
- * The circling stroke is drawn in the same light. In Blue these are Nous blue, #4A84FE and about #D6E4FF.
+ * The circling stroke is drawn in the same light. In Blue these are Herald blue #2F6BF5, #7AA5FF and about #E4EDFF.
  */
 internal class EdgeColors(val deep: Color, val bright: Color, val head: Color)
 
+// The accent's text shade is the light one on dark, so the trail stands out from the rim even where the fill is one blue.
 internal val AccentPalette.edge: EdgeColors
-    get() = EdgeColors(light.accent, dark.accent, lerp(Color.White, dark.accent, 0.22f))
+    get() = EdgeColors(light.accent, dark.text, lerp(Color.White, dark.text, 0.22f))
 private const val STOPS = 72
 private const val TAIL = 0.32f
 private val CORNER = 36.dp

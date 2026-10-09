@@ -2,9 +2,7 @@ package dev.hermeskotlin.designsystem
 
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.text.selection.TextSelectionColors
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -13,36 +11,16 @@ import com.composeunstyled.theme.ColorScheme
 import com.composeunstyled.theme.buildThemeV2
 import com.composeunstyled.theme.rememberColoredIndication
 
-/**
- * Hermes Desktop's default "Nous" skin: GitHub's Light/Dark Default neutrals carrying Nous blue,
- * which dark mode lifts to #4A84FE to stay legible on near-black. Dark values are as Desktop renders them.
- */
-private object Palette {
-    val Ink = Color(0xFF1F2328)
-    val InkMuted = Color(0xFF656D76)
-    val Canvas = Color(0xFFFFFFFF)
-    val CanvasSubtle = Color(0xFFF6F8FA)
-    val Border = Color(0xFFD0D7DE)
-    val BorderMuted = Color(0xFFD8DEE4)
-
-    val Night = Color(0xFF0D1014)
-    val NightSidebar = Color(0xFF090B0F)
-    val NightCard = Color(0xFF151B23)
-    val NightElevated = Color(0xFF1A2029)
-    val Snow = Color(0xFFE6EDF3)
-    val SnowMuted = Color(0xFF7D8590)
-    val NightBorder = Color(0xFF30363D)
-    val NightBorderMuted = Color(0xFF21262D)
-}
-
-private val baseText = TextStyle(fontFamily = FontFamily.Default)
+// Body text sits a hair tighter than the default, as the design's -0.005em does.
+private val baseText = TextStyle(fontFamily = Geist, letterSpacing = (-0.005).em)
 
 /** Dark with true black backgrounds, for OLED screens. */
 val PureBlack = ColorScheme("pure_black")
 
 /**
- * The app theme in Desktop's blue. Light/dark follow the system unless a [ColorScheme] is passed:
+ * The app theme in Herald blue. Light/dark follow the system unless a [ColorScheme] is passed:
  * `HermesTheme(ColorScheme.Dark) { ... }`, or [PureBlack]. [hermesTheme] gives it in another accent.
+ * The colors are in ThemeColors.kt.
  */
 val HermesTheme = buildHermesTheme(AccentPalette.Blue)
 
@@ -53,106 +31,52 @@ fun hermesTheme(accent: AccentPalette) = accentThemes.getValue(accent)
 
 private fun buildHermesTheme(palette: AccentPalette) = buildThemeV2 {
     name = "HermesTheme" + palette.name.takeIf { palette != AccentPalette.Blue }.orEmpty()
-    colorSchemeTransitionSpec = tween(200)
+    colorSchemeTransitionSpec = tween(180)
 
-    // Desktop scales every radius by 0.2: corners are barely there.
     properties[radii] = mapOf(
-        radiusSmall to 2.dp,
-        radiusMedium to 4.dp,
-        radiusLarge to 6.dp,
+        radiusXSmall to 6.dp,
+        radiusSmall to 10.dp,
+        radiusMedium to 14.dp,
+        radiusLarge to 20.dp,
+        radiusXLarge to 26.dp,
         radiusFull to 999.dp,
     )
 
+    // Hierarchy comes from size and color steps, so only 400, 500 and 600 are used.
     properties[typography] = mapOf(
-        display to baseText.copy(fontSize = 32.sp, lineHeight = 38.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.5).sp),
-        title to baseText.copy(fontSize = 22.sp, lineHeight = 28.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.2).sp),
-        heading to baseText.copy(fontSize = 17.sp, lineHeight = 24.sp, fontWeight = FontWeight.SemiBold),
-        body to baseText.copy(fontSize = 16.sp, lineHeight = 24.sp),
-        bodySmall to baseText.copy(fontSize = 14.sp, lineHeight = 20.sp),
-        label to baseText.copy(fontSize = 14.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
+        display to baseText.copy(fontSize = 32.sp, lineHeight = 35.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.03).em),
+        title to baseText.copy(fontSize = 22.sp, lineHeight = 26.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.02).em),
+        heading to baseText.copy(fontSize = 16.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.01).em),
+        body to baseText.copy(fontSize = 15.sp, lineHeight = 22.5.sp),
+        bodySmall to baseText.copy(fontSize = 13.5.sp, lineHeight = 19.5.sp),
+        label to baseText.copy(fontSize = 13.sp, lineHeight = 17.sp, fontWeight = FontWeight.Medium),
         caption to baseText.copy(fontSize = 12.sp, lineHeight = 16.sp),
-        code to TextStyle(fontFamily = FontFamily.Monospace, fontSize = 13.sp, lineHeight = 20.sp),
-        eyebrow to baseText.copy(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.14.em),
-        wordmark to baseText.copy(fontSize = 56.sp, lineHeight = 52.sp, fontWeight = FontWeight.Black, letterSpacing = 0.08.em),
+        code to TextStyle(fontFamily = GeistMono, fontSize = 12.5.sp, lineHeight = 19.5.sp),
+        eyebrow to baseText.copy(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.08.em),
+        wordmark to baseText.copy(fontSize = 56.sp, lineHeight = 52.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.08.em),
     )
 
+    // Selection keeps a stronger tint than accent soft, which is too faint behind selected text.
     colorScheme(ColorScheme.Light) {
-        properties[colors] = mapOf(
-            background to Palette.Canvas,
-            surface to Palette.CanvasSubtle,
-            surfaceElevated to Palette.Canvas,
-            input to Palette.Canvas,
-            sidebar to Palette.CanvasSubtle,
-            userBubble to palette.light.bubble,
-            userBubbleStroke to palette.light.bubbleStroke,
-            text to Palette.Ink,
-            textSecondary to Palette.Ink.copy(alpha = 0.78f),
-            textTertiary to Palette.InkMuted,
-            accent to palette.light.accent,
-            onAccent to palette.light.onAccent,
-            accentSoft to palette.light.soft,
-            stroke to Palette.BorderMuted,
-            strokeStrong to Palette.Border,
-            danger to Color(0xFFCF222E),
-            success to Color(0xFF1A7F37),
-            warning to Color(0xFF9A6700),
-        )
-        defaultContentColor = Palette.Ink
-        defaultIndication = rememberColoredIndication(Palette.Ink)
+        properties[colors] = lightColors(palette.light)
+        defaultContentColor = Palette.LightText
+        defaultIndication = rememberColoredIndication(Palette.LightText)
         defaultTextSelectionColors = TextSelectionColors(palette.light.accent, palette.light.accent.copy(alpha = 0.25f))
     }
 
     colorScheme(ColorScheme.Dark) {
-        properties[colors] = mapOf(
-            background to Palette.Night,
-            surface to Palette.NightCard,
-            surfaceElevated to Palette.NightElevated,
-            input to Palette.Night,
-            sidebar to Palette.NightSidebar,
-            userBubble to palette.dark.bubble,
-            userBubbleStroke to palette.dark.bubbleStroke,
-            text to Palette.Snow,
-            textSecondary to Palette.Snow.copy(alpha = 0.78f),
-            textTertiary to Palette.SnowMuted,
-            accent to palette.dark.accent,
-            onAccent to palette.dark.onAccent,
-            accentSoft to palette.dark.soft,
-            stroke to Palette.NightBorderMuted,
-            strokeStrong to Palette.NightBorder,
-            danger to Color(0xFFF85149),
-            success to Color(0xFF3FB950),
-            warning to Color(0xFFD29922),
-        )
-        defaultContentColor = Palette.Snow
-        defaultIndication = rememberColoredIndication(Palette.Snow)
-        defaultTextSelectionColors = TextSelectionColors(palette.dark.accent, palette.dark.accent.copy(alpha = 0.35f))
+        properties[colors] = darkColors(palette.dark)
+        defaultContentColor = Palette.Text
+        defaultIndication = rememberColoredIndication(Palette.Text)
+        defaultTextSelectionColors = TextSelectionColors(palette.dark.text, palette.dark.text.copy(alpha = 0.35f))
     }
 
     colorScheme(PureBlack) {
-        properties[colors] = mapOf(
-            background to Color.Black,
-            surface to Color(0xFF0D1014),
-            surfaceElevated to Palette.NightCard,
-            input to Color.Black,
-            sidebar to Color.Black,
-            userBubble to palette.black.bubble,
-            userBubbleStroke to palette.black.bubbleStroke,
-            text to Palette.Snow,
-            textSecondary to Palette.Snow.copy(alpha = 0.78f),
-            textTertiary to Palette.SnowMuted,
-            accent to palette.black.accent,
-            onAccent to palette.black.onAccent,
-            accentSoft to palette.black.soft,
-            stroke to Palette.NightBorderMuted,
-            strokeStrong to Palette.NightBorder,
-            danger to Color(0xFFF85149),
-            success to Color(0xFF3FB950),
-            warning to Color(0xFFD29922),
-        )
-        defaultContentColor = Palette.Snow
-        defaultIndication = rememberColoredIndication(Palette.Snow)
-        defaultTextSelectionColors = TextSelectionColors(palette.black.accent, palette.black.accent.copy(alpha = 0.35f))
+        properties[colors] = pureBlackColors(palette.black)
+        defaultContentColor = Palette.Text
+        defaultIndication = rememberColoredIndication(Palette.Text)
+        defaultTextSelectionColors = TextSelectionColors(palette.black.text, palette.black.text.copy(alpha = 0.35f))
     }
 
-    defaultTextStyle = baseText.copy(fontSize = 16.sp, lineHeight = 24.sp)
+    defaultTextStyle = baseText.copy(fontSize = 15.sp, lineHeight = 22.5.sp)
 }

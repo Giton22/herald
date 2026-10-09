@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -150,13 +151,13 @@ private fun Number(number: Int, modifier: Modifier = Modifier) {
     }
 }
 
-/** A sent prompt that carried comments: what was typed around them, and a card for each. */
+/** A sent prompt that carried comments: what was typed around them in [textColor], and a card for each. */
 @Composable
-internal fun SentReviewContent(review: SentReview) {
+internal fun SentReviewContent(review: SentReview, textColor: Color) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (review.before.isNotBlank()) Text(review.before, style = Theme[typography][body], color = Theme[colors][textColor])
+        if (review.before.isNotBlank()) Text(review.before, style = Theme[typography][body], color = textColor)
         review.comments.forEachIndexed { index, comment -> SentCommentCard(index + 1, comment) }
-        if (review.after.isNotBlank()) Text(review.after, style = Theme[typography][body], color = Theme[colors][textColor])
+        if (review.after.isNotBlank()) Text(review.after, style = Theme[typography][body], color = textColor)
     }
 }
 
@@ -167,7 +168,8 @@ private fun SentCommentCard(number: Int, comment: SentComment) {
     Row(
         Modifier
             .fillMaxWidth()
-            .background(Theme[colors][surface].copy(alpha = 0.6f), shape)
+            // Opaque, so it reads the same on the accent-filled bubble as anywhere else.
+            .background(Theme[colors][surface], shape)
             .border(1.dp, Theme[colors][stroke], shape)
             .padding(horizontal = 10.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),

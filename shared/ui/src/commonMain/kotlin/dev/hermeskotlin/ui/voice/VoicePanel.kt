@@ -60,6 +60,7 @@ import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.hazeBlur
 import dev.hermeskotlin.designsystem.accent
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
@@ -216,7 +217,7 @@ private fun RoundButton(icon: ImageVector, contentDescription: String, fill: Col
  */
 @Composable
 private fun Orb(state: VoiceChatState, modifier: Modifier = Modifier) {
-    val tint by animateColorAsState(if (state.muted) Theme[colors][textTertiary] else Theme[colors][accent])
+    val tint by animateColorAsState(if (state.muted) Theme[colors][textTertiary] else Theme[colors][accentText])
     val time by rememberInfiniteTransition().animateFloat(
         initialValue = 0f,
         targetValue = 1f,

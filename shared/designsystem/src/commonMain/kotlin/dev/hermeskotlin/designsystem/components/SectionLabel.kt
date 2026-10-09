@@ -13,14 +13,14 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import com.composeunstyled.Text
 import com.composeunstyled.theme.Theme
-import dev.hermeskotlin.designsystem.accent
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.eyebrow
 import dev.hermeskotlin.designsystem.typography
 
 /** "▦ SESSIONS": a section heading in spaced accent capitals behind a small checker mark. */
 @Composable
-fun SectionLabel(text: String, modifier: Modifier = Modifier, color: Color = Theme[colors][accent]) {
+fun SectionLabel(text: String, modifier: Modifier = Modifier, color: Color = Theme[colors][accentText]) {
     Row(modifier, horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         CheckerMark(color)
         Text(text.uppercase(), style = Theme[typography][eyebrow], color = color, singleLine = true)

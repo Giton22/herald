@@ -83,6 +83,7 @@ import dev.hermeskotlin.designsystem.components.MarkdownText
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.label
+import dev.hermeskotlin.designsystem.onUserBubble
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusLarge
 import dev.hermeskotlin.designsystem.radiusMedium
@@ -308,7 +309,7 @@ private fun Prompt(message: ChatMessage.User) {
         Text(
             message.text,
             style = Theme[typography][body],
-            color = Theme[colors][textColor],
+            color = Theme[colors][onUserBubble],
             modifier = Modifier
                 .clip(shape)
                 .background(Theme[colors][userBubble], shape)

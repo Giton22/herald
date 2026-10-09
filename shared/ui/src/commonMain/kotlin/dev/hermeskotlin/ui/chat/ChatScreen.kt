@@ -206,6 +206,8 @@ import com.composables.icons.lucide.AudioLines
 import com.composables.icons.lucide.Mic
 import com.composables.icons.lucide.Paperclip
 import dev.hermeskotlin.designsystem.accent
+import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
@@ -239,6 +241,7 @@ import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.heading
 import dev.hermeskotlin.designsystem.label
 import dev.hermeskotlin.designsystem.onAccent
+import dev.hermeskotlin.designsystem.onUserBubble
 import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.success
 import dev.hermeskotlin.designsystem.surface
@@ -769,7 +772,7 @@ internal fun TopBar(
                         titleFace?.invoke()
                         Text(
                             title.uppercase(),
-                            style = Theme[typography][label].copy(fontWeight = FontWeight.Bold, letterSpacing = 0.06.em),
+                            style = Theme[typography][label].copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.06.em),
                             color = Theme[colors][textColor],
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
@@ -813,7 +816,7 @@ internal fun BarButton(icon: ImageVector, contentDescription: String, onClick: (
 @Composable
 private fun Greeting(onAttach: () -> Unit, onDictate: () -> Unit, connected: Boolean, dictation: DictationState, canAttach: Boolean) {
     // Blue on light; near-white on dark, where the blue at this size glares.
-    val color = if (Theme[colors][background].luminance() < 0.5f) Theme[colors][textColor].copy(alpha = 0.9f) else Theme[colors][accent]
+    val color = if (Theme[colors][background].luminance() < 0.5f) Theme[colors][textColor].copy(alpha = 0.9f) else Theme[colors][accentText]
     // The lettering's ink width in px, so the pills below can share its edges.
     var wordmarkInk by remember { mutableIntStateOf(0) }
     Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
@@ -1286,14 +1289,16 @@ private fun UserBubble(
                 onBranch?.let { MenuAction("Branch from here", Lucide.GitBranch, onClick = { menuOpen = false; it() }) }
             },
         ) {
+            // A prompt still on its way is a soft tint with plain text: fading the accent fill would fade the white text with it.
+            val waiting = message.pending || message.check == SendCheck.Checking
+            val onBubble = Theme[colors][if (waiting) textColor else onUserBubble]
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .alpha(if (message.pending || message.check == SendCheck.Checking) 0.6f else 1f)
                     .clip(shape)
-                    .background(Theme[colors][userBubble], shape)
-                    // The prompt being edited is outlined in the accent, tying it to the composer.
-                    .border(if (editing) 2.dp else 1.dp, if (editing) Theme[colors][accent] else Theme[colors][userBubbleStroke], shape)
+                    .background(Theme[colors][if (waiting) accentSoft else userBubble], shape)
+                    // The prompt being edited is outlined in the text color, which shows on the accent fill.
+                    .border(if (editing) 2.dp else 1.dp, if (editing) Theme[colors][textColor] else Theme[colors][userBubbleStroke], shape)
                     .then(
                         if (hasMenu) {
                             Modifier.combinedClickable(
@@ -1304,7 +1309,7 @@ private fun UserBubble(
                                 },
                                 onLongClickLabel = "Message actions",
                                 interactionSource = null,
-                                indication = rememberColoredIndication(Theme[colors][textColor]),
+                                indication = rememberColoredIndication(onBubble),
                             )
                         } else Modifier,
                     )
@@ -1313,8 +1318,8 @@ private fun UserBubble(
             ) {
                 if (message.attachments.isNotEmpty()) SentAttachments(message.attachments)
                 when {
-                    review != null -> SentReviewContent(review)
-                    message.text.isNotEmpty() -> Text(message.text, style = Theme[typography][body], color = Theme[colors][textColor])
+                    review != null -> SentReviewContent(review, onBubble)
+                    message.text.isNotEmpty() -> Text(message.text, style = Theme[typography][body], color = onBubble)
                 }
             }
         }
@@ -1323,7 +1328,7 @@ private fun UserBubble(
             Text("Queued · sends after this task", style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }
         if (editing) {
-            Text("Editing in the composer", style = Theme[typography][caption], color = Theme[colors][accent])
+            Text("Editing in the composer", style = Theme[typography][caption], color = Theme[colors][accentText])
         }
         when (message.check) {
             SendCheck.Checking -> Text("Checking whether Hermes got this…", style = Theme[typography][caption], color = Theme[colors][textTertiary])
@@ -1616,7 +1621,7 @@ private fun SlashSuggestions(suggestions: List<SlashSuggestion>, hazeState: Haze
                 item(key = "group-$index-$group") {
                     Text(
                         group.uppercase(),
-                        style = Theme[typography][caption].copy(fontWeight = FontWeight.Bold, letterSpacing = 0.06.em),
+                        style = Theme[typography][caption].copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.06.em),
                         color = Theme[colors][textTertiary],
                         modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = if (index == 0) 4.dp else 10.dp, bottom = 2.dp),
                     )
@@ -1631,7 +1636,7 @@ private fun SlashSuggestions(suggestions: List<SlashSuggestion>, hazeState: Haze
                     Text(
                         row.label,
                         style = Theme[typography][code].copy(fontWeight = FontWeight.SemiBold),
-                        color = if (row.kind == SlashKind.Skill) Theme[colors][accent] else Theme[colors][textColor],
+                        color = if (row.kind == SlashKind.Skill) Theme[colors][accentText] else Theme[colors][textColor],
                         maxLines = 1,
                     )
                     if (row.description.isNotBlank()) {
@@ -1827,7 +1832,7 @@ private fun NoticeLine(text: String) {
 @Composable
 private fun NoticeBanner(notice: GatewayNotice, onDismiss: (String) -> Unit) {
     val (icon, tint) = when (notice.level) {
-        GatewayNotice.Level.Info -> Lucide.Info to Theme[colors][accent]
+        GatewayNotice.Level.Info -> Lucide.Info to Theme[colors][accentText]
         GatewayNotice.Level.Warning -> Lucide.TriangleAlert to Theme[colors][warning]
         GatewayNotice.Level.Error -> Lucide.CircleAlert to Theme[colors][danger]
         GatewayNotice.Level.Success -> Lucide.CircleCheck to Theme[colors][success]
@@ -1843,7 +1848,7 @@ private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit, 
             UnstyledIcon(
                 icon ?: Lucide.CircleAlert,
                 contentDescription = null,
-                tint = tint ?: if (icon == null) Theme[colors][danger] else Theme[colors][accent],
+                tint = tint ?: if (icon == null) Theme[colors][danger] else Theme[colors][accentText],
                 modifier = Modifier.size(16.dp),
             )
             Text(

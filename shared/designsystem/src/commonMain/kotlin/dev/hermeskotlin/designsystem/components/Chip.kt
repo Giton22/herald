@@ -16,8 +16,8 @@ import com.composeunstyled.Text
 import com.composeunstyled.UnstyledButton
 import com.composeunstyled.theme.Theme
 import com.composeunstyled.theme.rememberColoredIndication
-import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.label
 import dev.hermeskotlin.designsystem.radii
@@ -35,7 +35,7 @@ fun Chip(
     modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
-    val content = if (selected) Theme[colors][accent] else Theme[colors][textSecondary]
+    val content = if (selected) Theme[colors][accentText] else Theme[colors][textSecondary]
     UnstyledButton(
         onClick = onClick,
         role = Role.Tab,

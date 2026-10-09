@@ -59,7 +59,7 @@ import com.mikepenz.markdown.model.DefaultMarkdownColors
 import com.mikepenz.markdown.model.DefaultMarkdownTypography
 import com.mikepenz.markdown.model.markdownDimens
 import com.mikepenz.markdown.model.markdownPadding
-import dev.hermeskotlin.designsystem.accent
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.caption
 import dev.hermeskotlin.designsystem.code
@@ -69,10 +69,12 @@ import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.surface
+import dev.hermeskotlin.designsystem.surface2
 import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.title
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.designsystem.well
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.text.InlineTextContent
@@ -116,11 +118,11 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier, streaming: Boolean
     val bodyStyle = Theme[typography][body].copy(color = Theme[colors][textColor])
     val codeStyle = Theme[typography][code].copy(color = Theme[colors][textColor])
     val headingStyle = Theme[typography][heading].copy(color = Theme[colors][textColor])
-    val linkColor = Theme[colors][accent]
+    val linkColor = Theme[colors][accentText]
     val markdownColors = DefaultMarkdownColors(
         text = Theme[colors][textColor],
-        codeBackground = Theme[colors][surface],
-        inlineCodeBackground = Theme[colors][surface],
+        codeBackground = Theme[colors][well],
+        inlineCodeBackground = Theme[colors][surface2],
         dividerColor = Theme[colors][stroke],
         tableBackground = Theme[colors][surface],
     )
