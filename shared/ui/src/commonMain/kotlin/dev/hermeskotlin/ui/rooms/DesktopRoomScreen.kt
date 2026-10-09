@@ -42,6 +42,8 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.bots.BotFaces
 import dev.hermeskotlin.ui.bots.LocalBotFaces
 import dev.hermeskotlin.ui.chat.BarButton
+import dev.hermeskotlin.ui.chat.BarStatus
+import dev.hermeskotlin.ui.chat.StatusTone
 import dev.hermeskotlin.ui.chat.TopBar
 
 /**
@@ -65,7 +67,7 @@ fun DesktopRoomScreen(room: DesktopRoom, onOpenSidebar: () -> Unit, onBack: () -
             TopBar(
                 title = room.name,
                 titleFace = members.takeIf { it.isNotEmpty() }?.let { { RoomFaces(it, faces, size = 20.dp, max = 3) } },
-                subtitle = "On Desktop",
+                status = BarStatus("On Desktop", StatusTone.Neutral),
                 onOpenSidebar = onOpenSidebar,
                 onNewChat = null,
                 onOpenMenu = null,

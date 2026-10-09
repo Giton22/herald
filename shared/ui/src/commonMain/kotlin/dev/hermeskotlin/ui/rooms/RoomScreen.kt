@@ -56,7 +56,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.composables.icons.lucide.EllipsisVertical
+import com.composables.icons.lucide.Ellipsis
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
 import com.composeunstyled.Text
@@ -96,7 +96,9 @@ import dev.hermeskotlin.ui.bots.LocalBotFaces
 import dev.hermeskotlin.ui.chat.BarButton
 import dev.hermeskotlin.ui.chat.MessageTimeLabel
 import dev.hermeskotlin.ui.chat.SendButton
+import dev.hermeskotlin.ui.chat.BarStatus
 import dev.hermeskotlin.ui.chat.SendIcon
+import dev.hermeskotlin.ui.chat.StatusTone
 import dev.hermeskotlin.ui.chat.TopBar
 import dev.hermeskotlin.ui.sessions.ListNotice
 import dev.hermeskotlin.ui.sessions.ListSpinner
@@ -131,7 +133,7 @@ fun RoomScreen(
             TopBar(
                 title = room.room.name,
                 titleFace = members.takeIf { it.isNotEmpty() }?.let { { RoomFaces(it, faces, size = 20.dp, max = 3) } },
-                subtitle = "Waiting on you".takeIf { room.pendingActions.isNotEmpty() },
+                status = BarStatus("Waiting on you", StatusTone.Waiting).takeIf { room.pendingActions.isNotEmpty() },
                 onOpenSidebar = onOpenSidebar,
                 onNewChat = null,
                 onOpenMenu = null,
@@ -147,7 +149,7 @@ fun RoomScreen(
                             )
                         },
                     ) {
-                        BarButton(Lucide.EllipsisVertical, "Room options", onClick = { menuOpen = true })
+                        BarButton(Lucide.Ellipsis, "Room options", onClick = { menuOpen = true })
                     }
                     BarButton(Lucide.X, "Close the room", onClick = onBack)
                 },

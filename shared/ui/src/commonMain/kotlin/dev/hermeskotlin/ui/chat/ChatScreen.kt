@@ -12,10 +12,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberUpdatedState
@@ -33,18 +29,29 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.unit.Constraints
 import kotlin.math.roundToInt
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import com.composables.icons.lucide.EllipsisVertical
+import com.composables.icons.lucide.Ellipsis
+import dev.hermeskotlin.designsystem.HeraldBrandBlue
+import dev.hermeskotlin.designsystem.HeraldMark
+import dev.hermeskotlin.designsystem.components.halo
+import dev.hermeskotlin.designsystem.dangerSoft
+import dev.hermeskotlin.designsystem.radiusSmall
+import dev.hermeskotlin.designsystem.successSoft
+import dev.hermeskotlin.designsystem.surface3
+import dev.hermeskotlin.designsystem.textMuted
+import dev.hermeskotlin.designsystem.warningSoft
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
@@ -57,7 +64,6 @@ import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.strokeStrong
 import dev.hermeskotlin.designsystem.userBubble
 import dev.hermeskotlin.designsystem.userBubbleStroke
-import dev.hermeskotlin.designsystem.wordmark
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -108,7 +114,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
@@ -117,7 +122,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -376,6 +380,8 @@ fun ChatScreen(
         onViewImage = { viewing = it },
         onNotice = { notice = it },
         wallpaper = rememberChatWallpaper(),
+        place = target.gateway.label,
+        profile = target.profile,
     )
 
     AttachSheet(visible = attachOpen, onDismiss = { attachOpen = false }, picker = attachmentPicker)
@@ -484,11 +490,16 @@ internal fun ChatView(
     onNotice: (String) -> Unit,
     /** The chat background from Settings, drawn behind the conversation (and frosted under the composer). */
     wallpaper: ImageBitmap? = null,
+    /** The gateway's name, said where Hermes runs: under the title and on the empty chat. */
+    place: String? = null,
+    /** The profile the chat runs in; null is the launch profile, shown as "default". */
+    profile: String? = null,
 ) {
     Box(
         Modifier
             .fillMaxSize()
             .background(Theme[colors][background])
+            .then(if (wallpaper == null) Modifier.halo() else Modifier)
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
         contentAlignment = Alignment.TopCenter,
     ) {
@@ -496,11 +507,7 @@ internal fun ChatView(
             TopBar(
                 title = title,
                 titleFace = titleFace,
-                subtitle = when {
-                    !connected -> connectionLabel
-                    state.attachment is Attachment.Attaching -> "Opening…"
-                    else -> null
-                },
+                status = chatStatus(state, connected, connectionLabel, place),
                 onOpenSidebar = onOpenSidebar,
                 onNewChat = onNewChat,
                 onOpenMenu = onOpenMenu,
@@ -569,7 +576,16 @@ internal fun ChatView(
                                 EmptyState(Lucide.CloudOff, "Couldn't load the conversation", state.historyError.orEmpty()) {
                                     Button("Try again", onClick = actions::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                                 }
-                            else -> Greeting(onAttach = onAttach, onDictate = onDictate, connected = connected, dictation = dictation, canAttach = attachments.size < OutgoingAttachment.MAX_COUNT)
+                            else -> Greeting(
+                                onAttach = onAttach,
+                                onDictate = onDictate,
+                                onVoiceChat = onVoiceChat,
+                                connected = connected,
+                                dictation = dictation,
+                                canAttach = attachments.size < OutgoingAttachment.MAX_COUNT,
+                                place = place,
+                                profile = profile,
+                            )
                         }
                     }
                 }
@@ -744,145 +760,210 @@ private fun ColumnScope.Dock(
     }
 }
 
+/** How things stand, by the color of the dot beside a status line. */
+internal enum class StatusTone { Ok, Busy, Waiting, Trouble, Neutral }
+
+/** The line under the top bar's title, with its dot. */
+internal data class BarStatus(val text: String, val tone: StatusTone)
+
+/** The status line for a chat: the link first, then a question waiting, the agent at work, else where it runs. */
+internal fun chatStatus(state: ChatState, connected: Boolean, connectionLabel: String, place: String?): BarStatus = when {
+    !connected -> BarStatus(connectionLabel, StatusTone.Trouble)
+    state.attachment is Attachment.Attaching -> BarStatus("Opening…", StatusTone.Busy)
+    state.inputRequests.isNotEmpty() -> BarStatus("Needs your answer", StatusTone.Waiting)
+    state.running -> {
+        // Once every step is done the agent is wrapping up, not on a step.
+        val plan = state.livePlan()?.takeIf { it.total > 0 && it.active }
+        BarStatus(if (plan != null) "Working · step ${minOf(plan.done + 1, plan.total)} of ${plan.total}" else "Working", StatusTone.Busy)
+    }
+    else -> BarStatus(listOfNotNull("Hermes", place).joinToString(" · "), StatusTone.Ok)
+}
+
+/** Where the empty chat says Hermes runs: "Hermes on homelab · default profile". */
+internal fun greetingPlace(place: String?, profile: String?): String =
+    "${place?.let { "Hermes on $it" } ?: "Hermes"} · ${profile ?: "default"} profile"
+
 /**
- * Desktop's tab strip on a phone: the title in small spaced capitals over an accent rule, the sessions
- * button on the left and new chat with the chat's options grouped on the right.
+ * The sessions button, the title with a status line under it, and new chat with the chat's options
+ * grouped in a pill on the right.
  */
 @Composable
 internal fun TopBar(
     title: String,
     titleFace: (@Composable () -> Unit)?,
-    subtitle: String?,
+    status: BarStatus?,
     onOpenSidebar: () -> Unit,
     onNewChat: (() -> Unit)?,
     onOpenMenu: (() -> Unit)?,
     /** In place of New chat and the menu, e.g. a room's own buttons. */
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            BarButton(Lucide.PanelLeft, "Sessions", onClick = onOpenSidebar)
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Column(Modifier.width(IntrinsicSize.Max), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        titleFace?.invoke()
-                        Text(
-                            title.uppercase(),
-                            style = Theme[typography][label].copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.06.em),
-                            color = Theme[colors][textColor],
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
-                        )
-                    }
-                    Box(Modifier.fillMaxWidth().height(2.dp).background(Theme[colors][accent]))
-                }
-                if (!subtitle.isNullOrBlank()) {
-                    Text(subtitle, style = Theme[typography][caption], color = Theme[colors][warning], maxLines = 1, modifier = Modifier.padding(top = 2.dp))
-                }
+    Row(
+        Modifier.fillMaxWidth().padding(start = 4.dp, end = 10.dp, top = 4.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        BarButton(Lucide.PanelLeft, "Sessions", onClick = onOpenSidebar, tint = Theme[colors][textTertiary])
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                titleFace?.invoke()
+                Text(
+                    title,
+                    style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold, lineHeight = 19.sp),
+                    color = Theme[colors][textColor],
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            val shape = RoundedCornerShape(Theme[radii][radiusMedium])
-            Row(Modifier.clip(shape).border(1.dp, Theme[colors][stroke], shape)) {
-                if (trailing != null) {
-                    trailing()
-                } else {
-                    BarButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null)
-                    BarButton(Lucide.EllipsisVertical, "Chat options", onClick = { onOpenMenu?.invoke() }, enabled = onOpenMenu != null)
-                }
+            if (status != null && status.text.isNotBlank()) StatusLine(status)
+        }
+        // The buttons fill the pill edge to edge, so each keeps its whole 44dp to tap.
+        val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+        Row(
+            Modifier
+                .clip(shape)
+                .background(Theme[colors][surface], shape)
+                .border(1.dp, Theme[colors][stroke], shape),
+        ) {
+            if (trailing != null) {
+                trailing()
+            } else {
+                BarButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null)
+                BarButton(Lucide.Ellipsis, "Chat options", onClick = { onOpenMenu?.invoke() }, enabled = onOpenMenu != null)
             }
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Theme[colors][stroke]))
+    }
+}
+
+/** A dot in [BarStatus.tone] with a soft ring, then the status in small grey type. */
+@Composable
+private fun StatusLine(status: BarStatus) {
+    val (dot, ring) = when (status.tone) {
+        StatusTone.Ok -> Theme[colors][success] to Theme[colors][successSoft]
+        StatusTone.Busy -> Theme[colors][accentText] to Theme[colors][accentSoft]
+        StatusTone.Waiting -> Theme[colors][warning] to Theme[colors][warningSoft]
+        StatusTone.Trouble -> Theme[colors][danger] to Theme[colors][dangerSoft]
+        StatusTone.Neutral -> Theme[colors][textMuted] to Theme[colors][surface3]
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        Box(Modifier.size(12.dp).background(ring, CircleShape).padding(3.dp).background(dot, CircleShape))
+        Text(
+            status.text,
+            style = Theme[typography][caption],
+            // Trouble is said in its own color, so a lost link reads at a glance.
+            color = if (status.tone == StatusTone.Trouble) Theme[colors][danger] else Theme[colors][textTertiary],
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
 /** A 44dp square icon button with no fill, the top bar's style. */
 @Composable
-internal fun BarButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean = true) {
+internal fun BarButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    tint: Color = Theme[colors][textSecondary],
+) {
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusMedium])).alpha(if (enabled) 1f else 0.35f),
+        modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusSmall])).alpha(if (enabled) 1f else 0.35f),
         indication = rememberColoredIndication(Theme[colors][textColor]),
     ) {
-        UnstyledIcon(icon, contentDescription = contentDescription, tint = Theme[colors][textSecondary], modifier = Modifier.size(20.dp))
+        UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(19.dp))
     }
 }
 
-/** An empty chat is titled with the app's name in heavy spaced capitals stretched to the column. */
+/**
+ * An empty chat: the mark, a question in display type with one word in the accent, where Hermes runs, and
+ * pills for the other ways to begin than typing.
+ */
 @Composable
-private fun Greeting(onAttach: () -> Unit, onDictate: () -> Unit, connected: Boolean, dictation: DictationState, canAttach: Boolean) {
-    // Blue on light; near-white on dark, where the blue at this size glares.
-    val color = if (Theme[colors][background].luminance() < 0.5f) Theme[colors][textColor].copy(alpha = 0.9f) else Theme[colors][accentText]
-    // The lettering's ink width in px, so the pills below can share its edges.
-    var wordmarkInk by remember { mutableIntStateOf(0) }
-    Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-        Column(
-            Modifier.fillMaxWidth().padding(bottom = 48.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp),
-        ) {
-            BasicText(
-                "HERALD",
-                style = Theme[typography][wordmark].copy(textAlign = TextAlign.Center),
-                color = { color },
-                maxLines = 1,
-                autoSize = TextAutoSize.StepBased(minFontSize = 28.sp, maxFontSize = 72.sp, stepSize = 1.sp),
-                onTextLayout = { layout ->
-                    // Letter spacing pads half a gap outside the H and the D; leave it out.
-                    val style = layout.layoutInput.style
-                    val spacing = with(layout.layoutInput.density) { style.letterSpacing.value * style.fontSize.toPx() }
-                    wordmarkInk = (layout.getLineRight(0) - layout.getLineLeft(0) - spacing).roundToInt()
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
+private fun Greeting(
+    onAttach: () -> Unit,
+    onDictate: () -> Unit,
+    onVoiceChat: () -> Unit,
+    connected: Boolean,
+    dictation: DictationState,
+    canAttach: Boolean,
+    place: String?,
+    profile: String?,
+) {
+    val accentWord = Theme[colors][accentText]
+    Box(Modifier.fillMaxSize().padding(horizontal = 24.dp), contentAlignment = Alignment.CenterStart) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+            AppMark(52.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    remember(accentWord) {
+                        buildAnnotatedString {
+                            append("What are we\n")
+                            withStyle(SpanStyle(color = accentWord)) { append("building") }
+                            append(" today?")
+                        }
+                    },
+                    style = Theme[typography][display],
+                    color = Theme[colors][textColor],
+                )
+                Text(
+                    greetingPlace(place, profile),
+                    style = Theme[typography][bodySmall],
+                    color = Theme[colors][textTertiary],
+                )
+            }
             // Other ways to begin than typing, named rather than left to the composer's icons.
-            SplitCapsule(
-                spanPx = wordmarkInk,
-                start = { Button("Attach", onClick = onAttach, variant = ButtonVariant.Ghost, leadingIcon = Lucide.Paperclip, enabled = canAttach) },
-            ) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                StartPill(Lucide.Paperclip, "Attach", onClick = onAttach, enabled = canAttach)
                 // Tracks the composer's mic: while recording the same tap finishes it.
-                Button(
+                StartPill(
+                    if (dictation.recording) Lucide.Square else Lucide.Mic,
                     dictateLabel(dictation),
                     onClick = onDictate,
-                    variant = ButtonVariant.Ghost,
-                    leadingIcon = if (dictation.recording) Lucide.Square else Lucide.Mic,
-                    enabled = connected,
-                    loading = dictation.transcribing,
+                    enabled = connected && !dictation.transcribing,
                 )
+                StartPill(Lucide.AudioLines, "Voice chat", onClick = onVoiceChat, enabled = connected)
             }
         }
     }
 }
 
-/**
- * One outlined capsule [spanPx] wide, split down the middle into equal halves for [start] and [end]; a half whose
- * label needs more widens both rather than being clipped.
- */
+/** The app's mark: the white H on a Herald blue rounded square, with the accent's glow under it. */
 @Composable
-private fun SplitCapsule(spanPx: Int, start: @Composable () -> Unit, end: @Composable () -> Unit) {
+internal fun AppMark(size: Dp) {
+    val shape = RoundedCornerShape(size * 0.29f)
+    Box(
+        Modifier
+            .size(size)
+            .dropShadow(shape, Shadow(radius = 18.dp, color = HeraldBrandBlue.copy(alpha = 0.4f), offset = DpOffset(0.dp, 6.dp)))
+            .background(HeraldBrandBlue, shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        UnstyledIcon(HeraldMark, contentDescription = null, tint = Color.White, modifier = Modifier.size(size * 0.6f))
+    }
+}
+
+/** A pill on the empty chat: an accent icon and a label on a ringed surface. */
+@Composable
+private fun StartPill(icon: ImageVector, text: String, onClick: () -> Unit, enabled: Boolean) {
     val shape = RoundedCornerShape(percent = 50)
-    val line = Theme[colors][strokeStrong]
-    Layout(
-        contents = listOf(start, end),
+    UnstyledButton(
+        onClick = onClick,
+        enabled = enabled,
         modifier = Modifier
+            .heightIn(min = MinTouchTarget)
+            .alpha(if (enabled) 1f else 0.4f)
             .clip(shape)
-            .border(1.dp, line, shape)
-            .drawWithContent {
-                drawContent()
-                drawLine(line,Offset(size.width / 2, 0f), Offset(size.width / 2, size.height), strokeWidth = 1.dp.toPx())
-            },
-    ) { (startMeasurables, endMeasurables), constraints ->
-        val measurables = startMeasurables + endMeasurables
-        val natural = measurables.maxOfOrNull { it.maxIntrinsicWidth(constraints.maxHeight) } ?: 0
-        val half = maxOf(natural, spanPx / 2).coerceAtMost(constraints.maxWidth / 2)
-        val placeables = measurables.map { it.measure(Constraints(minWidth = half, maxWidth = half, maxHeight = constraints.maxHeight)) }
-        val height = placeables.maxOfOrNull { it.height } ?: 0
-        layout(half * 2, height) {
-            placeables.forEachIndexed { i, p -> p.placeRelative(i * half, (height - p.height) / 2) }
+            .background(Theme[colors][surface], shape)
+            .border(1.dp, Theme[colors][stroke], shape),
+        indication = rememberColoredIndication(Theme[colors][textColor]),
+        contentPadding = PaddingValues(horizontal = 16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][accentText], modifier = Modifier.size(16.dp))
+            Text(text, style = Theme[typography][label], color = Theme[colors][textColor], singleLine = true)
         }
     }
 }
