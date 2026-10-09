@@ -190,7 +190,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 ### Agents & processes
 - [x] Subagent tree and live progress (`subagent.*`, `subagent.list`, `subagent.interrupt`; saved `spawn_tree.*` snapshots not used)
 - [x] Background process list and kill, from the chat menu (`process.list`, `process.kill`; polled while open, with each one's output tail). Live `agent.terminal.output` streaming not used
-- [ ] Rollback / checkpoints (`rollback.list`, `rollback.diff`, `rollback.restore`)
+- [x] Rollback / checkpoints (`rollback.list`, `rollback.diff`, `rollback.restore`): Checkpoints in the chat menu, or `/rollback`, lists the snapshots Hermes took before the agent changed files; open one for what changed since (added lines green, removed red), and Restore it after a confirm, which also takes back the chat's last turn and reads the transcript again. Says when checkpoints are off in the profile
 
 ### Bots (Hermes Bot Mode; design in `docs/bot-mode-integration.md`)
 - [x] Chats | Bots switch at the top of the sidebar, remembered per gateway

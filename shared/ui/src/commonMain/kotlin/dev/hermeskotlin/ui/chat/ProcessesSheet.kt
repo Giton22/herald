@@ -232,12 +232,13 @@ private fun ProcessRow(process: BackgroundProcess, expanded: Boolean, stopping: 
     }
 }
 
+/** A line of text across a chat sheet, for its empty, off and error states. */
 @Composable
-private fun Note(text: String) {
+internal fun Note(text: String, error: Boolean = false) {
     Text(
         text,
         style = Theme[typography][body],
-        color = Theme[colors][textSecondary],
+        color = if (error) Theme[colors][danger] else Theme[colors][textSecondary],
         modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
     )
 }

@@ -30,6 +30,7 @@ internal fun ChatMenu(
     onDeleted: () -> Unit,
     onUsage: () -> Unit,
     onProcesses: () -> Unit,
+    onCheckpoints: () -> Unit,
     /**
      * A bot's permanent chat: its title is what makes it the bot's, so Rename, Archive and Delete would
      * lose the bot its conversation. Those are left to Desktop, which asks first.
@@ -60,6 +61,7 @@ internal fun ChatMenu(
         onCopyId = { clipboard.setText(AnnotatedString(it.id)) },
         onUsage = { onUsage() },
         onProcesses = { onProcesses() },
+        onCheckpoints = { onCheckpoints() },
         onStartFresh = onStartFresh?.let { start -> { _: SessionSummary -> start() } },
     )
     RenameDialog(
