@@ -60,6 +60,12 @@ import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusMedium
+import dev.hermeskotlin.designsystem.radiusLarge
+import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.accentText
+import dev.hermeskotlin.designsystem.surface2
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.text as textColor
@@ -155,7 +161,7 @@ fun PetSheet(visible: Boolean, controller: PetController, onDismiss: () -> Unit,
             gallery != null && gallery.pets.isEmpty() -> Note("The gateway has no pets to offer.")
             gallery != null -> LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 96.dp),
-                modifier = Modifier.fillMaxWidth().heightIn(max = 440.dp).padding(horizontal = 12.dp),
+                modifier = Modifier.fillMaxWidth().heightIn(max = 440.dp).padding(horizontal = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
@@ -182,13 +188,15 @@ fun PetSheet(visible: Boolean, controller: PetController, onDismiss: () -> Unit,
 @Composable
 private fun PetCell(pet: PetChoice, controller: PetController, active: Boolean, adopting: Boolean, onClick: () -> Unit) {
     val thumbnail by produceState<ByteArray?>(null, pet.slug) { value = controller.thumbnail(pet) }
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
+    // The adopted pet sits on the accent tint with an accent edge, as a picked choice does elsewhere.
     Column(
         Modifier
             .clip(shape)
-            .background(Theme[colors][surface], shape)
-            .border(if (active) 2.dp else 1.dp, Theme[colors][if (active) accent else stroke], shape)
+            .background(Theme[colors][if (active) accentSoft else surface2], shape)
+            .border(if (active) 1.5.dp else 1.dp, Theme[colors][if (active) accentText else stroke], shape)
             .clickable(enabled = !adopting, onClick = onClick)
+            .semantics { selected = active }
             .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(4.dp),
