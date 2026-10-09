@@ -24,7 +24,9 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
@@ -257,7 +259,7 @@ internal fun SettingsView(
     onSignOut: () -> Unit,
     onOpenGateways: () -> Unit,
     /** What the gateway is called: its given name, else its address. */
-    gatewayName: String = gatewayUrl.substringAfter("://"),
+    gatewayName: String = gatewayUrl.substringAfter("://").trimEnd('/'),
     onCheckConnection: () -> Unit = {},
     push: PushStatus = PushStatus(),
     pushTest: Boolean? = null,
@@ -553,8 +555,9 @@ private fun AccountCard(gatewayName: String, gatewayUrl: String, userLabel: Stri
                 overflow = TextOverflow.Ellipsis,
             )
             Text(
-                // The address only when the name above isn't already it.
-                listOfNotNull(gatewayUrl.substringAfter("://").trimEnd('/').takeIf { it != gatewayName }, userLabel ?: "Signed in")
+                // Who is signed in first, so a long address is what gets cut; the address only when the name
+                // above isn't already it.
+                listOfNotNull(userLabel ?: "Signed in", gatewayUrl.substringAfter("://").trimEnd('/').takeIf { it != gatewayName.trimEnd('/') })
                     .joinToString(" · "),
                 style = Theme[typography][code].copy(fontSize = 11.5.sp),
                 color = Theme[colors][textTertiary],
@@ -602,7 +605,11 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
             title.uppercase(),
             style = Theme[typography][eyebrow],
             color = Theme[colors][textTertiary],
-            modifier = Modifier.padding(start = 6.dp).semantics { heading() },
+            // Spoken as written, not spelled out in capitals.
+            modifier = Modifier.padding(start = 6.dp).semantics {
+                heading()
+                contentDescription = title
+            },
         )
         Surface(Modifier.fillMaxWidth()) { Column(content = content) }
     }
@@ -696,10 +703,17 @@ private fun TextSizeSlider(selected: TextSize, onSelect: (TextSize) -> Unit) {
     val sizes = TextSize.entries
     val index = sizes.indexOf(selected)
     val last = sizes.lastIndex
-    val pick by rememberUpdatedState(onSelect)
+    val onPick by rememberUpdatedState(onSelect)
+    val current by rememberUpdatedState(index)
+    // Only a new stop is saved: a drag reports every move.
+    val pick = { to: Int -> if (to != current) onPick(sizes[to]) }
+    // The "A"s keep one size whatever text size is picked, so the track never moves under the finger.
+    val fontScale = LocalDensity.current.fontScale
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text("A", style = Theme[typography][label].copy(fontSize = 12.sp), color = Theme[colors][textTertiary], modifier = Modifier.clearAndSetSemantics { })
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.width(20.dp).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
+                Text("A", style = Theme[typography][label].copy(fontSize = (12 / fontScale).sp), color = Theme[colors][textTertiary])
+            }
             BoxWithConstraints(
                 Modifier
                     .weight(1f)
@@ -709,40 +723,50 @@ private fun TextSizeSlider(selected: TextSize, onSelect: (TextSize) -> Unit) {
                         stateDescription = selected.name
                         progressBarRangeInfo = ProgressBarRangeInfo(index.toFloat(), 0f..last.toFloat(), steps = last - 1)
                         setProgress { target ->
-                            val to = target.roundToInt().coerceIn(0, last)
-                            if (to != index) pick(sizes[to])
+                            pick(target.roundToInt().coerceIn(0, last))
                             true
                         }
                     }
                     .pointerInput(last) {
-                        fun at(x: Float) = sizes[(x / size.width * last).roundToInt().coerceIn(0, last)]
+                        // Stops sit half a thumb in from each end, where the thumb's centre can reach.
+                        val inset = (SLIDER_THUMB / 2).toPx()
+                        fun at(x: Float) = ((x - inset) / (size.width - inset * 2) * last).roundToInt().coerceIn(0, last)
                         detectTapGestures { pick(at(it.x)) }
                     }
                     .pointerInput(last) {
-                        fun at(x: Float) = sizes[(x / size.width * last).roundToInt().coerceIn(0, last)]
+                        val inset = (SLIDER_THUMB / 2).toPx()
+                        fun at(x: Float) = ((x - inset) / (size.width - inset * 2) * last).roundToInt().coerceIn(0, last)
                         detectHorizontalDragGestures { change, _ -> pick(at(change.position.x)) }
                     },
                 contentAlignment = Alignment.CenterStart,
             ) {
                 val fraction = index.toFloat() / last
-                val thumb = 22.dp
-                Box(Modifier.fillMaxWidth().height(4.dp).background(Theme[colors][surface3], CircleShape))
-                Box(Modifier.fillMaxWidth(fraction).height(4.dp).background(Theme[colors][accent], CircleShape))
-                // The stops, each a dot; the passed ones in the accent.
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                val inset = SLIDER_THUMB / 2
+                val track = Modifier.padding(horizontal = inset - 3.dp)
+                Box(track.fillMaxWidth().height(4.dp).background(Theme[colors][surface3], CircleShape))
+                Box(
+                    track
+                        .width(6.dp + (maxWidth - SLIDER_THUMB) * fraction)
+                        .height(4.dp)
+                        .background(Theme[colors][accent], CircleShape),
+                )
+                // The stops, each a dot centred where the thumb's centre lands; the passed ones in the accent.
+                Row(track.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
                     sizes.forEachIndexed { i, _ ->
                         Box(Modifier.size(6.dp).background(if (i <= index) Theme[colors][accent] else Theme[colors][textMuted], CircleShape))
                     }
                 }
                 Box(
                     Modifier
-                        .offset { IntOffset(((maxWidth - thumb) * fraction).roundToPx(), 0) }
-                        .size(thumb)
+                        .offset { IntOffset(((maxWidth - SLIDER_THUMB) * fraction).roundToPx(), 0) }
+                        .size(SLIDER_THUMB)
                         .dropShadow(CircleShape, Shadow(radius = 8.dp, color = Color.Black.copy(alpha = 0.35f), offset = DpOffset(0.dp, 2.dp)))
                         .background(Color.White, CircleShape),
                 )
             }
-            Text("A", style = Theme[typography][label].copy(fontSize = 18.sp), color = Theme[colors][textTertiary], modifier = Modifier.clearAndSetSemantics { })
+            Box(Modifier.width(20.dp).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
+                Text("A", style = Theme[typography][label].copy(fontSize = (18 / fontScale).sp), color = Theme[colors][textTertiary])
+            }
         }
         Text(
             selected.name,
@@ -753,6 +777,8 @@ private fun TextSizeSlider(selected: TextSize, onSelect: (TextSize) -> Unit) {
         )
     }
 }
+
+private val SLIDER_THUMB = 22.dp
 
 @Composable
 private fun InfoRow(title: String, value: String) {

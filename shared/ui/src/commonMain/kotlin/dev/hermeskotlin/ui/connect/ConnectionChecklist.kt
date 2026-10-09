@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -73,7 +74,15 @@ internal fun ConnectionChecklist(
     val stages = CheckStage.entries
     Column(modifier.fillMaxWidth()) {
         stages.forEachIndexed { index, stage ->
-            StageRow(stage.label, results[stage], checking = stage == current, pendingNote(stage), first = index == 0, last = index == stages.lastIndex)
+            StageRow(
+                stage.label,
+                results[stage],
+                checking = stage == current,
+                pendingNote(stage),
+                step = "Step ${index + 1} of ${stages.size}",
+                first = index == 0,
+                last = index == stages.lastIndex,
+            )
         }
     }
 }
@@ -83,7 +92,7 @@ internal fun ConnectionChecklist(
  * came of it. A failure says what to do in a box with a bulb.
  */
 @Composable
-private fun StageRow(title: String, result: StageResult?, checking: Boolean, pendingNote: String, first: Boolean, last: Boolean) {
+private fun StageRow(title: String, result: StageResult?, checking: Boolean, pendingNote: String, step: String, first: Boolean, last: Boolean) {
     val line = Theme[colors][strokeStrong]
     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         // The line joins the discs: up to this one's top, and on from its bottom to the next.
@@ -99,7 +108,7 @@ private fun StageRow(title: String, result: StageResult?, checking: Boolean, pen
                     if (!last) drawLine(line, Offset(x, top + 28.dp.toPx()), Offset(x, size.height), w)
                 },
         ) {
-            StageDisc(result, checking, Modifier.padding(top = DISC_TOP))
+            StageDisc(result, checking, step, Modifier.padding(top = DISC_TOP))
         }
         Column(Modifier.weight(1f).padding(vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = Theme[typography][body].copy(fontWeight = FontWeight.Medium), color = Theme[colors][text])
@@ -117,7 +126,7 @@ private fun StageRow(title: String, result: StageResult?, checking: Boolean, pen
 }
 
 @Composable
-private fun StageDisc(result: StageResult?, checking: Boolean, modifier: Modifier) {
+private fun StageDisc(result: StageResult?, checking: Boolean, step: String, modifier: Modifier) {
     val (fill, tint, icon, spoken) = when {
         checking -> Quad(Theme[colors][surface2], Theme[colors][accentText], null, "Checking")
         result is StageResult.Passed -> Quad(Theme[colors][successSoft], Theme[colors][success], Lucide.Check, "Passed")
@@ -126,7 +135,8 @@ private fun StageDisc(result: StageResult?, checking: Boolean, modifier: Modifie
         else -> Quad(Theme[colors][surface2], Theme[colors][textTertiary], null, "Not checked")
     }
     Box(
-        modifier.size(28.dp).background(fill, CircleShape).semantics { contentDescription = spoken },
+        // One description for the disc, the spinner's own "Loading" folded in.
+        modifier.size(28.dp).background(fill, CircleShape).clearAndSetSemantics { contentDescription = "$step, $spoken" },
         contentAlignment = Alignment.Center,
     ) {
         when {
