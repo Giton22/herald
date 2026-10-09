@@ -76,7 +76,9 @@ internal fun NewProjectDialog(
     val d = shown ?: return
     val name = rememberTextFieldState(d.name)
     val folder = rememberTextFieldState(d.folder)
-    LaunchedEffect(d) {
+    // On every open, not only a different draft: a blank one equals the last, whose text would stay.
+    LaunchedEffect(draft != null, d) {
+        if (draft == null) return@LaunchedEffect
         name.edit { replace(0, length, d.name) }
         folder.edit { replace(0, length, d.folder) }
     }
@@ -112,7 +114,8 @@ internal fun RenameProjectDialog(project: Project?, onDismiss: () -> Unit, onRen
     if (project != null) shown = project
     val p = shown ?: return
     val name = rememberTextFieldState(p.label)
-    LaunchedEffect(p.id) { name.edit { replace(0, length, p.label) } }
+    // On every open, so a cancelled edit doesn't come back.
+    LaunchedEffect(project != null, p.id) { if (project != null) name.edit { replace(0, length, p.label) } }
     val nameText = name.text.toString().trim()
     val submit = {
         if (nameText.isNotEmpty()) {

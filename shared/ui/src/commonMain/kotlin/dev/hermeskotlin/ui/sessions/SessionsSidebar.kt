@@ -1042,7 +1042,8 @@ private fun ProjectFilters(
         val scroll = rememberScrollState()
         // Where the picked chip sits in the row, so the row can scroll it into sight: its options button
         // stays beside the row, and must never read as belonging to whichever chip happens to show.
-        var picked by remember { mutableStateOf<ClosedFloatingPointRange<Float>?>(null) }
+        // Keyed on the pick, so "All projects" doesn't scroll back to the chip picked before it.
+        var picked by remember(selected?.id) { mutableStateOf<ClosedFloatingPointRange<Float>?>(null) }
         val margin = with(LocalDensity.current) { 8.dp.toPx() }
         LaunchedEffect(selected?.id, picked, scroll.viewportSize) {
             val span = picked ?: return@LaunchedEffect
@@ -1137,7 +1138,8 @@ internal fun RenameDialog(session: SessionSummary?, onDismiss: () -> Unit, onRen
     if (session != null) shown = session
     val s = shown ?: return
     val title = rememberTextFieldState(s.title.orEmpty())
-    LaunchedEffect(s.id) { title.edit { replace(0, length, s.title.orEmpty()) } }
+    // On every open, so a cancelled edit doesn't come back.
+    LaunchedEffect(session != null, s.id) { if (session != null) title.edit { replace(0, length, s.title.orEmpty()) } }
     val submit = {
         onDismiss()
         onRename(s, title.text.toString())
