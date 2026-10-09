@@ -32,6 +32,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -71,6 +72,7 @@ fun <T> SegmentedControl(
 ) {
     val track = Theme[colors][well]
     val ring = Theme[colors][stroke]
+    val badges = LocalDensity.current.fontScale <= 1.3f
     Row(
         modifier
             .fillMaxWidth()
@@ -123,7 +125,8 @@ fun <T> SegmentedControl(
                         textAlign = TextAlign.Center,
                         modifier = Modifier.weight(1f, fill = false),
                     )
-                    optionBadge(option)?.let {
+                    // A large font leaves the label too little room beside it, and the count is extra.
+                    optionBadge(option)?.takeIf { badges }?.let {
                         Text(
                             it,
                             style = Theme[typography][code].copy(fontSize = 11.sp),

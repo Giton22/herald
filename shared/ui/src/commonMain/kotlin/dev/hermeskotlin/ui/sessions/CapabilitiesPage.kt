@@ -25,12 +25,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.key
-import androidx.compose.ui.draw.alpha
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
@@ -287,9 +288,10 @@ private fun ServerRow(server: McpServer, test: McpTestResult?, testing: Boolean,
             checked = server.enabled,
             // A plugin's server is the plugin's to switch.
             onToggle = onToggle.takeIf { server.plugin == null },
+            lockedNote = "set by ${server.plugin}",
         )
         Row(
-            Modifier.fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+            Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -336,31 +338,42 @@ private fun <T> RowCard(rows: List<T>, key: (T) -> Any, row: @Composable (T) -> 
 
 /**
  * The name in mono with a small tag pill, the detail under it, a switch on the right; a row switched off
- * recedes. A null [onToggle] locks it. "learned" — a skill the agent wrote itself — takes the accent.
+ * has its name in the secondary text. A null [onToggle] locks it, said as [lockedNote].
+ * "learned" — a skill the agent wrote itself — takes the accent.
  */
 @Composable
-private fun SwitchRow(title: String, detail: String?, tag: String?, checked: Boolean, onToggle: ((Boolean) -> Unit)?) {
+private fun SwitchRow(
+    title: String,
+    detail: String?,
+    tag: String?,
+    checked: Boolean,
+    onToggle: ((Boolean) -> Unit)?,
+    lockedNote: String = "can't be changed here",
+) {
     Row(
         Modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
             .then(
-                if (onToggle != null) Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = onToggle)
-                else Modifier.semantics(mergeDescendants = true) {},
+                if (onToggle != null) {
+                    Modifier.toggleable(value = checked, role = Role.Switch, onValueChange = onToggle)
+                } else {
+                    Modifier.semantics(mergeDescendants = true) { stateDescription = "${if (checked) "On" else "Off"}, $lockedNote" }
+                },
             )
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f).alpha(if (checked) 1f else 0.7f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            // The tag goes under a name too long to leave it room.
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(2.dp), itemVerticalAlignment = Alignment.CenterVertically) {
                 Text(
                     title,
                     style = Theme[typography][code].copy(fontSize = 13.5.sp, fontWeight = FontWeight.Medium),
-                    color = Theme[colors][text],
+                    color = if (checked) Theme[colors][text] else Theme[colors][textSecondary],
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
                 )
                 tag?.let { Tag(it, accent = it == "learned") }
             }

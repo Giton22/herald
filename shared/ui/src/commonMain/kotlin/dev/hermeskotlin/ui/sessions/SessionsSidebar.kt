@@ -882,8 +882,7 @@ internal fun SubpageHeader(title: String, onBack: () -> Unit, subtitle: String? 
                     subtitle,
                     style = Theme[typography][bodySmall].copy(fontSize = 13.5.sp),
                     color = Theme[colors][textTertiary],
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
+                    // Not cut short: it can carry a note the page relies on, like when changes apply.
                     modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 2.dp),
                 )
             }
