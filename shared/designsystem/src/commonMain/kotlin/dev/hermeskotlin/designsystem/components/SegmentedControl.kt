@@ -2,37 +2,58 @@ package dev.hermeskotlin.designsystem.components
 
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.composeunstyled.Text
+import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
-import dev.hermeskotlin.designsystem.accent
+import com.composeunstyled.theme.rememberColoredIndication
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.label
-import dev.hermeskotlin.designsystem.onAccent
-import dev.hermeskotlin.designsystem.radii
-import dev.hermeskotlin.designsystem.radiusMedium
-import dev.hermeskotlin.designsystem.radiusSmall
 import dev.hermeskotlin.designsystem.stroke
-import dev.hermeskotlin.designsystem.textSecondary
+import dev.hermeskotlin.designsystem.strokeStrong
+import dev.hermeskotlin.designsystem.text
+import dev.hermeskotlin.designsystem.textTertiary
+import dev.hermeskotlin.designsystem.thumb
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.designsystem.well
 
-/** Equal-width options in a tinted track; the selected one takes the accent fill. */
+/**
+ * Equal-width options in a recessed pill track; the selected one sits on a raised thumb. Each option is a
+ * full-height touch target, with an optional [optionIcon] before its label.
+ */
 @Composable
 fun <T> SegmentedControl(
     options: List<T>,
@@ -40,36 +61,59 @@ fun <T> SegmentedControl(
     onSelect: (T) -> Unit,
     optionLabel: (T) -> String,
     modifier: Modifier = Modifier,
+    optionIcon: (T) -> ImageVector? = { null },
 ) {
+    val track = Theme[colors][well]
+    val ring = Theme[colors][stroke]
     Row(
         modifier
             .fillMaxWidth()
-            .height(44.dp)
-            .background(Theme[colors][stroke], RoundedCornerShape(Theme[radii][radiusMedium]))
-            .padding(3.dp)
+            .heightIn(min = MinTouchTarget)
+            .height(IntrinsicSize.Min)
+            // The track is drawn 4dp in from the touch area's top and bottom.
+            .drawBehind {
+                val inset = 4.dp.toPx()
+                val h = size.height - inset * 2
+                val corner = CornerRadius(h / 2)
+                drawRoundRect(track, topLeft = Offset(0f, inset), size = Size(size.width, h), cornerRadius = corner)
+                drawRoundRect(ring, topLeft = Offset(0f, inset), size = Size(size.width, h), cornerRadius = corner, style = Stroke(1.dp.toPx()))
+            }
+            .padding(horizontal = 3.dp)
             .selectableGroup(),
-        horizontalArrangement = Arrangement.spacedBy(3.dp),
     ) {
         options.forEach { option ->
             val isSelected = option == selected
-            val fill by animateColorAsState(if (isSelected) Theme[colors][accent] else Color.Transparent)
-            val shape = RoundedCornerShape(Theme[radii][radiusSmall])
+            val interaction = remember { MutableInteractionSource() }
+            val fill by animateColorAsState(if (isSelected) Theme[colors][thumb] else Color.Transparent)
+            val edge by animateColorAsState(if (isSelected) Theme[colors][strokeStrong] else Color.Transparent)
+            val content = if (isSelected) Theme[colors][text] else Theme[colors][textTertiary]
             Box(
                 Modifier
                     .weight(1f)
-                    .fillMaxWidth()
-                    .height(38.dp)
-                    .clip(shape)
-                    .background(fill, shape)
-                    .selectable(selected = isSelected, role = Role.RadioButton, onClick = { onSelect(option) }),
+                    .fillMaxHeight()
+                    .selectable(selected = isSelected, interactionSource = interaction, indication = null, role = Role.RadioButton, onClick = { onSelect(option) }),
                 contentAlignment = Alignment.Center,
             ) {
-                Text(
-                    optionLabel(option),
-                    style = Theme[typography][label],
-                    color = if (isSelected) Theme[colors][onAccent] else Theme[colors][textSecondary],
-                    singleLine = true,
-                )
+                Row(
+                    Modifier
+                        .fillMaxSize()
+                        .padding(vertical = 7.dp)
+                        .clip(CircleShape)
+                        .background(fill, CircleShape)
+                        .border(1.dp, edge, CircleShape)
+                        .indication(interaction, rememberColoredIndication(Theme[colors][text]))
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    optionIcon(option)?.let { UnstyledIcon(it, contentDescription = null, tint = content, modifier = Modifier.size(13.dp)) }
+                    Text(
+                        optionLabel(option),
+                        style = Theme[typography][label].copy(fontSize = 13.sp, fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Normal),
+                        color = content,
+                        singleLine = true,
+                    )
+                }
             }
         }
     }

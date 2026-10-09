@@ -13,6 +13,7 @@ internal object Palette {
     val Surface2 = Color(0xFF1C1C22)
     val Surface3 = Color(0xFF232329)
     val Well = Color(0xFF121215)
+    val Thumb = Color(0xFF2C2C33)
     val Sheet = Color(0xFF18181D)
     val Line = Color.White.copy(alpha = 0.07f)
     val LineStrong = Color.White.copy(alpha = 0.12f)
@@ -54,6 +55,7 @@ internal fun lightColors(accentColors: AccentColors) = mapOf(
     surface2 to Palette.LightSurface2,
     surface3 to Palette.LightSurface3,
     well to Palette.LightWell,
+    thumb to Palette.LightSurface,
     surfaceElevated to Palette.LightSurface,
     input to Palette.LightSurface,
     sidebar to Palette.LightSurface,
@@ -100,6 +102,8 @@ internal fun darkColors(
     surface2 to surface2Color,
     surface3 to surface3Color,
     well to wellColor,
+    // One step above surface 3, whatever the ground.
+    thumb to Palette.Thumb,
     surfaceElevated to sheet,
     input to surfaceColor,
     sidebar to surfaceColor,

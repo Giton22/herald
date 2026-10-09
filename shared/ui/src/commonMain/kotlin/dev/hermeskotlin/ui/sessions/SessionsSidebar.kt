@@ -27,6 +27,7 @@ import com.composables.icons.lucide.PencilLine
 import com.composables.icons.lucide.ShieldAlert
 import dev.hermeskotlin.core.chat.Waiting
 import dev.hermeskotlin.designsystem.code
+import dev.hermeskotlin.designsystem.display
 import dev.hermeskotlin.designsystem.components.halo
 import dev.hermeskotlin.designsystem.eyebrow
 import dev.hermeskotlin.designsystem.radiusSmall
@@ -846,23 +847,27 @@ private fun SearchPill(onClick: () -> Unit) {
     }
 }
 
+/** A page's header: Back with the page's [actions] at the other end, then its title, large, underneath. */
 @Composable
 internal fun SubpageHeader(title: String, onBack: () -> Unit, actions: @Composable RowScope.() -> Unit = {}) {
-    Row(
-        Modifier.fillMaxWidth().padding(start = 12.dp, end = 16.dp, top = 16.dp, bottom = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(Lucide.ArrowLeft, contentDescription = "Back", onClick = onBack, tint = Theme[colors][text])
+    Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            IconButton(Lucide.ArrowLeft, contentDescription = "Back", onClick = onBack, tint = Theme[colors][textSecondary])
+            Spacer(Modifier.weight(1f))
+            actions()
+        }
         Text(
             title,
-            style = Theme[typography][heading],
+            style = Theme[typography][display],
             color = Theme[colors][text],
-            maxLines = 1,
+            maxLines = 2,
             overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.padding(horizontal = 16.dp).semantics { heading() },
         )
-        actions()
     }
 }
 

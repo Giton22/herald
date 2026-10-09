@@ -29,6 +29,9 @@ val surface3 = ThemeToken<Color>("surface_3")
 /** A recessed fill for code, commands and terminal output. */
 val well = ThemeToken<Color>("well")
 
+/** The raised pick in a segmented control's [well] track. */
+val thumb = ThemeToken<Color>("thumb")
+
 /** Floating panels: sheets, dialogs, menus. */
 val surfaceElevated = ThemeToken<Color>("surface_elevated")
 
