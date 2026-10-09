@@ -130,6 +130,8 @@ import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.designsystem.components.SegmentedControl
 import dev.hermeskotlin.ui.bots.BotActions
 import dev.hermeskotlin.ui.bots.BotsRoster
+import dev.hermeskotlin.ui.bots.BotsUiState
+import dev.hermeskotlin.ui.bots.NeedsYou
 import dev.hermeskotlin.ui.bots.BotsViewModel
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.models.displayModelName
@@ -736,6 +738,73 @@ internal fun SessionsSidebarSample(
             modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
+}
+
+/** The sidebar's Bots side drawn from [state] alone, for previews: the header, the switch and the roster. */
+@Composable
+internal fun BotsSidebarSample(
+    state: BotsUiState,
+    userLabel: String,
+    nowSeconds: Double,
+    needsYou: List<NeedsYou> = emptyList(),
+    rooms: List<Room> = emptyList(),
+) {
+    Box(
+        Modifier
+            .fillMaxSize()
+            .halo()
+            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start)),
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            MainHeader(gatewayLabel = "homelab", connection = null, onAccount = {}, onSettings = {}, onSearch = null)
+            SegmentedControl(
+                options = SidebarMode.entries,
+                selected = SidebarMode.Bots,
+                onSelect = {},
+                optionLabel = { if (it == SidebarMode.Bots && needsYou.isNotEmpty()) "${it.name} · ${needsYou.size}" else it.name },
+                modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+            )
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                BotsRoster(
+                    state = state,
+                    avatars = emptyMap(),
+                    selectedId = null,
+                    selectedRunning = false,
+                    nowSeconds = nowSeconds,
+                    actions = PreviewBotActions,
+                    onRetry = {},
+                    onDismissNotice = {},
+                    needsYou = needsYou,
+                    rooms = rooms,
+                    roomsAvailable = rooms.isNotEmpty(),
+                )
+            }
+        }
+        BottomBar(
+            userLabel = userLabel,
+            connection = null,
+            message = null,
+            onDismissMessage = {},
+            onNewChat = {},
+            onAccount = {},
+            modifier = Modifier.align(Alignment.BottomCenter),
+        )
+    }
+}
+
+private object PreviewBotActions : BotActions {
+    override fun open(bot: Bot) = Unit
+    override fun setPinned(bot: Bot, pinned: Boolean) = Unit
+    override fun setHidden(bot: Bot, hidden: Boolean) = Unit
+    override fun startFresh(bot: Bot) = Unit
+    override fun openRecent(bot: Bot) = Unit
+    override fun newChat(bot: Bot) = Unit
+    override fun create() = Unit
+    override fun edit(bot: Bot) = Unit
+    override fun duplicate(bot: Bot) = Unit
+    override fun delete(bot: Bot) = Unit
+    override fun checkAgain(bot: Bot) = Unit
+    override fun routines(bot: Bot) = Unit
 }
 
 private val SessionListFilter.label: String

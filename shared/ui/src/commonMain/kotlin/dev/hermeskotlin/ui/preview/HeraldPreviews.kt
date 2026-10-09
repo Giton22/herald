@@ -61,6 +61,13 @@ import dev.hermeskotlin.designsystem.components.SidebarLayout
 import dev.hermeskotlin.designsystem.components.rememberSidebarState
 import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.ui.sessions.SessionsSidebarSample
+import dev.hermeskotlin.ui.sessions.BotsSidebarSample
+import dev.hermeskotlin.core.rooms.Room
+import dev.hermeskotlin.core.rooms.RoomPendingAction
+import dev.hermeskotlin.ui.bots.BotFaces
+import dev.hermeskotlin.ui.bots.LocalBotFaces
+import dev.hermeskotlin.ui.rooms.RoomActions
+import dev.hermeskotlin.ui.rooms.RoomView
 import dev.hermeskotlin.ui.sessions.ProjectDraft
 import dev.hermeskotlin.core.projects.FolderListing
 import dev.hermeskotlin.ui.sessions.ProjectActionsSheet
@@ -99,6 +106,8 @@ enum class PreviewScene(val label: String) {
     Voice("Voice chat"),
     NewChat("A new chat"),
     Sidebar("The sessions sidebar"),
+    Bots("The bots and rooms"),
+    Room("A room of bots"),
     Settings("Settings"),
     Insights("Insights"),
     Capabilities("Capabilities"),
@@ -160,6 +169,21 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                         drafts = ChatSamples.sessionDrafts,
                         projects = ChatSamples.projects,
                     )
+                }
+                PreviewScene.Bots -> OpenSidebar {
+                    BotsSidebarSample(
+                        BotSamples.roster,
+                        userLabel = ChatSamples.USER,
+                        nowSeconds = BotSamples.now,
+                        needsYou = BotSamples.needsYou,
+                        rooms = BotSamples.rooms,
+                    )
+                }
+                PreviewScene.Room -> {
+                    val faces = remember { BotFaces(BotSamples.roster.all) }
+                    CompositionLocalProvider(LocalBotFaces provides faces) {
+                        RoomView(BotSamples.openRoom, remember { PreviewRoomActions() }, faces, onOpenSidebar = {}, onBack = {})
+                    }
                 }
                 PreviewScene.Archived -> Box(Modifier.fillMaxSize()) {
                     OpenSidebar {
@@ -402,6 +426,18 @@ private object PreviewScheduledActions : ScheduledActions {
     override fun askDelete() = Unit
     override fun cancelDelete() = Unit
     override fun deleteJob() = Unit
+}
+
+private class PreviewRoomActions : RoomActions {
+    override val composer = TextFieldState()
+    override fun send() = Unit
+    override fun stop() = Unit
+    override fun loadEarlier() = Unit
+    override fun approve(action: RoomPendingAction, choice: String) = Unit
+    override fun retry(action: RoomPendingAction) = Unit
+    override fun renameRoom(room: Room, name: String) = Unit
+    override fun deleteRoom(room: Room) = Unit
+    override fun dismissRoomNotice() = Unit
 }
 
 @Composable
