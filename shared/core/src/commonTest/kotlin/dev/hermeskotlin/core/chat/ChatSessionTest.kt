@@ -23,6 +23,7 @@ import kotlin.test.Test
 import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
@@ -1245,6 +1246,29 @@ class ChatSessionTest {
         history = """{"session_id":"stored-1","messages":[{"id":1,"role":"user","content":"hello"}]}"""
         assertEquals("Restored 1 file to 9f2c1ab4. The chat's last turn was taken back too.", chat.restoreCheckpoint(checkpoint))
         // The gateway rewound the transcript, so it's read again.
+        assertEquals(1, chat.state.first { it.messages.size == 1 }.messages.size)
+    }
+
+    @Test
+    fun aFailedCheckpointListSaysWhyAndAFailedRestoreStillReadsTheTranscript() = runTest {
+        val (connection, _) = setup(
+            backgroundScope,
+            mapOf(
+                "session.resume" to """{"session_id":"rt1","running":false}""",
+                "rollback.list" to "error:5020",
+                "rollback.restore" to "error:5021",
+            ),
+        )
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        connection.state.first { it is dev.hermeskotlin.core.connection.ConnectionState.Connected }
+
+        // Not "unavailable": the sheet shows the gateway's error message (the fake's is "nope").
+        assertEquals("nope", assertFailsWith<Exception> { chat.checkpoints() }.message)
+
+        // The restore may still have happened on the gateway, so the transcript is read again. Attaching for the
+        // rollback.* calls reads none, so the transcript below can only come from the restore's reload.
+        history = """{"session_id":"stored-1","messages":[{"id":1,"role":"user","content":"hello"}]}"""
+        assertEquals("nope", chat.restoreCheckpoint(Checkpoint("9f2c1ab47e0d", "", "")))
         assertEquals(1, chat.state.first { it.messages.size == 1 }.messages.size)
     }
 

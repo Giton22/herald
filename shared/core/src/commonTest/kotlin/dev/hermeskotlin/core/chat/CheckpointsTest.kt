@@ -5,6 +5,7 @@ import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class CheckpointsTest {
@@ -25,6 +26,17 @@ class CheckpointsTest {
         assertTrue(list.enabled)
         assertEquals(listOf("9f2c1ab4", "11aa22bb"), list.checkpoints.map { it.shortHash })
         assertEquals("before write_file app.py", list.checkpoints.first().message)
+    }
+
+    @Test
+    fun gitsTimeWithAnOffsetIsTheSameMomentAsInUtc() {
+        // git writes the gateway's own offset; the app shows the moment in the phone's zone.
+        val local = Checkpoint("a", "2026-10-09T11:17:03+02:00", "")
+        val utc = Checkpoint("b", "2026-10-09T09:17:03Z", "")
+        assertEquals(1_791_537_423.0, utc.epochSeconds)
+        assertEquals(utc.epochSeconds, local.epochSeconds)
+        assertNull(Checkpoint("c", "", "").epochSeconds)
+        assertNull(Checkpoint("d", "yesterday", "").epochSeconds)
     }
 
     @Test
@@ -53,6 +65,16 @@ class CheckpointsTest {
             restoreOutcome(obj("""{"success":true,"restored_files":["a.py"],"skipped_user_edits":["notes.md"],"history_removed":0}""")),
         )
         assertEquals("Restored the folder.", restoreOutcome(obj("""{"success":true}""")))
+        // Files the gateway didn't put back are named, not counted as restored.
+        assertEquals(
+            "Restored 1 file to 9f2c1ab4. Too large to restore: data.bin. Couldn't remove: new.py.",
+            restoreOutcome(
+                obj(
+                    """{"success":true,"restored_to":"9f2c1ab4","restored_files":["a.py"],
+                       "skipped_oversize":["data.bin"],"failed_deletes":["new.py"]}""",
+                ),
+            ),
+        )
         assertEquals("Checkpoint 'zz' not found", restoreOutcome(obj("""{"success":false,"error":"Checkpoint 'zz' not found"}""")))
         assertEquals("Couldn't restore the checkpoint.", restoreOutcome(null))
     }

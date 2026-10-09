@@ -1,5 +1,6 @@
 package dev.hermeskotlin.core.chat
 
+import dev.hermeskotlin.core.cron.epochSeconds
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -15,12 +16,14 @@ data class Checkpoint(
     val timestamp: String,
     val message: String,
 ) {
-    val shortHash: String get() = hash.take(SHORT_HASH)
+    val shortHash: String get() = shortHash(hash)
 
-    private companion object {
-        const val SHORT_HASH = 8
-    }
+    /** [timestamp] as epoch seconds, for showing it in the phone's time zone; null when it doesn't parse. */
+    val epochSeconds: Double? get() = timestamp.epochSeconds()
 }
+
+/** The first characters of a checkpoint hash, as git and the terminal's `/rollback` show it. */
+internal fun shortHash(hash: String): String = hash.take(8)
 
 /** `rollback.list`: [enabled] false when checkpoints are off in the profile's config. */
 data class Checkpoints(val enabled: Boolean, val checkpoints: List<Checkpoint>) {
@@ -53,6 +56,8 @@ internal fun restoreOutcome(result: JsonObject?): String {
     }
     val files = result.strings("restored_files")
     val skipped = result.strings("skipped_user_edits")
+    val oversize = result.strings("skipped_oversize")
+    val notRemoved = result.strings("failed_deletes")
     val removed = result.int("history_removed") ?: 0
     return buildString {
         append(
@@ -63,12 +68,14 @@ internal fun restoreOutcome(result: JsonObject?): String {
                 else -> "Restored ${files.size} files"
             },
         )
-        result.string("restored_to")?.take(8)?.let { append(" to $it") }
+        result.string("restored_to")?.let { append(" to ${shortHash(it)}") }
         append('.')
         if (removed > 0) append(" The chat's last turn was taken back too.")
         if (!skipped.isNullOrEmpty()) {
             append(" Left alone, since you changed them yourself: ${skipped.joinToString(", ")}.")
         }
+        if (!oversize.isNullOrEmpty()) append(" Too large to restore: ${oversize.joinToString(", ")}.")
+        if (!notRemoved.isNullOrEmpty()) append(" Couldn't remove: ${notRemoved.joinToString(", ")}.")
     }
 }
 

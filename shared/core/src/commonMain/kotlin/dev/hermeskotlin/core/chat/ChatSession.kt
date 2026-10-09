@@ -762,17 +762,12 @@ class ChatSession(
     /**
      * The folder snapshots Hermes took before the agent changed files in this chat (`rollback.list`). Null when
      * offline or for a chat with nothing on the gateway yet; a stored chat is attached first, as the call needs it live.
+     * Throws when the gateway fails the call, so the reason can be shown.
      */
     suspend fun checkpoints(): Checkpoints? {
         val client = connectedClient() ?: return null
-        return try {
-            val runtimeId = liveIdForCheckpoints(client) ?: return null
-            Checkpoints.parse(client.request("rollback.list", buildJsonObject { put("session_id", runtimeId) }) as? JsonObject)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            null
-        }
+        val runtimeId = liveIdForCheckpoints(client) ?: return null
+        return Checkpoints.parse(client.request("rollback.list", buildJsonObject { put("session_id", runtimeId) }) as? JsonObject)
     }
 
     /** What changed in the folder since [checkpoint] (`rollback.diff`). */
@@ -816,6 +811,8 @@ class ChatSession(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
+            // A reply that timed out may still have restored the folder and taken back the turn on the gateway.
+            scope.launch { loadHistory() }
             e.message ?: "Couldn't restore the checkpoint."
         }
     }
