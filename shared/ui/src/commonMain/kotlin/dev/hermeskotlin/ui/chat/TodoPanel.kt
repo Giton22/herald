@@ -81,6 +81,13 @@ import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
 import dev.chrisbanes.haze.blur.hazeBlur
+import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.platform.LocalDensity
+import dev.hermeskotlin.core.chat.SubagentStatus
 import dev.hermeskotlin.core.chat.TodoItem
 import dev.hermeskotlin.core.chat.TodoList
 import dev.hermeskotlin.core.chat.TodoStatus
@@ -273,6 +280,40 @@ private fun ShimmerCard(content: @Composable ColumnScope.() -> Unit) {
     )
 }
 
+/**
+ * One overlapping dot per subagent, colored by how it stands: green done, accent at work. Beyond four, the
+ * last says how many more. Silent: the title's "1 of 3 done" says it.
+ */
+@Composable
+private fun TeamDots(team: List<SubagentStatus>) {
+    val ring = Theme[colors][surface]
+    val shown = if (team.size > MAX_TEAM_DOTS) team.take(MAX_TEAM_DOTS - 1) else team
+    Row(Modifier.clearAndSetSemantics {}, horizontalArrangement = Arrangement.spacedBy((-6).dp)) {
+        shown.forEach { status ->
+            val color = subagentDotColor(status)
+            Box(
+                Modifier
+                    .size(22.dp)
+                    .border(2.dp, ring, CircleShape)
+                    .padding(2.dp)
+                    .background(if (status.live && status != SubagentStatus.Running) color.copy(alpha = 0.6f) else color, CircleShape),
+            )
+        }
+        if (team.size > MAX_TEAM_DOTS) {
+            Box(
+                Modifier.size(22.dp).border(2.dp, ring, CircleShape).padding(2.dp).background(Theme[colors][surface3], CircleShape),
+                contentAlignment = Alignment.Center,
+            ) {
+                // Sized in dp: the dot doesn't grow with the font, so neither may its count. The title says it aloud.
+                val size = with(LocalDensity.current) { 9.dp.toSp() }
+                Text("+${team.size - shown.size}", style = Theme[typography][caption].copy(fontSize = size, lineHeight = size), color = Theme[colors][textSecondary], maxLines = 1)
+            }
+        }
+    }
+}
+
+private const val MAX_TEAM_DOTS = 4
+
 /** The card's top: the spinner tile, the step, the running time and Stop; then the plan's progress, when there's a plan. */
 @Composable
 private fun CardHeader(step: LiveStep, turnKey: String?, plan: TodoList?, hasDetails: Boolean, expanded: Boolean, onStop: () -> Unit, canStop: Boolean) {
@@ -281,18 +322,36 @@ private fun CardHeader(step: LiveStep, turnKey: String?, plan: TodoList?, hasDet
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier
-                .size(30.dp)
-                .background(Theme[colors][accentSoft], RoundedCornerShape(Theme[radii][radiusSmall]))
-                // The title says it's working; "Loading" from the spinner would only repeat it.
-                .clearAndSetSemantics {},
-            contentAlignment = Alignment.Center,
-        ) {
-            Spinner(Modifier.size(14.dp), color = Theme[colors][accentText])
+        if (step.team.isNotEmpty()) {
+            TeamDots(step.team)
+        } else {
+            Box(
+                Modifier
+                    .size(30.dp)
+                    .background(Theme[colors][accentSoft], RoundedCornerShape(Theme[radii][radiusSmall]))
+                    // The title says it's working; "Loading" from the spinner would only repeat it.
+                    .clearAndSetSemantics {},
+                contentAlignment = Alignment.Center,
+            ) {
+                Spinner(Modifier.size(14.dp), color = Theme[colors][accentText])
+            }
         }
         Column(Modifier.weight(1f)) {
-            Text(step.title, style = Theme[typography][label], color = Theme[colors][text], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val progress = step.teamProgress
+            Text(
+                if (progress == null) {
+                    AnnotatedString(step.title)
+                } else {
+                    buildAnnotatedString {
+                        append(step.title)
+                        withStyle(SpanStyle(color = Theme[colors][textTertiary], fontWeight = FontWeight.Normal)) { append(" · $progress") }
+                    }
+                },
+                style = Theme[typography][label],
+                color = Theme[colors][text],
+                maxLines = if (progress == null) 1 else 2,
+                overflow = TextOverflow.Ellipsis,
+            )
             step.detail?.let {
                 Text(
                     it,

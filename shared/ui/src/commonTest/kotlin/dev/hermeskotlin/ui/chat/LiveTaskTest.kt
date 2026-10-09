@@ -2,6 +2,8 @@ package dev.hermeskotlin.ui.chat
 
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatState
+import dev.hermeskotlin.core.chat.Subagent
+import dev.hermeskotlin.core.chat.SubagentStatus
 import dev.hermeskotlin.core.chat.TodoItem
 import dev.hermeskotlin.core.chat.TodoList
 import dev.hermeskotlin.core.chat.TodoStatus
@@ -22,6 +24,40 @@ class LiveTaskTest {
 
         assertEquals(LiveStep("Reading a file", "/opt/backup/backup.sh"), currentStep(state))
         assertEquals("Reading a file: /opt/backup/backup.sh", currentAction(state))
+    }
+
+    private fun delegating(vararg statuses: SubagentStatus): ChatState {
+        val tool = ToolActivity("t1", "delegate_task", running = true)
+        return ChatState(
+            running = true,
+            messages = listOf(ChatMessage.Assistant("a1", streaming = true, tools = listOf(tool))),
+            subagents = statuses.mapIndexed { i, s -> Subagent("s$i", toolId = "t1", goal = "Task $i", status = s, taskIndex = i) },
+        )
+    }
+
+    @Test
+    fun aDelegationCountsItsSubagents() {
+        val state = delegating(SubagentStatus.Done, SubagentStatus.Running, SubagentStatus.Running)
+
+        val step = currentStep(state)
+        assertEquals(listOf(SubagentStatus.Done, SubagentStatus.Running, SubagentStatus.Running), step.team)
+        assertEquals("1 of 3 done", step.teamProgress)
+        assertEquals("Working with subagents · 1 of 3 done", currentAction(state))
+        assertEquals("Working · 2 subagents", chatStatus(state, connected = true, connectionLabel = "", place = null).text)
+    }
+
+    @Test
+    fun aSubagentThatFailedIsFinishedNotDone() {
+        assertEquals("2 of 2 finished", currentStep(delegating(SubagentStatus.Done, SubagentStatus.Failed)).teamProgress)
+    }
+
+    @Test
+    fun subagentsOfAnEarlierTurnDoNotCountNow() {
+        // A live subagent whose end never arrived, from a delegation no longer running.
+        val state = delegating(SubagentStatus.Running).copy(messages = listOf(ChatMessage.Assistant("a2", streaming = true)))
+
+        assertNull(currentStep(state).teamProgress)
+        assertEquals("Working", chatStatus(state, connected = true, connectionLabel = "", place = null).text)
     }
 
     @Test

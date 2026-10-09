@@ -200,6 +200,8 @@ import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.OutgoingAttachment
 import dev.hermeskotlin.core.chat.SendCheck
 import dev.hermeskotlin.core.chat.SessionRefusal
+import dev.hermeskotlin.core.chat.SubagentStatus
+import dev.hermeskotlin.core.chat.subagentRows
 import com.composables.icons.lucide.Hourglass
 import com.composables.icons.lucide.MonitorSmartphone
 import dev.hermeskotlin.core.chat.GeneratedImage
@@ -814,7 +816,17 @@ internal fun chatStatus(state: ChatState, connected: Boolean, connectionLabel: S
         // Once every step is done the agent is wrapping up, not on a step.
         val plan = state.livePlan()
         val step = planStep(plan)
-        BarStatus(if (plan != null && step != null) "Working · step $step of ${plan.total}" else "Working", StatusTone.Busy)
+        // Only the delegation running now: a subagent whose end never arrived mustn't haunt later turns.
+        val working = currentStep(state).team.count { it == SubagentStatus.Running }
+        BarStatus(
+            when {
+                plan != null && step != null -> "Working · step $step of ${plan.total}"
+                working == 1 -> "Working · 1 subagent"
+                working > 1 -> "Working · $working subagents"
+                else -> "Working"
+            },
+            StatusTone.Busy,
+        )
     }
     else -> BarStatus(listOfNotNull("Hermes", place).joinToString(" · "), StatusTone.Ok)
 }
@@ -2228,15 +2240,34 @@ private fun ChatState.livePlan(): TodoList? = todos?.takeIf { todosLive }
  * The one line that says what the agent is doing now, most specific first: waiting on the user, a tool
  * at work, the plan's step in hand, the gateway's status text, else thinking.
  */
-internal fun currentAction(state: ChatState): String = currentStep(state).let { step -> step.detail?.let { "${step.title}: $it" } ?: step.title }
+internal fun currentAction(state: ChatState): String = currentStep(state).let { step ->
+    val title = step.teamProgress?.let { "${step.title} · $it" } ?: step.title
+    step.detail?.let { "$title: $it" } ?: title
+}
 
-/** What the agent is doing now, in words, and what it's doing it to (a path, a command) when a tool says. */
-internal data class LiveStep(val title: String, val detail: String? = null)
+/**
+ * What the agent is doing now, in words, and what it's doing it to (a path, a command) when a tool says.
+ * [team] is how each subagent of the running delegation stands, in task order.
+ */
+internal data class LiveStep(val title: String, val detail: String? = null, val team: List<SubagentStatus> = emptyList()) {
+    /** "1 of 3 done", while subagents work; "finished" once any of those ended without succeeding. */
+    val teamProgress: String? get() = team.takeIf { it.isNotEmpty() }?.let { all ->
+        val ended = all.filterNot { it.live }
+        "${ended.size} of ${all.size} ${if (ended.all { it == SubagentStatus.Done }) "done" else "finished"}"
+    }
+}
 
 /** [currentAction] in its two parts, for the live task card. */
 internal fun currentStep(state: ChatState): LiveStep {
     if (state.inputRequests.isNotEmpty()) return LiveStep("Waiting for your answer")
-    state.runningTool()?.let { tool -> return LiveStep(tool.name.toolVerb(), tool.firstDetailLine()) }
+    state.runningTool()?.let { tool ->
+        if (tool.name == "delegate_task") {
+            // The same rows the delegation's cards show, tasks not started yet included.
+            val team = subagentRows(tool, state.subagents).map { it.status }
+            if (team.isNotEmpty()) return LiveStep(tool.name.toolVerb(), team = team)
+        }
+        return LiveStep(tool.name.toolVerb(), tool.firstDetailLine())
+    }
     state.livePlan()?.items?.firstOrNull { it.status == TodoStatus.InProgress }?.let { return LiveStep(it.content) }
     state.status?.takeIf { it.isNotBlank() }?.let { status ->
         // A turn woken by another bot's reply arriving says so, not the runner's command line.
@@ -2440,6 +2471,8 @@ private fun Composer(
                                     when {
                                         !connected -> "Reconnecting to Hermes…"
                                         comments.isNotEmpty() -> "Anything else? (optional)"
+                                        // Mid-task a message joins the running task, by Queue or Steer.
+                                        state.running -> "Add to this task…"
                                         else -> placeholder
                                     },
                                     style = Theme[typography][body],
@@ -2506,7 +2539,11 @@ private fun Composer(
             },
             {
                 FoldedComposer(
-                    placeholder = if (connected) placeholder else "Reconnecting to Hermes…",
+                    placeholder = when {
+                        !connected -> "Reconnecting to Hermes…"
+                        state.running -> "Add to this task…"
+                        else -> placeholder
+                    },
                     state = state,
                     connected = connected,
                     dictation = dictation,
