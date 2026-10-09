@@ -417,7 +417,7 @@ fun ChatScreen(
         onDismiss = { modelsOpen = false },
         state = state,
         picker = picker,
-        onRefresh = viewModel::loadModels,
+        onRefresh = { viewModel.loadModels(withPrices = true) },
         onSelectModel = {
             viewModel.selectModel(it)
             modelsOpen = false

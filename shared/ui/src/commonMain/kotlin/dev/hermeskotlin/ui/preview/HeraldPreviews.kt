@@ -43,11 +43,16 @@ import dev.hermeskotlin.designsystem.components.SidebarLayout
 import dev.hermeskotlin.designsystem.components.rememberSidebarState
 import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.ui.sessions.SessionsSidebarSample
+import dev.hermeskotlin.ui.sessions.ProjectDraft
+import dev.hermeskotlin.core.projects.FolderListing
+import dev.hermeskotlin.ui.sessions.ProjectActionsSheet
+import dev.hermeskotlin.ui.sessions.NewProjectDialog
 import dev.hermeskotlin.ui.settings.GatewayInfo
 import dev.hermeskotlin.ui.settings.SettingsView
 import androidx.compose.ui.tooling.preview.Preview
 import com.composeunstyled.theme.ColorScheme
 import dev.hermeskotlin.core.chat.ChatState
+import dev.hermeskotlin.core.models.PickerScope
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.DEFAULT_ACCENT
 import dev.hermeskotlin.designsystem.AccentPalette
@@ -56,6 +61,7 @@ import dev.hermeskotlin.designsystem.hermesTheme
 import dev.hermeskotlin.ui.LocalAppSettings
 import dev.hermeskotlin.ui.chat.ChatView
 import dev.hermeskotlin.ui.chat.ModelPickerState
+import dev.hermeskotlin.ui.chat.ModelSheet
 import dev.hermeskotlin.ui.voice.DictationState
 import dev.hermeskotlin.ui.voice.VoiceChatState
 
@@ -87,6 +93,11 @@ enum class PreviewScene(val label: String) {
     Notices("Notices from the gateway"),
     Archived("Archived, with Undo"),
     Checkpoints("Checkpoints, one opened on its changes"),
+    ProjectOptions("A project's options"),
+    NewProject("A new project"),
+    Models("Your starred and recent models in the model picker"),
+    ModelsAll("Every model, one row per model, in the model picker"),
+    ModelSearch("A search in the model picker"),
 }
 
 /**
@@ -139,6 +150,38 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                         onDismiss = {},
                     )
                 }
+                PreviewScene.ProjectOptions, PreviewScene.NewProject -> Box(Modifier.fillMaxSize()) {
+                    val site = ChatSamples.projects.first { it.id == "p-site" }
+                    OpenSidebar {
+                        SessionsSidebarSample(
+                            ChatSamples.sessions(),
+                            selectedId = "s1",
+                            userLabel = ChatSamples.USER,
+                            statuses = ChatSamples.sessionStatuses,
+                            drafts = ChatSamples.sessionDrafts,
+                            projects = ChatSamples.projects,
+                            selectedProject = site,
+                            canMakeProjects = true,
+                        )
+                    }
+                    if (scene == PreviewScene.ProjectOptions) {
+                        ProjectActionsSheet(site, onDismiss = {}, onRename = {}, onDelete = {}, onSave = {})
+                    } else {
+                        NewProjectDialog(
+                            ProjectDraft(name = "Herald", folder = "/home/you/projects/herald"),
+                            busy = false,
+                            error = null,
+                            onDismiss = {},
+                            onCreate = { _, _ -> },
+                            // Browse folders opens on sample folders, for the picker's screenshots.
+                            listFolders = { dir, _ ->
+                                FolderListing(
+                                    if (dir.endsWith("/projects/")) listOf("herald", "notes-app", "site") else listOf("androidApp", "docs", "shared"),
+                                )
+                            },
+                        )
+                    }
+                }
                 PreviewScene.Comments -> SampleChat(ChatSamples.reply, comments = remember { ChatSamples.comments() })
                 PreviewScene.LongChat -> SampleChat(ChatSamples.longChat)
                 PreviewScene.MidTask ->SampleChat(ChatSamples.working, composerText = "Also check the photos share")
@@ -177,6 +220,25 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                         onDismiss = {},
                         initiallyExpanded = "9f2c1ab47e0d55aa",
                     )
+                }
+                PreviewScene.Models, PreviewScene.ModelsAll, PreviewScene.ModelSearch -> Box(Modifier.fillMaxSize()) {
+                    SampleChat(ChatSamples.reply)
+                    val settings = AppSettings(showPet = false, starredModels = PageSamples.starredModels, recentModels = PageSamples.recentModels)
+                    CompositionLocalProvider(LocalAppSettings provides settings) {
+                        ModelSheet(
+                            visible = true,
+                            onDismiss = {},
+                            state = ChatState(),
+                            picker = ModelPickerState(catalog = PageSamples.modelCatalog),
+                            onRefresh = {},
+                            onSelectModel = {},
+                            onSelectEffort = {},
+                            onFast = {},
+                            onSettings = {},
+                            initialQuery = if (scene == PreviewScene.ModelSearch) "open" else "",
+                            initialScope = PickerScope.All.takeIf { scene == PreviewScene.ModelsAll },
+                        )
+                    }
                 }
                 PreviewScene.Processes -> Box(Modifier.fillMaxSize()) {
                     SampleChat(ChatSamples.reply)
@@ -335,3 +397,23 @@ private fun ProcessesPreview() = HeraldPreview(PreviewScene.Processes)
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun CheckpointsPreview() = HeraldPreview(PreviewScene.Checkpoints)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun ProjectOptionsPreview() = HeraldPreview(PreviewScene.ProjectOptions)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun NewProjectPreview() = HeraldPreview(PreviewScene.NewProject)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun ModelsPreview() = HeraldPreview(PreviewScene.Models)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun ModelSearchPreview() = HeraldPreview(PreviewScene.ModelSearch)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun ModelsAllPreview() = HeraldPreview(PreviewScene.ModelsAll)

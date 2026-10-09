@@ -1,8 +1,18 @@
 package dev.hermeskotlin.core.projects
 
 import dev.hermeskotlin.core.network.HermesJson
+import dev.hermeskotlin.core.rpc.FakeGateway
+import dev.hermeskotlin.core.rpc.RpcException
+import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class ProjectsApiTest {
@@ -47,4 +57,117 @@ class ProjectsApiTest {
         assertEquals(listOf("b", "c", "a"), ProjectsApi.parseProjectSessions(project).map { it.id })
         assertEquals(emptyList(), ProjectsApi.parseProjectSessions(null))
     }
+
+    @Test
+    fun aProjectTheUserMadeShowsBeforeItHasChats() {
+        val projects = ProjectsApi.parseProjects(
+            HermesJson.parseToJsonElement(
+                """[
+                  {"id":"p_new","label":"Fresh","path":"/srv/fresh","isAuto":false,"isNoProject":false,"sessionCount":0,"sessionIds":[]},
+                  {"id":"/srv/auto","label":"auto","path":"/srv/auto","isAuto":true,"sessionCount":0,"sessionIds":[]},
+                  {"id":"/srv/unsaid","label":"unsaid","path":"/srv/unsaid","sessionCount":0,"sessionIds":[]},
+                  {"id":"/srv/busy","label":"busy","path":"/srv/busy","sessionIds":["a"]},
+                  {"id":"__no_project__","label":"Home","isNoProject":true,"sessionCount":0}
+                ]""",
+            ),
+        )
+        // A node that doesn't say `isAuto` is taken as found: no empty chip, no Rename or Delete.
+        assertEquals(listOf("busy", "Fresh"), projects.map { it.label })
+        assertEquals(listOf(false, true), projects.map { it.isUserMade })
+    }
+
+    @Test
+    fun createRenameAndDeleteSendDesktopsCalls() = runTest {
+        val fake = FakeGateway(backgroundScope)
+        fake.answer = { call ->
+            when (call.method) {
+                "projects.delete" -> """{"projects":[],"active_id":null}"""
+                "projects.create" -> """{"project":{"id":"p_herald","name":"Herald","folders":[]}}"""
+                else -> """{"project":null}"""
+            }
+        }
+        val api = ProjectsApi(fake.start())
+
+        assertEquals("p_herald", api.create("work", "  Herald  ", " /srv/herald "))
+        val create = fake.sent("projects.create").single().params
+        assertEquals("Herald", create["name"]?.jsonPrimitive?.content)
+        assertEquals("work", create["profile"]?.jsonPrimitive?.content)
+        assertEquals(listOf("/srv/herald"), create["folders"]?.jsonArray?.map { it.jsonPrimitive.content })
+
+        api.create(null, "No folder", "  ")
+        val bare = fake.sent("projects.create").last().params
+        assertFalse("folders" in bare)
+        assertNull(bare["profile"])
+
+        api.rename(null, "p1", "Renamed ")
+        val update = fake.sent("projects.update").single().params
+        assertEquals("p1", update["id"]?.jsonPrimitive?.content)
+        assertEquals("Renamed", update["name"]?.jsonPrimitive?.content)
+
+        api.delete(null, "p1")
+        assertEquals("p1", fake.sent("projects.delete").single().params["id"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun aRefusedFolderComesBackAsTheGatewaysMessage() = runTest {
+        val fake = FakeGateway(backgroundScope)
+        fake.answer = { call -> call.error(5063, "folder already belongs to project 'herald'") }
+        val api = ProjectsApi(fake.start())
+        val e = assertFailsWith<RpcException> { api.create(null, "Dup", "/srv/herald") }
+        assertTrue(e.message.orEmpty().contains("already belongs"))
+    }
+
+    @Test
+    fun foldersAreTheDirectoriesCompletePathLists() = runTest {
+        val fake = FakeGateway(backgroundScope)
+        fake.answer = {
+            """{"items":[
+              {"text":"~/notes.txt","display":"notes.txt","meta":""},
+              {"text":"~/projects/","display":"projects/","meta":"dir"},
+              {"text":"~/src/","display":"src/","meta":"dir"}
+            ]}""".replace("\n", "")
+        }
+        val api = ProjectsApi(fake.start())
+
+        assertEquals(FolderListing(listOf("projects", "src")), api.folders("work", "~/", "pr"))
+        val sent = fake.sent("complete.path").single().params
+        assertEquals("~/pr", sent["word"]?.jsonPrimitive?.content)
+        assertEquals("work", sent["profile"]?.jsonPrimitive?.content)
+    }
+
+    @Test
+    fun aFullPageIsAskedAgainByFirstLetter() = runTest {
+        val fake = FakeGateway(backgroundScope)
+        // The first page is all dot-files; the folders after them only come back when asked for by letter.
+        val dotFiles = (1..ProjectsApi.FOLDER_PAGE).joinToString(",") { """{"display":".f$it","meta":""}""" }
+        fake.answer = { call ->
+            when (call.params["word"]?.jsonPrimitive?.content) {
+                "/srv/" -> """{"items":[$dotFiles]}"""
+                "/srv/s" -> """{"items":[{"display":"src/","meta":"dir"},{"display":"Site/","meta":"dir"}]}"""
+                "/srv/a" -> """{"items":[{"display":"app/","meta":"dir"}]}"""
+                "/srv/b" -> call.error(5021, "listing failed")
+                "/srv/x" -> """{"items":[$dotFiles]}"""
+                else -> """{"items":[]}"""
+            }
+        }
+        val api = ProjectsApi(fake.start())
+
+        // A letter whose page fails ("b") leaves the others; names starting elsewhere may still be missing.
+        assertEquals(FolderListing(listOf("app", "Site", "src"), more = true), api.folders(null, "/srv/"))
+        // With a filter, a full page isn't asked again letter by letter: a longer filter narrows it.
+        val asked = fake.sent("complete.path").size
+        assertEquals(FolderListing(emptyList(), more = true), api.folders(null, "/srv/", "x"))
+        assertEquals(asked + 1, fake.sent("complete.path").size)
+    }
+
+    @Test
+    fun aFullPageOfEntriesSaysThereMayBeMore() {
+        val full = HermesJson.parseToJsonElement(
+            (1..ProjectsApi.FOLDER_PAGE).joinToString(",", "[", "]") { """{"display":".dot$it/","meta":"dir"}""" },
+        )
+        assertTrue(ProjectsApi.parseFolders(full).more)
+        assertEquals(FolderListing(emptyList()), ProjectsApi.parseFolders(null))
+    }
+
+    private val JsonObject.params get() = getValue("params").jsonObject
 }

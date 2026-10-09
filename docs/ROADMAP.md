@@ -136,6 +136,9 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 
 ### 7. Settings (MVP)
 - [x] Model picker in the composer (`model.options`), switched per chat (`config.set model … --session`; picks before the first send go into `session.create`), with a confirm for expensive models
+- [x] Star the models you use most (kept on the device): the picker opens on Your models, starred and recently picked, with chips for All and for each provider
+- [x] One row per model: the same model from several providers shows once, with a pill per provider (and its price) to pick which
+- [x] Ranked model search: name starts first, then words, then anywhere; "op55" finds Opus 5.5; the start of a provider's name lists its models after the name matches
 - [x] Thinking level and fast mode per chat (`config.set reasoning` / `fast`), offered when the model supports them
 - [x] Profile picker (account sheet → Profile; `GET /api/profiles`, chats and sessions scoped with `profile`)
 - [x] Settings screen, opened from the account sheet
@@ -229,7 +232,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [ ] Config viewer and editor (`config.get`, `config.set`)
 - [x] Projects in the chat list (`projects.tree`, `projects.project_sessions`): a chip per project with chats, as Desktop groups them by folder; a new chat started under one runs in its folder (`session.create` `cwd`)
 - [ ] A chat's working folder: show it, and change it with a folder picker (`complete.path`, `session.cwd.set`, `session.workspace.move`)
-- [ ] Create, rename and delete projects (`projects.create`, `projects.update`, `projects.delete`)
+- [x] Create, rename and delete projects (`projects.create`, `projects.update`, `projects.delete`): a New project button beside the project chips (name and an optional folder on the gateway, typed or picked by browsing the gateway's folders with `complete.path`), and the picked project's options: Rename and Delete for one you made, "Save as project" for a folder the gateway only grouped chats by. A project you made shows before it has chats
 - [x] Insights page in the sidebar, after Desktop's (`GET /api/analytics/usage`): cost, sessions, tokens and cache share over 7/30/90 days, tokens by day (tap a day), top models, tools and skills. `usage.bars` (subscription limits) not yet
 
 ### Notifications & background

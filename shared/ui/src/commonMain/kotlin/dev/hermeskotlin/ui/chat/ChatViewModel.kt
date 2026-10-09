@@ -460,16 +460,30 @@ class ChatViewModel(
         usage.load(target.gateway.gatewayUrl, state.value.storedSessionId, target.profile, session.value)
     }
 
-    /** Refreshes the catalog for the open chat (its current model marked). */
-    fun loadModels() {
+    /**
+     * Refreshes the catalog for the open chat (its current model marked). [withPrices] (when the picker opens) also
+     * fetches prices the gateway left out, a few seconds later; see [ModelsApi.missingPrices].
+     */
+    fun loadModels(withPrices: Boolean = false) {
         // A load still running belongs to whatever chat was open when it started.
         loadJob?.cancel()
         _picker.update { it.copy(loading = true, error = null) }
         loadJob = viewModelScope.launch {
             try {
                 // Without a live session the catalog marks the default of the chat's profile.
-                val catalog = models.options(session.value?.state?.value?.runtimeSessionId, target?.profile)
+                val runtimeSessionId = session.value?.state?.value?.runtimeSessionId
+                val catalog = models.options(runtimeSessionId, target?.profile)
                 _picker.update { it.copy(catalog = catalog, loading = false) }
+                if (!withPrices) return@launch
+                // Prices the gateway left out follow a few seconds later; the list works without them.
+                val prices = try {
+                    models.missingPrices(catalog, runtimeSessionId, target?.profile)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                }
+                prices?.let { found -> _picker.update { it.copy(catalog = it.catalog?.withPrices(found)) } }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {

@@ -4,6 +4,7 @@ import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.BrowserSignIn
 import dev.hermeskotlin.core.auth.NativeTokens
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
+import dev.hermeskotlin.core.auth.WebCookieJar
 import dev.hermeskotlin.core.chat.AttentionTracker
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatLinks
@@ -15,6 +16,7 @@ import io.ktor.util.date.getTimeMillis
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.chat.ToolRiskStore
 import dev.hermeskotlin.core.capabilities.CapabilitiesApi
+import dev.hermeskotlin.core.plugins.PluginsApi
 import dev.hermeskotlin.core.cron.CronApi
 import dev.hermeskotlin.core.insights.InsightsApi
 import dev.hermeskotlin.core.connection.GatewayConnection
@@ -61,6 +63,7 @@ expect val platformModule: Module
 val coreModule = module {
     single { CoroutineScope(SupervisorJob() + Dispatchers.Default) }
     single { PersistentCookiesStorage(get()) }
+    single { WebCookieJar(get(), get(), get(), get()) }
     single { AccessTokens(get()) }
     single { NativeTokens(get()) }
     single { createHttpClient(cookies = get<PersistentCookiesStorage>(), access = get(), bearer = get()) }
@@ -75,6 +78,7 @@ val coreModule = module {
     single { SessionsApi(get()) }
     single { CronApi(get()) }
     single { CapabilitiesApi(get()) }
+    single { PluginsApi(get()) }
     single { InsightsApi(get()) }
     single { LastChatStore(get()) }
     single { DraftStore(get()) }
