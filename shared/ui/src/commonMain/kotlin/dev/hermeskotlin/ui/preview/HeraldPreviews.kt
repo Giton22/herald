@@ -155,11 +155,10 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                         )
                     }
                     Toast(
-                        "Archived",
+                        "Archived “${ChatSamples.sessions().first { it.id == "s3" }.displayTitle}”",
                         icon = Lucide.Archive,
-                        modifier = Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(start = 16.dp, end = 16.dp, top = 64.dp),
+                        modifier = Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(14.dp).fillMaxWidth(),
                         actionLabel = "Undo",
-                        onDismiss = {},
                     )
                 }
                 PreviewScene.ProjectOptions, PreviewScene.NewProject -> Box(Modifier.fillMaxSize()) {

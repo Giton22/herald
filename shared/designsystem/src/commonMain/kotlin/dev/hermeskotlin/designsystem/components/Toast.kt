@@ -1,8 +1,11 @@
 package dev.hermeskotlin.designsystem.components
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.padding
@@ -11,6 +14,8 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,7 +33,6 @@ import androidx.compose.ui.unit.dp
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
 import com.composeunstyled.Text
-import com.composeunstyled.UnstyledButton
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import com.composeunstyled.theme.rememberColoredIndication
@@ -66,8 +70,9 @@ fun Toast(
             .widthIn(max = 480.dp)
             .dropShadow(shape, Shadow(radius = 24.dp, color = Color.Black.copy(alpha = 0.22f), offset = DpOffset(0.dp, 8.dp)))
             .background(Theme[colors][inverse], shape)
-            // The action and × are full touch targets, which set the pill's height; with neither, the text keeps clear of the end.
-            .padding(start = 16.dp, end = if (actionLabel == null && onDismiss == null) 16.dp else 0.dp)
+            // The action and × are full touch targets, which set the pill's height; the action pill sits 6dp from the end,
+            // × at its own edge, and plain text keeps clear of it.
+            .padding(start = 16.dp, end = if (onDismiss != null) 0.dp else if (actionLabel != null) 6.dp else 16.dp)
             .semantics { liveRegion = LiveRegionMode.Polite },
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -77,22 +82,32 @@ fun Toast(
             message,
             style = Theme[typography][bodySmall].copy(fontWeight = FontWeight.Medium),
             color = on,
+            // Fills a full-width toast, so the action sits at its end.
             modifier = Modifier
-                .weight(1f, fill = false)
+                .weight(1f)
                 .padding(vertical = 8.dp)
                 .semantics { contentDescription = spokenMessage },
         )
         if (actionLabel != null) {
-            UnstyledButton(
-                onClick = onAction,
-                modifier = Modifier
+            // A 36dp pill inset in the toast, inside a full-height touch target.
+            val interaction = remember { MutableInteractionSource() }
+            Box(
+                Modifier
                     .defaultMinSize(minHeight = MinTouchTarget)
-                    .clip(CircleShape)
-                    .background(Theme[colors][accent], CircleShape),
-                indication = rememberColoredIndication(Theme[colors][onAccent]),
-                contentPadding = PaddingValues(horizontal = 16.dp),
+                    .clickable(interaction, indication = null, role = Role.Button, onClick = onAction),
+                contentAlignment = Alignment.Center,
             ) {
-                Text(actionLabel, style = Theme[typography][label].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][onAccent])
+                Box(
+                    Modifier
+                        .defaultMinSize(minHeight = 36.dp)
+                        .clip(CircleShape)
+                        .background(Theme[colors][accent], CircleShape)
+                        .indication(interaction, rememberColoredIndication(Theme[colors][onAccent]))
+                        .padding(horizontal = 14.dp, vertical = 6.dp),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Text(actionLabel, style = Theme[typography][label].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][onAccent])
+                }
             }
         }
         if (onDismiss != null) IconButton(Lucide.X, contentDescription = "Dismiss", onClick = onDismiss, tint = on.copy(alpha = 0.7f), iconSize = 16.dp)
