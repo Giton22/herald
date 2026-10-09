@@ -1,7 +1,27 @@
 package dev.hermeskotlin.ui.chat
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.History
+import com.composables.icons.lucide.Lucide
+import com.composeunstyled.UnstyledIcon
+import dev.hermeskotlin.designsystem.radiusLarge
+import dev.hermeskotlin.designsystem.surface2
+import dev.hermeskotlin.designsystem.surface3
+import dev.hermeskotlin.designsystem.textTertiary
+import dev.hermeskotlin.designsystem.title
+import dev.hermeskotlin.designsystem.well
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -42,11 +62,9 @@ import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.Dialog
-import dev.hermeskotlin.designsystem.components.SheetHeader
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.radii
-import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.success
 import dev.hermeskotlin.designsystem.text
@@ -191,14 +209,18 @@ internal fun CheckpointsSheetView(
     val use24Hour = uses24HourClock()
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         val list = state.list
-        SheetHeader(
-            "Checkpoints",
-            when {
-                list == null || !list.enabled || list.checkpoints.isEmpty() -> "Snapshots of this chat's folder"
-                list.checkpoints.size == 1 -> "1 snapshot, taken before the agent changed files"
-                else -> "${list.checkpoints.size} snapshots, taken before the agent changed files"
-            },
-        )
+        Column(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("Checkpoints", style = Theme[typography][title], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
+            Text(
+                when {
+                    list == null || !list.enabled || list.checkpoints.isEmpty() -> "Snapshots of this chat's folder"
+                    list.checkpoints.size == 1 -> "1 snapshot, taken before the agent changed files"
+                    else -> "${list.checkpoints.size} snapshots, taken before the agent changed files"
+                },
+                style = Theme[typography][bodySmall].copy(fontSize = 13.sp),
+                color = Theme[colors][textTertiary],
+            )
+        }
         when {
             list == null && state.error != null -> Note(state.error, error = true)
             list == null && state.unavailable ->
@@ -212,7 +234,11 @@ internal fun CheckpointsSheetView(
                 "None yet. Hermes takes one just before the agent first changes a file in this chat's folder. " +
                     "It never snapshots the home folder, so start the chat in a project to get them.",
             )
-            else -> LazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
+            else -> LazyColumn(
+                Modifier.fillMaxWidth().heightIn(max = 560.dp),
+                contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 items(list.checkpoints, key = { it.hash }) { checkpoint ->
                     CheckpointRow(
                         checkpoint,
@@ -269,35 +295,45 @@ private fun CheckpointRow(
 ) {
     // Also asks again once a restore or reopening the sheet drops the changes read so far.
     LaunchedEffect(expanded, diffAsked) { if (expanded) onDiff() }
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     Column(
         Modifier
             .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 2.dp)
-            .clickable(onClick = onToggle)
-            .padding(horizontal = 8.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+            .clip(shape)
+            .background(Theme[colors][surface2])
+            .border(1.dp, Theme[colors][stroke], shape),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide changes" else "Show changes since", onClick = onToggle)
+                .padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(Modifier.size(28.dp).background(Theme[colors][surface3], CircleShape), contentAlignment = Alignment.Center) {
+                UnstyledIcon(Lucide.History, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
+            }
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
                     checkpoint.message.ifBlank { "Checkpoint" },
-                    style = Theme[typography][body],
+                    style = Theme[typography][body].copy(fontSize = 14.5.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
                     color = Theme[colors][text],
-                    maxLines = if (expanded) 4 else 1,
+                    maxLines = if (expanded) 4 else 2,
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
                     "$time · ${checkpoint.shortHash}",
-                    style = Theme[typography][bodySmall],
-                    color = Theme[colors][textSecondary],
+                    style = Theme[typography][code].copy(fontSize = 11.5.sp),
+                    color = Theme[colors][textTertiary],
                     maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
             Button(
                 "Restore",
                 onClick = onRestore,
-                variant = ButtonVariant.Outline,
+                variant = ButtonVariant.Secondary,
                 size = ButtonSize.Small,
                 loading = restoring,
                 enabled = canRestore,
@@ -305,36 +341,50 @@ private fun CheckpointRow(
         }
         if (expanded) {
             when {
-                !diffAsked || diff == null -> Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) { Spinner() }
-                diff.error != null -> Text(diff.error.orEmpty(), style = Theme[typography][bodySmall], color = Theme[colors][danger])
-                diff.unchanged -> Text(
-                    "The folder is the same as at this checkpoint.",
-                    style = Theme[typography][bodySmall],
-                    color = Theme[colors][textSecondary],
-                )
-                else -> DiffText(diff, shape)
+                !diffAsked || diff == null -> Well { Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) { Spinner() } }
+                diff.error != null -> Well { Text(diff.error.orEmpty(), style = Theme[typography][bodySmall], color = Theme[colors][danger], modifier = Modifier.padding(14.dp)) }
+                diff.unchanged -> Well {
+                    Text(
+                        "The folder is the same as at this checkpoint.",
+                        style = Theme[typography][bodySmall],
+                        color = Theme[colors][textSecondary],
+                        modifier = Modifier.padding(14.dp),
+                    )
+                }
+                else -> Well { DiffText(diff) }
             }
         }
     }
 }
 
+/** A recessed well under a hairline across the card's foot, as a process's output sits. */
+@Composable
+private fun Well(content: @Composable () -> Unit) {
+    val line = Theme[colors][stroke]
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .background(Theme[colors][well])
+            .drawBehind { drawLine(line, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) },
+    ) { content() }
+}
+
 /** The stat lines, then the diff itself with added lines green and removed ones red; long lines scroll sideways. */
 @Composable
-private fun DiffText(diff: CheckpointDiff, shape: RoundedCornerShape) {
+private fun DiffText(diff: CheckpointDiff) {
     val added = Theme[colors][success]
     val removed = Theme[colors][danger]
     val plain = Theme[colors][textSecondary]
+    val style = Theme[typography][code].copy(fontSize = 11.5.sp, lineHeight = 18.sp)
     Column(
         Modifier
             .fillMaxWidth()
             .heightIn(max = 320.dp)
-            .clip(shape)
-            .background(Theme[colors][stroke])
             .verticalScroll(rememberScrollState())
             .horizontalScroll(rememberScrollState())
-            .padding(10.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
-        if (diff.stat.isNotBlank()) Text(diff.stat.trimEnd(), style = Theme[typography][code], color = Theme[colors][text])
+        if (diff.stat.isNotBlank()) Text(diff.stat.trimEnd(), style = style, color = Theme[colors][text])
         diff.diff.trimEnd().lines().take(DIFF_LINES).forEach { line ->
             val color = when {
                 line.startsWith("+++") || line.startsWith("---") -> plain
@@ -342,7 +392,7 @@ private fun DiffText(diff: CheckpointDiff, shape: RoundedCornerShape) {
                 line.startsWith("-") -> removed
                 else -> plain
             }
-            Text(line, style = Theme[typography][code], color = color)
+            Text(line, style = style, color = color)
         }
     }
 }
