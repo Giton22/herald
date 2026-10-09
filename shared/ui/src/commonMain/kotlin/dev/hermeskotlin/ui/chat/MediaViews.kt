@@ -27,7 +27,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
@@ -73,6 +75,7 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 
 /** Loads a picture or file the chat shows by source (see `ChatViewModel.loadMedia`); null when unavailable. */
 internal val LocalMediaLoader = staticCompositionLocalOf<suspend (String) -> ByteArray?> { { null } }
@@ -87,7 +90,8 @@ internal class ViewerImage(val name: String, val source: String? = null, val byt
 @Composable
 internal fun ReplyMediaList(media: List<ReplyMedia>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        media.forEach { item -> if (item.isImage) ReplyImage(item) else ReplyFile(item) }
+        // Keyed, so a picture's loaded bytes never show under another one when the list changes.
+        media.forEach { item -> key(item.source) { if (item.isImage) ReplyImage(item) else ReplyFile(item) } }
     }
 }
 
@@ -97,8 +101,9 @@ private fun ReplyImage(item: ReplyMedia) {
     val open = LocalOpenImage.current
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
     // A picture from the web waits for a tap: fetching it tells that site you read the reply, and a
-    // reply steered by something the agent read could put data in the address.
-    val remoteHost = remember(item.source) { webHost(item.source) }
+    // reply steered by something the agent read could put data in the address. A generated picture's
+    // address came from the image tool, so it loads like on Desktop.
+    val remoteHost = remember(item.source) { webHost(item.source).takeUnless { item.generated } }
     var allowed by remember(item.source) { mutableStateOf(remoteHost == null) }
     if (!allowed) {
         Row(
@@ -121,12 +126,14 @@ private fun ReplyImage(item: ReplyMedia) {
         }
         return
     }
-    val bytes by produceState<ByteArray?>(null, item.source) { value = load(item.source) }
+    // Bumped by a tap on a failed card, to ask again (a dropped link, a file not there yet).
+    var attempt by remember(item.source) { mutableIntStateOf(0) }
     var failed by remember(item.source) { mutableStateOf(false) }
-    LaunchedEffect(item.source) {
+    val bytes by produceState<ByteArray?>(null, item.source, attempt) {
+        failed = false
         // A gateway that won't hand the file over shouldn't leave a spinner forever.
-        delay(20_000)
-        if (bytes == null) failed = true
+        value = withTimeoutOrNull(20_000) { load(item.source) }
+        if (value == null) failed = true
     }
     val bitmap = bytes?.let { rememberImageBitmap(it, maxEdge = INLINE_EDGE) }
     Box(
@@ -136,7 +143,9 @@ private fun ReplyImage(item: ReplyMedia) {
             .clip(shape)
             .border(1.dp, Theme[colors][stroke], shape)
             .background(Theme[colors][surface])
-            .clickable(enabled = bitmap != null) { open(ViewerImage(item.name, source = item.source)) },
+            .clickable(enabled = bitmap != null || failed) {
+                if (bitmap != null) open(ViewerImage(item.name, source = item.source)) else attempt++
+            },
         contentAlignment = Alignment.Center,
     ) {
         when {
@@ -152,7 +161,10 @@ private fun ReplyImage(item: ReplyMedia) {
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 UnstyledIcon(Lucide.ImageOff, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(18.dp))
-                Text("Couldn't load ${item.name}", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+                Column {
+                    Text("Couldn't load ${item.name}", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+                    if (failed) Text("Tap to try again", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                }
             }
             else -> Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) { Spinner() }
         }

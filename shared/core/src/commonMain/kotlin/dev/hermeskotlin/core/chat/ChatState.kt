@@ -25,6 +25,8 @@ data class ToolActivity(
     val tasks: List<DelegatedTask> = emptyList(),
     /** For a `delegate_task` sent to the background: the ids its results are reported under later. */
     val delegationIds: List<String> = emptyList(),
+    /** For `image_generate`: the picture it made. */
+    val generatedImage: GeneratedImage? = null,
 )
 
 /** Why a tool's output was flagged (`tool.output_risk`): the scanner's finding ids. Advisory; nothing was blocked. */

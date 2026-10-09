@@ -172,7 +172,10 @@ import dev.hermeskotlin.core.chat.SendCheck
 import dev.hermeskotlin.core.chat.SessionRefusal
 import com.composables.icons.lucide.Hourglass
 import com.composables.icons.lucide.MonitorSmartphone
+import dev.hermeskotlin.core.chat.GeneratedImage
+import dev.hermeskotlin.core.chat.asMedia
 import dev.hermeskotlin.core.chat.extractReplyMedia
+import dev.hermeskotlin.core.chat.unservableEchoes
 import dev.hermeskotlin.core.chat.ToolActivity
 import dev.hermeskotlin.core.chat.TodoList
 import dev.hermeskotlin.core.chat.TodoStatus
@@ -987,6 +990,7 @@ private fun Messages(
     var seenTail by remember { mutableStateOf(tail) }
     LaunchedEffect(awayFromBottom, tail) { if (!awayFromBottom) seenTail = tail }
     val newBelow = awayFromBottom && tail != seenTail
+    val unservable = remember(messages) { unservableEchoes(messages) }
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
@@ -1042,6 +1046,7 @@ private fun Messages(
                                     rewind(MessageChange.Regenerate, prompt.key, message.key) { actions.regenerate(message.key) }
                                 },
                                 last = message.key == lastReply,
+                                unservable = unservable,
                             )
                         }
                         // An answer to another bot's message folds under it; never while it's still being written.
@@ -1448,6 +1453,8 @@ private fun AssistantReply(
     onRegenerate: (() -> Unit)?,
     /** The newest reply, which comments call "your last reply". */
     last: Boolean,
+    /** The chat's generated pictures' paths that can't be loaded, taken out wherever they're repeated. */
+    unservable: List<GeneratedImage> = emptyList(),
 ) {
     val settings = LocalAppSettings.current
     val showReasoning = settings.showReasoning && message.reasoning.isNotBlank()
@@ -1455,11 +1462,14 @@ private fun AssistantReply(
     val listedTools = message.tools.filter { it.name != MESSAGE_AGENT_TOOL }
     val showTools = settings.showToolActivity && listedTools.isNotEmpty()
     // Pictures and files the reply delivered show as themselves, not as Markdown a renderer can't load.
-    val (text, media) = remember(message.text) { extractReplyMedia(message.text) }
+    // Pictures image_generate made show where it ran, as on Desktop: the model may never name them.
+    val generated = remember(message.tools) { message.tools.mapNotNull { it.generatedImage }.distinctBy { it.source } }
+    val (text, media) = remember(message.text, generated, unservable) { extractReplyMedia(message.text, generated + unservable) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         // What's happening now is said once, above the composer; the reply keeps only what it's made of.
         if (showReasoning) Reasoning(message.reasoning)
         if (showTools) Tools(listedTools, message.key)
+        if (generated.isNotEmpty()) ReplyMediaList(remember(generated) { generated.map { it.asMedia() } })
         // Shown whatever the tool-activity setting: the work happens out of sight, in other agents.
         message.tools.filter { it.name == "delegate_task" }.forEach { DelegationCard(it) }
         // Messages to other bots, said whatever the tool-activity setting: they're part of the conversation.
