@@ -6,7 +6,9 @@ import dev.hermeskotlin.core.settings.WallpaperStore
 import dev.hermeskotlin.core.storage.AndroidBlobFile
 import dev.hermeskotlin.core.storage.EncryptedKeyValueStore
 import dev.hermeskotlin.core.storage.KeyValueStore
+import dev.hermeskotlin.core.voice.AndroidDeviceDictation
 import dev.hermeskotlin.core.voice.AndroidLiveCall
+import dev.hermeskotlin.core.voice.DeviceDictation
 import dev.hermeskotlin.core.voice.AndroidSpeechPlayer
 import dev.hermeskotlin.core.voice.LiveCalls
 import dev.hermeskotlin.core.voice.AndroidVoiceRecorder
@@ -24,5 +26,7 @@ actual val platformModule: Module = module {
     single { WallpaperStore(AndroidBlobFile(File(androidContext().filesDir, "wallpaper.jpg")), get()) }
     factory<VoiceRecorder> { AndroidVoiceRecorder() }
     single<SpeechPlayer> { AndroidSpeechPlayer(androidContext()) }
+    // One per screen, like the recorder: the chat and the assistant panel each stop only their own.
+    factory<DeviceDictation> { AndroidDeviceDictation(androidContext()) }
     single { LiveCalls { AndroidLiveCall(androidContext()) } }
 }
