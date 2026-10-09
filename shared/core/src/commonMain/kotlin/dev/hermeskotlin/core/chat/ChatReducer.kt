@@ -68,6 +68,7 @@ fun ChatState.reduce(event: GatewayEvent, now: Double? = null): ChatState {
                             knownGoals = it.tasks.map { task -> task.goal },
                         ),
                         delegationIds = if (it.name != DELEGATE_TOOL) it.delegationIds else delegationIds(payload?.get("result") ?: payload?.get("result_text")),
+                        generatedImage = if (it.name != IMAGE_GENERATE_TOOL) null else GeneratedImage.from(payload?.get("result")),
                     )
                 })
             }
@@ -341,6 +342,7 @@ fun historyToMessages(rows: List<SessionMessage>, liveSessionId: String? = null)
                         failed = ToolDetails.failed(result),
                         tasks = if (call.name == DELEGATE_TOOL) delegatedTasks(call.arguments, result) else emptyList(),
                         delegationIds = if (call.name == DELEGATE_TOOL) delegationIds(result) else emptyList(),
+                        generatedImage = if (storedToolName(call.name, call.arguments) == IMAGE_GENERATE_TOOL) GeneratedImage.from(result) else null,
                     )
                 }
                 val reasoning = row.reasoning.orEmpty()
