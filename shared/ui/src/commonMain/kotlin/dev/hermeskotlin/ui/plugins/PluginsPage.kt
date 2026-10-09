@@ -1,7 +1,14 @@
 package dev.hermeskotlin.ui.plugins
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.ui.unit.sp
+import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.code
+import dev.hermeskotlin.designsystem.radiusLarge
+import dev.hermeskotlin.designsystem.surface
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -89,12 +96,10 @@ internal fun PluginsView(
     onRetry: () -> Unit,
 ) {
     Column(Modifier.fillMaxSize()) {
-        SubpageHeader("Plugins", onBack = onBack)
-        Text(
-            "The gateway's dashboard plugins with a page of their own, like Kanban. One opens in the app.",
-            Modifier.padding(start = 16.dp, end = 16.dp, bottom = 6.dp),
-            style = Theme[typography][caption],
-            color = Theme[colors][textTertiary],
+        SubpageHeader(
+            "Plugins",
+            onBack = onBack,
+            subtitle = "The gateway's dashboard plugins with a page of their own, like Kanban. One opens in the app.",
         )
         Box(Modifier.weight(1f).fillMaxWidth()) {
             val plugins = state.plugins
@@ -104,7 +109,12 @@ internal fun PluginsView(
                 }
                 plugins == null -> CenteredSpinner()
                 state.openable.isEmpty() -> EmptyState(Lucide.Puzzle, "No plugin pages", "A plugin with a page, like Kanban, shows up here.")
-                else -> LazyColumn(Modifier.fillMaxSize()) {
+                else -> LazyColumn(
+                    Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    // A ringed card each, laid out lazily, so a gateway with many plugins scrolls as lightly as one with two.
                     items(state.openable, key = { it.name }) { plugin -> PluginRow(plugin) { onOpenPlugin(plugin) } }
                 }
             }
@@ -119,22 +129,24 @@ private fun PluginRow(plugin: DashboardPlugin, onClick: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
-            .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
+            .clip(RoundedCornerShape(Theme[radii][radiusLarge]))
+            .background(Theme[colors][surface])
+            .border(1.dp, Theme[colors][stroke], RoundedCornerShape(Theme[radii][radiusLarge]))
             .clickable(onClickLabel = "Open ${plugin.label}") { onClick() }
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(start = 14.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(36.dp).background(Theme[colors][stroke], RoundedCornerShape(Theme[radii][radiusMedium])),
+            Modifier.size(36.dp).background(Theme[colors][accentSoft], RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center,
         ) {
             UnstyledIcon(Lucide.Puzzle, contentDescription = null, tint = Theme[colors][accentText], modifier = Modifier.size(18.dp))
         }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(
                 plugin.label,
-                style = Theme[typography][body].copy(fontWeight = FontWeight.Medium),
+                style = Theme[typography][body].copy(fontSize = 15.sp, fontWeight = FontWeight.SemiBold),
                 color = Theme[colors][text],
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -150,9 +162,10 @@ private fun PluginRow(plugin: DashboardPlugin, onClick: () -> Unit) {
             }
             Text(
                 listOfNotNull(plugin.version?.takeIf { it.isNotBlank() }?.let { "v$it" }, plugin.source).joinToString(" · "),
-                style = Theme[typography][caption],
+                style = Theme[typography][code].copy(fontSize = 11.5.sp),
                 color = Theme[colors][textTertiary],
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
         UnstyledIcon(Lucide.ChevronRight, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp))
