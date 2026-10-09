@@ -48,6 +48,7 @@ import dev.hermeskotlin.designsystem.HeraldMark
 import dev.hermeskotlin.designsystem.components.halo
 import dev.hermeskotlin.designsystem.dangerSoft
 import dev.hermeskotlin.designsystem.radiusSmall
+import dev.hermeskotlin.designsystem.radiusXSmall
 import dev.hermeskotlin.designsystem.successSoft
 import dev.hermeskotlin.designsystem.surface3
 import dev.hermeskotlin.designsystem.textMuted
@@ -63,9 +64,13 @@ import dev.hermeskotlin.designsystem.radiusLarge
 import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.strokeStrong
 import dev.hermeskotlin.designsystem.userBubble
-import dev.hermeskotlin.designsystem.userBubbleStroke
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.isImeVisible
@@ -156,6 +161,11 @@ import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Square
 import com.composables.icons.lucide.SquarePen
+import com.composables.icons.lucide.FileDiff
+import com.composables.icons.lucide.FileText
+import com.composables.icons.lucide.Globe
+import com.composables.icons.lucide.Image
+import com.composables.icons.lucide.ListTodo
 import com.composables.icons.lucide.SquareTerminal
 import com.composables.icons.lucide.Wrench
 import com.composables.icons.lucide.X
@@ -930,14 +940,14 @@ private fun Greeting(
     }
 }
 
-/** The app's mark: the white H on a Herald blue rounded square, with the accent's glow under it. */
+/** The app's mark: the white H on a Herald blue rounded square, with its glow under it unless it's small. */
 @Composable
-internal fun AppMark(size: Dp) {
+internal fun AppMark(size: Dp, glow: Boolean = true) {
     val shape = RoundedCornerShape(size * 0.29f)
     Box(
         Modifier
             .size(size)
-            .dropShadow(shape, Shadow(radius = 18.dp, color = HeraldBrandBlue.copy(alpha = 0.4f), offset = DpOffset(0.dp, 6.dp)))
+            .then(if (glow) Modifier.dropShadow(shape, bubbleGlow(HeraldBrandBlue)) else Modifier)
             .background(HeraldBrandBlue, shape),
         contentAlignment = Alignment.Center,
     ) {
@@ -1335,7 +1345,7 @@ private fun UserBubble(
     /** It's in the composer being edited. */
     editing: Boolean,
 ) {
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    val shape = userBubbleShape()
     val clipboard = LocalClipboard.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
@@ -1343,68 +1353,72 @@ private fun UserBubble(
     val hasMenu = message.text.isNotBlank() || onEdit != null || onBranch != null
     val review = remember(message.text) { parseReview(message.text) }
     val commentHost = LocalCommentHost.current
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
         // A long press opens the prompt's actions just under it; the text itself isn't selectable, Copy is in there.
-        DropdownMenu(
-            expanded = menuOpen,
-            onExpandedChange = { menuOpen = it },
-            items = {
-                if (message.text.isNotBlank()) {
-                    MenuAction("Copy", Lucide.Copy, onClick = {
-                        menuOpen = false
-                        scope.launch { clipboard.setClipEntry(plainTextClipEntry(message.text)) }
-                    })
-                }
-                // The prompt isn't selectable, so its comment is on all of it.
-                if (commentHost != null && review == null && message.text.isNotBlank() && !message.pending) {
-                    MenuAction("Comment", Lucide.MessageSquare, onClick = {
-                        menuOpen = false
-                        commentHost.onSelection(
-                            SelectionAction.Comment,
-                            CommentSource(message.key, "my message that starts “${openingWords(message.text)}”"),
-                            SelectionAnchor.whole(message.text),
-                        )
-                    })
-                }
-                onEdit?.let { MenuAction(editLabel, Lucide.Pencil, onClick = { menuOpen = false; it() }) }
-                onBranch?.let { MenuAction("Branch from here", Lucide.GitBranch, onClick = { menuOpen = false; it() }) }
-            },
-        ) {
-            // A prompt still on its way is a soft tint with plain text: fading the accent fill would fade the white text with it.
-            val waiting = message.pending || message.check == SendCheck.Checking
-            val onBubble = Theme[colors][if (waiting) textColor else onUserBubble]
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .clip(shape)
-                    .background(Theme[colors][if (waiting) accentSoft else userBubble], shape)
-                    // The prompt being edited is outlined in the text color, which shows on the accent fill.
-                    .border(if (editing) 2.dp else 1.dp, if (editing) Theme[colors][textColor] else Theme[colors][userBubbleStroke], shape)
-                    .then(
-                        if (hasMenu) {
-                            Modifier.combinedClickable(
-                                onClick = {},
-                                onLongClick = {
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    menuOpen = true
-                                },
-                                onLongClickLabel = "Message actions",
-                                interactionSource = null,
-                                indication = rememberColoredIndication(onBubble),
+        // The bubble hugs its text, up to most of the row, against the end edge.
+        Box(Modifier.fillMaxWidth(USER_BUBBLE_WIDTH), contentAlignment = Alignment.TopEnd) {
+            DropdownMenu(
+                expanded = menuOpen,
+                onExpandedChange = { menuOpen = it },
+                items = {
+                    if (message.text.isNotBlank()) {
+                        MenuAction("Copy", Lucide.Copy, onClick = {
+                            menuOpen = false
+                            scope.launch { clipboard.setClipEntry(plainTextClipEntry(message.text)) }
+                        })
+                    }
+                    // The prompt isn't selectable, so its comment is on all of it.
+                    if (commentHost != null && review == null && message.text.isNotBlank() && !message.pending) {
+                        MenuAction("Comment", Lucide.MessageSquare, onClick = {
+                            menuOpen = false
+                            commentHost.onSelection(
+                                SelectionAction.Comment,
+                                CommentSource(message.key, "my message that starts “${openingWords(message.text)}”"),
+                                SelectionAnchor.whole(message.text),
                             )
-                        } else Modifier,
-                    )
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                        })
+                    }
+                    onEdit?.let { MenuAction(editLabel, Lucide.Pencil, onClick = { menuOpen = false; it() }) }
+                    onBranch?.let { MenuAction("Branch from here", Lucide.GitBranch, onClick = { menuOpen = false; it() }) }
+                },
             ) {
-                if (message.attachments.isNotEmpty()) SentAttachments(message.attachments)
-                when {
-                    review != null -> SentReviewContent(review, onBubble)
-                    message.text.isNotEmpty() -> Text(message.text, style = Theme[typography][body], color = onBubble)
+                // A prompt still on its way is a soft tint with plain text: fading the accent fill would fade the white text with it.
+                val waiting = message.pending || message.check == SendCheck.Checking
+                val onBubble = Theme[colors][if (waiting) textColor else onUserBubble]
+                Column(
+                    Modifier
+                        // A sent prompt glows faintly in its own color; one still on its way doesn't.
+                        .then(if (waiting) Modifier else Modifier.dropShadow(shape, bubbleGlow(Theme[colors][userBubble])))
+                        .clip(shape)
+                        .background(Theme[colors][if (waiting) accentSoft else userBubble], shape)
+                        // The prompt being edited is outlined in the text color, which shows on the accent fill.
+                        .then(if (editing) Modifier.border(2.dp, Theme[colors][textColor], shape) else Modifier)
+                        .then(
+                            if (hasMenu) {
+                                Modifier.combinedClickable(
+                                    onClick = {},
+                                    onLongClick = {
+                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        menuOpen = true
+                                    },
+                                    onLongClickLabel = "Message actions",
+                                    interactionSource = null,
+                                    indication = rememberColoredIndication(onBubble),
+                                )
+                            } else Modifier,
+                        )
+                        .padding(horizontal = 14.dp, vertical = 9.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    if (message.attachments.isNotEmpty()) SentAttachments(message.attachments)
+                    when {
+                        review != null -> SentReviewContent(review, onBubble)
+                        message.text.isNotEmpty() -> Text(message.text, style = Theme[typography][body], color = onBubble)
+                    }
                 }
             }
         }
-        if (!message.pending) MessageTimeLabel(message.timestamp, Modifier.align(Alignment.End))
+        if (!message.pending) MessageTimeLabel(message.timestamp)
         if (message.queued) {
             Text("Queued · sends after this task", style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }
@@ -1419,6 +1433,19 @@ private fun UserBubble(
         }
     }
 }
+
+/** A prompt's bubble: round all over but the corner by the sender, which tucks in. */
+@Composable
+internal fun userBubbleShape(): RoundedCornerShape {
+    val round = Theme[radii][radiusLarge]
+    return RoundedCornerShape(topStart = round, topEnd = round, bottomEnd = Theme[radii][radiusXSmall], bottomStart = round)
+}
+
+/** How much of the row a prompt's bubble may take. */
+private const val USER_BUBBLE_WIDTH = 0.84f
+
+/** The design's glow: a soft shadow in the color of what casts it, a little below it. */
+internal fun bubbleGlow(color: Color) = Shadow(radius = 18.dp, color = color.copy(alpha = 0.4f), offset = DpOffset(0.dp, 6.dp))
 
 /**
  * What to do with a prompt that lost its reply: check the transcript again, resend it, or take it back to
@@ -1552,6 +1579,7 @@ private fun AssistantReply(
     val generated = remember(message.tools) { message.tools.mapNotNull { it.generatedImage }.distinctBy { it.source } }
     val (text, media) = remember(message.text, generated, unservable) { extractReplyMedia(message.text, generated + unservable) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        ReplyHeader(message.timestamp.takeUnless { message.streaming })
         // What's happening now is said once, above the composer; the reply keeps only what it's made of.
         if (showReasoning) Reasoning(message.reasoning)
         if (showTools) Tools(listedTools, message.key)
@@ -1588,31 +1616,48 @@ private fun AssistantReply(
             }
         }
         val usage = message.usage?.takeIf { settings.showUsage && !message.streaming }
-        val dated = settings.showTimestamps && !message.streaming && message.timestamp != null
-        if ((!message.streaming && text.isNotBlank()) || usage != null || dated) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (!message.streaming && text.isNotBlank()) {
+        val actionable = !message.streaming && text.isNotBlank()
+        if (actionable || usage != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (actionable) {
                     // Their padding trimmed off the start and top, the icons line up with the reply and sit close under it.
-                    CopyButton(text, Modifier.trimStartTop(start = 8.dp, top = 4.dp))
-                    onRegenerate?.let {
-                        IconButton(Lucide.RefreshCw, contentDescription = "Regenerate", onClick = it, modifier = Modifier.trimStartTop(start = 0.dp, top = 4.dp))
-                    }
-                    onBranch?.let {
-                        IconButton(Lucide.GitBranch, contentDescription = "Branch from here", onClick = it, modifier = Modifier.trimStartTop(start = 0.dp, top = 4.dp))
-                    }
+                    val action = Modifier.trimStartTop(start = 0.dp, top = 4.dp)
+                    CopyButton(text, Modifier.trimStartTop(start = 16.dp, top = 4.dp).size(MinTouchTarget))
+                    onRegenerate?.let { ReplyAction(Lucide.RefreshCw, "Regenerate", it, action) }
+                    onBranch?.let { ReplyAction(Lucide.GitBranch, "Branch from here", it, action) }
                 }
+                Spacer(Modifier.weight(1f))
                 usage?.let {
                     Text(
-                        "${compactCount(it.input)} in · ${compactCount(it.output)} out",
-                        style = Theme[typography][caption],
-                        color = Theme[colors][textTertiary],
+                        replyUsage(it.input, it.output),
+                        style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
+                        color = Theme[colors][textMuted],
+                        modifier = Modifier.semantics { contentDescription = "${compactCount(it.input)} tokens in, ${compactCount(it.output)} out" },
                     )
                 }
-                if (dated) MessageTimeLabel(message.timestamp)
             }
         }
     }
 }
+
+/** Who's speaking above a reply: the small mark, "Hermes", and when it finished. */
+@Composable
+private fun ReplyHeader(epochSeconds: Double?) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        AppMark(20.dp, glow = false)
+        Text("Hermes", style = Theme[typography][label], color = Theme[colors][textSecondary])
+        MessageTimeLabel(epochSeconds)
+    }
+}
+
+/** One of the quiet icons under a finished reply, at the full touch size. */
+@Composable
+private fun ReplyAction(icon: ImageVector, contentDescription: String, onClick: () -> Unit, modifier: Modifier) {
+    IconButton(icon, contentDescription = contentDescription, onClick = onClick, modifier = modifier, tint = Theme[colors][textTertiary], iconSize = 16.dp)
+}
+
+/** A reply's tokens, read in and written out: "18.4k ↓ · 612 ↑". */
+internal fun replyUsage(input: Long, output: Long): String = "${compactCount(input)} ↓ · ${compactCount(output)} ↑"
 
 /** When a prompt was sent or a reply finished, in small type; nothing when the setting is off or there's no time. */
 @Composable
@@ -1785,7 +1830,7 @@ internal fun MentionSuggestions(choices: List<MentionChoice>, hazeState: HazeSta
     }
 }
 
-/** A tappable one-line header that opens to show more, shared by reasoning and tool activity. */
+/** A tappable one-line header that opens to show more, as the reply's reasoning does. */
 @Composable
 private fun Disclosure(
     icon: @Composable () -> Unit,
@@ -1839,18 +1884,98 @@ private fun Reasoning(text: String) {
 @Composable
 private fun Tools(tools: List<ToolActivity>, messageKey: String) {
     var expanded by remember { mutableStateOf(false) }
-    val names = tools.map { it.name }.distinct()
-    val label = if (names.size <= 2) "Used ${names.joinToString(" and ")}" else "Used ${tools.size} tools"
-    Disclosure(
-        icon = { UnstyledIcon(Lucide.Wrench, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp)) },
-        label = label,
-        expanded = expanded,
-        onToggle = { expanded = !expanded },
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            tools.forEach { ToolRow(it, messageKey) }
+    val icons = remember(tools) { tools.map { toolIcon(it.name) }.distinct().take(3) }
+    val (ran, took) = workedLabel(tools)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // A pill: up to three of the kinds of tool it used, overlapping, then how many ran and for how long.
+        // It's drawn 36dp tall, but the full touch height around it takes the tap.
+        val pill = CircleShape
+        val interaction = remember { MutableInteractionSource() }
+        Box(
+            Modifier
+                .heightIn(min = MinTouchTarget)
+                .clickable(interaction, indication = null) { expanded = !expanded }
+                .semantics {
+                    contentDescription = listOfNotNull(ran, took).joinToString(", ")
+                    stateDescription = if (expanded) "Expanded" else "Collapsed"
+                },
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Row(
+                Modifier
+                    .clearAndSetSemantics {}
+                    .heightIn(min = 36.dp)
+                    .clip(pill)
+                    .background(Theme[colors][surface], pill)
+                    .border(1.dp, Theme[colors][stroke], pill)
+                    .indication(interaction, rememberColoredIndication(Theme[colors][textSecondary]))
+                    .padding(start = 6.dp, end = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy((-6).dp)) { icons.forEach { ToolKindIcon(it) } }
+                Text(ran, style = Theme[typography][caption], color = Theme[colors][textSecondary])
+                took?.let { Text("· $it", style = Theme[typography][caption], color = Theme[colors][textMuted]) }
+                UnstyledIcon(
+                    if (expanded) Lucide.ChevronDown else Lucide.ChevronRight,
+                    contentDescription = null,
+                    tint = Theme[colors][textMuted],
+                    modifier = Modifier.size(13.dp),
+                )
+            }
+        }
+        if (expanded) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Theme[colors][stroke], RoundedCornerShape(Theme[radii][radiusMedium]))
+                    .background(Theme[colors][surface], RoundedCornerShape(Theme[radii][radiusMedium]))
+                    .padding(12.dp),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    tools.forEach { ToolRow(it, messageKey) }
+                }
+            }
         }
     }
+}
+
+/** One kind of tool in the pill: its icon in a small circle, ringed in the pill's fill so the circles overlap cleanly. */
+@Composable
+private fun ToolKindIcon(icon: ImageVector) {
+    Box(
+        Modifier
+            .size(24.dp)
+            .border(2.dp, Theme[colors][surface], CircleShape)
+            .padding(1.dp)
+            .background(Theme[colors][surface3], CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(11.dp))
+    }
+}
+
+/**
+ * "Ran 3 tools" and the time they took between them ("42s"), for the reply's tool pill; no time when none
+ * was timed. It's the tools' own time added up, not the turn's: calls run side by side each count.
+ */
+internal fun workedLabel(tools: List<ToolActivity>): Pair<String, String?> {
+    val timed = tools.mapNotNull { it.durationSeconds }
+    val ran = if (tools.size == 1) "Ran 1 tool" else "Ran ${tools.size} tools"
+    return ran to timed.takeIf { it.isNotEmpty() }?.let { formatDuration(it.sum()) }
+}
+
+/** A tool's kind, as a small icon. */
+internal fun toolIcon(name: String): ImageVector = when {
+    name == "terminal" || name == "process" || name == "execute_code" -> Lucide.SquareTerminal
+    name == "patch" || name == "write_file" -> Lucide.FileDiff
+    name == "read_file" || name == "search_files" -> Lucide.FileText
+    name.startsWith("web_") || name.startsWith("browser_") -> Lucide.Globe
+    name == "image_generate" || name == "vision_analyze" -> Lucide.Image
+    name == "memory" || name == "session_search" -> Lucide.Brain
+    name == "todo" -> Lucide.ListTodo
+    name == "delegate_task" -> Lucide.Users
+    else -> Lucide.Wrench
 }
 
 /** The tool the running turn is in the middle of, if any. Its reply isn't always last: a queued prompt sits after it. */
