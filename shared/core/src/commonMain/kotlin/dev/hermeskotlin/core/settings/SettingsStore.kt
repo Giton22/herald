@@ -82,6 +82,8 @@ data class AppSettings(
     /** Show the profile's pet (when the gateway has one on) above the composer. */
     val showPet: Boolean = true,
     val voicePause: VoicePause = VoicePause.Normal,
+    /** The mic for dictation in the composer and on an empty chat. Off, it goes, and the model name gets the room. */
+    val dictation: Boolean = true,
     val dictationEngine: DictationEngine = DictationEngine.Device,
     /** What tapping Send does while a reply is running; a long press on Send picks another for one message. */
     val runningSend: RunningSend = RunningSend.Steer,

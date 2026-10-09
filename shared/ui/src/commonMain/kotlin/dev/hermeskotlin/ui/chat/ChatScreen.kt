@@ -1027,12 +1027,14 @@ private fun Greeting(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 StartPill(Lucide.Paperclip, "Attach", onClick = onAttach, enabled = canAttach)
                 // Tracks the composer's mic: while recording the same tap finishes it.
-                StartPill(
-                    if (dictation.recording) Lucide.Square else Lucide.Mic,
-                    dictateLabel(dictation),
-                    onClick = onDictate,
-                    enabled = connected && !dictation.transcribing,
-                )
+                if (showMic(dictation)) {
+                    StartPill(
+                        if (dictation.recording) Lucide.Square else Lucide.Mic,
+                        dictateLabel(dictation),
+                        onClick = onDictate,
+                        enabled = connected && !dictation.transcribing,
+                    )
+                }
                 StartPill(Lucide.AudioLines, "Voice chat", onClick = onVoiceChat, enabled = connected)
             }
         }
@@ -2564,7 +2566,7 @@ private fun Composer(
                         Box(Modifier.weight(1f).padding(start = 2.dp), contentAlignment = Alignment.CenterStart) {
                             ModelPill(state, picker, onClick = onOpenModels, compact = segments)
                         }
-                        DictationButton(dictation, onClick = onDictate, enabled = connected)
+                        if (showMic(dictation)) DictationButton(dictation, onClick = onDictate, enabled = connected)
                         // Voice chat waits for the task to end, so while one runs its place goes to the ways to send.
                         if (!state.running) {
                             ComposerButton(
@@ -2683,7 +2685,7 @@ private fun FoldedComposer(
                 )
             }
         }
-        DictationButton(dictation, onClick = onDictate, enabled = connected)
+        if (showMic(dictation)) DictationButton(dictation, onClick = onDictate, enabled = connected)
         // Stop is on the live task card above, so this stays voice chat, which waits for the task to end.
         ComposerButton(
             icon = Lucide.AudioLines,
@@ -2693,6 +2695,10 @@ private fun FoldedComposer(
         )
     }
 }
+
+/** The mic shows with the Dictation setting on, and while a dictation still runs, so it can be finished. */
+@Composable
+private fun showMic(dictation: DictationState): Boolean = LocalAppSettings.current.dictation || dictation.active
 
 /** Says that a command typed while a task runs goes at once, not into the task. */
 @Composable
