@@ -4,9 +4,31 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import com.composeunstyled.UnstyledButton
+import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.components.CopyButton
+import dev.hermeskotlin.designsystem.components.MinTouchTarget
+import dev.hermeskotlin.designsystem.inverse
+import dev.hermeskotlin.designsystem.label
+import dev.hermeskotlin.designsystem.onInverse
+import dev.hermeskotlin.designsystem.radiusLarge
+import dev.hermeskotlin.designsystem.radiusSmall
+import dev.hermeskotlin.designsystem.surface
+import dev.hermeskotlin.designsystem.surface3
+import dev.hermeskotlin.designsystem.textMuted
+import dev.hermeskotlin.designsystem.warningSoft
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -24,7 +46,6 @@ import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,19 +56,16 @@ import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronUp
 import com.composables.icons.lucide.Circle
 import com.composables.icons.lucide.CircleCheck
 import com.composables.icons.lucide.CircleStop
-import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.KeyRound
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageCircleQuestion
@@ -75,9 +93,7 @@ import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.Dialog
-import dev.hermeskotlin.designsystem.components.Surface
 import dev.hermeskotlin.designsystem.components.TextField
-import dev.hermeskotlin.designsystem.components.plainTextClipEntry
 import dev.hermeskotlin.designsystem.heading
 import dev.hermeskotlin.designsystem.input
 import dev.hermeskotlin.designsystem.radii
@@ -89,7 +105,6 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonObject
 
 /**
@@ -106,9 +121,18 @@ internal fun InputRequestPanel(
     onStop: (() -> Unit)? = null,
 ) {
     val request = requests.firstOrNull() ?: return
-    Surface(
-        Modifier.fillMaxWidth().navigationBarsPadding().padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 12.dp),
-        elevated = true,
+    // A floating card ringed in the request's own soft tint: amber for what needs care, the accent for a question.
+    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
+    val ring = Theme[colors][if (request is InputRequest.Clarify) accentSoft else warningSoft]
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .navigationBarsPadding()
+            .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 12.dp)
+            .shadow(16.dp, shape, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.16f))
+            .clip(shape)
+            .background(Theme[colors][surface])
+            .border(1.dp, ring, shape),
     ) {
         Column(
             Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()).padding(16.dp),
@@ -128,11 +152,25 @@ internal fun InputRequestPanel(
     }
 }
 
+/** The request's icon in a tile of its soft tint, its title, and under it what it's about when there's a line to say. */
 @Composable
-private fun Header(icon: ImageVector, tint: Color, title: String, trailing: String?, onStop: (() -> Unit)? = null) {
-    Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-        UnstyledIcon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(20.dp))
-        Text(title, style = Theme[typography][heading], color = Theme[colors][textColor], modifier = Modifier.weight(1f))
+private fun Header(
+    icon: ImageVector,
+    tint: Color,
+    soft: Color,
+    title: String,
+    trailing: String?,
+    onStop: (() -> Unit)? = null,
+    subtitle: String? = null,
+) {
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(36.dp).background(soft, RoundedCornerShape(Theme[radii][radiusSmall])), contentAlignment = Alignment.Center) {
+            UnstyledIcon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(18.dp))
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(title, style = Theme[typography][heading], color = Theme[colors][textColor])
+            subtitle?.let { Text(it, style = Theme[typography][caption], color = Theme[colors][textTertiary]) }
+        }
         if (trailing != null) Text(trailing, style = Theme[typography][caption], color = Theme[colors][textTertiary])
         if (onStop != null) {
             Button("Stop task", onClick = onStop, variant = ButtonVariant.Ghost, size = ButtonSize.Small, leadingIcon = Lucide.CircleStop)
@@ -140,22 +178,42 @@ private fun Header(icon: ImageVector, tint: Color, title: String, trailing: Stri
     }
 }
 
-/** A broader permission: what it allows and for how long, the whole row the button. */
+/** A broader permission as a quiet text link, with the full touch height; [description] says what it allows. */
 @Composable
-private fun WiderChoice(title: String, detail: String, enabled: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
-    Column(
+private fun WiderChoice(title: String, description: String, enabled: Boolean, onClick: () -> Unit) {
+    Box(
         Modifier
-            .fillMaxWidth()
-            .clip(shape)
-            .border(1.dp, Theme[colors][stroke], shape)
+            .heightIn(min = MinTouchTarget)
+            .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .heightIn(min = 48.dp)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(2.dp),
+            .semantics { contentDescription = "$title. $description" }
+            .padding(horizontal = 8.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Text(title, style = Theme[typography][bodySmall], color = if (enabled) Theme[colors][textColor] else Theme[colors][textTertiary])
-        Text(detail, style = Theme[typography][caption], color = Theme[colors][textTertiary])
+        Text(title, style = Theme[typography][bodySmall], color = Theme[colors][if (enabled) textTertiary else textMuted])
+    }
+}
+
+/** One of the two answers: a full-height pill, the plain one on surface-3 and the strong one in the inverse color. */
+@Composable
+private fun AnswerPill(text: String, strong: Boolean, enabled: Boolean, onClick: () -> Unit, modifier: Modifier) {
+    val fill = Theme[colors][if (strong) inverse else surface3]
+    val on = Theme[colors][if (strong) onInverse else textColor]
+    UnstyledButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = modifier
+            .defaultMinSize(minHeight = MinTouchTarget)
+            .alpha(if (enabled) 1f else 0.45f)
+            .background(fill, CircleShape),
+        indication = rememberColoredIndication(on),
+        contentPadding = PaddingValues(horizontal = 12.dp),
+    ) {
+        Text(
+            text,
+            style = Theme[typography][label].copy(fontWeight = if (strong) FontWeight.SemiBold else FontWeight.Medium),
+            color = on,
+        )
     }
 }
 
@@ -177,56 +235,39 @@ private fun CommandBlock(command: String) {
     var long by remember(command) { mutableStateOf(false) }
     var full by remember(command) { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        BasicText(
-            command,
-            style = Theme[typography][code].copy(color = Theme[colors][textColor]),
-            maxLines = if (full) Int.MAX_VALUE else COMMAND_PREVIEW_LINES,
-            overflow = TextOverflow.Ellipsis,
-            onTextLayout = { if (!full) long = it.hasVisualOverflow },
-            modifier = Modifier
+        // A prompt sign, the command, and Copy at its side, on the page's own ground.
+        Row(
+            Modifier
                 .fillMaxWidth()
                 .clip(shape)
                 .background(Theme[colors][background], shape)
                 .border(1.dp, Theme[colors][stroke], shape)
-                .padding(horizontal = 12.dp, vertical = 10.dp),
-        )
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            if (long) {
-                Button(
-                    if (full) "Show less" else "Show full command",
-                    onClick = { full = !full },
-                    variant = ButtonVariant.Ghost,
-                    size = ButtonSize.Small,
-                    leadingIcon = if (full) Lucide.ChevronUp else Lucide.ChevronDown,
-                )
-            }
-            Spacer(Modifier.weight(1f))
-            CommandCopy(command)
+                .padding(start = 12.dp, top = 2.dp, bottom = 2.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            val mono = Theme[typography][code]
+            BasicText("$", style = mono.copy(color = Theme[colors][textMuted]), modifier = Modifier.clearAndSetSemantics {})
+            BasicText(
+                command,
+                style = mono.copy(color = Theme[colors][textColor]),
+                maxLines = if (full) Int.MAX_VALUE else COMMAND_PREVIEW_LINES,
+                overflow = TextOverflow.Ellipsis,
+                onTextLayout = { if (!full) long = it.hasVisualOverflow },
+                modifier = Modifier.weight(1f).padding(vertical = 8.dp),
+            )
+            CopyButton(command, Modifier.size(MinTouchTarget))
+        }
+        if (long) {
+            Button(
+                if (full) "Show less" else "Show full command",
+                onClick = { full = !full },
+                variant = ButtonVariant.Ghost,
+                size = ButtonSize.Small,
+                leadingIcon = if (full) Lucide.ChevronUp else Lucide.ChevronDown,
+            )
         }
     }
-}
-
-@Composable
-private fun CommandCopy(command: String) {
-    val clipboard = LocalClipboard.current
-    val scope = rememberCoroutineScope()
-    var copied by remember(command) { mutableStateOf(false) }
-    LaunchedEffect(copied) {
-        if (copied) {
-            delay(1_500)
-            copied = false
-        }
-    }
-    Button(
-        if (copied) "Copied" else "Copy command",
-        onClick = {
-            scope.launch { clipboard.setClipEntry(plainTextClipEntry(command)) }
-            copied = true
-        },
-        variant = ButtonVariant.Ghost,
-        size = ButtonSize.Small,
-        leadingIcon = if (copied) Lucide.Check else Lucide.Copy,
-    )
 }
 
 /** The tool and purpose ahead of the command, each only when the gateway named it; null when neither. */
@@ -248,26 +289,33 @@ private fun ApprovalContent(request: InputRequest.Approval, more: String?, conne
     }
     val ready = connected && armed
 
-    Header(Lucide.ShieldAlert, Theme[colors][warning], "Allow this command?", more, onStop)
-    approvalIntro(request)?.let { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary]) }
+    Header(
+        Lucide.ShieldAlert,
+        Theme[colors][warning],
+        Theme[colors][warningSoft],
+        "Allow this command?",
+        more,
+        onStop,
+        subtitle = approvalIntro(request),
+    )
     if (request.command.isNotBlank()) CommandBlock(request.command)
+    // Allow once is the stronger of the two, so a little wider.
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        Button("Deny", onClick = { choose(ApprovalChoice.Deny) }, variant = ButtonVariant.Outline, enabled = ready, modifier = Modifier.weight(1f))
-        Button("Allow once", onClick = { choose(ApprovalChoice.Once) }, enabled = ready, modifier = Modifier.weight(1f))
+        AnswerPill("Deny", strong = false, enabled = ready, onClick = { choose(ApprovalChoice.Deny) }, modifier = Modifier.weight(1f))
+        AnswerPill("Allow once", strong = true, enabled = ready, onClick = { choose(ApprovalChoice.Once) }, modifier = Modifier.weight(1.3f))
     }
-    Text("Allow once runs only this command, this time.", style = Theme[typography][caption], color = Theme[colors][textTertiary])
     val wider = request.choices.filter { it == ApprovalChoice.Session || it == ApprovalChoice.Always }
     if (wider.isNotEmpty()) {
-        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Text("Broader permissions", style = Theme[typography][caption], color = Theme[colors][textTertiary])
-            wider.forEach { choice ->
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            wider.forEachIndexed { i, choice ->
+                if (i > 0) Box(Modifier.padding(horizontal = 4.dp).size(3.dp).background(Theme[colors][textMuted], CircleShape))
                 val session = choice == ApprovalChoice.Session
                 WiderChoice(
                     title = if (session) "Allow for this chat" else "Always allow",
-                    detail = if (session) {
+                    description = if (session) {
                         "Commands like this run without asking again, in this chat only, until it ends."
                     } else {
-                        "Commands like this run without asking again, in every chat, until you remove the rule from the gateway's config."
+                        "Commands like this run without asking again, in every chat. Asks first."
                     },
                     enabled = ready,
                     onClick = { if (session) choose(choice) else confirmAlways = true },
@@ -305,7 +353,7 @@ private fun ClarifyContent(request: InputRequest.Clarify, more: String?, connect
     }
 
     val counter = if (questions.size > 1) "${index + 1} of ${questions.size}" else more
-    Header(Lucide.MessageCircleQuestion, Theme[colors][accentText], "Hermes asks", counter, onStop)
+    Header(Lucide.MessageCircleQuestion, Theme[colors][accentText], Theme[colors][accentSoft], "Hermes asks", counter, onStop)
     Text(question.question, style = Theme[typography][body], color = Theme[colors][textColor])
     if (question.choices.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -393,7 +441,7 @@ private fun SecretContent(request: InputRequest.Secret, more: String?, connected
         InputRequest.Secret.Kind.VaultCode -> "Sign-in code needed"
     }
 
-    Header(if (kind == InputRequest.Secret.Kind.VaultCode) Lucide.RectangleEllipsis else Lucide.KeyRound, Theme[colors][warning], title, more, onStop)
+    Header(if (kind == InputRequest.Secret.Kind.VaultCode) Lucide.RectangleEllipsis else Lucide.KeyRound, Theme[colors][warning], Theme[colors][warningSoft], title, more, onStop)
     if (kind == InputRequest.Secret.Kind.Sudo) {
         Text("To run this command as root:", style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
         request.command?.takeIf { it.isNotBlank() }?.let { CommandBlock(it) }
@@ -460,7 +508,7 @@ private fun SaveLoginContent(request: InputRequest.VaultSaveLogin, more: String?
     }
     val page = request.origin.ifBlank { request.site }
 
-    Header(Lucide.KeyRound, Theme[colors][warning], request.title, more, onStop)
+    Header(Lucide.KeyRound, Theme[colors][warning], Theme[colors][warningSoft], request.title, more, onStop)
     Text(
         (if (page.isBlank()) "Hermes is on a sign-in page" else "Hermes is on the sign-in page of $page") +
             " and has no login for it. Save one to your gateway's vault, and Hermes signs in with it.",
