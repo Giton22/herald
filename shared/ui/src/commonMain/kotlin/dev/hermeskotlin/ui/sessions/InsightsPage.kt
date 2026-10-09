@@ -7,7 +7,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -38,6 +38,7 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -56,9 +57,9 @@ import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.insights.UsageDay
 import dev.hermeskotlin.core.insights.UsageReport
 import dev.hermeskotlin.core.insights.dailySeries
+import dev.hermeskotlin.core.insights.isoDateOf
 import dev.hermeskotlin.core.models.displayModelName
 import dev.hermeskotlin.designsystem.accent
-import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
@@ -127,16 +128,17 @@ internal fun InsightsView(
     place: String? = null,
 ) {
     val report = state.report
-    val days = remember(report) { report?.dailySeries(Clock.System.now().toEpochMilliseconds() / 86_400_000) }
+    val today = Clock.System.now().toEpochMilliseconds() / 86_400_000
+    val days = remember(report) { report?.dailySeries(today) }
+    // The report's own days once it's here; until then the period's, so the title doesn't jump as it loads.
+    val range = days?.takeIf { it.isNotEmpty() }?.let { it.first().day to it.last().day }
+        ?: (isoDateOf(today - state.period.days + 1) to isoDateOf(today))
     Column(Modifier.fillMaxSize()) {
         // The period sits in the back row, as in the design; the title says which days it covers and where.
         SubpageHeader(
             "Insights",
             onBack = onBack,
-            subtitle = listOfNotNull(
-                days?.takeIf { it.isNotEmpty() }?.let { "${shortDate(it.first().day)} – ${shortDate(it.last().day)}" },
-                place,
-            ).joinToString(" · ").ifEmpty { null },
+            subtitle = listOfNotNull("${shortDate(range.first)} – ${shortDate(range.second)}", place).joinToString(" · "),
         ) {
             SegmentedControl(
                 options = InsightsPeriod.entries,
@@ -181,25 +183,31 @@ private fun Report(report: UsageReport, days: List<UsageDay>) {
         }
         val tiles = listOf(
             compactCount(totals.sessions.toLong()) to "sessions",
-            compactCount(totals.input + totals.output) to "tokens",
-            (totals.cachePercent?.let { "$it%" } ?: "—") to "from cache",
+            compactCount(totals.input + totals.output) to "tokens in and out",
+            (totals.cachePercent?.let { "$it%" } ?: "—") to "prompt from cache",
         )
-        // Three across, or one a row once a large font would crush them.
-        if (LocalDensity.current.fontScale > 1.3f) {
-            tiles.forEach { (value, caption) -> Tile(value, caption, Modifier.fillMaxWidth()) }
-        } else {
-            Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                tiles.forEach { (value, caption) -> Tile(value, caption, Modifier.weight(1f).fillMaxHeight()) }
+        // Three across, or one a row once a large font or a narrow page would crush them.
+        BoxWithConstraints(Modifier.fillMaxWidth()) {
+            if (LocalDensity.current.fontScale > 1.3f || maxWidth / 3 < 96.dp) {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    tiles.forEach { (value, caption) -> Tile(value, caption, Modifier.fillMaxWidth()) }
+                }
+            } else {
+                Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    tiles.forEach { (value, caption) -> Tile(value, caption, Modifier.weight(1f).fillMaxHeight()) }
+                }
             }
         }
-        if (days.isNotEmpty()) DailyChart(report, days)
+        // A chart of nothing but empty days says nothing.
+        if (days.any { it.tokens > 0 }) DailyChart(report, days)
         Ranked(
             "Models",
             report.byModel.sortedByDescending { it.tokens }.map { displayModelName(it.model) to it.tokens },
             format = { "${compactCount(it)} tokens" },
         )
-        Chips("Tools", report.tools.sortedByDescending { it.count }.map { it.tool to it.count.toLong() }, unit = "calls")
-        Chips("Skills", report.topSkills.sortedByDescending { it.count }.map { it.skill to it.count.toLong() }, unit = "uses")
+        // The title says what the chips count.
+        Chips("Tool calls", report.tools.sortedByDescending { it.count }.map { it.tool to it.count.toLong() }, unit = "calls")
+        Chips("Skill uses", report.topSkills.sortedByDescending { it.count }.map { it.skill to it.count.toLong() }, unit = "uses")
     }
 }
 
@@ -245,42 +253,52 @@ private fun DailyChart(report: UsageReport, days: List<UsageDay>) {
             horizontalArrangement = Arrangement.SpaceBetween,
             itemVerticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Tokens by day", style = Theme[typography][headingStyle],color = Theme[colors][text], modifier = Modifier.semantics { heading() })
-            if (peakDay.tokens > 0) {
-                Text(
-                    "Peak ${compactCount(peakDay.tokens)} · ${shortDate(peakDay.day)}",
-                    style = Theme[typography][caption].copy(fontSize = 12.sp),
-                    color = Theme[colors][textTertiary],
-                )
-            }
-        }
-        picked?.let { day ->
+            Text("Tokens by day", style = Theme[typography][headingStyle], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
             Text(
+                "Peak ${compactCount(peakDay.tokens)} · ${shortDate(peakDay.day)}",
+                style = Theme[typography][caption].copy(fontSize = 12.sp),
+                color = Theme[colors][textTertiary],
+            )
+        }
+        // Always there, so a pick doesn't push the bars down; it says the bars can be tapped until one is.
+        Text(
+            picked?.let { day ->
                 listOf(
                     shortDate(day.day),
                     "${compactCount(day.tokens)} tokens",
                     usd(day.cost),
                     "${day.sessions} ${if (day.sessions == 1) "session" else "sessions"}",
-                ).joinToString(" · "),
-                style = Theme[typography][bodySmall],
-                color = Theme[colors][text],
-                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
-            )
-        }
+                ).joinToString(" · ")
+            } ?: "Tap a day for its numbers.",
+            style = Theme[typography][bodySmall],
+            color = Theme[colors][if (picked != null) text else textTertiary],
+            modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+        )
         Row(Modifier.fillMaxWidth().height(120.dp), horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.Bottom) {
             days.forEach { day ->
                 val fraction = day.tokens.toFloat() / peak
-                val dim = picked != null && picked != day
-                val color = if (day == peakDay) Theme[colors][accentText] else Theme[colors][accent]
+                // The peak stands out by the others stepping back, which works whatever the accent.
+                val alpha = when {
+                    picked != null -> if (picked == day) 1f else 0.35f
+                    day == peakDay -> 1f
+                    else -> 0.7f
+                }
                 // The whole column is the hit target, not just the bar.
                 Box(
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
-                        .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                        .clickable(
+                            interactionSource = remember { MutableInteractionSource() },
+                            indication = null,
+                            onClickLabel = "Show its numbers",
+                        ) {
                             picked = if (picked == day) null else day
                         }
-                        .semantics { contentDescription = "${shortDate(day.day)}: ${compactCount(day.tokens)} tokens" },
+                        .semantics {
+                            contentDescription = "${shortDate(day.day)}: ${compactCount(day.tokens)} tokens"
+                            selected = picked == day
+                        },
                     contentAlignment = Alignment.BottomCenter,
                 ) {
                     if (day.tokens > 0) {
@@ -289,7 +307,7 @@ private fun DailyChart(report: UsageReport, days: List<UsageDay>) {
                                 .fillMaxWidth()
                                 .fillMaxHeight(fraction.coerceAtLeast(0.02f))
                                 .background(
-                                    color.copy(alpha = if (dim) 0.35f else 1f),
+                                    Theme[colors][accent].copy(alpha = alpha),
                                     RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp, bottomStart = 1.dp, bottomEnd = 1.dp),
                                 ),
                         )
@@ -320,7 +338,7 @@ private fun Ranked(title: String, rows: List<Pair<String, Long>>, format: (Long)
                     Text(format(value), style = Theme[typography][code].copy(fontSize = 12.sp), color = Theme[colors][textSecondary])
                 }
                 Box(Modifier.fillMaxWidth().height(6.dp).background(Theme[colors][surface3], CircleShape)) {
-                    Box(Modifier.fillMaxWidth(value.toFloat() / top).fillMaxHeight().background(Theme[colors][accentText], CircleShape))
+                    Box(Modifier.fillMaxWidth(value.toFloat() / top).fillMaxHeight().background(Theme[colors][accent], CircleShape))
                 }
             }
         }
@@ -328,7 +346,6 @@ private fun Ranked(title: String, rows: List<Pair<String, Long>>, format: (Long)
 }
 
 /** The most used, as mono chips with their counts. */
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun Chips(title: String, rows: List<Pair<String, Long>>, unit: String) {
     val shown = rows.filter { it.second > 0 }.take(8)

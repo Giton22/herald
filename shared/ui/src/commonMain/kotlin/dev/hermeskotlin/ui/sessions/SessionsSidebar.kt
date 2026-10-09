@@ -861,8 +861,13 @@ internal fun SubpageHeader(title: String, onBack: () -> Unit, subtitle: String? 
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(Lucide.ArrowLeft, contentDescription = "Back", onClick = onBack, tint = Theme[colors][textSecondary])
-                Spacer(Modifier.weight(1f))
-                actions()
+                // The actions get all the room past Back, pushed to the end; a weighted one can take it all.
+                Row(
+                    Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
+                    content = actions,
+                )
             }
             Text(
                 title,
