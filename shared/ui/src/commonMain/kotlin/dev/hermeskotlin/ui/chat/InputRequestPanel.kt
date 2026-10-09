@@ -5,6 +5,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.Column
@@ -172,9 +174,10 @@ private fun Header(
             subtitle?.let { Text(it, style = Theme[typography][caption], color = Theme[colors][textTertiary]) }
         }
         if (trailing != null) Text(trailing, style = Theme[typography][caption], color = Theme[colors][textTertiary])
-        if (onStop != null) {
-            Button("Stop task", onClick = onStop, variant = ButtonVariant.Ghost, size = ButtonSize.Small, leadingIcon = Lucide.CircleStop)
-        }
+    }
+    // On a line of its own, so the title and what it's about keep the width.
+    if (onStop != null) {
+        Button("Stop task", onClick = onStop, variant = ButtonVariant.Ghost, size = ButtonSize.Small, leadingIcon = Lucide.CircleStop)
     }
 }
 
@@ -244,10 +247,15 @@ private fun CommandBlock(command: String) {
                 .border(1.dp, Theme[colors][stroke], shape)
                 .padding(start = 12.dp, top = 2.dp, bottom = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            // Opened to many lines, the sign and Copy stay by the first one.
+            verticalAlignment = if (full) Alignment.Top else Alignment.CenterVertically,
         ) {
             val mono = Theme[typography][code]
-            BasicText("$", style = mono.copy(color = Theme[colors][textMuted]), modifier = Modifier.clearAndSetSemantics {})
+            BasicText(
+                "$",
+                style = mono.copy(color = Theme[colors][textMuted]),
+                modifier = Modifier.padding(vertical = if (full) 8.dp else 0.dp).clearAndSetSemantics {},
+            )
             BasicText(
                 command,
                 style = mono.copy(color = Theme[colors][textColor]),
@@ -306,7 +314,12 @@ private fun ApprovalContent(request: InputRequest.Approval, more: String?, conne
     }
     val wider = request.choices.filter { it == ApprovalChoice.Session || it == ApprovalChoice.Always }
     if (wider.isNotEmpty()) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        // Wraps rather than squeezes a link when the screen is narrow or the text large.
+        FlowRow(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            itemVerticalAlignment = Alignment.CenterVertically,
+        ) {
             wider.forEachIndexed { i, choice ->
                 if (i > 0) Box(Modifier.padding(horizontal = 4.dp).size(3.dp).background(Theme[colors][textMuted], CircleShape))
                 val session = choice == ApprovalChoice.Session
@@ -315,13 +328,21 @@ private fun ApprovalContent(request: InputRequest.Approval, more: String?, conne
                     description = if (session) {
                         "Commands like this run without asking again, in this chat only, until it ends."
                     } else {
-                        "Commands like this run without asking again, in every chat. Asks first."
+                        "Commands like this run without asking again, in every chat. Opens a confirmation first."
                     },
                     enabled = ready,
                     onClick = { if (session) choose(choice) else confirmAlways = true },
                 )
             }
         }
+        // Said where it shows: the broader choices cover a kind of command, not just this one.
+        Text(
+            "Allow once runs just this command. The others also let commands like it run without asking.",
+            style = Theme[typography][caption],
+            color = Theme[colors][textTertiary],
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 
     Dialog(
