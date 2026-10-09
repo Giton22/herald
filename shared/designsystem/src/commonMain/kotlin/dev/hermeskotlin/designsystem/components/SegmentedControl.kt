@@ -42,8 +42,10 @@ import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.code
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.label
+import dev.hermeskotlin.designsystem.textMuted
 import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.strokeStrong
 import dev.hermeskotlin.designsystem.text
@@ -64,6 +66,8 @@ fun <T> SegmentedControl(
     optionLabel: (T) -> String,
     modifier: Modifier = Modifier,
     optionIcon: (T) -> ImageVector? = { null },
+    /** A count beside the label, in mono, such as how many each tab holds. */
+    optionBadge: (T) -> String? = { null },
 ) {
     val track = Theme[colors][well]
     val ring = Theme[colors][stroke]
@@ -117,7 +121,16 @@ fun <T> SegmentedControl(
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         textAlign = TextAlign.Center,
+                        modifier = Modifier.weight(1f, fill = false),
                     )
+                    optionBadge(option)?.let {
+                        Text(
+                            it,
+                            style = Theme[typography][code].copy(fontSize = 11.sp),
+                            color = if (isSelected) Theme[colors][textTertiary] else Theme[colors][textMuted],
+                            maxLines = 1,
+                        )
+                    }
                 }
             }
         }
