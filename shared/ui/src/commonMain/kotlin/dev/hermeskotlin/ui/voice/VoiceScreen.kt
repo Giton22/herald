@@ -10,8 +10,21 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
+import androidx.compose.foundation.layout.only
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.isTraversalGroup
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -26,7 +39,6 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
@@ -49,12 +61,10 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -107,6 +117,8 @@ import kotlin.math.sqrt
  */
 @Composable
 internal fun VoiceScreen(
+    /** Showing and taking Back; false while it fades out. */
+    active: Boolean,
     chatTitle: String,
     state: VoiceChatState,
     /** Hermes's last reply, shown dimmed above what you're saying. */
@@ -119,15 +131,18 @@ internal fun VoiceScreen(
     onEnd: () -> Unit,
     onType: () -> Unit,
 ) {
-    PlatformBackHandler(enabled = true, onBack = onMinimize)
+    PlatformBackHandler(enabled = active, onBack = onMinimize)
     val glow = Theme[colors][accent].copy(alpha = 0.22f)
-    Box(
+    BoxWithConstraints(
         Modifier
             .fillMaxSize()
             .background(Theme[colors][background])
-            // Swallows taps so nothing reaches the chat beneath.
-            .clickable(remember { MutableInteractionSource() }, indication = null, onClick = {}),
+            // Swallows taps so nothing reaches the chat beneath, without becoming a button itself.
+            .pointerInput(Unit) { detectTapGestures {} }
+            .semantics { isTraversalGroup = true },
     ) {
+        // The orb gives way on a short screen (landscape, a large font) so the buttons always fit.
+        val orb = (maxHeight * 0.24f).coerceAtMost(168.dp)
         Canvas(Modifier.fillMaxSize()) {
             val radius = size.width * 0.9f
             drawCircle(
@@ -136,7 +151,10 @@ internal fun VoiceScreen(
                 center = Offset(size.width / 2, size.height * 0.82f),
             )
         }
-        Column(Modifier.fillMaxSize().navigationBarsPadding(), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Horizontal + WindowInsetsSides.Vertical)),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
             Row(
                 Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -150,31 +168,32 @@ internal fun VoiceScreen(
             }
             Transcript(
                 state,
-                lastReply.takeIf { captions },
+                lastReply,
                 captions,
-                Modifier.weight(1f).widthIn(max = 640.dp).fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 24.dp),
+                Modifier.weight(1f).widthIn(max = 640.dp).fillMaxWidth().padding(start = 24.dp, end = 24.dp, bottom = 16.dp),
             )
             Column(
                 Modifier.padding(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 18.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(22.dp),
+                verticalArrangement = Arrangement.spacedBy(if (orb < 120.dp) 12.dp else 22.dp),
             ) {
-                BigOrb(state, Modifier.size(168.dp))
+                if (orb >= 88.dp) BigOrb(state, Modifier.size(orb))
+                // No live region: the label flips with every breath you take, and the mic could hear TalkBack say so.
                 Column(
-                    Modifier.semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+                    Modifier.semantics(mergeDescendants = true) {},
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(2.dp),
                 ) {
-                    Text(label(state), style = Theme[typography][body].copy(fontSize = 17.sp, lineHeight = 22.sp), fontWeight = FontWeight.SemiBold, color = Theme[colors][textColor], textAlign = TextAlign.Center)
-                    Text(hint(state), style = Theme[typography][bodySmall].copy(fontSize = 13.sp), color = Theme[colors][textTertiary], textAlign = TextAlign.Center)
-                    AnimatedVisibility(state.working != null, enter = fadeIn(), exit = fadeOut()) {
+                    Text(label(state), style = Theme[typography][body].copy(fontSize = 17.sp, lineHeight = 22.sp), fontWeight = FontWeight.SemiBold, color = Theme[colors][textColor], textAlign = TextAlign.Center, maxLines = 1)
+                    Text(hint(state), style = Theme[typography][bodySmall].copy(fontSize = 13.sp), color = Theme[colors][textTertiary], textAlign = TextAlign.Center, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                    AnimatedVisibility(state.working != null, enter = fadeIn() + expandVertically(), exit = fadeOut() + shrinkVertically()) {
                         WorkingChip(state.working.orEmpty())
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
                     when {
                         state.live && state.phase != VoicePhase.Connecting ->
-                            SideButton(if (state.muted) Lucide.MicOff else Lucide.Mic, if (state.muted) "Unmute" else "Mute", onMute, on = state.muted)
+                            SideButton(Lucide.Mic.takeUnless { state.muted } ?: Lucide.MicOff, "Mute", onMute, on = state.muted, toggle = true)
                         !state.live && state.phase == VoicePhase.Speaking -> SideButton(Lucide.SkipForward, "Skip the reply", onSkip)
                         // An empty slot keeps End in the middle.
                         else -> Spacer(Modifier.size(52.dp))
@@ -190,7 +209,8 @@ internal fun VoiceScreen(
 /** The last reply, dimmed, over what was just said, large; the newest words sit nearest the orb. */
 @Composable
 private fun Transcript(state: VoiceChatState, lastReply: String?, captions: Boolean, modifier: Modifier) {
-    Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.Bottom)) {
+    // Bottom-up and clipped: squeezed, it loses the oldest words off the top rather than the newest.
+    Column(modifier.clipToBounds(), verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.Bottom)) {
         if (!captions) return@Column
         val said = state.caption
         val mine = said != null && !state.captionIsVoice
@@ -207,7 +227,8 @@ private fun Line(who: String, words: String, modifier: Modifier, big: Boolean, y
     Column(modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         Text(who.uppercase(), style = Theme[typography][eyebrow], color = if (you) Theme[colors][accentText] else Theme[colors][textTertiary])
         Text(
-            words,
+            // The newest words matter most: a long line shows its end, its start trimmed.
+            remember(words) { tail(words, if (big) 160 else 280) },
             style = if (big) {
                 Theme[typography][body].copy(fontSize = 24.sp, lineHeight = 31.sp, letterSpacing = (-0.02).em, fontWeight = FontWeight.Medium)
             } else {
@@ -245,9 +266,9 @@ private fun RingButton(icon: ImageVector, description: String, onClick: () -> Un
     }
 }
 
-/** A 52dp round button beside End; [on] fills it in, as Mute does while muted. */
+/** A 52dp round button beside End; [on] fills it in, as Mute does while muted. A [toggle] says it's on or off. */
 @Composable
-private fun SideButton(icon: ImageVector, description: String, onClick: () -> Unit, on: Boolean = false) {
+private fun SideButton(icon: ImageVector, description: String, onClick: () -> Unit, on: Boolean = false, toggle: Boolean = false) {
     val fill by animateColorAsState(if (on) Theme[colors][textColor] else Theme[colors][surface3])
     val tint = if (on) Theme[colors][background] else Theme[colors][textSecondary]
     Box(
@@ -255,7 +276,10 @@ private fun SideButton(icon: ImageVector, description: String, onClick: () -> Un
             .size(52.dp)
             .clip(CircleShape)
             .background(fill)
-            .clickable(role = Role.Button, onClick = onClick)
+            .then(
+                if (toggle) Modifier.toggleable(value = on, role = Role.Switch, onValueChange = { onClick() })
+                else Modifier.clickable(role = Role.Button, onClick = onClick),
+            )
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
@@ -375,6 +399,15 @@ private fun BigOrb(state: VoiceChatState, modifier: Modifier = Modifier) {
             }
         }
     }
+}
+
+/** The last [max] characters of [text] or so, starting on a word, after "…"; short text as is. */
+internal fun tail(text: String, max: Int): String {
+    val trimmed = text.trim()
+    if (trimmed.length <= max) return trimmed
+    val cut = trimmed.takeLast(max)
+    val start = cut.indexOf(' ').takeIf { it in 0 until max / 3 }?.plus(1) ?: 0
+    return "…" + cut.substring(start)
 }
 
 private val BAR_HEIGHTS = listOf(18, 34, 24, 40, 20)

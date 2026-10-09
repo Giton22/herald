@@ -17,6 +17,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -115,7 +117,8 @@ internal fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onSkip: () 
             Modifier
                 .size(112.dp)
                 .clip(CircleShape)
-                .clickable(role = Role.Button, onClickLabel = "Show voice chat full screen", onClick = onExpand),
+                .clickable(role = Role.Button, onClickLabel = "Show voice chat full screen", onClick = onExpand)
+                .semantics { contentDescription = "Voice chat" },
         )
         Text(
             label(state),
