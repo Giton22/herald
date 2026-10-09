@@ -42,23 +42,23 @@ internal fun RoomMemberFace(bot: Bot, faces: BotFaces, size: Dp, modifier: Modif
 }
 
 /**
- * Everyone in a room as overlapping faces, the first on top, each ringed in the page color so the
- * stack reads as separate heads. Past [max], the rest are left out.
+ * Everyone in a room as overlapping faces, the first on top, each ringed in [ring], the color under
+ * them, so the stack reads as separate heads. Past [max], the rest are left out.
  */
 @Composable
-internal fun RoomFaces(members: List<RoomMember>, faces: BotFaces, size: Dp, max: Int = 4) {
+internal fun RoomFaces(members: List<RoomMember>, faces: BotFaces, size: Dp, max: Int = 4, ring: Color = Theme[colors][background]) {
     val shown = members.take(max)
     if (shown.isEmpty()) return
-    val ring = 1.5.dp
+    val width = 1.5.dp
     val overlap = size * 0.35f
     Row(horizontalArrangement = Arrangement.spacedBy(-overlap)) {
         shown.forEachIndexed { index, member ->
             Box(
                 Modifier
                     .zIndex((shown.size - index).toFloat())
-                    .clip(RoundedCornerShape((size + ring * 2) * 0.32f))
-                    .background(Theme[colors][background])
-                    .padding(ring),
+                    .clip(RoundedCornerShape((size + width * 2) * 0.32f))
+                    .background(ring)
+                    .padding(width),
             ) {
                 RoomMemberFace(faces.roomBot(member.profile ?: member.memberId), faces, size)
             }
