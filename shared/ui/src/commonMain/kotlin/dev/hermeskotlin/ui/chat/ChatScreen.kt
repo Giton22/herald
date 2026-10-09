@@ -708,7 +708,15 @@ private fun ColumnScope.Dock(
     AnimatedVisibility(visible = notice != null) { NoticeLine(notice.orEmpty()) }
     // One place says what's happening: the current action, with the status text and plan folded beneath.
     AnimatedVisibility(visible = state.running, enter = fadeIn(), exit = fadeOut()) {
-        ProgressPanel(currentAction(state), state.status, state.runningTool(), state.livePlan(), hazeState)
+        ProgressPanel(
+            step = currentStep(state),
+            status = state.status,
+            tool = state.runningTool(),
+            todos = state.livePlan(),
+            startedAt = turnStartedAt(state),
+            onStop = actions::interrupt,
+            connected = connected,
+        )
     }
     if (!state.running) TodoPanel(state.todos, live = state.todosLive, hazeState = hazeState)
 
@@ -783,8 +791,9 @@ internal fun chatStatus(state: ChatState, connected: Boolean, connectionLabel: S
     state.inputRequests.isNotEmpty() -> BarStatus("Needs your answer", StatusTone.Waiting)
     state.running -> {
         // Once every step is done the agent is wrapping up, not on a step.
-        val plan = state.livePlan()?.takeIf { it.total > 0 && it.active }
-        BarStatus(if (plan != null) "Working · step ${minOf(plan.done + 1, plan.total)} of ${plan.total}" else "Working", StatusTone.Busy)
+        val plan = state.livePlan()
+        val step = planStep(plan)
+        BarStatus(if (plan != null && step != null) "Working · step $step of ${plan.total}" else "Working", StatusTone.Busy)
     }
     else -> BarStatus(listOfNotNull("Hermes", place).joinToString(" · "), StatusTone.Ok)
 }
@@ -1582,7 +1591,8 @@ private fun AssistantReply(
         ReplyHeader(message.timestamp.takeUnless { message.streaming })
         // What's happening now is said once, above the composer; the reply keeps only what it's made of.
         if (showReasoning) Reasoning(message.reasoning)
-        if (showTools) Tools(listedTools, message.key)
+        // While the turn runs its finished steps are listed as they land; once it ends they fold into the pill.
+        if (showTools) if (message.streaming) LiveSteps(listedTools) else Tools(listedTools, message.key)
         if (generated.isNotEmpty()) ReplyMediaList(remember(generated) { generated.map { it.asMedia() } })
         // Shown whatever the tool-activity setting: the work happens out of sight, in other agents.
         message.tools.filter { it.name == "delegate_task" }.forEach { DelegationCard(it) }
@@ -1940,6 +1950,66 @@ private fun Tools(tools: List<ToolActivity>, messageKey: String) {
     }
 }
 
+/**
+ * A running reply's finished steps, newest last: a check (or a cross) in a soft circle, what was done, and
+ * how long it took. The step in hand is on the live task card instead. Only the last few show.
+ */
+@Composable
+private fun LiveSteps(tools: List<ToolActivity>) {
+    val done = tools.filterNot { it.running }
+    if (done.isEmpty()) return
+    val shown = done.takeLast(LIVE_STEPS_SHOWN)
+    Column(Modifier.padding(start = 2.dp)) {
+        if (done.size > shown.size) {
+            val earlier = done.size - shown.size
+            Text(
+                if (earlier == 1) "1 earlier step" else "$earlier earlier steps",
+                style = Theme[typography][caption],
+                color = Theme[colors][textMuted],
+                modifier = Modifier.padding(start = 30.dp, bottom = 4.dp),
+            )
+        }
+        shown.forEach { LiveStepRow(it) }
+    }
+}
+
+@Composable
+private fun LiveStepRow(tool: ToolActivity) {
+    val step = remember(tool) { toolDone(tool) }
+    Row(Modifier.fillMaxWidth().heightIn(min = 30.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+        Box(
+            Modifier.size(20.dp).background(Theme[colors][if (tool.failed) dangerSoft else successSoft], CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            UnstyledIcon(
+                if (tool.failed) Lucide.X else Lucide.Check,
+                contentDescription = if (tool.failed) "Failed" else null,
+                tint = Theme[colors][if (tool.failed) danger else success],
+                modifier = Modifier.size(11.dp),
+            )
+        }
+        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(step.title, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary], maxLines = 1)
+            step.detail?.let {
+                Text(
+                    it,
+                    style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
+                    color = Theme[colors][textSecondary],
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .background(Theme[colors][surface], RoundedCornerShape(Theme[radii][radiusXSmall]))
+                        .padding(horizontal = 6.dp, vertical = 1.dp),
+                )
+            }
+        }
+        tool.durationSeconds?.let { Text(formatDuration(it), style = Theme[typography][caption], color = Theme[colors][textMuted]) }
+    }
+}
+
+private const val LIVE_STEPS_SHOWN = 4
+
 /** One kind of tool in the pill: its icon in a small circle, ringed in the pill's fill so the circles overlap cleanly. */
 @Composable
 private fun ToolKindIcon(icon: ImageVector) {
@@ -1989,18 +2059,52 @@ private fun ChatState.livePlan(): TodoList? = todos?.takeIf { todosLive }
  * The one line that says what the agent is doing now, most specific first: waiting on the user, a tool
  * at work, the plan's step in hand, the gateway's status text, else thinking.
  */
-internal fun currentAction(state: ChatState): String {
-    if (state.inputRequests.isNotEmpty()) return "Waiting for your answer"
-    state.runningTool()?.let { tool ->
-        val detail = tool.detail?.lineSequence()?.firstOrNull()?.takeIf { it.isNotBlank() }
-        return if (detail != null) "${tool.name.toolVerb()}: $detail" else tool.name.toolVerb()
-    }
-    state.livePlan()?.items?.firstOrNull { it.status == TodoStatus.InProgress }?.let { return it.content }
+internal fun currentAction(state: ChatState): String = currentStep(state).let { step -> step.detail?.let { "${step.title}: $it" } ?: step.title }
+
+/** What the agent is doing now, in words, and what it's doing it to (a path, a command) when a tool says. */
+internal data class LiveStep(val title: String, val detail: String? = null)
+
+/** [currentAction] in its two parts, for the live task card. */
+internal fun currentStep(state: ChatState): LiveStep {
+    if (state.inputRequests.isNotEmpty()) return LiveStep("Waiting for your answer")
+    state.runningTool()?.let { tool -> return LiveStep(tool.name.toolVerb(), tool.firstDetailLine()) }
+    state.livePlan()?.items?.firstOrNull { it.status == TodoStatus.InProgress }?.let { return LiveStep(it.content) }
     state.status?.takeIf { it.isNotBlank() }?.let { status ->
         // A turn woken by another bot's reply arriving says so, not the runner's command line.
-        return if (BOT_DELIVERY_STATUS.containsMatchIn(status)) "Reading another bot's reply" else status
+        return LiveStep(if (BOT_DELIVERY_STATUS.containsMatchIn(status)) "Reading another bot's reply" else status)
     }
-    return state.thinkingFrame ?: "Thinking…"
+    return LiveStep(state.thinkingFrame ?: "Thinking…")
+}
+
+/** What the tool is working on, in one line: its description, else what it was given when that's plain (a command, a query) rather than JSON. */
+private fun ToolActivity.firstDetailLine(): String? =
+    (detail ?: input?.takeUnless { it.trimStart().startsWith("{") })?.lineSequence()?.firstOrNull()?.trim()?.takeIf { it.isNotEmpty() }
+
+/** The step of a live plan in hand, counted from 1; null once nothing is left to do. */
+internal fun planStep(plan: TodoList?): Int? = plan?.takeIf { it.total > 0 && it.active }?.let { minOf(it.done + 1, it.total) }
+
+/**
+ * When the running turn began: the prompt the streaming reply answers. Null when there's no streaming reply
+ * yet, or its prompt isn't on screen (a turn started elsewhere before the transcript loaded).
+ */
+internal fun turnStartedAt(state: ChatState): Double? {
+    if (!state.running) return null
+    val reply = state.messages.indexOfLast { it is ChatMessage.Assistant && it.streaming }.takeIf { it >= 0 } ?: return null
+    return (state.messages.subList(0, reply).lastOrNull { it is ChatMessage.User } as? ChatMessage.User)?.timestamp
+}
+
+/** A finished step in a running reply, said in the past: "Ran" and the command, "Read" and the file. */
+internal fun toolDone(tool: ToolActivity): LiveStep {
+    val verb = when (tool.name) {
+        "terminal", "shell", "bash", "execute_code" -> "Ran"
+        "read_file", "file_read", "web_extract", "browser", "fetch" -> "Read"
+        "write_file", "patch", "edit_file" -> "Edited"
+        "web_search", "search", "search_files", "session_search" -> "Searched"
+        "delegate_task" -> "Delegated"
+        MESSAGE_AGENT_TOOL -> "Messaged"
+        else -> return LiveStep("Used ${tool.name.replace('_', ' ')}", tool.firstDetailLine())
+    }
+    return tool.firstDetailLine()?.let { LiveStep(verb, it) } ?: LiveStep("$verb with ${tool.name.replace('_', ' ')}")
 }
 
 /** The status of a turn started by a bot-to-bot delivery finishing (tools/bot_mode_dm.py's runner). */
@@ -2211,20 +2315,18 @@ private fun Composer(
                             enabled = connected && !state.running && !dictation.active,
                         )
                         Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { ModelPill(state, picker, onClick = onOpenModels) }
-                        // Stop stays for the whole task; a message typed meanwhile gets its own Send beside it.
-                        if (state.running) {
-                            if (hasText && !editing) {
-                                RunningSendButton(
-                                    mode = runningMode,
-                                    // A command runs at once; there's nothing to choose.
-                                    choices = if (command) emptyList() else RunningSend.entries.filterNot { it == RunningSend.Steer && attachments.isNotEmpty() },
-                                    enabled = connected,
-                                    onSend = actions::send,
-                                )
-                            }
-                            SendButton(SendIcon.Stop, onClick = actions::interrupt, enabled = connected)
+                        // Stop is on the live task card above; a message typed meanwhile is queued or steers the task.
+                        if (state.running && hasText && !editing) {
+                            RunningSendButton(
+                                mode = runningMode,
+                                // A command runs at once; there's nothing to choose.
+                                choices = if (command) emptyList() else RunningSend.entries.filterNot { it == RunningSend.Steer && attachments.isNotEmpty() },
+                                enabled = connected,
+                                onSend = actions::send,
+                            )
                         } else {
-                            SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected && hasText)
+                            // While a task runs this only waits: nothing typed yet, or an edit, which goes once it ends.
+                            SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected && hasText && !state.running)
                         }
                     }
                 }
