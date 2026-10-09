@@ -1365,7 +1365,8 @@ private fun UserBubble(
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     var menuOpen by remember { mutableStateOf(false) }
-    val hasMenu = message.text.isNotBlank() || onEdit != null || onBranch != null
+    // A prompt in doubt always has one: its Edit is there.
+    val hasMenu = message.text.isNotBlank() || onEdit != null || onBranch != null || message.check == SendCheck.Unknown
     val review = remember(message.text) { parseReview(message.text) }
     val commentHost = LocalCommentHost.current
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
@@ -1521,7 +1522,7 @@ private fun UnsettledActions(check: SendCheck, key: String, actions: ChatActions
         onDismissRequest = { confirmResend = false },
         title = "Resend this message?",
         message = "Hermes may already have it. If it does, resending makes Hermes get the same request twice and run it again. " +
-            "Check delivery first to be sure.",
+            "Tap Check first to be sure.",
         actions = {
             Button("Cancel", onClick = { confirmResend = false }, variant = ButtonVariant.Ghost)
             Button("Resend", onClick = { confirmResend = false; actions.resend(key) })
@@ -1551,11 +1552,12 @@ private fun DeliveryChip(
             Modifier
                 .clearAndSetSemantics {}
                 .alpha(if (enabled) 1f else 0.45f)
-                .height(28.dp)
+                // Grows with large text instead of cutting it off.
+                .heightIn(min = 28.dp)
                 .clip(pill)
                 .background(Theme[colors][surface2], pill)
                 .indication(interaction, rememberColoredIndication(Theme[colors][textColor]))
-                .padding(horizontal = 10.dp),
+                .padding(horizontal = 10.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
