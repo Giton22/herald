@@ -14,6 +14,12 @@ import dev.hermeskotlin.core.rpc.RpcTransport
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.profiles.ProfilesApi
+import dev.hermeskotlin.core.cache.InMemoryOfflineDao
+import dev.hermeskotlin.core.cache.OfflineCache
+import dev.hermeskotlin.core.cache.PlainSealer
+import kotlin.coroutines.EmptyCoroutineContext
+import dev.hermeskotlin.core.sessions.SessionListFilter
+import dev.hermeskotlin.core.sessions.SessionMessage
 import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
@@ -67,6 +73,9 @@ class SessionsViewModelTest {
         /** The body of each PATCH to a session, in order. */
         patches: MutableList<String> = mutableListOf(),
         patchStatus: HttpStatusCode = HttpStatusCode.OK,
+        cache: OfflineCache? = null,
+        /** The list can't be read while this says so, whatever [listStatus] is. */
+        listFails: () -> Boolean = { false },
     ): SessionsViewModel {
         // On the test dispatcher, so no request is still finishing on another thread when a test ends
         // (and resuming onto Dispatchers.Main while the next test sets it).
@@ -76,7 +85,7 @@ class SessionsViewModelTest {
             when {
                 request.url.encodedPath == "/api/sessions" -> respond(
                     """{"sessions":[{"id":"a","title":"Alpha","pinned":true},{"id":"b","title":"Beta"}],"total":$total}""",
-                    listStatus, json,
+                    if (listFails()) HttpStatusCode.InternalServerError else listStatus, json,
                 )
                 request.url.encodedPath == "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
                 request.method == HttpMethod.Delete -> respond("""{"detail":"Store is busy"}""", deleteStatus, json)
@@ -97,7 +106,80 @@ class SessionsViewModelTest {
         return SessionsViewModel(
             SessionsApi(client), auth, connection, LastChatStore(InMemoryKeyValueStore()), ProfilesApi(client),
             attention, SeenStore(InMemoryKeyValueStore()) { 0.0 }, DraftStore(InMemoryKeyValueStore()), ProjectsApi(connection),
+            cache,
         )
+    }
+
+    @Test
+    fun aListThatCantBeReadShowsTheSavedOneAndSaysSo() = runTest(dispatcher) {
+        val cache = OfflineCache(InMemoryOfflineDao(), PlainSealer, EmptyCoroutineContext) { 7_000L }
+        cache.saveList(gateway.gatewayUrl, null, SessionListFilter.Recent, listOf(SessionSummary("old", title = "Saved chat")))
+        val vm = viewModel(listStatus = HttpStatusCode.InternalServerError, cache = cache)
+
+        vm.bind(gateway)
+
+        val state = vm.state.value
+        assertEquals(listOf("Saved chat"), state.sessions.map { it.displayTitle })
+        assertEquals(7_000L, state.savedCopyAt)
+        assertEquals(null, state.error)
+        assertFalse(state.loading)
+        assertFalse(state.canLoadMore)
+    }
+
+    @Test
+    fun tryingAgainOnceTheGatewayAnswersDropsTheSavedCopyNotice() = runTest(dispatcher) {
+        val cache = OfflineCache(InMemoryOfflineDao(), PlainSealer, EmptyCoroutineContext) { 7_000L }
+        cache.saveList(gateway.gatewayUrl, null, SessionListFilter.Recent, listOf(SessionSummary("old")))
+        var offline = true
+        val vm = viewModel(cache = cache, listFails = { offline })
+        vm.bind(gateway)
+        assertEquals(7_000L, vm.state.value.savedCopyAt)
+
+        offline = false
+        vm.refresh()
+
+        assertEquals(null, vm.state.value.savedCopyAt)
+        assertEquals(listOf("a", "b"), vm.state.value.sessions.map { it.id })
+    }
+
+    @Test
+    fun aRowChangedOnTheSavedCopyKeepsItsNotice() = runTest(dispatcher) {
+        val cache = OfflineCache(InMemoryOfflineDao(), PlainSealer, EmptyCoroutineContext) { 7_000L }
+        cache.saveList(gateway.gatewayUrl, null, SessionListFilter.Recent, listOf(SessionSummary("old", title = "Old")))
+        val vm = viewModel(listStatus = HttpStatusCode.InternalServerError, cache = cache)
+        vm.bind(gateway)
+
+        vm.rename(vm.state.value.sessions.single(), "New")
+        vm.refresh()
+
+        assertEquals("New", vm.state.value.sessions.single().title)
+        assertEquals(7_000L, vm.state.value.savedCopyAt)
+    }
+
+    @Test
+    fun aListReadIsSavedAndReplacesTheSavedCopy() = runTest(dispatcher) {
+        val cache = OfflineCache(InMemoryOfflineDao(), PlainSealer, EmptyCoroutineContext) { 7_000L }
+        cache.saveList(gateway.gatewayUrl, null, SessionListFilter.Recent, listOf(SessionSummary("old")))
+        val vm = viewModel(cache = cache)
+
+        vm.bind(gateway)
+
+        assertEquals(listOf("a", "b"), vm.state.value.sessions.map { it.id })
+        assertEquals(null, vm.state.value.savedCopyAt)
+        assertEquals(listOf("a", "b"), cache.savedList(gateway.gatewayUrl, null, SessionListFilter.Recent)?.sessions?.map { it.id })
+    }
+
+    @Test
+    fun deletingAChatDropsItsSavedCopy() = runTest(dispatcher) {
+        val cache = OfflineCache(InMemoryOfflineDao(), PlainSealer, EmptyCoroutineContext) { 7_000L }
+        val vm = viewModel(cache = cache)
+        vm.bind(gateway)
+        cache.saveTranscript(gateway.gatewayUrl, null, "b", listOf(SessionMessage(id = 1, role = "user")), "b")
+
+        vm.delete(vm.state.value.sessions.first { it.id == "b" })
+
+        assertEquals(null, cache.savedTranscript(gateway.gatewayUrl, null, "b"))
+        assertEquals(listOf("a"), cache.savedList(gateway.gatewayUrl, null, SessionListFilter.Recent)?.sessions?.map { it.id })
     }
 
     /** A gateway socket that says it's ready and lists [live] as live sessions (`stored id to status`). */

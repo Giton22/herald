@@ -4,6 +4,10 @@ import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.bots.BotChatBackend
 import dev.hermeskotlin.core.bots.BotChats
+import dev.hermeskotlin.core.cache.InMemoryOfflineDao
+import dev.hermeskotlin.core.cache.OfflineCache
+import dev.hermeskotlin.core.cache.PlainSealer
+import kotlin.coroutines.EmptyCoroutineContext
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatLinks
 import dev.hermeskotlin.core.chat.LastChat
@@ -19,6 +23,8 @@ import dev.hermeskotlin.core.push.PushApi
 import dev.hermeskotlin.core.push.PushGateway
 import dev.hermeskotlin.core.push.PushKeys
 import dev.hermeskotlin.core.push.PushSetup
+import dev.hermeskotlin.core.sessions.SessionListFilter
+import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
@@ -43,6 +49,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -59,6 +66,7 @@ class AppViewModelTest {
     private val gateways = GatewayRepository(store)
     private val lastChats = LastChatStore(store)
     private val access = AccessTokens(store)
+    private val cache = OfflineCache(InMemoryOfflineDao(), PlainSealer, EmptyCoroutineContext) { 0L }
 
     // The connection waits on its ticket for good (a retry loop would keep the test clock busy, so a missed
     // route would hang instead of time out); every other call fails, and sign-out still wipes cookies.
@@ -86,7 +94,7 @@ class AppViewModelTest {
         val connection = GatewayConnection(auth, openSocket = { _, _ -> error("no socket in tests") }, scope = backgroundScope)
         val host = ChatHost(connection, SessionsApi(client), backgroundScope)
         val push = PushSetup(PushApi(connection), NoPushKeys, connection, gateways, SettingsStore(store, backgroundScope), backgroundScope) { "Test" }
-        return AppViewModel(gateways, auth, connection, lastChats, host, ProfileStore(store), ChatLinks(), BotChats(NoBotChats), push, access)
+        return AppViewModel(gateways, auth, connection, lastChats, host, ProfileStore(store), ChatLinks(), BotChats(NoBotChats), push, access, cache)
     }
 
     // Push was never set up and no bot is opened in these tests.
@@ -315,5 +323,36 @@ class AppViewModelTest {
         assertIs<Route.SignIn>(vm.awaitSignIn(home))
         assertEquals(listOf(home), gateways.all().gateways)
         assertTrue(vm.gatewayChoices.first { it.signedIn.isEmpty() }.signedIn.isEmpty())
+    }
+
+    @Test
+    fun removingAGatewayForgetsTheChatsSavedFromIt() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        cache.saveList(home.gatewayUrl, null, SessionListFilter.Recent, listOf(SessionSummary("a")))
+        val vm = viewModel()
+        vm.awaitChat(home)
+
+        vm.removeGateway(home)
+        vm.route.first { it is Route.Connect }
+
+        assertNull(cache.savedList(home.gatewayUrl, null, SessionListFilter.Recent))
+    }
+
+    @Test
+    fun signingOutForgetsTheChatsSavedFromThatGateway() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        val other = SavedGateway("https://other.example.ts.net")
+        cache.saveList(home.gatewayUrl, null, SessionListFilter.Recent, listOf(SessionSummary("a")))
+        cache.saveList(other.gatewayUrl, null, SessionListFilter.Recent, listOf(SessionSummary("b")))
+        val vm = viewModel()
+        vm.awaitChat(home)
+
+        vm.signOut()
+        vm.awaitSignIn(home)
+
+        assertNull(cache.savedList(home.gatewayUrl, null, SessionListFilter.Recent))
+        assertNotNull(cache.savedList(other.gatewayUrl, null, SessionListFilter.Recent))
     }
 }
