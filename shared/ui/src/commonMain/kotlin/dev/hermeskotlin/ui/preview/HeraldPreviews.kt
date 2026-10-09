@@ -6,6 +6,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.ui.unit.dp
+import com.composables.icons.lucide.Archive
+import com.composables.icons.lucide.CalendarClock
+import com.composables.icons.lucide.CloudOff
+import com.composables.icons.lucide.Plus
+import dev.hermeskotlin.ui.components.EmptyState
+import dev.hermeskotlin.ui.sessions.InsightsUiState
+import dev.hermeskotlin.ui.sessions.SubpageHeader
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import dev.hermeskotlin.designsystem.components.BottomSheet
@@ -47,6 +54,7 @@ import dev.hermeskotlin.ui.sessions.ProjectDraft
 import dev.hermeskotlin.core.projects.FolderListing
 import dev.hermeskotlin.ui.sessions.ProjectActionsSheet
 import dev.hermeskotlin.ui.sessions.NewProjectDialog
+import dev.hermeskotlin.ui.settings.ConnectionCheckSheet
 import dev.hermeskotlin.ui.settings.GatewayInfo
 import dev.hermeskotlin.ui.settings.SettingsView
 import androidx.compose.ui.tooling.preview.Preview
@@ -98,6 +106,10 @@ enum class PreviewScene(val label: String) {
     Models("Your starred and recent models in the model picker"),
     ModelsAll("Every model, one row per model, in the model picker"),
     ModelSearch("A search in the model picker"),
+    Offline("A chat that can't reach the gateway"),
+    EmptyPage("A page with nothing on it yet"),
+    LoadError("A page that couldn't load"),
+    Loading("A page loading"),
 }
 
 /**
@@ -144,10 +156,10 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                         )
                     }
                     Toast(
-                        "Archived",
-                        modifier = Modifier.align(Alignment.TopCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(start = 16.dp, end = 16.dp, top = 64.dp),
+                        "Archived “${ChatSamples.sessions().first { it.id == "s3" }.displayTitle}”",
+                        icon = Lucide.Archive,
+                        modifier = Modifier.align(Alignment.BottomCenter).windowInsetsPadding(WindowInsets.safeDrawing).padding(14.dp).fillMaxWidth(),
                         actionLabel = "Undo",
-                        onDismiss = {},
                     )
                 }
                 PreviewScene.ProjectOptions, PreviewScene.NewProject -> Box(Modifier.fillMaxSize()) {
@@ -185,6 +197,32 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 PreviewScene.Comments -> SampleChat(ChatSamples.reply, comments = remember { ChatSamples.comments() })
                 PreviewScene.LongChat -> SampleChat(ChatSamples.longChat)
                 PreviewScene.MidTask ->SampleChat(ChatSamples.working, composerText = "Also check the photos share")
+                PreviewScene.Offline -> SampleChat(ChatSamples.reply, offline = true)
+                PreviewScene.EmptyPage -> OpenSidebar {
+                    SidebarPage {
+                        Column {
+                            SubpageHeader("Scheduled", onBack = {})
+                            EmptyState(
+                                Lucide.CalendarClock,
+                                "No scheduled jobs",
+                                "Have the agent do something on a schedule, like a morning briefing. Each run opens as a chat here.",
+                            ) { Button("New job", onClick = {}, leadingIcon = Lucide.Plus) }
+                        }
+                    }
+                }
+                PreviewScene.LoadError -> OpenSidebar {
+                    SidebarPage {
+                        Column {
+                            SubpageHeader("Capabilities", onBack = {})
+                            EmptyState(Lucide.CloudOff, "Couldn't load", "The gateway didn't answer in time.", error = true) {
+                                Button("Try again", onClick = {}, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+                            }
+                        }
+                    }
+                }
+                PreviewScene.Loading -> OpenSidebar {
+                    SidebarPage { InsightsView(InsightsUiState(), onBack = {}, onSelectPeriod = {}, onRetry = {}) }
+                }
                 PreviewScene.Insights -> OpenSidebar {
                     SidebarPage { InsightsView(PageSamples.insights(), onBack = {}, onSelectPeriod = {}, onRetry = {}) }
                 }
@@ -248,6 +286,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                     settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light, accent = accent),
                     info = GatewayInfo(userLabel = ChatSamples.USER, version = "0.9.0"),
                     gatewayUrl = "https://hermes.example.ts.net",
+                    gatewayName = "homelab",
                     onUpdate = {},
                     onBack = {},
                     onSignOut = {},
@@ -258,18 +297,13 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                         settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light),
                         info = GatewayInfo(userLabel = ChatSamples.USER, version = "0.9.0"),
                         gatewayUrl = "https://hermes.example.ts.net",
+                        gatewayName = "homelab",
                         onUpdate = {},
                         onBack = {},
                         onSignOut = {},
                         onOpenGateways = {},
                     )
-                    BottomSheet(visible = true, onDismiss = {}) {
-                        SheetHeader("Check connection", subtitle = "Each stage is tested on its own.")
-                        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            ConnectionChecklist(PageSamples.connectionCheck, running = false)
-                            Button("Check again", onClick = {}, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw, modifier = Modifier.fillMaxWidth())
-                        }
-                    }
+                    ConnectionCheckSheet(visible = true, results = PageSamples.connectionCheck, running = false, onDismiss = {}, onCheckAgain = {})
                 }
             }
         }
@@ -309,12 +343,16 @@ private fun SampleChat(
     placeholder: String = ChatSamples.PLACEHOLDER,
     comments: List<PendingComment> = emptyList(),
     composerText: String = "",
+    /** The gateway can't be reached and the link is being made again. */
+    offline: Boolean = false,
 ) {
     ChatView(
         title = state.title ?: "New chat",
         state = state,
         picker = ModelPickerState(),
-        connected = true,
+        connected = !offline,
+        connectionLabel = "No connection · connecting again…",
+        linkStatus = "Reconnecting…".takeIf { offline },
         attachments = emptyList(),
         attachmentError = null,
         comments = comments,
@@ -335,6 +373,7 @@ private fun SampleChat(
         onOpenPets = {},
         onViewImage = {},
         onNotice = {},
+        place = "homelab",
     )
 }
 

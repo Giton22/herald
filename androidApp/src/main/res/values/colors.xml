@@ -1,9 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="window_background">#F8FAFF</color>
+    <color name="window_background">#F7F7F9</color>
     <!-- The app theme can override the system one; MainActivity picks between these. -->
-    <color name="window_background_light">#F8FAFF</color>
-    <color name="window_background_dark">#0A0A0B</color>
+    <color name="window_background_light">#F7F7F9</color>
+    <color name="window_background_dark">#0A0A0C</color>
+    <!-- The brand mark keeps its own blue, as the design's herald-logo.svg does. -->
     <color name="launcher_background">#0053FD</color>
-    <color name="notification_accent">#0053FD</color>
+    <color name="notification_accent">#2F6BF5</color>
 </resources>

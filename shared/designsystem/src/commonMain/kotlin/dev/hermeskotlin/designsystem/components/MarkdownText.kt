@@ -3,12 +3,26 @@ package dev.hermeskotlin.designsystem.components
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.clip
+import com.composables.icons.lucide.SquareTerminal
+import com.composeunstyled.UnstyledButton
+import com.composeunstyled.UnstyledIcon
+import com.composeunstyled.theme.rememberColoredIndication
+import com.mikepenz.markdown.compose.elements.listDepth
+import com.mikepenz.markdown.compose.elements.MarkdownListItems
+import dev.hermeskotlin.designsystem.radiusSmall
+import dev.hermeskotlin.designsystem.surface3
+import dev.hermeskotlin.designsystem.textMuted
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -50,7 +64,7 @@ import com.mikepenz.markdown.compose.elements.MarkdownTableHeader
 import com.mikepenz.markdown.compose.elements.MarkdownTableRow
 import androidx.compose.ui.text.style.TextOverflow
 import com.mikepenz.markdown.compose.elements.MarkdownText as LibraryMarkdownText
-import dev.hermeskotlin.designsystem.warning
+import dev.hermeskotlin.designsystem.accent
 import org.intellij.markdown.ast.ASTNode
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalUriHandler
@@ -59,7 +73,7 @@ import com.mikepenz.markdown.model.DefaultMarkdownColors
 import com.mikepenz.markdown.model.DefaultMarkdownTypography
 import com.mikepenz.markdown.model.markdownDimens
 import com.mikepenz.markdown.model.markdownPadding
-import dev.hermeskotlin.designsystem.accent
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.caption
 import dev.hermeskotlin.designsystem.code
@@ -69,10 +83,12 @@ import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.surface
+import dev.hermeskotlin.designsystem.surface2
 import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.title
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.designsystem.well
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.text.InlineTextContent
@@ -116,11 +132,11 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier, streaming: Boolean
     val bodyStyle = Theme[typography][body].copy(color = Theme[colors][textColor])
     val codeStyle = Theme[typography][code].copy(color = Theme[colors][textColor])
     val headingStyle = Theme[typography][heading].copy(color = Theme[colors][textColor])
-    val linkColor = Theme[colors][accent]
+    val linkColor = Theme[colors][accentText]
     val markdownColors = DefaultMarkdownColors(
         text = Theme[colors][textColor],
-        codeBackground = Theme[colors][surface],
-        inlineCodeBackground = Theme[colors][surface],
+        codeBackground = Theme[colors][well],
+        inlineCodeBackground = Theme[colors][surface2],
         dividerColor = Theme[colors][stroke],
         tableBackground = Theme[colors][surface],
     )
@@ -147,6 +163,7 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier, streaming: Boolean
             codeFence = { MarkdownCodeFence(it.content, it.node, block = { code, language, style -> CodeBlock(code, language, style) }) },
             codeBlock = { MarkdownCodeBlock(it.content, it.node, block = { code, language, style -> CodeBlock(code, language, style) }) },
             paragraph = { HighlightedParagraph(it.content, it.node) },
+            unorderedList = { DotList(it.content, it.node, it.listDepth) },
             table = { WrappingTable(it.content, it.node, it.typography.table) },
         )
     }
@@ -304,9 +321,23 @@ private fun WrappingTable(content: String, node: ASTNode, style: TextStyle) {
     )
 }
 
-/** The highlighter under text a comment is about. */
+/** A bullet list whose markers are small accent dots, centered on the first line; nested lists get muted ones. */
 @Composable
-fun highlightColor(): Color = Theme[colors][warning].copy(alpha = 0.3f)
+private fun DotList(content: String, node: ASTNode, depth: Int) {
+    val dot = Theme[colors][if (depth == 0) accentText else textMuted]
+    // Centers the dot on the first line of the item's text. Only the dot is pushed down: a task item's
+    // checkbox takes the same marker slot and sits on the line as it is.
+    val top = with(LocalDensity.current) { ((Theme[typography][body].lineHeight.toDp() - BULLET_DOT) / 2) }
+    MarkdownListItems(content, node, depth, markerModifier = { Modifier.padding(start = 2.dp, end = 10.dp) }) { _, _, _ ->
+        Box(Modifier.padding(top = top).size(BULLET_DOT).background(dot, CircleShape))
+    }
+}
+
+private val BULLET_DOT = 5.dp
+
+/** The highlighter under text a comment is about: the accent, a little stronger than its soft tint so it stands out. */
+@Composable
+fun highlightColor(): Color = Theme[colors][accent].copy(alpha = 0.24f)
 
 @Composable
 private fun CodeBlock(code: String, language: String?, style: TextStyle) {
@@ -324,20 +355,27 @@ private fun CodeBlock(code: String, language: String?, style: TextStyle) {
         Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
-            .border(1.dp, Theme[colors][stroke], shape)
-            .background(Theme[colors][surface], shape),
+            .clip(shape)
+            .background(Theme[colors][well])
+            .border(1.dp, Theme[colors][stroke], shape),
     ) {
-        Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        // A header strip: what the code is, and a Copy pill.
+        Row(
+            Modifier.fillMaxWidth().background(Theme[colors][surface2]).padding(start = 12.dp, end = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            UnstyledIcon(Lucide.SquareTerminal, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(13.dp))
             Text(
                 language?.takeIf { it.isNotBlank() } ?: "code",
                 style = Theme[typography][caption],
                 color = Theme[colors][textTertiary],
                 modifier = Modifier.weight(1f),
             )
-            CopyButton(code)
+            CopyPill(code)
         }
         val scroll = if (wrap) Modifier else Modifier.horizontalScroll(rememberScrollState())
-        Box(Modifier.fillMaxWidth().then(scroll).padding(start = 12.dp, end = 12.dp, bottom = 12.dp)) {
+        Box(Modifier.fillMaxWidth().then(scroll).padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 12.dp)) {
             BasicText(text, style = style, softWrap = wrap)
         }
     }
@@ -380,9 +418,9 @@ private fun rememberSyntaxSpans(code: String, languageName: String?): List<CodeS
     return last.spans
 }
 
-/** Copies [text]; the icon turns into a check for a moment. */
+/** Whether [text] was just copied, and the copy; the flag clears itself after a moment. */
 @Composable
-fun CopyButton(text: String, modifier: Modifier = Modifier) {
+private fun rememberCopy(text: String): Pair<Boolean, () -> Unit> {
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
     var copied by remember { mutableStateOf(false) }
@@ -392,15 +430,44 @@ fun CopyButton(text: String, modifier: Modifier = Modifier) {
             copied = false
         }
     }
+    return copied to {
+        scope.launch {
+            clipboard.setClipEntry(plainTextClipEntry(text))
+            copied = true
+        }
+    }
+}
+
+/** A code block's "Copy" pill; it says "Copied" for a moment. The whole header height takes the tap. */
+@Composable
+private fun CopyPill(text: String) {
+    val (copied, copy) = rememberCopy(text)
+    val tint = Theme[colors][textTertiary]
+    UnstyledButton(
+        onClick = copy,
+        modifier = Modifier.height(40.dp).clip(RoundedCornerShape(Theme[radii][radiusSmall])),
+        indication = rememberColoredIndication(tint),
+        contentPadding = PaddingValues(horizontal = 4.dp),
+    ) {
+        Row(
+            Modifier.background(Theme[colors][surface3], CircleShape).padding(horizontal = 8.dp, vertical = 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            UnstyledIcon(if (copied) Lucide.Check else Lucide.Copy, contentDescription = null, tint = tint, modifier = Modifier.size(11.dp))
+            Text(if (copied) "Copied" else "Copy", style = Theme[typography][caption], color = tint)
+        }
+    }
+}
+
+/** Copies [text]; the icon turns into a check for a moment. */
+@Composable
+fun CopyButton(text: String, modifier: Modifier = Modifier) {
+    val (copied, copy) = rememberCopy(text)
     IconButton(
         icon = if (copied) Lucide.Check else Lucide.Copy,
         contentDescription = if (copied) "Copied" else "Copy",
-        onClick = {
-            scope.launch {
-                clipboard.setClipEntry(plainTextClipEntry(text))
-                copied = true
-            }
-        },
+        onClick = copy,
         // Smaller than MinTouchTarget so it sits under the text; it stands alone, so Compose still stretches its taps to 48dp.
         modifier = modifier.size(32.dp),
         tint = Theme[colors][textTertiary],

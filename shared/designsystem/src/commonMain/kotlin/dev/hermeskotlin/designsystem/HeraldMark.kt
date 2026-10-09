@@ -6,6 +6,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.graphics.vector.addPathNodes
 import androidx.compose.ui.unit.dp
 
+/** The mark's own blue, the launcher icon's background, kept whatever accent the app is drawn in. */
+val HeraldBrandBlue = Color(0xFF0053FD)
+
 /**
  * The app mark, an H whose two halves reach for each other, as an icon (tint it like any other).
  * The launcher icon (ic_launcher_foreground.xml) draws the same shapes in the 108dp adaptive grid.

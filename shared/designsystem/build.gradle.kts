@@ -11,6 +11,8 @@ kotlin {
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
         withHostTest {}
+        // For the bundled Geist fonts in res/font (license: GEIST-OFL.txt).
+        androidResources { enable = true }
     }
 
     sourceSets {

@@ -34,7 +34,7 @@ import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.plugins.DashboardPlugin
-import dev.hermeskotlin.designsystem.accent
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
@@ -99,7 +99,7 @@ internal fun PluginsView(
         Box(Modifier.weight(1f).fillMaxWidth()) {
             val plugins = state.plugins
             when {
-                plugins == null && state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load plugins", state.error) {
+                plugins == null && state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load plugins", state.error, error = true) {
                     Button("Try again", onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                 }
                 plugins == null -> CenteredSpinner()
@@ -129,7 +129,7 @@ private fun PluginRow(plugin: DashboardPlugin, onClick: () -> Unit) {
             Modifier.size(36.dp).background(Theme[colors][stroke], RoundedCornerShape(Theme[radii][radiusMedium])),
             contentAlignment = Alignment.Center,
         ) {
-            UnstyledIcon(Lucide.Puzzle, contentDescription = null, tint = Theme[colors][accent], modifier = Modifier.size(18.dp))
+            UnstyledIcon(Lucide.Puzzle, contentDescription = null, tint = Theme[colors][accentText], modifier = Modifier.size(18.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(

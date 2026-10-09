@@ -24,6 +24,7 @@ import com.composeunstyled.theme.Theme
 import com.composeunstyled.theme.rememberColoredIndication
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.label
@@ -60,7 +61,7 @@ fun Button(
     val shape = RoundedCornerShape(Theme[radii][if (pill) radiusFull else radiusMedium])
     val (container, content) = when (variant) {
         ButtonVariant.Primary -> Theme[colors][accent] to Theme[colors][onAccent]
-        ButtonVariant.Secondary -> Theme[colors][accentSoft] to Theme[colors][accent]
+        ButtonVariant.Secondary -> Theme[colors][accentSoft] to Theme[colors][accentText]
         ButtonVariant.Outline -> Color.Transparent to Theme[colors][textColor]
         ButtonVariant.Ghost -> Color.Transparent to Theme[colors][textColor]
         ButtonVariant.Danger -> Theme[colors][danger] to Color.White

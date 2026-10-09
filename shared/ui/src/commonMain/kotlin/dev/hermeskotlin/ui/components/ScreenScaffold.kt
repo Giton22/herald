@@ -27,8 +27,8 @@ import androidx.compose.ui.unit.dp
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
-import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.colors
@@ -72,7 +72,7 @@ fun ScreenHeader(icon: ImageVector, title: String, subtitle: String) {
                 .background(Theme[colors][accentSoft], RoundedCornerShape(Theme[radii][radiusLarge])),
             contentAlignment = Alignment.Center,
         ) {
-            UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][accent], modifier = Modifier.size(24.dp))
+            UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][accentText], modifier = Modifier.size(24.dp))
         }
         Spacer(Modifier.height(4.dp))
         Text(title, style = Theme[typography][display], color = Theme[colors][text])

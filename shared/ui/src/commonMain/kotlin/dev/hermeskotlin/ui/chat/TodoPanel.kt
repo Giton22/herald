@@ -1,6 +1,38 @@
 package dev.hermeskotlin.ui.chat
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.LinearEasing
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
+import com.composables.icons.lucide.Square
+import com.composeunstyled.UnstyledButton
+import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.accent
+import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.accentText
+import dev.hermeskotlin.designsystem.caption
+import dev.hermeskotlin.designsystem.code
+import dev.hermeskotlin.designsystem.components.MinTouchTarget
+import dev.hermeskotlin.designsystem.radiusSmall
+import dev.hermeskotlin.designsystem.surface
+import dev.hermeskotlin.designsystem.surface3
+import dev.hermeskotlin.designsystem.textMuted
+import kotlin.time.Clock
+import androidx.compose.runtime.key
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -149,48 +181,45 @@ private fun Panel(todos: TodoList, live: Boolean, hazeState: HazeState) {
 }
 
 /**
- * What a running turn is doing, in one line above the composer: [action] with a spinner, and the plan's
- * count when there is one. The technical details stay folded underneath until asked for: the gateway's
- * status text, the tool and what it was given, and the plan step by step.
+ * The live task card above the composer while a turn runs: [step] beside a spinner, how long the turn has
+ * run, and Stop; under it the plan's progress when there is one. The technical details stay folded
+ * underneath until asked for: the gateway's status text, the tool and what it was given, and the plan
+ * step by step.
  */
 @Composable
-fun ProgressPanel(action: String, status: String?, tool: ToolActivity?, todos: TodoList?, hazeState: HazeState) {
+internal fun ProgressPanel(
+    step: LiveStep,
+    status: String?,
+    tool: ToolActivity?,
+    todos: TodoList?,
+    /** The running turn, which the running time counts from when it showed here; null hides the time. */
+    turnKey: String?,
+    onStop: () -> Unit,
+    canStop: Boolean,
+) {
     var expanded by remember { mutableStateOf(false) }
     val plan = todos?.takeIf { it.items.isNotEmpty() }
-    val statusDetail = status?.takeIf { it.isNotBlank() && it != action }
+    val statusDetail = status?.takeIf { it.isNotBlank() && it != step.title }
     val toolDetail = tool?.let { t -> listOfNotNull(t.name, t.detail?.takeIf { it.isNotBlank() }).joinToString(": ") }
     val hasDetails = statusDetail != null || toolDetail != null || plan != null
-    FrostedPanel(hazeState) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .then(if (hasDetails) Modifier.clickable { expanded = !expanded } else Modifier)
-                .padding(horizontal = 14.dp, vertical = 10.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
-            verticalAlignment = Alignment.CenterVertically,
+    ShimmerCard {
+        // The header opens and folds the details; the details themselves scroll without folding.
+        Column(
+            Modifier.then(
+                if (hasDetails) {
+                    Modifier
+                        .clickable(onClickLabel = if (expanded) "Hide details" else "Show details") { expanded = !expanded }
+                        .semantics { stateDescription = if (expanded) "Details shown" else "Details hidden" }
+                } else {
+                    Modifier
+                },
+            ),
         ) {
-            Spinner(Modifier.size(14.dp))
-            Text(
-                action,
-                style = Theme[typography][bodySmall],
-                color = Theme[colors][text],
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f),
-            )
-            plan?.let { Text("${it.done}/${it.total}", style = Theme[typography][label], color = Theme[colors][textSecondary]) }
-            if (hasDetails) {
-                UnstyledIcon(
-                    if (expanded) Lucide.ChevronDown else Lucide.ChevronUp,
-                    contentDescription = if (expanded) "Hide details" else "Show details",
-                    tint = Theme[colors][textTertiary],
-                    modifier = Modifier.size(16.dp),
-                )
-            }
+            CardHeader(step, turnKey, plan, hasDetails, expanded, onStop, canStop)
         }
         AnimatedVisibility(visible = expanded && hasDetails) {
             Column(
-                Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
+                Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 statusDetail?.let { DetailLine("Status", it) }
@@ -215,7 +244,157 @@ private fun DetailLine(name: String, value: String) {
     )
 }
 
-/** The dock's frosted card, shared by the progress line and the plan. */
+/** The live task card: an opaque surface inside a 1dp edge whose accent highlight sweeps round while the task runs. */
+@Composable
+private fun ShimmerCard(content: @Composable ColumnScope.() -> Unit) {
+    val radius = Theme[radii][radiusLarge]
+    val soft = Theme[colors][accentSoft]
+    val bright = Theme[colors][accentText]
+    val sweep = rememberInfiniteTransition(label = "shimmer").animateFloat(
+        initialValue = 0f,
+        targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(SHIMMER_MS, easing = LinearEasing)),
+        label = "sweep",
+    )
+    Column(
+        Modifier
+            .padding(start = 12.dp, end = 12.dp, top = 6.dp)
+            .fillMaxWidth()
+            // Read in the draw phase only, so the sweep redraws the edge without recomposing the card.
+            .drawBehind {
+                val x = size.width * (2 * sweep.value - 1)
+                val brush = Brush.linearGradient(listOf(soft, bright, soft), start = Offset(x, 0f), end = Offset(x + size.width, size.height))
+                drawRoundRect(brush, cornerRadius = CornerRadius(radius.toPx()))
+            }
+            .padding(1.dp)
+            .clip(RoundedCornerShape(radius - 1.dp))
+            .background(Theme[colors][surface]),
+        content = content,
+    )
+}
+
+/** The card's top: the spinner tile, the step, the running time and Stop; then the plan's progress, when there's a plan. */
+@Composable
+private fun CardHeader(step: LiveStep, turnKey: String?, plan: TodoList?, hasDetails: Boolean, expanded: Boolean, onStop: () -> Unit, canStop: Boolean) {
+    Row(
+        Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = if (plan != null) 0.dp else 6.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier
+                .size(30.dp)
+                .background(Theme[colors][accentSoft], RoundedCornerShape(Theme[radii][radiusSmall]))
+                // The title says it's working; "Loading" from the spinner would only repeat it.
+                .clearAndSetSemantics {},
+            contentAlignment = Alignment.Center,
+        ) {
+            Spinner(Modifier.size(14.dp), color = Theme[colors][accentText])
+        }
+        Column(Modifier.weight(1f)) {
+            Text(step.title, style = Theme[typography][label], color = Theme[colors][text], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            step.detail?.let {
+                Text(
+                    it,
+                    style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
+                    color = Theme[colors][accentText],
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+        turnKey?.let { key(it) { RunningTime() } }
+        // Without a plan row below, the header says it opens.
+        if (plan == null && hasDetails) DetailsChevron(expanded)
+        StopButton(onStop, enabled = canStop)
+    }
+    if (plan != null) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 2.dp, bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            PlanBar(plan.done.toFloat() / plan.total.coerceAtLeast(1), Modifier.weight(1f))
+            val inHand = planStep(plan)
+            Text(
+                if (inHand != null) "Step $inHand of ${plan.total}" else "${plan.done} of ${plan.total} done",
+                style = Theme[typography][caption],
+                color = Theme[colors][textTertiary],
+            )
+            DetailsChevron(expanded)
+        }
+    }
+}
+
+@Composable
+private fun DetailsChevron(expanded: Boolean) {
+    UnstyledIcon(
+        if (expanded) Lucide.ChevronDown else Lucide.ChevronUp,
+        contentDescription = null,
+        tint = Theme[colors][textMuted],
+        modifier = Modifier.size(13.dp),
+    )
+}
+
+/**
+ * How long the turn has run since it showed here, "0:42", ticking on the second. Screen readers skip it:
+ * read out, it would change under them every second.
+ */
+@Composable
+private fun RunningTime() {
+    val started = remember { Clock.System.now().toEpochMilliseconds() }
+    var now by remember { mutableStateOf(started) }
+    LaunchedEffect(Unit) {
+        while (true) {
+            now = Clock.System.now().toEpochMilliseconds()
+            // To the next whole second since the start, so no second is skipped or shown twice.
+            delay(1_000 - (now - started) % 1_000)
+        }
+    }
+    Text(
+        runningTime((now - started) / 1_000),
+        style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
+        color = Theme[colors][textTertiary],
+        modifier = Modifier.clearAndSetSemantics {},
+    )
+}
+
+/** Seconds as a clock reads them: "0:42", "12:05", "1:02:03". */
+internal fun runningTime(seconds: Long): String {
+    val s = seconds.coerceAtLeast(0)
+    val (h, m, sec) = Triple(s / 3600, s % 3600 / 60, s % 60)
+    val mm = if (h > 0) m.toString().padStart(2, '0') else m.toString()
+    return (if (h > 0) "$h:" else "") + "$mm:${sec.toString().padStart(2, '0')}"
+}
+
+/** Stops the task: a small round button, with the full touch size around it. */
+@Composable
+private fun StopButton(onStop: () -> Unit, enabled: Boolean) {
+    UnstyledButton(
+        onClick = onStop,
+        enabled = enabled,
+        modifier = Modifier.size(MinTouchTarget).clip(CircleShape).alpha(if (enabled) 1f else 0.45f),
+        indication = rememberColoredIndication(Theme[colors][text]),
+    ) {
+        Box(Modifier.size(34.dp).background(Theme[colors][surface3], CircleShape), contentAlignment = Alignment.Center) {
+            UnstyledIcon(Lucide.Square, contentDescription = "Stop the task", tint = Theme[colors][text], modifier = Modifier.size(12.dp))
+        }
+    }
+}
+
+/** The plan's progress: a thin track filling in the accent as steps are done. */
+@Composable
+private fun PlanBar(fraction: Float, modifier: Modifier) {
+    val shown by animateFloatAsState(fraction.coerceIn(0f, 1f), label = "plan")
+    val fill = Brush.horizontalGradient(listOf(Theme[colors][accent], Theme[colors][accentText]))
+    Box(modifier.height(4.dp).clip(CircleShape).background(Theme[colors][surface3])) {
+        Box(Modifier.fillMaxWidth(shown).fillMaxHeight().clip(CircleShape).background(fill))
+    }
+}
+
+private const val SHIMMER_MS = 3_000
+
+/** The dock's frosted card for a plan after its turn. */
 @Composable
 private fun FrostedPanel(hazeState: HazeState, content: @Composable ColumnScope.() -> Unit) {
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])

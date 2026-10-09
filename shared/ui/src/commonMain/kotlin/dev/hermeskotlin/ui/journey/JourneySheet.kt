@@ -38,7 +38,7 @@ import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.journey.JourneyNode
 import dev.hermeskotlin.core.journey.JourneyNodeDetail
-import dev.hermeskotlin.designsystem.accent
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
@@ -89,7 +89,7 @@ fun JourneySheet(visible: Boolean, controller: JourneyController, onLoad: () -> 
                         item(key = "m-$month") {
                             Text(
                                 month.uppercase(),
-                                style = Theme[typography][caption].copy(fontWeight = FontWeight.Bold, letterSpacing = 0.06.em),
+                                style = Theme[typography][caption].copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.06.em),
                                 color = Theme[colors][textTertiary],
                                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
                             )
@@ -112,7 +112,7 @@ private fun NodeRow(node: JourneyNode, onClick: () -> Unit) {
         UnstyledIcon(
             if (node.isMemory) Lucide.Brain else Lucide.Sparkles,
             contentDescription = null,
-            tint = Theme[colors][if (node.isMemory) textSecondary else accent],
+            tint = Theme[colors][if (node.isMemory) textSecondary else accentText],
             modifier = Modifier.size(18.dp),
         )
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {

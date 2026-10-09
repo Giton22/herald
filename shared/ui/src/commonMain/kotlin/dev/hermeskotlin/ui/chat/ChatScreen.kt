@@ -12,10 +12,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
-import androidx.compose.foundation.layout.IntrinsicSize
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.text.TextAutoSize
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.rememberUpdatedState
@@ -33,18 +29,30 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
-import androidx.compose.ui.unit.Constraints
 import kotlin.math.roundToInt
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.draw.dropShadow
+import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
-import com.composables.icons.lucide.EllipsisVertical
+import com.composables.icons.lucide.Ellipsis
+import dev.hermeskotlin.designsystem.HeraldBrandBlue
+import dev.hermeskotlin.designsystem.HeraldMark
+import dev.hermeskotlin.designsystem.components.halo
+import dev.hermeskotlin.designsystem.dangerSoft
+import dev.hermeskotlin.designsystem.radiusSmall
+import dev.hermeskotlin.designsystem.radiusXSmall
+import dev.hermeskotlin.designsystem.successSoft
+import dev.hermeskotlin.designsystem.surface3
+import dev.hermeskotlin.designsystem.textMuted
+import dev.hermeskotlin.designsystem.warningSoft
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
@@ -56,10 +64,13 @@ import dev.hermeskotlin.designsystem.radiusLarge
 import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.strokeStrong
 import dev.hermeskotlin.designsystem.userBubble
-import dev.hermeskotlin.designsystem.userBubbleStroke
-import dev.hermeskotlin.designsystem.wordmark
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.indication
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.isImeVisible
@@ -108,7 +119,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.SolidColor
@@ -117,7 +127,6 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.KeyboardCapitalization
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
@@ -130,6 +139,21 @@ import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.CircleCheck
+import com.composables.icons.lucide.Clock
+import com.composables.icons.lucide.Sparkles
+import com.composables.icons.lucide.WifiOff
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.semantics.selected
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.semantics.role
+import dev.hermeskotlin.designsystem.radiusXLarge
+import androidx.compose.ui.semantics.Role
+import dev.hermeskotlin.designsystem.surface2
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.ListEnd
 import com.composables.icons.lucide.Info
@@ -152,6 +176,12 @@ import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Square
 import com.composables.icons.lucide.SquarePen
+import com.composables.icons.lucide.FileDiff
+import com.composables.icons.lucide.ShieldAlert
+import com.composables.icons.lucide.FileText
+import com.composables.icons.lucide.Globe
+import com.composables.icons.lucide.Image
+import com.composables.icons.lucide.ListTodo
 import com.composables.icons.lucide.SquareTerminal
 import com.composables.icons.lucide.Wrench
 import com.composables.icons.lucide.X
@@ -206,6 +236,8 @@ import com.composables.icons.lucide.AudioLines
 import com.composables.icons.lucide.Mic
 import com.composables.icons.lucide.Paperclip
 import dev.hermeskotlin.designsystem.accent
+import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
@@ -239,6 +271,7 @@ import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.heading
 import dev.hermeskotlin.designsystem.label
 import dev.hermeskotlin.designsystem.onAccent
+import dev.hermeskotlin.designsystem.onUserBubble
 import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.success
 import dev.hermeskotlin.designsystem.surface
@@ -344,6 +377,7 @@ fun ChatScreen(
         connected = connected,
         connectionLabel = connectionLabel(connection),
         linkStatus = linkStatus(connection),
+        onRetryConnection = viewModel::retryConnection,
         attachments = attachments,
         attachmentError = attachmentError,
         comments = viewModel.comments.collectAsStateWithLifecycle().value,
@@ -373,6 +407,8 @@ fun ChatScreen(
         onViewImage = { viewing = it },
         onNotice = { notice = it },
         wallpaper = rememberChatWallpaper(),
+        place = target.gateway.label,
+        profile = target.profile,
     )
 
     AttachSheet(visible = attachOpen, onDismiss = { attachOpen = false }, picker = attachmentPicker)
@@ -453,6 +489,8 @@ internal fun ChatView(
     connectionLabel: String = "No connection",
     /** Shown in the chat while the link is being made again, so a reply that stopped streaming says why. */
     linkStatus: String? = null,
+    /** Tries the gateway again now, from the offline banner. */
+    onRetryConnection: () -> Unit = {},
     attachments: List<OutgoingAttachment>,
     attachmentError: String?,
     /** Comments on parts of the chat, waiting for the next send. */
@@ -481,11 +519,16 @@ internal fun ChatView(
     onNotice: (String) -> Unit,
     /** The chat background from Settings, drawn behind the conversation (and frosted under the composer). */
     wallpaper: ImageBitmap? = null,
+    /** The gateway's name, said where Hermes runs: under the title and on the empty chat. */
+    place: String? = null,
+    /** The profile the chat runs in; null is the launch profile, shown as "default". */
+    profile: String? = null,
 ) {
     Box(
         Modifier
             .fillMaxSize()
             .background(Theme[colors][background])
+            .then(if (wallpaper == null) Modifier.halo() else Modifier)
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal)),
         contentAlignment = Alignment.TopCenter,
     ) {
@@ -493,11 +536,7 @@ internal fun ChatView(
             TopBar(
                 title = title,
                 titleFace = titleFace,
-                subtitle = when {
-                    !connected -> connectionLabel
-                    state.attachment is Attachment.Attaching -> "Opening…"
-                    else -> null
-                },
+                status = chatStatus(state, connected, connectionLabel, place),
                 onOpenSidebar = onOpenSidebar,
                 onNewChat = onNewChat,
                 onOpenMenu = onOpenMenu,
@@ -563,10 +602,19 @@ internal fun ChatView(
                         when {
                             !state.historyLoaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
                             state.historyError != null ->
-                                EmptyState(Lucide.CloudOff, "Couldn't load the conversation", state.historyError.orEmpty()) {
+                                EmptyState(Lucide.CloudOff, "Couldn't load the conversation", state.historyError.orEmpty(), error = true) {
                                     Button("Try again", onClick = actions::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                                 }
-                            else -> Greeting(onAttach = onAttach, onDictate = onDictate, connected = connected, dictation = dictation, canAttach = attachments.size < OutgoingAttachment.MAX_COUNT)
+                            else -> Greeting(
+                                onAttach = onAttach,
+                                onDictate = onDictate,
+                                onVoiceChat = onVoiceChat,
+                                connected = connected,
+                                dictation = dictation,
+                                canAttach = attachments.size < OutgoingAttachment.MAX_COUNT,
+                                place = place,
+                                profile = profile,
+                            )
                         }
                     }
                 }
@@ -578,8 +626,8 @@ internal fun ChatView(
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
-                    AnimatedVisibility(visible = linkStatus != null && state.messages.isNotEmpty(), enter = fadeIn(), exit = fadeOut()) {
-                        StatusPill(lastLinkStatus)
+                    AnimatedVisibility(visible = linkStatus != null, enter = fadeIn(), exit = fadeOut()) {
+                        OfflineBanner(place, lastLinkStatus, onRetry = onRetryConnection)
                     }
                     AnimatedVisibility(visible = state.loadingOlder, enter = fadeIn(), exit = fadeOut()) {
                         StatusPill("Loading earlier messages…")
@@ -679,12 +727,22 @@ private fun ColumnScope.Dock(
     AnimatedVisibility(visible = notice != null) { NoticeLine(notice.orEmpty()) }
     // One place says what's happening: the current action, with the status text and plan folded beneath.
     AnimatedVisibility(visible = state.running, enter = fadeIn(), exit = fadeOut()) {
-        ProgressPanel(currentAction(state), state.status, state.runningTool(), state.livePlan(), hazeState)
+        ProgressPanel(
+            step = currentStep(state),
+            status = state.status,
+            tool = state.runningTool(),
+            todos = state.livePlan(),
+            turnKey = runningTurnKey(state),
+            onStop = actions::interrupt,
+            // Not once it's over: the card fades out with the turn already ended.
+            canStop = connected && state.running,
+        )
     }
     if (!state.running) TodoPanel(state.todos, live = state.todosLive, hazeState = hazeState)
 
     if (state.inputRequests.isNotEmpty()) {
-        InputRequestPanel(state.inputRequests, connected, onAnswer = actions::answer, onStop = actions::interrupt.takeIf { state.running })
+        // The task's Stop is on the live task card above.
+        InputRequestPanel(state.inputRequests, connected, onAnswer = actions::answer, onStop = null)
     } else if (voiceChat.phase != VoicePhase.Off) {
         VoicePanel(
             hazeState = hazeState,
@@ -741,145 +799,211 @@ private fun ColumnScope.Dock(
     }
 }
 
+/** How things stand, by the color of the dot beside a status line. */
+internal enum class StatusTone { Ok, Busy, Waiting, Trouble, Neutral }
+
+/** The line under the top bar's title, with its dot. */
+internal data class BarStatus(val text: String, val tone: StatusTone)
+
+/** The status line for a chat: the link first, then a question waiting, the agent at work, else where it runs. */
+internal fun chatStatus(state: ChatState, connected: Boolean, connectionLabel: String, place: String?): BarStatus = when {
+    !connected -> BarStatus(connectionLabel, StatusTone.Trouble)
+    state.attachment is Attachment.Attaching -> BarStatus("Opening…", StatusTone.Busy)
+    state.inputRequests.isNotEmpty() -> BarStatus("Needs your answer", StatusTone.Waiting)
+    state.running -> {
+        // Once every step is done the agent is wrapping up, not on a step.
+        val plan = state.livePlan()
+        val step = planStep(plan)
+        BarStatus(if (plan != null && step != null) "Working · step $step of ${plan.total}" else "Working", StatusTone.Busy)
+    }
+    else -> BarStatus(listOfNotNull("Hermes", place).joinToString(" · "), StatusTone.Ok)
+}
+
+/** Where the empty chat says Hermes runs: "Hermes on homelab · default profile". */
+internal fun greetingPlace(place: String?, profile: String?): String =
+    "${place?.let { "Hermes on $it" } ?: "Hermes"} · ${profile ?: "default"} profile"
+
 /**
- * Desktop's tab strip on a phone: the title in small spaced capitals over an accent rule, the sessions
- * button on the left and new chat with the chat's options grouped on the right.
+ * The sessions button, the title with a status line under it, and new chat with the chat's options
+ * grouped in a pill on the right.
  */
 @Composable
 internal fun TopBar(
     title: String,
     titleFace: (@Composable () -> Unit)?,
-    subtitle: String?,
+    status: BarStatus?,
     onOpenSidebar: () -> Unit,
     onNewChat: (() -> Unit)?,
     onOpenMenu: (() -> Unit)?,
     /** In place of New chat and the menu, e.g. a room's own buttons. */
     trailing: (@Composable () -> Unit)? = null,
 ) {
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            BarButton(Lucide.PanelLeft, "Sessions", onClick = onOpenSidebar)
-            Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
-                Column(Modifier.width(IntrinsicSize.Max), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        titleFace?.invoke()
-                        Text(
-                            title.uppercase(),
-                            style = Theme[typography][label].copy(fontWeight = FontWeight.Bold, letterSpacing = 0.06.em),
-                            color = Theme[colors][textColor],
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.padding(horizontal = 4.dp, vertical = 6.dp),
-                        )
-                    }
-                    Box(Modifier.fillMaxWidth().height(2.dp).background(Theme[colors][accent]))
-                }
-                if (!subtitle.isNullOrBlank()) {
-                    Text(subtitle, style = Theme[typography][caption], color = Theme[colors][warning], maxLines = 1, modifier = Modifier.padding(top = 2.dp))
-                }
+    Row(
+        Modifier.fillMaxWidth().padding(start = 4.dp, end = 10.dp, top = 4.dp, bottom = 8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        BarButton(Lucide.PanelLeft, "Sessions", onClick = onOpenSidebar, tint = Theme[colors][textTertiary])
+        Column(Modifier.weight(1f)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                titleFace?.invoke()
+                Text(
+                    title,
+                    style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold, lineHeight = 19.sp),
+                    color = Theme[colors][textColor],
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
-            val shape = RoundedCornerShape(Theme[radii][radiusMedium])
-            Row(Modifier.clip(shape).border(1.dp, Theme[colors][stroke], shape)) {
-                if (trailing != null) {
-                    trailing()
-                } else {
-                    BarButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null)
-                    BarButton(Lucide.EllipsisVertical, "Chat options", onClick = { onOpenMenu?.invoke() }, enabled = onOpenMenu != null)
-                }
+            if (status != null && status.text.isNotBlank()) StatusLine(status)
+        }
+        // The buttons fill the pill edge to edge, so each keeps its whole 44dp to tap.
+        val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+        Row(
+            Modifier
+                .clip(shape)
+                .background(Theme[colors][surface], shape)
+                .border(1.dp, Theme[colors][stroke], shape),
+        ) {
+            if (trailing != null) {
+                trailing()
+            } else {
+                BarButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null)
+                BarButton(Lucide.Ellipsis, "Chat options", onClick = { onOpenMenu?.invoke() }, enabled = onOpenMenu != null)
             }
         }
-        Box(Modifier.fillMaxWidth().height(1.dp).background(Theme[colors][stroke]))
+    }
+}
+
+/** A dot in [BarStatus.tone] with a soft ring, then the status in small grey type. */
+@Composable
+private fun StatusLine(status: BarStatus) {
+    val (dot, ring) = when (status.tone) {
+        StatusTone.Ok -> Theme[colors][success] to Theme[colors][successSoft]
+        StatusTone.Busy -> Theme[colors][accentText] to Theme[colors][accentSoft]
+        StatusTone.Waiting -> Theme[colors][warning] to Theme[colors][warningSoft]
+        StatusTone.Trouble -> Theme[colors][danger] to Theme[colors][dangerSoft]
+        StatusTone.Neutral -> Theme[colors][textMuted] to Theme[colors][surface3]
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(7.dp)) {
+        Box(Modifier.size(12.dp).background(ring, CircleShape).padding(3.dp).background(dot, CircleShape))
+        Text(
+            status.text,
+            style = Theme[typography][caption],
+            // Trouble is said in its own color, so a lost link reads at a glance.
+            color = if (status.tone == StatusTone.Trouble) Theme[colors][danger] else Theme[colors][textTertiary],
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
 /** A 44dp square icon button with no fill, the top bar's style. */
 @Composable
-internal fun BarButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean = true) {
+internal fun BarButton(
+    icon: ImageVector,
+    contentDescription: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    tint: Color = Theme[colors][textSecondary],
+) {
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusMedium])).alpha(if (enabled) 1f else 0.35f),
+        modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusSmall])).alpha(if (enabled) 1f else 0.35f),
         indication = rememberColoredIndication(Theme[colors][textColor]),
     ) {
-        UnstyledIcon(icon, contentDescription = contentDescription, tint = Theme[colors][textSecondary], modifier = Modifier.size(20.dp))
+        UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(19.dp))
     }
 }
 
-/** An empty chat is titled with the app's name in heavy spaced capitals stretched to the column. */
+/**
+ * An empty chat: the mark, a question in display type with one word in the accent, where Hermes runs, and
+ * pills for the other ways to begin than typing.
+ */
 @Composable
-private fun Greeting(onAttach: () -> Unit, onDictate: () -> Unit, connected: Boolean, dictation: DictationState, canAttach: Boolean) {
-    // Blue on light; near-white on dark, where the blue at this size glares.
-    val color = if (Theme[colors][background].luminance() < 0.5f) Theme[colors][textColor].copy(alpha = 0.9f) else Theme[colors][accent]
-    // The lettering's ink width in px, so the pills below can share its edges.
-    var wordmarkInk by remember { mutableIntStateOf(0) }
-    Box(Modifier.fillMaxSize().padding(horizontal = 20.dp), contentAlignment = Alignment.Center) {
-        Column(
-            Modifier.fillMaxWidth().padding(bottom = 48.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(24.dp),
-        ) {
-            BasicText(
-                "HERALD",
-                style = Theme[typography][wordmark].copy(textAlign = TextAlign.Center),
-                color = { color },
-                maxLines = 1,
-                autoSize = TextAutoSize.StepBased(minFontSize = 28.sp, maxFontSize = 72.sp, stepSize = 1.sp),
-                onTextLayout = { layout ->
-                    // Letter spacing pads half a gap outside the H and the D; leave it out.
-                    val style = layout.layoutInput.style
-                    val spacing = with(layout.layoutInput.density) { style.letterSpacing.value * style.fontSize.toPx() }
-                    wordmarkInk = (layout.getLineRight(0) - layout.getLineLeft(0) - spacing).roundToInt()
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
+private fun Greeting(
+    onAttach: () -> Unit,
+    onDictate: () -> Unit,
+    onVoiceChat: () -> Unit,
+    connected: Boolean,
+    dictation: DictationState,
+    canAttach: Boolean,
+    place: String?,
+    profile: String?,
+) {
+    val accentWord = Theme[colors][accentText]
+    Box(Modifier.fillMaxSize().padding(horizontal = 24.dp), contentAlignment = Alignment.CenterStart) {
+        Column(Modifier.fillMaxWidth().padding(bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+            AppMark(52.dp)
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Text(
+                    remember(accentWord) {
+                        buildAnnotatedString {
+                            append("What are we\n")
+                            withStyle(SpanStyle(color = accentWord)) { append("building") }
+                            append(" today?")
+                        }
+                    },
+                    style = Theme[typography][display],
+                    color = Theme[colors][textColor],
+                )
+                Text(
+                    greetingPlace(place, profile),
+                    style = Theme[typography][bodySmall],
+                    color = Theme[colors][textTertiary],
+                )
+            }
             // Other ways to begin than typing, named rather than left to the composer's icons.
-            SplitCapsule(
-                spanPx = wordmarkInk,
-                start = { Button("Attach", onClick = onAttach, variant = ButtonVariant.Ghost, leadingIcon = Lucide.Paperclip, enabled = canAttach) },
-            ) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                StartPill(Lucide.Paperclip, "Attach", onClick = onAttach, enabled = canAttach)
                 // Tracks the composer's mic: while recording the same tap finishes it.
-                Button(
+                StartPill(
+                    if (dictation.recording) Lucide.Square else Lucide.Mic,
                     dictateLabel(dictation),
                     onClick = onDictate,
-                    variant = ButtonVariant.Ghost,
-                    leadingIcon = if (dictation.recording) Lucide.Square else Lucide.Mic,
-                    enabled = connected,
-                    loading = dictation.transcribing,
+                    enabled = connected && !dictation.transcribing,
                 )
+                StartPill(Lucide.AudioLines, "Voice chat", onClick = onVoiceChat, enabled = connected)
             }
         }
     }
 }
 
-/**
- * One outlined capsule [spanPx] wide, split down the middle into equal halves for [start] and [end]; a half whose
- * label needs more widens both rather than being clipped.
- */
+/** The app's mark: the white H on a Herald blue rounded square, with its glow under it unless it's small. */
 @Composable
-private fun SplitCapsule(spanPx: Int, start: @Composable () -> Unit, end: @Composable () -> Unit) {
+internal fun AppMark(size: Dp, glow: Boolean = true) {
+    val shape = RoundedCornerShape(size * 0.29f)
+    Box(
+        Modifier
+            .size(size)
+            .then(if (glow) Modifier.dropShadow(shape, bubbleGlow(HeraldBrandBlue)) else Modifier)
+            .background(HeraldBrandBlue, shape),
+        contentAlignment = Alignment.Center,
+    ) {
+        UnstyledIcon(HeraldMark, contentDescription = null, tint = Color.White, modifier = Modifier.size(size * 0.6f))
+    }
+}
+
+/** A pill on the empty chat: an accent icon and a label on a ringed surface. */
+@Composable
+private fun StartPill(icon: ImageVector, text: String, onClick: () -> Unit, enabled: Boolean) {
     val shape = RoundedCornerShape(percent = 50)
-    val line = Theme[colors][strokeStrong]
-    Layout(
-        contents = listOf(start, end),
+    UnstyledButton(
+        onClick = onClick,
+        enabled = enabled,
         modifier = Modifier
+            .heightIn(min = MinTouchTarget)
+            .alpha(if (enabled) 1f else 0.4f)
             .clip(shape)
-            .border(1.dp, line, shape)
-            .drawWithContent {
-                drawContent()
-                drawLine(line,Offset(size.width / 2, 0f), Offset(size.width / 2, size.height), strokeWidth = 1.dp.toPx())
-            },
-    ) { (startMeasurables, endMeasurables), constraints ->
-        val measurables = startMeasurables + endMeasurables
-        val natural = measurables.maxOfOrNull { it.maxIntrinsicWidth(constraints.maxHeight) } ?: 0
-        val half = maxOf(natural, spanPx / 2).coerceAtMost(constraints.maxWidth / 2)
-        val placeables = measurables.map { it.measure(Constraints(minWidth = half, maxWidth = half, maxHeight = constraints.maxHeight)) }
-        val height = placeables.maxOfOrNull { it.height } ?: 0
-        layout(half * 2, height) {
-            placeables.forEachIndexed { i, p -> p.placeRelative(i * half, (height - p.height) / 2) }
+            .background(Theme[colors][surface], shape)
+            .border(1.dp, Theme[colors][stroke], shape),
+        indication = rememberColoredIndication(Theme[colors][textColor]),
+        contentPadding = PaddingValues(horizontal = 16.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][accentText], modifier = Modifier.size(16.dp))
+            Text(text, style = Theme[typography][label], color = Theme[colors][textColor], singleLine = true)
         }
     }
 }
@@ -1222,6 +1346,62 @@ internal fun linkStatus(state: ConnectionState): String? = when (state) {
 /** GatewayConnection's reason when the ticket request never reached the gateway (no network, or it's down). */
 private const val UNREACHABLE = "Can't reach gateway"
 
+/** The banner over the chat while the gateway can't be reached: where, what's being done about it, and Retry now. */
+@Composable
+private fun OfflineBanner(place: String?, status: String, onRetry: () -> Unit) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 14.dp)
+            .background(Theme[colors][dangerSoft], RoundedCornerShape(Theme[radii][radiusMedium]))
+            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
+            .semantics(mergeDescendants = true) {},
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        UnstyledIcon(Lucide.WifiOff, contentDescription = null, tint = Theme[colors][danger], modifier = Modifier.size(16.dp))
+        Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
+            // Announced once as it appears: the line under it changes with every attempt, and isn't.
+            Text(
+                offlineTitle(place),
+                style = Theme[typography][bodySmall].copy(fontWeight = FontWeight.Medium),
+                color = Theme[colors][textColor],
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+            Text("$status Your draft is kept.", style = Theme[typography][caption], color = Theme[colors][textSecondary])
+        }
+        RetryChip("Retry now", onClick = onRetry)
+    }
+}
+
+/** What the offline banner leads with. */
+internal fun offlineTitle(place: String?): String = "Can't reach ${place?.takeIf { it.isNotBlank() } ?: "Hermes"}"
+
+/** A small pill button, drawn 30dp tall with the full touch height around it. */
+@Composable
+private fun RetryChip(text: String, onClick: () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        Modifier
+            .heightIn(min = MinTouchTarget)
+            .clickable(interaction, indication = null, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text,
+            style = Theme[typography][caption].copy(fontWeight = FontWeight.Medium),
+            color = Theme[colors][textColor],
+            maxLines = 1,
+            modifier = Modifier
+                .heightIn(min = 30.dp)
+                .clip(CircleShape)
+                .background(Theme[colors][surface3], CircleShape)
+                .indication(interaction, rememberColoredIndication(Theme[colors][textColor]))
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+        )
+    }
+}
+
 /** A small floating line with a spinner, for something under way. */
 @Composable
 private fun StatusPill(text: String) {
@@ -1251,111 +1431,161 @@ private fun UserBubble(
     /** It's in the composer being edited. */
     editing: Boolean,
 ) {
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    val shape = userBubbleShape()
     val clipboard = LocalClipboard.current
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     var menuOpen by remember { mutableStateOf(false) }
-    val hasMenu = message.text.isNotBlank() || onEdit != null || onBranch != null
+    // A prompt in doubt always has one: its Edit is there.
+    val hasMenu = message.text.isNotBlank() || onEdit != null || onBranch != null || message.check == SendCheck.Unknown
     val review = remember(message.text) { parseReview(message.text) }
     val commentHost = LocalCommentHost.current
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
         // A long press opens the prompt's actions just under it; the text itself isn't selectable, Copy is in there.
-        DropdownMenu(
-            expanded = menuOpen,
-            onExpandedChange = { menuOpen = it },
-            items = {
-                if (message.text.isNotBlank()) {
-                    MenuAction("Copy", Lucide.Copy, onClick = {
-                        menuOpen = false
-                        scope.launch { clipboard.setClipEntry(plainTextClipEntry(message.text)) }
-                    })
-                }
-                // The prompt isn't selectable, so its comment is on all of it.
-                if (commentHost != null && review == null && message.text.isNotBlank() && !message.pending) {
-                    MenuAction("Comment", Lucide.MessageSquare, onClick = {
-                        menuOpen = false
-                        commentHost.onSelection(
-                            SelectionAction.Comment,
-                            CommentSource(message.key, "my message that starts “${openingWords(message.text)}”"),
-                            SelectionAnchor.whole(message.text),
-                        )
-                    })
-                }
-                onEdit?.let { MenuAction(editLabel, Lucide.Pencil, onClick = { menuOpen = false; it() }) }
-                onBranch?.let { MenuAction("Branch from here", Lucide.GitBranch, onClick = { menuOpen = false; it() }) }
-            },
-        ) {
-            Column(
-                Modifier
-                    .fillMaxWidth()
-                    .alpha(if (message.pending || message.check == SendCheck.Checking) 0.6f else 1f)
-                    .clip(shape)
-                    .background(Theme[colors][userBubble], shape)
-                    // The prompt being edited is outlined in the accent, tying it to the composer.
-                    .border(if (editing) 2.dp else 1.dp, if (editing) Theme[colors][accent] else Theme[colors][userBubbleStroke], shape)
-                    .then(
-                        if (hasMenu) {
-                            Modifier.combinedClickable(
-                                onClick = {},
-                                onLongClick = {
-                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    menuOpen = true
-                                },
-                                onLongClickLabel = "Message actions",
-                                interactionSource = null,
-                                indication = rememberColoredIndication(Theme[colors][textColor]),
+        // The bubble hugs its text, up to most of the row, against the end edge.
+        Box(Modifier.fillMaxWidth(USER_BUBBLE_WIDTH), contentAlignment = Alignment.TopEnd) {
+            DropdownMenu(
+                expanded = menuOpen,
+                onExpandedChange = { menuOpen = it },
+                items = {
+                    if (message.text.isNotBlank()) {
+                        MenuAction("Copy", Lucide.Copy, onClick = {
+                            menuOpen = false
+                            scope.launch { clipboard.setClipEntry(plainTextClipEntry(message.text)) }
+                        })
+                    }
+                    // The prompt isn't selectable, so its comment is on all of it.
+                    if (commentHost != null && review == null && message.text.isNotBlank() && !message.pending) {
+                        MenuAction("Comment", Lucide.MessageSquare, onClick = {
+                            menuOpen = false
+                            commentHost.onSelection(
+                                SelectionAction.Comment,
+                                CommentSource(message.key, "my message that starts “${openingWords(message.text)}”"),
+                                SelectionAnchor.whole(message.text),
                             )
-                        } else Modifier,
-                    )
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                        })
+                    }
+                    onEdit?.let { MenuAction(editLabel, Lucide.Pencil, onClick = { menuOpen = false; it() }) }
+                    // A prompt in doubt has only Check and Resend under it; taking it back to edit is here.
+                    if (onEdit == null && message.check == SendCheck.Unknown) {
+                        MenuAction("Edit", Lucide.Pencil, onClick = { menuOpen = false; actions.editMessage(message.key) })
+                    }
+                    onBranch?.let { MenuAction("Branch from here", Lucide.GitBranch, onClick = { menuOpen = false; it() }) }
+                },
             ) {
-                if (message.attachments.isNotEmpty()) SentAttachments(message.attachments)
-                when {
-                    review != null -> SentReviewContent(review)
-                    message.text.isNotEmpty() -> Text(message.text, style = Theme[typography][body], color = Theme[colors][textColor])
+                // A prompt still on its way, or whose delivery is in doubt, is a soft tint with plain text:
+                // fading the accent fill would fade the white text with it.
+                val waiting = message.pending || message.check != null
+                val onBubble = Theme[colors][if (waiting) textSecondary else onUserBubble]
+                // A prompt whose delivery is in doubt is marked beside it, on the side away from the edge.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    message.check?.let { DeliveryMark(it) }
+                    Column(
+                        Modifier
+                            .weight(1f, fill = false)
+                            // A sent prompt glows faintly in its own color; one still on its way doesn't.
+                            .then(if (waiting) Modifier else Modifier.dropShadow(shape, bubbleGlow(Theme[colors][userBubble])))
+                            .clip(shape)
+                            .background(Theme[colors][if (waiting) accentSoft else userBubble], shape)
+                            // The prompt being edited is outlined in the text color, which shows on the accent fill.
+                            .then(if (editing) Modifier.border(2.dp, Theme[colors][textColor], shape) else Modifier)
+                            .then(
+                                if (hasMenu) {
+                                    Modifier.combinedClickable(
+                                        onClick = {},
+                                        onLongClick = {
+                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            menuOpen = true
+                                        },
+                                        onLongClickLabel = "Message actions",
+                                        interactionSource = null,
+                                        indication = rememberColoredIndication(onBubble),
+                                    )
+                                } else Modifier,
+                            )
+                            .padding(horizontal = 14.dp, vertical = 9.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (message.attachments.isNotEmpty()) SentAttachments(message.attachments)
+                        when {
+                            review != null -> SentReviewContent(review, onBubble)
+                            message.text.isNotEmpty() -> Text(message.text, style = Theme[typography][body], color = onBubble)
+                        }
+                    }
                 }
             }
         }
-        if (!message.pending) MessageTimeLabel(message.timestamp, Modifier.align(Alignment.End))
+        if (!message.pending) MessageTimeLabel(message.timestamp)
         if (message.queued) {
             Text("Queued · sends after this task", style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }
         if (editing) {
-            Text("Editing in the composer", style = Theme[typography][caption], color = Theme[colors][accent])
+            Text("Editing in the composer", style = Theme[typography][caption], color = Theme[colors][accentText])
         }
-        when (message.check) {
-            SendCheck.Checking -> Text("Checking whether Hermes got this…", style = Theme[typography][caption], color = Theme[colors][textTertiary])
-            SendCheck.Unknown -> UnsettledActions("May not have reached Hermes", message.key, mayHaveArrived = true, actions, connected)
-            SendCheck.NotReceived -> UnsettledActions("Hermes didn't get this", message.key, mayHaveArrived = false, actions, connected)
-            null -> {}
-        }
+        message.check?.let { UnsettledActions(it, message.key, actions, connected) }
     }
 }
 
+/** A prompt's bubble: round all over but the corner by the sender, which tucks in. */
+@Composable
+internal fun userBubbleShape(): RoundedCornerShape {
+    val round = Theme[radii][radiusLarge]
+    return RoundedCornerShape(topStart = round, topEnd = round, bottomEnd = Theme[radii][radiusXSmall], bottomStart = round)
+}
+
+/** How much of the row a prompt's bubble may take. */
+private const val USER_BUBBLE_WIDTH = 0.84f
+
+/** The design's glow: a soft shadow in the color of what casts it, a little below it. */
+internal fun bubbleGlow(color: Color) = Shadow(radius = 18.dp, color = color.copy(alpha = 0.4f), offset = DpOffset(0.dp, 6.dp))
+
+/** The mark beside a prompt whose delivery is in doubt: an alert when Hermes didn't get it, a clock while it's unknown. */
+@Composable
+private fun DeliveryMark(check: SendCheck) {
+    val (icon, tint, soft) = when (check) {
+        SendCheck.NotReceived -> Triple(Lucide.CircleAlert, danger, dangerSoft)
+        SendCheck.Unknown, SendCheck.Checking -> Triple(Lucide.Clock, warning, warningSoft)
+    }
+    Box(Modifier.size(22.dp).background(Theme[colors][soft], CircleShape), contentAlignment = Alignment.Center) {
+        UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][tint], modifier = Modifier.size(13.dp))
+    }
+}
+
+/** What's said under a prompt whose delivery is in doubt. */
+internal fun deliveryLabel(check: SendCheck): String = when (check) {
+    SendCheck.Checking -> "Checking whether Hermes got this…"
+    SendCheck.Unknown -> "May not have arrived"
+    SendCheck.NotReceived -> "Not delivered"
+}
+
 /**
- * What to do with a prompt that lost its reply: check the transcript again, resend it, or take it back to
- * edit. Nothing is resent on its own; when it [mayHaveArrived], Resend first warns it could run twice.
+ * What to do with a prompt that lost its reply: when it may have arrived, check the transcript again or resend it;
+ * when it didn't, resend it or take it back to edit. Nothing is resent on its own; when it may have arrived,
+ * Resend first warns it could run twice.
  */
 @Composable
-private fun UnsettledActions(label: String, key: String, mayHaveArrived: Boolean, actions: ChatActions, connected: Boolean) {
+private fun UnsettledActions(check: SendCheck, key: String, actions: ChatActions, connected: Boolean) {
     var confirmResend by remember(key) { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(label, style = Theme[typography][caption], color = Theme[colors][textTertiary])
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (mayHaveArrived) {
-                Button("Check delivery", onClick = { actions.checkDelivery(key) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small, leadingIcon = Lucide.SearchCheck)
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            deliveryLabel(check),
+            style = Theme[typography][caption],
+            color = Theme[colors][textTertiary],
+            modifier = Modifier.padding(end = 4.dp),
+        )
+        when (check) {
+            SendCheck.Checking -> {}
+            SendCheck.Unknown -> {
+                DeliveryChip("Check", Lucide.SearchCheck, description = "Check delivery", onClick = { actions.checkDelivery(key) })
+                DeliveryChip("Resend", Lucide.RotateCw, enabled = connected, onClick = { confirmResend = true })
             }
-            Button(
-                "Resend",
-                onClick = { if (mayHaveArrived) confirmResend = true else actions.resend(key) },
-                variant = ButtonVariant.Ghost,
-                size = ButtonSize.Small,
-                leadingIcon = Lucide.RotateCw,
-                enabled = connected,
-            )
-            Button("Edit", onClick = { actions.editMessage(key) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small, leadingIcon = Lucide.Pencil)
+            SendCheck.NotReceived -> {
+                DeliveryChip("Resend", Lucide.RotateCw, enabled = connected, onClick = { actions.resend(key) })
+                DeliveryChip("Edit", Lucide.Pencil, onClick = { actions.editMessage(key) })
+            }
         }
     }
     Dialog(
@@ -1363,12 +1593,49 @@ private fun UnsettledActions(label: String, key: String, mayHaveArrived: Boolean
         onDismissRequest = { confirmResend = false },
         title = "Resend this message?",
         message = "Hermes may already have it. If it does, resending makes Hermes get the same request twice and run it again. " +
-            "Check delivery first to be sure.",
+            "Tap Check first to be sure.",
         actions = {
             Button("Cancel", onClick = { confirmResend = false }, variant = ButtonVariant.Ghost)
             Button("Resend", onClick = { confirmResend = false; actions.resend(key) })
         },
     )
+}
+
+/** A small action under an undelivered prompt: drawn 28dp tall, but the full touch height around it takes the tap. */
+@Composable
+private fun DeliveryChip(
+    text: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    description: String = text,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pill = CircleShape
+    Box(
+        Modifier
+            .heightIn(min = MinTouchTarget)
+            .clickable(interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            Modifier
+                .clearAndSetSemantics {}
+                .alpha(if (enabled) 1f else 0.45f)
+                // Grows with large text instead of cutting it off.
+                .heightIn(min = 28.dp)
+                .clip(pill)
+                .background(Theme[colors][surface2], pill)
+                .indication(interaction, rememberColoredIndication(Theme[colors][textColor]))
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][textColor], modifier = Modifier.size(12.dp))
+            Text(text, style = Theme[typography][caption].copy(fontWeight = FontWeight.Medium), color = Theme[colors][textColor])
+        }
+    }
 }
 
 /**
@@ -1466,9 +1733,11 @@ private fun AssistantReply(
     val generated = remember(message.tools) { message.tools.mapNotNull { it.generatedImage }.distinctBy { it.source } }
     val (text, media) = remember(message.text, generated, unservable) { extractReplyMedia(message.text, generated + unservable) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        ReplyHeader(message.timestamp.takeUnless { message.streaming })
         // What's happening now is said once, above the composer; the reply keeps only what it's made of.
         if (showReasoning) Reasoning(message.reasoning)
-        if (showTools) Tools(listedTools, message.key)
+        // While the turn runs its finished steps are listed as they land; once it ends they fold into the pill.
+        if (showTools) if (message.streaming) LiveSteps(listedTools, message.key) else Tools(listedTools, message.key)
         if (generated.isNotEmpty()) ReplyMediaList(remember(generated) { generated.map { it.asMedia() } })
         // Shown whatever the tool-activity setting: the work happens out of sight, in other agents.
         message.tools.filter { it.name == "delegate_task" }.forEach { DelegationCard(it) }
@@ -1502,31 +1771,48 @@ private fun AssistantReply(
             }
         }
         val usage = message.usage?.takeIf { settings.showUsage && !message.streaming }
-        val dated = settings.showTimestamps && !message.streaming && message.timestamp != null
-        if ((!message.streaming && text.isNotBlank()) || usage != null || dated) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                if (!message.streaming && text.isNotBlank()) {
+        val actionable = !message.streaming && text.isNotBlank()
+        if (actionable || usage != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (actionable) {
                     // Their padding trimmed off the start and top, the icons line up with the reply and sit close under it.
-                    CopyButton(text, Modifier.trimStartTop(start = 8.dp, top = 4.dp))
-                    onRegenerate?.let {
-                        IconButton(Lucide.RefreshCw, contentDescription = "Regenerate", onClick = it, modifier = Modifier.trimStartTop(start = 0.dp, top = 4.dp))
-                    }
-                    onBranch?.let {
-                        IconButton(Lucide.GitBranch, contentDescription = "Branch from here", onClick = it, modifier = Modifier.trimStartTop(start = 0.dp, top = 4.dp))
-                    }
+                    val action = Modifier.trimStartTop(start = 0.dp, top = 4.dp)
+                    CopyButton(text, Modifier.trimStartTop(start = 16.dp, top = 4.dp).size(MinTouchTarget))
+                    onRegenerate?.let { ReplyAction(Lucide.RefreshCw, "Regenerate", it, action) }
+                    onBranch?.let { ReplyAction(Lucide.GitBranch, "Branch from here", it, action) }
                 }
+                Spacer(Modifier.weight(1f))
                 usage?.let {
                     Text(
-                        "${compactCount(it.input)} in · ${compactCount(it.output)} out",
-                        style = Theme[typography][caption],
-                        color = Theme[colors][textTertiary],
+                        replyUsage(it.input, it.output),
+                        style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
+                        color = Theme[colors][textMuted],
+                        modifier = Modifier.semantics { contentDescription = "${compactCount(it.input)} tokens in, ${compactCount(it.output)} out" },
                     )
                 }
-                if (dated) MessageTimeLabel(message.timestamp)
             }
         }
     }
 }
+
+/** Who's speaking above a reply: the small mark, "Hermes", and when it finished. */
+@Composable
+private fun ReplyHeader(epochSeconds: Double?) {
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+        AppMark(20.dp, glow = false)
+        Text("Hermes", style = Theme[typography][label], color = Theme[colors][textSecondary])
+        MessageTimeLabel(epochSeconds)
+    }
+}
+
+/** One of the quiet icons under a finished reply, at the full touch size. */
+@Composable
+private fun ReplyAction(icon: ImageVector, contentDescription: String, onClick: () -> Unit, modifier: Modifier) {
+    IconButton(icon, contentDescription = contentDescription, onClick = onClick, modifier = modifier, tint = Theme[colors][textTertiary], iconSize = 16.dp)
+}
+
+/** A reply's tokens, read in and written out: "18.4k ↓ · 612 ↑". */
+internal fun replyUsage(input: Long, output: Long): String = "${compactCount(input)} ↓ · ${compactCount(output)} ↑"
 
 /** When a prompt was sent or a reply finished, in small type; nothing when the setting is off or there's no time. */
 @Composable
@@ -1616,7 +1902,7 @@ private fun SlashSuggestions(suggestions: List<SlashSuggestion>, hazeState: Haze
                 item(key = "group-$index-$group") {
                     Text(
                         group.uppercase(),
-                        style = Theme[typography][caption].copy(fontWeight = FontWeight.Bold, letterSpacing = 0.06.em),
+                        style = Theme[typography][caption].copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.06.em),
                         color = Theme[colors][textTertiary],
                         modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = if (index == 0) 4.dp else 10.dp, bottom = 2.dp),
                     )
@@ -1631,7 +1917,7 @@ private fun SlashSuggestions(suggestions: List<SlashSuggestion>, hazeState: Haze
                     Text(
                         row.label,
                         style = Theme[typography][code].copy(fontWeight = FontWeight.SemiBold),
-                        color = if (row.kind == SlashKind.Skill) Theme[colors][accent] else Theme[colors][textColor],
+                        color = if (row.kind == SlashKind.Skill) Theme[colors][accentText] else Theme[colors][textColor],
                         maxLines = 1,
                     )
                     if (row.description.isNotBlank()) {
@@ -1699,7 +1985,7 @@ internal fun MentionSuggestions(choices: List<MentionChoice>, hazeState: HazeSta
     }
 }
 
-/** A tappable one-line header that opens to show more, shared by reasoning and tool activity. */
+/** A tappable one-line header that opens to show more, as the reply's reasoning does. */
 @Composable
 private fun Disclosure(
     icon: @Composable () -> Unit,
@@ -1753,18 +2039,182 @@ private fun Reasoning(text: String) {
 @Composable
 private fun Tools(tools: List<ToolActivity>, messageKey: String) {
     var expanded by remember { mutableStateOf(false) }
-    val names = tools.map { it.name }.distinct()
-    val label = if (names.size <= 2) "Used ${names.joinToString(" and ")}" else "Used ${tools.size} tools"
-    Disclosure(
-        icon = { UnstyledIcon(Lucide.Wrench, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp)) },
-        label = label,
-        expanded = expanded,
-        onToggle = { expanded = !expanded },
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            tools.forEach { ToolRow(it, messageKey) }
+    val icons = remember(tools) { tools.map { toolIcon(it.name) }.distinct().take(3) }
+    val (ran, took) = workedLabel(tools)
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        // A pill: up to three of the kinds of tool it used, overlapping, then how many ran and for how long.
+        // It's drawn 36dp tall, but the full touch height around it takes the tap.
+        val pill = CircleShape
+        val interaction = remember { MutableInteractionSource() }
+        Box(
+            Modifier
+                .heightIn(min = MinTouchTarget)
+                .clickable(interaction, indication = null) { expanded = !expanded }
+                .semantics {
+                    contentDescription = listOfNotNull(ran, took).joinToString(", ")
+                    stateDescription = if (expanded) "Expanded" else "Collapsed"
+                },
+            contentAlignment = Alignment.CenterStart,
+        ) {
+            Row(
+                Modifier
+                    .clearAndSetSemantics {}
+                    .heightIn(min = 36.dp)
+                    .clip(pill)
+                    .background(Theme[colors][surface], pill)
+                    .border(1.dp, Theme[colors][stroke], pill)
+                    .indication(interaction, rememberColoredIndication(Theme[colors][textSecondary]))
+                    .padding(start = 6.dp, end = 12.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Row(horizontalArrangement = Arrangement.spacedBy((-6).dp)) { icons.forEach { ToolKindIcon(it) } }
+                Text(ran, style = Theme[typography][caption], color = Theme[colors][textSecondary])
+                took?.let { Text("· $it", style = Theme[typography][caption], color = Theme[colors][textMuted]) }
+                UnstyledIcon(
+                    if (expanded) Lucide.ChevronDown else Lucide.ChevronRight,
+                    contentDescription = null,
+                    tint = Theme[colors][textMuted],
+                    modifier = Modifier.size(13.dp),
+                )
+            }
+        }
+        if (expanded) {
+            Box(
+                Modifier
+                    .fillMaxWidth()
+                    .border(1.dp, Theme[colors][stroke], RoundedCornerShape(Theme[radii][radiusMedium]))
+                    .background(Theme[colors][surface], RoundedCornerShape(Theme[radii][radiusMedium]))
+                    .padding(12.dp),
+            ) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    tools.forEach { ToolRow(it, messageKey) }
+                }
+            }
         }
     }
+}
+
+/**
+ * A running reply's finished steps, newest last: a check (or a cross) in a soft circle, what was done, and
+ * how long it took. The step in hand is on the live task card instead. Only the last few show.
+ */
+@Composable
+private fun LiveSteps(tools: List<ToolActivity>, messageKey: String) {
+    val done = tools.filterNot { it.running }
+    if (done.isEmpty()) return
+    val shown = done.takeLast(LIVE_STEPS_SHOWN)
+    Column(Modifier.padding(start = 2.dp)) {
+        if (done.size > shown.size) {
+            val earlier = done.size - shown.size
+            Text(
+                if (earlier == 1) "1 earlier step" else "$earlier earlier steps",
+                style = Theme[typography][caption],
+                color = Theme[colors][textMuted],
+                modifier = Modifier.padding(start = 30.dp, bottom = 4.dp),
+            )
+        }
+        shown.forEach { key(it.id) { LiveStepRow(it, messageKey) } }
+    }
+}
+
+/** A finished step; tapped, it opens to what the tool was given and gave back, as in the pill's list. */
+@Composable
+private fun LiveStepRow(tool: ToolActivity, messageKey: String) {
+    val step = remember(tool) { toolDone(tool) }
+    var open by remember(tool.id) { mutableStateOf(false) }
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 36.dp)
+            .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
+            .clickable(onClickLabel = if (open) "Hide details" else "Show details") { open = !open },
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(20.dp).background(Theme[colors][if (tool.failed) dangerSoft else successSoft], CircleShape),
+            contentAlignment = Alignment.Center,
+        ) {
+            UnstyledIcon(
+                if (tool.failed) Lucide.X else Lucide.Check,
+                contentDescription = if (tool.failed) "Failed" else null,
+                tint = Theme[colors][if (tool.failed) danger else success],
+                modifier = Modifier.size(11.dp),
+            )
+        }
+        Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(step.title, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary], maxLines = 1)
+            step.detail?.let {
+                Text(
+                    it,
+                    style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
+                    color = Theme[colors][textSecondary],
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier
+                        .weight(1f, fill = false)
+                        .background(Theme[colors][surface], RoundedCornerShape(Theme[radii][radiusXSmall]))
+                        .padding(horizontal = 6.dp, vertical = 1.dp),
+                )
+            }
+        }
+        // A scan flagged its output: said on the row, so it's seen while Stop is still worth pressing.
+        if (tool.risk != null) {
+            UnstyledIcon(Lucide.ShieldAlert, contentDescription = "Suspicious output", tint = Theme[colors][warning], modifier = Modifier.size(14.dp))
+        }
+        tool.durationSeconds?.let { Text(formatDuration(it), style = Theme[typography][caption], color = Theme[colors][textMuted]) }
+    }
+    AnimatedVisibility(visible = open) {
+        Box(
+            Modifier
+                .padding(start = 30.dp, top = 2.dp, bottom = 6.dp)
+                .fillMaxWidth()
+                .border(1.dp, Theme[colors][stroke], RoundedCornerShape(Theme[radii][radiusMedium]))
+                .background(Theme[colors][surface], RoundedCornerShape(Theme[radii][radiusMedium]))
+                .padding(12.dp),
+        ) { ToolRow(tool, messageKey) }
+    }
+}
+
+private const val LIVE_STEPS_SHOWN = 4
+
+/** One kind of tool in the pill: its icon in a small circle, ringed in the pill's fill so the circles overlap cleanly. */
+@Composable
+private fun ToolKindIcon(icon: ImageVector) {
+    Box(
+        Modifier
+            .size(24.dp)
+            .border(2.dp, Theme[colors][surface], CircleShape)
+            .padding(1.dp)
+            .background(Theme[colors][surface3], CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(11.dp))
+    }
+}
+
+/**
+ * "Ran 3 tools" and the time they took between them ("42s"), for the reply's tool pill; no time when none
+ * was timed. It's the tools' own time added up, not the turn's: calls run side by side each count.
+ */
+internal fun workedLabel(tools: List<ToolActivity>): Pair<String, String?> {
+    val timed = tools.mapNotNull { it.durationSeconds }
+    val ran = if (tools.size == 1) "Ran 1 tool" else "Ran ${tools.size} tools"
+    return ran to timed.takeIf { it.isNotEmpty() }?.let { formatDuration(it.sum()) }
+}
+
+/** A tool's kind, as a small icon. */
+internal fun toolIcon(name: String): ImageVector = when {
+    name == "terminal" || name == "process" || name == "execute_code" -> Lucide.SquareTerminal
+    name == "patch" || name == "write_file" -> Lucide.FileDiff
+    name == "read_file" || name == "search_files" -> Lucide.FileText
+    name.startsWith("web_") || name.startsWith("browser_") -> Lucide.Globe
+    name == "image_generate" || name == "vision_analyze" -> Lucide.Image
+    name == "memory" || name == "session_search" -> Lucide.Brain
+    name == "todo" -> Lucide.ListTodo
+    name == "delegate_task" -> Lucide.Users
+    else -> Lucide.Wrench
 }
 
 /** The tool the running turn is in the middle of, if any. Its reply isn't always last: a queued prompt sits after it. */
@@ -1778,18 +2228,50 @@ private fun ChatState.livePlan(): TodoList? = todos?.takeIf { todosLive }
  * The one line that says what the agent is doing now, most specific first: waiting on the user, a tool
  * at work, the plan's step in hand, the gateway's status text, else thinking.
  */
-internal fun currentAction(state: ChatState): String {
-    if (state.inputRequests.isNotEmpty()) return "Waiting for your answer"
-    state.runningTool()?.let { tool ->
-        val detail = tool.detail?.lineSequence()?.firstOrNull()?.takeIf { it.isNotBlank() }
-        return if (detail != null) "${tool.name.toolVerb()}: $detail" else tool.name.toolVerb()
-    }
-    state.livePlan()?.items?.firstOrNull { it.status == TodoStatus.InProgress }?.let { return it.content }
+internal fun currentAction(state: ChatState): String = currentStep(state).let { step -> step.detail?.let { "${step.title}: $it" } ?: step.title }
+
+/** What the agent is doing now, in words, and what it's doing it to (a path, a command) when a tool says. */
+internal data class LiveStep(val title: String, val detail: String? = null)
+
+/** [currentAction] in its two parts, for the live task card. */
+internal fun currentStep(state: ChatState): LiveStep {
+    if (state.inputRequests.isNotEmpty()) return LiveStep("Waiting for your answer")
+    state.runningTool()?.let { tool -> return LiveStep(tool.name.toolVerb(), tool.firstDetailLine()) }
+    state.livePlan()?.items?.firstOrNull { it.status == TodoStatus.InProgress }?.let { return LiveStep(it.content) }
     state.status?.takeIf { it.isNotBlank() }?.let { status ->
         // A turn woken by another bot's reply arriving says so, not the runner's command line.
-        return if (BOT_DELIVERY_STATUS.containsMatchIn(status)) "Reading another bot's reply" else status
+        return LiveStep(if (BOT_DELIVERY_STATUS.containsMatchIn(status)) "Reading another bot's reply" else status)
     }
-    return state.thinkingFrame ?: "Thinking…"
+    return LiveStep(state.thinkingFrame ?: "Thinking…")
+}
+
+/** What the tool is working on, in one line: its description, else what it was given when that's plain (a command, a query) rather than JSON. */
+private fun ToolActivity.firstDetailLine(): String? =
+    (detail?.takeIf { it.isNotBlank() } ?: input?.takeUnless { it.trimStart().let { s -> s.startsWith("{") || s.startsWith("[") } })
+        ?.lineSequence()?.map { it.trim() }?.firstOrNull { it.isNotEmpty() }
+
+/** The step of a live plan in hand, counted from 1; null once nothing is left to do. */
+internal fun planStep(plan: TodoList?): Int? = plan?.takeIf { it.total > 0 && it.active }?.let { minOf(it.done + 1, it.total) }
+
+/**
+ * The running turn, by its streaming reply's key, for timing it from when it opened here. A prompt's own
+ * time won't do: a queued one is stamped when it was queued, and a turn started elsewhere may have none.
+ */
+internal fun runningTurnKey(state: ChatState): String? =
+    if (!state.running) null else state.messages.lastOrNull { it is ChatMessage.Assistant && it.streaming }?.key
+
+/** A finished step in a running reply, said in the past: "Ran" and the command, "Read" and the file. */
+internal fun toolDone(tool: ToolActivity): LiveStep {
+    val verb = when (tool.name) {
+        "terminal", "shell", "bash", "execute_code" -> "Ran"
+        "read_file", "file_read", "web_extract", "browser", "fetch" -> "Read"
+        "write_file", "patch", "edit_file" -> "Edited"
+        "web_search", "search", "search_files", "session_search" -> "Searched"
+        "delegate_task" -> "Delegated"
+        MESSAGE_AGENT_TOOL -> "Messaged"
+        else -> return LiveStep("Used ${tool.name.replace('_', ' ')}", tool.firstDetailLine())
+    }
+    return tool.firstDetailLine()?.let { LiveStep(verb, it) } ?: LiveStep("$verb with ${tool.name.replace('_', ' ')}")
 }
 
 /** The status of a turn started by a bot-to-bot delivery finishing (tools/bot_mode_dm.py's runner). */
@@ -1827,7 +2309,7 @@ private fun NoticeLine(text: String) {
 @Composable
 private fun NoticeBanner(notice: GatewayNotice, onDismiss: (String) -> Unit) {
     val (icon, tint) = when (notice.level) {
-        GatewayNotice.Level.Info -> Lucide.Info to Theme[colors][accent]
+        GatewayNotice.Level.Info -> Lucide.Info to Theme[colors][accentText]
         GatewayNotice.Level.Warning -> Lucide.TriangleAlert to Theme[colors][warning]
         GatewayNotice.Level.Error -> Lucide.CircleAlert to Theme[colors][danger]
         GatewayNotice.Level.Success -> Lucide.CircleCheck to Theme[colors][success]
@@ -1843,7 +2325,7 @@ private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit, 
             UnstyledIcon(
                 icon ?: Lucide.CircleAlert,
                 contentDescription = null,
-                tint = tint ?: if (icon == null) Theme[colors][danger] else Theme[colors][accent],
+                tint = tint ?: if (icon == null) Theme[colors][danger] else Theme[colors][accentText],
                 modifier = Modifier.size(16.dp),
             )
             Text(
@@ -1863,9 +2345,9 @@ private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit, 
 
 /**
  * Desktop's composer stood up for a phone: a flat outlined box, the text on top; beneath it +, dictation
- * and voice chat, the model and thinking level as quiet text, and the round send button, which is Stop
- * for as long as a task runs. A message typed mid-task gets a Send of its own beside Stop, which steers,
- * queues or stops and sends as Settings says; holding it picks another way for that message.
+ * and voice chat, the model and thinking level as quiet text, and the round send button. While a task runs,
+ * Stop is on the live task card above; a message typed mid-task gets a Send that steers, queues or stops and
+ * sends as Settings says; holding it picks another way for that message.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -1896,7 +2378,7 @@ private fun Composer(
     // Attachments or comments alone are sendable: the gateway gets Desktop's image prompt or the file references.
     val hasText = actions.composer.text.isNotBlank() || attachments.isNotEmpty() || comments.isNotEmpty()
     val runningSend by actions.runningSend.collectAsStateWithLifecycle()
-    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
+    val shape = RoundedCornerShape(Theme[radii][radiusXLarge])
     val page = Theme[colors][background]
     val frosted = remember(page) {
         HazeBlurStyle {
@@ -1978,42 +2460,46 @@ private fun Composer(
                             color = Theme[colors][textTertiary],
                             modifier = Modifier.padding(start = 12.dp, top = 10.dp),
                         )
-                    } else if (state.running && hasText) {
-                        MidTaskHint(command, runningMode)
+                    } else if (state.running && hasText && command) {
+                        CommandHint()
                     }
                     Row(
                         Modifier.fillMaxWidth().padding(top = 6.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         // The buttons are full 48dp targets, which already space their icons apart.
                     ) {
-                        ComposerButton(
-                            icon = Lucide.Plus,
-                            contentDescription = "Add photos or files",
-                            onClick = onAttach,
-                            enabled = attachments.size < OutgoingAttachment.MAX_COUNT,
-                        )
+                        AttachButton(onClick = onAttach, enabled = attachments.size < OutgoingAttachment.MAX_COUNT)
+                        // Queue and Steer need the room mid-task, so the model pill folds to its sparkle meanwhile.
+                        val segments = state.running && hasText && !editing && !command
+                        Box(Modifier.weight(1f).padding(start = 2.dp), contentAlignment = Alignment.CenterStart) {
+                            ModelPill(state, picker, onClick = onOpenModels, compact = segments)
+                        }
                         DictationButton(dictation, onClick = onDictate, enabled = connected)
-                        ComposerButton(
-                            icon = Lucide.AudioLines,
-                            contentDescription = "Start a voice chat",
-                            onClick = onVoiceChat,
-                            enabled = connected && !state.running && !dictation.active,
-                        )
-                        Box(Modifier.weight(1f), contentAlignment = Alignment.CenterEnd) { ModelPill(state, picker, onClick = onOpenModels) }
-                        // Stop stays for the whole task; a message typed meanwhile gets its own Send beside it.
-                        if (state.running) {
-                            if (hasText && !editing) {
-                                RunningSendButton(
+                        // Voice chat waits for the task to end, so while one runs its place goes to the ways to send.
+                        if (!state.running) {
+                            ComposerButton(
+                                icon = Lucide.AudioLines,
+                                contentDescription = "Start a voice chat",
+                                onClick = onVoiceChat,
+                                enabled = connected && !dictation.active,
+                            )
+                        }
+                        // Stop is on the live task card above; a message typed meanwhile is queued or steers the task.
+                        if (state.running && hasText && !editing) {
+                            if (command) {
+                                // A command runs at once; there's nothing to choose.
+                                SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected)
+                            } else {
+                                RunningSendSegments(
                                     mode = runningMode,
-                                    // A command runs at once; there's nothing to choose.
-                                    choices = if (command) emptyList() else RunningSend.entries.filterNot { it == RunningSend.Steer && attachments.isNotEmpty() },
+                                    attachments = attachments.isNotEmpty(),
                                     enabled = connected,
                                     onSend = actions::send,
                                 )
                             }
-                            SendButton(SendIcon.Stop, onClick = actions::interrupt, enabled = connected)
                         } else {
-                            SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected && hasText)
+                            // While a task runs this only waits: nothing typed yet, or an edit, which goes once it ends.
+                            SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected && hasText && !state.running)
                         }
                     }
                 }
@@ -2030,7 +2516,6 @@ private fun Composer(
                         fold.heldOpen = true
                         focus.requestFocus()
                     },
-                    onStop = actions::interrupt,
                     onAttach = onAttach,
                     onDictate = onDictate,
                     onVoiceChat = onVoiceChat,
@@ -2042,11 +2527,13 @@ private fun Composer(
             .navigationBarsPadding()
             .padding(start = 12.dp, end = 12.dp, top = 6.dp, bottom = 10.dp)
             .onSizeChanged { onShrink((openHeight[0] - it.height).coerceAtLeast(0)) }
+            // The dock floats over the chat on a soft shadow.
+            .dropShadow(shape, DockShadow)
             .clip(shape)
-            // Frosted: the conversation beneath is blurred, then tinted so the text on top stays clear.
+            // Nearly solid: the conversation beneath only just shows through, blurred.
             .hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)
-            .background(Theme[colors][surface].copy(alpha = 0.55f))
-            .border(1.dp, if (focused) Theme[colors][textTertiary] else Theme[colors][strokeStrong], shape)
+            .background(Theme[colors][surface].copy(alpha = 0.92f))
+            .border(1.dp, if (focused) Theme[colors][textTertiary] else Theme[colors][stroke], shape)
             .onFocusChanged { focused = it.hasFocus },
     ) { (openMeasurables, lineMeasurables), constraints ->
         val loose = constraints.copy(minHeight = 0)
@@ -2067,7 +2554,7 @@ private fun Composer(
 
 /**
  * The composer folded to one line while reading back, as ChatGPT does: + on the left, the placeholder to tap
- * and start writing, dictation, and Stop while a task runs or voice chat otherwise. The model and the field
+ * and start writing, dictation, and voice chat. The model and the field
  * come back with the rest when it opens.
  */
 @Composable
@@ -2078,7 +2565,6 @@ private fun FoldedComposer(
     dictation: DictationState,
     canAttach: Boolean,
     onOpen: () -> Unit,
-    onStop: () -> Unit,
     onAttach: () -> Unit,
     onDictate: () -> Unit,
     onVoiceChat: () -> Unit,
@@ -2087,7 +2573,7 @@ private fun FoldedComposer(
         Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 2.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        ComposerButton(icon = Lucide.Plus, contentDescription = "Add photos or files", onClick = onAttach, enabled = canAttach)
+        AttachButton(onClick = onAttach, enabled = canAttach)
         UnstyledButton(
             onClick = onOpen,
             modifier = Modifier.weight(1f).heightIn(min = MinTouchTarget).semantics { contentDescription = "Write a message" },
@@ -2104,53 +2590,49 @@ private fun FoldedComposer(
             }
         }
         DictationButton(dictation, onClick = onDictate, enabled = connected)
-        if (state.running) {
-            SendButton(SendIcon.Stop, onClick = onStop, enabled = connected)
-        } else {
-            ComposerButton(
-                icon = Lucide.AudioLines,
-                contentDescription = "Start a voice chat",
-                onClick = onVoiceChat,
-                enabled = connected && !dictation.active,
-            )
-        }
-    }
-}
-
-/** Says what Send does with a message typed while a task runs, and that holding it offers the other ways. */
-@Composable
-private fun MidTaskHint(command: Boolean, mode: RunningSend) {
-    Row(
-        Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp, top = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        if (!command) UnstyledIcon(mode.icon, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
-        Text(
-            if (command) "Commands run right away." else "Send: ${mode.summary.replaceFirstChar { it.lowercase() }}. Hold Send for other ways.",
-            style = Theme[typography][caption],
-            color = Theme[colors][textTertiary],
+        // Stop is on the live task card above, so this stays voice chat, which waits for the task to end.
+        ComposerButton(
+            icon = Lucide.AudioLines,
+            contentDescription = "Start a voice chat",
+            onClick = onVoiceChat,
+            enabled = connected && !dictation.active && !state.running,
         )
     }
 }
 
+/** Says that a command typed while a task runs goes at once, not into the task. */
+@Composable
+private fun CommandHint() {
+    Text(
+        "Commands run right away.",
+        style = Theme[typography][caption],
+        color = Theme[colors][textTertiary],
+        modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 10.dp),
+    )
+}
+
+/** The two ways a message typed mid-task is shown to go: Queue, and Steer or, when that's the setting, Stop & send. */
+internal fun runningSegments(mode: RunningSend): List<RunningSend> =
+    listOf(RunningSend.Queue, if (mode == RunningSend.StopAndSend) RunningSend.StopAndSend else RunningSend.Steer)
+
 /**
- * Send while a task runs: a tap sends the way [mode] says (the setting), a long press opens the [choices]
- * just above it to pick another way for this one message.
+ * Send while a task runs, as a segmented pill: each half sends the message its way, and the one [mode] picks
+ * (the setting) is filled. A steer can't carry files, so with [attachments] it's off. Holding either half
+ * offers the way that isn't shown.
  */
 @Composable
-private fun RunningSendButton(mode: RunningSend, choices: List<RunningSend>, enabled: Boolean, onSend: (RunningSend?) -> Unit) {
+private fun RunningSendSegments(mode: RunningSend, attachments: Boolean, enabled: Boolean, onSend: (RunningSend) -> Unit) {
     val haptics = LocalHapticFeedback.current
     var menuOpen by remember { mutableStateOf(false) }
-    val fill = if (enabled) Theme[colors][textColor] else Theme[colors][textColor].copy(alpha = 0.12f)
-    val tint = if (enabled) Theme[colors][background] else Theme[colors][textTertiary]
+    val shown = runningSegments(mode)
+    val others = RunningSend.entries.filter { it !in shown && !(it == RunningSend.Steer && attachments) }
     DropdownMenu(
         expanded = menuOpen,
         onExpandedChange = { menuOpen = it },
         // The composer sits at the bottom of the screen; the choices open upward, over the chat.
         above = true,
         items = {
-            choices.forEach { choice ->
+            others.forEach { choice ->
                 MenuAction(choice.label, choice.icon, onClick = {
                     menuOpen = false
                     onSend(choice)
@@ -2158,34 +2640,99 @@ private fun RunningSendButton(mode: RunningSend, choices: List<RunningSend>, ena
             }
         },
     ) {
-        Box(
+        // The pill is drawn 38dp tall behind the halves; each half takes taps over the full touch height.
+        val track = Theme[colors][surface3]
+        Row(
             Modifier
-                .size(MinTouchTarget)
-                .clip(CircleShape)
-                .combinedClickable(
-                    enabled = enabled,
-                    onClick = { onSend(null) },
-                    onLongClick = if (choices.isEmpty()) null else {
-                        {
-                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                            menuOpen = true
-                        }
-                    },
-                    onClickLabel = if (choices.isEmpty()) "Send" else mode.label,
-                    onLongClickLabel = "Other ways to send",
-                    interactionSource = null,
-                    indication = rememberColoredIndication(tint),
-                ),
-            contentAlignment = Alignment.Center,
+                .heightIn(min = MinTouchTarget)
+                .height(IntrinsicSize.Min)
+                .alpha(if (enabled) 1f else 0.45f)
+                .drawBehind {
+                    // Grows with large text so the filled half stays inside it.
+                    val h = maxOf(38.dp.toPx(), size.height - 10.dp.toPx())
+                    drawRoundRect(track, topLeft = Offset(0f, (size.height - h) / 2), size = Size(size.width, h), cornerRadius = CornerRadius(h / 2))
+                }
+                .padding(horizontal = 3.dp),
+            horizontalArrangement = Arrangement.spacedBy(4.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            Box(Modifier.size(40.dp).clip(CircleShape).background(fill), contentAlignment = Alignment.Center) {
-                UnstyledIcon(Lucide.ArrowUp, contentDescription = "Send", tint = tint, modifier = Modifier.size(20.dp))
+            shown.forEach { way ->
+                val on = way == mode
+                val usable = enabled && !(way == RunningSend.Steer && attachments)
+                val tint = Theme[colors][if (on) onUserBubble else textTertiary]
+                val interaction = remember { MutableInteractionSource() }
+                Box(
+                    Modifier
+                        .fillMaxHeight()
+                        .combinedClickable(
+                            enabled = usable,
+                            onClick = { onSend(way) },
+                            onLongClick = if (others.isEmpty()) null else {
+                                {
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    menuOpen = true
+                                }
+                            },
+                            onClickLabel = "Send",
+                            onLongClickLabel = "Other ways to send",
+                            interactionSource = interaction,
+                            indication = null,
+                        )
+                        .semantics {
+                            contentDescription = "${way.label}: ${way.summary}"
+                            role = Role.Button
+                            // The filled half is the setting's way; a steer can't carry files.
+                            selected = on
+                            if (enabled && !usable) stateDescription = "Can't carry files"
+                        },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Row(
+                        Modifier
+                            .clearAndSetSemantics {}
+                            .alpha(if (usable || !enabled) 1f else 0.45f)
+                            .heightIn(min = 32.dp)
+                            .clip(CircleShape)
+                            .then(if (on) Modifier.background(Theme[colors][userBubble], CircleShape) else Modifier)
+                            .indication(interaction, rememberColoredIndication(tint))
+                            .padding(horizontal = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(5.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        UnstyledIcon(way.icon, contentDescription = null, tint = tint, modifier = Modifier.size(13.dp))
+                        Text(
+                            way.label,
+                            style = Theme[typography][label].copy(fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium),
+                            color = tint,
+                            maxLines = 1,
+                        )
+                    }
+                }
             }
         }
     }
 }
 
-/** A plain square icon button inside the composer, like Desktop's +. */
+/** The dock's shadow: soft and wide, a little below it, so it floats over the chat. */
+private val DockShadow = Shadow(radius = 24.dp, color = Color.Black.copy(alpha = 0.18f), offset = DpOffset(0.dp, 8.dp))
+
+/** The composer's +: a 36dp disc, with the full touch target around it. */
+@Composable
+private fun AttachButton(onClick: () -> Unit, enabled: Boolean) {
+    val tint = if (enabled) Theme[colors][textSecondary] else Theme[colors][textTertiary].copy(alpha = 0.5f)
+    UnstyledButton(
+        onClick = onClick,
+        enabled = enabled,
+        modifier = Modifier.size(MinTouchTarget).clip(CircleShape),
+        indication = rememberColoredIndication(tint),
+    ) {
+        Box(Modifier.size(36.dp).background(Theme[colors][surface3], CircleShape), contentAlignment = Alignment.Center) {
+            UnstyledIcon(Lucide.Plus, contentDescription = "Add photos or files", tint = tint, modifier = Modifier.size(20.dp))
+        }
+    }
+}
+
+/** A plain icon button inside the composer, like the microphone. */
 @Composable
 private fun ComposerButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean) {
     val tint = if (enabled) Theme[colors][textSecondary] else Theme[colors][textTertiary].copy(alpha = 0.5f)
@@ -2202,20 +2749,20 @@ private fun ComposerButton(icon: ImageVector, contentDescription: String, onClic
 internal enum class SendIcon { Send, Stop }
 
 /**
- * Desktop's round send: a disc in the text colour (white on dark) with the icon cut in the page colour.
+ * The round send: an accent disc that glows when there's something to send, a quiet grey one otherwise.
  * The disc stays 40dp; the button around it takes taps over the full [MinTouchTarget].
  */
 @Composable
 internal fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
-    val fill = if (enabled) Theme[colors][textColor] else Theme[colors][textColor].copy(alpha = 0.12f)
-    val tint = if (enabled) Theme[colors][background] else Theme[colors][textTertiary]
-    UnstyledButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.size(MinTouchTarget).clip(CircleShape),
-        indication = rememberColoredIndication(tint),
+    val (fill, tint) = sendColors(enabled)
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        Modifier
+            .size(MinTouchTarget)
+            .clickable(interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size(40.dp).clip(CircleShape).background(fill), contentAlignment = Alignment.Center) {
+        SendDisc(fill, tint, glow = enabled, interaction) {
             UnstyledIcon(
                 when (icon) {
                     SendIcon.Send -> Lucide.ArrowUp
@@ -2230,6 +2777,26 @@ internal fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
             )
         }
     }
+}
+
+/** Send's disc and icon colors: the accent when it can send, a quiet grey when it can't. */
+@Composable
+private fun sendColors(enabled: Boolean): Pair<Color, Color> =
+    if (enabled) Theme[colors][accent] to Theme[colors][onAccent] else Theme[colors][surface3] to Theme[colors][textMuted]
+
+/** Send's 40dp disc, which glows in its own color when it can send; a press on the button around it shows on the disc. */
+@Composable
+private fun SendDisc(fill: Color, tint: Color, glow: Boolean, interaction: MutableInteractionSource, content: @Composable () -> Unit) {
+    Box(
+        Modifier
+            .size(40.dp)
+            // Tighter than the bubble's glow: Send sits near the dock's edge, which would cut a wider one off.
+            .then(if (glow) Modifier.dropShadow(CircleShape, Shadow(radius = 10.dp, color = fill.copy(alpha = 0.45f), offset = DpOffset(0.dp, 3.dp))) else Modifier)
+            .background(fill, CircleShape)
+            .clip(CircleShape)
+            .indication(interaction, rememberColoredIndication(tint)),
+        contentAlignment = Alignment.Center,
+    ) { content() }
 }
 
 /** The composer's microphone: tap to dictate, tap again to finish; the ring follows your voice. */
@@ -2263,43 +2830,65 @@ internal fun DictationButton(state: DictationState, onClick: () -> Unit, enabled
     }
 }
 
-/** "Opus 5.5 ⌄  Medium ⌄" as quiet text, Desktop's composer selectors; opens the model sheet. */
+/** "✦ Opus 5.5 | Medium ⌄" in a pill, the model and thinking level; opens the model sheet. */
 @Composable
-private fun ModelPill(state: ChatState, picker: ModelPickerState, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun ModelPill(
+    state: ChatState,
+    picker: ModelPickerState,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** Just the sparkle in a disc, when the row needs the room. */
+    compact: Boolean = false,
+) {
     val selection = ModelSelection.of(state, picker.catalog)
     val model = selection.model ?: return
     val effort = state.effort(selection.option)
-    val tint = Theme[colors][textSecondary]
-    Row(
+    val fast = state.fast == true
+    val name = displayModelName(model)
+    val interaction = remember { MutableInteractionSource() }
+    // Drawn 36dp tall; the full touch height around it takes the tap.
+    Box(
         modifier
-            .height(40.dp)
-            .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+            .heightIn(min = MinTouchTarget)
+            .clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
+            .semantics {
+                contentDescription = listOfNotNull(name, effort?.label, "fast mode".takeIf { fast }).joinToString(", ") + ". Change model"
+            },
+        contentAlignment = Alignment.CenterStart,
     ) {
-        if (state.fast == true) {
-            UnstyledIcon(Lucide.Zap, contentDescription = "Fast mode", tint = Theme[colors][warning], modifier = Modifier.size(14.dp))
-        }
-        Text(
-            displayModelName(model),
-            style = Theme[typography][bodySmall],
-            color = tint,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f, fill = false),
-        )
-        UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
-        if (effort != null) {
-            Text(
-                effort.label,
-                style = Theme[typography][bodySmall],
-                color = tint,
-                maxLines = 1,
-                modifier = Modifier.padding(start = 10.dp),
+        Row(
+            Modifier
+                .clearAndSetSemantics {}
+                .heightIn(min = 36.dp)
+                .then(if (compact) Modifier.widthIn(min = 36.dp) else Modifier)
+                .clip(CircleShape)
+                .background(Theme[colors][surface3], CircleShape)
+                .indication(interaction, rememberColoredIndication(Theme[colors][textSecondary]))
+                .padding(horizontal = if (compact) 0.dp else 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
+        ) {
+            // Fast mode takes the sparkle's place.
+            UnstyledIcon(
+                if (fast) Lucide.Zap else Lucide.Sparkles,
+                contentDescription = null,
+                tint = Theme[colors][if (fast) warning else accentText],
+                modifier = Modifier.size(if (compact) 16.dp else 13.dp),
             )
-            UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
+            if (compact) return@Row
+            Text(
+                name,
+                style = Theme[typography][caption],
+                color = Theme[colors][textSecondary],
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            if (effort != null) {
+                Text("|", style = Theme[typography][caption], color = Theme[colors][textMuted])
+                Text(effort.label, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+            UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textMuted], modifier = Modifier.size(12.dp))
         }
     }
 }

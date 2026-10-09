@@ -1,6 +1,7 @@
 package dev.hermeskotlin.designsystem
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import kotlin.math.max
 import kotlin.math.min
@@ -16,6 +17,12 @@ class AccentPaletteTest {
         return (max(la, lb) + 0.05f) / (min(la, lb) + 0.05f)
     }
 
+    private fun schemes(palette: AccentPalette) = listOf(
+        "light" to lightColors(palette.light),
+        "dark" to darkColors(palette.dark),
+        "black" to pureBlackColors(palette.black),
+    )
+
     @Test
     fun textOnEveryAccentIsReadable() {
         for (palette in AccentPalette.all) {
@@ -27,11 +34,18 @@ class AccentPaletteTest {
     }
 
     @Test
-    fun everyAccentReadsAsLinkTextOnItsBackground() {
+    fun accentTextReadsOnEveryGroundItSitsOn() {
         for (palette in AccentPalette.all) {
-            assertTrue(contrast(palette.light.accent, Color.White) >= 4.5f, "${palette.name} on white")
-            assertTrue(contrast(palette.dark.accent, Color(0xFF0D1014)) >= 4.5f, "${palette.name} on the dark background")
-            assertTrue(contrast(palette.black.accent, Color.Black) >= 4.5f, "${palette.name} on black")
+            for ((scheme, colors) in schemes(palette)) {
+                val text = colors.getValue(accentText)
+                val grounds = listOf(background, surface, surface2, surface3, surfaceElevated).map { colors.getValue(it) }
+                // Selected chips, rows and secondary buttons: the soft tint over a card.
+                val tinted = colors.getValue(accentSoft).compositeOver(colors.getValue(surface))
+                for (ground in grounds + tinted) {
+                    val ratio = contrast(text, ground)
+                    assertTrue(ratio >= 4.5f, "${palette.name} $scheme: accent text on $ground is $ratio:1")
+                }
+            }
         }
     }
 

@@ -108,7 +108,7 @@ data class ArchiveUndo(
 enum class AttentionFilter(val label: String) {
     All("All"),
     Running("Running"),
-    NeedsAttention("Needs attention"),
+    NeedsAttention("Needs you"),
 }
 
 /** What a row says about its chat besides the title, in words. [running]: a turn is going right now. */

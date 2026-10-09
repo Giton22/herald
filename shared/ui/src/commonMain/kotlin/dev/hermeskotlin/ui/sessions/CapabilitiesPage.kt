@@ -56,6 +56,7 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.components.EmptyState
+import dev.hermeskotlin.ui.components.ListSkeleton
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -207,10 +208,10 @@ internal fun skillGroups(skills: List<Skill>, query: String): Map<String, List<S
 private fun <T> TabList(loadable: Loadable<T>, empty: String, onRetry: () -> Unit, content: LazyListScope.(List<T>) -> Unit) {
     val items = loadable.items
     when {
-        items == null && loadable.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load", loadable.error) {
+        items == null && loadable.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load", loadable.error, error = true) {
             Button("Try again", onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
         }
-        items == null -> CenteredSpinner()
+        items == null -> ListSkeleton()
         items.isEmpty() -> Box(Modifier.fillMaxSize().padding(12.dp)) { ListNotice(empty) }
         else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 96.dp)) {
             content(items)
