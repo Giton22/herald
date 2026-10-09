@@ -13,7 +13,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -84,7 +83,7 @@ fun Button(
         Modifier
     }
     val glow = if (variant == ButtonVariant.Primary && size == ButtonSize.Large && enabled) {
-        Modifier.dropShadow(shape, Shadow(radius = 18.dp, color = container.copy(alpha = 0.35f), offset = DpOffset(0.dp, 6.dp)))
+        Modifier.glow(shape, Shadow(radius = 18.dp, color = container.copy(alpha = 0.35f), offset = DpOffset(0.dp, 6.dp)))
     } else {
         Modifier
     }

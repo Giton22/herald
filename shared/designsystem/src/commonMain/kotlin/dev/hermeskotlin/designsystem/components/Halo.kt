@@ -17,6 +17,8 @@ import dev.hermeskotlin.designsystem.colors
  */
 @Composable
 fun Modifier.halo(): Modifier {
+    // Off, every screen's ground is one flat color.
+    if (!LocalGlow.current) return this
     val glow = Theme[colors][accentSoft]
     return drawWithCache {
         // The glow fades out at FADE of the radius; capping the radius keeps that within the reach.
