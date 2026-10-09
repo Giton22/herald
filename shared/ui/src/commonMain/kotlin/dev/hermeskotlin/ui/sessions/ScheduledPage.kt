@@ -12,6 +12,9 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import dev.hermeskotlin.core.cron.DeliveryTarget
+import dev.hermeskotlin.core.cron.Routines
+import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -154,7 +157,13 @@ internal fun ScheduledPage(
                     else -> "$count ${if (count == 1) "job" else "jobs"} · each run opens as a chat"
                 },
             ) {
-                Button(if (routines) "New routine" else "New job", onClick = viewModel::newJob, size = ButtonSize.Small, leadingIcon = Lucide.Plus)
+                Button(
+                    if (routines) "New routine" else "New job",
+                    onClick = viewModel::newJob,
+                    size = ButtonSize.Small,
+                    leadingIcon = Lucide.Plus,
+                    modifier = Modifier.heightIn(min = MinTouchTarget),
+                )
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
@@ -195,7 +204,9 @@ internal fun ScheduledPage(
                 contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 96.dp),
             ) {
                 item(key = "summary") {
-                    val deliversTo = job.deliver?.takeIf { it.isNotBlank() }?.let { id -> state.deliveryTargets.firstOrNull { it.id == id }?.name ?: id }
+                    val deliversTo = job.deliver?.takeIf { it.isNotBlank() }?.let { id ->
+                        deliveryLabel(id, state.deliveryTargets, botLabel = owner?.label ?: Routines.taggedBot(job.name))
+                    }
                     JobSummary(job, deliversTo, busy = state.busy, onRunNow = viewModel::runNow, onTogglePaused = viewModel::togglePaused)
                 }
                 item(key = "runs-header") {
@@ -285,16 +296,27 @@ private fun JobRow(job: CronJob, onClick: () -> Unit) {
     }
 }
 
-/** "21h" over "next run", "failed" over "last run", or "paused". */
+/** "21h" over "next run", "failed" over "last run", or "paused" (over "last run failed" when it did). */
 private fun CronJob.nextColumn(): Pair<String?, String?> = when {
+    paused -> "paused" to ("last run failed".takeIf { problem != null })
+    state == "completed" -> "done" to ("last run failed".takeIf { problem != null })
     problem != null -> "failed" to "last run"
-    paused -> "paused" to null
-    state == "completed" -> "done" to null
     else -> when (val until = timeUntil(nextRunEpochSeconds)) {
         "" -> null to null
         "now" -> "now" to "next run"
         else -> until to "next run"
     }
+}
+
+/**
+ * Where runs go, said for people: the target's own name, a bot's chat, or the platform and the chat's id
+ * for one chat the target list doesn't name.
+ */
+internal fun deliveryLabel(id: String, targets: List<DeliveryTarget>, botLabel: String?): String {
+    targets.firstOrNull { it.id == id }?.name?.takeIf { it != id }?.let { return it }
+    if (id == Routines.BOT_CHAT_DELIVERY) return botLabel?.let { "$it's chat" } ?: "the bot's chat"
+    val platform = id.substringBefore(':', missingDelimiterValue = "")
+    return if (platform.isEmpty()) id else "${platform.replaceFirstChar { it.uppercase() }} · ${id.substringAfter(':')}"
 }
 
 /** What the job does, where it reports, and the two things you can do with it. */
