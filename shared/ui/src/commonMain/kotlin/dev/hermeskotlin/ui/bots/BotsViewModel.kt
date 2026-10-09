@@ -345,6 +345,15 @@ class BotsViewModel(
             try {
                 val catalog = models.options(profile = bot.name)
                 if (modelsOf == bot.name) _modelPicker.update { it.copy(catalog = catalog, loading = false) }
+                // Prices the gateway left out follow a few seconds later; the list works without them.
+                val prices = try {
+                    models.missingPrices(catalog, profile = bot.name)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    null
+                }
+                if (prices != null && modelsOf == bot.name) _modelPicker.update { it.copy(catalog = it.catalog?.withPrices(prices)) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
