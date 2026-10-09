@@ -9,6 +9,13 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.font.FontWeight
+import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.components.MinTouchTarget
+import dev.hermeskotlin.ui.bots.BotAvatar
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -99,24 +106,26 @@ fun CreateRoomDialog(
         ) {
             bots.forEach { bot ->
                 val picked = bot.name in selected
+                val full = !picked && selected.size >= MAX_MEMBERS
                 Row(
                     Modifier
                         .fillMaxWidth()
+                        .heightIn(min = MinTouchTarget)
                         .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
-                        .clickable(enabled = busy == null) {
-                            when {
-                                picked -> selected.remove(bot.name)
-                                selected.size < MAX_MEMBERS -> selected.add(bot.name)
-                            }
+                        .background(if (picked) Theme[colors][accentSoft] else Color.Transparent)
+                        .toggleable(value = picked, enabled = busy == null && !full, role = Role.Checkbox) {
+                            if (picked) selected.remove(bot.name) else selected.add(bot.name)
                         }
-                        .padding(horizontal = 8.dp, vertical = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        .padding(horizontal = 8.dp, vertical = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    // Each bot by its own face, as the roster and the room draw it.
+                    BotAvatar(bot, null, size = 30.dp)
                     Text(
                         bot.label,
-                        style = Theme[typography][body],
-                        color = Theme[colors][text],
+                        style = Theme[typography][body].copy(fontWeight = FontWeight.Medium),
+                        color = Theme[colors][if (full) textTertiary else text],
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f),
@@ -141,7 +150,8 @@ fun CreateRoomDialog(
 private fun PickMark(picked: Boolean) {
     if (picked) {
         Box(Modifier.size(18.dp).background(Theme[colors][accent], CircleShape), contentAlignment = Alignment.Center) {
-            UnstyledIcon(Lucide.Check, contentDescription = "Picked", tint = Theme[colors][onAccent], modifier = Modifier.size(12.dp))
+            // The row says picked as a checkbox; the mark itself stays silent.
+            UnstyledIcon(Lucide.Check, contentDescription = null, tint = Theme[colors][onAccent], modifier = Modifier.size(12.dp))
         }
     } else {
         Box(Modifier.size(18.dp).border(1.dp, Theme[colors][stroke], CircleShape))
