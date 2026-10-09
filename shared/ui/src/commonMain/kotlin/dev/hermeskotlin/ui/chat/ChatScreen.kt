@@ -139,6 +139,9 @@ import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.CircleCheck
+import com.composables.icons.lucide.Clock
+import androidx.compose.ui.semantics.Role
+import dev.hermeskotlin.designsystem.surface2
 import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.ListEnd
 import com.composables.icons.lucide.Info
@@ -1362,7 +1365,8 @@ private fun UserBubble(
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     var menuOpen by remember { mutableStateOf(false) }
-    val hasMenu = message.text.isNotBlank() || onEdit != null || onBranch != null
+    // A prompt in doubt always has one: its Edit is there.
+    val hasMenu = message.text.isNotBlank() || onEdit != null || onBranch != null || message.check == SendCheck.Unknown
     val review = remember(message.text) { parseReview(message.text) }
     val commentHost = LocalCommentHost.current
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
@@ -1391,41 +1395,51 @@ private fun UserBubble(
                         })
                     }
                     onEdit?.let { MenuAction(editLabel, Lucide.Pencil, onClick = { menuOpen = false; it() }) }
+                    // A prompt in doubt has only Check and Resend under it; taking it back to edit is here.
+                    if (onEdit == null && message.check == SendCheck.Unknown) {
+                        MenuAction("Edit", Lucide.Pencil, onClick = { menuOpen = false; actions.editMessage(message.key) })
+                    }
                     onBranch?.let { MenuAction("Branch from here", Lucide.GitBranch, onClick = { menuOpen = false; it() }) }
                 },
             ) {
-                // A prompt still on its way is a soft tint with plain text: fading the accent fill would fade the white text with it.
-                val waiting = message.pending || message.check == SendCheck.Checking
-                val onBubble = Theme[colors][if (waiting) textColor else onUserBubble]
-                Column(
-                    Modifier
-                        // A sent prompt glows faintly in its own color; one still on its way doesn't.
-                        .then(if (waiting) Modifier else Modifier.dropShadow(shape, bubbleGlow(Theme[colors][userBubble])))
-                        .clip(shape)
-                        .background(Theme[colors][if (waiting) accentSoft else userBubble], shape)
-                        // The prompt being edited is outlined in the text color, which shows on the accent fill.
-                        .then(if (editing) Modifier.border(2.dp, Theme[colors][textColor], shape) else Modifier)
-                        .then(
-                            if (hasMenu) {
-                                Modifier.combinedClickable(
-                                    onClick = {},
-                                    onLongClick = {
-                                        haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        menuOpen = true
-                                    },
-                                    onLongClickLabel = "Message actions",
-                                    interactionSource = null,
-                                    indication = rememberColoredIndication(onBubble),
-                                )
-                            } else Modifier,
-                        )
-                        .padding(horizontal = 14.dp, vertical = 9.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    if (message.attachments.isNotEmpty()) SentAttachments(message.attachments)
-                    when {
-                        review != null -> SentReviewContent(review, onBubble)
-                        message.text.isNotEmpty() -> Text(message.text, style = Theme[typography][body], color = onBubble)
+                // A prompt still on its way, or whose delivery is in doubt, is a soft tint with plain text:
+                // fading the accent fill would fade the white text with it.
+                val waiting = message.pending || message.check != null
+                val onBubble = Theme[colors][if (waiting) textSecondary else onUserBubble]
+                // A prompt whose delivery is in doubt is marked beside it, on the side away from the edge.
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    message.check?.let { DeliveryMark(it) }
+                    Column(
+                        Modifier
+                            .weight(1f, fill = false)
+                            // A sent prompt glows faintly in its own color; one still on its way doesn't.
+                            .then(if (waiting) Modifier else Modifier.dropShadow(shape, bubbleGlow(Theme[colors][userBubble])))
+                            .clip(shape)
+                            .background(Theme[colors][if (waiting) accentSoft else userBubble], shape)
+                            // The prompt being edited is outlined in the text color, which shows on the accent fill.
+                            .then(if (editing) Modifier.border(2.dp, Theme[colors][textColor], shape) else Modifier)
+                            .then(
+                                if (hasMenu) {
+                                    Modifier.combinedClickable(
+                                        onClick = {},
+                                        onLongClick = {
+                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            menuOpen = true
+                                        },
+                                        onLongClickLabel = "Message actions",
+                                        interactionSource = null,
+                                        indication = rememberColoredIndication(onBubble),
+                                    )
+                                } else Modifier,
+                            )
+                            .padding(horizontal = 14.dp, vertical = 9.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) {
+                        if (message.attachments.isNotEmpty()) SentAttachments(message.attachments)
+                        when {
+                            review != null -> SentReviewContent(review, onBubble)
+                            message.text.isNotEmpty() -> Text(message.text, style = Theme[typography][body], color = onBubble)
+                        }
                     }
                 }
             }
@@ -1437,12 +1451,7 @@ private fun UserBubble(
         if (editing) {
             Text("Editing in the composer", style = Theme[typography][caption], color = Theme[colors][accentText])
         }
-        when (message.check) {
-            SendCheck.Checking -> Text("Checking whether Hermes got this…", style = Theme[typography][caption], color = Theme[colors][textTertiary])
-            SendCheck.Unknown -> UnsettledActions("May not have reached Hermes", message.key, mayHaveArrived = true, actions, connected)
-            SendCheck.NotReceived -> UnsettledActions("Hermes didn't get this", message.key, mayHaveArrived = false, actions, connected)
-            null -> {}
-        }
+        message.check?.let { UnsettledActions(it, message.key, actions, connected) }
     }
 }
 
@@ -1459,28 +1468,53 @@ private const val USER_BUBBLE_WIDTH = 0.84f
 /** The design's glow: a soft shadow in the color of what casts it, a little below it. */
 internal fun bubbleGlow(color: Color) = Shadow(radius = 18.dp, color = color.copy(alpha = 0.4f), offset = DpOffset(0.dp, 6.dp))
 
+/** The mark beside a prompt whose delivery is in doubt: an alert when Hermes didn't get it, a clock while it's unknown. */
+@Composable
+private fun DeliveryMark(check: SendCheck) {
+    val (icon, tint, soft) = when (check) {
+        SendCheck.NotReceived -> Triple(Lucide.CircleAlert, danger, dangerSoft)
+        SendCheck.Unknown, SendCheck.Checking -> Triple(Lucide.Clock, warning, warningSoft)
+    }
+    Box(Modifier.size(22.dp).background(Theme[colors][soft], CircleShape), contentAlignment = Alignment.Center) {
+        UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][tint], modifier = Modifier.size(13.dp))
+    }
+}
+
+/** What's said under a prompt whose delivery is in doubt. */
+internal fun deliveryLabel(check: SendCheck): String = when (check) {
+    SendCheck.Checking -> "Checking whether Hermes got this…"
+    SendCheck.Unknown -> "May not have arrived"
+    SendCheck.NotReceived -> "Not delivered"
+}
+
 /**
- * What to do with a prompt that lost its reply: check the transcript again, resend it, or take it back to
- * edit. Nothing is resent on its own; when it [mayHaveArrived], Resend first warns it could run twice.
+ * What to do with a prompt that lost its reply: when it may have arrived, check the transcript again or resend it;
+ * when it didn't, resend it or take it back to edit. Nothing is resent on its own; when it may have arrived,
+ * Resend first warns it could run twice.
  */
 @Composable
-private fun UnsettledActions(label: String, key: String, mayHaveArrived: Boolean, actions: ChatActions, connected: Boolean) {
+private fun UnsettledActions(check: SendCheck, key: String, actions: ChatActions, connected: Boolean) {
     var confirmResend by remember(key) { mutableStateOf(false) }
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(label, style = Theme[typography][caption], color = Theme[colors][textTertiary])
-        Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            if (mayHaveArrived) {
-                Button("Check delivery", onClick = { actions.checkDelivery(key) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small, leadingIcon = Lucide.SearchCheck)
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.End),
+        itemVerticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            deliveryLabel(check),
+            style = Theme[typography][caption],
+            color = Theme[colors][textTertiary],
+            modifier = Modifier.padding(end = 4.dp),
+        )
+        when (check) {
+            SendCheck.Checking -> {}
+            SendCheck.Unknown -> {
+                DeliveryChip("Check", Lucide.SearchCheck, description = "Check delivery", onClick = { actions.checkDelivery(key) })
+                DeliveryChip("Resend", Lucide.RotateCw, enabled = connected, onClick = { confirmResend = true })
             }
-            Button(
-                "Resend",
-                onClick = { if (mayHaveArrived) confirmResend = true else actions.resend(key) },
-                variant = ButtonVariant.Ghost,
-                size = ButtonSize.Small,
-                leadingIcon = Lucide.RotateCw,
-                enabled = connected,
-            )
-            Button("Edit", onClick = { actions.editMessage(key) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small, leadingIcon = Lucide.Pencil)
+            SendCheck.NotReceived -> {
+                DeliveryChip("Resend", Lucide.RotateCw, enabled = connected, onClick = { actions.resend(key) })
+                DeliveryChip("Edit", Lucide.Pencil, onClick = { actions.editMessage(key) })
+            }
         }
     }
     Dialog(
@@ -1488,12 +1522,49 @@ private fun UnsettledActions(label: String, key: String, mayHaveArrived: Boolean
         onDismissRequest = { confirmResend = false },
         title = "Resend this message?",
         message = "Hermes may already have it. If it does, resending makes Hermes get the same request twice and run it again. " +
-            "Check delivery first to be sure.",
+            "Tap Check first to be sure.",
         actions = {
             Button("Cancel", onClick = { confirmResend = false }, variant = ButtonVariant.Ghost)
             Button("Resend", onClick = { confirmResend = false; actions.resend(key) })
         },
     )
+}
+
+/** A small action under an undelivered prompt: drawn 28dp tall, but the full touch height around it takes the tap. */
+@Composable
+private fun DeliveryChip(
+    text: String,
+    icon: ImageVector,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    description: String = text,
+) {
+    val interaction = remember { MutableInteractionSource() }
+    val pill = CircleShape
+    Box(
+        Modifier
+            .heightIn(min = MinTouchTarget)
+            .clickable(interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
+            .semantics { contentDescription = description },
+        contentAlignment = Alignment.Center,
+    ) {
+        Row(
+            Modifier
+                .clearAndSetSemantics {}
+                .alpha(if (enabled) 1f else 0.45f)
+                // Grows with large text instead of cutting it off.
+                .heightIn(min = 28.dp)
+                .clip(pill)
+                .background(Theme[colors][surface2], pill)
+                .indication(interaction, rememberColoredIndication(Theme[colors][textColor]))
+                .padding(horizontal = 10.dp, vertical = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(5.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][textColor], modifier = Modifier.size(12.dp))
+            Text(text, style = Theme[typography][caption].copy(fontWeight = FontWeight.Medium), color = Theme[colors][textColor])
+        }
+    }
 }
 
 /**
