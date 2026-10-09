@@ -101,6 +101,7 @@ import dev.hermeskotlin.core.settings.RunningSend
 import dev.hermeskotlin.core.settings.TextSize
 import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.core.settings.VoicePause
+import dev.hermeskotlin.core.settings.DictationEngine
 import dev.hermeskotlin.core.settings.WallpaperStrength
 import dev.hermeskotlin.designsystem.AccentPalette
 import dev.hermeskotlin.designsystem.accent
@@ -425,6 +426,21 @@ internal fun SettingsView(
                 }
 
                 Section("Voice") {
+                    Field(
+                        "Dictation",
+                        detail = when (settings.dictationEngine) {
+                            DictationEngine.Device -> "The phone's speech recognizer writes as you talk. Falls back to the gateway on a phone without one."
+                            DictationEngine.Gateway -> "The profile's speech-to-text on the gateway, once you stop talking."
+                        },
+                    ) {
+                        SegmentedControl(
+                            options = DictationEngine.entries,
+                            selected = settings.dictationEngine,
+                            onSelect = { engine -> onUpdate { it.copy(dictationEngine = engine) } },
+                            optionLabel = { it.name },
+                        )
+                    }
+                    Divider()
                     Field("Pause before sending", detail = "How long a voice chat waits after you stop talking. Short is Desktop's timing.") {
                         SegmentedControl(
                             options = VoicePause.entries,

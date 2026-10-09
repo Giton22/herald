@@ -85,6 +85,36 @@ interface VoiceRecorder {
     fun finish()
 }
 
+/**
+ * The device's own speech recognizer, for dictation that never goes to the gateway: it writes words
+ * down as they are said and ends on its own when the speaker stops.
+ */
+interface DeviceDictation {
+    /** Whether this device has a recognizer to use. */
+    fun available(): Boolean
+
+    /**
+     * Listens until the speaker is done, [finish] is called, or the caller is cancelled (which discards
+     * it). [onPartial] gets the words so far, [onLevel] the input level, 0..1. Returns what was said,
+     * blank when nothing was heard; throws [DeviceDictationUnavailable] when no recognizer could start,
+     * and otherwise with a readable message when the recognizer fails.
+     */
+    suspend fun listen(onPartial: (String) -> Unit = {}, onLevel: (Float) -> Unit = {}): String
+
+    /** Ends the listening in progress now and keeps what was said. */
+    fun finish()
+}
+
+/** No recognizer on the device could start listening; the gateway transcribes instead. */
+class DeviceDictationUnavailable : Exception("No speech recognizer on this phone could start.")
+
+/** A device without a speech recognizer: dictation always goes to the gateway. */
+object NoDeviceDictation : DeviceDictation {
+    override fun available() = false
+    override suspend fun listen(onPartial: (String) -> Unit, onLevel: (Float) -> Unit): String = throw DeviceDictationUnavailable()
+    override fun finish() = Unit
+}
+
 /** Plays synthesized speech through the device speaker. */
 interface SpeechPlayer {
     /** Plays [audio] to the end; cancelling stops it. */

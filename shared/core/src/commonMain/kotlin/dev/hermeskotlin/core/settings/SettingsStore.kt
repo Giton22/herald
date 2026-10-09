@@ -43,6 +43,14 @@ enum class VoicePause(val millis: Long) {
 }
 
 /**
+ * Who writes down dictation: the phone's own speech recognizer ([Device]: words appear as you talk, and
+ * nothing is sent anywhere until you send the message), or the profile's speech-to-text on the gateway
+ * ([Gateway]: the recording is uploaded once you stop). Device falls back to the gateway on a phone
+ * without a recognizer.
+ */
+enum class DictationEngine { Device, Gateway }
+
+/**
  * What a message sent while a reply is running does: [Steer] slips it into the running turn (the model
  * reads it after its current tool call), [Queue] holds it for the next turn, [StopAndSend] stops the
  * reply and sends it as a fresh turn.
@@ -74,6 +82,7 @@ data class AppSettings(
     /** Show the profile's pet (when the gateway has one on) above the composer. */
     val showPet: Boolean = true,
     val voicePause: VoicePause = VoicePause.Normal,
+    val dictationEngine: DictationEngine = DictationEngine.Device,
     /** What tapping Send does while a reply is running; a long press on Send picks another for one message. */
     val runningSend: RunningSend = RunningSend.Steer,
     /** Notify when a turn finishes while the app is in the background. */

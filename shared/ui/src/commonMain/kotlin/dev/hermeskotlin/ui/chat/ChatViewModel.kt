@@ -47,6 +47,7 @@ import dev.hermeskotlin.core.voice.LiveCalls
 import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.core.voice.SpeechPlayer
 import dev.hermeskotlin.core.voice.VoiceRecorder
+import dev.hermeskotlin.core.voice.DeviceDictation
 import dev.hermeskotlin.ui.voice.VoiceController
 import kotlinx.coroutines.CoroutineScope
 import dev.hermeskotlin.core.slash.SlashApi
@@ -173,10 +174,11 @@ class ChatViewModel(
     private val bots: BotsApi,
     liveCalls: LiveCalls,
     voiceKeepAlive: VoiceKeepAlive,
+    deviceDictation: DeviceDictation,
 ) : ViewModel(), ChatActions {
 
     /** Dictation and voice chat for the open chat. */
-    val voice = VoiceController(audioApi, recorder, player, viewModelScope, appScope, voiceKeepAlive, liveCalls)
+    val voice = VoiceController(audioApi, recorder, player, viewModelScope, appScope, voiceKeepAlive, deviceDictation, liveCalls)
 
     /** The profile's pet and its gallery. */
     val pets = PetController(petApi, viewModelScope)
@@ -418,9 +420,26 @@ class ChatViewModel(
     fun toggleDictation() {
         val target = target ?: return
         if (voice.dictation.value.recording) return voice.finishDictation()
-        voice.startDictation(target.gateway.gatewayUrl, target.profile) { text ->
+        val engine = (settings.settings.value ?: AppSettings()).dictationEngine
+        val typed = composer.text.toString()
+        // The words so far show in the composer as they're said, unless the person edits it meanwhile.
+        var shown = typed
+        fun withSpoken(base: String, spoken: String) = if (base.isBlank()) spoken else "${base.trimEnd()} $spoken"
+        voice.startDictation(
+            target.gateway.gatewayUrl,
+            target.profile,
+            engine,
+            onPartial = { partial ->
+                if (composer.text.toString() == shown) {
+                    shown = withSpoken(typed, partial)
+                    composer.setTextAndPlaceCursorAtEnd(shown)
+                }
+            },
+            // Cancelled (another chat, the app went away): the half-said words go, what was typed stays.
+            onCancelled = { if (shown != typed && composer.text.toString() == shown) composer.setTextAndPlaceCursorAtEnd(typed) },
+        ) { text ->
             val current = composer.text.toString()
-            composer.setTextAndPlaceCursorAtEnd(if (current.isBlank()) text else "${current.trimEnd()} $text")
+            composer.setTextAndPlaceCursorAtEnd(withSpoken(if (current == shown) typed else current, text))
         }
     }
 
