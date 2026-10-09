@@ -1,7 +1,24 @@
 package dev.hermeskotlin.ui.gateways
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.sp
+import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.code
+import dev.hermeskotlin.designsystem.radii
+import dev.hermeskotlin.designsystem.radiusLarge
+import dev.hermeskotlin.designsystem.stroke
+import dev.hermeskotlin.designsystem.surface2
+import dev.hermeskotlin.designsystem.surface3
+import dev.hermeskotlin.designsystem.warning
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -31,6 +48,7 @@ import com.composables.icons.lucide.EllipsisVertical
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Plus
+import com.composables.icons.lucide.Server
 import com.composables.icons.lucide.Star
 import com.composables.icons.lucide.Trash2
 import com.composeunstyled.Text
@@ -85,20 +103,31 @@ fun GatewaysSheet(
 
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         SheetHeader("Gateways", "Each gateway is its own Hermes, with its own profiles and chats.")
-        list.ordered.forEach { gateway ->
-            GatewayRow(
-                gateway = gateway,
-                primary = gateway.url == list.primary?.url,
-                // With one gateway saved, "Primary" says nothing.
-                showPrimary = list.gateways.size > 1,
-                active = gateway.url == activeUrl,
-                signedIn = gateway.url in choices.signedIn,
-                onClick = { onDismiss(); onSwitch(gateway) },
-                onSetPrimary = { onSetPrimary(gateway) },
-                onRename = { renameTarget = gateway },
-                onRemove = { removeTarget = gateway },
-            )
+        // A card each; the sheet scrolls only when there are more than fit.
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .heightIn(max = 480.dp)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 14.dp, vertical = 2.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            list.ordered.forEach { gateway ->
+                GatewayRow(
+                    gateway = gateway,
+                    primary = gateway.url == list.primary?.url,
+                    // With one gateway saved, "Primary" says nothing.
+                    showPrimary = list.gateways.size > 1,
+                    active = gateway.url == activeUrl,
+                    signedIn = gateway.url in choices.signedIn,
+                    onClick = { onDismiss(); onSwitch(gateway) },
+                    onSetPrimary = { onSetPrimary(gateway) },
+                    onRename = { renameTarget = gateway },
+                    onRemove = { removeTarget = gateway },
+                )
+            }
         }
+        Spacer(Modifier.height(6.dp))
         SheetAction("Add a gateway", Lucide.Plus, onClick = { onDismiss(); onAdd() })
     }
 
@@ -119,34 +148,82 @@ private fun GatewayRow(
     onRemove: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     Row(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = 56.dp)
+            .heightIn(min = 60.dp)
+            .clip(shape)
+            .background(Theme[colors][if (active) accentSoft else surface2])
+            .border(1.dp, Theme[colors][stroke], shape)
             .clickable(onClick = onClick)
-            .padding(start = 20.dp, end = 8.dp, top = 8.dp, bottom = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+            .semantics { selected = active }
+            .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
-            Modifier.size(28.dp).clip(CircleShape).background(Theme[colors][if (active) accent else surface]),
+            Modifier.size(36.dp).background(Theme[colors][if (active) accent else surface3], RoundedCornerShape(10.dp)),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                gateway.label.take(1).uppercase(),
-                style = Theme[typography][caption].copy(fontWeight = FontWeight.SemiBold),
-                color = Theme[colors][if (active) onAccent else textSecondary],
-            )
-        }
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(gateway.label, style = Theme[typography][body], color = Theme[colors][text], maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val address = gateway.url.substringAfter("://").takeIf { gateway.name != null && it != gateway.label }
-            val sub = listOfNotNull("Primary".takeIf { primary && showPrimary }, address, "Signed out".takeIf { !signedIn }).joinToString(" · ")
-            if (sub.isNotEmpty()) {
-                Text(sub, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val initial = gateway.label.firstOrNull()?.takeIf { it.isLetter() }
+            // A gateway known only by its address gets a server, not the first digit of its IP.
+            if (initial == null) {
+                UnstyledIcon(Lucide.Server, contentDescription = null, tint = Theme[colors][if (active) onAccent else textSecondary], modifier = Modifier.size(17.dp))
+            } else {
+                Text(
+                    initial.uppercase(),
+                    style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold),
+                    color = Theme[colors][if (active) onAccent else textSecondary],
+                )
             }
         }
-        if (active) UnstyledIcon(Lucide.Check, contentDescription = "In use", tint = Theme[colors][accentText], modifier = Modifier.size(20.dp))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    gateway.label,
+                    style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold),
+                    color = Theme[colors][text],
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                if (primary && showPrimary) {
+                    Text(
+                        "Primary",
+                        style = Theme[typography][caption].copy(fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold),
+                        color = Theme[colors][textSecondary],
+                        maxLines = 1,
+                        modifier = Modifier.background(Theme[colors][surface3], CircleShape).padding(horizontal = 7.dp, vertical = 1.dp),
+                    )
+                }
+            }
+            val address = gateway.url.substringAfter("://").takeIf { gateway.name != null && it != gateway.label }
+            if (address != null || !signedIn) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (address != null) {
+                        Text(
+                            address,
+                            style = Theme[typography][code].copy(fontSize = 11.5.sp),
+                            color = Theme[colors][textTertiary],
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                    }
+                    if (!signedIn) {
+                        Text(
+                            if (address != null) "· Signed out" else "Signed out",
+                            style = Theme[typography][bodySmall].copy(fontSize = 12.sp),
+                            color = Theme[colors][warning],
+                            maxLines = 1,
+                        )
+                    }
+                }
+            }
+        }
+        // The row says it's the one in use as selected; the check stays silent.
+        if (active) UnstyledIcon(Lucide.Check, contentDescription = null, tint = Theme[colors][accentText], modifier = Modifier.size(20.dp))
         DropdownMenu(
             expanded = menuOpen,
             onExpandedChange = { menuOpen = it },

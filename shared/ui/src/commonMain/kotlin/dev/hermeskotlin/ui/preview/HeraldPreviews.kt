@@ -68,6 +68,15 @@ import dev.hermeskotlin.ui.bots.BotFaces
 import dev.hermeskotlin.ui.bots.LocalBotFaces
 import dev.hermeskotlin.ui.rooms.RoomActions
 import dev.hermeskotlin.ui.rooms.RoomView
+import dev.hermeskotlin.ui.plugins.PluginsUiState
+import dev.hermeskotlin.ui.gateways.GatewaysSheet
+import dev.hermeskotlin.ui.journey.JourneySheetView
+import dev.hermeskotlin.ui.rooms.CreateRoomDialog
+import dev.hermeskotlin.ui.bots.BotEditor
+import dev.hermeskotlin.core.bots.BotDetails
+import dev.hermeskotlin.ui.plugins.PluginsView
+import dev.hermeskotlin.ui.assistant.AssistantBackdrop
+import dev.hermeskotlin.ui.assistant.AssistantCard
 import dev.hermeskotlin.ui.sessions.ProjectDraft
 import dev.hermeskotlin.core.projects.FolderListing
 import dev.hermeskotlin.ui.sessions.ProjectActionsSheet
@@ -108,9 +117,16 @@ enum class PreviewScene(val label: String) {
     Sidebar("The sessions sidebar"),
     Bots("The bots and rooms"),
     Room("A room of bots"),
+    NewRoom("A new room"),
+    BotEditor("Editing a bot"),
     Settings("Settings"),
+    Gateways("Saved gateways"),
+    Journey("What the agent has learned"),
     Insights("Insights"),
     Capabilities("Capabilities"),
+    Plugins("Plugins with a page"),
+    Assistant("The assistant, called up over another app"),
+    AssistantAnswer("The assistant, after a question about the screen"),
     Scheduled("Scheduled jobs"),
     ScheduledJob("A scheduled job and its runs"),
     JobEditor("A new scheduled job"),
@@ -296,6 +312,59 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 }
                 PreviewScene.Capabilities -> OpenSidebar {
                     SidebarPage { CapabilitiesView(PageSamples.capabilities, remember { TextFieldState() }, PreviewCapabilitiesActions, onBack = {}) }
+                }
+                PreviewScene.Gateways -> Box(Modifier.fillMaxSize()) {
+                    SampleChat(ChatSamples.reply)
+                    GatewaysSheet(
+                        visible = true,
+                        choices = PageSamples.gateways,
+                        activeUrl = "https://hermes.example.ts.net",
+                        onDismiss = {},
+                        onSwitch = {},
+                        onAdd = {},
+                        onSetPrimary = {},
+                        onRename = { _, _ -> },
+                        onRemove = {},
+                    )
+                }
+                PreviewScene.BotEditor -> BotEditor(
+                    bot = BotSamples.scribe.copy(model = "anthropic/claude-opus-5-5", provider = "anthropic"),
+                    taken = emptySet(),
+                    busy = null,
+                    loadDetails = {
+                        BotDetails(
+                            soul = "I'm Scribe. I keep notes short, dated and easy to search.",
+                            description = "Takes meeting notes and files them where you can find them.",
+                        )
+                    },
+                    onBack = {},
+                    onCreate = {},
+                    onSave = { _, _, _ -> },
+                )
+                PreviewScene.NewRoom -> Box(Modifier.fillMaxSize()) {
+                    OpenSidebar {
+                        BotsSidebarSample(BotSamples.roster, userLabel = ChatSamples.USER, nowSeconds = BotSamples.now, rooms = BotSamples.rooms)
+                    }
+                    CreateRoomDialog(visible = true, bots = BotSamples.roster.bots, busy = null, onDismiss = {}, onCreate = { _, _ -> })
+                }
+                PreviewScene.Journey -> Box(Modifier.fillMaxSize()) {
+                    SampleChat(ChatSamples.reply)
+                    JourneySheetView(visible = true, state = remember { PageSamples.journey() }, detail = { null }, onDismiss = {})
+                }
+                PreviewScene.Assistant, PreviewScene.AssistantAnswer -> AssistantBackdrop(onClose = {}) {
+                    AssistantCard(
+                        state = if (scene == PreviewScene.Assistant) AssistantSamples.offer else AssistantSamples.answered,
+                        actions = PreviewAssistantActions,
+                        microphoneAllowed = true,
+                        onOpenHerald = {},
+                        onSignIn = {},
+                        onAllowMicrophone = {},
+                        onOpenScreenSettings = {},
+                        onClose = {},
+                    )
+                }
+                PreviewScene.Plugins -> OpenSidebar {
+                    SidebarPage { PluginsView(PluginsUiState(plugins = PageSamples.plugins), onBack = {}, onOpenPlugin = {}, onRetry = {}) }
                 }
                 PreviewScene.Scheduled, PreviewScene.ScheduledJob -> OpenSidebar {
                     SidebarPage {

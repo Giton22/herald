@@ -37,6 +37,14 @@ import dev.hermeskotlin.ui.sessions.InsightsUiState
 import dev.hermeskotlin.ui.sessions.JobEditor
 import dev.hermeskotlin.ui.sessions.Loadable
 import kotlin.time.Clock
+import dev.hermeskotlin.core.plugins.DashboardPlugin
+import dev.hermeskotlin.core.gateway.GatewayList
+import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.ui.GatewayChoices
+import dev.hermeskotlin.core.journey.JourneyGraph
+import dev.hermeskotlin.core.journey.JourneyNode
+import dev.hermeskotlin.ui.journey.JourneyState
+import dev.hermeskotlin.core.plugins.PluginTab
 
 /** Made-up data for the sidebar pages and the chat's sheets, in the same home-server story as [ChatSamples]. */
 internal object PageSamples {
@@ -278,6 +286,43 @@ internal object PageSamples {
 
     /** Two models starred, one from each of two providers. */
     val starredModels = listOf("anthropic/claude-opus-5-5", "openrouter/z-ai/glm-5.3-flash")
+
+    /** Dashboard plugins with a page, one bundled with Hermes and the rest installed on the gateway. */
+    val plugins = listOf(
+        DashboardPlugin("kanban", "Kanban", "Boards the agent and you share: cards move as work gets done.", "1.4.0", "bundled", PluginTab("/kanban")),
+        DashboardPlugin("achievements", "Achievements", "Badges for streaks, first runs and long tasks.", "0.3.2", "user", PluginTab("/achievements")),
+        DashboardPlugin("homelab-status", "Homelab status", "Disks, backups and containers on one page.", "2.0.1", "user", PluginTab("/homelab")),
+    )
+
+    /** Three saved gateways: the home one in use and primary, a named one, and one signed out. */
+    val gateways = GatewayChoices(
+        GatewayList(
+            gateways = listOf(
+                SavedGateway("https://hermes.example.ts.net", name = "homelab"),
+                SavedGateway("https://work-hermes.example.com", name = "Work"),
+                SavedGateway("http://192.168.1.20:9119"),
+            ),
+            currentUrl = "https://hermes.example.ts.net",
+            primaryUrl = "https://hermes.example.ts.net",
+        ),
+        signedIn = setOf("https://hermes.example.ts.net", "https://work-hermes.example.com"),
+    )
+
+    /** What the agent has picked up over two months: skills it wrote and memories it keeps. */
+    fun journey(now: Long = Clock.System.now().epochSeconds): JourneyState {
+        val day = 86_400L
+        return JourneyState(
+            JourneyGraph(
+                listOf(
+                    JourneyNode("s1", "rotate-nas-snapshots", timestamp = now - 1 * day, category = "homelab", useCount = 6, pinned = true),
+                    JourneyNode("m1", "Backups go to /mnt/nas/backups and keep 14 snapshots", kind = "memory", timestamp = now - 2 * day, memorySource = "MEMORY.md"),
+                    JourneyNode("s2", "summarize-changelog", timestamp = now - 5 * day, category = "writing", useCount = 3),
+                    JourneyNode("m2", "Prefers short answers with the command first", kind = "memory", timestamp = now - 40 * day, memorySource = "USER.md"),
+                    JourneyNode("s3", "check-disk-health", timestamp = now - 45 * day, category = "homelab", useCount = 1),
+                ),
+            ),
+        )
+    }
 
     /** Picked lately, newest first. */
     val recentModels = listOf("openai-codex/gpt-6.1-sol", "openrouter/deepseek/deepseek-v4", "anthropic/claude-opus-5-5")

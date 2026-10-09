@@ -1,6 +1,21 @@
 package dev.hermeskotlin.ui.journey
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.sp
+import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.components.MinTouchTarget
+import dev.hermeskotlin.designsystem.eyebrow
+import dev.hermeskotlin.designsystem.code
+import dev.hermeskotlin.designsystem.radii
+import dev.hermeskotlin.designsystem.radiusMedium
+import dev.hermeskotlin.designsystem.surface2
+import dev.hermeskotlin.designsystem.title
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -60,15 +75,24 @@ import dev.hermeskotlin.designsystem.typography
  */
 @Composable
 fun JourneySheet(visible: Boolean, controller: JourneyController, onLoad: () -> Unit, onDismiss: () -> Unit) {
-    val state = controller.state.collectAsStateWithLifecycle().value
+    LaunchedEffect(visible) { if (visible) onLoad() }
+    JourneySheetView(visible, controller.state.collectAsStateWithLifecycle().value, controller::detail, onDismiss)
+}
+
+/** The sheet's layout, apart from its controller, so previews can draw it from sample data. */
+@Composable
+internal fun JourneySheetView(
+    visible: Boolean,
+    state: JourneyState,
+    detail: suspend (JourneyNode) -> JourneyNodeDetail?,
+    onDismiss: () -> Unit,
+) {
     var open by remember { mutableStateOf<JourneyNode?>(null) }
-    LaunchedEffect(visible) {
-        if (visible) onLoad() else open = null
-    }
+    LaunchedEffect(visible) { if (!visible) open = null }
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         val node = open
         if (node != null) {
-            NodeDetail(node, controller, onBack = { open = null })
+            NodeDetail(node, detail, onBack = { open = null })
             return@BottomSheet
         }
         val graph = state.graph
@@ -89,9 +113,14 @@ fun JourneySheet(visible: Boolean, controller: JourneyController, onLoad: () -> 
                         item(key = "m-$month") {
                             Text(
                                 month.uppercase(),
-                                style = Theme[typography][caption].copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.06.em),
+                                style = Theme[typography][eyebrow],
                                 color = Theme[colors][textTertiary],
-                                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
+                                modifier = Modifier
+                                    .padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 6.dp)
+                                    .semantics {
+                                        heading()
+                                        contentDescription = month
+                                    },
                             )
                         }
                         items(nodes, key = { it.id }) { NodeRow(it, onClick = { open = it }) }
@@ -105,32 +134,62 @@ fun JourneySheet(visible: Boolean, controller: JourneyController, onLoad: () -> 
 @Composable
 private fun NodeRow(node: JourneyNode, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onClick).padding(horizontal = 20.dp, vertical = 10.dp),
-        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = MinTouchTarget)
+            .padding(horizontal = 8.dp)
+            .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        UnstyledIcon(
-            if (node.isMemory) Lucide.Brain else Lucide.Sparkles,
-            contentDescription = null,
-            tint = Theme[colors][if (node.isMemory) textSecondary else accentText],
-            modifier = Modifier.size(18.dp),
-        )
+        // A skill on the accent tint, a memory on a plain tile, so the two read apart at a glance.
+        Box(
+            Modifier.size(32.dp).background(Theme[colors][if (node.isMemory) surface2 else accentSoft], RoundedCornerShape(10.dp)),
+            contentAlignment = Alignment.Center,
+        ) {
+            UnstyledIcon(
+                if (node.isMemory) Lucide.Brain else Lucide.Sparkles,
+                contentDescription = null,
+                tint = Theme[colors][if (node.isMemory) textSecondary else accentText],
+                modifier = Modifier.size(16.dp),
+            )
+        }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(node.title, style = Theme[typography][body], color = Theme[colors][textColor], maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(node.detailLine(), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(
+                node.title,
+                // A skill's name is its slug, so it's set in mono as Capabilities sets it.
+                style = if (node.isMemory) {
+                    Theme[typography][body].copy(fontSize = 14.5.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium)
+                } else {
+                    Theme[typography][code].copy(fontSize = 13.5.sp, lineHeight = 20.sp)
+                },
+                color = Theme[colors][textColor],
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            Text(node.detailLine(), style = Theme[typography][caption].copy(fontSize = 12.sp), color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
         if (node.pinned) UnstyledIcon(Lucide.Pin, contentDescription = "Pinned", tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
     }
 }
 
 @Composable
-private fun NodeDetail(node: JourneyNode, controller: JourneyController, onBack: () -> Unit) {
-    val detail by produceState<Result<JourneyNodeDetail?>?>(null, node.id) { value = runCatching { controller.detail(node) } }
+private fun NodeDetail(node: JourneyNode, read: suspend (JourneyNode) -> JourneyNodeDetail?, onBack: () -> Unit) {
+    val detail by produceState<Result<JourneyNodeDetail?>?>(null, node.id) { value = runCatching { read(node) } }
     Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 20.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(Lucide.ArrowLeft, contentDescription = "Back to the journey", onClick = onBack)
-        Column(Modifier.weight(1f)) {
-            Text(node.title, style = Theme[typography][body], color = Theme[colors][textColor], maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(node.detailLine(), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary], maxLines = 1)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(
+                node.title,
+                style = Theme[typography][title],
+                color = Theme[colors][textColor],
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(node.detailLine(), style = Theme[typography][bodySmall].copy(fontSize = 13.sp), color = Theme[colors][textTertiary], maxLines = 1)
         }
     }
     val content = detail?.getOrNull()?.content

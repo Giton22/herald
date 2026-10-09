@@ -44,6 +44,14 @@ import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.danger
+import dev.hermeskotlin.designsystem.dangerSoft
+import dev.hermeskotlin.designsystem.surface2
+import dev.hermeskotlin.designsystem.title as titleStyle
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.sp
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusLarge
 import dev.hermeskotlin.designsystem.stroke
@@ -117,21 +125,37 @@ fun BottomSheet(
     }
 }
 
-/** Optional heading block for a [BottomSheet]. */
+/** Optional heading block for a [BottomSheet]: the title in the sheet's title style, a quiet line under it. */
 @Composable
 fun SheetHeader(title: String, subtitle: String? = null) {
     Column(
-        Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 10.dp),
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
-        Text(title, style = Theme[typography][body], color = Theme[colors][textColor], maxLines = 2)
+        Text(
+            title,
+            style = Theme[typography][titleStyle],
+            color = Theme[colors][textColor],
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.semantics { heading() },
+        )
         if (subtitle != null) {
-            Text(subtitle, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary], maxLines = 2)
+            Text(
+                subtitle,
+                style = Theme[typography][bodySmall].copy(fontSize = 13.sp),
+                color = Theme[colors][textTertiary],
+                maxLines = 3,
+                overflow = TextOverflow.Ellipsis,
+            )
         }
     }
 }
 
-/** One full-width row in a [BottomSheet]. [destructive] tints it with the danger color. */
+/**
+ * One full-width row in a [BottomSheet]: its icon on a small tile, then the label. [destructive] tints both
+ * with the danger color.
+ */
 @Composable
 fun SheetAction(
     text: String,
@@ -147,17 +171,24 @@ fun SheetAction(
         contentAlignment = Alignment.CenterStart,
     ) {
         Row(
-            Modifier.padding(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            Modifier.padding(horizontal = 18.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            UnstyledIcon(
-                icon,
-                contentDescription = null,
-                tint = if (destructive) tint else Theme[colors][textSecondary],
-                modifier = Modifier.size(20.dp),
-            )
-            Text(text, style = Theme[typography][body], color = tint)
+            Box(
+                Modifier
+                    .size(34.dp)
+                    .background(if (destructive) Theme[colors][dangerSoft] else Theme[colors][surface2], RoundedCornerShape(10.dp)),
+                contentAlignment = Alignment.Center,
+            ) {
+                UnstyledIcon(
+                    icon,
+                    contentDescription = null,
+                    tint = if (destructive) tint else Theme[colors][textSecondary],
+                    modifier = Modifier.size(18.dp),
+                )
+            }
+            Text(text, style = Theme[typography][body].copy(fontWeight = FontWeight.Medium), color = tint)
         }
     }
 }

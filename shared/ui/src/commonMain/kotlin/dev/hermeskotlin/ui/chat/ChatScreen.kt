@@ -946,7 +946,7 @@ internal fun TopBar(
 
 /** A dot in [BarStatus.tone] with a soft ring, then the status in small grey type. */
 @Composable
-private fun StatusLine(status: BarStatus) {
+internal fun StatusLine(status: BarStatus) {
     val (dot, ring) = when (status.tone) {
         StatusTone.Ok -> Theme[colors][success] to Theme[colors][successSoft]
         StatusTone.Busy -> Theme[colors][accentText] to Theme[colors][accentSoft]
@@ -1396,7 +1396,7 @@ private fun ChatMessage.contentSize(): Int = when (this) {
 }
 
 /** Tells apart the ways the link can be down: none, being re-made, or needing a new sign-in. */
-private fun connectionLabel(state: ConnectionState): String = when (state) {
+internal fun connectionLabel(state: ConnectionState): String = when (state) {
     is ConnectionState.Connecting, is ConnectionState.Reconnecting -> "No connection · connecting again…"
     ConnectionState.SessionExpired -> "Signed out · sign in again"
     is ConnectionState.Failed, ConnectionState.Idle, is ConnectionState.Connected -> "No connection"
@@ -1866,7 +1866,7 @@ private fun AssistantReply(
 
 /** Who's speaking above a reply: the small mark, "Hermes", and when it finished. */
 @Composable
-private fun ReplyHeader(epochSeconds: Double?) {
+internal fun ReplyHeader(epochSeconds: Double?) {
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
         AppMark(20.dp, glow = false)
         Text("Hermes", style = Theme[typography][label], color = Theme[colors][textSecondary])
@@ -2808,7 +2808,7 @@ private fun RunningSendSegments(mode: RunningSend, attachments: Boolean, enabled
 }
 
 /** The dock's shadow: soft and wide, a little below it, so it floats over the chat. */
-private val DockShadow = Shadow(radius = 24.dp, color = Color.Black.copy(alpha = 0.18f), offset = DpOffset(0.dp, 8.dp))
+internal val DockShadow =Shadow(radius = 24.dp, color = Color.Black.copy(alpha = 0.18f), offset = DpOffset(0.dp, 8.dp))
 
 /** The composer's +: a 36dp disc, with the full touch target around it. */
 @Composable
@@ -2828,7 +2828,7 @@ private fun AttachButton(onClick: () -> Unit, enabled: Boolean) {
 
 /** A plain icon button inside the composer, like the microphone. */
 @Composable
-private fun ComposerButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean) {
+internal fun ComposerButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean) {
     val tint = if (enabled) Theme[colors][textSecondary] else Theme[colors][textTertiary].copy(alpha = 0.5f)
     UnstyledButton(
         onClick = onClick,
