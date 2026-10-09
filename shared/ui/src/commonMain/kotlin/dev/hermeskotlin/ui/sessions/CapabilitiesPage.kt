@@ -213,7 +213,8 @@ private fun <T> TabList(loadable: Loadable<T>, empty: String, onRetry: () -> Uni
         }
         items == null -> ListSkeleton()
         items.isEmpty() -> Box(Modifier.fillMaxSize().padding(12.dp)) { ListNotice(empty) }
-        else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 96.dp)) {
+        // 4dp on top leaves room for a focused search field's ring, which the list would clip.
+        else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 4.dp, bottom = 96.dp)) {
             content(items)
         }
     }

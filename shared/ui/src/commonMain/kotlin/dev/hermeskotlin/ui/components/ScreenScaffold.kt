@@ -61,7 +61,8 @@ fun ScreenScaffold(content: @Composable ColumnScope.() -> Unit) {
                 .widthIn(max = 520.dp)
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
-                .padding(start = 22.dp, end = 22.dp, top = 36.dp, bottom = 16.dp),
+                // Room at the end for a last button's glow, which reaches about 24dp below it.
+                .padding(start = 22.dp, end = 22.dp, top = 36.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp),
             content = content,
         )

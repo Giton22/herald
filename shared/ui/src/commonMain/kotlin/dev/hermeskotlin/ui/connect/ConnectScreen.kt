@@ -31,6 +31,11 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
+import androidx.compose.ui.semantics.onClick
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
@@ -103,7 +108,9 @@ fun ConnectScreen(
     ConnectView(
         url = viewModel.url,
         state = state,
-        access = AccessToken(viewModel.accessClientId, viewModel.accessClientSecret, accessSaved, viewModel::forgetAccessToken),
+        access = remember(viewModel, accessSaved) {
+            AccessToken(viewModel.accessClientId, viewModel.accessClientSecret, accessSaved, viewModel::forgetAccessToken)
+        },
         onTest = viewModel::testConnection,
         onContinue = { onContinue(SavedGateway(it.url.value, provider = PASSWORD_PROVIDER)) },
         onCancel = onCancel,
@@ -223,7 +230,14 @@ private fun TestButton(testing: Boolean, onClick: () -> Unit) {
     Box(
         Modifier
             .heightIn(min = 48.dp)
-            .clickable(interaction, indication = null, enabled = !testing, role = Role.Button, onClick = onClick),
+            .clickable(interaction, indication = null, enabled = !testing, role = Role.Button, onClick = onClick)
+            // "Test" alone doesn't say what's tested once it's read apart from the field.
+            .clearAndSetSemantics {
+                contentDescription = if (testing) "Testing the connection" else "Test connection"
+                role = Role.Button
+                if (testing) disabled()
+                onClick { onClick(); true }
+            },
         contentAlignment = Alignment.Center,
     ) {
         Row(
@@ -329,7 +343,7 @@ private fun ResultCard(result: ProbeResult.Reachable) {
                         color = Theme[colors][text],
                     )
                     if (signInReady) {
-                        Text("Sign-in is tested next", style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary])
+                        Text("Sign-in is tested next, then the chat", style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary])
                     }
                 }
             }

@@ -18,6 +18,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.TextUnit
@@ -113,7 +115,11 @@ fun Button(
                         fontSize = size.fontSize,
                         fontWeight = if (main) FontWeight.SemiBold else FontWeight.Medium,
                     ),
-                    singleLine = true,
+                    // Large text wraps to a second line inside the pill rather than running out of it.
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.weight(1f, fill = false),
                 )
                 if (trailingIcon != null && !loading) {
                     UnstyledIcon(trailingIcon, contentDescription = null, modifier = Modifier.size(size.iconSize), tint = content)

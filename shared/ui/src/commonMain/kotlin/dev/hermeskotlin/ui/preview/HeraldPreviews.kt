@@ -503,6 +503,10 @@ private fun ConnectPreview() = HeraldPreview(PreviewScene.Connect)
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
+private fun ConnectFailedPreview() = HeraldPreview(PreviewScene.ConnectFailed)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
 private fun SignInPreview() = HeraldPreview(PreviewScene.SignIn)
 
 /** The welcome screen after a test of [address] came back with [result]. */

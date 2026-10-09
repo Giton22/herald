@@ -161,8 +161,9 @@ fun TextField(
                 .padding(
                     start = 16.dp,
                     end = if (trailing != null) 6.dp else 16.dp,
-                    top = if (trailing != null) 2.dp else 6.dp,
-                    bottom = if (trailing != null) 2.dp else 6.dp,
+                    // A field of several lines keeps room above its first line and below its last.
+                    top = if (trailing != null) 2.dp else if (singleLine) 6.dp else 12.dp,
+                    bottom = if (trailing != null) 2.dp else if (singleLine) 6.dp else 12.dp,
                 ),
         ) {
             Row(Modifier.defaultMinSize(minHeight = 40.dp), verticalAlignment = Alignment.CenterVertically) {
