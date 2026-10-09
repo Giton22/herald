@@ -22,7 +22,8 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [ ] Kotlin models generated from `gateway-contract.openrpc.json`
 - [x] Koin for dependency injection, androidx ViewModel (KMP), Coroutines/Flow
 - [ ] Navigation library (KMP); a small route state machine (`AppViewModel`) is used for now
-- [ ] SQLDelight or Room KMP for the local cache, DataStore for settings
+- [x] Room KMP for the local cache
+- [ ] DataStore for settings
 - [x] Secure storage on Android (AES-GCM key in the Android Keystore) for the session cookie jar
 - [ ] Secure storage on iOS (Keychain)
 - [x] Markdown rendering (`multiplatform-markdown-renderer`)
@@ -263,7 +264,8 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] App lock (Settings → Privacy): fingerprint, face or screen lock on launch and after a minute away; content hidden in Recents
 - [ ] Tablet and foldable adaptive layout (list and detail side by side)
 - [ ] Home-screen widget and Quick Settings tile
-- [ ] Offline cache of sessions and messages
+- [x] Offline cache of sessions and messages: the chat list and the newest rows of the last 50 chats read are kept on the device (Room, rows encrypted with a Keystore-held key) and shown while the gateway can't be reached, marked "Saved copy"; signing out of a gateway forgets its chats
+- [ ] Send prompts typed offline once the gateway is back (an outbox)
 - [ ] iOS app
 - [ ] Desktop (JVM) app
 - [ ] Wear OS companion
