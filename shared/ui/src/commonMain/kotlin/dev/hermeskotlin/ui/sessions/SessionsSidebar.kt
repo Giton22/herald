@@ -850,7 +850,7 @@ private fun SearchPill(onClick: () -> Unit) {
 
 /** A page's header: Back with the page's [actions] at the other end, then its title, large, underneath. */
 @Composable
-internal fun SubpageHeader(title: String, onBack: () -> Unit, actions: @Composable RowScope.() -> Unit = {}) {
+internal fun SubpageHeader(title: String, onBack: () -> Unit, subtitle: String? = null, actions: @Composable RowScope.() -> Unit = {}) {
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // A narrow page, such as one in the sidebar, takes the smaller title style.
         val style = Theme[typography][if (maxWidth < 360.dp) titleStyle else display]
@@ -861,8 +861,13 @@ internal fun SubpageHeader(title: String, onBack: () -> Unit, actions: @Composab
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 IconButton(Lucide.ArrowLeft, contentDescription = "Back", onClick = onBack, tint = Theme[colors][textSecondary])
-                Spacer(Modifier.weight(1f))
-                actions()
+                // The actions get all the room past Back, pushed to the end; a weighted one can take it all.
+                Row(
+                    Modifier.weight(1f),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp, Alignment.End),
+                    verticalAlignment = Alignment.CenterVertically,
+                    content = actions,
+                )
             }
             Text(
                 title,
@@ -872,6 +877,16 @@ internal fun SubpageHeader(title: String, onBack: () -> Unit, actions: @Composab
                 overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.padding(horizontal = 16.dp).semantics { heading() },
             )
+            if (subtitle != null) {
+                Text(
+                    subtitle,
+                    style = Theme[typography][bodySmall].copy(fontSize = 13.5.sp),
+                    color = Theme[colors][textTertiary],
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 2.dp),
+                )
+            }
         }
     }
 }
