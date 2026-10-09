@@ -1355,13 +1355,19 @@ private fun OfflineBanner(place: String?, status: String, onRetry: () -> Unit) {
             .padding(horizontal = 14.dp)
             .background(Theme[colors][dangerSoft], RoundedCornerShape(Theme[radii][radiusMedium]))
             .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
-            .semantics(mergeDescendants = true) { liveRegion = LiveRegionMode.Polite },
+            .semantics(mergeDescendants = true) {},
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         UnstyledIcon(Lucide.WifiOff, contentDescription = null, tint = Theme[colors][danger], modifier = Modifier.size(16.dp))
         Column(Modifier.weight(1f).padding(vertical = 6.dp)) {
-            Text(offlineTitle(place), style = Theme[typography][bodySmall].copy(fontWeight = FontWeight.Medium), color = Theme[colors][textColor])
+            // Announced once as it appears: the line under it changes with every attempt, and isn't.
+            Text(
+                offlineTitle(place),
+                style = Theme[typography][bodySmall].copy(fontWeight = FontWeight.Medium),
+                color = Theme[colors][textColor],
+                modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
             Text("$status Your draft is kept.", style = Theme[typography][caption], color = Theme[colors][textSecondary])
         }
         RetryChip("Retry now", onClick = onRetry)

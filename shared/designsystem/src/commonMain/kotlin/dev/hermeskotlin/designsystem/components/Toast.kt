@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -58,13 +59,15 @@ fun Toast(
     spokenMessage: String = message,
 ) {
     val on = Theme[colors][onInverse]
+    // A pill for one line; a message that wraps keeps the same corners instead of a half-height radius.
+    val shape = RoundedCornerShape(24.dp)
     Row(
         modifier
             .widthIn(max = 480.dp)
-            .dropShadow(CircleShape, Shadow(radius = 24.dp, color = Color.Black.copy(alpha = 0.22f), offset = DpOffset(0.dp, 8.dp)))
-            .background(Theme[colors][inverse], CircleShape)
-            // The action and × are full touch targets, which set the pill's height; the action's ends meet its own.
-            .padding(start = 16.dp)
+            .dropShadow(shape, Shadow(radius = 24.dp, color = Color.Black.copy(alpha = 0.22f), offset = DpOffset(0.dp, 8.dp)))
+            .background(Theme[colors][inverse], shape)
+            // The action and × are full touch targets, which set the pill's height; with neither, the text keeps clear of the end.
+            .padding(start = 16.dp, end = if (actionLabel == null && onDismiss == null) 16.dp else 0.dp)
             .semantics { liveRegion = LiveRegionMode.Polite },
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,

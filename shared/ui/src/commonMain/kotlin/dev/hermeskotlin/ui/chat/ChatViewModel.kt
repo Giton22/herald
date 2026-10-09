@@ -1003,8 +1003,13 @@ class ChatViewModel(
         session.value?.retry()
     }
 
-    /** Tries the gateway again now instead of waiting out the backoff. */
-    fun retryConnection() = connection.retry()
+    /**
+     * Tries the gateway again now instead of waiting out the backoff. Only while it's waiting: during an attempt
+     * the wake would stay buffered and skip the wait after some later drop.
+     */
+    fun retryConnection() {
+        if (connectionState.value is ConnectionState.Reconnecting) connection.retry()
+    }
 
     override fun loadOlder() {
         val chat = session.value ?: return
