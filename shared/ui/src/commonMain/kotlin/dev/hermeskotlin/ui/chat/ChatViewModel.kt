@@ -203,6 +203,11 @@ class ChatViewModel(
     private var target: ChatTarget? = null
     private val session = MutableStateFlow<ChatSession?>(null)
 
+    init {
+        // A chat opened under the checkpoints sheet shows its own checkpoints, not the last chat's.
+        viewModelScope.launch { session.collect { checkpoints.follow(it) } }
+    }
+
     val state: StateFlow<ChatState> = session
         .flatMapLatest { it?.state ?: flowOf(ChatState()) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, ChatState())

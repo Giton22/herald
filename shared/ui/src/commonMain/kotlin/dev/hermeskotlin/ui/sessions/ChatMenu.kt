@@ -30,7 +30,7 @@ internal fun ChatMenu(
     onDeleted: () -> Unit,
     onUsage: () -> Unit,
     onProcesses: () -> Unit,
-    onCheckpoints: () -> Unit = {},
+    onCheckpoints: () -> Unit,
     /**
      * A bot's permanent chat: its title is what makes it the bot's, so Rename, Archive and Delete would
      * lose the bot its conversation. Those are left to Desktop, which asks first.

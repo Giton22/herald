@@ -52,6 +52,10 @@ import dev.hermeskotlin.designsystem.success
 import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.components.messageTime
+import dev.hermeskotlin.ui.components.uses24HourClock
+import kotlin.time.Clock
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,6 +69,8 @@ data class CheckpointsState(
     val list: Checkpoints? = null,
     /** Offline, or a chat with nothing on the gateway yet. */
     val unavailable: Boolean = false,
+    /** Why the gateway couldn't list them. */
+    val error: String? = null,
     /** Each opened checkpoint's changes since; a key with a null value is still loading. */
     val diffs: Map<String, CheckpointDiff?> = emptyMap(),
     /** The checkpoint being restored right now. */
@@ -84,36 +90,73 @@ class CheckpointsController(private val scope: CoroutineScope) {
 
     private var loading: Job? = null
 
+    /** The chat the sheet shows; answers that come back for another one, after a switch, are dropped. */
+    private var shown: ChatSession? = null
+    private var open = false
+
+    /** Bumped whenever the folder or the chat may have changed, so a diff read before then is dropped. */
+    private var folderVersion = 0
+
     fun load(chat: ChatSession?) {
         loading?.cancel()
-        _state.value = CheckpointsState()
+        // Reopened on the same chat mid-restore: Restore stays off until that one ends.
+        val restoring = _state.value.restoring.takeIf { chat != null && chat === shown }
+        open = true
+        shown = chat
+        folderVersion++
+        _state.value = CheckpointsState(restoring = restoring)
         loading = scope.launch {
-            val list = chat?.checkpoints()
-            _state.update { if (list == null) it.copy(unavailable = true) else it.copy(list = list) }
+            if (chat == null) return@launch _state.update { it.copy(unavailable = true) }
+            read(chat).fold(
+                onSuccess = { list -> _state.update { if (list == null) it.copy(unavailable = true) else it.copy(list = list) } },
+                onFailure = { e -> _state.update { it.copy(error = e.message ?: "Couldn't read the checkpoints.") } },
+            )
         }
+    }
+
+    fun close() {
+        open = false
+    }
+
+    /** The open chat changed; while the sheet is up, it shows the new chat's checkpoints. */
+    fun follow(chat: ChatSession?) {
+        if (open && chat !== shown) load(chat)
     }
 
     /** Reads what changed since [checkpoint], once; a failed read is tried again on the next call. */
     fun loadDiff(chat: ChatSession?, checkpoint: Checkpoint) {
-        chat ?: return
+        if (chat == null || chat !== shown) return
         val known = _state.value.diffs
         if (checkpoint.hash in known && known[checkpoint.hash]?.error == null) return
         _state.update { it.copy(diffs = it.diffs + (checkpoint.hash to null)) }
+        val asked = folderVersion
         scope.launch {
             val diff = chat.checkpointDiff(checkpoint)
-            _state.update { it.copy(diffs = it.diffs + (checkpoint.hash to diff)) }
+            if (asked == folderVersion) _state.update { it.copy(diffs = it.diffs + (checkpoint.hash to diff)) }
         }
     }
 
     fun restore(chat: ChatSession?, checkpoint: Checkpoint) {
-        chat ?: return
+        if (chat == null || chat !== shown) return
+        folderVersion++
         _state.update { it.copy(restoring = checkpoint.hash, message = null) }
         scope.launch {
             val outcome = chat.restoreCheckpoint(checkpoint)
-            // The folder changed, so every diff read so far is stale; a restore also adds no checkpoint of its own.
-            val list = chat.checkpoints()
-            _state.update { it.copy(list = list ?: it.list, diffs = emptyMap(), restoring = null, message = outcome) }
+            // The folder changed, so every diff read so far is stale; the gateway also snapshots it before restoring.
+            val list = read(chat).getOrNull()
+            if (chat === shown) {
+                folderVersion++
+                _state.update { it.copy(list = list ?: it.list, diffs = emptyMap(), restoring = null, message = outcome) }
+            }
         }
+    }
+
+    private suspend fun read(chat: ChatSession): Result<Checkpoints?> = try {
+        Result.success(chat.checkpoints())
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Exception) {
+        Result.failure(e)
     }
 }
 
@@ -128,7 +171,7 @@ fun CheckpointsSheet(
     running: Boolean,
     onDismiss: () -> Unit,
 ) {
-    LaunchedEffect(visible) { if (visible) onLoad() }
+    LaunchedEffect(visible) { if (visible) onLoad() else controller.close() }
     CheckpointsSheetView(visible, controller.state.collectAsStateWithLifecycle().value, onDiff, onRestore, running, onDismiss)
 }
 
@@ -145,36 +188,42 @@ internal fun CheckpointsSheetView(
 ) {
     var expanded by remember { mutableStateOf(initiallyExpanded) }
     var confirm by remember { mutableStateOf<Checkpoint?>(null) }
+    val use24Hour = uses24HourClock()
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         val list = state.list
         SheetHeader(
             "Checkpoints",
             when {
-                list == null || !list.enabled -> "Snapshots of this chat's folder"
+                list == null || !list.enabled || list.checkpoints.isEmpty() -> "Snapshots of this chat's folder"
                 list.checkpoints.size == 1 -> "1 snapshot, taken before the agent changed files"
                 else -> "${list.checkpoints.size} snapshots, taken before the agent changed files"
             },
         )
         when {
+            list == null && state.error != null -> Note(state.error, error = true)
             list == null && state.unavailable ->
                 Note("Available once this chat is connected and has had its first reply.")
             list == null -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Spinner() }
-            !list.enabled ->
-                Note("Checkpoints are off for this profile. Turn them on with checkpoints.enabled in its config.yaml.")
-            list.checkpoints.isEmpty() ->
-                Note("None yet. Hermes takes one just before the agent first writes or edits a file in this chat's folder.")
+            !list.enabled -> Note(
+                "Checkpoints are off on the gateway. Turn them on with checkpoints.enabled in the profile's config.yaml; " +
+                    "older Hermes versions read only HERMES_TUI_CHECKPOINTS=1 in the dashboard's environment.",
+            )
+            list.checkpoints.isEmpty() -> Note(
+                "None yet. Hermes takes one just before the agent first changes a file in this chat's folder. " +
+                    "It never snapshots the home folder, so start the chat in a project to get them.",
+            )
             else -> LazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
                 items(list.checkpoints, key = { it.hash }) { checkpoint ->
                     CheckpointRow(
                         checkpoint,
+                        time = checkpointTime(checkpoint, use24Hour),
                         expanded = expanded == checkpoint.hash,
                         diff = state.diffs[checkpoint.hash],
                         diffAsked = checkpoint.hash in state.diffs,
                         restoring = state.restoring == checkpoint.hash,
                         canRestore = state.restoring == null && !running,
-                        onToggle = {
-                            expanded = if (expanded == checkpoint.hash) null else checkpoint.hash.also { onDiff(checkpoint) }
-                        },
+                        onToggle = { expanded = if (expanded == checkpoint.hash) null else checkpoint.hash },
+                        onDiff = { onDiff(checkpoint) },
                         onRestore = { confirm = checkpoint },
                     )
                 }
@@ -183,24 +232,24 @@ internal fun CheckpointsSheetView(
         if (running && list?.checkpoints?.isNotEmpty() == true) Note("Restoring waits until the reply is done.")
         state.message?.let { Note(it) }
     }
-    val target = confirm
+    RestoreDialog(confirm, use24Hour, onDismiss = { confirm = null }, onConfirm = onRestore)
+}
+
+@Composable
+private fun RestoreDialog(checkpoint: Checkpoint?, use24Hour: Boolean, onDismiss: () -> Unit, onConfirm: (Checkpoint) -> Unit) {
+    // Kept while the dialog fades out, so its text doesn't lose the time.
+    var shown by remember { mutableStateOf(checkpoint) }
+    if (checkpoint != null) shown = checkpoint
+    val target = shown ?: return
     Dialog(
-        visible = target != null,
-        onDismissRequest = { confirm = null },
+        visible = checkpoint != null,
+        onDismissRequest = onDismiss,
         title = "Restore this checkpoint?",
-        message = "Files the agent changed go back to how they were at ${target?.let(::checkpointTime).orEmpty()}, and " +
+        message = "Files the agent changed go back to this snapshot (${checkpointTime(target, use24Hour)}), and " +
             "this chat's last turn is taken back. Files you edited yourself since are left alone.",
         actions = {
-            Button("Cancel", onClick = { confirm = null }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button(
-                "Restore",
-                onClick = {
-                    target?.let(onRestore)
-                    confirm = null
-                },
-                variant = ButtonVariant.Danger,
-                size = ButtonSize.Small,
-            )
+            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button("Restore", onClick = { onDismiss(); onConfirm(target) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
         },
     )
 }
@@ -208,14 +257,18 @@ internal fun CheckpointsSheetView(
 @Composable
 private fun CheckpointRow(
     checkpoint: Checkpoint,
+    time: String,
     expanded: Boolean,
     diff: CheckpointDiff?,
     diffAsked: Boolean,
     restoring: Boolean,
     canRestore: Boolean,
     onToggle: () -> Unit,
+    onDiff: () -> Unit,
     onRestore: () -> Unit,
 ) {
+    // Also asks again once a restore or reopening the sheet drops the changes read so far.
+    LaunchedEffect(expanded, diffAsked) { if (expanded) onDiff() }
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
     Column(
         Modifier
@@ -235,7 +288,7 @@ private fun CheckpointRow(
                     overflow = TextOverflow.Ellipsis,
                 )
                 Text(
-                    "${checkpointTime(checkpoint)} · ${checkpoint.shortHash}",
+                    "$time · ${checkpoint.shortHash}",
                     style = Theme[typography][bodySmall],
                     color = Theme[colors][textSecondary],
                     maxLines = 1,
@@ -295,21 +348,9 @@ private fun DiffText(diff: CheckpointDiff, shape: RoundedCornerShape) {
     }
 }
 
-@Composable
-private fun Note(text: String) {
-    Text(
-        text,
-        style = Theme[typography][body],
-        color = Theme[colors][textSecondary],
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp, vertical = 16.dp),
-    )
-}
-
-/** "2026-10-08 20:41" from git's ISO 8601 time, kept in the gateway's own time zone. */
-internal fun checkpointTime(checkpoint: Checkpoint): String {
-    val t = checkpoint.timestamp
-    return if (t.length >= 16 && t[10] == 'T') "${t.substring(0, 10)} ${t.substring(11, 16)}" else t.ifBlank { checkpoint.shortHash }
-}
+/** When [checkpoint] was taken, in the phone's time zone and as a message's time reads; its hash without a time. */
+internal fun checkpointTime(checkpoint: Checkpoint, use24Hour: Boolean, nowMillis: Long = Clock.System.now().toEpochMilliseconds()): String =
+    messageTime(checkpoint.epochSeconds, use24Hour, nowMillis).ifEmpty { checkpoint.timestamp.ifBlank { checkpoint.shortHash } }
 
 /** The gateway sends at most 4000 characters of diff; this many lines keeps the sheet light on a phone. */
 private const val DIFF_LINES = 400

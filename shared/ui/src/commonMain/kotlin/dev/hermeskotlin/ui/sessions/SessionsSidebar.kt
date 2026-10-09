@@ -69,8 +69,8 @@ import com.composables.icons.lucide.CloudOff
 import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.Gauge
-import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.History
+import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Ellipsis
 import com.composables.icons.lucide.FolderPlus
 import com.composables.icons.lucide.Lucide
