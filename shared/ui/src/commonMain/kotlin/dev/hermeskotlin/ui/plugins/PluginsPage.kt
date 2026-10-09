@@ -99,7 +99,7 @@ internal fun PluginsView(
         Box(Modifier.weight(1f).fillMaxWidth()) {
             val plugins = state.plugins
             when {
-                plugins == null && state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load plugins", state.error) {
+                plugins == null && state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load plugins", state.error, error = true) {
                     Button("Try again", onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                 }
                 plugins == null -> CenteredSpinner()

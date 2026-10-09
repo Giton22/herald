@@ -146,6 +146,7 @@ import dev.hermeskotlin.designsystem.warning
 import dev.hermeskotlin.ui.PlatformBackHandler
 import dev.hermeskotlin.ui.components.ConnectionLine
 import dev.hermeskotlin.ui.components.EmptyState
+import dev.hermeskotlin.ui.components.ListSkeleton
 import dev.hermeskotlin.ui.components.relativeTime
 import dev.hermeskotlin.ui.update.UpdateBanner
 import kotlinx.coroutines.delay
@@ -509,8 +510,8 @@ fun SessionsSidebar(
                             }
                         }
                     }
-                    state.loading -> CenteredSpinner()
-                    state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load sessions", state.error) {
+                    state.loading -> ListSkeleton()
+                    state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load sessions", state.error, error = true) {
                         Button("Try again", onClick = viewModel::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                     }
                     state.sessions.isEmpty() ->

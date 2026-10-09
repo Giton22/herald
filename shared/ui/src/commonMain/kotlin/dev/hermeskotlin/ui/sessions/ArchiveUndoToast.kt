@@ -7,6 +7,7 @@ import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -22,14 +23,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalAccessibilityManager
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.composables.icons.lucide.Archive
+import com.composables.icons.lucide.ArchiveRestore
+import com.composables.icons.lucide.Lucide
 import dev.hermeskotlin.designsystem.components.Toast
 import kotlinx.coroutines.delay
 import kotlin.time.Clock
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
- * "Archived · Undo" after a chat is archived or unarchived, from the sidebar or the chat's menu. It sits at
- * the top, under the bar, where it covers no composer, and goes after [UNDO_MILLIS], or the time the user's
+ * "Archived “title” · Undo" after a chat is archived or unarchived, from the sidebar or the chat's menu. It
+ * spans the bottom of the screen, clear of the content above, and goes after [UNDO_MILLIS], or the time the user's
  * accessibility settings ask for; with a screen reader on, it stays until it's closed.
  */
 @Composable
@@ -51,20 +55,23 @@ fun ArchiveUndoToast(viewModel: SessionsViewModel = koinViewModel()) {
         viewModel.dismissUndo()
     }
     Box(
-        Modifier.fillMaxWidth().windowInsetsPadding(WindowInsets.safeDrawing).padding(start = 16.dp, end = 16.dp, top = 64.dp),
-        contentAlignment = Alignment.TopCenter,
+        Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing).padding(14.dp),
+        contentAlignment = Alignment.BottomCenter,
     ) {
         AnimatedVisibility(
             visible = undo != null,
-            enter = fadeIn() + slideInVertically { -it / 2 },
-            exit = fadeOut() + slideOutVertically { -it / 2 },
+            enter = fadeIn() + slideInVertically { it / 2 },
+            exit = fadeOut() + slideOutVertically { it / 2 },
         ) {
             shown?.let {
                 Toast(
-                    it.message,
+                    "${it.message} “${it.session.displayTitle}”",
+                    modifier = Modifier.fillMaxWidth(),
+                    icon = if (it.session.archived) Lucide.ArchiveRestore else Lucide.Archive,
                     actionLabel = "Undo",
                     onAction = viewModel::undoArchive,
-                    onDismiss = viewModel::dismissUndo,
+                    // It goes by itself, unless a screen reader keeps it until it's closed.
+                    onDismiss = viewModel::dismissUndo.takeIf { timeout == Long.MAX_VALUE },
                     spokenMessage = it.spoken,
                 )
             }
