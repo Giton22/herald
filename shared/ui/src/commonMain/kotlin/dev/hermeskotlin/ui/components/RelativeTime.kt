@@ -8,6 +8,13 @@ fun relativeTime(epochSeconds: Double?, nowMillis: Long = Clock.System.now().toE
     return span(((nowMillis / 1000.0 - epochSeconds) / 60).toLong())
 }
 
+/** What a list or chat shown from the device's copy says about it: "Saved copy · 5m ago". [savedAtMillis] in epoch ms. */
+fun savedCopyLabel(savedAtMillis: Long, nowMillis: Long = Clock.System.now().toEpochMilliseconds()): String =
+    when (val age = relativeTime(savedAtMillis / 1000.0, nowMillis)) {
+        "now", "" -> "Saved copy · just now"
+        else -> "Saved copy · $age ago"
+    }
+
 /** Compact countdown to a future moment: "in 5m", "in 3h"; "now" once it is due. */
 fun timeUntil(epochSeconds: Double?, nowMillis: Long = Clock.System.now().toEpochMilliseconds()): String {
     if (epochSeconds == null || epochSeconds <= 0) return ""
