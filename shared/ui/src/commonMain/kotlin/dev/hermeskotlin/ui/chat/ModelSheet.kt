@@ -83,10 +83,28 @@ import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.components.Switch
 import dev.hermeskotlin.designsystem.components.TextField
 import dev.hermeskotlin.designsystem.danger
-import dev.hermeskotlin.designsystem.heading
+import dev.hermeskotlin.designsystem.code
+import dev.hermeskotlin.designsystem.eyebrow
 import dev.hermeskotlin.designsystem.label
 import dev.hermeskotlin.designsystem.radii
+import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.radiusSmall
+import dev.hermeskotlin.designsystem.radiusXSmall
+import dev.hermeskotlin.designsystem.surface2
+import dev.hermeskotlin.designsystem.surface3
+import dev.hermeskotlin.designsystem.title
+import dev.hermeskotlin.designsystem.warning
+import dev.hermeskotlin.designsystem.warningSoft
+import androidx.compose.foundation.selection.toggleable
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.Zap
 import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textSecondary
@@ -163,12 +181,26 @@ internal fun ModelSheet(
     }
 
     BottomSheet(visible = visible, onDismiss = onDismiss) {
-        Text(
-            "Model",
-            style = Theme[typography][heading],
-            color = Theme[colors][textColor],
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = if (note != null) 4.dp else 12.dp),
-        )
+        Row(
+            Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = if (note != null) 4.dp else 12.dp),
+            verticalAlignment = Alignment.Bottom,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                "Model",
+                style = Theme[typography][title],
+                color = Theme[colors][textColor],
+                modifier = Modifier.weight(1f).semantics { heading() },
+            )
+            if (!modelOnly) {
+                Text(
+                    "For this chat",
+                    style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp),
+                    color = Theme[colors][textTertiary],
+                    modifier = Modifier.padding(bottom = 3.dp),
+                )
+            }
+        }
         note?.let {
             Text(
                 it,
@@ -189,10 +221,16 @@ internal fun ModelSheet(
         val option = selection.option
         val efforts = if (modelOnly) emptyList() else ReasoningEffort.choicesFor(option)
         if (efforts.isNotEmpty()) {
-            SectionLabel("Thinking")
+            Text(
+                "Thinking",
+                style = Theme[typography][label],
+                color = Theme[colors][textSecondary],
+                modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 8.dp).semantics { heading() },
+            )
             val current = state.effort(option)
             val chips = rememberLazyListState()
-            // The chips don't all fit on a phone: bring the chat's level into view, with its neighbour peeking.
+            // Seven or eight levels don't fit across a phone as a segmented control, so they scroll as chips:
+            // bring the chat's level into view, with its neighbour peeking.
             LaunchedEffect(visible, current, efforts) {
                 if (visible) chips.scrollToItem((efforts.indexOf(current) - 1).coerceAtLeast(0))
             }
@@ -208,21 +246,8 @@ internal fun ModelSheet(
             }
         }
         if (option?.fast == true && !modelOnly) {
-            val fast = state.fast == true
-            Row(
-                Modifier.fillMaxWidth().clickable { onFast(!fast) }.padding(horizontal = 20.dp, vertical = 14.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Column(Modifier.weight(1f)) {
-                    Text("Fast mode", style = Theme[typography][body], color = Theme[colors][textColor])
-                    Text("Priority processing. Costs more.", style = Theme[typography][caption], color = Theme[colors][textTertiary])
-                }
-                Switch(fast)
-            }
-        } else if (efforts.isNotEmpty()) {
-            Box(Modifier.height(12.dp))
+            FastModeCard(state.fast == true, onFast, Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp))
         }
-        Box(Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(1.dp).background(Theme[colors][stroke]))
 
         val catalog = picker.catalog
         when {
@@ -364,14 +389,48 @@ private fun settingsUpdater(): ((AppSettings) -> AppSettings) -> Unit {
     return remember(settings) { settings::update }
 }
 
+/** A list's section, in small caps; read as its own words, not spelled out. */
 @Composable
 private fun SectionLabel(text: String) {
     Text(
-        text,
-        style = Theme[typography][label],
+        text.uppercase(),
+        style = Theme[typography][eyebrow],
         color = Theme[colors][textTertiary],
-        modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 8.dp),
+        modifier = Modifier
+            .padding(start = 20.dp, end = 20.dp, top = 14.dp, bottom = 6.dp)
+            .semantics {
+                heading()
+                contentDescription = text
+            },
     )
+}
+
+/** Fast mode on a raised card: a bolt on a warm tile, what it does, and its switch. The whole card toggles it. */
+@Composable
+private fun FastModeCard(on: Boolean, onFast: (Boolean) -> Unit, modifier: Modifier = Modifier) {
+    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    Row(
+        modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(Theme[colors][surface2])
+            .toggleable(value = on, role = Role.Switch, onValueChange = onFast)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(
+            Modifier.size(32.dp).background(Theme[colors][warningSoft], RoundedCornerShape(Theme[radii][radiusSmall])),
+            contentAlignment = Alignment.Center,
+        ) {
+            UnstyledIcon(Lucide.Zap, contentDescription = null, tint = Theme[colors][warning], modifier = Modifier.size(15.dp))
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("Fast mode", style = Theme[typography][body].copy(fontSize = 15.sp), color = Theme[colors][textColor])
+            Text("Priority processing. Costs more.", style = Theme[typography][caption].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary])
+        }
+        Switch(on)
+    }
 }
 
 /**
@@ -395,6 +454,9 @@ private fun ModelRow(
     Row(
         Modifier
             .fillMaxWidth()
+            .padding(horizontal = 8.dp)
+            .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
+            .background(if (selected) Theme[colors][accentSoft] else Color.Transparent)
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = {
@@ -403,25 +465,50 @@ private fun ModelRow(
                 },
                 onLongClickLabel = if (starred) "Unstar" else "Star",
             )
-            .padding(start = 20.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
+            .semantics { this.selected = selected }
+            .padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Column(Modifier.weight(1f).padding(vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        // The model's initial on a tile, so the list scans by shape before it's read.
+        Box(
+            Modifier.size(34.dp).background(Theme[colors][surface3], RoundedCornerShape(Theme[radii][radiusSmall])),
+            contentAlignment = Alignment.Center,
+        ) {
+            Text(
+                row.name.firstOrNull { it.isLetterOrDigit() }?.uppercase().orEmpty(),
+                style = Theme[typography][label].copy(fontSize = 13.sp, fontWeight = FontWeight.SemiBold),
+                color = Theme[colors][textSecondary],
+                modifier = Modifier.clearAndSetSemantics { },
+            )
+        }
+        Column(Modifier.weight(1f).padding(vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Text(
                 row.name,
-                style = Theme[typography][body],
-                color = if (selected) Theme[colors][accentText] else Theme[colors][textColor],
+                style = Theme[typography][body].copy(fontSize = 15.sp, fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal),
+                color = Theme[colors][textColor],
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             val details = listOfNotNull(
                 single?.provider?.let { providerNames?.get(it) },
                 row.variants.first().id.takeIf { showId && displayModelName(it) != it },
-                single?.price,
             ).joinToString(" · ")
-            if (details.isNotEmpty()) {
-                Text(details, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            val price = single?.price
+            if (details.isNotEmpty() || price != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    if (details.isNotEmpty()) {
+                        Text(
+                            details,
+                            style = Theme[typography][caption].copy(fontSize = 12.sp),
+                            color = Theme[colors][textTertiary],
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                    }
+                    if (price != null) PriceTag(price)
+                }
             }
             if (single == null) {
                 Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -468,16 +555,42 @@ private fun ProviderPill(text: String, selected: Boolean, onClick: () -> Unit) {
     }
 }
 
+/** A model's price per million tokens, in mono on a small raised tag. */
+@Composable
+private fun PriceTag(price: String) {
+    Text(
+        price,
+        style = Theme[typography][code].copy(fontSize = 10.5.sp),
+        color = Theme[colors][textSecondary],
+        maxLines = 1,
+        modifier = Modifier
+            .background(Theme[colors][surface3], RoundedCornerShape(Theme[radii][radiusXSmall]))
+            .padding(horizontal = 6.dp, vertical = 1.dp),
+    )
+}
+
 /** Leaves your models for the whole catalog. */
 @Composable
 private fun BrowseAllRow(count: Int, onClick: () -> Unit) {
     Row(
-        Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(horizontal = 20.dp, vertical = 14.dp),
+        Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 8.dp)
+            .heightIn(min = 48.dp)
+            .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
+            .clickable(role = Role.Button, onClick = onClick)
+            .padding(horizontal = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text("All models", style = Theme[typography][body], color = Theme[colors][accentText], modifier = Modifier.weight(1f))
-        Text("$count", style = Theme[typography][caption], color = Theme[colors][textTertiary])
-        UnstyledIcon(Lucide.ChevronRight, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.padding(start = 6.dp).size(16.dp))
+        Text(
+            "All models",
+            style = Theme[typography][body].copy(fontSize = 14.5.sp, fontWeight = FontWeight.Medium),
+            color = Theme[colors][accentText],
+            modifier = Modifier.weight(1f),
+        )
+        Text("$count", style = Theme[typography][code].copy(fontSize = 12.sp), color = Theme[colors][textTertiary])
+        UnstyledIcon(Lucide.ChevronRight, contentDescription = null, tint = Theme[colors][accentText], modifier = Modifier.size(15.dp))
     }
 }
 
