@@ -5,6 +5,8 @@ import dev.hermeskotlin.core.auth.BrowserSignIn
 import dev.hermeskotlin.core.auth.NativeTokens
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.auth.WebCookieJar
+import dev.hermeskotlin.core.cache.OfflineCache
+import dev.hermeskotlin.core.cache.OfflineDatabase
 import dev.hermeskotlin.core.chat.AttentionTracker
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatLinks
@@ -94,7 +96,8 @@ val coreModule = module {
         )
     }
     single { ToolRiskStore(get()) }
-    single { ChatHost(get(), get(), get(), get()) }
+    single { OfflineCache(get<OfflineDatabase>().dao(), get()) { getTimeMillis() } }
+    single { ChatHost(get(), get(), get(), get(), get()) }
     single { ActiveSessions(get(), get()) }
     single(createdAtStart = true) { AttentionTracker(get(), get(), get(), get()) }
     single(createdAtStart = true) { SessionWatcher(get(), get(), get(), get(), get()) }

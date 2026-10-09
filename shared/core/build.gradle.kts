@@ -2,6 +2,8 @@ plugins {
     alias(libs.plugins.kotlin.multiplatform)
     alias(libs.plugins.kotlin.serialization)
     alias(libs.plugins.android.kotlin.multiplatform.library)
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
 }
 
 kotlin {
@@ -23,6 +25,7 @@ kotlin {
             implementation(libs.ktor.client.websockets)
             implementation(libs.ktor.serialization.kotlinx.json)
             implementation(libs.koin.core)
+            implementation(libs.room.runtime)
         }
         androidMain.dependencies {
             implementation(libs.ktor.client.okhttp)
@@ -36,6 +39,14 @@ kotlin {
             implementation(libs.ktor.client.mock)
         }
     }
+}
+
+dependencies {
+    add("kspAndroid", libs.room.compiler)
+}
+
+room {
+    schemaDirectory("$projectDir/schemas")
 }
 
 // Lint only ever gets this module's test sources, and the app's lint ignores those (see androidApp).

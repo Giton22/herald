@@ -181,6 +181,7 @@ import dev.hermeskotlin.ui.components.ConnectionLine
 import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.ListSkeleton
 import dev.hermeskotlin.ui.components.relativeTime
+import dev.hermeskotlin.ui.components.savedCopyLabel
 import dev.hermeskotlin.ui.update.UpdateBanner
 import kotlinx.coroutines.delay
 import dev.hermeskotlin.core.rooms.Room
@@ -524,6 +525,11 @@ fun SessionsSidebar(
                                         needsAttention = state.listed.count { statuses[it.id]?.needsAttention == true },
                                         onSelect = viewModel::setAttentionFilter,
                                     )
+                                }
+                            }
+                            state.savedCopyAt?.takeIf { state.project == null }?.let { savedAt ->
+                                item(key = "saved-copy") {
+                                    ListNotice("${savedCopyLabel(savedAt)}. Hermes can't be reached right now.", action = "Try again", onAction = viewModel::refresh)
                                 }
                             }
                             when {
