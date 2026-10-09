@@ -43,7 +43,7 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Ellipsis
-import com.composables.icons.lucide.EllipsisVertical
+import dev.hermeskotlin.designsystem.HeraldBrandBlue
 import dev.hermeskotlin.designsystem.HeraldMark
 import dev.hermeskotlin.designsystem.components.halo
 import dev.hermeskotlin.designsystem.dangerSoft
@@ -772,11 +772,16 @@ internal fun chatStatus(state: ChatState, connected: Boolean, connectionLabel: S
     state.attachment is Attachment.Attaching -> BarStatus("Opening…", StatusTone.Busy)
     state.inputRequests.isNotEmpty() -> BarStatus("Needs your answer", StatusTone.Waiting)
     state.running -> {
-        val plan = state.livePlan()?.takeIf { it.total > 0 }
+        // Once every step is done the agent is wrapping up, not on a step.
+        val plan = state.livePlan()?.takeIf { it.total > 0 && it.active }
         BarStatus(if (plan != null) "Working · step ${minOf(plan.done + 1, plan.total)} of ${plan.total}" else "Working", StatusTone.Busy)
     }
     else -> BarStatus(listOfNotNull("Hermes", place).joinToString(" · "), StatusTone.Ok)
 }
+
+/** Where the empty chat says Hermes runs: "Hermes on homelab · default profile". */
+internal fun greetingPlace(place: String?, profile: String?): String =
+    "${place?.let { "Hermes on $it" } ?: "Hermes"} · ${profile ?: "default"} profile"
 
 /**
  * The sessions button, the title with a status line under it, and new chat with the chat's options
@@ -812,20 +817,19 @@ internal fun TopBar(
             }
             if (status != null && status.text.isNotBlank()) StatusLine(status)
         }
+        // The buttons fill the pill edge to edge, so each keeps its whole 44dp to tap.
         val shape = RoundedCornerShape(Theme[radii][radiusMedium])
         Row(
             Modifier
                 .clip(shape)
                 .background(Theme[colors][surface], shape)
-                .border(1.dp, Theme[colors][stroke], shape)
-                .padding(3.dp),
-            horizontalArrangement = Arrangement.spacedBy(2.dp),
+                .border(1.dp, Theme[colors][stroke], shape),
         ) {
             if (trailing != null) {
                 trailing()
             } else {
-                BarButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null, size = 38.dp)
-                BarButton(Lucide.Ellipsis, "Chat options", onClick = { onOpenMenu?.invoke() }, enabled = onOpenMenu != null, size = 38.dp)
+                BarButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null)
+                BarButton(Lucide.Ellipsis, "Chat options", onClick = { onOpenMenu?.invoke() }, enabled = onOpenMenu != null)
             }
         }
     }
@@ -854,20 +858,19 @@ private fun StatusLine(status: BarStatus) {
     }
 }
 
-/** A square icon button with no fill, the top bar's style; [size] 44dp unless it sits in a padded group. */
+/** A 44dp square icon button with no fill, the top bar's style. */
 @Composable
 internal fun BarButton(
     icon: ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
     enabled: Boolean = true,
-    size: Dp = MinTouchTarget,
     tint: Color = Theme[colors][textSecondary],
 ) {
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(size).clip(RoundedCornerShape(Theme[radii][radiusSmall])).alpha(if (enabled) 1f else 0.35f),
+        modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusSmall])).alpha(if (enabled) 1f else 0.35f),
         indication = rememberColoredIndication(Theme[colors][textColor]),
     ) {
         UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(19.dp))
@@ -906,7 +909,7 @@ private fun Greeting(
                     color = Theme[colors][textColor],
                 )
                 Text(
-                    listOfNotNull(place?.let { "Hermes on $it" } ?: "Hermes", "${profile ?: "default"} profile").joinToString(" · "),
+                    greetingPlace(place, profile),
                     style = Theme[typography][bodySmall],
                     color = Theme[colors][textTertiary],
                 )
@@ -934,16 +937,13 @@ internal fun AppMark(size: Dp) {
     Box(
         Modifier
             .size(size)
-            .dropShadow(shape, Shadow(radius = 18.dp, color = Theme[colors][accent].copy(alpha = 0.4f), offset = DpOffset(0.dp, 6.dp)))
-            .background(BRAND_BLUE, shape),
+            .dropShadow(shape, Shadow(radius = 18.dp, color = HeraldBrandBlue.copy(alpha = 0.4f), offset = DpOffset(0.dp, 6.dp)))
+            .background(HeraldBrandBlue, shape),
         contentAlignment = Alignment.Center,
     ) {
         UnstyledIcon(HeraldMark, contentDescription = null, tint = Color.White, modifier = Modifier.size(size * 0.6f))
     }
 }
-
-/** The brand mark's own blue, which the launcher icon and the design's logo keep whatever the accent. */
-private val BRAND_BLUE = Color(0xFF0053FD)
 
 /** A pill on the empty chat: an accent icon and a label on a ringed surface. */
 @Composable

@@ -56,7 +56,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.composables.icons.lucide.EllipsisVertical
+import com.composables.icons.lucide.Ellipsis
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
 import com.composeunstyled.Text
@@ -149,7 +149,7 @@ fun RoomScreen(
                             )
                         },
                     ) {
-                        BarButton(Lucide.EllipsisVertical, "Room options", onClick = { menuOpen = true })
+                        BarButton(Lucide.Ellipsis, "Room options", onClick = { menuOpen = true })
                     }
                     BarButton(Lucide.X, "Close the room", onClick = onBack)
                 },
