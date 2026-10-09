@@ -4,7 +4,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
@@ -59,7 +58,7 @@ private object Palette {
 }
 
 // Body text sits a hair tighter than the default, as the design's -0.005em does.
-private val baseText = TextStyle(fontFamily = FontFamily.Default, letterSpacing = (-0.005).em)
+private val baseText = TextStyle(fontFamily = Geist, letterSpacing = (-0.005).em)
 
 /** Dark with true black backgrounds, for OLED screens. */
 val PureBlack = ColorScheme("pure_black")
@@ -97,7 +96,7 @@ private fun buildHermesTheme(palette: AccentPalette) = buildThemeV2 {
         bodySmall to baseText.copy(fontSize = 13.5.sp, lineHeight = 19.5.sp),
         label to baseText.copy(fontSize = 13.sp, lineHeight = 17.sp, fontWeight = FontWeight.Medium),
         caption to baseText.copy(fontSize = 12.sp, lineHeight = 16.sp),
-        code to TextStyle(fontFamily = FontFamily.Monospace, fontSize = 12.5.sp, lineHeight = 19.5.sp),
+        code to TextStyle(fontFamily = GeistMono, fontSize = 12.5.sp, lineHeight = 19.5.sp),
         eyebrow to baseText.copy(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.08.em),
         wordmark to baseText.copy(fontSize = 56.sp, lineHeight = 52.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.08.em),
     )
