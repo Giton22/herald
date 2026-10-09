@@ -5,6 +5,8 @@ import androidx.compose.animation.core.spring
 import androidx.compose.foundation.MutatePriority
 import androidx.compose.foundation.MutatorMutex
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.draggable
@@ -28,6 +30,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
@@ -175,15 +178,18 @@ fun SidebarLayout(
                     .fillMaxHeight()
                     .align(Alignment.CenterStart)
                     .offset { IntOffset((-widthPx * (1f - p)).roundToInt(), 0) }
-                    .background(Theme[colors][sidebarColor])
+                    // A sheet over the chat, its outer corners rounded; the ring shows the edge when both are black.
+                    .clip(DrawerShape)
+                    .background(Theme[colors][sidebarColor], DrawerShape)
+                    .border(1.dp, Theme[colors][stroke], DrawerShape)
                     .then(hidden),
             ) {
                 sidebar()
-                // The dim alone doesn't show the edge when both are black (pure black theme).
-                Box(Modifier.align(Alignment.CenterEnd).width(1.dp).fillMaxHeight().background(Theme[colors][stroke]))
             }
         }
     }
 }
 
 private const val FLING_VELOCITY = 800f
+
+private val DrawerShape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp)
