@@ -7,7 +7,7 @@ class ThemeColorsTest {
 
     // Every color token in Tokens.kt. A lookup of a token a scheme lacks crashes at runtime, so all must be in each one.
     private val allTokens = setOf(
-        background, surface, surface2, surface3, well, surfaceElevated, input, sidebar,
+        background, surface, surface2, surface3, well, thumb, surfaceElevated, input, sidebar,
         userBubble, userBubbleStroke, onUserBubble,
         text, textSecondary, textTertiary, textMuted,
         accent, onAccent, accentText, accentSoft, inverse, onInverse,

@@ -6,6 +6,7 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -27,6 +28,7 @@ import com.composables.icons.lucide.PencilLine
 import com.composables.icons.lucide.ShieldAlert
 import dev.hermeskotlin.core.chat.Waiting
 import dev.hermeskotlin.designsystem.code
+import dev.hermeskotlin.designsystem.display
 import dev.hermeskotlin.designsystem.components.halo
 import dev.hermeskotlin.designsystem.eyebrow
 import dev.hermeskotlin.designsystem.radiusSmall
@@ -169,7 +171,7 @@ import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
-import dev.hermeskotlin.designsystem.title
+import dev.hermeskotlin.designsystem.title as titleStyle
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
 import dev.hermeskotlin.ui.PlatformBackHandler
@@ -846,23 +848,31 @@ private fun SearchPill(onClick: () -> Unit) {
     }
 }
 
+/** A page's header: Back with the page's [actions] at the other end, then its title, large, underneath. */
 @Composable
 internal fun SubpageHeader(title: String, onBack: () -> Unit, actions: @Composable RowScope.() -> Unit = {}) {
-    Row(
-        Modifier.fillMaxWidth().padding(start = 12.dp, end = 16.dp, top = 16.dp, bottom = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        IconButton(Lucide.ArrowLeft, contentDescription = "Back", onClick = onBack, tint = Theme[colors][text])
-        Text(
-            title,
-            style = Theme[typography][heading],
-            color = Theme[colors][text],
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier.weight(1f),
-        )
-        actions()
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        // A narrow page, such as one in the sidebar, takes the smaller title style.
+        val style = Theme[typography][if (maxWidth < 360.dp) titleStyle else display]
+        Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                IconButton(Lucide.ArrowLeft, contentDescription = "Back", onClick = onBack, tint = Theme[colors][textSecondary])
+                Spacer(Modifier.weight(1f))
+                actions()
+            }
+            Text(
+                title,
+                style = style,
+                color = Theme[colors][text],
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.padding(horizontal = 16.dp).semantics { heading() },
+            )
+        }
     }
 }
 

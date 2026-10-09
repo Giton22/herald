@@ -54,6 +54,7 @@ import dev.hermeskotlin.ui.sessions.ProjectDraft
 import dev.hermeskotlin.core.projects.FolderListing
 import dev.hermeskotlin.ui.sessions.ProjectActionsSheet
 import dev.hermeskotlin.ui.sessions.NewProjectDialog
+import dev.hermeskotlin.ui.settings.ConnectionCheckSheet
 import dev.hermeskotlin.ui.settings.GatewayInfo
 import dev.hermeskotlin.ui.settings.SettingsView
 import androidx.compose.ui.tooling.preview.Preview
@@ -285,6 +286,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                     settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light, accent = accent),
                     info = GatewayInfo(userLabel = ChatSamples.USER, version = "0.9.0"),
                     gatewayUrl = "https://hermes.example.ts.net",
+                    gatewayName = "homelab",
                     onUpdate = {},
                     onBack = {},
                     onSignOut = {},
@@ -295,18 +297,13 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                         settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light),
                         info = GatewayInfo(userLabel = ChatSamples.USER, version = "0.9.0"),
                         gatewayUrl = "https://hermes.example.ts.net",
+                        gatewayName = "homelab",
                         onUpdate = {},
                         onBack = {},
                         onSignOut = {},
                         onOpenGateways = {},
                     )
-                    BottomSheet(visible = true, onDismiss = {}) {
-                        SheetHeader("Check connection", subtitle = "Each stage is tested on its own.")
-                        Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            ConnectionChecklist(PageSamples.connectionCheck, running = false)
-                            Button("Check again", onClick = {}, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw, modifier = Modifier.fillMaxWidth())
-                        }
-                    }
+                    ConnectionCheckSheet(visible = true, results = PageSamples.connectionCheck, running = false, onDismiss = {}, onCheckAgain = {})
                 }
             }
         }
