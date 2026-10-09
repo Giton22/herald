@@ -86,7 +86,7 @@ import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.withStyle
-import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalDensity
 import dev.hermeskotlin.core.chat.SubagentStatus
 import dev.hermeskotlin.core.chat.TodoItem
 import dev.hermeskotlin.core.chat.TodoList
@@ -304,7 +304,9 @@ private fun TeamDots(team: List<SubagentStatus>) {
                 Modifier.size(22.dp).border(2.dp, ring, CircleShape).padding(2.dp).background(Theme[colors][surface3], CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("+${team.size - shown.size}", style = Theme[typography][caption].copy(fontSize = 9.sp), color = Theme[colors][textSecondary], maxLines = 1)
+                // Sized in dp: the dot doesn't grow with the font, so neither may its count. The title says it aloud.
+                val size = with(LocalDensity.current) { 9.dp.toSp() }
+                Text("+${team.size - shown.size}", style = Theme[typography][caption].copy(fontSize = size, lineHeight = size), color = Theme[colors][textSecondary], maxLines = 1)
             }
         }
     }

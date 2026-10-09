@@ -33,6 +33,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
@@ -95,7 +96,8 @@ internal fun DelegationCard(call: ToolActivity) {
     val context = LocalSubagents.current
     val rows = remember(call, context.subagents) { subagentRows(call, context.subagents) }
     if (rows.isEmpty()) return
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    // A little more room than the glow's spread would like, so a live card's glow doesn't wash over the next.
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         rows.forEach { row ->
             key(row.key) { SubagentCard(row, context.onStop) }
         }
@@ -115,7 +117,8 @@ private fun SubagentCard(row: SubagentRow, onStop: (String) -> Unit) {
             .clip(shape)
             .background(Theme[colors][surface])
             .border(1.dp, if (live) soft else Theme[colors][stroke], shape)
-            .padding(start = 14.dp, end = if (row.subagentId != null) 4.dp else 12.dp, top = 8.dp, bottom = 12.dp),
+            // The end stays put when Stop goes, so the text doesn't shift as the subagent finishes.
+            .padding(start = 14.dp, end = 4.dp, top = 8.dp, bottom = 12.dp),
     ) {
         SubagentRowView(row, onStop)
     }
@@ -127,10 +130,10 @@ private fun SubagentRowView(row: SubagentRow, onStop: (String) -> Unit) {
     val live = row.status.live
     val hasMore = row.activity.isNotEmpty() || row.summary != null || row.filesWritten.isNotEmpty() || row.goal.length > 80
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(
+        // The goal and the lines under it are one target that opens the details; Stop stays its own button.
+        Column(
             Modifier
                 .fillMaxWidth()
-                .heightIn(min = MinTouchTarget)
                 .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
                 .then(
                     if (hasMore) {
@@ -138,9 +141,13 @@ private fun SubagentRowView(row: SubagentRow, onStop: (String) -> Unit) {
                             .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide details" else "Show details") { expanded = !expanded }
                             .semantics { stateDescription = if (expanded) "Details shown" else "Details hidden" }
                     } else {
-                        Modifier
+                        Modifier.semantics(mergeDescendants = true) {}
                     },
                 ),
+            verticalArrangement = Arrangement.spacedBy(6.dp),
+        ) {
+        Row(
+            Modifier.fillMaxWidth().heightIn(min = MinTouchTarget),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -155,7 +162,7 @@ private fun SubagentRowView(row: SubagentRow, onStop: (String) -> Unit) {
             )
             row.subagentId?.let { id -> StopButton { onStop(id) } }
         }
-        Column(Modifier.padding(start = 34.dp, end = 8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(Modifier.padding(start = 34.dp, end = 8.dp, bottom = 2.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             // Collapsed, one line says where it's at: what it's doing now, or how it ended.
             val glance = if (live) row.thinking ?: row.activity.lastOrNull() else row.summary ?: row.activity.lastOrNull()
             if (!expanded && glance != null) {
@@ -180,6 +187,7 @@ private fun SubagentRowView(row: SubagentRow, onStop: (String) -> Unit) {
                     overflow = TextOverflow.Ellipsis,
                 )
             }
+        }
         }
         AnimatedVisibility(visible = expanded) {
             Column(Modifier.padding(start = 34.dp, end = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -238,7 +246,8 @@ private fun StatusDisc(status: SubagentStatus) {
     }
     val (icon, said) = statusIcon(status)
     Box(
-        Modifier.size(24.dp).background(fill, CircleShape).semantics { contentDescription = said },
+        // Clears the spinner's own "Loading", so the disc says its state once.
+        Modifier.size(24.dp).background(fill, CircleShape).clearAndSetSemantics { contentDescription = said },
         contentAlignment = Alignment.Center,
     ) {
         if (icon == null) Spinner(Modifier.size(12.dp), color = tint)

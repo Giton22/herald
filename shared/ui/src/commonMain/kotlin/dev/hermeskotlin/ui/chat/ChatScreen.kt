@@ -201,6 +201,7 @@ import dev.hermeskotlin.core.chat.OutgoingAttachment
 import dev.hermeskotlin.core.chat.SendCheck
 import dev.hermeskotlin.core.chat.SessionRefusal
 import dev.hermeskotlin.core.chat.SubagentStatus
+import dev.hermeskotlin.core.chat.subagentRows
 import com.composables.icons.lucide.Hourglass
 import com.composables.icons.lucide.MonitorSmartphone
 import dev.hermeskotlin.core.chat.GeneratedImage
@@ -815,7 +816,8 @@ internal fun chatStatus(state: ChatState, connected: Boolean, connectionLabel: S
         // Once every step is done the agent is wrapping up, not on a step.
         val plan = state.livePlan()
         val step = planStep(plan)
-        val working = state.subagents.count { it.parentId == null && it.status.live }
+        // Only the delegation running now: a subagent whose end never arrived mustn't haunt later turns.
+        val working = currentStep(state).team.count { it == SubagentStatus.Running }
         BarStatus(
             when {
                 plan != null && step != null -> "Working · step $step of ${plan.total}"
@@ -2248,8 +2250,11 @@ internal fun currentAction(state: ChatState): String = currentStep(state).let { 
  * [team] is how each subagent of the running delegation stands, in task order.
  */
 internal data class LiveStep(val title: String, val detail: String? = null, val team: List<SubagentStatus> = emptyList()) {
-    /** "1 of 3 done", while subagents work. */
-    val teamProgress: String? get() = team.takeIf { it.isNotEmpty() }?.let { all -> "${all.count { !it.live }} of ${all.size} done" }
+    /** "1 of 3 done", while subagents work; "finished" once any of those ended without succeeding. */
+    val teamProgress: String? get() = team.takeIf { it.isNotEmpty() }?.let { all ->
+        val ended = all.filterNot { it.live }
+        "${ended.size} of ${all.size} ${if (ended.all { it == SubagentStatus.Done }) "done" else "finished"}"
+    }
 }
 
 /** [currentAction] in its two parts, for the live task card. */
@@ -2257,7 +2262,8 @@ internal fun currentStep(state: ChatState): LiveStep {
     if (state.inputRequests.isNotEmpty()) return LiveStep("Waiting for your answer")
     state.runningTool()?.let { tool ->
         if (tool.name == "delegate_task") {
-            val team = state.subagents.filter { it.toolId == tool.id && it.parentId == null }.sortedBy { it.taskIndex }.map { it.status }
+            // The same rows the delegation's cards show, tasks not started yet included.
+            val team = subagentRows(tool, state.subagents).map { it.status }
             if (team.isNotEmpty()) return LiveStep(tool.name.toolVerb(), team = team)
         }
         return LiveStep(tool.name.toolVerb(), tool.firstDetailLine())
@@ -2533,7 +2539,11 @@ private fun Composer(
             },
             {
                 FoldedComposer(
-                    placeholder = if (connected) placeholder else "Reconnecting to Hermes…",
+                    placeholder = when {
+                        !connected -> "Reconnecting to Hermes…"
+                        state.running -> "Add to this task…"
+                        else -> placeholder
+                    },
                     state = state,
                     connected = connected,
                     dictation = dictation,
