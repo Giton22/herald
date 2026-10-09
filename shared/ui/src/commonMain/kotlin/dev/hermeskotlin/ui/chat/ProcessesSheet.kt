@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.sizeIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
@@ -33,9 +34,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.disabled
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
@@ -59,7 +60,7 @@ import com.composeunstyled.theme.Theme
 import com.composeunstyled.theme.rememberColoredIndication
 import dev.hermeskotlin.core.chat.BackgroundProcess
 import dev.hermeskotlin.core.chat.ChatSession
-import dev.hermeskotlin.designsystem.background
+import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
@@ -68,7 +69,6 @@ import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.BottomSheet
 import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import dev.hermeskotlin.designsystem.components.Spinner
-import dev.hermeskotlin.designsystem.components.SyntaxColors
 import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.dangerSoft
 import dev.hermeskotlin.designsystem.eyebrow
@@ -296,10 +296,13 @@ private fun RunningCard(process: BackgroundProcess, expanded: Boolean, stopping:
 private fun StopButton(stopping: Boolean, onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
     val tint = Theme[colors][danger]
+    // Stays clickable while stopping so a tap on "Stopping" is swallowed here instead of toggling the card;
+    // it does nothing then, and says so as disabled.
     Box(
         Modifier
             .sizeIn(minWidth = MinTouchTarget, minHeight = MinTouchTarget)
-            .clickable(interaction, indication = null, enabled = !stopping, role = Role.Button, onClick = onClick),
+            .semantics { if (stopping) disabled() }
+            .clickable(interaction, indication = null, role = Role.Button) { if (!stopping) onClick() },
         contentAlignment = Alignment.Center,
     ) {
         Row(
@@ -319,6 +322,8 @@ private fun StopButton(stopping: Boolean, onClick: () -> Unit) {
                 style = Theme[typography][label].copy(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold),
                 color = tint,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.widthIn(max = 88.dp),
             )
         }
     }
@@ -331,6 +336,8 @@ private fun StopButton(stopping: Boolean, onClick: () -> Unit) {
 @Composable
 private fun FinishedRow(process: BackgroundProcess, expanded: Boolean, onToggle: () -> Unit) {
     val failed = !process.stopped && process.exitCode != null && process.exitCode != 0
+    // No exit code and not stopped: how it ended isn't known, so the disc claims neither success nor failure.
+    val unknown = !process.stopped && process.exitCode == null
     Column(Modifier.fillMaxWidth()) {
         Row(
             Modifier
@@ -346,16 +353,20 @@ private fun FinishedRow(process: BackgroundProcess, expanded: Boolean, onToggle:
                 Modifier.size(26.dp).background(if (failed) Theme[colors][dangerSoft] else Theme[colors][surface2], CircleShape),
                 contentAlignment = Alignment.Center,
             ) {
-                UnstyledIcon(
-                    when {
-                        process.stopped -> Lucide.Square
-                        failed -> Lucide.X
-                        else -> Lucide.Check
-                    },
-                    contentDescription = null,
-                    tint = if (failed) Theme[colors][danger] else Theme[colors][textTertiary],
-                    modifier = Modifier.size(12.dp),
-                )
+                if (unknown) {
+                    Box(Modifier.size(6.dp).background(Theme[colors][textMuted], CircleShape))
+                } else {
+                    UnstyledIcon(
+                        when {
+                            process.stopped -> Lucide.Square
+                            failed -> Lucide.X
+                            else -> Lucide.Check
+                        },
+                        contentDescription = null,
+                        tint = if (failed) Theme[colors][danger] else Theme[colors][textTertiary],
+                        modifier = Modifier.size(12.dp),
+                    )
+                }
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Command(process, maxLines = if (expanded) 6 else 1, color = Theme[colors][textSecondary])
@@ -376,16 +387,23 @@ private fun FinishedRow(process: BackgroundProcess, expanded: Boolean, onToggle:
     }
 }
 
-/** The command in mono, its program in the keyword color the chat's code uses. */
+/** The command in mono, its program (past any `NAME=value` prefixes) in the accent text color. */
 @Composable
 private fun Command(process: BackgroundProcess, maxLines: Int, color: Color) {
-    val keyword = (if (Theme[colors][background].luminance() < 0.5f) SyntaxColors.Dark else SyntaxColors.Light).keyword
-    val command = process.command.ifBlank { process.id }
-    val program = command.substringBefore(' ')
+    val accent = Theme[colors][accentText]
+    val command = process.command.trim()
+    val program = PROGRAM.find(command)?.groups?.get(2)
     Text(
         buildAnnotatedString {
-            withStyle(SpanStyle(color = keyword)) { append(program) }
-            append(command.removePrefix(program))
+            if (command.isEmpty()) {
+                append(process.id)
+            } else if (program == null) {
+                append(command)
+            } else {
+                append(command.substring(0, program.range.first))
+                withStyle(SpanStyle(color = accent)) { append(program.value) }
+                append(command.substring(program.range.last + 1))
+            }
         },
         style = Theme[typography][code].copy(fontSize = 12.5.sp, lineHeight = 19.sp),
         color = color,
@@ -444,7 +462,7 @@ private fun BackgroundProcess.statusLine(): String = listOfNotNull(
         running -> uptimeSeconds?.let { duration(it) } ?: "Running"
         stopped -> "Stopped"
         exitCode != null -> "Exited with code $exitCode"
-        else -> "Finished"
+        else -> "Ended"
     },
     pid?.let { "pid $it" },
     cwd?.takeIf { it.isNotBlank() },
@@ -458,3 +476,6 @@ internal fun duration(seconds: Long): String = when {
 }
 
 private const val OUTPUT_LINES = 40
+
+/** Leading `NAME=value` assignments (group 1), then the program word (group 2). */
+private val PROGRAM = Regex("""^((?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*)(\S+)""")
