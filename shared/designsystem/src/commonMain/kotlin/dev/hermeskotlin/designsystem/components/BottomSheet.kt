@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -94,7 +95,8 @@ fun BottomSheet(
         onDismiss = onDismiss,
         overlay = { Scrim(scrimColor = Color.Black.copy(alpha = 0.45f), enter = fadeIn(), exit = fadeOut()) },
     ) {
-        Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.BottomCenter) {
+        // A sheet tall enough to reach the top stops under the status bar rather than running beneath it.
+        Box(Modifier.fillMaxWidth().statusBarsPadding(), contentAlignment = Alignment.BottomCenter) {
             Sheet(
                 Modifier
                     .widthIn(max = 640.dp)
