@@ -45,7 +45,6 @@ import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.onUserBubble
 import dev.hermeskotlin.designsystem.surface2
-import dev.hermeskotlin.designsystem.textMuted
 import dev.hermeskotlin.designsystem.userBubble
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
@@ -130,18 +129,19 @@ private fun PendingCommentCard(number: Int, comment: PendingComment, focus: Bool
                 )
             }
         }
-        IconButton(Lucide.X, contentDescription = "Remove comment $number", onClick = onRemove, tint = Theme[colors][textMuted], iconSize = 14.dp)
+        IconButton(Lucide.X, contentDescription = "Remove comment $number", onClick = onRemove, tint = Theme[colors][textTertiary], iconSize = 14.dp)
     }
 }
 
 /**
- * Where the comment points, then the selected words: "item 2 · “retry with backoff”". Anything but the
+ * The selected words, then where the comment points: "“retry with backoff” · item 2". Anything but the
  * newest reply also says what it's in, since that isn't the obvious place.
  */
 private fun quoteLine(comment: PendingComment): String {
     val quote = comment.quote.replace(Regex("""\s+"""), " ").trim()
-    val source = comment.source.label.takeUnless { it == LAST_REPLY }?.replaceFirstChar { it.uppercaseChar() }
-    return listOfNotNull(source, comment.where, "“$quote”").joinToString(" · ")
+    val source = comment.source.label.takeUnless { it == LAST_REPLY }
+    // The quote first: on a narrow card, a long source would otherwise push it out of sight.
+    return listOfNotNull("“$quote”", source, comment.where).joinToString(" · ")
 }
 
 /** The order of a comment, in a small circle filled like the user's bubble. */

@@ -141,6 +141,8 @@ import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.CircleCheck
 import com.composables.icons.lucide.Clock
 import com.composables.icons.lucide.Sparkles
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.ui.semantics.selected
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.ui.geometry.CornerRadius
@@ -2405,12 +2407,12 @@ private fun Composer(
                         // The buttons are full 48dp targets, which already space their icons apart.
                     ) {
                         AttachButton(onClick = onAttach, enabled = attachments.size < OutgoingAttachment.MAX_COUNT)
-                        Box(Modifier.weight(1f).padding(start = 2.dp), contentAlignment = Alignment.CenterStart) {
-                            ModelPill(state, picker, onClick = onOpenModels)
-                        }
-                        // Queue and Steer need the room mid-task; dictation already going keeps its button so it can be finished.
+                        // Queue and Steer need the room mid-task, so the model pill folds to its sparkle meanwhile.
                         val segments = state.running && hasText && !editing && !command
-                        if (!segments || dictation.active) DictationButton(dictation, onClick = onDictate, enabled = connected)
+                        Box(Modifier.weight(1f).padding(start = 2.dp), contentAlignment = Alignment.CenterStart) {
+                            ModelPill(state, picker, onClick = onOpenModels, compact = segments)
+                        }
+                        DictationButton(dictation, onClick = onDictate, enabled = connected)
                         // Voice chat waits for the task to end, so while one runs its place goes to the ways to send.
                         if (!state.running) {
                             ComposerButton(
@@ -2584,7 +2586,8 @@ private fun RunningSendSegments(mode: RunningSend, attachments: Boolean, enabled
                 .height(IntrinsicSize.Min)
                 .alpha(if (enabled) 1f else 0.45f)
                 .drawBehind {
-                    val h = 38.dp.toPx()
+                    // Grows with large text so the filled half stays inside it.
+                    val h = maxOf(38.dp.toPx(), size.height - 10.dp.toPx())
                     drawRoundRect(track, topLeft = Offset(0f, (size.height - h) / 2), size = Size(size.width, h), cornerRadius = CornerRadius(h / 2))
                 }
                 .padding(horizontal = 3.dp),
@@ -2616,6 +2619,9 @@ private fun RunningSendSegments(mode: RunningSend, attachments: Boolean, enabled
                         .semantics {
                             contentDescription = "${way.label}: ${way.summary}"
                             role = Role.Button
+                            // The filled half is the setting's way; a steer can't carry files.
+                            selected = on
+                            if (enabled && !usable) stateDescription = "Can't carry files"
                         },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -2722,7 +2728,8 @@ private fun SendDisc(fill: Color, tint: Color, glow: Boolean, interaction: Mutab
     Box(
         Modifier
             .size(40.dp)
-            .then(if (glow) Modifier.dropShadow(CircleShape, bubbleGlow(fill)) else Modifier)
+            // Tighter than the bubble's glow: Send sits near the dock's edge, which would cut a wider one off.
+            .then(if (glow) Modifier.dropShadow(CircleShape, Shadow(radius = 10.dp, color = fill.copy(alpha = 0.45f), offset = DpOffset(0.dp, 3.dp))) else Modifier)
             .background(fill, CircleShape)
             .clip(CircleShape)
             .indication(interaction, rememberColoredIndication(tint)),
@@ -2763,7 +2770,14 @@ internal fun DictationButton(state: DictationState, onClick: () -> Unit, enabled
 
 /** "✦ Opus 5.5 | Medium ⌄" in a pill, the model and thinking level; opens the model sheet. */
 @Composable
-private fun ModelPill(state: ChatState, picker: ModelPickerState, onClick: () -> Unit, modifier: Modifier = Modifier) {
+private fun ModelPill(
+    state: ChatState,
+    picker: ModelPickerState,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** Just the sparkle in a disc, when the row needs the room. */
+    compact: Boolean = false,
+) {
     val selection = ModelSelection.of(state, picker.catalog)
     val model = selection.model ?: return
     val effort = state.effort(selection.option)
@@ -2784,20 +2798,22 @@ private fun ModelPill(state: ChatState, picker: ModelPickerState, onClick: () ->
             Modifier
                 .clearAndSetSemantics {}
                 .heightIn(min = 36.dp)
+                .then(if (compact) Modifier.widthIn(min = 36.dp) else Modifier)
                 .clip(CircleShape)
                 .background(Theme[colors][surface3], CircleShape)
                 .indication(interaction, rememberColoredIndication(Theme[colors][textSecondary]))
-                .padding(horizontal = 12.dp),
+                .padding(horizontal = if (compact) 0.dp else 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
         ) {
             // Fast mode takes the sparkle's place.
             UnstyledIcon(
                 if (fast) Lucide.Zap else Lucide.Sparkles,
                 contentDescription = null,
                 tint = Theme[colors][if (fast) warning else accentText],
-                modifier = Modifier.size(13.dp),
+                modifier = Modifier.size(if (compact) 16.dp else 13.dp),
             )
+            if (compact) return@Row
             Text(
                 name,
                 style = Theme[typography][caption],
@@ -2808,7 +2824,7 @@ private fun ModelPill(state: ChatState, picker: ModelPickerState, onClick: () ->
             )
             if (effort != null) {
                 Text("|", style = Theme[typography][caption], color = Theme[colors][textMuted])
-                Text(effort.label, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
+                Text(effort.label, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
             UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textMuted], modifier = Modifier.size(12.dp))
         }

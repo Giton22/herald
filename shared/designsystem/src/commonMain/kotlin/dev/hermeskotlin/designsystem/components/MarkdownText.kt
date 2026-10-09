@@ -64,7 +64,7 @@ import com.mikepenz.markdown.compose.elements.MarkdownTableHeader
 import com.mikepenz.markdown.compose.elements.MarkdownTableRow
 import androidx.compose.ui.text.style.TextOverflow
 import com.mikepenz.markdown.compose.elements.MarkdownText as LibraryMarkdownText
-import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.accent
 import org.intellij.markdown.ast.ASTNode
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalUriHandler
@@ -335,9 +335,9 @@ private fun DotList(content: String, node: ASTNode, depth: Int) {
 
 private val BULLET_DOT = 5.dp
 
-/** The highlighter under text a comment is about: the accent's soft tint. */
+/** The highlighter under text a comment is about: the accent, a little stronger than its soft tint so it stands out. */
 @Composable
-fun highlightColor(): Color = Theme[colors][accentSoft]
+fun highlightColor(): Color = Theme[colors][accent].copy(alpha = 0.24f)
 
 @Composable
 private fun CodeBlock(code: String, language: String?, style: TextStyle) {
