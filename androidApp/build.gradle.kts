@@ -87,13 +87,16 @@ android {
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
         }
-        // "Herald Dev": a debuggable build that installs beside the real app, with its own data and sign-in,
-        // for trying work in progress on a phone without touching the installed Herald.
+        // "Herald Dev": a build that installs beside the real app, with its own data and sign-in, for trying work
+        // in progress on a phone without touching the installed Herald. It's built like a release (R8, not
+        // debuggable), so it scrolls and animates as the real app will; a debuggable Compose build runs far slower.
+        // It keeps the debug key, so each one installs over the last.
         create("dev") {
-            initWith(getByName("debug"))
+            initWith(getByName("release"))
             applicationIdSuffix = ".dev"
             versionNameSuffix = "-dev"
-            matchingFallbacks += listOf("debug")
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
         }
     }
 }
