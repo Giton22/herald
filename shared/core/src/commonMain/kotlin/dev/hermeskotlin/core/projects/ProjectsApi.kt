@@ -73,16 +73,18 @@ class ProjectsApi(private val connection: GatewayConnection) {
     /**
      * `projects.create`: a project named [name] over [folder] (its primary path; none for a project that only
      * groups chats later). The gateway refuses a folder another project already has, with a message saying so.
+     * Answers the new project's id, or null when the reply leaves it out.
      */
-    suspend fun create(profile: String?, name: String, folder: String?) {
-        client().request(
+    suspend fun create(profile: String?, name: String, folder: String?): String? {
+        val reply = client().request(
             "projects.create",
             buildJsonObject {
                 profile?.let { put("profile", it) }
                 put("name", name.trim())
                 folder?.trim()?.takeIf { it.isNotEmpty() }?.let { put("folders", JsonArray(listOf(JsonPrimitive(it)))) }
             },
-        )
+        ) as? JsonObject
+        return (reply?.get("project") as? JsonObject)?.text("id")
     }
 
     /** `projects.update`: renames project [id]. */
@@ -130,7 +132,9 @@ class ProjectsApi(private val connection: GatewayConnection) {
                     label = o.text("label") ?: id,
                     path = o.text("path"),
                     sessionCount = ids?.size ?: (o["sessionCount"] as? JsonPrimitive)?.intOrNull ?: 0,
-                    isAuto = (o["isAuto"] as? JsonPrimitive)?.booleanOrNull == true,
+                    // Every node says `isAuto`; one that doesn't is taken as found, not made, so it never
+                    // shows empty or offers Rename and Delete.
+                    isAuto = (o["isAuto"] as? JsonPrimitive)?.booleanOrNull != false,
                     isNoProject = (o["isNoProject"] as? JsonPrimitive)?.booleanOrNull == true || id == NO_PROJECT_ID,
                 )
             }

@@ -65,21 +65,30 @@ class ProjectsApiTest {
                 """[
                   {"id":"p_new","label":"Fresh","path":"/srv/fresh","isAuto":false,"isNoProject":false,"sessionCount":0,"sessionIds":[]},
                   {"id":"/srv/auto","label":"auto","path":"/srv/auto","isAuto":true,"sessionCount":0,"sessionIds":[]},
+                  {"id":"/srv/unsaid","label":"unsaid","path":"/srv/unsaid","sessionCount":0,"sessionIds":[]},
+                  {"id":"/srv/busy","label":"busy","path":"/srv/busy","sessionIds":["a"]},
                   {"id":"__no_project__","label":"Home","isNoProject":true,"sessionCount":0}
                 ]""",
             ),
         )
-        assertEquals(listOf("p_new"), projects.map { it.id })
-        assertTrue(projects.single().isUserMade)
+        // A node that doesn't say `isAuto` is taken as found: no empty chip, no Rename or Delete.
+        assertEquals(listOf("busy", "Fresh"), projects.map { it.label })
+        assertEquals(listOf(false, true), projects.map { it.isUserMade })
     }
 
     @Test
     fun createRenameAndDeleteSendDesktopsCalls() = runTest {
         val fake = FakeGateway(backgroundScope)
-        fake.answer = { call -> if (call.method == "projects.delete") """{"projects":[],"active_id":null}""" else """{"project":null}""" }
+        fake.answer = { call ->
+            when (call.method) {
+                "projects.delete" -> """{"projects":[],"active_id":null}"""
+                "projects.create" -> """{"project":{"id":"p_herald","name":"Herald","folders":[]}}"""
+                else -> """{"project":null}"""
+            }
+        }
         val api = ProjectsApi(fake.start())
 
-        api.create("work", "  Herald  ", " /srv/herald ")
+        assertEquals("p_herald", api.create("work", "  Herald  ", " /srv/herald "))
         val create = fake.sent("projects.create").single().params
         assertEquals("Herald", create["name"]?.jsonPrimitive?.content)
         assertEquals("work", create["profile"]?.jsonPrimitive?.content)
