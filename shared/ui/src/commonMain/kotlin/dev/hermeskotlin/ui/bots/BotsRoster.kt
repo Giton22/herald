@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -237,7 +238,8 @@ fun BotsRoster(
                     Modifier.fillMaxWidth().height(IntrinsicSize.Min).padding(bottom = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    row.forEach { card(it, hidden, Modifier.weight(1f).fillMaxHeight()) }
+                    // Keyed by bot, so a card's open menu stays with its bot when the row reshuffles.
+                    row.forEach { key(it.name) { card(it, hidden, Modifier.weight(1f).fillMaxHeight()) } }
                     repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
                 }
             }
@@ -564,13 +566,14 @@ private fun NeedsYouCard(item: NeedsYou, picture: ByteArray?, onClick: () -> Uni
                 "${item.bot.label} needs you",
                 style = Theme[typography][body].copy(fontSize = 14.5.sp, fontWeight = FontWeight.Medium),
                 color = Theme[colors][text],
-                maxLines = 1,
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             Text(item.reason, style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textSecondary], maxLines = 2, overflow = TextOverflow.Ellipsis)
         }
-        // Not a button of its own: the whole card is the one target, and this says where it goes.
-        Text(
+        // Not a button of its own: the whole card is the one target, and this says where it goes. A large
+        // font leaves it out, so the words keep the room.
+        if (LocalDensity.current.fontScale <= 1.3f) Text(
             if (answer) "Review" else "Open",
             style = Theme[typography][caption].copy(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold),
             color = Theme[colors][onInverse],

@@ -57,6 +57,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.AtSign
 import com.composables.icons.lucide.Ellipsis
@@ -335,8 +336,9 @@ internal fun MemberLine(line: RoomLine.Message, continued: Boolean, faces: BotFa
                     Text(
                         line.speaker ?: bot.label,
                         style = Theme[typography][caption].copy(fontSize = 12.sp, fontWeight = FontWeight.SemiBold),
-                        // The bot's own color, drawn toward the text color so it reads on either theme.
-                        color = lerp(tint, Theme[colors][text], 0.25f),
+                        // The bot's own color, drawn toward the text color so it reads on either theme: further on a
+                        // light one, where a yellow or cyan name would wash out.
+                        color = lerp(tint, Theme[colors][text], if (Theme[colors][background].luminance() > 0.5f) 0.6f else 0.25f),
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
@@ -446,8 +448,13 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomActions) {
             BarButton(Lucide.AtSign, "Mention a member", onClick = {
                 viewModel.composer.edit {
                     val at = selection
-                    val before = if (at.start > 0 && !asCharSequence()[at.start - 1].isWhitespace()) " @" else "@"
+                    val previous = asCharSequence().getOrNull(at.start - 1)
+                    // A second tap doesn't start another @.
+                    if (at.collapsed && previous == '@') return@edit
+                    val before = if (previous != null && !previous.isWhitespace()) " @" else "@"
                     replace(at.start, at.end, before)
+                    // Over a selection, the cursor goes after the @ rather than selecting it.
+                    placeCursorBeforeCharAt(at.start + before.length)
                 }
             })
             Text(

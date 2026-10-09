@@ -18,10 +18,16 @@ internal object BotSamples {
     /** Read once, so every time on a scene is drawn against the same moment. */
     val now: Double = Clock.System.now().epochSeconds.toDouble()
 
+    // Marked custom, so the default bot wears its color instead of the stock violet.
     private fun look(title: String, shape: String, color: String) = JsonObject(
         mapOf(
             "hermes-bots" to JsonObject(
-                mapOf("title" to JsonPrimitive(title), "shape" to JsonPrimitive(shape), "color" to JsonPrimitive(color)),
+                mapOf(
+                    "title" to JsonPrimitive(title),
+                    "shape" to JsonPrimitive(shape),
+                    "color" to JsonPrimitive(color),
+                    "custom" to JsonPrimitive(true),
+                ),
             ),
         ),
     )
@@ -87,7 +93,7 @@ internal object BotSamples {
             RoomLine.Message(
                 2,
                 fromUser = false,
-                speaker = "default",
+                speaker = "Hermes",
                 text = "The Albertina has a new exhibition, and it's a short walk from the Naschmarkt for lunch.",
                 eventId = "e2",
                 profile = "default",
@@ -96,7 +102,7 @@ internal object BotSamples {
             RoomLine.Message(
                 3,
                 fromUser = false,
-                speaker = "scribe",
+                speaker = "Scribe",
                 text = "I'll keep a list. Saturday so far: Naschmarkt lunch, then the Albertina.",
                 eventId = "e3",
                 profile = "scribe",
