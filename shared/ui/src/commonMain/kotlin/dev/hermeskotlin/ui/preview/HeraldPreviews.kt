@@ -166,7 +166,12 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                             error = null,
                             onDismiss = {},
                             onCreate = { _, _ -> },
-                            listFolders = { _, _ -> FolderListing(emptyList()) },
+                            // Browse folders opens on sample folders, for the picker's screenshots.
+                            listFolders = { dir, _ ->
+                                FolderListing(
+                                    if (dir.endsWith("/projects/")) listOf("herald", "notes-app", "site") else listOf("androidApp", "docs", "shared"),
+                                )
+                            },
                         )
                     }
                 }
