@@ -1,15 +1,20 @@
 package dev.hermeskotlin.ui.sessions
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
+import dev.hermeskotlin.core.cron.DeliveryTarget
+import dev.hermeskotlin.core.cron.Routines
+import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
@@ -21,8 +26,30 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.clearAndSetSemantics
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.MessageSquare
+import com.composables.icons.lucide.Send
+import com.composables.icons.lucide.TriangleAlert
+import com.composeunstyled.UnstyledIcon
+import dev.hermeskotlin.designsystem.accentSoft
+import dev.hermeskotlin.designsystem.accentText
+import dev.hermeskotlin.designsystem.code
+import dev.hermeskotlin.designsystem.components.Spinner
+import dev.hermeskotlin.designsystem.dangerSoft
+import dev.hermeskotlin.designsystem.eyebrow
+import dev.hermeskotlin.designsystem.radiusLarge
+import dev.hermeskotlin.designsystem.radiusSmall
+import dev.hermeskotlin.designsystem.surface
+import dev.hermeskotlin.designsystem.surface2
+import dev.hermeskotlin.designsystem.textMuted
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.CalendarClock
 import com.composables.icons.lucide.CloudOff
@@ -85,7 +112,6 @@ internal fun ScheduledPage(
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
     val job = state.openJob
-    val routines = owner != null
 
     LaunchedEffect(gateway, owner) { viewModel.bind(gateway, owner) }
     LaunchedEffect(Unit) { viewModel.refresh() }
@@ -119,15 +145,64 @@ internal fun ScheduledPage(
                 onClose = viewModel::closeEditor,
                 routineOf = owner?.label,
             )
-        } else if (job == null) {
-            SubpageHeader(owner?.let { "${it.label}'s routines" } ?: "Scheduled", onBack = onBack) {
-                IconButton(Lucide.Plus, contentDescription = if (routines) "New routine" else "New job", onClick = viewModel::newJob, tint = Theme[colors][text])
+        } else {
+            ScheduledView(state, viewModel, selectedId = selectedId, onBack = onBack, onOpenRun = onOpenRun, owner = owner)
+        }
+        state.message?.let { MessageBanner(it, onDismiss = viewModel::dismissMessage, modifier = Modifier.padding(bottom = 96.dp)) }
+    }
+}
+
+/** What the Scheduled list and a job's page can ask for; [ScheduledViewModel] does it all, previews nothing. */
+interface ScheduledActions {
+    fun refresh()
+    fun newJob()
+    fun openJob(jobId: String)
+    fun closeJob()
+    fun editJob()
+    fun runNow()
+    fun togglePaused()
+    fun askDelete()
+    fun cancelDelete()
+    fun deleteJob()
+}
+
+/** The jobs list and a job's page, apart from the view model, so previews can draw them from sample data. */
+@Composable
+internal fun ScheduledView(
+    state: ScheduledUiState,
+    actions: ScheduledActions,
+    selectedId: String?,
+    onBack: () -> Unit,
+    onOpenRun: (SessionSummary) -> Unit,
+    owner: RoutineOwner? = null,
+) {
+    val job = state.openJob
+    val routines = owner != null
+    Column(Modifier.fillMaxSize()) {
+        if (job == null) {
+            val count = state.jobs.size
+            SubpageHeader(
+                owner?.let { "${it.label}'s routines" } ?: "Scheduled",
+                onBack = onBack,
+                subtitle = when {
+                    state.loading || state.error != null || count == 0 -> null
+                    owner != null -> "$count ${if (count == 1) "routine" else "routines"} · each runs as ${owner.label}"
+                    else -> "$count ${if (count == 1) "job" else "jobs"} · each run opens as a chat"
+                },
+            ) {
+                Button(
+                    if (routines) "New routine" else "New job",
+                    onClick = actions::newJob,
+                    size = ButtonSize.Small,
+                    leadingIcon = Lucide.Plus,
+                    modifier = Modifier.heightIn(min = MinTouchTarget),
+                )
             }
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 when {
                     state.loading -> ListSkeleton()
                     state.error != null -> EmptyState(Lucide.CloudOff, if (routines) "Couldn't load routines" else "Couldn't load scheduled jobs", state.error, error = true) {
-                        Button("Try again", onClick = viewModel::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+                        Button("Try again", onClick = actions::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                     }
                     state.jobs.isEmpty() && owner != null ->
                         EmptyState(
@@ -136,45 +211,52 @@ internal fun ScheduledPage(
                             "Have ${owner.label} do something on a schedule, like a morning briefing. It runs as ${owner.label}, " +
                                 "with its own memory and skills, and can report to its chat.",
                         ) {
-                            Button("New routine", onClick = viewModel::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
+                            Button("New routine", onClick = actions::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
                         }
                     state.jobs.isEmpty() ->
                         EmptyState(Lucide.CalendarClock, "No scheduled jobs", "Have the agent do something on a schedule, like a morning briefing. Each run opens as a chat here.") {
-                            Button("New job", onClick = viewModel::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
+                            Button("New job", onClick = actions::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
                         }
                     else -> LazyColumn(
                         Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 96.dp),
+                        contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 96.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        items(state.jobs, key = { it.id }) { item -> JobRow(item, onClick = { viewModel.openJob(item.id) }) }
+                        items(state.jobs, key = { it.id }) { item -> JobRow(item, onClick = { actions.openJob(item.id) }) }
                     }
                 }
             }
         } else {
             val noun = if (routines) "routine" else "job"
-            SubpageHeader(job.displayName, onBack = viewModel::closeJob) {
-                IconButton(Lucide.Pencil, contentDescription = "Edit $noun", onClick = viewModel::editJob, enabled = !state.busy, tint = Theme[colors][text])
-                IconButton(Lucide.Trash2, contentDescription = "Delete $noun", onClick = viewModel::askDelete, enabled = !state.busy, tint = Theme[colors][text])
+            SubpageHeader(job.displayName, onBack = actions::closeJob, subtitle = job.statusLine().ifEmpty { null }) {
+                IconButton(Lucide.Pencil, contentDescription = "Edit $noun", onClick = actions::editJob, enabled = !state.busy, tint = Theme[colors][textSecondary])
+                IconButton(Lucide.Trash2, contentDescription = "Delete $noun", onClick = actions::askDelete, enabled = !state.busy, tint = Theme[colors][textSecondary])
             }
             LazyColumn(
                 Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = PaddingValues(start = 12.dp, end = 12.dp, bottom = 96.dp),
+                contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 96.dp),
             ) {
                 item(key = "summary") {
-                    JobSummary(job, busy = state.busy, onRunNow = viewModel::runNow, onTogglePaused = viewModel::togglePaused)
+                    val deliversTo = job.deliver?.takeIf { it.isNotBlank() }?.let { id ->
+                        deliveryLabel(id, state.deliveryTargets, botLabel = owner?.label ?: Routines.taggedBot(job.name))
+                    }
+                    JobSummary(job, deliversTo, busy = state.busy, onRunNow = actions::runNow, onTogglePaused = actions::togglePaused)
                 }
                 item(key = "runs-header") {
                     Text(
                         "RUNS",
-                        style = Theme[typography][caption],
+                        style = Theme[typography][eyebrow],
                         color = Theme[colors][textTertiary],
-                        modifier = Modifier.padding(start = 12.dp, top = 20.dp, bottom = 4.dp),
+                        modifier = Modifier.padding(start = 6.dp, top = 20.dp, bottom = 6.dp).semantics {
+                            heading()
+                            contentDescription = "Runs"
+                        },
                     )
                 }
                 when {
                     state.runsLoading -> item(key = "runs-loading") { ListSpinner() }
                     state.runsError != null -> item(key = "runs-error") {
-                        ListNotice("Couldn't load runs. ${state.runsError}", action = "Try again", onAction = viewModel::refresh)
+                        ListNotice("Couldn't load runs. ${state.runsError}", action = "Try again", onAction = actions::refresh)
                     }
                     state.runs.isEmpty() -> item(key = "runs-empty") { ListNotice("No runs yet. Each run opens as a chat here.") }
                     else -> items(state.runs, key = { it.id }) { run ->
@@ -183,66 +265,118 @@ internal fun ScheduledPage(
                 }
             }
         }
-        state.message?.let { MessageBanner(it, onDismiss = viewModel::dismissMessage, modifier = Modifier.padding(bottom = 96.dp)) }
     }
 
     Dialog(
         visible = state.confirmingDelete,
-        onDismissRequest = viewModel::cancelDelete,
+        onDismissRequest = actions::cancelDelete,
         title = if (routines) "Delete routine?" else "Delete job?",
         message = "“${job?.displayName.orEmpty()}” stops running. The chats from its past runs stay.",
         actions = {
-            Button("Cancel", onClick = viewModel::cancelDelete, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Delete", onClick = viewModel::deleteJob, variant = ButtonVariant.Danger, size = ButtonSize.Small)
+            Button("Cancel", onClick = actions::cancelDelete, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button("Delete", onClick = actions::deleteJob, variant = ButtonVariant.Danger, size = ButtonSize.Small)
         },
     )
 }
 
+/** How a job stands, for its tile and its "next" column. */
+private enum class JobTone { Ok, Idle, Failed }
+
+private val CronJob.tone: JobTone
+    get() = when {
+        problem != null -> JobTone.Failed
+        paused || state == "completed" -> JobTone.Idle
+        else -> JobTone.Ok
+    }
+
+/** A ringed card: a tinted tile, the name and schedule, and when it runs next (or that it failed or waits). */
 @Composable
 private fun JobRow(job: CronJob, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
+    val (tile, tint) = when (job.tone) {
+        JobTone.Ok -> Theme[colors][accentSoft] to Theme[colors][accentText]
+        JobTone.Idle -> Theme[colors][surface2] to Theme[colors][textTertiary]
+        JobTone.Failed -> Theme[colors][dangerSoft] to Theme[colors][danger]
+    }
+    val (next, nextLabel) = job.nextColumn()
     Row(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = 60.dp)
-            .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
+            .clip(shape)
+            .background(Theme[colors][surface])
+            .border(1.dp, Theme[colors][stroke], shape)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 10.dp),
+            .padding(14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(job.displayName, style = Theme[typography][body], color = Theme[colors][text], maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(job.statusLine(), style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+        Box(Modifier.size(40.dp).background(tile, RoundedCornerShape(Theme[radii][radiusSmall])), contentAlignment = Alignment.Center) {
+            UnstyledIcon(if (job.tone == JobTone.Failed) Lucide.TriangleAlert else Lucide.CalendarClock, contentDescription = null, tint = tint, modifier = Modifier.size(17.dp))
         }
-        StateDot(job)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(job.displayName, style = Theme[typography][body].copy(fontWeight = FontWeight.Medium), color = Theme[colors][text], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            job.scheduleDisplay.takeIf { it.isNotBlank() && it != "?" }?.let {
+                Text(readableSchedule(it), style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        if (next != null) {
+            Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(next, style = Theme[typography][code].copy(fontSize = 12.sp), color = tint, maxLines = 1)
+                nextLabel?.let { Text(it, style = Theme[typography][caption].copy(fontSize = 11.sp), color = Theme[colors][textMuted], maxLines = 1) }
+            }
+        }
     }
 }
 
-/** What the job does, when it runs, and the two things you can do with it. */
+/** "21h" over "next run", "failed" over "last run", or "paused" (over "last run failed" when it did). */
+private fun CronJob.nextColumn(): Pair<String?, String?> = when {
+    paused -> "paused" to ("last run failed".takeIf { problem != null })
+    state == "completed" -> "done" to ("last run failed".takeIf { problem != null })
+    problem != null -> "failed" to "last run"
+    else -> when (val until = timeUntil(nextRunEpochSeconds)) {
+        "" -> null to null
+        "now" -> "now" to "next run"
+        else -> until to "next run"
+    }
+}
+
+/**
+ * Where runs go, said for people: the target's own name, a bot's chat, or the platform and the chat's id
+ * for one chat the target list doesn't name.
+ */
+internal fun deliveryLabel(id: String, targets: List<DeliveryTarget>, botLabel: String?): String {
+    targets.firstOrNull { it.id == id }?.name?.takeIf { it != id }?.let { return it }
+    if (id == Routines.BOT_CHAT_DELIVERY) return botLabel?.let { "$it's chat" } ?: "the bot's chat"
+    val platform = id.substringBefore(':', missingDelimiterValue = "")
+    return if (platform.isEmpty()) id else "${platform.replaceFirstChar { it.uppercase() }} · ${id.substringAfter(':')}"
+}
+
+/** What the job does, where it reports, and the two things you can do with it. */
 @Composable
-private fun JobSummary(job: CronJob, busy: Boolean, onRunNow: () -> Unit, onTogglePaused: () -> Unit) {
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+private fun JobSummary(job: CronJob, deliversTo: String?, busy: Boolean, onRunNow: () -> Unit, onTogglePaused: () -> Unit) {
+    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     Column(
-        Modifier.fillMaxWidth().background(Theme[colors][stroke], shape).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        Modifier.fillMaxWidth().background(Theme[colors][surface], shape).border(1.dp, Theme[colors][stroke], shape).padding(14.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-            StateDot(job)
-            Text(job.statusLine(), style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
-        }
         if (job.prompt.isNotBlank()) {
-            Text(job.prompt.trim(), style = Theme[typography][bodySmall], color = Theme[colors][text], maxLines = 6, overflow = TextOverflow.Ellipsis)
+            Text(job.prompt.trim(), style = Theme[typography][bodySmall].copy(fontSize = 14.sp, lineHeight = 21.sp), color = Theme[colors][textSecondary], maxLines = 8, overflow = TextOverflow.Ellipsis)
         }
         job.problem?.let {
             Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger], maxLines = 3, overflow = TextOverflow.Ellipsis)
         }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button("Run now", onClick = onRunNow, size = ButtonSize.Small, leadingIcon = Lucide.Zap, loading = busy)
+        deliversTo?.let {
+            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                UnstyledIcon(Lucide.Send, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(13.dp))
+                Text("Delivers to $it", style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary])
+            }
+        }
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button("Run now", onClick = onRunNow, variant = ButtonVariant.Inverse, leadingIcon = Lucide.Zap, loading = busy)
             Button(
                 if (job.paused) "Resume" else "Pause",
                 onClick = onTogglePaused,
-                variant = ButtonVariant.Outline,
-                size = ButtonSize.Small,
+                variant = ButtonVariant.Secondary,
                 leadingIcon = if (job.paused) Lucide.Play else Lucide.Pause,
                 enabled = !busy,
             )
@@ -250,6 +384,7 @@ private fun JobSummary(job: CronJob, busy: Boolean, onRunNow: () -> Unit, onTogg
     }
 }
 
+/** A run: a disc (a spinner while it runs), when, what it said, and how many messages. */
 @Composable
 private fun RunRow(run: SessionSummary, selected: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
@@ -258,31 +393,35 @@ private fun RunRow(run: SessionSummary, selected: Boolean, onClick: () -> Unit) 
             .fillMaxWidth()
             .heightIn(min = 52.dp)
             .clip(shape)
-            .then(if (selected) Modifier.background(Theme[colors][stroke], shape) else Modifier)
+            .then(if (selected) Modifier.background(Theme[colors][surface2], shape) else Modifier)
             .clickable(onClick = onClick)
-            .padding(horizontal = 12.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
+            .semantics { this.selected = selected }
+            .padding(horizontal = 8.dp, vertical = 10.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(
-            relativeTime(run.activityAt).let { if (it == "now") "Just now" else "$it ago" },
-            style = Theme[typography][body],
-            color = Theme[colors][text],
-            modifier = Modifier.weight(1f),
-        )
-        if (run.isActive) Box(Modifier.size(8.dp).background(Theme[colors][success], CircleShape))
-        if (run.messageCount > 0) Text("${run.messageCount} msgs", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+        Box(
+            Modifier
+                .size(28.dp)
+                .background(Theme[colors][if (run.isActive) accentSoft else surface2], CircleShape)
+                .clearAndSetSemantics { if (run.isActive) contentDescription = "Running" },
+            contentAlignment = Alignment.Center,
+        ) {
+            if (run.isActive) Spinner(Modifier.size(13.dp), color = Theme[colors][accentText])
+            else UnstyledIcon(Lucide.MessageSquare, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(13.dp))
+        }
+        Column(Modifier.weight(1f)) {
+            Text(
+                relativeTime(run.activityAt).let { if (it == "now") "Just now" else "$it ago" },
+                style = Theme[typography][body].copy(fontSize = 14.5.sp),
+                color = Theme[colors][text],
+            )
+            (run.preview ?: run.snippet)?.takeIf { it.isNotBlank() }?.let {
+                Text(it.trim(), style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            }
+        }
+        if (run.messageCount > 0) Text("${run.messageCount} msgs", style = Theme[typography][code].copy(fontSize = 11.5.sp), color = Theme[colors][textMuted])
     }
-}
-
-@Composable
-private fun StateDot(job: CronJob) {
-    val color = when {
-        job.problem != null -> Theme[colors][danger]
-        job.paused || job.state == "completed" -> Theme[colors][textTertiary]
-        else -> Theme[colors][success]
-    }
-    Box(Modifier.size(8.dp).background(color, CircleShape))
 }
 
 private fun CronJob.statusLine(): String = listOfNotNull(

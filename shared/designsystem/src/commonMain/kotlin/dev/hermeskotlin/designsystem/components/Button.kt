@@ -34,14 +34,17 @@ import com.composeunstyled.theme.rememberColoredIndication
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.danger
+import dev.hermeskotlin.designsystem.inverse
 import dev.hermeskotlin.designsystem.label
 import dev.hermeskotlin.designsystem.onAccent
+import dev.hermeskotlin.designsystem.onInverse
 import dev.hermeskotlin.designsystem.strokeStrong
 import dev.hermeskotlin.designsystem.surface3
 import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.typography
 
-enum class ButtonVariant { Primary, Secondary, Outline, Ghost, Danger }
+/** [Inverse] is the text color filled in, for a strong action that isn't the screen's one primary, like Run now. */
+enum class ButtonVariant { Primary, Secondary, Outline, Ghost, Danger, Inverse }
 
 enum class ButtonSize(val height: Dp, val horizontalPadding: Dp, val iconSize: Dp, val fontSize: TextUnit) {
     Small(36.dp, 14.dp, 15.dp, 13.sp),
@@ -73,6 +76,7 @@ fun Button(
         ButtonVariant.Outline -> Color.Transparent to Theme[colors][textColor]
         ButtonVariant.Ghost -> Color.Transparent to Theme[colors][textColor]
         ButtonVariant.Danger -> Theme[colors][danger] to Color.White
+        ButtonVariant.Inverse -> Theme[colors][inverse] to Theme[colors][onInverse]
     }
     val outline = if (variant == ButtonVariant.Outline) {
         Modifier.border(1.dp, Theme[colors][strokeStrong], shape)
@@ -84,7 +88,7 @@ fun Button(
     } else {
         Modifier
     }
-    val main = variant == ButtonVariant.Primary || variant == ButtonVariant.Danger
+    val main = variant == ButtonVariant.Primary || variant == ButtonVariant.Danger || variant == ButtonVariant.Inverse
 
     UnstyledButton(
         onClick = onClick,
