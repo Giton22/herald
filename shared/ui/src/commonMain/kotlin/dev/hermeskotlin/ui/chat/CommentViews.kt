@@ -7,16 +7,16 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
-import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
@@ -40,7 +40,13 @@ import com.composeunstyled.Text
 import com.composeunstyled.TextInput
 import com.composeunstyled.UnstyledTextField
 import com.composeunstyled.theme.Theme
+import androidx.compose.ui.text.font.FontWeight
 import dev.hermeskotlin.designsystem.accent
+import dev.hermeskotlin.designsystem.accentText
+import dev.hermeskotlin.designsystem.onUserBubble
+import dev.hermeskotlin.designsystem.surface2
+import dev.hermeskotlin.designsystem.textMuted
+import dev.hermeskotlin.designsystem.userBubble
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
@@ -57,7 +63,6 @@ import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
-import dev.hermeskotlin.designsystem.warning
 
 /**
  * The comments waiting for the next send, numbered like their order in the message, each with its note.
@@ -65,13 +70,13 @@ import dev.hermeskotlin.designsystem.warning
  */
 @Composable
 internal fun CommentTray(comments: List<PendingComment>, focusComment: Long?, onFocused: () -> Unit, onRemove: (Long) -> Unit) {
-    Column(
+    // A row of cards side by side; more than fit scroll sideways.
+    Row(
         Modifier
             .fillMaxWidth()
-            .heightIn(max = 240.dp)
-            .verticalScroll(rememberScrollState())
+            .horizontalScroll(rememberScrollState())
             .padding(start = 4.dp, end = 4.dp, bottom = 10.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         comments.forEachIndexed { index, comment ->
             key(comment.id) {
@@ -83,7 +88,7 @@ internal fun CommentTray(comments: List<PendingComment>, focusComment: Long?, on
 
 @Composable
 private fun PendingCommentCard(number: Int, comment: PendingComment, focus: Boolean, onFocused: () -> Unit, onRemove: () -> Unit) {
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    val shape = RoundedCornerShape(16.dp)
     val requester = remember { FocusRequester() }
     LaunchedEffect(focus) {
         if (focus) {
@@ -93,20 +98,19 @@ private fun PendingCommentCard(number: Int, comment: PendingComment, focus: Bool
     }
     Row(
         Modifier
-            .fillMaxWidth()
-            .background(Theme[colors][surface], shape)
-            .border(1.dp, Theme[colors][stroke], shape)
-            .padding(start = 10.dp, top = 8.dp, bottom = 4.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
+            .width(230.dp)
+            .background(Theme[colors][surface2], shape)
+            .padding(start = 12.dp, top = 10.dp, bottom = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.Top,
     ) {
-        Number(number, Modifier.padding(top = 1.dp))
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Number(number)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text(
                 quoteLine(comment),
                 style = Theme[typography][caption],
-                color = Theme[colors][textSecondary],
-                maxLines = 2,
+                color = Theme[colors][accentText],
+                maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             UnstyledTextField(
@@ -126,7 +130,7 @@ private fun PendingCommentCard(number: Int, comment: PendingComment, focus: Bool
                 )
             }
         }
-        IconButton(Lucide.X, contentDescription = "Remove comment $number", onClick = onRemove, tint = Theme[colors][textTertiary], iconSize = 16.dp)
+        IconButton(Lucide.X, contentDescription = "Remove comment $number", onClick = onRemove, tint = Theme[colors][textMuted], iconSize = 14.dp)
     }
 }
 
@@ -140,14 +144,14 @@ private fun quoteLine(comment: PendingComment): String {
     return listOfNotNull(source, comment.where, "“$quote”").joinToString(" · ")
 }
 
-/** The order of a comment, in a small filled circle in the highlighter's color. */
+/** The order of a comment, in a small circle filled like the user's bubble. */
 @Composable
 private fun Number(number: Int, modifier: Modifier = Modifier) {
     Box(
-        modifier.size(18.dp).background(highlightColor(), CircleShape),
+        modifier.size(20.dp).background(Theme[colors][userBubble], CircleShape),
         contentAlignment = Alignment.Center,
     ) {
-        Text("$number", style = Theme[typography][label], color = Theme[colors][warning])
+        Text("$number", style = Theme[typography][label].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][onUserBubble])
     }
 }
 
