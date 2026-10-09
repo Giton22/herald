@@ -25,6 +25,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
@@ -48,7 +49,6 @@ import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.components.MarkdownText
 import dev.hermeskotlin.designsystem.components.highlightColor
 import dev.hermeskotlin.designsystem.label
-import dev.hermeskotlin.designsystem.onUserBubble
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.stroke
@@ -151,13 +151,13 @@ private fun Number(number: Int, modifier: Modifier = Modifier) {
     }
 }
 
-/** A sent prompt that carried comments: what was typed around them, and a card for each. */
+/** A sent prompt that carried comments: what was typed around them in [textColor], and a card for each. */
 @Composable
-internal fun SentReviewContent(review: SentReview) {
+internal fun SentReviewContent(review: SentReview, textColor: Color) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        if (review.before.isNotBlank()) Text(review.before, style = Theme[typography][body], color = Theme[colors][onUserBubble])
+        if (review.before.isNotBlank()) Text(review.before, style = Theme[typography][body], color = textColor)
         review.comments.forEachIndexed { index, comment -> SentCommentCard(index + 1, comment) }
-        if (review.after.isNotBlank()) Text(review.after, style = Theme[typography][body], color = Theme[colors][onUserBubble])
+        if (review.after.isNotBlank()) Text(review.after, style = Theme[typography][body], color = textColor)
     }
 }
 

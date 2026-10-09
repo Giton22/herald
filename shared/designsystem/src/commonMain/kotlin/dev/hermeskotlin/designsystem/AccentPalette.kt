@@ -43,10 +43,10 @@ class AccentPalette private constructor(
             black = AccentColors(HeraldBlue, Color.White, text = Color(0xFF7AA5FF), soft = Color(0xFF4A84FE).copy(alpha = 0.14f)),
         )
         val Violet = mixed("Violet", light = Color(0xFF7C3AED), dark = Color(0xFFA78BFA))
-        val Green = mixed("Green", light = Color(0xFF16803C), dark = Color(0xFF3FB950))
-        val Orange = mixed("Orange", light = Color(0xFFBC4C00), dark = Color(0xFFF0883E))
-        val Pink = mixed("Pink", light = Color(0xFFBF3989), dark = Color(0xFFF778BA))
-        val Teal = mixed("Teal", light = Color(0xFF0E7490), dark = Color(0xFF22D3EE))
+        val Green = mixed("Green", light = Color(0xFF137538), dark = Color(0xFF3FB950))
+        val Orange = mixed("Orange", light = Color(0xFFB04700), dark = Color(0xFFF0883E))
+        val Pink = mixed("Pink", light = Color(0xFFB0327E), dark = Color(0xFFF778BA))
+        val Teal = mixed("Teal", light = Color(0xFF0C6A84), dark = Color(0xFF22D3EE))
 
         val all: List<AccentPalette> = listOf(Blue, Violet, Green, Orange, Pink, Teal)
 

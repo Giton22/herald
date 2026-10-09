@@ -89,7 +89,7 @@ fun JourneySheet(visible: Boolean, controller: JourneyController, onLoad: () -> 
                         item(key = "m-$month") {
                             Text(
                                 month.uppercase(),
-                                style = Theme[typography][caption].copy(fontWeight = FontWeight.Bold, letterSpacing = 0.06.em),
+                                style = Theme[typography][caption].copy(fontWeight = FontWeight.SemiBold, letterSpacing = 0.06.em),
                                 color = Theme[colors][textTertiary],
                                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 4.dp),
                             )
