@@ -291,9 +291,9 @@ internal object ChatSamples {
         ),
     )
 
-    /** A hands-free voice chat, listening. */
+    /** A hands-free voice chat, a live call listening, so Mute shows. */
     val voice: ChatState = reply
-    val listening = VoiceChatState(phase = VoicePhase.Listening, level = 0.55f, hearing = true, caption = "Yes, run it now, and mail me the report")
+    val listening = VoiceChatState(phase = VoicePhase.Listening, level = 0.55f, hearing = true, caption = "Yes, run it now, and mail me the report", live = true)
 
     /** A new chat, before the first prompt. */
     val empty: ChatState = connected.copy(title = null)
