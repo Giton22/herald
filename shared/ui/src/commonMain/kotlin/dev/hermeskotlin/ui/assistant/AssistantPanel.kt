@@ -86,6 +86,13 @@ import dev.hermeskotlin.designsystem.label
 import dev.hermeskotlin.designsystem.onUserBubble
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusLarge
+import dev.hermeskotlin.designsystem.radiusXLarge
+import dev.hermeskotlin.designsystem.accentText
+import dev.hermeskotlin.designsystem.strokeStrong
+import dev.hermeskotlin.ui.chat.AppMark
+import dev.hermeskotlin.ui.chat.userBubbleShape
+import androidx.compose.foundation.layout.wrapContentWidth
+import androidx.compose.ui.text.font.FontWeight
 import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.surface
@@ -175,7 +182,8 @@ private fun Card(
     onClose: () -> Unit,
 ) {
     val phase by model.phase.collectAsState()
-    val shape = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+    // Rounded as the app's sheets are.
+    val shape = RoundedCornerShape(topStart = Theme[radii][radiusXLarge], topEnd = Theme[radii][radiusXLarge])
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val maxCard = maxHeight * 0.75f
         Column(
@@ -211,8 +219,14 @@ private fun Card(
 
 @Composable
 private fun Header(onCircle: (() -> Unit)?, onOpenHerald: () -> Unit, onClose: () -> Unit) {
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("Herald", style = Theme[typography][label], color = Theme[colors][textSecondary], modifier = Modifier.weight(1f))
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        AppMark(20.dp, glow = false)
+        Text(
+            "Herald",
+            style = Theme[typography][label].copy(fontWeight = FontWeight.SemiBold),
+            color = Theme[colors][textColor],
+            modifier = Modifier.weight(1f),
+        )
         onCircle?.let { IconButton(Lucide.LassoSelect, contentDescription = "Circle part of the screen", onClick = it) }
         IconButton(Lucide.Maximize2, contentDescription = "Open in Herald", onClick = onOpenHerald)
         IconButton(Lucide.X, contentDescription = "Close", onClick = onClose)
@@ -303,7 +317,7 @@ private fun ColumnScope.Ready(
 /** The user's prompt, boxed like the app's bubbles, with the screen it took along above it. */
 @Composable
 private fun Prompt(message: ChatMessage.User) {
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    val shape = userBubbleShape()
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (message.attachments.isNotEmpty()) SentAttachments(message.attachments)
         Text(
@@ -311,10 +325,12 @@ private fun Prompt(message: ChatMessage.User) {
             style = Theme[typography][body],
             color = Theme[colors][onUserBubble],
             modifier = Modifier
+                .fillMaxWidth(0.84f)
+                .wrapContentWidth(Alignment.End)
                 .clip(shape)
                 .background(Theme[colors][userBubble], shape)
                 .border(1.dp, Theme[colors][userBubbleStroke], shape)
-                .padding(horizontal = 12.dp, vertical = 8.dp),
+                .padding(horizontal = 14.dp, vertical = 9.dp),
         )
     }
 }
@@ -327,13 +343,13 @@ private fun Prompt(message: ChatMessage.User) {
 private fun ScreenChip(screen: ScreenCapture, included: Boolean, onIncluded: (Boolean) -> Unit, onCircle: () -> Unit) {
     val context = screen.context
     if (context.isEmpty && screen.pending == 0) return
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     Row(
         Modifier
             .padding(end = 8.dp, bottom = 8.dp)
             .clip(shape)
             .background(if (included) Theme[colors][accentSoft] else Theme[colors][surface], shape)
-            .border(1.dp, if (included) Theme[colors][accent] else Theme[colors][stroke], shape)
+            .border(if (included) 1.5.dp else 1.dp, if (included) Theme[colors][accentText] else Theme[colors][stroke], shape)
             .clickable(role = Role.Checkbox, onClickLabel = if (included) "Leave the screen out" else "Include the screen") { onIncluded(!included) }
             .padding(start = 6.dp, top = 6.dp, bottom = 6.dp, end = if (included) 0.dp else 6.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -379,7 +395,7 @@ private fun ScreenChip(screen: ScreenCapture, included: Boolean, onIncluded: (Bo
  */
 @Composable
 private fun ScreenUnavailable(onOpenSettings: () -> Unit) {
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     Row(
         Modifier
             .padding(end = 8.dp, bottom = 8.dp)
@@ -410,13 +426,13 @@ private fun ScreenUnavailable(onOpenSettings: () -> Unit) {
 /** The part the user circled, held for their question: the crop as it is, to circle again or drop. */
 @Composable
 private fun CircledChip(part: ScreenContext, onCircleAgain: () -> Unit, onRemove: () -> Unit) {
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     Row(
         Modifier
             .padding(end = 8.dp, bottom = 8.dp)
             .clip(shape)
             .background(Theme[colors][accentSoft], shape)
-            .border(1.dp, Theme[colors][accent], shape)
+            .border(1.5.dp, Theme[colors][accentText], shape)
             .padding(start = 6.dp, top = 6.dp, bottom = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -454,7 +470,8 @@ private fun Composer(
     dictation: DictationState,
     onAllowMicrophone: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(Theme[radii][radiusLarge])
+    // The chat composer's box: 26dp round, its edge one step stronger than a card's.
+    val shape = RoundedCornerShape(Theme[radii][radiusXLarge])
     val hasText = model.composer.text.isNotBlank()
     Row(
         Modifier
@@ -462,8 +479,8 @@ private fun Composer(
             .padding(end = 8.dp)
             .clip(shape)
             .background(Theme[colors][surface], shape)
-            .border(1.dp, Theme[colors][stroke], shape)
-            .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+            .border(1.dp, Theme[colors][strokeStrong], shape)
+            .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         UnstyledTextField(
