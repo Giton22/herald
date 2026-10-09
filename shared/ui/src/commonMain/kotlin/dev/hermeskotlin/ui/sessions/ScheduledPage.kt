@@ -112,7 +112,6 @@ internal fun ScheduledPage(
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
     val job = state.openJob
-    val routines = owner != null
 
     LaunchedEffect(gateway, owner) { viewModel.bind(gateway, owner) }
     LaunchedEffect(Unit) { viewModel.refresh() }
@@ -146,7 +145,41 @@ internal fun ScheduledPage(
                 onClose = viewModel::closeEditor,
                 routineOf = owner?.label,
             )
-        } else if (job == null) {
+        } else {
+            ScheduledView(state, viewModel, selectedId = selectedId, onBack = onBack, onOpenRun = onOpenRun, owner = owner)
+        }
+        state.message?.let { MessageBanner(it, onDismiss = viewModel::dismissMessage, modifier = Modifier.padding(bottom = 96.dp)) }
+    }
+}
+
+/** What the Scheduled list and a job's page can ask for; [ScheduledViewModel] does it all, previews nothing. */
+interface ScheduledActions {
+    fun refresh()
+    fun newJob()
+    fun openJob(jobId: String)
+    fun closeJob()
+    fun editJob()
+    fun runNow()
+    fun togglePaused()
+    fun askDelete()
+    fun cancelDelete()
+    fun deleteJob()
+}
+
+/** The jobs list and a job's page, apart from the view model, so previews can draw them from sample data. */
+@Composable
+internal fun ScheduledView(
+    state: ScheduledUiState,
+    actions: ScheduledActions,
+    selectedId: String?,
+    onBack: () -> Unit,
+    onOpenRun: (SessionSummary) -> Unit,
+    owner: RoutineOwner? = null,
+) {
+    val job = state.openJob
+    val routines = owner != null
+    Column(Modifier.fillMaxSize()) {
+        if (job == null) {
             val count = state.jobs.size
             SubpageHeader(
                 owner?.let { "${it.label}'s routines" } ?: "Scheduled",
@@ -159,7 +192,7 @@ internal fun ScheduledPage(
             ) {
                 Button(
                     if (routines) "New routine" else "New job",
-                    onClick = viewModel::newJob,
+                    onClick = actions::newJob,
                     size = ButtonSize.Small,
                     leadingIcon = Lucide.Plus,
                     modifier = Modifier.heightIn(min = MinTouchTarget),
@@ -169,7 +202,7 @@ internal fun ScheduledPage(
                 when {
                     state.loading -> ListSkeleton()
                     state.error != null -> EmptyState(Lucide.CloudOff, if (routines) "Couldn't load routines" else "Couldn't load scheduled jobs", state.error, error = true) {
-                        Button("Try again", onClick = viewModel::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+                        Button("Try again", onClick = actions::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                     }
                     state.jobs.isEmpty() && owner != null ->
                         EmptyState(
@@ -178,26 +211,26 @@ internal fun ScheduledPage(
                             "Have ${owner.label} do something on a schedule, like a morning briefing. It runs as ${owner.label}, " +
                                 "with its own memory and skills, and can report to its chat.",
                         ) {
-                            Button("New routine", onClick = viewModel::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
+                            Button("New routine", onClick = actions::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
                         }
                     state.jobs.isEmpty() ->
                         EmptyState(Lucide.CalendarClock, "No scheduled jobs", "Have the agent do something on a schedule, like a morning briefing. Each run opens as a chat here.") {
-                            Button("New job", onClick = viewModel::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
+                            Button("New job", onClick = actions::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
                         }
                     else -> LazyColumn(
                         Modifier.fillMaxSize(),
                         contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 96.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        items(state.jobs, key = { it.id }) { item -> JobRow(item, onClick = { viewModel.openJob(item.id) }) }
+                        items(state.jobs, key = { it.id }) { item -> JobRow(item, onClick = { actions.openJob(item.id) }) }
                     }
                 }
             }
         } else {
             val noun = if (routines) "routine" else "job"
-            SubpageHeader(job.displayName, onBack = viewModel::closeJob, subtitle = job.statusLine().ifEmpty { null }) {
-                IconButton(Lucide.Pencil, contentDescription = "Edit $noun", onClick = viewModel::editJob, enabled = !state.busy, tint = Theme[colors][textSecondary])
-                IconButton(Lucide.Trash2, contentDescription = "Delete $noun", onClick = viewModel::askDelete, enabled = !state.busy, tint = Theme[colors][textSecondary])
+            SubpageHeader(job.displayName, onBack = actions::closeJob, subtitle = job.statusLine().ifEmpty { null }) {
+                IconButton(Lucide.Pencil, contentDescription = "Edit $noun", onClick = actions::editJob, enabled = !state.busy, tint = Theme[colors][textSecondary])
+                IconButton(Lucide.Trash2, contentDescription = "Delete $noun", onClick = actions::askDelete, enabled = !state.busy, tint = Theme[colors][textSecondary])
             }
             LazyColumn(
                 Modifier.weight(1f).fillMaxWidth(),
@@ -207,7 +240,7 @@ internal fun ScheduledPage(
                     val deliversTo = job.deliver?.takeIf { it.isNotBlank() }?.let { id ->
                         deliveryLabel(id, state.deliveryTargets, botLabel = owner?.label ?: Routines.taggedBot(job.name))
                     }
-                    JobSummary(job, deliversTo, busy = state.busy, onRunNow = viewModel::runNow, onTogglePaused = viewModel::togglePaused)
+                    JobSummary(job, deliversTo, busy = state.busy, onRunNow = actions::runNow, onTogglePaused = actions::togglePaused)
                 }
                 item(key = "runs-header") {
                     Text(
@@ -223,7 +256,7 @@ internal fun ScheduledPage(
                 when {
                     state.runsLoading -> item(key = "runs-loading") { ListSpinner() }
                     state.runsError != null -> item(key = "runs-error") {
-                        ListNotice("Couldn't load runs. ${state.runsError}", action = "Try again", onAction = viewModel::refresh)
+                        ListNotice("Couldn't load runs. ${state.runsError}", action = "Try again", onAction = actions::refresh)
                     }
                     state.runs.isEmpty() -> item(key = "runs-empty") { ListNotice("No runs yet. Each run opens as a chat here.") }
                     else -> items(state.runs, key = { it.id }) { run ->
@@ -232,17 +265,16 @@ internal fun ScheduledPage(
                 }
             }
         }
-        state.message?.let { MessageBanner(it, onDismiss = viewModel::dismissMessage, modifier = Modifier.padding(bottom = 96.dp)) }
     }
 
     Dialog(
         visible = state.confirmingDelete,
-        onDismissRequest = viewModel::cancelDelete,
+        onDismissRequest = actions::cancelDelete,
         title = if (routines) "Delete routine?" else "Delete job?",
         message = "“${job?.displayName.orEmpty()}” stops running. The chats from its past runs stay.",
         actions = {
-            Button("Cancel", onClick = viewModel::cancelDelete, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Delete", onClick = viewModel::deleteJob, variant = ButtonVariant.Danger, size = ButtonSize.Small)
+            Button("Cancel", onClick = actions::cancelDelete, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button("Delete", onClick = actions::deleteJob, variant = ButtonVariant.Danger, size = ButtonSize.Small)
         },
     )
 }

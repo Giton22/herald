@@ -9,7 +9,12 @@ import dev.hermeskotlin.core.chat.ContextBreakdown
 import dev.hermeskotlin.core.chat.ContextCategory
 import dev.hermeskotlin.core.chat.ContextFile
 import dev.hermeskotlin.core.chat.SessionUsage
+import dev.hermeskotlin.core.cron.CronJob
 import dev.hermeskotlin.core.cron.DeliveryTarget
+import dev.hermeskotlin.core.sessions.SessionSummary
+import dev.hermeskotlin.ui.sessions.ScheduledUiState
+import kotlin.time.Duration.Companion.days
+import kotlin.time.Duration.Companion.hours
 import dev.hermeskotlin.core.gateway.CheckStage
 import dev.hermeskotlin.core.gateway.StageResult
 import dev.hermeskotlin.core.insights.ModelUsage
@@ -92,6 +97,45 @@ internal object PageSamples {
         DeliveryTarget("email", "Email"),
         DeliveryTarget("discord", "Discord", homeTargetSet = false),
     )
+
+    /** Three jobs, one failing and one paused; with [open], the first one's page and its runs. */
+    fun scheduled(open: Boolean = false): ScheduledUiState {
+        val now = Clock.System.now()
+        val nowSeconds = now.toEpochMilliseconds() / 1000.0
+        fun ago(minutes: Int) = nowSeconds - minutes * 60
+        return ScheduledUiState(
+            jobs = listOf(
+                CronJob(
+                    "j1",
+                    name = JOB_NAME,
+                    prompt = JOB_PROMPT,
+                    scheduleDisplay = JOB_SCHEDULE,
+                    nextRunAt = (now + 21.hours).toString(),
+                    lastStatus = "ok",
+                    deliver = "telegram",
+                ),
+                CronJob(
+                    "j2",
+                    name = "Renew the TLS certificates",
+                    prompt = "Renew any certificate that expires within 30 days and reload the proxy.",
+                    scheduleDisplay = "0 3 * * 0",
+                    nextRunAt = (now + 3.days).toString(),
+                    lastStatus = "error",
+                    lastError = "certbot: DNS challenge timed out for photos.home.example",
+                    deliver = "email",
+                ),
+                CronJob("j3", name = "Weekly meal plan", prompt = "Plan next week's dinners from what's in season.", scheduleDisplay = "0 18 * * 5", state = "paused", deliver = "local"),
+            ),
+            loading = false,
+            openJobId = "j1".takeIf { open },
+            runs = listOf(
+                SessionSummary("r1", lastActive = ago(1), isActive = true, messageCount = 3, source = "cron"),
+                SessionSummary("r2", preview = "All good: backup 412 GB, NAS 61% full, every disk healthy.", lastActive = ago(60 * 24), messageCount = 6, source = "cron"),
+                SessionSummary("r3", preview = "Disk 3 reports 8 reallocated sectors. Worth replacing soon.", lastActive = ago(60 * 24 * 2), messageCount = 9, source = "cron"),
+            ),
+            deliveryTargets = deliveryTargets,
+        )
+    }
 
     val jobEditor = JobEditor(deliver = "telegram")
     const val JOB_PROMPT = "Check last night's backup, the free space on the NAS and the SMART health of each disk. Send me a short summary, and say first if anything needs me."

@@ -52,6 +52,8 @@ import dev.hermeskotlin.ui.chat.ProcessesSheetView
 import dev.hermeskotlin.ui.chat.UsageSheetView
 import dev.hermeskotlin.ui.sessions.CapabilitiesActions
 import dev.hermeskotlin.ui.sessions.CapabilitiesView
+import dev.hermeskotlin.ui.sessions.ScheduledActions
+import dev.hermeskotlin.ui.sessions.ScheduledView
 import dev.hermeskotlin.ui.sessions.CapabilityTab
 import dev.hermeskotlin.ui.sessions.InsightsView
 import dev.hermeskotlin.ui.sessions.JobEditorPage
@@ -100,6 +102,8 @@ enum class PreviewScene(val label: String) {
     Settings("Settings"),
     Insights("Insights"),
     Capabilities("Capabilities"),
+    Scheduled("Scheduled jobs"),
+    ScheduledJob("A scheduled job and its runs"),
     JobEditor("A new scheduled job"),
     Usage("Usage and context"),
     Processes("Background processes"),
@@ -269,6 +273,17 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 PreviewScene.Capabilities -> OpenSidebar {
                     SidebarPage { CapabilitiesView(PageSamples.capabilities, remember { TextFieldState() }, PreviewCapabilitiesActions, onBack = {}) }
                 }
+                PreviewScene.Scheduled, PreviewScene.ScheduledJob -> OpenSidebar {
+                    SidebarPage {
+                        ScheduledView(
+                            PageSamples.scheduled(open = scene == PreviewScene.ScheduledJob),
+                            PreviewScheduledActions,
+                            selectedId = null,
+                            onBack = {},
+                            onOpenRun = {},
+                        )
+                    }
+                }
                 PreviewScene.JobEditor -> OpenSidebar {
                     SidebarPage {
                         JobEditorPage(
@@ -374,6 +389,19 @@ private object PreviewCapabilitiesActions : CapabilitiesActions {
     override fun setServerEnabled(server: McpServer, enabled: Boolean) = Unit
     override fun testServer(server: McpServer) = Unit
     override fun dismissMessage() = Unit
+}
+
+private object PreviewScheduledActions : ScheduledActions {
+    override fun refresh() = Unit
+    override fun newJob() = Unit
+    override fun openJob(jobId: String) = Unit
+    override fun closeJob() = Unit
+    override fun editJob() = Unit
+    override fun runNow() = Unit
+    override fun togglePaused() = Unit
+    override fun askDelete() = Unit
+    override fun cancelDelete() = Unit
+    override fun deleteJob() = Unit
 }
 
 @Composable

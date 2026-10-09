@@ -74,7 +74,7 @@ internal val LOCAL_DELIVERY = DeliveryTarget(id = "local", name = "Local (save o
 class ScheduledViewModel(
     private val api: CronApi,
     private val connection: GatewayConnection,
-) : ViewModel() {
+) : ViewModel(), ScheduledActions {
 
     val name = TextFieldState()
     val prompt = TextFieldState()
@@ -106,7 +106,7 @@ class ScheduledViewModel(
     }
 
     /** Refetches the jobs, and the open job's runs. */
-    fun refresh() {
+    override fun refresh() {
         val url = gateway?.gatewayUrl ?: return
         val owner = owner
         viewModelScope.launch {
@@ -130,24 +130,24 @@ class ScheduledViewModel(
         _state.value.openJobId?.let(::loadRuns)
     }
 
-    fun openJob(jobId: String) {
+    override fun openJob(jobId: String) {
         _state.update { it.copy(openJobId = jobId, runs = emptyList(), runsError = null) }
         loadRuns(jobId)
     }
 
-    fun closeJob() {
+    override fun closeJob() {
         runsJob?.cancel()
         _state.update { it.copy(openJobId = null, runs = emptyList(), runsLoading = false, runsError = null) }
     }
 
-    fun togglePaused() {
+    override fun togglePaused() {
         val job = _state.value.openJob ?: return
         act(if (job.paused) "Couldn't resume the job" else "Couldn't pause the job") { url ->
             if (job.paused) api.resume(url, job.id, job.profile) else api.pause(url, job.id, job.profile)
         }
     }
 
-    fun runNow() {
+    override fun runNow() {
         val job = _state.value.openJob ?: return
         act("Couldn't start a run", success = "Run started") { url -> api.trigger(url, job.id, job.profile) }
     }
@@ -158,7 +158,7 @@ class ScheduledViewModel(
      *  leaving it set would bounce the next mount after a fresh sign-in. */
     fun consumeSessionExpired() = _state.update { it.copy(sessionExpired = false) }
 
-    fun newJob() {
+    override fun newJob() {
         name.setTextAndPlaceCursorAtEnd("")
         prompt.setTextAndPlaceCursorAtEnd("")
         schedule.setTextAndPlaceCursorAtEnd("")
@@ -168,7 +168,7 @@ class ScheduledViewModel(
         loadDeliveryTargets()
     }
 
-    fun editJob() {
+    override fun editJob() {
         val job = _state.value.openJob ?: return
         // A routine's tag isn't the user's to edit: it's put back on save.
         name.setTextAndPlaceCursorAtEnd(if (Routines.taggedBot(job.name) != null) job.routineTitle else job.name)
@@ -270,11 +270,11 @@ class ScheduledViewModel(
         }
     }
 
-    fun askDelete() = _state.update { it.copy(confirmingDelete = it.openJob != null) }
+    override fun askDelete() = _state.update { it.copy(confirmingDelete = it.openJob != null) }
 
-    fun cancelDelete() = _state.update { it.copy(confirmingDelete = false) }
+    override fun cancelDelete() = _state.update { it.copy(confirmingDelete = false) }
 
-    fun deleteJob() {
+    override fun deleteJob() {
         val url = gateway?.gatewayUrl ?: return
         val job = _state.value.openJob ?: return
         _state.update { it.copy(confirmingDelete = false, busy = true) }
