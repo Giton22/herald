@@ -75,6 +75,8 @@ import dev.hermeskotlin.ui.rooms.CreateRoomDialog
 import dev.hermeskotlin.ui.bots.BotEditor
 import dev.hermeskotlin.core.bots.BotDetails
 import dev.hermeskotlin.ui.plugins.PluginsView
+import dev.hermeskotlin.ui.assistant.AssistantBackdrop
+import dev.hermeskotlin.ui.assistant.AssistantCard
 import dev.hermeskotlin.ui.sessions.ProjectDraft
 import dev.hermeskotlin.core.projects.FolderListing
 import dev.hermeskotlin.ui.sessions.ProjectActionsSheet
@@ -123,6 +125,8 @@ enum class PreviewScene(val label: String) {
     Insights("Insights"),
     Capabilities("Capabilities"),
     Plugins("Plugins with a page"),
+    Assistant("The assistant, called up over another app"),
+    AssistantAnswer("The assistant, after a question about the screen"),
     Scheduled("Scheduled jobs"),
     ScheduledJob("A scheduled job and its runs"),
     JobEditor("A new scheduled job"),
@@ -346,6 +350,18 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 PreviewScene.Journey -> Box(Modifier.fillMaxSize()) {
                     SampleChat(ChatSamples.reply)
                     JourneySheetView(visible = true, state = remember { PageSamples.journey() }, detail = { null }, onDismiss = {})
+                }
+                PreviewScene.Assistant, PreviewScene.AssistantAnswer -> AssistantBackdrop(onClose = {}) {
+                    AssistantCard(
+                        state = if (scene == PreviewScene.Assistant) AssistantSamples.offer else AssistantSamples.answered,
+                        actions = PreviewAssistantActions,
+                        microphoneAllowed = true,
+                        onOpenHerald = {},
+                        onSignIn = {},
+                        onAllowMicrophone = {},
+                        onOpenScreenSettings = {},
+                        onClose = {},
+                    )
                 }
                 PreviewScene.Plugins -> OpenSidebar {
                     SidebarPage { PluginsView(PluginsUiState(plugins = PageSamples.plugins), onBack = {}, onOpenPlugin = {}, onRetry = {}) }
