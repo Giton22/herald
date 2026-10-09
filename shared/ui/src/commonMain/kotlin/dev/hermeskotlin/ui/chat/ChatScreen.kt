@@ -1890,14 +1890,6 @@ private fun AssistantReply(
         val actionable = !message.streaming && text.isNotBlank()
         if (actionable || usage != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (actionable) {
-                    // Their padding trimmed off the start and top, the icons line up with the reply and sit close under it.
-                    val action = Modifier.trimStartTop(start = 0.dp, top = 4.dp)
-                    CopyButton(text, Modifier.trimStartTop(start = 16.dp, top = 4.dp).size(MinTouchTarget))
-                    onRegenerate?.let { ReplyAction(Lucide.RefreshCw, "Regenerate", it, action) }
-                    onBranch?.let { ReplyAction(Lucide.GitBranch, "Branch from here", it, action) }
-                }
-                Spacer(Modifier.weight(1f))
                 usage?.let {
                     Text(
                         replyUsage(it.input, it.output),
@@ -1905,6 +1897,15 @@ private fun AssistantReply(
                         color = Theme[colors][textMuted],
                         modifier = Modifier.semantics { contentDescription = "${compactCount(it.input)} tokens in, ${compactCount(it.output)} out" },
                     )
+                }
+                Spacer(Modifier.weight(1f))
+                if (actionable) {
+                    // On the end, under the thumb of the hand holding the phone; Copy, the one used most, sits last.
+                    // Copy's padding trimmed off the end lines its icon up with the reply's edge; all three lose 4dp on top to sit close under it.
+                    val action = Modifier.trimEndTop(end = 0.dp, top = 4.dp)
+                    onBranch?.let { ReplyAction(Lucide.GitBranch, "Branch from here", it, action) }
+                    onRegenerate?.let { ReplyAction(Lucide.RefreshCw, "Regenerate", it, action) }
+                    CopyButton(text, Modifier.trimEndTop(end = 16.dp, top = 4.dp).size(MinTouchTarget))
                 }
             }
         }
@@ -3035,12 +3036,11 @@ private fun ModelPill(
 }
 
 /**
- * Lays the element out [start] and [top] smaller, drawn up and to the left by as much: empty padding inside
- * it stops pushing it away from its neighbours, while it still takes taps over its whole size.
+ * Lays the element out [end] and [top] smaller, drawn up and past its end by as much: empty padding inside
+ * it stops pushing it away from the edge, while it still takes taps over its whole size.
  */
-private fun Modifier.trimStartTop(start: Dp, top: Dp) = layout { measurable, constraints ->
+private fun Modifier.trimEndTop(end: Dp, top: Dp) = layout { measurable, constraints ->
     val placeable = measurable.measure(constraints)
-    val dx = start.roundToPx()
     val dy = top.roundToPx()
-    layout(placeable.width - dx, placeable.height - dy) { placeable.place(-dx, -dy) }
+    layout(placeable.width - end.roundToPx(), placeable.height - dy) { placeable.placeRelative(0, -dy) }
 }
