@@ -306,7 +306,7 @@ private fun CheckpointRow(
         Row(
             Modifier
                 .fillMaxWidth()
-                .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide changes" else "Show changes since", onClick = onToggle)
+                .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide changes" else "Show changes since this checkpoint", onClick = onToggle)
                 .padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,

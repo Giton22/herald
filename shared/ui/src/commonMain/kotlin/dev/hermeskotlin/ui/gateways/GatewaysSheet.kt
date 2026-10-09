@@ -222,7 +222,8 @@ private fun GatewayRow(
                 }
             }
         }
-        if (active) UnstyledIcon(Lucide.Check, contentDescription = "In use", tint = Theme[colors][accentText], modifier = Modifier.size(20.dp))
+        // The row says it's the one in use as selected; the check stays silent.
+        if (active) UnstyledIcon(Lucide.Check, contentDescription = null, tint = Theme[colors][accentText], modifier = Modifier.size(20.dp))
         DropdownMenu(
             expanded = menuOpen,
             onExpandedChange = { menuOpen = it },
