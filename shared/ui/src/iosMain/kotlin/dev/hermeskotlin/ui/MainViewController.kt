@@ -1,5 +1,9 @@
 package dev.hermeskotlin.ui
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.window.ComposeUIViewController
 import dev.hermeskotlin.core.push.PushGateway
 import dev.hermeskotlin.core.push.PushKeys
@@ -7,8 +11,11 @@ import dev.hermeskotlin.core.push.PushRegistration
 import dev.hermeskotlin.core.push.PushSetup
 import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.ui.di.sharedModules
+import dev.hermeskotlin.ui.platform.IosAppLock
+import dev.hermeskotlin.ui.platform.SafariUriHandler
 import org.koin.core.context.startKoin
 import org.koin.dsl.module
+import org.koin.mp.KoinPlatform
 import platform.Foundation.NSBundle
 import platform.UIKit.UIDevice
 import platform.UIKit.UIViewController
@@ -22,12 +29,19 @@ fun initKoin() {
  * The whole app as one view controller for the Swift host. [onDarkTheme] tells the host which theme is
  * showing, so it can match the status bar.
  */
-fun MainViewController(onDarkTheme: (Boolean) -> Unit): UIViewController = ComposeUIViewController {
-    App(appVersion = appVersion(), onDarkTheme = onDarkTheme)
+fun MainViewController(onDarkTheme: (Boolean) -> Unit): UIViewController {
+    val lock = KoinPlatform.getKoin().get<IosAppLock>()
+    return ComposeUIViewController {
+        val locked by lock.timer.locked.collectAsState()
+        CompositionLocalProvider(LocalUriHandler provides SafariUriHandler) {
+            App(appVersion = appVersion(), onDarkTheme = onDarkTheme, locked = locked, onUnlock = lock::ask)
+        }
+    }
 }
 
 /** What the Android app module provides, as iOS has it. */
 internal val iosAppModule = module {
+    single { IosAppLock(get(), get()) }
     single<VoiceKeepAlive> { NoKeepAlive }
     single<PushKeys> { NoPushKeys }
     single { PushSetup(get(), get(), get(), get(), get(), get(), deviceName = { UIDevice.currentDevice.name }) }
