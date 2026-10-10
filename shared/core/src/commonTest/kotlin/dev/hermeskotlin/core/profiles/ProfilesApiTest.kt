@@ -75,8 +75,8 @@ class ProfilesApiTest {
         api.list(url, profile = "work")
         api.list(url)
 
-        assertEquals("profile=work&limit=50&offset=0&archived=exclude&order=recent&exclude_sources=cron", queries[0])
-        assertEquals("limit=50&offset=0&archived=exclude&order=recent&exclude_sources=cron", queries[1])
+        assertEquals("profile=work&limit=50&offset=0&archived=exclude&order=recent&exclude_sources=acp%2Ccron%2Ckanban%2Coneshot%2Csubagent%2Ctool", queries[0])
+        assertEquals("limit=50&offset=0&archived=exclude&order=recent&exclude_sources=acp%2Ccron%2Ckanban%2Coneshot%2Csubagent%2Ctool", queries[1])
     }
 
     @Test
