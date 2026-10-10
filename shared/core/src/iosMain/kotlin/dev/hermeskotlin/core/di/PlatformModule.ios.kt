@@ -11,12 +11,11 @@ import dev.hermeskotlin.core.storage.KeyValueStore
 import dev.hermeskotlin.core.storage.KeychainKeyValueStore
 import dev.hermeskotlin.core.storage.appSupportPath
 import dev.hermeskotlin.core.voice.DeviceDictation
+import dev.hermeskotlin.core.voice.IosDeviceDictation
+import dev.hermeskotlin.core.voice.IosSpeechPlayer
+import dev.hermeskotlin.core.voice.IosVoiceRecorder
 import dev.hermeskotlin.core.voice.LiveCalls
-import dev.hermeskotlin.core.voice.NoDeviceDictation
-import dev.hermeskotlin.core.voice.Recording
 import dev.hermeskotlin.core.voice.SpeechPlayer
-import dev.hermeskotlin.core.voice.SpokenAudio
-import dev.hermeskotlin.core.voice.VoiceActivity
 import dev.hermeskotlin.core.voice.VoiceRecorder
 import org.koin.core.module.Module
 import org.koin.dsl.module
@@ -33,22 +32,12 @@ actual val platformModule: Module = module {
     // The in-app browser session watches for this link, which closes it once the gateway has sent the code.
     single<LoopbackReceiver> { IosLoopbackReceiver("$signInReturnScheme:/signed-in") }
     single { WallpaperStore(IosBlobFile(appSupportPath("wallpaper.jpg")), get()) }
-    factory<VoiceRecorder> { NoVoiceRecorder }
-    single<SpeechPlayer> { NoSpeechPlayer }
-    factory<DeviceDictation> { NoDeviceDictation }
+    factory<VoiceRecorder> { IosVoiceRecorder() }
+    single<SpeechPlayer> { IosSpeechPlayer() }
+    factory<DeviceDictation> { IosDeviceDictation() }
     // No WebRTC on iOS yet: a voice chat falls back to the chained mode (record, transcribe, speak).
     single { LiveCalls { null } }
     single { offlineDatabase() }
     single<Sealer> { KeychainSealer(get()) }
 }
 
-private object NoVoiceRecorder : VoiceRecorder {
-    override suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit, onSpeech: () -> Unit): Recording =
-        error("Voice input isn't available on iOS yet.")
-
-    override fun finish() = Unit
-}
-
-private object NoSpeechPlayer : SpeechPlayer {
-    override suspend fun play(audio: SpokenAudio) = Unit
-}
