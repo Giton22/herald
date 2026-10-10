@@ -135,6 +135,7 @@ enum class PreviewScene(val label: String) {
     Usage("Usage and context"),
     Processes("Background processes"),
     Goal("The chat's goal, loop and heartbeat"),
+    GoalStrip("A chat with a goal, loop and heartbeat above the composer"),
     Comments("Comments on a reply"),
     MidTask("Typing while a task runs"),
     ConnectionCheck("The connection check"),
@@ -437,6 +438,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                     SampleChat(ChatSamples.reply)
                     ProcessesSheetView(visible = true, state = PageSamples.processes, onKill = {}, onDismiss = {}, initiallyExpanded = "proc_1")
                 }
+                PreviewScene.GoalStrip -> SampleChat(ChatSamples.reply.copy(control = PageSamples.control))
                 PreviewScene.Goal -> Box(Modifier.fillMaxSize()) {
                     SampleChat(ChatSamples.reply)
                     SessionControlSheetView(visible = true, control = PageSamples.control, busy = null, error = null, onAction = { _, _, _ -> }, onDismiss = {})

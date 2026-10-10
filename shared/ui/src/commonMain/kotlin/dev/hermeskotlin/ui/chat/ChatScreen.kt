@@ -328,6 +328,9 @@ fun ChatScreen(
     var processesOpen by remember { mutableStateOf(false) }
     var checkpointsOpen by remember { mutableStateOf(false) }
     var controlOpen by remember { mutableStateOf(false) }
+    // Cleared (here or on another client) while open, there is nothing left to show.
+    val hasControl = state.control != null
+    LaunchedEffect(hasControl) { if (!hasControl) controlOpen = false }
     var viewing by remember { mutableStateOf<ViewerImage?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(notice) {
@@ -416,7 +419,10 @@ fun ChatScreen(
         onDictate = toggleDictation,
         onVoiceChat = startVoiceChat,
         onOpenPets = { petsOpen = true },
-        onOpenControl = { controlOpen = true },
+        onOpenControl = {
+            viewModel.control.clearError()
+            controlOpen = true
+        },
         onViewImage = { viewing = it },
         onNotice = { notice = it },
         wallpaper = rememberChatWallpaper(),

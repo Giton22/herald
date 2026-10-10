@@ -129,6 +129,9 @@ class SessionControlController(private val scope: CoroutineScope) {
     private val _state = MutableStateFlow(ControlPanelState())
     val state: StateFlow<ControlPanelState> = _state.asStateFlow()
 
+    /** Forgets the last failure: it was about another chat, or the sheet was closed on it. */
+    fun clearError() = _state.update { it.copy(error = null) }
+
     fun run(chat: ChatSession?, action: ControlAction, text: String? = null, index: Int? = null) {
         chat ?: return
         if (_state.value.busy != null) return
