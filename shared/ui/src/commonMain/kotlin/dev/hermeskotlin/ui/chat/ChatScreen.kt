@@ -2566,14 +2566,14 @@ private fun Composer(
                         Box(Modifier.weight(1f).padding(start = 2.dp), contentAlignment = Alignment.CenterStart) {
                             ModelPill(state, picker, onClick = onOpenModels, compact = segments)
                         }
-                        if (showMic(dictation)) DictationButton(dictation, onClick = onDictate, enabled = connected)
+                        if (showMic(dictation)) Snug { DictationButton(dictation, onClick = onDictate, enabled = connected) }
                         // Voice chat waits for the task to end, so while one runs its place goes to the ways to send.
-                        if (!state.running) VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active)
+                        if (!state.running) Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active) }
                         // Stop is on the live task card above; a message typed meanwhile is queued or steers the task.
                         if (state.running && hasText && !editing) {
                             if (command) {
                                 // A command runs at once; there's nothing to choose.
-                                SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected)
+                                Snug { SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected) }
                             } else {
                                 RunningSendSegments(
                                     mode = runningMode,
@@ -2584,7 +2584,7 @@ private fun Composer(
                             }
                         } else {
                             // While a task runs this only waits: nothing typed yet, or an edit, which goes once it ends.
-                            SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected && hasText && !state.running)
+                            Snug { SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected && hasText && !state.running) }
                         }
                     }
                 }
@@ -2678,9 +2678,9 @@ private fun FoldedComposer(
                 )
             }
         }
-        if (showMic(dictation)) DictationButton(dictation, onClick = onDictate, enabled = connected)
+        if (showMic(dictation)) Snug { DictationButton(dictation, onClick = onDictate, enabled = connected) }
         // Stop is on the live task card above, so this stays voice chat, which waits for the task to end.
-        VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active && !state.running)
+        Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active && !state.running) }
     }
 }
 
@@ -2830,8 +2830,23 @@ private fun DiscButton(icon: ImageVector, contentDescription: String, onClick: (
     }
 }
 
-/** The size the composer's round buttons are drawn at: +, voice chat and Send. */
+/** The size the composer's round buttons are drawn at: +, the mic, voice chat and Send. */
 private val ComposerDisc = 36.dp
+
+/**
+ * Sets a round button [SNUG_TRIM] narrower on each side, so neighbouring discs sit 8dp apart instead of 12dp;
+ * each still takes taps over its full touch target, which only overlap at their edges.
+ */
+@Composable
+private fun Snug(button: @Composable () -> Unit) {
+    Layout(button) { measurables, constraints ->
+        val placeable = measurables.first().measure(constraints)
+        val trim = SNUG_TRIM.roundToPx()
+        layout(placeable.width - 2 * trim, placeable.height) { placeable.place(-trim, 0) }
+    }
+}
+
+private val SNUG_TRIM = 2.dp
 
 /** A plain icon button inside the composer, like the microphone. */
 @Composable
