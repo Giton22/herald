@@ -2568,14 +2568,7 @@ private fun Composer(
                         }
                         if (showMic(dictation)) DictationButton(dictation, onClick = onDictate, enabled = connected)
                         // Voice chat waits for the task to end, so while one runs its place goes to the ways to send.
-                        if (!state.running) {
-                            ComposerButton(
-                                icon = Lucide.AudioLines,
-                                contentDescription = "Start a voice chat",
-                                onClick = onVoiceChat,
-                                enabled = connected && !dictation.active,
-                            )
-                        }
+                        if (!state.running) VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active)
                         // Stop is on the live task card above; a message typed meanwhile is queued or steers the task.
                         if (state.running && hasText && !editing) {
                             if (command) {
@@ -2687,12 +2680,7 @@ private fun FoldedComposer(
         }
         if (showMic(dictation)) DictationButton(dictation, onClick = onDictate, enabled = connected)
         // Stop is on the live task card above, so this stays voice chat, which waits for the task to end.
-        ComposerButton(
-            icon = Lucide.AudioLines,
-            contentDescription = "Start a voice chat",
-            onClick = onVoiceChat,
-            enabled = connected && !dictation.active && !state.running,
-        )
+        VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active && !state.running)
     }
 }
 
@@ -2816,9 +2804,19 @@ private fun RunningSendSegments(mode: RunningSend, attachments: Boolean, enabled
 /** The dock's shadow: soft and wide, a little below it, so it floats over the chat. */
 internal val DockShadow =Shadow(radius = 24.dp, color = Color.Black.copy(alpha = 0.18f), offset = DpOffset(0.dp, 8.dp))
 
-/** The composer's +: a 36dp disc, with the full touch target around it. */
+/** The composer's +. */
 @Composable
-private fun AttachButton(onClick: () -> Unit, enabled: Boolean) {
+private fun AttachButton(onClick: () -> Unit, enabled: Boolean) =
+    DiscButton(Lucide.Plus, contentDescription = "Add photos or files", onClick = onClick, enabled = enabled, iconSize = 20.dp)
+
+/** Voice chat, on a disc like + and Send so the row reads as three round buttons and the mic. */
+@Composable
+private fun VoiceChatButton(onClick: () -> Unit, enabled: Boolean) =
+    DiscButton(Lucide.AudioLines, contentDescription = "Start a voice chat", onClick = onClick, enabled = enabled, iconSize = 19.dp)
+
+/** A composer button drawn as a 36dp disc, with the full touch target around it. */
+@Composable
+private fun DiscButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean, iconSize: Dp) {
     val tint = if (enabled) Theme[colors][textSecondary] else Theme[colors][textTertiary].copy(alpha = 0.5f)
     UnstyledButton(
         onClick = onClick,
@@ -2826,11 +2824,14 @@ private fun AttachButton(onClick: () -> Unit, enabled: Boolean) {
         modifier = Modifier.size(MinTouchTarget).clip(CircleShape),
         indication = rememberColoredIndication(tint),
     ) {
-        Box(Modifier.size(36.dp).background(Theme[colors][surface3], CircleShape), contentAlignment = Alignment.Center) {
-            UnstyledIcon(Lucide.Plus, contentDescription = "Add photos or files", tint = tint, modifier = Modifier.size(20.dp))
+        Box(Modifier.size(ComposerDisc).background(Theme[colors][surface3], CircleShape), contentAlignment = Alignment.Center) {
+            UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(iconSize))
         }
     }
 }
+
+/** The size the composer's round buttons are drawn at: +, voice chat and Send. */
+private val ComposerDisc = 36.dp
 
 /** A plain icon button inside the composer, like the microphone. */
 @Composable
@@ -2850,7 +2851,7 @@ internal enum class SendIcon { Send, Stop }
 
 /**
  * The round send: an accent disc that glows when there's something to send, a quiet grey one otherwise.
- * The disc stays 40dp; the button around it takes taps over the full [MinTouchTarget].
+ * The disc is drawn at [ComposerDisc], like +; the button around it takes taps over the full [MinTouchTarget].
  */
 @Composable
 internal fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
@@ -2873,7 +2874,7 @@ internal fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
                     SendIcon.Stop -> "Stop the task"
                 },
                 tint = tint,
-                modifier = Modifier.size(if (icon == SendIcon.Stop) 16.dp else 20.dp),
+                modifier = Modifier.size(if (icon == SendIcon.Stop) 15.dp else 19.dp),
             )
         }
     }
@@ -2884,12 +2885,12 @@ internal fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
 private fun sendColors(enabled: Boolean): Pair<Color, Color> =
     if (enabled) Theme[colors][accent] to Theme[colors][onAccent] else Theme[colors][surface3] to Theme[colors][textMuted]
 
-/** Send's 40dp disc, which glows in its own color when it can send; a press on the button around it shows on the disc. */
+/** Send's disc, which glows in its own color when it can send; a press on the button around it shows on the disc. */
 @Composable
 private fun SendDisc(fill: Color, tint: Color, glow: Boolean, interaction: MutableInteractionSource, content: @Composable () -> Unit) {
     Box(
         Modifier
-            .size(40.dp)
+            .size(ComposerDisc)
             // Tighter than the bubble's glow: Send sits near the dock's edge, which would cut a wider one off.
             .then(if (glow) Modifier.dropShadow(CircleShape, Shadow(radius = 10.dp, color = fill.copy(alpha = 0.45f), offset = DpOffset(0.dp, 3.dp))) else Modifier)
             .background(fill, CircleShape)
@@ -2902,8 +2903,12 @@ private fun SendDisc(fill: Color, tint: Color, glow: Boolean, interaction: Mutab
 /** The composer's microphone: tap to dictate, tap again to finish; the ring follows your voice. */
 @Composable
 internal fun DictationButton(state: DictationState, onClick: () -> Unit, enabled: Boolean) {
+    // On a disc like the composer's other round buttons.
+    val disc = Modifier.size(ComposerDisc).background(Theme[colors][surface3], CircleShape)
     if (state.transcribing) {
-        Box(Modifier.size(MinTouchTarget), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
+        Box(Modifier.size(MinTouchTarget), contentAlignment = Alignment.Center) {
+            Box(disc, contentAlignment = Alignment.Center) { Spinner(Modifier.size(16.dp)) }
+        }
         return
     }
     val recording = state.recording
@@ -2915,18 +2920,20 @@ internal fun DictationButton(state: DictationState, onClick: () -> Unit, enabled
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier
-            .size(MinTouchTarget)
-            .clip(CircleShape)
-            .then(if (recording) Modifier.border(2.dp, tint.copy(alpha = 0.25f + 0.75f * state.level), CircleShape) else Modifier),
+        modifier = Modifier.size(MinTouchTarget).clip(CircleShape),
         indication = rememberColoredIndication(tint),
     ) {
-        UnstyledIcon(
-            if (recording) Lucide.Square else Lucide.Mic,
-            contentDescription = if (recording) "Finish dictating" else "Dictate",
-            tint = tint,
-            modifier = Modifier.size(if (recording) 16.dp else 22.dp),
-        )
+        Box(
+            disc.then(if (recording) Modifier.border(2.dp, tint.copy(alpha = 0.25f + 0.75f * state.level), CircleShape) else Modifier),
+            contentAlignment = Alignment.Center,
+        ) {
+            UnstyledIcon(
+                if (recording) Lucide.Square else Lucide.Mic,
+                contentDescription = if (recording) "Finish dictating" else "Dictate",
+                tint = tint,
+                modifier = Modifier.size(if (recording) 15.dp else 19.dp),
+            )
+        }
     }
 }
 
