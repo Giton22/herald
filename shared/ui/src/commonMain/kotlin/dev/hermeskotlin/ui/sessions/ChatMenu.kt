@@ -31,6 +31,8 @@ internal fun ChatMenu(
     onUsage: () -> Unit,
     onProcesses: () -> Unit,
     onCheckpoints: () -> Unit,
+    /** The chat's goal and loops sheet; null when the chat has no goal, loop or heartbeat. */
+    onControl: (() -> Unit)? = null,
     /**
      * A bot's permanent chat: its title is what makes it the bot's, so Rename, Archive and Delete would
      * lose the bot its conversation. Those are left to Desktop, which asks first.
@@ -62,6 +64,7 @@ internal fun ChatMenu(
         onUsage = { onUsage() },
         onProcesses = { onProcesses() },
         onCheckpoints = { onCheckpoints() },
+        onControl = onControl?.let { open -> { _: SessionSummary -> open() } },
         onStartFresh = onStartFresh?.let { start -> { _: SessionSummary -> start() } },
     )
     RenameDialog(

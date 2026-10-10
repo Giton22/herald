@@ -13,6 +13,7 @@ import dev.hermeskotlin.core.chat.ChatSession
 import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.ComposeDraft
+import dev.hermeskotlin.core.chat.ControlAction
 import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.chat.LastChat
@@ -107,6 +108,7 @@ sealed interface ChatRequest {
     data object OpenUsage : ChatRequest
     data object OpenProcesses : ChatRequest
     data object OpenCheckpoints : ChatRequest
+    data object OpenControl : ChatRequest
 
     /** `/voice`: the screen asks for the microphone, then starts a voice chat. */
     data object StartVoice : ChatRequest
@@ -195,6 +197,9 @@ class ChatViewModel(
     /** The folder snapshots Hermes took before the agent changed files in the open chat. */
     val checkpoints = CheckpointsController(viewModelScope)
 
+    /** Runs goal, loop and heartbeat actions for the open chat's panel. */
+    val control = SessionControlController(viewModelScope)
+
     override val composer = TextFieldState()
     val connectionState: StateFlow<ConnectionState> = connection.state
 
@@ -208,6 +213,7 @@ class ChatViewModel(
     init {
         // A chat opened under the checkpoints sheet shows its own checkpoints, not the last chat's.
         viewModelScope.launch { session.collect { checkpoints.follow(it) } }
+        viewModelScope.launch { session.collect { control.follow(it) } }
     }
 
     val state: StateFlow<ChatState> = session
@@ -472,6 +478,14 @@ class ChatViewModel(
     fun openCheckpoints() {
         viewModelScope.launch { _requests.send(ChatRequest.OpenCheckpoints) }
     }
+
+    /** Shows the goal and loops sheet (from the chat menu, or the strip above the composer). */
+    fun openControl() {
+        control.clearError()
+        viewModelScope.launch { _requests.send(ChatRequest.OpenControl) }
+    }
+
+    override fun runControl(action: ControlAction, text: String?, index: Int?) = control.run(session.value, action, text, index)
 
     fun loadCheckpoints() = checkpoints.load(session.value)
 

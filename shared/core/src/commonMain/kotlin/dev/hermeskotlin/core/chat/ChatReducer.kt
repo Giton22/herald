@@ -103,6 +103,8 @@ fun ChatState.reduce(event: GatewayEvent, now: Double? = null): ChatState {
         "session.info" -> withInfo(payload).copy(title = payload.string("title")?.takeIf { it.isNotBlank() } ?: title)
         "btw.complete" -> answerAside(payload)
         "todo.updated" -> withTodos(TodoList.parse(payload))
+        // Pushed on every mutation, our own actions included; an empty snapshot is a clear, one without a snapshot nothing.
+        "session.control.update" -> (payload?.get("control") as? JsonObject)?.let { withControl(SessionControl.parse(it)) } ?: this
         "subagent.spawn_requested", "subagent.start", "subagent.progress", "subagent.thinking", "subagent.tool", "subagent.complete" ->
             withSubagentEvent(event.type, payload)
         else -> this
@@ -128,6 +130,17 @@ internal fun ChatState.withTodos(list: TodoList?): ChatState {
     val current = todos
     if (current != null && list.revision < current.revision) return this
     return copy(todos = list, todosLive = running)
+}
+
+/**
+ * Takes a control snapshot, keeping the same reference when its revision matches: an unchanged
+ * revision means identical state, so nothing should recompose for it.
+ */
+internal fun ChatState.withControl(next: SessionControl?): ChatState {
+    val current = control
+    if (next == null) return if (current == null) this else copy(control = null)
+    if (current != null && next.revision.isNotEmpty() && next.revision == current.revision) return this
+    return copy(control = next)
 }
 
 /** A `/btw` answer: fills the card that asked it, or adds one when the question came from another client. */
