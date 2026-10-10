@@ -1,3 +1,5 @@
+@file:OptIn(ExperimentalForeignApi::class)
+
 package dev.hermeskotlin.ui.chat
 
 import androidx.compose.runtime.Composable
@@ -48,9 +50,13 @@ actual fun rememberAttachmentPicker(
         object : AttachmentPicker {
             override fun pickPhotos() {
                 scope.launch {
-                    val photos = choosePhotos(OutgoingAttachment.MAX_COUNT)
+                    val photos = choosePhotos(OutgoingAttachment.MAX_COUNT, MAX_PHOTO_BYTES)
                     if (photos.isEmpty()) return@launch
-                    deliver(withContext(Dispatchers.Default) { readAll(photos.map { { budget -> photoAttachment(it.name, it.bytes, budget) } }) })
+                    deliver(
+                        withContext(Dispatchers.Default) {
+                            readAll(photos.map { { budget -> photoAttachment(it.name, it.bytes ?: tooLarge(it.name ?: "A photo"), budget) } })
+                        },
+                    )
                 }
             }
 
@@ -69,7 +75,12 @@ actual fun rememberAttachmentPicker(
                 scope.launch {
                     val urls = chooseFiles()
                     if (urls.isEmpty()) return@launch
-                    deliver(withContext(Dispatchers.IO) { readAll(urls.map { { budget -> fileAttachment(it, budget) } }) })
+                    try {
+                        deliver(withContext(Dispatchers.IO) { readAll(urls.map { { budget -> fileAttachment(it, budget) } }) })
+                    } finally {
+                        // Cancelled before they were read: the picker's copies are still the app's to remove.
+                        urls.forEach { NSFileManager.defaultManager.removeItemAtURL(it, error = null) }
+                    }
                 }
             }
         }
@@ -89,7 +100,7 @@ private fun readAll(items: List<(budget: Long) -> OutgoingAttachment>): List<Res
 /** A photo from the library or the camera: upright, at most [MAX_EDGE] px and JPEG, with a thumbnail. */
 private fun photoAttachment(name: String?, original: ByteArray, budget: Long): OutgoingAttachment {
     val label = name ?: "photo"
-    if (original.size > MAX_PHOTO_BYTES) error("$label is larger than 50 MB.")
+    if (original.size > MAX_PHOTO_BYTES) tooLarge(label)
     val image = uiImage(original) ?: error("Couldn't read $label as an image.")
     return photoAttachment(name, image, budget)
 }
@@ -128,6 +139,8 @@ private fun readFile(url: NSURL, budget: Long): OutgoingAttachment {
     val thumbnail = if (mime.startsWith("image/")) decodeUpright(bytes, THUMBNAIL_EDGE)?.jpeg(THUMBNAIL_QUALITY) else null
     return OutgoingAttachment(newId(), name, mime, bytes, thumbnail)
 }
+
+private fun tooLarge(label: String): Nothing = error("$label is larger than 50 MB.")
 
 private fun newId() = "att-${Random.nextLong().toULong().toString(16)}"
 

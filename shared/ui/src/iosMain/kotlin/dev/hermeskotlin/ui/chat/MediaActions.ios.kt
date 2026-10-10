@@ -49,30 +49,42 @@ private object IosMediaActions : MediaActions {
 
     private suspend fun saveToPhotos(bytes: ByteArray, name: String): String {
         val file = withContext(Dispatchers.IO) { tempFile(bytes, name) } ?: return "Couldn't save $name."
-        val saved = suspendCancellableCoroutine { done ->
-            // Adding only: the system asks once for "Add Photos Only", never for the whole library.
-            PHPhotoLibrary.sharedPhotoLibrary().performChanges(
-                { PHAssetChangeRequest.creationRequestForAssetFromImageAtFileURL(file) },
-                completionHandler = { ok: Boolean, _: NSError? -> done.resume(ok) },
-            )
+        val saved = try {
+            suspendCancellableCoroutine { done ->
+                // Adding only: the system asks once for "Add Photos Only", never for the whole library.
+                PHPhotoLibrary.sharedPhotoLibrary().performChanges(
+                    { PHAssetChangeRequest.creationRequestForAssetFromImageAtFileURL(file) },
+                    completionHandler = { ok: Boolean, _: NSError? -> if (done.isActive) done.resume(ok) },
+                )
+            }
+        } finally {
+            // Photos has its own copy once the change is done; a cancelled save may still be reading it, which
+            // a removed file just fails.
+            removeTempFile(file)
         }
-        removeTempFile(file)
         return if (saved) "Saved to Photos" else "Couldn't save $name. Herald may not be allowed to add to Photos."
     }
 
     private suspend fun exportToFiles(bytes: ByteArray, name: String): String {
         val file = withContext(Dispatchers.IO) { tempFile(bytes, name) } ?: return "Couldn't save $name."
-        val saved = suspendCancellableCoroutine { done ->
-            val picker = UIDocumentPickerViewController(forExportingURLs = listOf(file), asCopy = true)
-            val delegate = ExportDelegate(done)
-            picker.delegate = delegate
-            retain(picker, delegate)
-            if (!present(picker)) {
-                release(picker)
-                done.resume(null)
+        val saved = try {
+            suspendCancellableCoroutine { done ->
+                val picker = UIDocumentPickerViewController(forExportingURLs = listOf(file), asCopy = true)
+                val delegate = ExportDelegate(done)
+                picker.delegate = delegate
+                retain(picker, delegate)
+                done.invokeOnCancellation {
+                    release(picker)
+                    picker.dismissViewControllerAnimated(true, completion = null)
+                }
+                if (!present(picker)) {
+                    release(picker)
+                    done.resume(null)
+                }
             }
+        } finally {
+            removeTempFile(file)
         }
-        removeTempFile(file)
         return when (saved) {
             null -> "Couldn't save $name."
             false -> "Not saved"

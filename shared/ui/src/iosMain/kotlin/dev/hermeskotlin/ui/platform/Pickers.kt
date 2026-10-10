@@ -23,14 +23,17 @@ import platform.UniformTypeIdentifiers.UTTypeItem
 import platform.darwin.NSObject
 import kotlin.coroutines.resume
 
-/** A photo from the library: its encoded bytes as stored (JPEG, HEIC, PNG…) and the name the library suggests. */
-internal class PickedPhoto(val name: String?, val bytes: ByteArray)
+/**
+ * A photo from the library: its encoded bytes as stored (JPEG, HEIC, PNG…) and the name the library suggests.
+ * [bytes] is null when the original was too large to read.
+ */
+internal class PickedPhoto(val name: String?, val bytes: ByteArray?)
 
 /**
- * The photo library picker, up to [limit] photos; empty when the person cancels. Photos that can't be read
- * (still downloading from iCloud and offline, say) are left out.
+ * The photo library picker, up to [limit] photos of at most [maxBytes] each; empty when the person cancels.
+ * Photos that can't be read (still downloading from iCloud and offline, say) are left out.
  */
-internal suspend fun pickPhotos(limit: Int): List<PickedPhoto> {
+internal suspend fun pickPhotos(limit: Int, maxBytes: Long): List<PickedPhoto> {
     val results = suspendCancellableCoroutine { done ->
         val config = PHPickerConfiguration().apply {
             filter = PHPickerFilter.imagesFilter
@@ -45,14 +48,25 @@ internal suspend fun pickPhotos(limit: Int): List<PickedPhoto> {
             picker.dismissViewControllerAnimated(true, completion = null)
         }
         retain(picker, delegate)
-        if (!present(picker)) done.resume(emptyList())
+        if (!present(picker)) {
+            release(picker)
+            done.resume(emptyList())
+        }
     }
-    return results.mapNotNull { result -> loadImage(result)?.let { PickedPhoto(result.itemProvider.suggestedName, it) } }
+    // One at a time, each dropped before the next loads if it's over [maxBytes]: a pick of RAW originals
+    // never sits in memory all at once.
+    return results.mapNotNull { result ->
+        val name = result.itemProvider.suggestedName
+        when (val data = loadImage(result)) {
+            null -> null
+            else -> PickedPhoto(name, data.takeIf { it.length <= maxBytes.toULong() }?.toByteArray())
+        }
+    }
 }
 
-private suspend fun loadImage(result: PHPickerResult): ByteArray? = suspendCancellableCoroutine { done ->
+private suspend fun loadImage(result: PHPickerResult): NSData? = suspendCancellableCoroutine { done ->
     result.itemProvider.loadDataRepresentationForTypeIdentifier(UTTypeImage.identifier) { data: NSData?, _ ->
-        done.resume(data?.toByteArray())
+        done.resume(data)
     }
 }
 
@@ -78,7 +92,10 @@ internal suspend fun takePhoto(): UIImage? = suspendCancellableCoroutine { done 
         picker.dismissViewControllerAnimated(true, completion = null)
     }
     retain(picker, delegate)
-    if (!present(picker)) done.resume(null)
+    if (!present(picker)) {
+        release(picker)
+        done.resume(null)
+    }
 }
 
 private class CameraDelegate(private val done: CancellableContinuation<UIImage?>) :
@@ -108,7 +125,10 @@ internal suspend fun pickFiles(): List<NSURL> = suspendCancellableCoroutine { do
         picker.dismissViewControllerAnimated(true, completion = null)
     }
     retain(picker, delegate)
-    if (!present(picker)) done.resume(emptyList())
+    if (!present(picker)) {
+        release(picker)
+        done.resume(emptyList())
+    }
 }
 
 private class FilesDelegate(private val done: CancellableContinuation<List<NSURL>>) : NSObject(), UIDocumentPickerDelegateProtocol {

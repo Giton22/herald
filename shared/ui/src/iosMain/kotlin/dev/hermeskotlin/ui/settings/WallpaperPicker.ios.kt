@@ -25,12 +25,12 @@ actual fun rememberWallpaperPicker(onPicked: (ByteArray) -> Unit, onError: (Stri
     return remember {
         {
             scope.launch {
-                val photo = pickPhotos(limit = 1).firstOrNull() ?: return@launch
+                val photo = pickPhotos(limit = 1, maxBytes = MAX_PHOTO_BYTES).firstOrNull() ?: return@launch
                 val image = withContext(Dispatchers.Default) {
                     runCatching {
-                        if (photo.bytes.size > MAX_PHOTO_BYTES) error("That photo is too large or can't be read.")
+                        val bytes = photo.bytes ?: error("That photo is too large or can't be read.")
                         // Kept upright and screen-sized, so showing it later is a plain decode.
-                        val decoded = uiImage(photo.bytes) ?: error("That file isn't an image Herald can read.")
+                        val decoded = uiImage(bytes) ?: error("That file isn't an image Herald can read.")
                         decoded.uprightScaled(WALLPAPER_EDGE).jpeg(WALLPAPER_QUALITY)
                     }
                 }
