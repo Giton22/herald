@@ -22,6 +22,9 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<!-- Only the system's standard cryptography (TLS, the Keychain, AES-GCM for the cache): exempt from export filing. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<!-- Lets Compose draw at 120 Hz on ProMotion screens. -->
 	<key>CADisableMinimumFrameDurationOnPhone</key>
 	<true/>
