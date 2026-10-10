@@ -47,6 +47,28 @@ class CronApiTest {
     }
 
     @Test
+    fun aJobStampedWithAMissedFireDoesNotBreakTheList() = runTest {
+        // The dashboard's fire webhook stamps last_fire_error as an object (cron/jobs.py note_fire_forward_failure).
+        val api = CronApi(createHttpClient(MockEngine {
+            respond(
+                """[{"id":"a1","name":"Darts","state":"scheduled","enabled":true,"last_status":"ok",
+                   "last_fire_error":{"at":"2026-10-03T04:30:00+02:00","detail":"gateway runner unreachable: connection refused"}},
+                   {"id":"b2","name":"Weather","last_fire_error":"model timeout"},
+                   {"id":"c3","name":"Fine","last_fire_error":null}]""",
+                HttpStatusCode.OK, json,
+            )
+        }))
+
+        val jobs = assertIs<ApiResult.Success<List<CronJob>>>(api.jobs(url)).value
+
+        assertEquals(listOf("gateway runner unreachable: connection refused", "model timeout", null), jobs.map { it.lastFireError })
+        assertEquals("Missed its last scheduled run: gateway runner unreachable: connection refused", jobs[0].problem)
+        assertEquals(null, jobs[2].problem)
+        // Paused by the user since, it isn't a problem to flag.
+        assertEquals(null, jobs[0].copy(state = "paused").problem)
+    }
+
+    @Test
     fun runsAcceptRawSqliteFlags() = runTest {
         val api = CronApi(createHttpClient(MockEngine { request ->
             assertEquals("/api/cron/jobs/a1/runs", request.url.encodedPath)

@@ -44,7 +44,9 @@ fun CronJob.isRoutineOf(bot: String): Boolean {
 
 /** Why a job isn't doing what it's set to do, in a line; null while it's fine. */
 val CronJob.problem: String? get() {
-    val reason = listOf(lastFireError, lastDeliveryError, lastError, pausedReason).firstOrNull { !it.isNullOrBlank() }?.trim()
+    // A fire the runner never got leaves no run and no status, only this stamp, which the next run clears.
+    if (!paused) lastFireError?.let { return "Missed its last scheduled run: ${it.trim().lineSequence().first().take(160)}" }
+    val reason = listOf(lastDeliveryError, lastError, pausedReason).firstOrNull { !it.isNullOrBlank() }?.trim()
     val headline = when (lastStatus) {
         "error" -> "The last run failed"
         // The run worked, but its result never reached anyone: not a run to trust.
