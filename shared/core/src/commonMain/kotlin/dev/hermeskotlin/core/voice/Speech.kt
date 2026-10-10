@@ -131,7 +131,6 @@ private val HEADING = Regex("""^#{1,6}\s+""", RegexOption.MULTILINE)
 private val BULLET = Regex("""^\s*[-+*]\s+""", RegexOption.MULTILINE)
 private val TABLE_RULE = Regex("""^\s*\|?\s*:?-{3,}:?\s*(\|\s*:?-{3,}:?\s*)*\|?\s*$""", RegexOption.MULTILINE)
 private val TABLE_ROW = Regex("""^\s*\|.*\|\s*$""", RegexOption.MULTILINE)
-private val EMOJI = Regex("[\\x{1F000}-\\x{1FAFF}\\x{2600}-\\x{27BF}\\x{FE0F}\\x{200D}]+")
 private val MARKUP = Regex("[*_~>#|]")
 private val WHITESPACE = Regex("""\s+""")
 
@@ -148,12 +147,37 @@ fun speakableText(markdown: String): String = markdown
     .replace(INLINE_CODE, "$1")
     .replace(URL, "")
     .replace(MEDIA_PATH, "")
-    .replace(EMOJI, " ")
+    .withoutEmoji()
     .replace(HEADING, "")
     .replace(BULLET, "")
     .replace(MARKUP, "")
     .replace(WHITESPACE, " ")
     .trim()
+
+/**
+ * Each run of emoji (U+1F000–U+1FAFF, the U+2600–U+27BF symbols, and the joiners and variation selector that
+ * build them) as one space. By hand: Kotlin/Native's regex has no `\x{…}` for code points beyond U+FFFF.
+ */
+private fun String.withoutEmoji(): String {
+    val out = StringBuilder(length)
+    var inRun = false
+    var i = 0
+    while (i < length) {
+        val c = this[i]
+        val pair = c.isHighSurrogate() && i + 1 < length && this[i + 1].isLowSurrogate()
+        val codePoint = if (pair) 0x10000 + ((c.code - 0xD800) shl 10) + (this[i + 1].code - 0xDC00) else c.code
+        val emoji = codePoint in 0x1F000..0x1FAFF || codePoint in 0x2600..0x27BF || codePoint == 0xFE0F || codePoint == 0x200D
+        if (emoji) {
+            if (!inRun) out.append(' ')
+        } else {
+            out.append(c)
+            if (pair) out.append(this[i + 1])
+        }
+        inRun = emoji
+        i += if (pair) 2 else 1
+    }
+    return out.toString()
+}
 
 /**
  * Cuts [text] into pieces of at most about [maxChars], at sentence ends where possible, so the first
@@ -181,14 +205,18 @@ private val STOP_PHRASES = setOf(
     "never mind", "nevermind", "end conversation", "end the conversation", "goodbye", "good bye", "bye", "cancel",
 )
 private val ADDRESS_PREFIXES = listOf("hey hermes", "hermes", "okay", "ok", "hey")
-private val PUNCTUATION = Regex("""[\p{P}]+""")
+/** Unicode punctuation (`\p{P}`), which Kotlin/Native's regex doesn't know. */
+private val PUNCTUATION = setOf(
+    CharCategory.CONNECTOR_PUNCTUATION, CharCategory.DASH_PUNCTUATION, CharCategory.START_PUNCTUATION, CharCategory.END_PUNCTUATION,
+    CharCategory.INITIAL_QUOTE_PUNCTUATION, CharCategory.FINAL_QUOTE_PUNCTUATION, CharCategory.OTHER_PUNCTUATION,
+)
 
 /**
  * A whole utterance that only says "stop" (or "never mind", "goodbye", …), optionally addressed to
  * Hermes, ends the conversation instead of being sent. "Stop the container" is a real request.
  */
 fun isVoiceStopCommand(transcript: String): Boolean {
-    var text = transcript.lowercase().replace(PUNCTUATION, " ").replace(WHITESPACE, " ").trim()
+    var text = transcript.lowercase().map { if (it.category in PUNCTUATION) ' ' else it }.joinToString("").replace(WHITESPACE, " ").trim()
     ADDRESS_PREFIXES.firstOrNull { text.startsWith("$it ") }?.let { text = text.removePrefix(it).trim() }
     return text in STOP_PHRASES
 }
