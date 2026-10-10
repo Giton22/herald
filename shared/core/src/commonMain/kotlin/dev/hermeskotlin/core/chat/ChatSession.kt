@@ -824,6 +824,82 @@ class ChatSession(
     private suspend fun liveIdForCheckpoints(client: JsonRpcClient): String? =
         _state.value.runtimeSessionId ?: if (rowExists) ensureAttached(client) else null
 
+    /** Set once `session.control.read` came back "no such method": the gateway predates it, so don't ask again. */
+    private var controlUnsupported = false
+
+    /**
+     * Reads the session's goal, loop and heartbeat once (`session.control.read`), since `session.resume`
+     * doesn't carry them; later changes arrive as `session.control.update` events. Best effort: a gateway
+     * that doesn't know the method hides the feature, and any other failure leaves the state as it is.
+     */
+    suspend fun refreshControl() {
+        if (controlUnsupported) return
+        val client = connectedClient() ?: return
+        val runtimeId = _state.value.runtimeSessionId ?: return
+        // An update that lands while the read is out is newer than the read's answer, so the answer yields to it.
+        val before = _state.value.control
+        val result = try {
+            client.request("session.control.read", buildJsonObject { put("session_id", runtimeId) }) as? JsonObject
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: RpcException) {
+            if (e.code == METHOD_NOT_FOUND) controlUnsupported = true
+            return
+        } catch (_: Exception) {
+            return
+        }
+        if (result != null && "control" in result) {
+            _state.update { if (it.control !== before) it else it.withControl(SessionControl.parse(result["control"] as? JsonObject)) }
+        }
+    }
+
+    /**
+     * Runs one `session.control` action (pause a goal, add a sub-goal, ...) and applies the snapshot it
+     * returns at once rather than waiting for the event. A `send` dispatch (a resumed goal's kickoff)
+     * goes out as a prompt with its `display` on the bubble, queued behind a running turn. Returns null
+     * on success, or a user-readable reason it didn't go.
+     */
+    suspend fun runControl(action: ControlAction, text: String? = null, index: Int? = null): String? {
+        val client = connectedClient() ?: return NOT_CONNECTED
+        val runtimeId = try {
+            ensureAttached(client)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return e.message ?: "Couldn't open the session."
+        }
+        val result = try {
+            client.request(
+                "session.control",
+                buildJsonObject {
+                    put("session_id", runtimeId)
+                    put("action", action.wire)
+                    if (text != null) put("args", buildJsonObject { put("text", text) })
+                    else if (index != null) put("args", buildJsonObject { put("index", index) })
+                },
+            ) as? JsonObject
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return e.message ?: "Couldn't ${action.verb}."
+        }
+        if (result != null && "control" in result) {
+            _state.update { it.withControl(SessionControl.parse(result["control"] as? JsonObject)) }
+        }
+        val dispatch = result?.get("dispatch") as? JsonObject
+        if (dispatch.string("type") == "send") {
+            val message = dispatch.string("message")?.takeIf { it.isNotBlank() }
+            if (message != null) {
+                val display = dispatch.string("display")?.takeIf { it.isNotBlank() } ?: "/goal resume"
+                // The gateway has already resumed it; without this prompt the agent wouldn't take the next step.
+                if (!send(message, display = display, queue = _state.value.running)) {
+                    return "The goal is resumed, but its next step didn't go out. Resend it from the chat."
+                }
+            }
+        }
+        return null
+    }
+
     /** `/stop`: stops the reply, then the background processes the agent left running (`process.stop`). */
     suspend fun stopEverything() = runOnGateway("/stop") { client, runtimeId ->
         val lines = mutableListOf<String>()
@@ -1744,6 +1820,8 @@ class ChatSession(
                 .let { if (running || resumable) it else it.withoutAgentNotices() }
         }
         if (catchingUp) scope.launch { catchUp(client, runtimeId) }
+        // session.resume doesn't carry the goal/loop/heartbeat; read them once, events take it from there.
+        scope.launch { refreshControl() }
         runtimeId
     }
 

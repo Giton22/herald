@@ -196,6 +196,8 @@ data class ChatState(
     val subagents: List<Subagent> = emptyList(),
     /** The part of the running turn's reply shown before a mid-turn correction; the turn continues below it. */
     val correctedReplyKey: String? = null,
+    /** The session's goal, loop and heartbeat, null when it has none (`session.control.update`). */
+    val control: SessionControl? = null,
     /** Source of unique keys for messages created on this device. */
     val keySeq: Int = 0,
 ) {
