@@ -270,7 +270,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [ ] Home-screen widget and Quick Settings tile
 - [x] Offline cache of sessions and messages: the chat list and the newest rows of the last 50 chats read are kept on the device (Room, rows encrypted with a Keystore-held key) and shown while the gateway can't be reached, marked "Saved copy"; signing out of a gateway forgets its chats
 - [ ] Send prompts typed offline once the gateway is back (an outbox)
-- [ ] iOS app 🚧 in progress: the shared UI in a UIKit host (`iosApp/`, an XcodeGen project), browser sign-in in an in-app session
+- [ ] iOS app 🚧 in progress: the shared UI in a UIKit host (`iosApp/`, an XcodeGen project), browser sign-in in an in-app session; attachments, saving and sharing, chat backgrounds, plugin pages and app lock with Face ID
 - [ ] Desktop (JVM) app
 - [ ] Wear OS companion
 - [ ] Localization (`i18n.catalog`)
