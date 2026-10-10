@@ -7,6 +7,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
         MainViewControllerKt.doInitKoin()
         // Live voice calls run on the WebRTC package here; the shared code makes one per call.
         NativeLiveCallKt.setLiveCallMaker { WebRTCLiveCall() }
+        if CallKitCall.available { NativeSystemCallKt.setSystemCall(call: CallKitCall()) }
         return true
     }
 }

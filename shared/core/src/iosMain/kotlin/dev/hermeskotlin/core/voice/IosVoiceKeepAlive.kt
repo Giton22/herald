@@ -21,10 +21,31 @@ class IosVoiceKeepAlive : VoiceKeepAlive {
     private var observers: List<NSObjectProtocol> = emptyList()
     private var holding = false
 
+    /**
+     * The system's call screen (CallKit), which the Swift host provides: the chat shows on the Lock Screen and
+     * in the status bar like a call, and can be ended there. Main thread only.
+     */
+    interface SystemCall {
+        /**
+         * Shows the call; CallKit then activates the audio session ([onActivated]). [onEnd] runs when it's
+         * ended from outside Herald, [onUnavailable] when there's no call screen after all (refused, or no
+         * activation in time).
+         */
+        fun start(onEnd: () -> Unit, onActivated: () -> Unit, onUnavailable: () -> Unit)
+
+        fun end()
+    }
+
     override fun hold(onEnd: () -> Unit, onLost: () -> Unit): Boolean {
         release()
         holding = true
-        VoiceAudioSession.holdChat()
+        val call = systemCall
+        VoiceAudioSession.holdChat(activate = call == null)
+        call?.start(
+            onEnd,
+            onActivated = { if (holding) VoiceAudioSession.callKitActivated() },
+            onUnavailable = { if (holding) VoiceAudioSession.activateChat() },
+        )
         val center = NSNotificationCenter.defaultCenter
         val main = NSOperationQueue.mainQueue
         observers = listOf(
@@ -45,7 +66,13 @@ class IosVoiceKeepAlive : VoiceKeepAlive {
         observers = emptyList()
         if (holding) {
             holding = false
+            systemCall?.end()
             VoiceAudioSession.releaseChat()
         }
+    }
+
+    companion object {
+        /** Set by the UI from the Swift host at launch; null where there's no call screen. */
+        var systemCall: SystemCall? = null
     }
 }
