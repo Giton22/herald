@@ -19,8 +19,14 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import platform.AVFAudio.AVAudioEngine
+import platform.AVFAudio.AVAudioEngineConfigurationChangeNotification
+import platform.AVFAudio.AVAudioFormat
+import platform.AVFAudio.AVAudioPCMBuffer
 import platform.AVFAudio.AVAudioPlayer
 import platform.AVFAudio.AVAudioPlayerDelegateProtocol
+import platform.AVFAudio.AVAudioPlayerNode
+import platform.AVFAudio.AVAudioPlayerNodeBufferLoops
 import platform.AVFAudio.AVAudioRecorder
 import platform.AVFAudio.AVAudioSession
 import platform.AVFAudio.AVAudioSessionCategoryOptionAllowBluetooth
@@ -50,6 +56,9 @@ import platform.Foundation.NSURL
 import platform.Foundation.NSUUID
 import platform.Foundation.dataWithContentsOfURL
 import platform.darwin.NSObject
+import platform.darwin.NSObjectProtocol
+import kotlinx.cinterop.get
+import kotlinx.cinterop.set
 import kotlin.concurrent.Volatile
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
@@ -71,8 +80,12 @@ internal object VoiceAudioSession {
     private val main = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var recorders = 0
     private var players = 0
+    private var calls = 0
+    private var chats = 0
     private var active = false
     private var release: Job? = null
+    private var silence: AVAudioEngine? = null
+    private var silenceObserver: NSObjectProtocol? = null
 
     init {
         // A call or an alarm takes the session away: it has to be asked for again afterwards.
@@ -97,8 +110,9 @@ internal object VoiceAudioSession {
         memScoped {
             val error = alloc<ObjCObjectVar<NSError?>>()
             val session = AVAudioSession.sharedInstance()
-            // Each time: a recording that starts while a reply plays needs the microphone added.
-            val categorized = if (recorders > 0) {
+            // Each time: a recording that starts while a reply plays needs the microphone added. A voice chat
+            // keeps it throughout: adding the microphone back from the background can be refused.
+            val categorized = if (recorders > 0 || chats > 0) {
                 session.setCategory(
                     AVAudioSessionCategoryPlayAndRecord,
                     AVAudioSessionModeDefault,
@@ -108,7 +122,8 @@ internal object VoiceAudioSession {
             } else {
                 session.setCategory(AVAudioSessionCategoryPlayback, AVAudioSessionModeSpokenAudio, 0u, error.ptr)
             }
-            val ready = categorized && (active || session.setActive(true, error.ptr))
+            // Each time too: a call or an interruption may have let the session go without telling this count.
+            val ready = categorized && session.setActive(true, error.ptr)
             if (!ready) {
                 if (use == Use.Record) recorders-- else players--
                 error("The microphone isn't available: ${error.value?.localizedDescription ?: "audio session refused"}.")
@@ -117,20 +132,112 @@ internal object VoiceAudioSession {
         }
     }
 
+    /**
+     * A voice chat is on, from the tap that starts it (in the foreground) to its end. iOS keeps a backgrounded
+     * app running only while it plays or records, and a chat also waits on the agent with neither: silence
+     * plays meanwhile, in play-and-record, so the chat doesn't stall out of sight. A live call's own audio does
+     * that during the call. Main thread only.
+     */
+    fun holdChat() {
+        release?.cancel()
+        release = null
+        chats++
+        memScoped {
+            val error = alloc<ObjCObjectVar<NSError?>>()
+            val session = AVAudioSession.sharedInstance()
+            session.setCategory(
+                AVAudioSessionCategoryPlayAndRecord,
+                AVAudioSessionModeDefault,
+                AVAudioSessionCategoryOptionDefaultToSpeaker or AVAudioSessionCategoryOptionAllowBluetooth or AVAudioSessionCategoryOptionAllowBluetoothA2DP,
+                error.ptr,
+            )
+            if (session.setActive(true, error.ptr)) active = true
+        }
+        updateSilence()
+    }
+
+    fun releaseChat() {
+        chats--
+        // Whatever played or recorded last, the session is let go now.
+        active = true
+        updateSilence()
+        releaseWhenIdle()
+    }
+
+    /**
+     * A live call is on (WebRTC sets its own category and activates the session). Until [endCall], a pending
+     * release mustn't deactivate the session, which would silence the call.
+     */
+    fun startCall() {
+        release?.cancel()
+        release = null
+        calls++
+        updateSilence()
+    }
+
+    fun endCall() {
+        calls--
+        // WebRTC may have activated the session itself, or let it go: either way it's let go now, and the next
+        // recording or reply asks for it again.
+        active = true
+        updateSilence()
+        releaseWhenIdle()
+    }
+
     private fun release(use: Use) {
         if (use == Use.Record) recorders-- else players--
-        if (recorders + players > 0) return
+        releaseWhenIdle()
+    }
+
+    private fun releaseWhenIdle() {
+        if (recorders + players + calls + chats > 0) return
+        release?.cancel()
         release = main.launch {
             delay(LINGER_MS)
-            if (recorders + players == 0 && active) {
+            if (recorders + players + calls + chats == 0 && active) {
                 active = false
                 AVAudioSession.sharedInstance().setActive(false, AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation, null)
             }
         }
     }
 
+    private fun updateSilence() {
+        if (chats > 0 && calls == 0) startSilence() else stopSilence()
+    }
+
+    private fun startSilence() {
+        if (silence != null) return
+        val engine = AVAudioEngine()
+        val player = AVAudioPlayerNode()
+        engine.attachNode(player)
+        val format = AVAudioFormat(standardFormatWithSampleRate = SILENCE_RATE, channels = 1u)
+        engine.connect(player, to = engine.mainMixerNode, format = format)
+        val buffer = AVAudioPCMBuffer(pCMFormat = format, frameCapacity = SILENCE_RATE.toUInt()) ?: return
+        buffer.frameLength = SILENCE_RATE.toUInt()
+        buffer.floatChannelData?.get(0)?.let { samples -> for (i in 0 until SILENCE_RATE.toInt()) samples[i] = 0f }
+        player.scheduleBuffer(buffer, atTime = null, options = AVAudioPlayerNodeBufferLoops, completionHandler = null)
+        if (!engine.startAndReturnError(null)) return
+        player.play()
+        silence = engine
+        // A route change (headphones in or out) stops the engine: start it again.
+        silenceObserver = NSNotificationCenter.defaultCenter.addObserverForName(AVAudioEngineConfigurationChangeNotification, engine, NSOperationQueue.mainQueue) { _ ->
+            stopSilence()
+            updateSilence()
+        }
+    }
+
+    private fun stopSilence() {
+        silenceObserver?.let(NSNotificationCenter.defaultCenter::removeObserver)
+        silenceObserver = null
+        silence?.stop()
+        silence = null
+    }
+
     /** Long enough to bridge synthesizing the next clip or sending a transcript. */
     private const val LINGER_MS = 4_000L
+
+    /** A second of silence at this rate, looped. */
+    private const val SILENCE_RATE = 16_000.0
 }
 
 /**
