@@ -78,3 +78,49 @@ jobs:
           name: ios-test-report
           path: shared/*/build/reports/tests/
           if-no-files-found: ignore
+
+      # The app itself: XcodeGen writes the project, xcodebuild builds it (its pre-build phase runs Gradle for the
+      # framework), and the simulator shows that it starts. The screenshot is kept with the run.
+      - name: Xcode project
+        run: brew install xcodegen && xcodegen --spec iosApp/project.yml
+
+      - name: Build the app for the simulator
+        run: >-
+          xcodebuild -project iosApp/Herald.xcodeproj -scheme Herald -configuration Debug
+          -sdk iphonesimulator -destination 'generic/platform=iOS Simulator' -derivedDataPath iosApp/build
+          ARCHS=arm64 CODE_SIGNING_ALLOWED=NO build
+
+      - name: Launch in the simulator
+        run: |
+          udid=$(xcrun simctl list devices available -j | jq -r '[.devices[][] | select(.name | startswith("iPhone"))][0].udid')
+          xcrun simctl boot "$udid"
+          xcrun simctl bootstatus "$udid" -b
+          xcrun simctl install "$udid" iosApp/build/Build/Products/Debug-iphonesimulator/Herald.app
+          # The app's own output, where Kotlin prints an uncaught exception before the crash.
+          xcrun simctl launch --stdout="$PWD/ios-launch.log" --stderr="$PWD/ios-launch.log" "$udid" dev.herald.ios
+          sleep 20
+          xcrun simctl io "$udid" screenshot ios-launch.png
+          # Still running after 20 s: it didn't crash on start.
+          xcrun simctl spawn "$udid" launchctl list | grep -q "UIKitApplication:dev.herald.ios" || {
+            echo "Herald isn't running"
+            cat ios-launch.log || true
+            exit 1
+          }
+
+      - name: Simulator screenshot
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-screenshots
+          path: |
+            ios-launch.png
+            ios-launch.log
+          if-no-files-found: ignore
+
+      - name: Crash reports
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-crash-reports
+          path: ~/Library/Logs/DiagnosticReports/
+          if-no-files-found: ignore

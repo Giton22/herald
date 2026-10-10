@@ -209,6 +209,20 @@ class PushSetupTest {
     }
 
     @Test
+    fun aPhoneThatCantReceivePushesNeverTouchesTheGateway() = runTest {
+        val keys = object : PushKeys by FakeKeys() {
+            override val unavailable = "Not on this phone."
+        }
+        val s = setup(keys)
+        val gateway = FakeGateway(installed = false)
+        connect(s, gateway)
+        s.setup.enable()
+
+        assertEquals(emptyList(), gateway.actions())
+        assertEquals(PushStatus(PushStatus.State.Failed, "Not on this phone."), s.setup.status.value)
+    }
+
+    @Test
     fun aDisabledPluginIsSwitchedOnNotReinstalled() = runTest {
         val keys = FakeKeys()
         val s = setup(keys)
