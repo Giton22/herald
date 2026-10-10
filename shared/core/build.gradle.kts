@@ -14,7 +14,8 @@ kotlin {
         withHostTest {}
     }
 
-    // iOS targets are added here once the Android app is in shape.
+    iosArm64()
+    iosSimulatorArm64()
 
     sourceSets {
         commonMain.dependencies {
@@ -33,6 +34,10 @@ kotlin {
             implementation(libs.androidx.core.ktx)
             implementation(libs.webrtc.android)
         }
+        iosMain.dependencies {
+            implementation(libs.ktor.client.darwin)
+            implementation(libs.sqlite.bundled)
+        }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutines.test)
@@ -43,6 +48,8 @@ kotlin {
 
 dependencies {
     add("kspAndroid", libs.room.compiler)
+    add("kspIosArm64", libs.room.compiler)
+    add("kspIosSimulatorArm64", libs.room.compiler)
 }
 
 room {
