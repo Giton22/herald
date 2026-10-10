@@ -49,7 +49,7 @@ final class CallKitCall: NSObject, NativeSystemCall, CXProviderDelegate {
         self.onActivated = onActivated
         self.onUnavailable = onUnavailable
         let action = CXStartCallAction(call: id, handle: CXHandle(type: .generic, value: "Herald"))
-        action.isVoiceCall = true
+        action.isVideo = false
         controller.request(CXTransaction(action: action)) { [weak self] error in
             guard error != nil else { return }
             // No call screen (refused, or another call is on): the chat goes on without it, with its own audio.
