@@ -44,3 +44,37 @@ jobs:
           name: lint-report
           path: androidApp/build/reports/lint-results-debug.html
           if-no-files-found: ignore
+
+  ios:
+    # Kotlin/Native links and runs Apple targets only on macOS. macOS runners are free for public repos.
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: "25"
+
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+
+      - name: Kotlin/Native cache
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.konan
+          key: konan-${{ runner.os }}-${{ hashFiles('gradle/libs.versions.toml') }}
+
+      # The shared tests on the iOS simulator, and the framework the iOS app links.
+      - name: iOS tests and framework
+        run: ./gradlew --no-daemon --continue :shared:core:iosSimulatorArm64Test :shared:designsystem:iosSimulatorArm64Test :shared:ui:iosSimulatorArm64Test :shared:ui:linkDebugFrameworkIosSimulatorArm64
+
+      - name: iOS test report
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: ios-test-report
+          path: shared/*/build/reports/tests/
+          if-no-files-found: ignore
