@@ -128,7 +128,7 @@ sealed interface ChatMessage {
         val output: String = "",
         val running: Boolean = true,
         val failed: Boolean = false,
-        /** The side task answering a `/btw`, whose `btw.complete` fills [output] in. */
+        /** The side task answering a `/btw` or `/bg`, whose `btw.complete` / `background.complete` fills [output] in. */
         val taskId: String? = null,
     ) : ChatMessage
 }

@@ -57,6 +57,9 @@ class SlashTest {
         assertEquals(SlashRoute.Gateway, SlashRoute.of("work", null))
         assertIs<SlashRoute.Unavailable>(SlashRoute.of("paste", catalog))
         assertEquals(SlashRoute.Yolo, SlashRoute.of("yolo", catalog))
+        // A background prompt answers into the chat only through prompt.background, never the slash worker.
+        assertEquals(SlashRoute.Background, SlashRoute.of("bg", catalog))
+        assertEquals(SlashRoute.Background, SlashRoute.of("background", null))
         assertEquals(SlashRoute.Branch, SlashRoute.of("fork", catalog))
         assertEquals("/wake listens on the gateway computer's microphone, a Desktop feature.", (SlashRoute.of("wake", catalog) as SlashRoute.Unavailable).message)
         assertTrue(SlashRoute.hidden("paste", catalog))

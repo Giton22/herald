@@ -849,15 +849,42 @@ class ChatSession(
             showCommandOutput("/btw", "Usage: /btw <question>. It's answered from a snapshot of this chat, without interrupting it.")
             return
         }
-        val key = addCommand("/btw ${question.trim()}")
+        startSideTask("/btw", "prompt.btw", question.trim(), "Couldn't ask the side question.")
+    }
+
+    /**
+     * `/bg <prompt>`: a fresh agent runs [prompt] in its own session beside this chat (`prompt.background`),
+     * as the TUI and Desktop do. The reply arrives later as `background.complete` and fills in the card.
+     * Through `slash.exec` the slash worker would print it after its output was already collected, so it
+     * never reached the chat (hermes-agent #97635); a gateway without the method still gets that path.
+     */
+    suspend fun runInBackground(prompt: String) {
+        if (prompt.isBlank()) {
+            showCommandOutput("/bg", "Usage: /bg <prompt>. A separate agent runs it in the background, and its answer shows up here.")
+            return
+        }
+        try {
+            startSideTask("/bg", "prompt.background", prompt.trim(), "Couldn't start the background task.", rethrowMissing = true)
+        } catch (_: RpcException) {
+            runCommand(SlashCommand("bg", prompt.trim()))
+        }
+    }
+
+    /**
+     * Starts a side agent through [method] under a running card for [command]. Its answer comes back as an
+     * event with the returned `task_id`, which the reducer matches to the card. With [rethrowMissing], a
+     * gateway without [method] drops the card and throws [RpcException] for the caller's fallback.
+     */
+    private suspend fun startSideTask(command: String, method: String, text: String, failure: String, rethrowMissing: Boolean = false) {
+        val key = addCommand("$command $text")
         val client = connectedClient() ?: return finishCommand(key, NOT_CONNECTED, failed = true)
         try {
             val runtimeId = ensureAttached(client)
             val result = client.request(
-                "prompt.btw",
+                method,
                 buildJsonObject {
                     put("session_id", runtimeId)
-                    put("text", question.trim())
+                    put("text", text)
                 },
             ) as? JsonObject
             val taskId = result.string("task_id")
@@ -866,8 +893,14 @@ class ChatSession(
             }
         } catch (e: CancellationException) {
             throw e
+        } catch (e: RpcException) {
+            if (rethrowMissing && e.code == METHOD_NOT_FOUND) {
+                removeMessage(key)
+                throw e
+            }
+            finishCommand(key, e.message ?: failure, failed = true)
         } catch (e: Exception) {
-            finishCommand(key, e.message ?: "Couldn't ask the side question.", failed = true)
+            finishCommand(key, e.message ?: failure, failed = true)
         }
     }
 

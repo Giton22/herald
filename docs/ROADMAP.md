@@ -180,7 +180,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Pet: Petdex gallery, adopt or put away, animated on the composer by the agent's activity (`pet.gallery`, `pet.info`, `pet.select`, `pet.disable`; `/pet`)
 - [x] Journey: learned skills and memories by month, with their text (`/api/learning/graph`, `/api/learning/node`; `/journey`)
 - [x] BTW side questions (`/btw` → `prompt.btw`, answered in place by `btw.complete`)
-- [ ] Background prompts (`prompt.background`, `background.complete`)
+- [x] Background prompts: `/bg <prompt>` (or `/background`) runs it on a fresh agent beside the chat (`prompt.background`), and the answer fills its card when `background.complete` arrives, also for one started on Desktop; a crashed task shows as failed. A gateway without the method runs `/bg` on the slash worker as before
 - [ ] Message reactions (`message.react`)
 - [x] Drafts: each chat keeps its unsent text (stored, survives a restart) and picked files (in memory) when you switch chats; the session list marks it "Draft"
 - [x] Undo and branch from the composer (`/undo` hands the last prompt back; `/branch` → `session.branch_whole` / `session.branch`)

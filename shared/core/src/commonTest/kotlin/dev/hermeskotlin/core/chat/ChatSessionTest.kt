@@ -1165,6 +1165,71 @@ class ChatSessionTest {
     }
 
     @Test
+    fun aBackgroundPromptRunsBesideTheChatAndAnswersIntoItsCard() = runTest {
+        val (chat, transport) = newChat(backgroundScope, mapOf("prompt.background" to """{"task_id":"bg_1a2b3c"}"""))
+
+        chat.runInBackground("  summarize the logs  ")
+
+        val call = transport.sent.value.first { it.isCall("prompt.background") }
+        assertEquals("summarize the logs", call.param("text"))
+        // Not the slash worker, which prints the answer after its output was collected.
+        assertTrue(transport.sent.value.none { it.isCall("slash.exec") })
+        val waiting = chat.state.first { (it.messages.singleOrNull() as? ChatMessage.Command)?.taskId == "bg_1a2b3c" }
+        assertTrue((waiting.messages.single() as ChatMessage.Command).running)
+
+        transport.push(event("background.complete", "rt9", """{"task_id":"bg_1a2b3c","text":"Three errors, all from cron."}"""))
+        val card = chat.state.first { (it.messages.single() as ChatMessage.Command).output.isNotEmpty() }.messages.single() as ChatMessage.Command
+        assertEquals("/bg summarize the logs", card.command)
+        assertEquals("Three errors, all from cron.", card.output)
+        assertFalse(card.running)
+        assertFalse(card.failed)
+    }
+
+    @Test
+    fun aBackgroundTaskThatCrashedShowsAsFailed() = runTest {
+        val (chat, transport) = newChat(backgroundScope, mapOf("prompt.background" to """{"task_id":"bg_x"}"""))
+
+        chat.runInBackground("do it")
+        chat.state.first { (it.messages.singleOrNull() as? ChatMessage.Command)?.taskId == "bg_x" }
+        transport.push(event("background.complete", "rt9", """{"task_id":"bg_x","text":"error: no credentials"}"""))
+
+        val card = chat.state.first { (it.messages.single() as ChatMessage.Command).output.isNotEmpty() }.messages.single() as ChatMessage.Command
+        assertTrue(card.failed)
+        assertFalse(card.running)
+    }
+
+    @Test
+    fun aBackgroundAnswerStartedElsewhereGetsItsOwnCard() = runTest {
+        val (chat, transport) = newChat(backgroundScope, mapOf("prompt.background" to """{"task_id":"bg_mine"}"""))
+        chat.runInBackground("mine")
+        chat.state.first { (it.messages.singleOrNull() as? ChatMessage.Command)?.taskId == "bg_mine" }
+
+        // Desktop or the TUI started this one on the same session.
+        transport.push(event("background.complete", "rt9", """{"task_id":"bg_theirs","text":"done"}"""))
+
+        val messages = chat.state.first { it.messages.size == 2 }.messages
+        assertTrue((messages[0] as ChatMessage.Command).running)
+        val card = messages[1] as ChatMessage.Command
+        assertEquals("/bg", card.command)
+        assertEquals("done", card.output)
+        assertFalse(card.running)
+    }
+
+    @Test
+    fun aGatewayWithoutBackgroundPromptsRunsBgOnTheSlashWorker() = runTest {
+        val (chat, transport) = newChat(
+            backgroundScope,
+            mapOf("prompt.background" to "error:-32601", "slash.exec" to """{"output":"Background task #1 started"}"""),
+        )
+
+        chat.runInBackground("do it")
+
+        assertEquals("bg do it", transport.sent.value.first { it.isCall("slash.exec") }.param("command"))
+        val card = chat.state.value.messages.single() as ChatMessage.Command
+        assertEquals("Background task #1 started", card.output)
+    }
+
+    @Test
     fun yoloTogglesForThisChatOnly() = runTest {
         val (chat, transport) = newChat(backgroundScope, mapOf("config.set" to """{"key":"yolo","value":"1"}"""))
 
