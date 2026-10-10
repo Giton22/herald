@@ -53,6 +53,9 @@ fun MainViewController(onDarkTheme: (Boolean) -> Unit): UIViewController {
  */
 fun openLink(url: String): Boolean = KoinPlatform.getKoin().get<IosLinks>().open(url)
 
+/** Siri's and Shortcuts' "Ask Herald": a new chat with [text] in the composer, or dictating without it. */
+fun askHerald(text: String?) = KoinPlatform.getKoin().get<IosLinks>().ask(text)
+
 /** What the Android app module provides, as iOS has it. */
 internal val iosAppModule = module {
     single { IosAppLock(get(), get()) }

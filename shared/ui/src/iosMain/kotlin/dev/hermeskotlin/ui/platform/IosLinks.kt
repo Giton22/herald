@@ -105,6 +105,15 @@ internal class IosLinks(
         return true
     }
 
+    /**
+     * A new chat with [text] in its composer, or dictating when there's none: Siri's and Shortcuts' "Ask
+     * Herald". Nothing is sent until the person sends it, so an automation can't send prompts by itself.
+     */
+    fun ask(text: String?) {
+        val prompt = text?.trim()?.takeIf { it.isNotEmpty() }
+        whenUnlocked { links.newChat(if (prompt == null) ComposeDraft(dictate = true) else ComposeDraft(text = prompt)) }
+    }
+
     private fun whenUnlocked(action: () -> Unit) {
         if (lock.timer.locked.value) held = action else action()
     }
