@@ -103,8 +103,8 @@ fun ChatState.reduce(event: GatewayEvent, now: Double? = null): ChatState {
         "session.info" -> withInfo(payload).copy(title = payload.string("title")?.takeIf { it.isNotBlank() } ?: title)
         "btw.complete" -> answerAside(payload)
         "todo.updated" -> withTodos(TodoList.parse(payload))
-        // Pushed on every mutation, our own actions included; an empty snapshot is a clear.
-        "session.control.update" -> withControl(SessionControl.parse(payload?.get("control") as? JsonObject))
+        // Pushed on every mutation, our own actions included; an empty snapshot is a clear, one without a snapshot nothing.
+        "session.control.update" -> (payload?.get("control") as? JsonObject)?.let { withControl(SessionControl.parse(it)) } ?: this
         "subagent.spawn_requested", "subagent.start", "subagent.progress", "subagent.thinking", "subagent.tool", "subagent.complete" ->
             withSubagentEvent(event.type, payload)
         else -> this

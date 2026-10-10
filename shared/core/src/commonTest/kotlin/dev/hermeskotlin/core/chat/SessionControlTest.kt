@@ -53,6 +53,22 @@ class SessionControlTest {
     }
 
     @Test
+    fun aGoalWaitingOnAProcessOrAnotherChatParsesItsBarrier() {
+        // _extract_wait_barrier: the pid is a JSON int, the session a string.
+        val onPid = WaitBarrier.parse(HermesJson.parseToJsonElement("""{"type":"pid","target":4242,"reason":"build"}""") as kotlinx.serialization.json.JsonObject)
+        assertEquals(WaitBarrier.OnProcess(4242, "build"), onPid)
+        val onChat = WaitBarrier.parse(HermesJson.parseToJsonElement("""{"type":"session","target":"20261010_1200_x","reason":""}""") as kotlinx.serialization.json.JsonObject)
+        assertEquals(WaitBarrier.OnSession("20261010_1200_x", ""), onChat)
+    }
+
+    @Test
+    fun anUpdateWithoutASnapshotLeavesTheControlAlone() {
+        val state = ChatState().reduce(event("""{"control":${ControlFixtures.GOAL_ACTIVE}}"""))
+        assertSame(state, state.reduce(event("""{}""")))
+        assertSame(state, state.reduce(event("""{"control":"oops"}""")))
+    }
+
+    @Test
     fun theLoopAndHeartbeatSnapshotParses() {
         val control = ControlFixtures.parse(ControlFixtures.GOAL_LOOP_HEARTBEAT)!!
         val loop = control.loop!!

@@ -868,6 +868,8 @@ class ChatSession(
         } catch (e: Exception) {
             return e.message ?: "Couldn't open the session."
         }
+        // As with the read: an update from another client that lands first is newer than this answer.
+        val before = _state.value.control
         val result = try {
             client.request(
                 "session.control",
@@ -884,7 +886,7 @@ class ChatSession(
             return e.message ?: "Couldn't ${action.verb}."
         }
         if (result != null && "control" in result) {
-            _state.update { it.withControl(SessionControl.parse(result["control"] as? JsonObject)) }
+            _state.update { if (it.control !== before) it else it.withControl(SessionControl.parse(result["control"] as? JsonObject)) }
         }
         val dispatch = result?.get("dispatch") as? JsonObject
         if (dispatch.string("type") == "send") {

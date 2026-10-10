@@ -8,6 +8,7 @@ import dev.hermeskotlin.core.rpc.json
 import dev.hermeskotlin.core.rpc.param
 import dev.hermeskotlin.core.sessions.SessionsApi
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.jsonObject
@@ -116,6 +117,55 @@ class ChatSessionControlTest {
         kotlinx.coroutines.delay(1_000)
 
         assertEquals("paused", chat.state.value.control?.goal?.status)
+    }
+
+    @Test
+    fun anActionsAnswerYieldsToAnUpdateThatLandedFirst() = runTest {
+        val connection = gateway(backgroundScope, mapOf("session.resume" to RESUME), reconnects = false).connection
+        var action: FakeGateway.Call? = null
+        gateway.answer = { call ->
+            when (call.method) {
+                "session.resume" -> RESUME
+                "session.control.read" -> """{"control":${ControlFixtures.GOAL_ACTIVE}}"""
+                "session.control" -> null.also { action = call }
+                else -> "{}"
+            }
+        }
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.control != null }
+
+        val run = backgroundScope.async { chat.runControl(ControlAction.GoalPause) }
+        gateway.socket.awaitSent { it.isCall("session.control") }
+        // Cleared on Desktop after this phone's pause went out, before its answer came back.
+        gateway.socket.push(event("session.control.update", "rt1", """{"control":${ControlFixtures.EMPTY}}"""))
+        chat.state.first { it.control == null }
+        gateway.socket.push(
+            action!!.reply(
+                """{"control":${ControlFixtures.GOAL_PAUSED},"dispatch":{"type":"exec","output":"Paused","notice":null,"message":null,"display":null}}""",
+            ),
+        )
+
+        assertNull(run.await())
+        assertNull(chat.state.value.control)
+    }
+
+    @Test
+    fun removingASubgoalSendsItsOneBasedIndex() = runTest {
+        val chat = setup(
+            backgroundScope,
+            mapOf(
+                "session.resume" to RESUME,
+                "session.control" to """{"control":${ControlFixtures.GOAL_ACTIVE},""" +
+                    """"dispatch":{"type":"exec","output":null,"notice":null,"message":null,"display":null}}""",
+            ),
+        )
+
+        assertNull(chat.runControl(ControlAction.SubgoalRemove, index = 2))
+
+        val call = gateway.sent("session.control").single()
+        assertEquals("subgoal.remove", call.param("action"))
+        assertEquals("2", call["params"]!!.jsonObject.getValue("args").jsonObject.getValue("index").jsonPrimitive.content)
     }
 
     @Test
