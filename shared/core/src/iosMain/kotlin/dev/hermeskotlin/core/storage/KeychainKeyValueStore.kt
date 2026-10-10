@@ -64,7 +64,9 @@ class KeychainKeyValueStore(
                 // Locked (before the first unlock since boot) isn't "no value": reading null would let the next
                 // write replace the saved sign-in.
                 check(status != errSecInteractionNotAllowed) { "The Keychain is locked until the phone is unlocked." }
-                if (status != errSecSuccess) return@memScoped null
+                // Likewise any other failure: only a missing item is "no value".
+                if (status == errSecItemNotFound) return@memScoped null
+                check(status == errSecSuccess) { "Couldn't read from the Keychain ($status)." }
                 (CFBridgingRelease(result.value) as? NSData)?.toByteArray()?.decodeToString()
             }
         } finally {
