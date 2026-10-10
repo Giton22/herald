@@ -43,7 +43,7 @@ class SessionsApiTest {
 
         val page = assertIs<ApiResult.Success<SessionPage>>(api.list(url)).value
 
-        assertEquals("limit=50&offset=0&archived=exclude&order=recent&exclude_sources=cron", query)
+        assertEquals("limit=50&offset=0&archived=exclude&order=recent&exclude_sources=acp%2Ccron%2Ckanban%2Coneshot%2Csubagent%2Ctool", query)
         val row = page.sessions.single()
         assertEquals("fix the build", row.displayTitle)
         assertEquals(1700000100.0, row.activityAt)
