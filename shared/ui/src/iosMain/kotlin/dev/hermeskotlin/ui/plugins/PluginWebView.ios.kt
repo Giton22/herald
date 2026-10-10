@@ -73,8 +73,10 @@ import platform.WebKit.WKNavigationDelegateProtocol
 import platform.WebKit.WKNavigationResponse
 import platform.WebKit.WKNavigationResponsePolicy
 import platform.WebKit.WKNavigationTypeLinkActivated
+import platform.WebKit.WKUIDelegateProtocol
 import platform.WebKit.WKWebView
 import platform.WebKit.WKWebViewConfiguration
+import platform.WebKit.WKWindowFeatures
 import platform.WebKit.WKWebsiteDataStore
 import platform.darwin.NSObject
 import kotlin.coroutines.resume
@@ -148,6 +150,7 @@ actual fun PluginWebView(url: String, gateway: String, title: String, onClose: (
         )
     }
     webView.navigationDelegate = navigation
+    webView.UIDelegate = navigation
 
     LaunchedEffect(url) {
         // The jar first, so the first navigation already carries the session.
@@ -168,6 +171,7 @@ actual fun PluginWebView(url: String, gateway: String, title: String, onClose: (
         onDispose {
             webView.stopLoading()
             webView.navigationDelegate = null
+            webView.UIDelegate = null
         }
     }
     // Back (the edge swipe) walks the page's own history first.
@@ -225,7 +229,27 @@ private class PageNavigation(
     private val onLogin: () -> Unit,
     private val onFinished: () -> Unit,
     private val onFailed: () -> Unit,
-) : NSObject(), WKNavigationDelegateProtocol {
+) : NSObject(), WKNavigationDelegateProtocol, WKUIDelegateProtocol {
+
+    /** A page is loading: a navigation to another origin now is the gateway's redirect, not the page's doing. */
+    private var loading = false
+
+    @ObjCSignatureOverride
+    override fun webView(webView: WKWebView, didStartProvisionalNavigation: WKNavigation?) {
+        loading = true
+    }
+
+    /** `target=_blank` and `window.open`: the gateway's own pages open here, anything else in the browser. */
+    override fun webView(
+        webView: WKWebView,
+        createWebViewWithConfiguration: WKWebViewConfiguration,
+        forNavigationAction: WKNavigationAction,
+        windowFeatures: WKWindowFeatures,
+    ): WKWebView? {
+        val target = forNavigationAction.request.URL ?: return null
+        if (sameOrigin(target, page)) webView.loadRequest(forNavigationAction.request) else openOutside(target)
+        return null
+    }
 
     override fun webView(
         webView: WKWebView,
@@ -243,15 +267,22 @@ private class PageNavigation(
             } else {
                 decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyAllow)
             }
-            decidePolicyForNavigationAction.navigationType == WKNavigationTypeLinkActivated -> {
-                decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
-                UIApplication.sharedApplication.openURL(target, options = emptyMap<Any?, Any>(), completionHandler = null)
-            }
-            else -> {
+            loading && decidePolicyForNavigationAction.navigationType != WKNavigationTypeLinkActivated -> {
+                // The gateway sent the page elsewhere (a sign-in in front of it): nothing to show here.
                 decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
                 onFailed()
             }
+            else -> {
+                // Anywhere else (a link, the page moving itself, mailto:) is the browser's or another app's to
+                // show, not a page passed off under this plugin's title.
+                decisionHandler(WKNavigationActionPolicy.WKNavigationActionPolicyCancel)
+                openOutside(target)
+            }
         }
+    }
+
+    private fun openOutside(target: NSURL) {
+        UIApplication.sharedApplication.openURL(target, options = emptyMap<Any?, Any>(), completionHandler = null)
     }
 
     override fun webView(
@@ -270,7 +301,10 @@ private class PageNavigation(
     }
 
     @ObjCSignatureOverride
-    override fun webView(webView: WKWebView, didFinishNavigation: WKNavigation?) = onFinished()
+    override fun webView(webView: WKWebView, didFinishNavigation: WKNavigation?) {
+        loading = false
+        onFinished()
+    }
 
     @ObjCSignatureOverride
     override fun webView(webView: WKWebView, didFailProvisionalNavigation: WKNavigation?, withError: NSError) = failed(withError)
@@ -279,6 +313,7 @@ private class PageNavigation(
     override fun webView(webView: WKWebView, didFailNavigation: WKNavigation?, withError: NSError) = failed(withError)
 
     private fun failed(error: NSError) {
+        loading = false
         // A navigation this delegate cancelled (the sign-in, a link to Safari) isn't the page failing.
         if (error.domain == "NSURLErrorDomain" && error.code == NSURL_ERROR_CANCELLED) return
         if (error.domain == "WebKitErrorDomain" && error.code == FRAME_LOAD_INTERRUPTED) return
