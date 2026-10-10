@@ -15,13 +15,19 @@ final class SwiftMathTypesetter: NSObject, NativeMathTypesetter {
             blue: CGFloat(value & 0xFF) / 255,
             alpha: CGFloat((value >> 24) & 0xFF) / 255
         )
+        let fontSize = CGFloat(textSizePx) / scale
         let image = MTMathImage(
             latex: latex,
-            fontSize: CGFloat(textSizePx) / scale,
+            fontSize: fontSize,
             textColor: color,
             labelMode: display ? .display : .text,
             textAlignment: .left
         )
+        // SwiftMath sizes the picture to the glyph boxes, which tall delimiters and italic letters reach past:
+        // without a margin a matrix lost the bottom of its brackets. Even top and bottom keep it centred on the
+        // line, as the chat places it.
+        let margin = (fontSize * 0.15).rounded(.up)
+        image.contentInsets = MTEdgeInsets(top: margin, left: 1, bottom: margin, right: (fontSize * 0.08).rounded(.up))
         let (error, rendered) = image.asImage()
         guard error == nil, let rendered else { return nil }
         return rendered.pngData()
