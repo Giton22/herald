@@ -7,6 +7,7 @@ final class AppDelegate: UIResponder, UIApplicationDelegate {
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         // Before the shared code starts: it writes the widgets' chats right away.
         IosWidgetsKt.setWidgetReloader { WidgetCenter.shared.reloadAllTimelines() }
+        NativeMathTypesetterKt.setMathTypesetter(typesetter: SwiftMathTypesetter())
         MainViewControllerKt.doInitKoin()
         // Live voice calls run on the WebRTC package here; the shared code makes one per call.
         NativeLiveCallKt.setLiveCallMaker { WebRTCLiveCall() }

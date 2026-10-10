@@ -12,6 +12,10 @@ packages:
   # (WebRTC/Package.swift) that downloads webrtc-sdk's prebuilt framework.
   WebRTC:
     path: WebRTC
+  # TeX math in the chat (an iosMath port), as JLaTeXMath is on Android.
+  SwiftMath:
+    url: https://github.com/mgriebling/SwiftMath
+    exactVersion: 1.7.3
 settings:
   base:
     # Bumped by the release workflow from the tag, like the Android versionName.
@@ -53,6 +57,7 @@ targets:
       - target: HeraldShare
       - target: HeraldWidgets
       - package: WebRTC
+      - package: SwiftMath
   # The share sheet's "Herald": plain Swift, no shared framework (an extension has little memory).
   HeraldShare:
     type: app-extension
