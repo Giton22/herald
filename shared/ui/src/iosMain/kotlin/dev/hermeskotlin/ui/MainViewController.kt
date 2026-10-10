@@ -9,6 +9,7 @@ import dev.hermeskotlin.core.push.PushGateway
 import dev.hermeskotlin.core.push.PushKeys
 import dev.hermeskotlin.core.push.PushRegistration
 import dev.hermeskotlin.core.push.PushSetup
+import dev.hermeskotlin.core.voice.IosVoiceKeepAlive
 import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.ui.di.sharedModules
 import dev.hermeskotlin.ui.platform.IosAppLock
@@ -52,19 +53,12 @@ fun openLink(url: String): Boolean = KoinPlatform.getKoin().get<IosLinks>().open
 internal val iosAppModule = module {
     single { IosAppLock(get(), get()) }
     single { IosLinks(get(), get(), get(), get(), get()) }
-    single<VoiceKeepAlive> { NoKeepAlive }
+    single<VoiceKeepAlive> { IosVoiceKeepAlive() }
     single<PushKeys> { NoPushKeys }
     single { PushSetup(get(), get(), get(), get(), get(), get(), deviceName = { UIDevice.currentDevice.name }) }
 }
 
 private fun appVersion(): String? = NSBundle.mainBundle.objectForInfoDictionaryKey("CFBundleShortVersionString") as? String
-
-/** A voice chat ends when the app leaves the screen. */
-private object NoKeepAlive : VoiceKeepAlive {
-    override fun hold(onEnd: () -> Unit, onLost: () -> Unit) = false
-
-    override fun release() = Unit
-}
 
 /** No push identity on iOS yet: turning on "Notifications anywhere" says why, without touching the gateway. */
 private object NoPushKeys : PushKeys {

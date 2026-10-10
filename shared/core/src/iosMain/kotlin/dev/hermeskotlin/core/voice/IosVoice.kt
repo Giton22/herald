@@ -109,7 +109,8 @@ internal object VoiceAudioSession {
             } else {
                 session.setCategory(AVAudioSessionCategoryPlayback, AVAudioSessionModeSpokenAudio, 0u, error.ptr)
             }
-            val ready = categorized && (active || session.setActive(true, error.ptr))
+            // Each time too: a call or an interruption may have let the session go without telling this count.
+            val ready = categorized && session.setActive(true, error.ptr)
             if (!ready) {
                 if (use == Use.Record) recorders-- else players--
                 error("The microphone isn't available: ${error.value?.localizedDescription ?: "audio session refused"}.")
@@ -119,8 +120,9 @@ internal object VoiceAudioSession {
     }
 
     /**
-     * A live call takes the session over: WebRTC sets its own category and activates it. Until [endCall], a
-     * pending release mustn't deactivate the session under the call, which would silence it.
+     * A voice chat or a live call is on (WebRTC sets its own category and activates the session). Until
+     * [endCall], a pending release mustn't deactivate the session: that would silence a call, and in the
+     * background iOS would suspend the app between a reply and listening again. Main thread only.
      */
     fun startCall() {
         release?.cancel()
@@ -130,16 +132,23 @@ internal object VoiceAudioSession {
 
     fun endCall() {
         calls--
-        // WebRTC may have let the session go: the next recording or reply asks for it again.
-        active = false
+        // WebRTC may have activated the session itself, or let it go: either way it's let go now, and the next
+        // recording or reply asks for it again.
+        active = true
+        releaseWhenIdle()
     }
 
     private fun release(use: Use) {
         if (use == Use.Record) recorders-- else players--
-        if (recorders + players > 0) return
+        releaseWhenIdle()
+    }
+
+    private fun releaseWhenIdle() {
+        if (recorders + players + calls > 0) return
+        release?.cancel()
         release = main.launch {
             delay(LINGER_MS)
-            if (recorders + players == 0 && calls == 0 && active) {
+            if (recorders + players + calls == 0 && active) {
                 active = false
                 AVAudioSession.sharedInstance().setActive(false, AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation, null)
             }
