@@ -2818,15 +2818,30 @@ private fun VoiceChatButton(onClick: () -> Unit, enabled: Boolean) =
 @Composable
 private fun DiscButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean, iconSize: Dp) {
     val tint = if (enabled) Theme[colors][textSecondary] else Theme[colors][textTertiary].copy(alpha = 0.5f)
-    UnstyledButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.size(MinTouchTarget).clip(CircleShape),
-        indication = rememberColoredIndication(tint),
+    DiscTarget(onClick = onClick, enabled = enabled, tint = tint) {
+        UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(iconSize))
+    }
+}
+
+/** A grey disc in the full touch target; a press shows on the disc itself, as on Send. [disc] draws over its fill. */
+@Composable
+private fun DiscTarget(onClick: () -> Unit, enabled: Boolean, tint: Color, disc: Modifier = Modifier, content: @Composable () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        Modifier
+            .size(MinTouchTarget)
+            .clickable(interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
-        Box(Modifier.size(ComposerDisc).background(Theme[colors][surface3], CircleShape), contentAlignment = Alignment.Center) {
-            UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(iconSize))
-        }
+        Box(
+            Modifier
+                .size(ComposerDisc)
+                .background(Theme[colors][surface3], CircleShape)
+                .then(disc)
+                .clip(CircleShape)
+                .indication(interaction, rememberColoredIndication(tint)),
+            contentAlignment = Alignment.Center,
+        ) { content() }
     }
 }
 
@@ -2842,25 +2857,17 @@ private fun Snug(button: @Composable () -> Unit) {
     Layout(button) { measurables, constraints ->
         val placeable = measurables.first().measure(constraints)
         val trim = SNUG_TRIM.roundToPx()
-        layout(placeable.width - 2 * trim, placeable.height) { placeable.place(-trim, 0) }
+        // In a window too narrow for the button at all, there's nothing to trim.
+        layout((placeable.width - 2 * trim).coerceAtLeast(0), placeable.height) { placeable.place(-trim, 0) }
     }
 }
 
 private val SNUG_TRIM = 2.dp
 
-/** A plain icon button inside the composer, like the microphone. */
+/** A round button for another composer, like the assistant's lasso, on the same disc as the chat's. */
 @Composable
-internal fun ComposerButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean) {
-    val tint = if (enabled) Theme[colors][textSecondary] else Theme[colors][textTertiary].copy(alpha = 0.5f)
-    UnstyledButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusMedium])),
-        indication = rememberColoredIndication(tint),
-    ) {
-        UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(22.dp))
-    }
-}
+internal fun ComposerButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean) =
+    DiscButton(icon, contentDescription = contentDescription, onClick = onClick, enabled = enabled, iconSize = 19.dp)
 
 internal enum class SendIcon { Send, Stop }
 
@@ -2918,11 +2925,12 @@ private fun SendDisc(fill: Color, tint: Color, glow: Boolean, interaction: Mutab
 /** The composer's microphone: tap to dictate, tap again to finish; the ring follows your voice. */
 @Composable
 internal fun DictationButton(state: DictationState, onClick: () -> Unit, enabled: Boolean) {
-    // On a disc like the composer's other round buttons.
-    val disc = Modifier.size(ComposerDisc).background(Theme[colors][surface3], CircleShape)
     if (state.transcribing) {
+        // The spinner sits on the mic's disc while the words are written down.
         Box(Modifier.size(MinTouchTarget), contentAlignment = Alignment.Center) {
-            Box(disc, contentAlignment = Alignment.Center) { Spinner(Modifier.size(16.dp)) }
+            Box(Modifier.size(ComposerDisc).background(Theme[colors][surface3], CircleShape), contentAlignment = Alignment.Center) {
+                Spinner(Modifier.size(16.dp))
+            }
         }
         return
     }
@@ -2932,23 +2940,18 @@ internal fun DictationButton(state: DictationState, onClick: () -> Unit, enabled
         enabled -> Theme[colors][textSecondary]
         else -> Theme[colors][textTertiary].copy(alpha = 0.5f)
     }
-    UnstyledButton(
+    DiscTarget(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier.size(MinTouchTarget).clip(CircleShape),
-        indication = rememberColoredIndication(tint),
+        tint = tint,
+        disc = if (recording) Modifier.border(2.dp, tint.copy(alpha = 0.25f + 0.75f * state.level), CircleShape) else Modifier,
     ) {
-        Box(
-            disc.then(if (recording) Modifier.border(2.dp, tint.copy(alpha = 0.25f + 0.75f * state.level), CircleShape) else Modifier),
-            contentAlignment = Alignment.Center,
-        ) {
-            UnstyledIcon(
-                if (recording) Lucide.Square else Lucide.Mic,
-                contentDescription = if (recording) "Finish dictating" else "Dictate",
-                tint = tint,
-                modifier = Modifier.size(if (recording) 15.dp else 19.dp),
-            )
-        }
+        UnstyledIcon(
+            if (recording) Lucide.Square else Lucide.Mic,
+            contentDescription = if (recording) "Finish dictating" else "Dictate",
+            tint = tint,
+            modifier = Modifier.size(if (recording) 15.dp else 19.dp),
+        )
     }
 }
 
