@@ -19,6 +19,9 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import platform.AVFAudio.AVAudioEngine
 import platform.AVFAudio.AVAudioEngineConfigurationChangeNotification
 import platform.AVFAudio.AVAudioFormat
@@ -82,6 +85,9 @@ internal object VoiceAudioSession {
     private var players = 0
     private var calls = 0
     private var chats = 0
+    private var byCallKit = false
+    /** False while a call screen's audio is still to be activated by CallKit. */
+    private val callKitReady = MutableStateFlow(true)
     private var active = false
     private var release: Job? = null
     private var silence: AVAudioEngine? = null
@@ -95,6 +101,8 @@ internal object VoiceAudioSession {
     }
 
     suspend fun <T> use(use: Use, block: suspend () -> T): T {
+        // CallKit activates a call screen's audio itself: wait for it rather than activate it first.
+        if (withTimeoutOrNull(CALLKIT_WAIT_MS) { callKitReady.first { it } } == null) withContext(Dispatchers.Main) { activateChat() }
         withContext(Dispatchers.Main) { acquire(use) }
         try {
             return block()
@@ -138,10 +146,14 @@ internal object VoiceAudioSession {
      * plays meanwhile, in play-and-record, so the chat doesn't stall out of sight. A live call's own audio does
      * that during the call. Main thread only.
      */
-    fun holdChat() {
+    fun holdChat(activate: Boolean = true) {
         release?.cancel()
         release = null
         chats++
+        // In the system's call screen, CallKit activates the session (and its call keeps the app running):
+        // only the category is set here, until [callKitActivated], or [activateChat] if CallKit doesn't take it.
+        byCallKit = !activate
+        callKitReady.value = activate
         memScoped {
             val error = alloc<ObjCObjectVar<NSError?>>()
             val session = AVAudioSession.sharedInstance()
@@ -151,13 +163,32 @@ internal object VoiceAudioSession {
                 AVAudioSessionCategoryOptionDefaultToSpeaker or AVAudioSessionCategoryOptionAllowBluetooth or AVAudioSessionCategoryOptionAllowBluetoothA2DP,
                 error.ptr,
             )
-            if (session.setActive(true, error.ptr)) active = true
+            if (activate && session.setActive(true, error.ptr)) active = true
         }
+        updateSilence()
+    }
+
+    /** CallKit activated the call screen's audio: recordings and replies can go ahead. */
+    fun callKitActivated() {
+        active = true
+        callKitReady.value = true
+    }
+
+    /** The call screen refused the chat, or never activated its audio: it keeps itself running after all. */
+    fun activateChat() {
+        callKitReady.value = true
+        if (chats == 0 || !byCallKit) return
+        byCallKit = false
+        if (AVAudioSession.sharedInstance().setActive(true, null)) active = true
         updateSilence()
     }
 
     fun releaseChat() {
         chats--
+        if (chats == 0) {
+            byCallKit = false
+            callKitReady.value = true
+        }
         // Whatever played or recorded last, the session is let go now.
         active = true
         updateSilence()
@@ -202,7 +233,7 @@ internal object VoiceAudioSession {
     }
 
     private fun updateSilence() {
-        if (chats > 0 && calls == 0) startSilence() else stopSilence()
+        if (chats > 0 && calls == 0 && !byCallKit) startSilence() else stopSilence()
     }
 
     private fun startSilence() {
@@ -235,6 +266,9 @@ internal object VoiceAudioSession {
 
     /** Long enough to bridge synthesizing the next clip or sending a transcript. */
     private const val LINGER_MS = 4_000L
+
+    /** A little longer than the call screen itself waits for CallKit's activation. */
+    private const val CALLKIT_WAIT_MS = 3_000L
 
     /** A second of silence at this rate, looped. */
     private const val SILENCE_RATE = 16_000.0

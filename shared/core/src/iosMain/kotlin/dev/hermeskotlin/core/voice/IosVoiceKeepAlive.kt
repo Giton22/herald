@@ -26,8 +26,12 @@ class IosVoiceKeepAlive : VoiceKeepAlive {
      * in the status bar like a call, and can be ended there. Main thread only.
      */
     interface SystemCall {
-        /** Shows the call; [onEnd] runs when it's ended from outside Herald. */
-        fun start(onEnd: () -> Unit)
+        /**
+         * Shows the call; CallKit then activates the audio session ([onActivated]). [onEnd] runs when it's
+         * ended from outside Herald, [onUnavailable] when there's no call screen after all (refused, or no
+         * activation in time).
+         */
+        fun start(onEnd: () -> Unit, onActivated: () -> Unit, onUnavailable: () -> Unit)
 
         fun end()
     }
@@ -35,8 +39,13 @@ class IosVoiceKeepAlive : VoiceKeepAlive {
     override fun hold(onEnd: () -> Unit, onLost: () -> Unit): Boolean {
         release()
         holding = true
-        VoiceAudioSession.holdChat()
-        systemCall?.start(onEnd)
+        val call = systemCall
+        VoiceAudioSession.holdChat(activate = call == null)
+        call?.start(
+            onEnd,
+            onActivated = { if (holding) VoiceAudioSession.callKitActivated() },
+            onUnavailable = { if (holding) VoiceAudioSession.activateChat() },
+        )
         val center = NSNotificationCenter.defaultCenter
         val main = NSOperationQueue.mainQueue
         observers = listOf(

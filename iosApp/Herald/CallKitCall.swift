@@ -14,8 +14,13 @@ final class CallKitCall: NSObject, NativeSystemCall, CXProviderDelegate {
 
     private let provider: CXProvider
     private let controller = CXCallController()
+    private static let activationSeconds = 2.0
+
     private var call: UUID?
     private var onEnd: (() -> Void)?
+    private var onActivated: (() -> Void)?
+    private var onUnavailable: (() -> Void)?
+    private var activated = false
 
     override init() {
         let config = CXProviderConfiguration()
@@ -33,13 +38,16 @@ final class CallKitCall: NSObject, NativeSystemCall, CXProviderDelegate {
         RTCAudioSession.sharedInstance().isAudioEnabled = false
     }
 
-    func start(onEnd: @escaping () -> Void) {
+    func start(onEnd: @escaping () -> Void, onActivated: @escaping () -> Void, onUnavailable: @escaping () -> Void) {
         end()
-        // WebRTC waits for CallKit's activation of this call's audio.
+        // WebRTC and the chat wait for CallKit's activation of this call's audio.
         RTCAudioSession.sharedInstance().isAudioEnabled = false
+        activated = false
         let id = UUID()
         call = id
         self.onEnd = onEnd
+        self.onActivated = onActivated
+        self.onUnavailable = onUnavailable
         let action = CXStartCallAction(call: id, handle: CXHandle(type: .generic, value: "Herald"))
         action.isVoiceCall = true
         controller.request(CXTransaction(action: action)) { [weak self] error in
@@ -48,8 +56,13 @@ final class CallKitCall: NSObject, NativeSystemCall, CXProviderDelegate {
             DispatchQueue.main.async {
                 guard let self, self.call == id else { return }
                 self.call = nil
-                RTCAudioSession.sharedInstance().isAudioEnabled = true
+                self.unavailable()
             }
+        }
+        // CallKit may not activate a session that's already active: then the chat doesn't wait any longer.
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.activationSeconds) { [weak self] in
+            guard let self, self.call == id, !self.activated else { return }
+            self.unavailable()
         }
     }
 
@@ -57,10 +70,15 @@ final class CallKitCall: NSObject, NativeSystemCall, CXProviderDelegate {
         guard let id = call else { return }
         call = nil
         onEnd = nil
+        onActivated = nil
+        onUnavailable = nil
         controller.request(CXTransaction(action: CXEndCallAction(call: id))) { _ in }
     }
 
     func providerDidReset(_ provider: CXProvider) {
+        // The calls and their audio are gone: WebRTC mustn't think the session is still CallKit's.
+        RTCAudioSession.sharedInstance().isAudioEnabled = false
+        RTCAudioSession.sharedInstance().audioSessionDidDeactivate(AVAudioSession.sharedInstance())
         endedOutside()
     }
 
@@ -87,8 +105,12 @@ final class CallKitCall: NSObject, NativeSystemCall, CXProviderDelegate {
     }
 
     func provider(_ provider: CXProvider, didActivate audioSession: AVAudioSession) {
+        activated = true
         RTCAudioSession.sharedInstance().audioSessionDidActivate(audioSession)
         RTCAudioSession.sharedInstance().isAudioEnabled = true
+        let onActivated = self.onActivated
+        self.onActivated = nil
+        onActivated?()
     }
 
     func provider(_ provider: CXProvider, didDeactivate audioSession: AVAudioSession) {
@@ -96,10 +118,21 @@ final class CallKitCall: NSObject, NativeSystemCall, CXProviderDelegate {
         RTCAudioSession.sharedInstance().audioSessionDidDeactivate(audioSession)
     }
 
+    /// Without the call screen's audio: WebRTC and the chat activate the session themselves.
+    private func unavailable() {
+        let onUnavailable = self.onUnavailable
+        self.onUnavailable = nil
+        onActivated = nil
+        RTCAudioSession.sharedInstance().isAudioEnabled = true
+        onUnavailable?()
+    }
+
     private func endedOutside() {
         let onEnd = self.onEnd
         call = nil
         self.onEnd = nil
+        onActivated = nil
+        onUnavailable = nil
         onEnd?()
     }
 }
