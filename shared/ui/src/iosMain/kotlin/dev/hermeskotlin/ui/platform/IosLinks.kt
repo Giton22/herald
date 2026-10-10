@@ -71,9 +71,26 @@ internal class IosLinks(
             latestShare()?.let(::takeShare)
         }
         scope.launch(Dispatchers.Main) {
-            connection.state.distinctUntilChanged { a, b -> (a is ConnectionState.Connected) == (b is ConnectionState.Connected) }
-                .filter { it is ConnectionState.Connected }
-                .collect { runCatching { publishBotShortcuts() } }
+            var connected = false
+            connection.state.collect { state ->
+                when {
+                    state is ConnectionState.Connected && !connected -> {
+                        connected = true
+                        try {
+                            publishBotShortcuts()
+                        } catch (e: CancellationException) {
+                            throw e
+                        } catch (_: Exception) {
+                            // Kept as they were; the next connection tries again.
+                        }
+                    }
+                    // Signed out, or on the way to another gateway: its bots aren't this one's.
+                    (state is ConnectionState.Idle || state is ConnectionState.SessionExpired) && connected -> {
+                        connected = false
+                        UIApplication.sharedApplication.setShortcutItems(emptyList<UIApplicationShortcutItem>())
+                    }
+                }
+            }
         }
     }
 
@@ -124,31 +141,46 @@ internal class IosLinks(
     private fun readShare(folder: NSURL): ComposeDraft? {
         val manifest = folder.URLByAppendingPathComponent(MANIFEST)?.let { NSData.dataWithContentsOfURL(it) }?.toByteArray() ?: return null
         val share = InboxShare.parse(manifest.decodeToString())
-        val content = SharedContent(text = share.text, subject = share.subject, files = share.files)
-        if (content.isEmpty && share.skipped == 0) return null
-        val urls = content.filesToAttach.mapNotNull { name -> folder.URLByAppendingPathComponent(name.substringAfterLast('/')) }
+        // Only `<n>/<name>` inside this share's folder: never a path that leads out of it.
+        val names = share.files.filter { SHARED_FILE.matches(it) && it.substringAfter('/') !in setOf(".", "..") }
+        val content = SharedContent(text = share.text, subject = share.subject, files = names)
+        val left = buildList {
+            if (share.tooLarge > 0) add(plural(share.tooLarge, "was too large to share", "were too large to share"))
+            if (share.tooMany > 0) add(plural(share.tooMany, "was over the limit of 10", "were over the limit of 10"))
+            if (share.unreadable > 0) add(plural(share.unreadable, "couldn't be read", "couldn't be read"))
+        }
+        if (content.isEmpty && left.isEmpty()) return null
+        val urls = content.filesToAttach.mapNotNull { name ->
+            folder.URLByAppendingPathComponent(name.substringBefore('/'))?.URLByAppendingPathComponent(name.substringAfter('/'))
+        }
         val (files, error) = readSharedFiles(urls)
-        val skipped = if (share.skipped > 0) "${share.skipped} file${if (share.skipped == 1) " was" else "s were"} too large to share." else null
-        val notice = listOfNotNull(error, content.leftOverNotice, skipped).joinToString(" ").ifEmpty { null }
+        val notice = (listOfNotNull(error, content.leftOverNotice) + left).joinToString(" ").ifEmpty { null }
         return ComposeDraft(text = content.draftText, attachments = files, notice = notice)
     }
 
-    /** The newest share still waiting, from the last half hour; older ones are cleared away. */
+    private fun plural(count: Int, one: String, many: String) = if (count == 1) "1 file $one." else "$count files $many."
+
+    /**
+     * The newest share still waiting, from the last half hour. The others are cleared away: one share at a
+     * time, as on Android, rather than a backlog that opens chats each time the app comes back.
+     */
     private fun latestShare(): String? {
         val inbox = inbox() ?: return null
         val manager = NSFileManager.defaultManager
         val entries = manager.contentsOfDirectoryAtURL(inbox, includingPropertiesForKeys = null, options = 0u, error = null)
             ?.filterIsInstance<NSURL>()
             .orEmpty()
-            .filter { it.lastPathComponent?.let(SHARE_ID::matches) == true && it.lastPathComponent !in reading }
+            .filter { it.lastPathComponent !in reading }
         val now = NSDate()
         val (fresh, stale) = entries.partition { url ->
             val modified = url.path?.let { manager.attributesOfItemAtPath(it, error = null)?.get(NSFileModificationDate) as? NSDate }
             modified != null && now.timeIntervalSinceDate(modified) < SHARE_MAX_AGE_SECONDS
         }
-        stale.forEach { manager.removeItemAtURL(it, error = null) }
-        return fresh.maxByOrNull { it.path?.let { p -> (manager.attributesOfItemAtPath(p, error = null)?.get(NSFileModificationDate) as? NSDate)?.timeIntervalSince1970 } ?: 0.0 }
-            ?.lastPathComponent
+        // Fresh `.<id>` folders are shares the extension is still writing: left alone until they're moved in.
+        val shares = fresh.filter { it.lastPathComponent?.let(SHARE_ID::matches) == true }
+        val newest = shares.maxByOrNull { it.path?.let { p -> (manager.attributesOfItemAtPath(p, error = null)?.get(NSFileModificationDate) as? NSDate)?.timeIntervalSince1970 } ?: 0.0 }
+        (stale + shares).filter { it != newest }.forEach { manager.removeItemAtURL(it, error = null) }
+        return newest?.lastPathComponent
     }
 
     private fun inbox(): NSURL? =
@@ -169,17 +201,30 @@ internal class IosLinks(
         withContext(Dispatchers.Main) { UIApplication.sharedApplication.setShortcutItems(items) }
     }
 
-    /** What the share extension writes beside the files: `share.json`. */
-    private class InboxShare(val text: String?, val subject: String?, val files: List<String>, val skipped: Int) {
+    /**
+     * What the share extension writes beside the files: `share.json`. [files] are `<n>/<name>`, each file in a
+     * numbered folder of its own so it keeps its name; the counts are the files it left behind and why.
+     */
+    private class InboxShare(
+        val text: String?,
+        val subject: String?,
+        val files: List<String>,
+        val tooLarge: Int,
+        val tooMany: Int,
+        val unreadable: Int,
+    ) {
         companion object {
             fun parse(json: String): InboxShare {
                 val root = HermesJson.parseToJsonElement(json).jsonObject
                 fun string(key: String) = (root[key] as? JsonPrimitive)?.contentOrNull
+                fun count(key: String) = string(key)?.toIntOrNull()?.coerceAtLeast(0) ?: 0
                 return InboxShare(
                     text = string("text"),
                     subject = string("subject"),
                     files = (root["files"] as? JsonArray)?.mapNotNull { (it as? JsonPrimitive)?.contentOrNull }.orEmpty(),
-                    skipped = string("skipped")?.toIntOrNull() ?: 0,
+                    tooLarge = count("tooLarge"),
+                    tooMany = count("tooMany"),
+                    unreadable = count("unreadable"),
                 )
             }
         }
@@ -197,6 +242,7 @@ internal class IosLinks(
         private const val MANIFEST = "share.json"
         private const val MAX_BOT_SHORTCUTS = 2
         private const val SHARE_MAX_AGE_SECONDS = 30 * 60.0
+        private val SHARED_FILE = Regex("^[0-9]{1,2}/[^/]+$")
         private val SHARE_ID = Regex("^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}$")
     }
 }
