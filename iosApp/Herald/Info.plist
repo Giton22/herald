@@ -41,6 +41,8 @@
 	<string>Herald records your voice when you dictate a message or talk to your agent.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
 	<string>Herald saves pictures from your chats to Photos when you ask it to.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>With on-device dictation, Herald turns what you say into text on your iPhone instead of on the gateway.</string>
 	<key>UILaunchScreen</key>
 	<dict/>
 	<key>UIRequiredDeviceCapabilities</key>

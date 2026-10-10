@@ -82,30 +82,11 @@ class AndroidVoiceRecorder : VoiceRecorder {
             record.release()
             onLevel(0f)
         }
-        Recording(wav(pcm.toByteArray()), "audio/wav", endOfSpeech.heardSpeech || finishRequested && pcm.size() > SAMPLE_RATE / 2)
+        Recording(pcm16Wav(pcm.toByteArray(), SAMPLE_RATE),"audio/wav", endOfSpeech.heardSpeech || finishRequested && pcm.size() > SAMPLE_RATE / 2)
     }
 
     override fun finish() {
         finishRequested = true
-    }
-
-    private fun wav(pcm: ByteArray): ByteArray {
-        val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN).apply {
-            put("RIFF".toByteArray())
-            putInt(36 + pcm.size)
-            put("WAVE".toByteArray())
-            put("fmt ".toByteArray())
-            putInt(16)
-            putShort(1) // PCM
-            putShort(1) // mono
-            putInt(SAMPLE_RATE)
-            putInt(SAMPLE_RATE * 2)
-            putShort(2)
-            putShort(16)
-            put("data".toByteArray())
-            putInt(pcm.size)
-        }
-        return header.array() + pcm
     }
 
     private companion object {
