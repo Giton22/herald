@@ -12,6 +12,7 @@ import dev.hermeskotlin.core.storage.KeychainKeyValueStore
 import dev.hermeskotlin.core.storage.appSupportPath
 import dev.hermeskotlin.core.voice.DeviceDictation
 import dev.hermeskotlin.core.voice.IosDeviceDictation
+import dev.hermeskotlin.core.voice.IosLiveCalls
 import dev.hermeskotlin.core.voice.IosSpeechPlayer
 import dev.hermeskotlin.core.voice.IosVoiceRecorder
 import dev.hermeskotlin.core.voice.LiveCalls
@@ -35,8 +36,8 @@ actual val platformModule: Module = module {
     factory<VoiceRecorder> { IosVoiceRecorder() }
     single<SpeechPlayer> { IosSpeechPlayer() }
     factory<DeviceDictation> { IosDeviceDictation() }
-    // No WebRTC on iOS yet: a voice chat falls back to the chained mode (record, transcribe, speak).
-    single { LiveCalls { null } }
+    // WebRTC is the Swift host's (IosLiveCalls); without it a voice chat uses the chained mode (record, transcribe, speak).
+    single { LiveCalls { IosLiveCalls.make?.invoke() } }
     single { offlineDatabase() }
     single<Sealer> { KeychainSealer(get()) }
 }
