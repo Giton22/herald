@@ -37,7 +37,7 @@ actual val platformModule: Module = module {
     single<SpeechPlayer> { IosSpeechPlayer() }
     factory<DeviceDictation> { IosDeviceDictation() }
     // WebRTC is the Swift host's (IosLiveCalls); without it a voice chat uses the chained mode (record, transcribe, speak).
-    single { LiveCalls { IosLiveCalls.make?.invoke() } }
+    single { LiveCalls { IosLiveCalls.create() } }
     single { offlineDatabase() }
     single<Sealer> { KeychainSealer(get()) }
 }

@@ -71,6 +71,7 @@ internal object VoiceAudioSession {
     private val main = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var recorders = 0
     private var players = 0
+    private var calls = 0
     private var active = false
     private var release: Job? = null
 
@@ -117,12 +118,28 @@ internal object VoiceAudioSession {
         }
     }
 
+    /**
+     * A live call takes the session over: WebRTC sets its own category and activates it. Until [endCall], a
+     * pending release mustn't deactivate the session under the call, which would silence it.
+     */
+    fun startCall() {
+        release?.cancel()
+        release = null
+        calls++
+    }
+
+    fun endCall() {
+        calls--
+        // WebRTC may have let the session go: the next recording or reply asks for it again.
+        active = false
+    }
+
     private fun release(use: Use) {
         if (use == Use.Record) recorders-- else players--
         if (recorders + players > 0) return
         release = main.launch {
             delay(LINGER_MS)
-            if (recorders + players == 0 && active) {
+            if (recorders + players == 0 && calls == 0 && active) {
                 active = false
                 AVAudioSession.sharedInstance().setActive(false, AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation, null)
             }

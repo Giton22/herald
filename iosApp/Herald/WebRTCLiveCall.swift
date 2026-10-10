@@ -23,6 +23,8 @@ final class WebRTCLiveCall: NSObject, NativeLiveCall {
     private static let speakingHangover = 0.4
     /// Stats report audio levels as 0..1 amplitude; the shared code's 1.0 is loud speech (Android's RMS / 256 / 42).
     private static let micScale = 32_768.0 / (256.0 * 42.0)
+    /// The microphone's running energy at the last poll.
+    private var micEnergy: (energy: Double, duration: Double)?
 
     private let lock = NSLock()
     private var peer: RTCPeerConnection?
@@ -139,16 +141,27 @@ final class WebRTCLiveCall: NSObject, NativeLiveCall {
         peer.statistics { [weak self] report in
             guard let self else { return }
             var voice: Double?
-            var input: Double?
+            var energy: Double?
+            var duration: Double?
             for stats in report.statistics.values where (stats.values["kind"] as? String) == "audio" {
-                let level = (stats.values["audioLevel"] as? NSNumber)?.doubleValue
-                if stats.type == "inbound-rtp" { voice = level }
-                if stats.type == "media-source" { input = level }
+                if stats.type == "inbound-rtp" { voice = (stats.values["audioLevel"] as? NSNumber)?.doubleValue }
+                if stats.type == "media-source" {
+                    energy = (stats.values["totalAudioEnergy"] as? NSNumber)?.doubleValue
+                    duration = (stats.values["totalSamplesDuration"] as? NSNumber)?.doubleValue
+                }
             }
             self.lock.lock()
             self.statsPending = false
             if let voice, voice > Self.speakingLevel { self.loudAt = Date() }
-            if let input, !self.muted { self.mic = Float(min(1.0, input * Self.micScale)) }
+            // audioLevel is a peak; Android's level is an RMS. The RMS since the last poll comes from the
+            // running energy (the sum of squared levels times their duration).
+            if let energy, let duration {
+                if let last = self.micEnergy, duration > last.duration, !self.muted {
+                    let rms = ((energy - last.energy) / (duration - last.duration)).squareRoot()
+                    self.mic = Float(min(1.0, rms * Self.micScale))
+                }
+                self.micEnergy = (energy, duration)
+            }
             self.lock.unlock()
         }
     }
