@@ -22,6 +22,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
@@ -44,8 +46,12 @@ data class CronJob(
     @SerialName("last_error") val lastError: String? = null,
     /** The run worked but its result never reached its target (`last_status` is then `delivery_failed`). */
     @SerialName("last_delivery_error") val lastDeliveryError: String? = null,
-    /** Why the scheduler couldn't start the last run. */
-    @SerialName("last_fire_error") val lastFireError: String? = null,
+    /**
+     * Why the scheduler couldn't hand the last fire to the runner, kept loose: the dashboard stamps it as
+     * `{at, detail}` (`cron/jobs.py` `note_fire_forward_failure`), but it's typed as a string elsewhere.
+     * Read it through [lastFireError].
+     */
+    @SerialName("last_fire_error") val fireError: JsonElement? = null,
     /** Why the scheduler paused the job by itself, when it did. */
     @SerialName("paused_reason") val pausedReason: String? = null,
     /** The profile whose cron store holds the job, as the cross-profile list tags it. */
@@ -63,6 +69,13 @@ data class CronJob(
     val displayName: String get() = routineTitle.ifBlank { prompt.lineSequence().firstOrNull()?.take(50).orEmpty() }.ifBlank { id }
 
     val paused: Boolean get() = state == "paused"
+
+    /** Why the scheduler couldn't start the last run, from [fireError] in either shape. */
+    val lastFireError: String? get() = when (val raw = fireError) {
+        is JsonObject -> raw.string("detail")
+        is JsonPrimitive -> raw.contentOrNull
+        else -> null
+    }?.takeIf { it.isNotBlank() }
 
     /** Next run in epoch seconds, or null when none is planned (paused, finished, or unparseable). */
     val nextRunEpochSeconds: Double? get() = nextRunAt.epochSeconds()
