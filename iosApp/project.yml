@@ -7,6 +7,12 @@ options:
   deploymentTarget:
     iOS: "17.0"
   createIntermediateGroups: true
+packages:
+  # The same WebRTC build as Android's webrtc-android (libs.versions.toml `webrtc`). Pinned by commit: the tag
+  # 150.7871.01 isn't a version Swift Package Manager accepts.
+  WebRTC:
+    url: https://github.com/webrtc-sdk/Specs
+    revision: 08bbe32d4b96b23a619369748239018d5358b940
 settings:
   base:
     # Bumped by the release workflow from the tag, like the Android versionName.
@@ -46,6 +52,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Herald/Herald.entitlements
     dependencies:
       - target: HeraldShare
+      - package: WebRTC
   # The share sheet's "Herald": plain Swift, no shared framework (an extension has little memory).
   HeraldShare:
     type: app-extension
