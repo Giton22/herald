@@ -73,11 +73,11 @@ data class SessionPage(
 /** Which part of the archive a listing covers (`archived=` query). */
 enum class ArchiveFilter(val wire: String) { Exclude("exclude"), Only("only"), Include("include") }
 
-/** Machine-originated session sources that Recent hides (matches Desktop's SIDEBAR_EXCLUDED_SOURCES). */
-val MACHINE_SOURCES = listOf("acp", "cron", "kanban", "oneshot", "subagent", "tool")
-
 /** `source` of sessions started by scheduled (cron) jobs. */
 const val CRON_SOURCE = "cron"
+
+/** Machine-originated session sources that Recent hides (matches Desktop's SIDEBAR_EXCLUDED_SOURCES). */
+val MACHINE_SOURCES = listOf("acp", CRON_SOURCE, "kanban", "oneshot", "subagent", "tool")
 
 /**
  * The list views. Like Hermes Desktop, Recent leaves out machine-originated runs (cron, oneshot,
