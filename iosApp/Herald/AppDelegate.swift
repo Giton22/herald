@@ -3,15 +3,42 @@ import UIKit
 
 @main
 final class AppDelegate: UIResponder, UIApplicationDelegate {
-    var window: UIWindow?
-
     func application(_ application: UIApplication, didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]?) -> Bool {
         MainViewControllerKt.doInitKoin()
-        let window = UIWindow(frame: UIScreen.main.bounds)
+        return true
+    }
+}
+
+/// The app's one window. Links, quick actions and shares arrive here and go to the shared code.
+final class SceneDelegate: UIResponder, UIWindowSceneDelegate {
+    var window: UIWindow?
+
+    func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
+        guard let scene = scene as? UIWindowScene else { return }
+        let window = UIWindow(windowScene: scene)
         window.rootViewController = HostViewController()
         window.makeKeyAndVisible()
         self.window = window
-        return true
+        // Launched by a link or a quick action: open it once the UI is there.
+        connectionOptions.urlContexts.forEach { open($0.url) }
+        if let item = connectionOptions.shortcutItem { _ = perform(item) }
+    }
+
+    func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        URLContexts.forEach { open($0.url) }
+    }
+
+    func windowScene(_ windowScene: UIWindowScene, performActionFor shortcutItem: UIApplicationShortcutItem, completionHandler: @escaping (Bool) -> Void) {
+        completionHandler(perform(shortcutItem))
+    }
+
+    private func perform(_ item: UIApplicationShortcutItem) -> Bool {
+        guard let url = item.userInfo?["url"] as? String else { return false }
+        return MainViewControllerKt.openLink(url: url)
+    }
+
+    private func open(_ url: URL) {
+        _ = MainViewControllerKt.openLink(url: url.absoluteString)
     }
 }
 
