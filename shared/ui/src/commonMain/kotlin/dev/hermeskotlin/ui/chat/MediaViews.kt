@@ -1,5 +1,6 @@
 package dev.hermeskotlin.ui.chat
 
+import dev.hermeskotlin.ui.fullScreenDialogProperties
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -47,7 +48,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.File
 import com.composables.icons.lucide.Image
@@ -246,7 +246,7 @@ internal fun ImageViewer(image: ViewerImage, onDismiss: () -> Unit) {
         offset = if (scale == 1f) Offset.Zero else offset + pan
     }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    Dialog(onDismissRequest = onDismiss, properties = fullScreenDialogProperties()) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             val bitmap = bytes?.let { rememberImageBitmap(it, maxEdge = VIEWER_EDGE) }
             if (bitmap != null) {

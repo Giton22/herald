@@ -1,5 +1,6 @@
 package dev.hermeskotlin.ui.chat
 
+import dev.hermeskotlin.ui.imeVisible
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -74,7 +75,6 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
@@ -2528,9 +2528,9 @@ private fun Composer(
     var focused by remember { mutableStateOf(false) }
     // Back hides the keyboard but leaves the field focused, and a focused field brings the keyboard back on
     // the next relayout (opening a tool card, the menu). Put away means done typing, so let go of the focus.
-    val imeVisible = WindowInsets.isImeVisible
+    val keyboardUp = imeVisible
     val focusManager = LocalFocusManager.current
-    LaunchedEffect(imeVisible) { if (!imeVisible && focused) focusManager.clearFocus() }
+    LaunchedEffect(keyboardUp) { if (!keyboardUp && focused) focusManager.clearFocus() }
     // How open the composer stands, 1 open to 0 folded to a line. It tracks the scroll as it goes, and springs
     // across when a tap, the keyboard or a draft holds it open or lets go.
     val open = remember { Animatable(1f) }
