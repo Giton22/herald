@@ -3,6 +3,7 @@ package dev.hermeskotlin.core.profiles
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.createHttpClient
+import dev.hermeskotlin.core.sessions.MACHINE_SOURCES
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import io.ktor.client.engine.mock.MockEngine
@@ -75,8 +76,9 @@ class ProfilesApiTest {
         api.list(url, profile = "work")
         api.list(url)
 
-        assertEquals("profile=work&limit=50&offset=0&archived=exclude&order=recent&exclude_sources=cron", queries[0])
-        assertEquals("limit=50&offset=0&archived=exclude&order=recent&exclude_sources=cron", queries[1])
+        val excludeSources = MACHINE_SOURCES.joinToString("%2C")
+        assertEquals("profile=work&limit=50&offset=0&archived=exclude&order=recent&exclude_sources=$excludeSources", queries[0])
+        assertEquals("limit=50&offset=0&archived=exclude&order=recent&exclude_sources=$excludeSources", queries[1])
     }
 
     @Test
