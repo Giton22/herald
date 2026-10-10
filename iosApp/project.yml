@@ -8,11 +8,10 @@ options:
     iOS: "17.0"
   createIntermediateGroups: true
 packages:
-  # The same WebRTC build as Android's webrtc-android (libs.versions.toml `webrtc`). Pinned by commit: the tag
-  # 150.7871.01 isn't a version Swift Package Manager accepts.
+  # The same WebRTC build as Android's webrtc-android (libs.versions.toml `webrtc`), through a local manifest
+  # (WebRTC/Package.swift) that downloads webrtc-sdk's prebuilt framework.
   WebRTC:
-    url: https://github.com/webrtc-sdk/Specs
-    revision: 08bbe32d4b96b23a619369748239018d5358b940
+    path: WebRTC
 settings:
   base:
     # Bumped by the release workflow from the tag, like the Android versionName.
