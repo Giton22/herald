@@ -42,9 +42,11 @@ private object NoKeepAlive : VoiceKeepAlive {
     override fun release() = Unit
 }
 
-/** No push identity on iOS yet: turning on "Notifications anywhere" says why it can't. */
+/** No push identity on iOS yet: turning on "Notifications anywhere" says why, without touching the gateway. */
 private object NoPushKeys : PushKeys {
     override val deviceId = ""
+
+    override val unavailable = "Notifications anywhere aren't available on iOS yet."
 
     override fun registration(name: String): PushRegistration = error("Notifications anywhere aren't available on iOS yet.")
 

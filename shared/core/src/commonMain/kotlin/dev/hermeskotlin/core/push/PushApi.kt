@@ -136,6 +136,9 @@ class PushApi(private val connection: GatewayConnection) {
 interface PushKeys {
     val deviceId: String
 
+    /** Null when this phone can receive pushes; otherwise why it can't, shown instead of setting up. */
+    val unavailable: String? get() = null
+
     /** What to send the gateway; [name] is how the gateway lists this phone. */
     fun registration(name: String): PushRegistration
 

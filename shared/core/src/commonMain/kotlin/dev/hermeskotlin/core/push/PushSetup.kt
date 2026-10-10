@@ -99,6 +99,11 @@ class PushSetup(
         // Turned off while this waited for the lock: don't register again.
         if (settings.settings.value?.pushAnywhere != true) return@withLock
         val url = gateways.current()?.gatewayUrl?.value ?: return@withLock
+        // Nothing here could receive them: never install or register on the gateway.
+        keys.unavailable?.let {
+            _status.value = PushStatus(State.Failed, it)
+            return@withLock
+        }
         _status.value = PushStatus(State.Working)
         try {
             // An identity registered with another gateway is retired, never shared.
