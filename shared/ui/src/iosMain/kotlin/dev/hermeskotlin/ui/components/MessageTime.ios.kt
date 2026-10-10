@@ -21,8 +21,7 @@ import platform.Foundation.localTimeZone
 actual fun localMoment(epochMillis: Long): LocalMoment {
     val date = NSDate.dateWithTimeIntervalSince1970(epochMillis / 1000.0)
     val zone = NSTimeZone.localTimeZone
-    // Gregorian fields in the device's zone, whatever calendar the device shows.
-    val calendar = NSCalendar(calendarIdentifier = NSCalendarIdentifierISO8601).apply { timeZone = zone }
+    val calendar = CALENDAR.apply { timeZone = zone }
     val parts = calendar.components(
         NSCalendarUnitYear or NSCalendarUnitMonth or NSCalendarUnitDay or NSCalendarUnitWeekday or NSCalendarUnitHour or NSCalendarUnitMinute,
         fromDate = date,
@@ -42,10 +41,13 @@ actual fun localMoment(epochMillis: Long): LocalMoment {
 
 @Composable
 actual fun uses24HourClock(): Boolean = remember {
-    // The locale's short time pattern has an "a" (AM/PM) when the device is on a 12-hour clock.
+    // The locale's hour pattern uses H or k on a 24-hour clock; a 12-hour one has h or K with a day period
+    // ("a", or "B" in some locales).
     val pattern = NSDateFormatter.dateFormatFromTemplate("j", options = 0u, locale = NSLocale.currentLocale).orEmpty()
-    !pattern.contains('a')
+    pattern.contains('H') || pattern.contains('k')
 }
 
 private const val SECONDS_PER_DAY = 86_400L
 
+/** Gregorian fields, whatever calendar the device shows. Made once: this runs for every message on screen. */
+private val CALENDAR = NSCalendar(calendarIdentifier = NSCalendarIdentifierISO8601)
