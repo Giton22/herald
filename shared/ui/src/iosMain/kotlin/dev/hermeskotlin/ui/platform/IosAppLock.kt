@@ -5,15 +5,20 @@ package dev.hermeskotlin.ui.platform
 import dev.hermeskotlin.core.settings.AppLockTimer
 import dev.hermeskotlin.core.settings.SettingsStore
 import kotlinx.cinterop.ExperimentalForeignApi
+import kotlinx.cinterop.convert
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import platform.Foundation.NSNotificationCenter
 import platform.Foundation.NSOperationQueue
-import platform.Foundation.NSProcessInfo
 import platform.Foundation.NSUserDefaults
+import platform.UIKit.UIViewController
+import platform.posix.CLOCK_MONOTONIC
+import platform.posix.clock_gettime_nsec_np
 import platform.LocalAuthentication.LAContext
 import platform.LocalAuthentication.LAPolicyDeviceOwnerAuthentication
 import platform.UIKit.UIApplicationDidBecomeActiveNotification
@@ -39,25 +44,48 @@ internal class IosAppLock(private val settings: SettingsStore, scope: CoroutineS
     private var asking = false
     private var cover: UIView? = null
 
+    /**
+     * Ask by itself only on launch and on coming back from the background. The unlock prompt also makes the
+     * app inactive and active again; asking then would reopen a prompt the person just cancelled.
+     */
+    private var askWhenActive = true
+
     init {
         // The stored setting is read asynchronously; this copy decides the very first frame.
         timer.onLaunch(enabled, fresh = true)
-        scope.launch {
+        scope.launch(Dispatchers.Main) {
             settings.settings.filterNotNull().map { it.appLock }.distinctUntilChanged().collect { on ->
                 defaults.setBool(on, KEY_APP_LOCK)
                 enabled = on
                 timer.setEnabled(on)
             }
         }
+        scope.launch(Dispatchers.Main) {
+            // A sheet (Safari, share, a picker) would stay usable above the lock: close it.
+            timer.locked.filter { it }.collect { topViewController()?.takeIf { it.presentingViewController != null }?.let(::dismissAll) }
+        }
         val center = NSNotificationCenter.defaultCenter
         val main = NSOperationQueue.mainQueue
         center.addObserverForName(UIApplicationWillResignActiveNotification, null, main) { _ -> if (enabled) showCover() }
         center.addObserverForName(UIApplicationDidEnterBackgroundNotification, null, main) { _ -> timer.onBackground(now()) }
-        center.addObserverForName(UIApplicationWillEnterForegroundNotification, null, main) { _ -> timer.onForeground(now()) }
+        center.addObserverForName(UIApplicationWillEnterForegroundNotification, null, main) { _ ->
+            askWhenActive = true
+            timer.onForeground(now())
+        }
         center.addObserverForName(UIApplicationDidBecomeActiveNotification, null, main) { _ ->
             hideCover()
-            ask()
+            if (askWhenActive) {
+                askWhenActive = false
+                ask()
+            }
         }
+    }
+
+    /** Closes every sheet down to the app itself. */
+    private fun dismissAll(top: UIViewController) {
+        var root = top
+        while (true) root = root.presentingViewController ?: break
+        root.dismissViewControllerAnimated(false, completion = null)
     }
 
     /** Shows the system's unlock prompt, unless it's already up or the app isn't locked. */
@@ -95,7 +123,8 @@ internal class IosAppLock(private val settings: SettingsStore, scope: CoroutineS
         cover = null
     }
 
-    private fun now(): Long = (NSProcessInfo.processInfo.systemUptime * 1000).toLong()
+    // Keeps counting while the phone sleeps (systemUptime doesn't), like Android's elapsedRealtime.
+    private fun now(): Long = (clock_gettime_nsec_np(CLOCK_MONOTONIC.convert()) / 1_000_000u).toLong()
 
     private companion object {
         const val KEY_APP_LOCK = "app_lock"
