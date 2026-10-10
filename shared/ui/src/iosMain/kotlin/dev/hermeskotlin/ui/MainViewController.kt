@@ -27,7 +27,7 @@ fun MainViewController(onDarkTheme: (Boolean) -> Unit): UIViewController = Compo
 }
 
 /** What the Android app module provides, as iOS has it. */
-private val iosAppModule = module {
+internal val iosAppModule = module {
     single<VoiceKeepAlive> { NoKeepAlive }
     single<PushKeys> { NoPushKeys }
     single { PushSetup(get(), get(), get(), get(), get(), get(), deviceName = { UIDevice.currentDevice.name }) }
