@@ -6,6 +6,7 @@ import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.bots.BotChats
 import dev.hermeskotlin.core.bots.BotSession
+import dev.hermeskotlin.core.cache.OfflineCache
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
 import dev.hermeskotlin.ui.chat.BotIdentity
@@ -62,6 +63,8 @@ class AppViewModel(
     private val botChats: BotChats,
     private val push: PushSetup,
     private val access: AccessTokens,
+    /** The chats saved on this device, which go with signing out. */
+    private val cache: OfflineCache? = null,
 ) : ViewModel() {
 
     private val _route = MutableStateFlow<Route>(Route.Loading)
@@ -170,6 +173,8 @@ class AppViewModel(
     /** Signs out of [gateway] and forgets it; removing the current one moves to the primary (or to [Route.Connect]). */
     fun removeGateway(gateway: SavedGateway) {
         viewModelScope.launch {
+            // First, so the chats go even if what follows waits on an unreachable gateway and the app is closed.
+            cache?.forgetGateway(gateway.gatewayUrl)
             val wasCurrent = currentGateway()?.url == gateway.url || gateways.current()?.url == gateway.url
             if (wasCurrent) {
                 // While the socket is still up: the gateway forgets this phone's push identity.
@@ -178,6 +183,8 @@ class AppViewModel(
                 host.close()
             }
             auth.signOut(gateway.gatewayUrl)
+            // Again: a list read that was under way may have saved itself since.
+            cache?.forgetGateway(gateway.gatewayUrl)
             gateways.remove(gateway.url)
             forgetUnusedAccessTokens()
             sessionsChanged.update { it + 1 }
@@ -300,11 +307,15 @@ class AppViewModel(
     fun signOut() {
         val gateway = currentGateway() ?: return
         viewModelScope.launch {
+            // First, so the chats go even if what follows waits on an unreachable gateway and the app is closed.
+            cache?.forgetGateway(gateway.gatewayUrl)
             // While the socket is still up: the gateway forgets this phone's push identity.
             push.forget()
             connection.stop()
             host.close()
             auth.signOut(gateway.gatewayUrl)
+            // Again: a list read that was under way may have saved itself since.
+            cache?.forgetGateway(gateway.gatewayUrl)
             sessionsChanged.update { it + 1 }
             _route.value = Route.SignIn(gateway)
         }

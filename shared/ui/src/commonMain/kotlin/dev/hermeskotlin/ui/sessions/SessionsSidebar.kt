@@ -10,7 +10,6 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
-import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.shadow.Shadow
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.clearAndSetSemantics
@@ -29,6 +28,7 @@ import com.composables.icons.lucide.ShieldAlert
 import dev.hermeskotlin.core.chat.Waiting
 import dev.hermeskotlin.designsystem.code
 import dev.hermeskotlin.designsystem.display
+import dev.hermeskotlin.designsystem.components.glow
 import dev.hermeskotlin.designsystem.components.halo
 import dev.hermeskotlin.designsystem.eyebrow
 import dev.hermeskotlin.designsystem.radiusSmall
@@ -181,6 +181,7 @@ import dev.hermeskotlin.ui.components.ConnectionLine
 import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.ListSkeleton
 import dev.hermeskotlin.ui.components.relativeTime
+import dev.hermeskotlin.ui.components.savedCopyLabel
 import dev.hermeskotlin.ui.update.UpdateBanner
 import kotlinx.coroutines.delay
 import dev.hermeskotlin.core.rooms.Room
@@ -524,6 +525,11 @@ fun SessionsSidebar(
                                         needsAttention = state.listed.count { statuses[it.id]?.needsAttention == true },
                                         onSelect = viewModel::setAttentionFilter,
                                     )
+                                }
+                            }
+                            state.savedCopyAt?.takeIf { state.project == null }?.let { savedAt ->
+                                item(key = "saved-copy") {
+                                    ListNotice("${savedCopyLabel(savedAt)}. Hermes can't be reached right now.", action = "Try again", onAction = viewModel::refresh)
                                 }
                             }
                             when {
@@ -1082,7 +1088,7 @@ private fun NewChatPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
             Modifier
                 .fillMaxWidth()
                 .heightIn(min = 46.dp)
-                .dropShadow(shape, Shadow(radius = 14.dp, color = fill.copy(alpha = 0.4f), offset = DpOffset(0.dp, 4.dp)))
+                .glow(shape, Shadow(radius = 14.dp, color = fill.copy(alpha = 0.4f), offset = DpOffset(0.dp, 4.dp)))
                 .clip(shape)
                 .background(fill, shape)
                 .indication(interaction, rememberColoredIndication(Theme[colors][onAccent]))

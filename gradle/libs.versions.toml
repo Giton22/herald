@@ -20,6 +20,8 @@ highlights = "1.1.0"
 jlatexmath-android = "0.2.0"
 haze = "2.0.1"
 webrtc = "150.7871.01"
+room = "2.8.5"
+ksp = "2.3.12"
 
 android-compileSdk = "37"
 android-targetSdk = "36"
@@ -76,6 +78,10 @@ androidx-fragment = { module = "androidx.fragment:fragment", version.ref = "frag
 # GPT-Live voice calls
 webrtc-android = { module = "io.github.webrtc-sdk:android", version.ref = "webrtc" }
 
+# Offline cache
+room-runtime = { module = "androidx.room:room-runtime", version.ref = "room" }
+room-compiler = { module = "androidx.room:room-compiler", version.ref = "room" }
+
 # Testing
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 
@@ -86,3 +92,5 @@ compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "
 compose-multiplatform = { id = "org.jetbrains.compose", version.ref = "compose-multiplatform" }
 android-application = { id = "com.android.application", version.ref = "agp" }
 android-kotlin-multiplatform-library = { id = "com.android.kotlin.multiplatform.library", version.ref = "agp" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+room = { id = "androidx.room", version.ref = "room" }

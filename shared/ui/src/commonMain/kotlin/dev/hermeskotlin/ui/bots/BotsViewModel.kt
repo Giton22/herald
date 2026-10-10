@@ -3,6 +3,7 @@ package dev.hermeskotlin.ui.bots
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.bots.Bot
+import dev.hermeskotlin.core.cache.OfflineCache
 import dev.hermeskotlin.core.bots.BotDetails
 import dev.hermeskotlin.core.bots.BotDraft
 import dev.hermeskotlin.core.bots.BotHealth
@@ -104,6 +105,8 @@ class BotsViewModel(
     private val models: ModelsApi,
     private val host: ChatHost,
     attention: AttentionTracker,
+    /** The chats saved on this device, which go with their bot. */
+    private val cache: OfflineCache? = null,
 ) : ViewModel() {
 
     private val _state = MutableStateFlow(BotsUiState())
@@ -455,6 +458,7 @@ class BotsViewModel(
             when (val result = profiles.delete(url, bot.name)) {
                 is ApiResult.Success -> {
                     chats.forget(bot.name)
+                    cache?.forgetProfile(url, bot.name)
                     _state.update { it.regroup(it.all.filterNot { b -> b.name == bot.name }).copy(notice = "Deleted ${bot.label}.") }
                     onDeleted()
                 }

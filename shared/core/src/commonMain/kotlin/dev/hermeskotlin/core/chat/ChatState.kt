@@ -159,6 +159,11 @@ data class ChatState(
     val yolo: Boolean? = null,
     val historyLoaded: Boolean = false,
     val historyError: String? = null,
+    /**
+     * When the copy of the transcript shown was saved on this device (epoch ms): the gateway couldn't be read
+     * ([historyError] says why). Null once the transcript comes from the gateway.
+     */
+    val savedCopyAt: Long? = null,
     /** The transcript goes back further than what's loaded; scrolling to the top loads the page before. */
     val olderMessages: Boolean = false,
     /** An older page is being read. */
@@ -195,6 +200,9 @@ data class ChatState(
     val keySeq: Int = 0,
 ) {
     val runtimeSessionId: String? get() = (attachment as? Attachment.Attached)?.runtimeSessionId
+
+    /** The stored messages shown are the gateway's: none failed to load, and they aren't the device's saved copy. */
+    val historyRead: Boolean get() = historyError == null && savedCopyAt == null
 
     /** Prompts or replies exist, so the stored row does too; command output or notices alone don't make one. */
     val hasConversation: Boolean get() = messages.any { it is ChatMessage.User || it is ChatMessage.Assistant }

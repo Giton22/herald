@@ -1,5 +1,6 @@
 package dev.hermeskotlin.core.chat
 
+import dev.hermeskotlin.core.cache.OfflineCache
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.sessions.SessionsApi
@@ -21,6 +22,7 @@ class ChatHost(
     private val sessions: SessionsApi,
     private val scope: CoroutineScope,
     private val risks: ToolRiskStore? = null,
+    private val cache: OfflineCache? = null,
 ) {
     private val _session = MutableStateFlow<ChatSession?>(null)
     val session: StateFlow<ChatSession?> = _session.asStateFlow()
@@ -46,7 +48,7 @@ class ChatHost(
         this.gateway = gateway
         this.profile = profile
         sessionScope = childScope
-        return ChatSession(gateway, storedSessionId, title, connection, sessions, childScope, profile, risks, cwd = cwd)
+        return ChatSession(gateway, storedSessionId, title, connection, sessions, childScope, profile, risks, cwd = cwd, cache = cache)
             .also { it.start() }
             .also { _session.value = it }
     }

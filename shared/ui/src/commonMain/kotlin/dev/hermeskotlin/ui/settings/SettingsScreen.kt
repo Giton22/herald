@@ -320,6 +320,13 @@ internal fun SettingsView(
                         onCheckedChange = { on -> onUpdate { it.copy(pureBlack = on) } },
                     )
                     Divider()
+                    SwitchRow(
+                        title = "Glow",
+                        detail = "Soft colored light behind the top of each screen and under your messages and buttons. Off, everything sits flat.",
+                        checked = settings.glow,
+                        onCheckedChange = { on -> onUpdate { it.copy(glow = on) } },
+                    )
+                    Divider()
                     Field("Text size", detail = "On top of your phone's own font size.") {
                         TextSizeSlider(settings.textSize, onSelect = { size -> onUpdate { it.copy(textSize = size) } })
                     }

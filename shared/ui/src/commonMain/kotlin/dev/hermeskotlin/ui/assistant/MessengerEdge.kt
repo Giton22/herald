@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 import dev.hermeskotlin.designsystem.AccentPalette
 import dev.hermeskotlin.designsystem.LocalAccentPalette
+import dev.hermeskotlin.designsystem.components.LocalGlow
 import dev.hermeskotlin.core.chat.ChatState
 import kotlinx.coroutines.flow.emptyFlow
 
@@ -98,6 +99,8 @@ internal fun MessengerEdge(model: AssistantPanelModel, modifier: Modifier = Modi
     }
 
     val edge = LocalAccentPalette.current.edge
+    // With the Glow setting off, only the crisp line: the edge still tells what Hermes is doing.
+    val layers = if (LocalGlow.current) LAYERS else LAYERS.takeLast(1)
     Canvas(modifier) {
         val heads = listOf(phase.floatValue, (phase.floatValue + 0.5f) % 1f)
         val stops = Array(STOPS + 1) { i ->
@@ -109,7 +112,7 @@ internal fun MessengerEdge(model: AssistantPanelModel, modifier: Modifier = Modi
         val brush = Brush.sweepGradient(*stops, center = center)
         val corner = CornerRadius(CORNER.toPx())
         // A soft wide halo under a crisp line, both centred on the screen's edge so only their inner half shows.
-        for ((width, alpha) in LAYERS) {
+        for ((width, alpha) in layers) {
             val w = width.toPx() * (1f + 0.6f * voice)
             drawRoundRect(brush, topLeft = Offset.Zero, size = Size(size.width, size.height), cornerRadius = corner, style = Stroke(w), alpha = alpha)
         }

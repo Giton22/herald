@@ -1,5 +1,6 @@
 package dev.hermeskotlin.core.chat
 
+import dev.hermeskotlin.core.cache.OfflineCache
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
@@ -71,6 +72,8 @@ class ChatSession(
     private val clock: Clock = Clock.System,
     /** For a new chat: the working folder it starts in (a project's), or null for the profile's default. */
     private val cwd: String? = null,
+    /** The device's copy of the transcript, shown while the gateway can't be read. */
+    private val cache: OfflineCache? = null,
 ) {
     private fun nowSeconds(): Double = clock.now().toEpochMilliseconds() / 1000.0
 
@@ -205,7 +208,7 @@ class ChatSession(
         // queued one isn't, so for those the transcript can't say whether it arrived.
         val startsTurn = !queue && !_state.value.running
         // The prompts shown, which the transcript has too; not countable when the transcript failed to load.
-        val promptsBefore = _state.value.takeIf { it.historyError == null }
+        val promptsBefore = _state.value.takeIf { it.historyRead }
             ?.messages?.count { it is ChatMessage.User && !it.pending && it.check == null }
         var submitted = false
         return try {
@@ -324,11 +327,11 @@ class ChatSession(
         if (bubble.check == null || bubble.check == SendCheck.Checking) return
         // Reloaded first only when it never loaded, since the count below needs it: a reload settles any
         // prompt whose text the transcript has anywhere, an earlier one alike, so it can't be the check.
-        if (_state.value.historyError != null) loadHistory()
+        if (!_state.value.historyRead) loadHistory()
         val messages = _state.value.messages
         val index = messages.indexOfFirst { it.key == key }
         if (index < 0) return run { unsettled.remove(key) }
-        val before = _state.value.takeIf { it.historyError == null }?.let {
+        val before = _state.value.takeIf { it.historyRead }?.let {
             messages.take(index).count { m -> m is ChatMessage.User && !m.pending && m.check == null }
         }
         val arrived = findInTranscript(bubble.text, key, before)
@@ -450,7 +453,7 @@ class ChatSession(
                 // No answer: the cut may have happened. The transcript shows which, and its last prompt says whether this went.
                 _state.update { state -> state.copy(messages = state.messages.filterNot { it.key == newKey }) }
                 loadHistory()
-                val arrived = _state.value.historyError == null &&
+                val arrived = _state.value.historyRead &&
                     (_state.value.messages.lastOrNull { it is ChatMessage.User } as? ChatMessage.User)?.text == trimmed
                 if (arrived) {
                     rewound = true
@@ -1333,7 +1336,8 @@ class ChatSession(
             }
             if (!rowExists) return@collectLatest // a new chat attaches on first send
             // Load what couldn't be read before the link came up; after a drop, attaching catches up.
-            if (!attachedBefore && _state.value.historyError != null) loadHistory()
+            // A load still running (showing the saved copy meanwhile) isn't one that failed: it brings the rows itself.
+            if (!attachedBefore && !_state.value.historyRead && !historyMutex.isLocked) loadHistory()
             // A chat created on this link was live too, though it never resumed: it catches up the same way.
             val reconnected = attachedBefore || streamMutex.withLock { seqRuntime != null }
             if (runCatchingAttach(connectionState.client, reconnected = reconnected)) attachedBefore = true
@@ -1451,6 +1455,8 @@ class ChatSession(
                     foreignTurn = false
                     rewound = false
                     scope.launch { loadHistory() }
+                } else if (cache != null) {
+                    scope.launch { refreshSavedCopy() }
                 }
             }
             "request.cancel" -> {
@@ -1480,12 +1486,24 @@ class ChatSession(
      * Reads the newest page of the transcript and lays it over the loaded rows, so older pages scrolled back to
      * stay. When it no longer meets them (many turns since), the chat starts over from the newest page.
      */
-    private suspend fun loadHistory() = historyMutex.withLock {
+    private suspend fun loadHistory(): Unit = historyMutex.withLock {
         val id = _state.value.storedSessionId ?: return
+        // Nothing shown yet: the copy saved on this device, while the gateway is asked (which may take long offline).
+        if (rows.isEmpty()) {
+            cache?.savedTranscript(gateway, profile, id)?.let { saved ->
+                rows = saved.rows
+                rowsSessionId = saved.rowsSessionId
+                olderSkew = 0
+                // Earlier pages can't be read until the gateway can, which brings this copy up to date first.
+                showRows(risks?.all().orEmpty(), older = false, savedCopyAt = saved.savedAt)
+            }
+        }
         val result = sessions.messages(gateway, id, limit = HISTORY_PAGE, profile = profile)
         val flagged = risks?.all().orEmpty()
         when (result) {
             is ApiResult.Success -> {
+                // The saved copy may be out of date before the page too (an undo, a compression): start over.
+                if (_state.value.savedCopyAt != null) rows = emptyList()
                 val page = result.value.messages
                 val full = page.size >= HISTORY_PAGE
                 val joined = if (full && rows.isNotEmpty()) rows.withNewest(page.fromFirstTurn()) else null
@@ -1494,15 +1512,60 @@ class ChatSession(
                 rowsSessionId = result.value.sessionId
                 olderSkew = 0
                 showRows(flagged, older)
+                saveCopy(id, rows, rowsSessionId)
             }
-            else -> _state.update {
-                it.copy(
-                    historyLoaded = true,
-                    historyError = result.errorMessage,
-                    // Gone from the gateway (deleted elsewhere, or with its bot): nothing of it is still running.
-                    running = it.running && !(result is ApiResult.Failed && result.status == HTTP_NOT_FOUND),
-                )
+            else -> {
+                val gone = result is ApiResult.Failed && result.status == HTTP_NOT_FOUND
+                if (gone) {
+                    // A write still under way would bring it back.
+                    saveJob?.cancel()
+                    savedCopyKey = null
+                    cache?.forgetChat(gateway, profile, id)
+                    // The saved copy is of a chat that no longer exists.
+                    if (_state.value.savedCopyAt != null) {
+                        rows = emptyList()
+                        showRows(flagged, older = false)
+                    }
+                }
+                _state.update {
+                    it.copy(
+                        historyLoaded = true,
+                        historyError = result.errorMessage,
+                        // Gone from the gateway (deleted elsewhere, or with its bot): nothing of it is still running.
+                        running = it.running && !gone,
+                    )
+                }
             }
+        }
+    }
+
+    /** The copy last written to the device, by row count and newest row id, so an unchanged transcript isn't written again. */
+    private var savedCopyKey: Pair<Int, Long?>? = null
+    private var saveJob: Job? = null
+
+    /** Writes [saved] as the device's copy of chat [id], off the history lock; a newer copy replaces one still being written. */
+    private fun saveCopy(id: String, saved: List<SessionMessage>, savedSessionId: String?) {
+        val cache = cache ?: return
+        val key = saved.size to saved.lastOrNull()?.id
+        if (key == savedCopyKey) return
+        savedCopyKey = key
+        saveJob?.cancel()
+        saveJob = scope.launch { cache.saveTranscript(gateway, profile, id, saved, savedSessionId) }
+    }
+
+    /**
+     * Brings the device's copy up to date after a turn of ours: the screen shows it from live events, which the
+     * loaded rows don't have. Nothing shown changes.
+     */
+    private suspend fun refreshSavedCopy() {
+        val id = _state.value.storedSessionId ?: return
+        val page = (sessions.messages(gateway, id, limit = HISTORY_PAGE, profile = profile) as? ApiResult.Success)?.value ?: return
+        historyMutex.withLock {
+            if (!_state.value.historyRead || _state.value.storedSessionId != id) return
+            val full = page.messages.size >= HISTORY_PAGE
+            val newest = if (full) page.messages.fromFirstTurn() else page.messages
+            val joined = (if (full) rows.withNewest(newest) else null) ?: newest
+            saveCopy(id, joined, page.sessionId)
         }
     }
 
@@ -1520,6 +1583,12 @@ class ChatSession(
      * couldn't be read.
      */
     suspend fun loadAllHistory(): Boolean {
+        // A saved copy says nothing of the rows before it; the gateway's transcript is needed first.
+        if (_state.value.savedCopyAt != null) loadHistory()
+        if (_state.value.savedCopyAt != null) {
+            _state.update { it.copy(error = "Couldn't read the whole conversation from Hermes. ${it.historyError.orEmpty()}".trim()) }
+            return false
+        }
         repeat(MAX_HISTORY_PAGES) {
             if (!_state.value.olderMessages) return true
             if (!loadOlderPage(HISTORY_PAGE_MAX)) return false
@@ -1564,8 +1633,11 @@ class ChatSession(
         }
     }
 
-    /** Shows the loaded [rows] in place of the stored messages, keeping what they can't hold yet. */
-    private fun showRows(flagged: Map<String, ToolRisk>, older: Boolean) = _state.update { state ->
+    /**
+     * Shows the loaded [rows] in place of the stored messages, keeping what they can't hold yet. [savedCopyAt]: they're
+     * the copy saved on this device then, not the gateway's.
+     */
+    private fun showRows(flagged: Map<String, ToolRisk>, older: Boolean, savedCopyAt: Long? = null) = _state.update { state ->
         // Keep a reply that is streaming right now; the stored rows don't have it yet. Nor do they
         // have a correction mid-turn, or the part of the reply shown before it.
         val corrected = state.messages.indexOfFirst { it.key == state.correctedReplyKey }
@@ -1577,8 +1649,11 @@ class ChatSession(
         val stored = historyToMessages(rows, rowsSessionId).withRisks(flagged)
         // A prompt sent without a reply that the transcript now has arrived after all.
         val storedPrompts = stored.mapNotNullTo(HashSet()) { (it as? ChatMessage.User)?.text }
-        val unsettled = live.filterNot { it is ChatMessage.User && it.check != null && storedPrompts.any { p -> p.contains(it.text) } }
-        state.copy(messages = stored + unsettled, historyLoaded = true, historyError = null, olderMessages = older)
+        // Only the gateway's transcript says a prompt arrived; the saved copy is from before it.
+        val unsettled = if (savedCopyAt != null) live else {
+            live.filterNot { it is ChatMessage.User && it.check != null && storedPrompts.any { p -> p.contains(it.text) } }
+        }
+        state.copy(messages = stored + unsettled, historyLoaded = true, historyError = null, savedCopyAt = savedCopyAt, olderMessages = older)
     }
 
     private suspend fun runCatchingAttach(client: JsonRpcClient, reconnected: Boolean = false): Boolean = try {
@@ -1649,7 +1724,7 @@ class ChatSession(
             if (catchingUp) held = mutableListOf()
             resumable to catchingUp
         }
-        if (reconnected && (!resumable || _state.value.historyError != null)) loadHistory()
+        if (reconnected && (!resumable || (!_state.value.historyRead && !historyMutex.isLocked))) loadHistory()
         _state.update { state ->
             state.copy(
                 attachment = Attachment.Attached(runtimeId),
@@ -1839,7 +1914,7 @@ internal fun ChatState.withInflight(streamed: String): ChatState {
 internal fun ChatState.withoutStaleReply(): ChatState {
     if (messages.none { it is ChatMessage.Assistant && it.streaming }) return this
     return copy(
-        messages = if (historyError == null) {
+        messages = if (historyRead) {
             messages.filterNot { it is ChatMessage.Assistant && it.streaming }
         } else {
             messages.map { if (it is ChatMessage.Assistant && it.streaming) it.copy(streaming = false) else it }

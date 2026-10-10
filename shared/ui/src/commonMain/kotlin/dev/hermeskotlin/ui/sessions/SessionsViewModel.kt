@@ -6,6 +6,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.AuthUser
+import dev.hermeskotlin.core.cache.OfflineCache
 import dev.hermeskotlin.core.chat.AttentionTracker
 import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.LastChatStore
@@ -59,6 +60,8 @@ data class SessionsUiState(
     val canLoadMore: Boolean = false,
     /** The list itself failed to load. */
     val error: String? = null,
+    /** When the rows shown were saved on this device (epoch ms): the gateway couldn't be read. Null once it has been. */
+    val savedCopyAt: Long? = null,
     /** Results for the search box; null while it is empty. */
     val searchResults: List<SessionSummary>? = null,
     val searching: Boolean = false,
@@ -132,6 +135,8 @@ class SessionsViewModel(
     private val seenStore: SeenStore,
     private val drafts: DraftStore,
     private val projectsApi: ProjectsApi,
+    /** The list as last read, shown while the gateway can't be. */
+    private val cache: OfflineCache? = null,
 ) : ViewModel() {
 
     /** Stamps an archive's undo offer, so it runs out on time even if the screen goes and comes back. */
@@ -204,6 +209,9 @@ class SessionsViewModel(
     private var profile: String? = null
     private var loadJob: Job? = null
 
+    /** When the rows showing were saved on the device (epoch ms); null once the gateway's list replaced them. */
+    private var savedShownAt: Long? = null
+
     /** Sessions with unsent text in their composer, marked "Draft" in the list. */
     val draftChats: StateFlow<Set<String>> = bound
         .flatMapLatest { scope -> scope?.let { (url, profile) -> drafts.chatsWithDrafts(url, profile) } ?: flowOf(emptySet()) }
@@ -222,6 +230,7 @@ class SessionsViewModel(
         this.profile = profile
         bound.value = gateway.gatewayUrl to profile
         _state.value = SessionsUiState()
+        savedShownAt = null
         // The last list's projects mean nothing here; ask afresh.
         projectsJob?.cancel()
         projectSessionsJob?.cancel()
@@ -256,6 +265,7 @@ class SessionsViewModel(
     fun setFilter(filter: SessionListFilter) {
         if (filter == _state.value.filter) return
         // The picked project stays for the way back; the archive isn't split by project.
+        savedShownAt = null
         _state.update {
             SessionsUiState(
                 filter = filter,
@@ -558,7 +568,12 @@ class SessionsViewModel(
     fun delete(session: SessionSummary) = mutate(
         apply = { list -> list.filterNot { it.id == session.id } },
         call = { url, profile ->
-            api.delete(url, session.id, profile).also { if (it is ApiResult.Success) lastChats.forget(url, session.id, profile) }
+            api.delete(url, session.id, profile).also {
+                if (it is ApiResult.Success) {
+                    lastChats.forget(url, session.id, profile)
+                    cache?.forgetChat(url, profile, session.id)
+                }
+            }
         },
     )
 
@@ -600,6 +615,7 @@ class SessionsViewModel(
 
     private fun load(refresh: Boolean) {
         val url = gateway?.gatewayUrl ?: return
+        val profile = profile
         val filter = _state.value.filter
         // This may cancel a page fetch mid-flight, which would otherwise leave its spinner up for good.
         loadJob?.cancel()
@@ -607,11 +623,25 @@ class SessionsViewModel(
         // Pull to refresh asks at once; a change from the gateway waits its turn.
         if (filter == SessionListFilter.Recent) loadProjects(force = refresh)
         loadJob = viewModelScope.launch {
+            // Nothing showing yet: the list as last read, while the gateway is asked.
+            val saved = if (_state.value.sessions.isEmpty()) cache?.savedList(url, profile, filter) else null
+            if (saved != null) {
+                _state.update { state ->
+                    if (state.filter != filter || state.sessions.isNotEmpty() || bound.value != url to profile) {
+                        state
+                    } else {
+                        savedShownAt = saved.savedAt
+                        state.copy(sessions = saved.sessions, loading = false, canLoadMore = false)
+                    }
+                }
+            }
             // Keep however many rows are already showing so a background refetch doesn't truncate the list.
             val limit = _state.value.sessions.size.coerceIn(SessionsApi.PAGE_SIZE, 100)
             val result = api.list(url, limit = limit, filter = filter, profile = profile)
+            if (result is ApiResult.Success) cache?.saveList(url, profile, filter, result.value.sessions)
             _state.update { state ->
                 if (state.filter != filter) return@update state
+                if (result is ApiResult.Success) savedShownAt = null
                 when (result) {
                     is ApiResult.Success -> state.copy(
                         sessions = result.value.sessions,
@@ -619,6 +649,7 @@ class SessionsViewModel(
                         refreshing = false,
                         error = null,
                         canLoadMore = result.value.sessions.size < result.value.total,
+                        savedCopyAt = null,
                     )
                     else -> state.copy(
                         loading = false,
@@ -627,6 +658,7 @@ class SessionsViewModel(
                         error = result.errorMessage.takeIf { state.sessions.isEmpty() },
                         message = result.errorMessage.takeIf { state.sessions.isNotEmpty() && refresh },
                         sessionExpired = result.isExpired,
+                        savedCopyAt = savedShownAt,
                     )
                 }
             }

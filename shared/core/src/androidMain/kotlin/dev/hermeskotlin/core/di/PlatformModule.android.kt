@@ -2,6 +2,9 @@ package dev.hermeskotlin.core.di
 
 import dev.hermeskotlin.core.auth.AndroidLoopbackReceiver
 import dev.hermeskotlin.core.auth.LoopbackReceiver
+import dev.hermeskotlin.core.cache.KeystoreSealer
+import dev.hermeskotlin.core.cache.Sealer
+import dev.hermeskotlin.core.cache.offlineDatabase
 import dev.hermeskotlin.core.settings.WallpaperStore
 import dev.hermeskotlin.core.storage.AndroidBlobFile
 import dev.hermeskotlin.core.storage.EncryptedKeyValueStore
@@ -29,4 +32,6 @@ actual val platformModule: Module = module {
     // One per screen, like the recorder: the chat and the assistant panel each stop only their own.
     factory<DeviceDictation> { AndroidDeviceDictation(androidContext()) }
     single { LiveCalls { AndroidLiveCall(androidContext()) } }
+    single { offlineDatabase(androidContext()) }
+    single<Sealer> { KeystoreSealer(get()) }
 }

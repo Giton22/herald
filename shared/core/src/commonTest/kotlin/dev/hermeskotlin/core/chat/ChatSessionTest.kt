@@ -1,5 +1,10 @@
 package dev.hermeskotlin.core.chat
 
+import dev.hermeskotlin.core.cache.InMemoryOfflineDao
+import dev.hermeskotlin.core.cache.OfflineCache
+import dev.hermeskotlin.core.cache.PlainSealer
+import dev.hermeskotlin.core.cache.SavedTranscript
+import kotlin.coroutines.EmptyCoroutineContext
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.network.HermesJson
@@ -9,6 +14,7 @@ import dev.hermeskotlin.core.rpc.event
 import dev.hermeskotlin.core.rpc.isCall
 import dev.hermeskotlin.core.rpc.json
 import dev.hermeskotlin.core.rpc.param
+import dev.hermeskotlin.core.sessions.SessionMessage
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.slash.SlashCommand
 import io.ktor.http.HttpStatusCode
@@ -16,6 +22,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
@@ -811,6 +818,106 @@ class ChatSessionTest {
         assertEquals(SendCheck.Unknown, (chat.state.value.messages.last() as ChatMessage.User).check)
         historyFails = false
         return chat
+    }
+
+    @Test
+    fun aTranscriptReadIsSavedAndShownWhenTheGatewayCantBeRead() = runTest {
+        val cache = OfflineCache(InMemoryOfflineDao(), PlainSealer, EmptyCoroutineContext) { 5_000L }
+        val (connection, _) = setup(backgroundScope, mapOf("session.resume" to """{"session_id":"rt1","running":false}"""))
+        val first = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope, cache = cache)
+        first.start()
+        first.state.first { it.historyLoaded && it.messages.size == 2 }
+        testScheduler.runCurrent() // the copy is written after the rows show
+        assertNotNull(cache.savedTranscript(url, null, "stored-1"))
+        first.stop()
+
+        historyFails = true
+        val again = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope, cache = cache)
+        again.start()
+
+        val saved = again.state.first { it.historyError != null }
+        assertEquals(listOf("hello", "Hi! What next?"), saved.messages.map { it.textOf() })
+        assertEquals(5_000L, saved.savedCopyAt)
+        assertNotNull(saved.historyError)
+        assertFalse(saved.olderMessages)
+    }
+
+    @Test
+    fun theGatewaysTranscriptReplacesTheSavedCopyOnceItCanBeRead() = runTest {
+        val cache = OfflineCache(InMemoryOfflineDao(), PlainSealer, EmptyCoroutineContext) { 5_000L }
+        cache.saveTranscript(url, null, "stored-1", listOf(SessionMessage(id = 1, role = "user", content = JsonPrimitive("old"))), "stored-1")
+        historyFails = true
+        val (connection, _) = setup(backgroundScope, mapOf("session.resume" to """{"session_id":"rt1","running":false}"""))
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope, cache = cache)
+        chat.start()
+        assertEquals(listOf("old"), chat.state.first { it.savedCopyAt != null }.messages.map { it.textOf() })
+
+        historyFails = false
+        chat.retry()
+
+        val fresh = chat.state.first { it.savedCopyAt == null && it.historyError == null }
+        assertEquals(listOf("hello", "Hi! What next?"), fresh.messages.map { it.textOf() })
+        testScheduler.runCurrent() // the copy is written after the rows show
+        assertEquals(listOf(1L, 2L), cache.savedTranscript(url, null, "stored-1")?.rows?.map { it.id })
+    }
+
+    @Test
+    fun aTurnOfOursEndingBringsTheSavedCopyUpToDate() = runTest {
+        val cache = OfflineCache(InMemoryOfflineDao(), PlainSealer, EmptyCoroutineContext) { 5_000L }
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf("session.resume" to """{"session_id":"rt1","running":false}""", "prompt.submit" to """{"status":"streaming"}"""),
+        )
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope, cache = cache)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        assertTrue(chat.send("go on"))
+        transport.push(event("message.start", "rt1"))
+        history = history.replace("]}", """,{"id":3,"role":"user","content":"go on"},{"id":4,"role":"assistant","content":"Done."}]}""")
+
+        transport.push(event("message.complete", "rt1", """{"text":"Done.","status":"complete"}"""))
+
+        var saved: SavedTranscript? = null
+        repeat(100) {
+            if (saved == null) {
+                testScheduler.advanceTimeBy(10)
+                testScheduler.runCurrent()
+                saved = cache.savedTranscript(url, null, "stored-1")?.takeIf { it.rows.size == 4 }
+            }
+        }
+        assertEquals(listOf(1L, 2L, 3L, 4L), saved?.rows?.map { it.id })
+    }
+
+    @Test
+    fun attachingWhileTheSavedCopyShowsReadsTheTranscriptOnce() = runTest {
+        val cache = OfflineCache(InMemoryOfflineDao(), PlainSealer, EmptyCoroutineContext) { 5_000L }
+        cache.saveTranscript(url, null, "stored-1", listOf(SessionMessage(id = 1, role = "user", content = JsonPrimitive("old"))), "stored-1")
+        var reads = 0
+        val (connection, _) = setup(backgroundScope, mapOf("session.resume" to """{"session_id":"rt1","running":false}"""))
+        val answer = gateway.http
+        gateway.http = { request -> reads++; answer(request) }
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope, cache = cache)
+        chat.start()
+
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyRead && it.messages.size == 2 }
+        testScheduler.advanceTimeBy(1_000)
+        testScheduler.runCurrent()
+        assertEquals(1, reads)
+    }
+
+    @Test
+    fun aChatTheGatewayNoLongerHasIsDroppedFromTheDevice() = runTest {
+        val cache = OfflineCache(InMemoryOfflineDao(), PlainSealer, EmptyCoroutineContext) { 5_000L }
+        cache.saveTranscript(url, null, "stored-1", listOf(SessionMessage(id = 1, role = "user", content = JsonPrimitive("old"))), "stored-1")
+        historyMissing = true
+        val (connection, _) = setup(backgroundScope, mapOf("session.resume" to """{"session_id":"rt1","running":false}"""))
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope, cache = cache)
+        chat.start()
+
+        val gone = chat.state.first { it.historyError != null }
+        assertTrue(gone.messages.isEmpty())
+        assertNull(gone.savedCopyAt)
+        assertNull(cache.savedTranscript(url, null, "stored-1"))
     }
 
     @Test

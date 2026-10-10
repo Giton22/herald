@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Ellipsis
 import dev.hermeskotlin.designsystem.HeraldBrandBlue
 import dev.hermeskotlin.designsystem.HeraldMark
+import dev.hermeskotlin.designsystem.components.glow
 import dev.hermeskotlin.designsystem.components.halo
 import dev.hermeskotlin.designsystem.dangerSoft
 import dev.hermeskotlin.designsystem.radiusSmall
@@ -142,6 +143,8 @@ import com.composables.icons.lucide.CircleCheck
 import com.composables.icons.lucide.Clock
 import com.composables.icons.lucide.Sparkles
 import com.composables.icons.lucide.WifiOff
+import com.composables.icons.lucide.History
+import dev.hermeskotlin.ui.components.savedCopyLabel
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.foundation.layout.widthIn
@@ -292,6 +295,8 @@ import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.messageTime
 import dev.hermeskotlin.ui.components.uses24HourClock
 import kotlinx.coroutines.delay
+import androidx.compose.runtime.produceState
+import kotlin.time.Clock
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -622,7 +627,8 @@ internal fun ChatView(
                                 fold = composerFold,
                                 actions = actions,
                                 connected = connected,
-                                canChange = state.canChangeChat(connected),
+                                // A saved copy may lack what changed since; edits wait for the gateway's transcript.
+                                canChange = state.canChangeChat(connected && state.savedCopyAt == null),
                                 editing = editing,
                             )
                         }
@@ -656,6 +662,15 @@ internal fun ChatView(
                 ) {
                     AnimatedVisibility(visible = linkStatus != null, enter = fadeIn(), exit = fadeOut()) {
                         OfflineBanner(place, lastLinkStatus, onRetry = onRetryConnection)
+                    }
+                    // A chat read from the device's copy says so, and how old it is, once the gateway is known to be away;
+                    // while it's only being asked, the copy is replaced without a word.
+                    var lastSavedAt by remember { mutableStateOf(0L) }
+                    state.savedCopyAt?.let { lastSavedAt = it }
+                    val showSaved = state.savedCopyAt != null && state.messages.isNotEmpty() && (state.historyError != null || !connected)
+                    AnimatedVisibility(visible = showSaved, enter = fadeIn(), exit = fadeOut()) {
+                        // Offline, the banner above offers the retry; connected, the transcript itself failed to load.
+                        SavedCopyPill(lastSavedAt, onRetry = if (connected) actions::retry else null)
                     }
                     AnimatedVisibility(visible = state.loadingOlder, enter = fadeIn(), exit = fadeOut()) {
                         StatusPill("Loading earlier messages…")
@@ -1048,7 +1063,7 @@ internal fun AppMark(size: Dp, glow: Boolean = true) {
     Box(
         Modifier
             .size(size)
-            .then(if (glow) Modifier.dropShadow(shape, bubbleGlow(HeraldBrandBlue)) else Modifier)
+            .then(if (glow) Modifier.glow(shape, bubbleGlow(HeraldBrandBlue)) else Modifier)
             .background(HeraldBrandBlue, shape),
         contentAlignment = Alignment.Center,
     ) {
@@ -1473,6 +1488,38 @@ private fun RetryChip(text: String, onClick: () -> Unit) {
     }
 }
 
+/**
+ * A small floating line saying the chat shown is the copy saved on this device at [savedAt] (epoch ms), its age kept
+ * current. With [onRetry], the gateway answered but its transcript didn't load, and the pill offers to try again.
+ */
+@Composable
+private fun SavedCopyPill(savedAt: Long, onRetry: (() -> Unit)?) {
+    val now by produceState(Clock.System.now().toEpochMilliseconds()) {
+        while (true) {
+            delay(30_000)
+            value = Clock.System.now().toEpochMilliseconds()
+        }
+    }
+    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    Row(
+        Modifier
+            .background(Theme[colors][surfaceElevated], shape)
+            .border(1.dp, Theme[colors][strokeStrong], shape)
+            .padding(start = 12.dp, end = if (onRetry != null) 4.dp else 12.dp, top = 2.dp, bottom = 2.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        UnstyledIcon(Lucide.History, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(12.dp))
+        Text(
+            savedCopyLabel(savedAt, now) + if (onRetry != null) " · couldn't load the latest" else "",
+            style = Theme[typography][caption],
+            color = Theme[colors][textSecondary],
+            modifier = Modifier.padding(vertical = 4.dp),
+        )
+        if (onRetry != null) RetryChip("Try again", onClick = onRetry)
+    }
+}
+
 /** A small floating line with a spinner, for something under way. */
 @Composable
 private fun StatusPill(text: String) {
@@ -1555,7 +1602,7 @@ private fun UserBubble(
                         Modifier
                             .weight(1f, fill = false)
                             // A sent prompt glows faintly in its own color; one still on its way doesn't.
-                            .then(if (waiting) Modifier else Modifier.dropShadow(shape, bubbleGlow(Theme[colors][userBubble])))
+                            .then(if (waiting) Modifier else Modifier.glow(shape, bubbleGlow(Theme[colors][userBubble])))
                             .clip(shape)
                             .background(Theme[colors][if (waiting) accentSoft else userBubble], shape)
                             // The prompt being edited is outlined in the text color, which shows on the accent fill.
@@ -1845,14 +1892,6 @@ private fun AssistantReply(
         val actionable = !message.streaming && text.isNotBlank()
         if (actionable || usage != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                if (actionable) {
-                    // Their padding trimmed off the start and top, the icons line up with the reply and sit close under it.
-                    val action = Modifier.trimStartTop(start = 0.dp, top = 4.dp)
-                    CopyButton(text, Modifier.trimStartTop(start = 16.dp, top = 4.dp).size(MinTouchTarget))
-                    onRegenerate?.let { ReplyAction(Lucide.RefreshCw, "Regenerate", it, action) }
-                    onBranch?.let { ReplyAction(Lucide.GitBranch, "Branch from here", it, action) }
-                }
-                Spacer(Modifier.weight(1f))
                 usage?.let {
                     Text(
                         replyUsage(it.input, it.output),
@@ -1860,6 +1899,15 @@ private fun AssistantReply(
                         color = Theme[colors][textMuted],
                         modifier = Modifier.semantics { contentDescription = "${compactCount(it.input)} tokens in, ${compactCount(it.output)} out" },
                     )
+                }
+                Spacer(Modifier.weight(1f))
+                if (actionable) {
+                    // On the end, under the thumb of the hand holding the phone; Copy, the one used most, sits last.
+                    // Copy's padding trimmed off the end lines its icon up with the reply's edge; all three lose 4dp on top to sit close under it.
+                    val action = Modifier.trimEndTop(end = 0.dp, top = 4.dp)
+                    onBranch?.let { ReplyAction(Lucide.GitBranch, "Branch from here", it, action) }
+                    onRegenerate?.let { ReplyAction(Lucide.RefreshCw, "Regenerate", it, action) }
+                    CopyButton(text, Modifier.trimEndTop(end = 16.dp, top = 4.dp).size(MinTouchTarget))
                 }
             }
         }
@@ -2914,7 +2962,7 @@ private fun SendDisc(fill: Color, tint: Color, glow: Boolean, interaction: Mutab
         Modifier
             .size(ComposerDisc)
             // Tighter than the bubble's glow: Send sits near the dock's edge, which would cut a wider one off.
-            .then(if (glow) Modifier.dropShadow(CircleShape, Shadow(radius = 10.dp, color = fill.copy(alpha = 0.45f), offset = DpOffset(0.dp, 3.dp))) else Modifier)
+            .then(if (glow) Modifier.glow(CircleShape, Shadow(radius = 10.dp, color = fill.copy(alpha = 0.45f), offset = DpOffset(0.dp, 3.dp))) else Modifier)
             .background(fill, CircleShape)
             .clip(CircleShape)
             .indication(interaction, rememberColoredIndication(tint)),
@@ -3019,12 +3067,11 @@ private fun ModelPill(
 }
 
 /**
- * Lays the element out [start] and [top] smaller, drawn up and to the left by as much: empty padding inside
- * it stops pushing it away from its neighbours, while it still takes taps over its whole size.
+ * Lays the element out [end] and [top] smaller, drawn up and past its end by as much: empty padding inside
+ * it stops pushing it away from the edge, while it still takes taps over its whole size.
  */
-private fun Modifier.trimStartTop(start: Dp, top: Dp) = layout { measurable, constraints ->
+private fun Modifier.trimEndTop(end: Dp, top: Dp) = layout { measurable, constraints ->
     val placeable = measurable.measure(constraints)
-    val dx = start.roundToPx()
     val dy = top.roundToPx()
-    layout(placeable.width - dx, placeable.height - dy) { placeable.place(-dx, -dy) }
+    layout(placeable.width - end.roundToPx(), placeable.height - dy) { placeable.placeRelative(0, -dy) }
 }

@@ -1,0 +1,158 @@
+{
+  "formatVersion": 1,
+  "database": {
+    "version": 1,
+    "identityHash": "57ebd45b76e35f7f52a9e36de49e36f5",
+    "entities": [
+      {
+        "tableName": "saved_list_row",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`gateway` TEXT NOT NULL, `profile` TEXT NOT NULL, `filter` TEXT NOT NULL, `id` TEXT NOT NULL, `position` INTEGER NOT NULL, `savedAt` INTEGER NOT NULL, `row` BLOB NOT NULL, PRIMARY KEY(`gateway`, `profile`, `filter`, `id`))",
+        "fields": [
+          {
+            "fieldPath": "gateway",
+            "columnName": "gateway",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "profile",
+            "columnName": "profile",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "filter",
+            "columnName": "filter",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "id",
+            "columnName": "id",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "savedAt",
+            "columnName": "savedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "row",
+            "columnName": "row",
+            "affinity": "BLOB",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "gateway",
+            "profile",
+            "filter",
+            "id"
+          ]
+        }
+      },
+      {
+        "tableName": "saved_transcript",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`gateway` TEXT NOT NULL, `profile` TEXT NOT NULL, `sessionId` TEXT NOT NULL, `rowsSessionId` TEXT, `savedAt` INTEGER NOT NULL, PRIMARY KEY(`gateway`, `profile`, `sessionId`))",
+        "fields": [
+          {
+            "fieldPath": "gateway",
+            "columnName": "gateway",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "profile",
+            "columnName": "profile",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "rowsSessionId",
+            "columnName": "rowsSessionId",
+            "affinity": "TEXT"
+          },
+          {
+            "fieldPath": "savedAt",
+            "columnName": "savedAt",
+            "affinity": "INTEGER",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "gateway",
+            "profile",
+            "sessionId"
+          ]
+        }
+      },
+      {
+        "tableName": "saved_message",
+        "createSql": "CREATE TABLE IF NOT EXISTS `${TABLE_NAME}` (`gateway` TEXT NOT NULL, `profile` TEXT NOT NULL, `sessionId` TEXT NOT NULL, `position` INTEGER NOT NULL, `row` BLOB NOT NULL, PRIMARY KEY(`gateway`, `profile`, `sessionId`, `position`))",
+        "fields": [
+          {
+            "fieldPath": "gateway",
+            "columnName": "gateway",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "profile",
+            "columnName": "profile",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "sessionId",
+            "columnName": "sessionId",
+            "affinity": "TEXT",
+            "notNull": true
+          },
+          {
+            "fieldPath": "position",
+            "columnName": "position",
+            "affinity": "INTEGER",
+            "notNull": true
+          },
+          {
+            "fieldPath": "row",
+            "columnName": "row",
+            "affinity": "BLOB",
+            "notNull": true
+          }
+        ],
+        "primaryKey": {
+          "autoGenerate": false,
+          "columnNames": [
+            "gateway",
+            "profile",
+            "sessionId",
+            "position"
+          ]
+        }
+      }
+    ],
+    "setupQueries": [
+      "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '57ebd45b76e35f7f52a9e36de49e36f5')"
+    ]
+  }
+}

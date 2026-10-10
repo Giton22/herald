@@ -22,7 +22,8 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [ ] Kotlin models generated from `gateway-contract.openrpc.json`
 - [x] Koin for dependency injection, androidx ViewModel (KMP), Coroutines/Flow
 - [ ] Navigation library (KMP); a small route state machine (`AppViewModel`) is used for now
-- [ ] SQLDelight or Room KMP for the local cache, DataStore for settings
+- [x] Room KMP for the local cache
+- [ ] DataStore for settings
 - [x] Secure storage on Android (AES-GCM key in the Android Keystore) for the session cookie jar
 - [ ] Secure storage on iOS (Keychain)
 - [x] Markdown rendering (`multiplatform-markdown-renderer`)
@@ -48,6 +49,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [ ] Chat bubble, tool card, approval card as design-system components (they live in `shared/ui` for now)
 - [x] Theme picker (system / light / dark) and pure black
 - [x] Accent color presets (Settings → Appearance → Accent): blue, violet, green, orange, pink and teal, each tuned for light, dark and pure black
+- [x] Glow switch (Settings → Appearance): off, the colored glows go (the halo behind each screen, and the light under prompts, the app mark, Send, New chat, main buttons, live subagent cards, the voice screen, and the assistant edge's halo, which keeps its crisp line) and everything sits flat
 
 ---
 
@@ -184,6 +186,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Undo and branch from the composer (`/undo` hands the last prompt back; `/branch` → `session.branch_whole` / `session.branch`)
 - [x] Undo and branch from a message: a ⋯ menu on each message with Copy, Edit last prompt (`/undo`, then the transcript reloads) and Branch from here (`session.branch` with the message's position), each change explained before it happens
 - [x] Regenerate a reply and edit any prompt: one `prompt.submit` with `truncate_before_row_id` (the prompt's stored row), `confirm_truncate` and `confirm_empty_truncate` cuts the transcript and sends in its place; asks before discarding later messages; off mid-turn and for prompts the live agent no longer holds
+- [x] A finished reply's Copy, Regenerate and Branch sit on the right, under the thumb, with Copy last; its token usage moves to the left
 - [x] Comment on part of a reply: select text and pick Comment; a numbered card with a note waits above the composer and the text stays highlighted. Each comment names its place (the reply, list item, code block line, tool or command output) and quotes the sentence or line around the selection, so a repeated word is still found; they go out together in one message, shown as cards in the sent bubble. Also on a prompt (its long-press menu), tool and command output and subagent results
 - [x] Explain (asks at once when nothing else is waiting) and Ask aside (a `/btw` about the selection) in the same selection menu
 - [x] Context compression (`/compress` → `session.compress`)
@@ -264,7 +267,8 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] App lock (Settings → Privacy): fingerprint, face or screen lock on launch and after a minute away; content hidden in Recents
 - [ ] Tablet and foldable adaptive layout (list and detail side by side)
 - [ ] Home-screen widget and Quick Settings tile
-- [ ] Offline cache of sessions and messages
+- [x] Offline cache of sessions and messages: the chat list and the newest rows of the last 50 chats read are kept on the device (Room, rows encrypted with a Keystore-held key) and shown while the gateway can't be reached, marked "Saved copy"; signing out of a gateway forgets its chats
+- [ ] Send prompts typed offline once the gateway is back (an outbox)
 - [ ] iOS app
 - [ ] Desktop (JVM) app
 - [ ] Wear OS companion

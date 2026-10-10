@@ -12,7 +12,7 @@ import dev.hermeskotlin.ui.preview.PreviewScene
 /**
  * Debug builds only: shows one sample screen full-screen, for the README screenshots.
  * `adb shell am start -n dev.herald.android/dev.hermeskotlin.android.PreviewGalleryActivity --es scene Reply --ez dark true`
- * (and `--es accent Violet` for another accent preset).
+ * (and `--es accent Violet` for another accent preset, `--ez glow false` with the Glow setting off).
  */
 class PreviewGalleryActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -22,6 +22,7 @@ class PreviewGalleryActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         val scene = PreviewScene.entries.firstOrNull { it.name == intent.getStringExtra("scene") } ?: PreviewScene.Reply
         val accent = intent.getStringExtra("accent")
-        setContent { if (accent != null) HeraldPreview(scene, dark, accent) else HeraldPreview(scene, dark) }
+        val glow = intent.getBooleanExtra("glow", true)
+        setContent { if (accent != null) HeraldPreview(scene, dark, accent, glow) else HeraldPreview(scene, dark, glow = glow) }
     }
 }
