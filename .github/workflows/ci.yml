@@ -47,7 +47,8 @@ jobs:
 
   ios:
     # Kotlin/Native links and runs Apple targets only on macOS. macOS runners are free for public repos.
-    runs-on: macos-15
+    # Xcode 26 at least: the WebRTC package's manifest names visionOS 26.
+    runs-on: macos-26
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1

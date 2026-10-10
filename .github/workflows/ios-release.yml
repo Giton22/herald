@@ -13,7 +13,8 @@
 # at least one device in the developer account, or automatic signing can't make the profiles.
 #
 # Pre-release tags (v1.2.3-rc1) skip the upload: their build number would be the final release's, which
-# TestFlight then refuses. Xcode isn't pinned: the runner's default is a recent SDK, which App Store uploads need.
+# TestFlight then refuses. Xcode isn't pinned: the runner's default is a recent SDK, which App Store uploads need
+# (and the WebRTC package needs Xcode 26 at least).
 name: iOS release
 
 on:
@@ -29,7 +30,7 @@ concurrency:
 
 jobs:
   testflight:
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 75
     steps:
       - name: Signing set up?
