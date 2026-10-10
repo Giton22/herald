@@ -512,7 +512,7 @@ private fun GoalSection(goal: GoalControl, use24Hour: Boolean, busy: ControlActi
         if (!goal.contract.isEmpty) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 ContractLine("Outcome", goal.contract.outcome)
-                ContractLine("How it's checked", goal.contract.verification)
+                ContractLine("How it's checked", goal.contract.verification, codeValue = true)
                 ContractLine("Constraints", goal.contract.constraints)
                 ContractLine("Boundaries", goal.contract.boundaries)
                 ContractLine("Stop when", goal.contract.stopWhen)
@@ -523,16 +523,15 @@ private fun GoalSection(goal: GoalControl, use24Hour: Boolean, busy: ControlActi
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text("CHECKS", style = Theme[typography][eyebrow], color = Theme[colors][textTertiary], modifier = Modifier.semantics { heading() })
                 goal.gates.forEach { gate ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Column {
                         Text(
                             gate.command,
                             style = Theme[typography][code].copy(fontSize = 12.sp),
                             color = Theme[colors][textSecondary],
-                            maxLines = 2,
+                            maxLines = 3,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f),
                         )
-                        Text(gateLabel(gate), style = Theme[typography][caption], color = Theme[colors][textMuted], maxLines = 1)
+                        Text(gateLabel(gate), style = Theme[typography][caption], color = Theme[colors][textMuted])
                     }
                 }
             }
@@ -581,7 +580,18 @@ private fun Subgoals(goal: GoalControl, busy: ControlAction?, onAction: (Control
     }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (goal.subgoals.isNotEmpty()) {
-            Text("SUB-GOALS", style = Theme[typography][eyebrow], color = Theme[colors][textTertiary], modifier = Modifier.semantics { heading() })
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("SUB-GOALS", style = Theme[typography][eyebrow], color = Theme[colors][textTertiary], modifier = Modifier.weight(1f).semantics { heading() })
+                if (goal.subgoals.size > 1) {
+                    Button(
+                        "Clear all",
+                        onClick = { onConfirm(ConfirmAction.ClearSubgoals) },
+                        variant = ButtonVariant.Ghost,
+                        size = ButtonSize.Small,
+                        enabled = busy == null,
+                    )
+                }
+            }
             goal.subgoals.forEach { text ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(text, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], modifier = Modifier.weight(1f))
@@ -595,15 +605,6 @@ private fun Subgoals(goal: GoalControl, busy: ControlAction?, onAction: (Control
                         UnstyledIcon(Lucide.X, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(13.dp))
                     }
                 }
-            }
-            if (goal.subgoals.size > 1) {
-                Button(
-                    "Clear all",
-                    onClick = { onConfirm(ConfirmAction.ClearSubgoals) },
-                    variant = ButtonVariant.Ghost,
-                    size = ButtonSize.Small,
-                    enabled = busy == null,
-                )
             }
         }
         if (goal.phase != GoalPhase.Done) {
@@ -737,9 +738,16 @@ private fun Detail(text: String) {
 }
 
 @Composable
-private fun ContractLine(name: String, value: String) {
+private fun ContractLine(name: String, value: String, codeValue: Boolean = false) {
     if (value.isBlank()) return
-    Text("$name: $value", style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
+    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        Text(name, style = Theme[typography][eyebrow], color = Theme[colors][textTertiary])
+        Text(
+            value,
+            style = if (codeValue) Theme[typography][code] else Theme[typography][bodySmall],
+            color = Theme[colors][textSecondary],
+        )
+    }
 }
 
 /** A section's main action: a small secondary pill that spins while its action is in flight. */
