@@ -29,6 +29,7 @@ import platform.Security.SecItemAdd
 import platform.Security.SecItemCopyMatching
 import platform.Security.SecItemDelete
 import platform.Security.SecItemUpdate
+import platform.Security.errSecInteractionNotAllowed
 import platform.Security.errSecItemNotFound
 import platform.Security.errSecSuccess
 import platform.Security.kSecAttrAccessGroup
@@ -60,6 +61,9 @@ class KeychainKeyValueStore(
             memScoped {
                 val result = alloc<CFTypeRefVar>()
                 val status = SecItemCopyMatching(query, result.ptr)
+                // Locked (before the first unlock since boot) isn't "no value": reading null would let the next
+                // write replace the saved sign-in.
+                check(status != errSecInteractionNotAllowed) { "The Keychain is locked until the phone is unlocked." }
                 if (status != errSecSuccess) return@memScoped null
                 (CFBridgingRelease(result.value) as? NSData)?.toByteArray()?.decodeToString()
             }
