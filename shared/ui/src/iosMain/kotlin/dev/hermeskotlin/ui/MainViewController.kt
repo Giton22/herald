@@ -26,6 +26,9 @@ import platform.UIKit.UIViewController
 /** Starts the shared code. The Swift app calls it once, before the first screen. */
 fun initKoin() {
     startKoin { modules(sharedModules + iosAppModule) }
+    // Before launch finishes: the notification center has to have its delegate by then, or a tap that
+    // launched the app is lost.
+    KoinPlatform.getKoin().get<IosChatNotifier>()
 }
 
 /**
@@ -36,7 +39,6 @@ fun MainViewController(onDarkTheme: (Boolean) -> Unit): UIViewController {
     val lock = KoinPlatform.getKoin().get<IosAppLock>()
     // Started with the UI: it follows the connection for the quick actions and the app for shares.
     KoinPlatform.getKoin().get<IosLinks>()
-    KoinPlatform.getKoin().get<IosChatNotifier>()
     return ComposeUIViewController {
         val locked by lock.timer.locked.collectAsState()
         CompositionLocalProvider(LocalUriHandler provides SafariUriHandler) {

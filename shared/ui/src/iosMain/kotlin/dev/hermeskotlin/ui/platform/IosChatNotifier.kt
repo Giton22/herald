@@ -113,13 +113,15 @@ internal class IosChatNotifier(
                         center.removeDeliveredNotificationsWithIdentifiers(listOf(it))
                     }
 
-                    if (previous?.running == true && !state.running && !visible && prefs.notifyReplies) {
+                    // Only a stored chat: the notification opens it, as on Android.
+                    val storedId = state.storedSessionId
+                    if (storedId != null && previous?.running == true && !state.running && !visible && prefs.notifyReplies) {
                         val reply = state.messages.lastOrNull() as? ChatMessage.Assistant
                         if (reply != null && reply.outcome != TurnOutcome.Interrupted) {
                             val failed = reply.outcome == TurnOutcome.Error
-                            val text = if (failed) reply.error ?: reply.text else reply.text
-                            val title = state.title ?: "Hermes"
-                            post(REPLY_PREFIX + (state.storedSessionId ?: ""), state, if (failed) "$title: the turn failed" else title, text)
+                            val text = (if (failed) reply.error ?: reply.text else reply.text).toPlainText()
+                                .ifBlank { if (failed) "The turn failed." else "Done." }
+                            post(REPLY_PREFIX + storedId, state, state.title ?: "Hermes", text)
                         }
                     }
                     previous = state
@@ -179,7 +181,23 @@ internal class IosChatNotifier(
         is InputRequest.VaultSaveLogin -> "Open Herald to save it."
     }
 
+    /** Markdown reads badly in a notification; keep the words, drop the markup (as Android does). */
+    private fun String.toPlainText(): String = this
+        .replace(CODE_FENCE, "")
+        .replace(HEADING, "")
+        .replace(BOLD, "$2")
+        .replace(INLINE_CODE, "$1")
+        .replace(LINK_OR_IMAGE, "$1")
+        .replace(BLANK_LINES, "\n\n")
+        .trim()
+
     private companion object {
+        val CODE_FENCE = Regex("```[^\\n]*\\n?")
+        val HEADING = Regex("(?m)^#{1,6}\\s+")
+        val BOLD = Regex("(\\*\\*|__)(.+?)\\1")
+        val INLINE_CODE = Regex("`([^`]+)`")
+        val LINK_OR_IMAGE = Regex("!?\\[([^]]*)]\\([^)]*\\)")
+        val BLANK_LINES = Regex("\\n{3,}")
         const val LINK = "link"
         const val REPLY_PREFIX = "reply-"
         const val MAX_BODY = 1_000
