@@ -50,6 +50,7 @@ import dev.hermeskotlin.core.capabilities.Skill
 import dev.hermeskotlin.core.capabilities.Toolset
 import dev.hermeskotlin.ui.chat.CheckpointsSheetView
 import dev.hermeskotlin.ui.chat.ProcessesSheetView
+import dev.hermeskotlin.ui.chat.SessionControlSheetView
 import dev.hermeskotlin.ui.chat.UsageSheetView
 import dev.hermeskotlin.ui.sessions.CapabilitiesActions
 import dev.hermeskotlin.ui.sessions.CapabilitiesView
@@ -133,6 +134,7 @@ enum class PreviewScene(val label: String) {
     JobEditor("A new scheduled job"),
     Usage("Usage and context"),
     Processes("Background processes"),
+    Goal("The chat's goal, loop and heartbeat"),
     Comments("Comments on a reply"),
     MidTask("Typing while a task runs"),
     ConnectionCheck("The connection check"),
@@ -435,6 +437,10 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                     SampleChat(ChatSamples.reply)
                     ProcessesSheetView(visible = true, state = PageSamples.processes, onKill = {}, onDismiss = {}, initiallyExpanded = "proc_1")
                 }
+                PreviewScene.Goal -> Box(Modifier.fillMaxSize()) {
+                    SampleChat(ChatSamples.reply)
+                    SessionControlSheetView(visible = true, control = PageSamples.control, busy = null, error = null, onAction = { _, _, _ -> }, onDismiss = {})
+                }
                 PreviewScene.Settings -> SettingsView(
                     settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light, accent = accent, glow = glow),
                     info = GatewayInfo(userLabel = ChatSamples.USER, version = "0.9.0"),
@@ -610,6 +616,10 @@ private fun UsagePreview() = HeraldPreview(PreviewScene.Usage)
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun ProcessesPreview() = HeraldPreview(PreviewScene.Processes)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun GoalPreview() = HeraldPreview(PreviewScene.Goal)
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable

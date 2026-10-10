@@ -6,6 +6,12 @@ import dev.hermeskotlin.core.chat.Checkpoint
 import dev.hermeskotlin.core.chat.CheckpointDiff
 import dev.hermeskotlin.core.chat.Checkpoints
 import dev.hermeskotlin.core.chat.ContextBreakdown
+import dev.hermeskotlin.core.chat.GoalContract
+import dev.hermeskotlin.core.chat.GoalControl
+import dev.hermeskotlin.core.chat.GoalGate
+import dev.hermeskotlin.core.chat.HeartbeatControl
+import dev.hermeskotlin.core.chat.LoopControl
+import dev.hermeskotlin.core.chat.SessionControl
 import dev.hermeskotlin.core.chat.ContextCategory
 import dev.hermeskotlin.core.chat.ContextFile
 import dev.hermeskotlin.core.chat.SessionUsage
@@ -219,6 +225,69 @@ internal object PageSamples {
             ),
         ),
     )
+
+    /**
+     * The backup chat's automation, after the gateway's real goal_loop_heartbeat snapshot: a goal four
+     * turns in with sub-goals and a check, the loop it holds back, and a heartbeat. Times follow the
+     * clock so the next run reads as a time of day.
+     */
+    val control: SessionControl
+        get() {
+            val now = Clock.System.now().toEpochMilliseconds() / 1000.0
+            return SessionControl(
+                goal = GoalControl(
+                    title = "Get the test suite green on the feat/goals branch",
+                    status = "active",
+                    turnsUsed = 4,
+                    maxTurns = 20,
+                    contract = GoalContract(
+                        outcome = "Core tests pass",
+                        verification = "./gradlew :shared:core:testAndroidHostTest",
+                        constraints = "No new dependencies",
+                        boundaries = "",
+                        stopWhen = "",
+                    ),
+                    subgoals = listOf("Fix the flaky reconnect test", "Pin the wire contract in a test"),
+                    gates = listOf(
+                        GoalGate(
+                            command = "./gradlew :shared:core:testAndroidHostTest",
+                            timeoutSeconds = 600,
+                            maxRetries = 2,
+                            attempts = 2,
+                            lastExitCode = 1,
+                        ),
+                    ),
+                    pausedReason = null,
+                    lastVerdict = "continue",
+                    lastReason = "Two tests still fail in ChatSessionTest.",
+                    waitBarrier = null,
+                    updatedAt = now - 9 * 60,
+                ),
+                loop = LoopControl(
+                    prompt = "Check the deploy log and report errors",
+                    status = "active",
+                    selfPaced = false,
+                    intervalSeconds = 1800.0,
+                    times = 6,
+                    until = "",
+                    ticksFired = 2,
+                    lastFiredAt = now - 12 * 60,
+                    nextDueAt = now + 18 * 60,
+                    awaitingResponse = false,
+                    deferredByGoal = true,
+                    pausedReason = null,
+                    lastStopReason = null,
+                ),
+                heartbeat = HeartbeatControl(
+                    prompt = "Any new GitHub notifications?",
+                    status = "active",
+                    intervalSeconds = 3600,
+                    lastFiredAt = now - 42 * 60,
+                    fireCount = 3,
+                ),
+                revision = "dced25cac75f65f0dce50607239ba5a41dbc0b9b91d1c4e75503dde64af77467",
+            )
+        }
 
     /** Settings → Check connection, where the server and sign-in pass but the live link doesn't. */
     val connectionCheck = mapOf(

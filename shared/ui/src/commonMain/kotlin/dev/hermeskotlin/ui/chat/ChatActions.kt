@@ -3,6 +3,7 @@ package dev.hermeskotlin.ui.chat
 import androidx.compose.foundation.text.input.TextFieldState
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatState
+import dev.hermeskotlin.core.chat.ControlAction
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.settings.RunningSend
 import dev.hermeskotlin.core.slash.SlashSuggestion
@@ -87,6 +88,12 @@ interface ChatActions {
 
     /** Loads the page of the conversation before what's shown, as the reader scrolls to the top. */
     fun loadOlder() {}
+
+    /**
+     * Runs an action from the goal and loops panel (pause, resume, clear, sub-goal edits) on the open
+     * chat. The snapshot it answers with lands in [ChatState.control]; failures show in the sheet.
+     */
+    fun runControl(action: ControlAction, text: String? = null, index: Int? = null) {}
 
     fun dismissError()
 

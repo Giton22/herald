@@ -327,6 +327,7 @@ fun ChatScreen(
     var usageOpen by remember { mutableStateOf(false) }
     var processesOpen by remember { mutableStateOf(false) }
     var checkpointsOpen by remember { mutableStateOf(false) }
+    var controlOpen by remember { mutableStateOf(false) }
     var viewing by remember { mutableStateOf<ViewerImage?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(notice) {
@@ -362,6 +363,7 @@ fun ChatScreen(
                 ChatRequest.OpenUsage -> usageOpen = true
                 ChatRequest.OpenProcesses -> processesOpen = true
                 ChatRequest.OpenCheckpoints -> checkpointsOpen = true
+                ChatRequest.OpenControl -> controlOpen = true
                 ChatRequest.StartVoice -> startVoiceChat()
                 ChatRequest.StartDictation -> toggleDictation()
             }
@@ -414,6 +416,7 @@ fun ChatScreen(
         onDictate = toggleDictation,
         onVoiceChat = startVoiceChat,
         onOpenPets = { petsOpen = true },
+        onOpenControl = { controlOpen = true },
         onViewImage = { viewing = it },
         onNotice = { notice = it },
         wallpaper = rememberChatWallpaper(),
@@ -455,6 +458,13 @@ fun ChatScreen(
         onRestore = viewModel::restoreCheckpoint,
         running = state.running,
         onDismiss = { checkpointsOpen = false },
+    )
+    SessionControlSheet(
+        visible = controlOpen,
+        control = state.control,
+        controller = viewModel.control,
+        onAction = viewModel::runControl,
+        onDismiss = { controlOpen = false },
     )
     viewing?.let { image ->
         CompositionLocalProvider(LocalMediaLoader provides viewModel::loadMedia) {
@@ -525,6 +535,8 @@ internal fun ChatView(
     onDictate: () -> Unit,
     onVoiceChat: () -> Unit,
     onOpenPets: () -> Unit,
+    /** Opens the goal and loops sheet from the strip above the composer. */
+    onOpenControl: () -> Unit = {},
     onViewImage: (ViewerImage) -> Unit,
     onNotice: (String) -> Unit,
     /** The chat background from Settings, drawn behind the conversation (and frosted under the composer). */
@@ -703,6 +715,7 @@ internal fun ChatView(
                         onAttach = onAttach,
                         onDictate = onDictate,
                         onVoiceChat = onVoiceChat,
+                        onOpenControl = onOpenControl,
                         voiceFull = voiceFull,
                         onExpandVoice = { voiceFolded = false },
                     )
@@ -771,6 +784,8 @@ private fun ColumnScope.Dock(
     onAttach: () -> Unit,
     onDictate: () -> Unit,
     onVoiceChat: () -> Unit,
+    /** Opens the goal and loops sheet from the strip above the composer. */
+    onOpenControl: () -> Unit,
     /** The voice chat is open over the whole screen. */
     voiceFull: Boolean,
     onExpandVoice: () -> Unit,
@@ -809,6 +824,8 @@ private fun ColumnScope.Dock(
         )
     }
     if (!state.running) TodoPanel(state.todos, live = state.todosLive, hazeState = hazeState)
+    // The chat's automation sits here whether or not a turn runs: the goal works on its own between turns.
+    SessionControlStrip(state.control, hazeState, onOpen = onOpenControl)
 
     if (state.inputRequests.isNotEmpty()) {
         // The task's Stop is on the live task card above.
