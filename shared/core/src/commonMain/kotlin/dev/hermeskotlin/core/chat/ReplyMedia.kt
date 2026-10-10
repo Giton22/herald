@@ -18,10 +18,21 @@ data class ReplyMedia(
     val gatewayPath: String get() = source.removePrefix("file://")
 }
 
-private val MARKDOWN_IMAGE = Regex("""!\[([^\]]*)\]\(\s*<?([^\)\s>]+)>?(?:\s+"[^"]*")?\s*\)""")
+/** The address may hold one level of balanced brackets, as Wikipedia's `Foo_(bar)` pages do. */
+private val MARKDOWN_IMAGE = Regex("""!\[([^\]]*)\]\(\s*<?((?:[^\(\)\s<>]|\([^\(\)\s]*\))+)>?(?:\s+"[^"]*")?\s*\)""")
 
-/** Hermes' delivery directive; trailing sentence punctuation is not part of the path. */
-private val MEDIA_TOKEN = Regex("""[ \t]*MEDIA:(\S+?)(?=[.,;:!?)\]]*(?:\s|$))""")
+/**
+ * Hermes' delivery directive, as a word of its own (not the end of `MULTIMEDIA:`); trailing sentence
+ * punctuation is not part of the path.
+ */
+private val MEDIA_TOKEN = Regex("""[ \t]*(?<![A-Za-z0-9_])MEDIA:(\S+?)(?=[.,;:!?)\]]*(?:\s|$))""")
+
+/**
+ * Fenced code blocks (one still streaming runs to the end) and code spans. What's in them is a sample,
+ * shown as typed: the gateway delivers no `MEDIA:` path from code either (`gateway/platforms/base.py`
+ * `_code_spans`).
+ */
+private val CODE = Regex("""(?s)(```|~~~)[^\n]*\n.*?(?:\1|\z)|`[^`\n]+`""")
 
 /** Desktop's inline widget directive, alone on its line; shown here as its file. */
 // Braces and brackets are escaped everywhere: Android's ICU regex rejects a bare `}` that the JVM allows.
@@ -52,20 +63,22 @@ fun extractReplyMedia(text: String, generated: List<GeneratedImage> = emptyList(
     val echoes = generated.flatMap { it.echoes }.toSet()
     if ("![" !in text && "MEDIA:" !in text && "::preview" !in text && echoes.none { it in text }) return text to emptyList()
     val media = LinkedHashMap<String, ReplyMedia>()
-    var cleaned = MARKDOWN_IMAGE.replace(text) { match ->
-        val source = match.groupValues[2]
-        media.getOrPut(source) { ReplyMedia(source, nameOf(source, match.groupValues[1]), isImage = true) }
-        ""
-    }
-    cleaned = PREVIEW_DIRECTIVE.replace(cleaned) { match ->
-        val source = match.groupValues[1]
-        media.getOrPut(source) { ReplyMedia(source, nameOf(source), isImage = false) }
-        ""
-    }
-    cleaned = MEDIA_TOKEN.replace(cleaned) { match ->
-        val source = match.groupValues[1]
-        media.getOrPut(source) { ReplyMedia(source, nameOf(source), isImagePath(source)) }
-        ""
+    var cleaned = outsideCode(text) { prose ->
+        var part = MARKDOWN_IMAGE.replace(prose) { match ->
+            val source = match.groupValues[2]
+            media.getOrPut(source) { ReplyMedia(source, nameOf(source, match.groupValues[1]), isImage = true) }
+            ""
+        }
+        part = PREVIEW_DIRECTIVE.replace(part) { match ->
+            val source = match.groupValues[1]
+            media.getOrPut(source) { ReplyMedia(source, nameOf(source), isImage = false) }
+            ""
+        }
+        MEDIA_TOKEN.replace(part) { match ->
+            val source = match.groupValues[1]
+            media.getOrPut(source) { ReplyMedia(source, nameOf(source), isImagePath(source)) }
+            ""
+        }
     }
     // A bare path, where it stands alone: not inside a link or code, as Desktop does it.
     echoes.forEach { echo ->
@@ -77,4 +90,15 @@ fun extractReplyMedia(text: String, generated: List<GeneratedImage> = emptyList(
     // Lines left empty by the removal shouldn't leave gaps in the reply.
     cleaned = cleaned.lines().joinToString("\n") { it.trimEnd() }.replace(Regex("\n{3,}"), "\n\n").trim()
     return cleaned to media.values.filterNot { it.gatewayPath in echoes || it.source in echoes }
+}
+
+/** [text] with [transform] applied to everything but its [CODE], which stays as it was. */
+private inline fun outsideCode(text: String, transform: (String) -> String): String {
+    val out = StringBuilder(text.length)
+    var from = 0
+    CODE.findAll(text).forEach { code ->
+        out.append(transform(text.substring(from, code.range.first))).append(code.value)
+        from = code.range.last + 1
+    }
+    return out.append(transform(text.substring(from))).toString()
 }
