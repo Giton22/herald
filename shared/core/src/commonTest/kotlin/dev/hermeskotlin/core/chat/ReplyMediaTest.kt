@@ -73,6 +73,39 @@ class ReplyMediaTest {
     }
 
     @Test
+    fun markupInCodeIsASampleNotMedia() {
+        val reply = "Use this syntax:\n```markdown\n![cat](/opt/data/cat.png)\nMEDIA:/opt/data/report.pdf\n```\n" +
+            "Inline, type `MEDIA:/tmp/x.png` or `![a](b.png)`. Here it is: MEDIA:/opt/data/real.pdf"
+        val (text, media) = extractReplyMedia(reply)
+        assertEquals(
+            "Use this syntax:\n```markdown\n![cat](/opt/data/cat.png)\nMEDIA:/opt/data/report.pdf\n```\n" +
+                "Inline, type `MEDIA:/tmp/x.png` or `![a](b.png)`. Here it is:",
+            text,
+        )
+        assertEquals(listOf("/opt/data/real.pdf"), media.map { it.source })
+    }
+
+    @Test
+    fun aFenceStillStreamingIsCodeToTheEnd() {
+        val (text, media) = extractReplyMedia("```bash\necho MEDIA:/tmp/a.png")
+        assertEquals("```bash\necho MEDIA:/tmp/a.png", text)
+        assertTrue(media.isEmpty())
+    }
+
+    @Test
+    fun anImageAddressKeepsItsBrackets() {
+        val (text, media) = extractReplyMedia("See ![Foo](https://en.wikipedia.org/wiki/Foo_(bar).png) for details.")
+        assertEquals("See  for details.", text)
+        assertEquals(listOf("https://en.wikipedia.org/wiki/Foo_(bar).png"), media.map { it.source })
+    }
+
+    @Test
+    fun mediaInsideAWordIsProse() {
+        val text = "MULTIMEDIA:notes.txt is a heading"
+        assertEquals(text to emptyList(), extractReplyMedia(text))
+    }
+
+    @Test
     fun plainTextIsUntouched() {
         val text = "No pictures here, just [a link](https://example.com)."
         assertEquals(text to emptyList(), extractReplyMedia(text))
