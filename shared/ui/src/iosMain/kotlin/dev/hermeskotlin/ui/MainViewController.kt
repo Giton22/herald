@@ -12,6 +12,7 @@ import dev.hermeskotlin.core.push.PushSetup
 import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.ui.di.sharedModules
 import dev.hermeskotlin.ui.platform.IosAppLock
+import dev.hermeskotlin.ui.platform.IosLinks
 import dev.hermeskotlin.ui.platform.SafariUriHandler
 import org.koin.core.context.startKoin
 import org.koin.dsl.module
@@ -31,6 +32,8 @@ fun initKoin() {
  */
 fun MainViewController(onDarkTheme: (Boolean) -> Unit): UIViewController {
     val lock = KoinPlatform.getKoin().get<IosAppLock>()
+    // Started with the UI: it follows the connection for the quick actions and the app for shares.
+    KoinPlatform.getKoin().get<IosLinks>()
     return ComposeUIViewController {
         val locked by lock.timer.locked.collectAsState()
         CompositionLocalProvider(LocalUriHandler provides SafariUriHandler) {
@@ -39,9 +42,16 @@ fun MainViewController(onDarkTheme: (Boolean) -> Unit): UIViewController {
     }
 }
 
+/**
+ * Opens a `hermes://` link, a quick action's link or a share the extension left, for the Swift host. False when
+ * it isn't one Herald knows.
+ */
+fun openLink(url: String): Boolean = KoinPlatform.getKoin().get<IosLinks>().open(url)
+
 /** What the Android app module provides, as iOS has it. */
 internal val iosAppModule = module {
     single { IosAppLock(get(), get()) }
+    single { IosLinks(get(), get(), get(), get(), get()) }
     single<VoiceKeepAlive> { NoKeepAlive }
     single<PushKeys> { NoPushKeys }
     single { PushSetup(get(), get(), get(), get(), get(), get(), deviceName = { UIDevice.currentDevice.name }) }

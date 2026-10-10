@@ -43,3 +43,21 @@ targets:
         ENABLE_USER_SCRIPT_SANDBOXING: NO
         SWIFT_VERSION: "5.0"
         CODE_SIGN_STYLE: Automatic
+        CODE_SIGN_ENTITLEMENTS: Herald/Herald.entitlements
+    dependencies:
+      - target: HeraldShare
+  # The share sheet's "Herald": plain Swift, no shared framework (an extension has little memory).
+  HeraldShare:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: HeraldShare
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.herald.ios.share
+        PRODUCT_NAME: HeraldShare
+        INFOPLIST_FILE: HeraldShare/Info.plist
+        CODE_SIGN_ENTITLEMENTS: HeraldShare/HeraldShare.entitlements
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Automatic

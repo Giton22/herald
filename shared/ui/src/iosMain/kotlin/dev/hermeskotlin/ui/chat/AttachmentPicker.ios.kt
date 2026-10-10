@@ -91,6 +91,15 @@ actual fun rememberAttachmentPicker(
 actual fun rememberImageBitmap(bytes: ByteArray, maxEdge: Int): ImageBitmap? =
     remember(bytes, maxEdge) { decodeUpright(bytes, maxEdge)?.toBitmap() }
 
+/**
+ * Files shared from another app, read like files picked in Files (each one removed once read): the
+ * attachments, and a sentence about the first that couldn't come along.
+ */
+internal fun readSharedFiles(urls: List<NSURL>): Pair<List<OutgoingAttachment>, String?> {
+    val results = readAll(urls.map { { budget -> fileAttachment(it, budget) } })
+    return results.mapNotNull { it.getOrNull() } to results.firstNotNullOfOrNull { it.exceptionOrNull()?.message }
+}
+
 /** Reads each item in turn within one pick's [MAX_PICK_BYTES], as the Android pickers do. */
 private fun readAll(items: List<(budget: Long) -> OutgoingAttachment>): List<Result<OutgoingAttachment>> {
     var left = MAX_PICK_BYTES
