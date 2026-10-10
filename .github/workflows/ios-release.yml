@@ -4,9 +4,16 @@
 #
 # Until these repo secrets exist, the job says so and stops without failing the release:
 #   APPLE_TEAM_ID              the Apple Developer team id (10 characters)
-#   ASC_KEY_ID, ASC_ISSUER_ID  an App Store Connect API key (Users and Access → Integrations), App Manager role
+#   ASC_KEY_ID, ASC_ISSUER_ID  a team App Store Connect API key (Users and Access → Integrations): Admin, or
+#                              App Manager with access to Certificates, Identifiers & Profiles and to
+#                              cloud-managed distribution certificates
 #   ASC_KEY_P8_BASE64          that key's .p8 file, base64-encoded
 # Xcode signs with the API key (automatic signing), so no certificates or profiles are kept in the repo.
+# Once, by hand, beforehand: create the app's record in App Store Connect (bundle id dev.herald.ios) and register
+# at least one device in the developer account, or automatic signing can't make the profiles.
+#
+# Pre-release tags (v1.2.3-rc1) skip the upload: their build number would be the final release's, which
+# TestFlight then refuses. Xcode isn't pinned: the runner's default is a recent SDK, which App Store uploads need.
 name: iOS release
 
 on:
@@ -33,11 +40,20 @@ jobs:
           ISSUER: ${{ secrets.ASC_ISSUER_ID }}
           KEY_P8: ${{ secrets.ASC_KEY_P8_BASE64 }}
         run: |
-          if [ -z "$TEAM" ] || [ -z "$KEY_ID" ] || [ -z "$ISSUER" ] || [ -z "$KEY_P8" ]; then
-            echo "::notice::No App Store Connect secrets yet: skipping the TestFlight upload."
+          set=0
+          for value in "$TEAM" "$KEY_ID" "$ISSUER" "$KEY_P8"; do if [ -n "$value" ]; then set=$((set + 1)); fi; done
+          if [[ "$GITHUB_REF_NAME" == *-* ]]; then
+            echo "::notice::$GITHUB_REF_NAME is a pre-release: skipping the TestFlight upload."
             echo "ready=false" >> "$GITHUB_OUTPUT"
-          else
+          elif [ "$set" -eq 4 ]; then
             echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            if [ "$set" -eq 0 ]; then
+              echo "::notice::No App Store Connect secrets yet: skipping the TestFlight upload."
+            else
+              echo "::warning::Only $set of the 4 App Store Connect secrets are set: skipping the TestFlight upload."
+            fi
+            echo "ready=false" >> "$GITHUB_OUTPUT"
           fi
 
       # Pinned to commits, not tags, so a moved tag can't change what runs with the signing key.
@@ -64,8 +80,8 @@ jobs:
         if: steps.secrets.outputs.ready == 'true'
         id: version
         run: |
-          # Apple takes plain numbers only: a pre-release suffix (v1.2.3-rc1) is dropped, as in Android's versionCode.
-          [[ "$GITHUB_REF_NAME" =~ ^v([0-9]+)\.([0-9]{1,2})\.([0-9]{1,2})(-[0-9A-Za-z.]+)?$ ]] || { echo "::error::$GITHUB_REF_NAME isn't a vMAJOR.MINOR.PATCH tag"; exit 1; }
+          # Apple takes plain numbers only (pre-releases stopped above).
+          [[ "$GITHUB_REF_NAME" =~ ^v([0-9]+)\.([0-9]{1,2})\.([0-9]{1,2})$ ]] || { echo "::error::$GITHUB_REF_NAME isn't a vMAJOR.MINOR.PATCH tag"; exit 1; }
           major=${BASH_REMATCH[1]} minor=${BASH_REMATCH[2]} patch=${BASH_REMATCH[3]}
           v="$major.$minor.$patch"
           echo "name=$v" >> "$GITHUB_OUTPUT"
