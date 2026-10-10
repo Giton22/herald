@@ -60,8 +60,8 @@ struct ChatsEntry: TimelineEntry {
     let data: WidgetData?
 }
 
-/// The app reloads the widgets whenever what they show changes, so one entry is enough; the hourly refresh
-/// only keeps the "10 min ago" times roughly right.
+/// The app reloads the widgets whenever what they show changes. The entries only move the "10 min ago" times
+/// on: every few minutes for the first hour, when they change the most, then every half hour.
 struct ChatsProvider: TimelineProvider {
     func placeholder(in context: Context) -> ChatsEntry {
         ChatsEntry(date: Date(), data: .sample)
@@ -72,9 +72,20 @@ struct ChatsProvider: TimelineProvider {
     }
 
     func getTimeline(in context: Context, completion: @escaping (Timeline<ChatsEntry>) -> Void) {
-        let entry = ChatsEntry(date: Date(), data: WidgetData.read())
-        completion(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(3600))))
+        let data = WidgetData.read()
+        let now = Date()
+        let minutes = Array(stride(from: 0, to: 60, by: 5)) + Array(stride(from: 60, through: 360, by: 30))
+        let entries = minutes.map { ChatsEntry(date: now.addingTimeInterval(Double($0) * 60), data: data) }
+        completion(Timeline(entries: entries, policy: .atEnd))
     }
+}
+
+/// "10 min ago" as of the entry's time: a live `.relative` text counts seconds ("10 min, 9 secs").
+private func ago(_ date: Date, at now: Date) -> String {
+    if now.timeIntervalSince(date) < 60 { return "Just now" }
+    let formatter = RelativeDateTimeFormatter()
+    formatter.unitsStyle = .short
+    return formatter.localizedString(for: date, relativeTo: now)
 }
 
 // MARK: - Recent chats
@@ -134,7 +145,7 @@ struct RecentChatsView: View {
                     VStack(alignment: .leading, spacing: 1) {
                         Text(chat.title).font(.subheadline).lineLimit(family == .systemSmall ? 3 : 1)
                         if let date = chat.date {
-                            Text(date, style: .relative).font(.caption2).foregroundStyle(.secondary)
+                            Text(ago(date, at: entry.date)).font(.caption2).foregroundStyle(.secondary)
                         }
                     }
                     // Redacted where the widget shows on a locked device (StandBy, the iPad Lock Screen).
