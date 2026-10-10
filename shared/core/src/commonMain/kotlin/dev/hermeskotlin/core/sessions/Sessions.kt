@@ -81,8 +81,8 @@ val MACHINE_SOURCES = listOf("acp", CRON_SOURCE, "kanban", "oneshot", "subagent"
 
 /**
  * The list views. Like Hermes Desktop, Recent leaves out machine-originated runs (cron, oneshot,
- * subagent, etc.) which would otherwise push real conversations off the first page. They remain
- * accessible through search, the archive, and their own job views.
+ * subagent, etc.) which would otherwise push real conversations off the first page. They stay
+ * reachable through search, and cron runs also through their job (`CronApi.runs`).
  */
 enum class SessionListFilter(
     val archived: ArchiveFilter,
