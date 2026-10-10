@@ -2,6 +2,7 @@ package dev.hermeskotlin.ui.chat
 
 import dev.hermeskotlin.core.chat.GoalGate
 import dev.hermeskotlin.core.chat.GoalPhase
+import dev.hermeskotlin.core.chat.HeartbeatControl
 import dev.hermeskotlin.core.chat.LoopControl
 import dev.hermeskotlin.core.chat.WaitBarrier
 import kotlin.test.Test
@@ -96,5 +97,55 @@ class SessionControlLabelsTest {
         assertEquals("Loop · Held by the goal · 2 of 6 runs", loopLine(held, use24Hour = true))
         val due = loop(ticksFired = 2, times = 6, nextDueAt = 1791819900.0)
         assert(loopLine(due, use24Hour = true, nowMillis = 1791810000000L).startsWith("Loop · Running · 2 of 6 runs · next "))
+    }
+
+    @Test
+    fun loopLineSaysDueNowOnceTheNextRunPassed() {
+        val overdue = loop(ticksFired = 2, times = 6, nextDueAt = 1791810000.0)
+        val line = loopLine(overdue, use24Hour = true, nowMillis = 1791819900000L)
+        assertEquals("Loop · Running · 2 of 6 runs · due now", line)
+    }
+
+    @Test
+    fun loopLineHonoursTheTwelveHourClock() {
+        val due = loop(ticksFired = 2, times = 6, nextDueAt = 1791819900.0)
+        val line = loopLine(due, use24Hour = false, nowMillis = 1791810000000L)
+        assert(line.startsWith("Loop · Running · 2 of 6 runs · next ")) { line }
+        assert(line.contains("AM") || line.contains("PM")) { line }
+    }
+
+    @Test
+    fun waitBarrierSaysWaitingToResumeOnceItsTimePassed() {
+        val past = WaitBarrier.Until(1791810000.0, "")
+        assertEquals("Waiting to resume", waitBarrierLabel(past, use24Hour = true, nowMillis = 1791819900000L))
+        val pastWithReason = WaitBarrier.Until(1791810000.0, "CI is running")
+        assertEquals("Waiting to resume: CI is running", waitBarrierLabel(pastWithReason, use24Hour = true, nowMillis = 1791819900000L))
+    }
+
+    @Test
+    fun heartbeatLinesCoverPausedFreshAndIntervalless() {
+        val paused = HeartbeatControl("Check in", "paused", 3600, lastFiredAt = 0.0, fireCount = 0)
+        assertEquals("Heartbeat · Paused", heartbeatLine(paused))
+        // Before the first fire there is no count to show.
+        val fresh = HeartbeatControl("Check in", "active", 3600, lastFiredAt = 0.0, fireCount = 0)
+        assertEquals("Heartbeat · every 1 h", heartbeatLine(fresh))
+        // No interval means no cadence part, not a dangling "every 0 s".
+        val noInterval = HeartbeatControl("Check in", "active", 0, lastFiredAt = 0.0, fireCount = 3)
+        assertEquals("Heartbeat · 3 fired", heartbeatLine(noInterval))
+    }
+
+    @Test
+    fun everyLabelIsEmptyWithoutAnInterval() {
+        assertEquals("", everyLabel(0.0))
+        assertEquals("", everyLabel(-5.0))
+    }
+
+    @Test
+    fun subgoalIndexResolvesAtConfirmTime() {
+        val subgoals = listOf("Write the tests", "Ship it", "Ship it")
+        assertEquals(2, subgoalIndexOf(subgoals, "Ship it"))
+        // A sub-goal removed while the dialog was open sends nothing.
+        assertEquals(null, subgoalIndexOf(subgoals, "Gone"))
+        assertEquals(null, subgoalIndexOf(emptyList(), "Ship it"))
     }
 }

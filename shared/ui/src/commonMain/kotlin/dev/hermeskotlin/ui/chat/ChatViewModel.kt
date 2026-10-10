@@ -213,7 +213,7 @@ class ChatViewModel(
     init {
         // A chat opened under the checkpoints sheet shows its own checkpoints, not the last chat's.
         viewModelScope.launch { session.collect { checkpoints.follow(it) } }
-        viewModelScope.launch { session.collect { control.clearError() } }
+        viewModelScope.launch { session.collect { control.follow(it) } }
     }
 
     val state: StateFlow<ChatState> = session

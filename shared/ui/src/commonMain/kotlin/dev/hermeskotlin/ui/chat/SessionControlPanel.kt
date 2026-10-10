@@ -28,6 +28,7 @@ import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -129,7 +130,17 @@ class SessionControlController(private val scope: CoroutineScope) {
     private val _state = MutableStateFlow(ControlPanelState())
     val state: StateFlow<ControlPanelState> = _state.asStateFlow()
 
-    /** Forgets the last failure: it was about another chat, or the sheet was closed on it. */
+    /** The chat the busy flag and the error belong to; results from another one are dropped. */
+    private var followed: ChatSession? = null
+
+    /** The open chat changed; whatever was running or failed was about the previous one. */
+    fun follow(chat: ChatSession?) {
+        if (chat === followed) return
+        followed = chat
+        _state.value = ControlPanelState()
+    }
+
+    /** Forgets the last failure: the sheet was closed on it. */
     fun clearError() = _state.update { it.copy(error = null) }
 
     fun run(chat: ChatSession?, action: ControlAction, text: String? = null, index: Int? = null) {
@@ -138,7 +149,8 @@ class SessionControlController(private val scope: CoroutineScope) {
         _state.update { it.copy(busy = action, error = null) }
         scope.launch {
             val error = chat.runControl(action, text, index)
-            _state.update { it.copy(busy = null, error = error) }
+            // The user may have switched chats mid-action; that chat's result isn't ours to show.
+            if (chat === followed) _state.update { it.copy(busy = null, error = error) }
         }
     }
 }
@@ -222,7 +234,7 @@ private fun Strip(control: SessionControl, hazeState: HazeState, onOpen: () -> U
 @Composable
 private fun StripRow(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color, line: String, title: String) {
     Row(
-        Modifier.fillMaxWidth().clearAndSetSemantics {}.padding(horizontal = 14.dp, vertical = 7.dp),
+        Modifier.fillMaxWidth().heightIn(min = MinTouchTarget).clearAndSetSemantics {}.padding(horizontal = 14.dp, vertical = 7.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -250,7 +262,8 @@ internal fun goalLine(goal: GoalControl): String =
 /** "Loop · Running · 2 of 6 runs · next 3:45 PM". */
 internal fun loopLine(loop: LoopControl, use24Hour: Boolean, nowMillis: Long = Clock.System.now().toEpochMilliseconds()): String {
     val next = if (loop.status == "active" && !loop.deferredByGoal && loop.nextDueAt > 0) {
-        "next ${messageTime(loop.nextDueAt, use24Hour, nowMillis)}"
+        // A past due time reads as now, not as a clock time that already went by.
+        if (loop.nextDueAt * 1000 <= nowMillis) "due now" else "next ${messageTime(loop.nextDueAt, use24Hour, nowMillis)}"
     } else {
         ""
     }
@@ -303,9 +316,10 @@ internal fun runsLabel(ticksFired: Int, times: Int): String = when {
 /** "3 fired"; "" when it never has. */
 internal fun firedLabel(fireCount: Int): String = if (fireCount <= 0) "" else "$fireCount fired"
 
-/** "every 45 s", "every 30 min", "every 1 h", "every 1 h 30 min". */
+/** "every 45 s", "every 30 min", "every 1 h", "every 1 h 30 min"; "" for no interval at all. */
 internal fun everyLabel(intervalSeconds: Double): String {
-    val s = intervalSeconds.toLong().coerceAtLeast(0)
+    val s = intervalSeconds.toLong()
+    if (s <= 0) return ""
     return when {
         s < 60 -> "every $s s"
         s < 3600 -> "every ${s / 60} min"
@@ -321,10 +335,16 @@ internal fun gateLabel(gate: GoalGate): String {
     return "${gate.attempts} of ${gate.maxRetries + 1} attempts$exit"
 }
 
-/** "Waiting until 3:45 PM", "Waiting on another chat", "Waiting on process 4242". */
+/** "Waiting until 3:45 PM", "Waiting to resume: <reason>" once that time passed, "Waiting on another chat". */
 internal fun waitBarrierLabel(barrier: WaitBarrier, use24Hour: Boolean, nowMillis: Long = Clock.System.now().toEpochMilliseconds()): String =
     when (barrier) {
-        is WaitBarrier.Until -> "Waiting until ${messageTime(barrier.untilAt, use24Hour, nowMillis)}"
+        is WaitBarrier.Until ->
+            // The wait's end time went by without the barrier lifting; a past clock time would mislead.
+            if (barrier.untilAt * 1000 <= nowMillis) {
+                "Waiting to resume" + barrier.reason.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()
+            } else {
+                "Waiting until ${messageTime(barrier.untilAt, use24Hour, nowMillis)}"
+            }
         is WaitBarrier.OnSession -> "Waiting on another chat"
         is WaitBarrier.OnProcess -> "Waiting on process ${barrier.pid}"
     }
@@ -376,7 +396,7 @@ internal fun SessionControlSheetView(
             current.heartbeat?.let { HeartbeatSection(it, busy, onAction, onConfirm = { confirm = it }) }
         }
         error?.let { Note(it, error = true) }
-        ConfirmControlAction(confirm, onDismiss = { confirm = null }, onAction = onAction)
+        ConfirmControlAction(confirm, current.goal?.subgoals.orEmpty(), onDismiss = { confirm = null }, onAction = onAction)
     }
 }
 
@@ -392,7 +412,8 @@ private sealed interface ConfirmAction {
         override val confirmLabel = "Clear goal"
     }
 
-    data class RemoveSubgoal(val index: Int, val text: String) : ConfirmAction {
+    // The index isn't stored: the list may change under the open dialog, so it's resolved at confirm time.
+    data class RemoveSubgoal(val text: String) : ConfirmAction {
         override val title = "Remove this sub-goal?"
         override val message = "“$text” leaves the goal's criteria. The goal itself stays."
         override val confirmLabel = "Remove"
@@ -417,8 +438,12 @@ private sealed interface ConfirmAction {
     }
 }
 
+/** The 1-based index of [text] in [subgoals] (first match), null when it's no longer there. */
+internal fun subgoalIndexOf(subgoals: List<String>, text: String): Int? =
+    subgoals.indexOf(text).takeIf { it >= 0 }?.plus(1)
+
 @Composable
-private fun ConfirmControlAction(pending: ConfirmAction?, onDismiss: () -> Unit, onAction: (ControlAction, String?, Int?) -> Unit) {
+private fun ConfirmControlAction(pending: ConfirmAction?, subgoals: List<String>, onDismiss: () -> Unit, onAction: (ControlAction, String?, Int?) -> Unit) {
     // Kept while the dialog fades out, so its text doesn't change under it.
     var shown by remember { mutableStateOf(pending) }
     if (pending != null) shown = pending
@@ -436,7 +461,10 @@ private fun ConfirmControlAction(pending: ConfirmAction?, onDismiss: () -> Unit,
                     onDismiss()
                     when (val it = pending) {
                         ConfirmAction.ClearGoal -> onAction(ControlAction.GoalClear, null, null)
-                        is ConfirmAction.RemoveSubgoal -> onAction(ControlAction.SubgoalRemove, null, it.index)
+                        // Resolve against the live list; if the text is gone, the dialog just closes.
+                        is ConfirmAction.RemoveSubgoal -> subgoalIndexOf(subgoals, it.text)?.let { index ->
+                            onAction(ControlAction.SubgoalRemove, null, index)
+                        }
                         ConfirmAction.ClearSubgoals -> onAction(ControlAction.SubgoalClear, null, null)
                         ConfirmAction.StopLoop -> onAction(ControlAction.LoopStop, null, null)
                         ConfirmAction.ClearHeartbeat -> onAction(ControlAction.HeartbeatClear, null, null)
@@ -472,8 +500,10 @@ private fun GoalSection(goal: GoalControl, use24Hour: Boolean, busy: ControlActi
         // The one line that matters now: what it's parked on, why it paused, or the judge's last word.
         val barrier = goal.waitBarrier
         val relevant = when {
-            barrier != null -> waitBarrierLabel(barrier, use24Hour) +
-                barrier.reason.takeIf { it.isNotBlank() }?.let { ": $it" }.orEmpty()
+            barrier != null -> waitBarrierLabel(barrier, use24Hour).let { label ->
+                // The label already carries the reason when it replaced a past clock time.
+                if (barrier.reason.isBlank() || label.endsWith(barrier.reason)) label else "$label: ${barrier.reason}"
+            }
             !goal.pausedReason.isNullOrBlank() -> goal.pausedReason
             !goal.lastReason.isNullOrBlank() -> goal.lastReason
             else -> null
@@ -540,17 +570,26 @@ private fun GoalSection(goal: GoalControl, use24Hour: Boolean, busy: ControlActi
 @Composable
 private fun Subgoals(goal: GoalControl, busy: ControlAction?, onAction: (ControlAction, String?, Int?) -> Unit, onConfirm: (ConfirmAction) -> Unit) {
     val newSubgoal = rememberTextFieldState()
+    // The field keeps what the user typed until the gateway confirms it: it's cleared only once the
+    // submitted text shows up in the goal's sub-goals, so a failed add loses nothing.
+    var submitted by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(goal.subgoals) {
+        submitted?.takeIf { it in goal.subgoals }?.let {
+            submitted = null
+            newSubgoal.clearText()
+        }
+    }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (goal.subgoals.isNotEmpty()) {
             Text("SUB-GOALS", style = Theme[typography][eyebrow], color = Theme[colors][textTertiary], modifier = Modifier.semantics { heading() })
-            goal.subgoals.forEachIndexed { i, text ->
+            goal.subgoals.forEach { text ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(text, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], modifier = Modifier.weight(1f))
                     Box(
                         Modifier
                             .size(MinTouchTarget)
                             .clip(CircleShape)
-                            .clickable(role = Role.Button, onClickLabel = "Remove “$text”", enabled = busy == null) { onConfirm(ConfirmAction.RemoveSubgoal(i + 1, text)) },
+                            .clickable(role = Role.Button, onClickLabel = "Remove “$text”", enabled = busy == null) { onConfirm(ConfirmAction.RemoveSubgoal(text)) },
                         contentAlignment = Alignment.Center,
                     ) {
                         UnstyledIcon(Lucide.X, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(13.dp))
@@ -572,12 +611,12 @@ private fun Subgoals(goal: GoalControl, busy: ControlAction?, onAction: (Control
                 TextField(
                     state = newSubgoal,
                     placeholder = "Add a sub-goal",
-                    onKeyboardAction = { addSubgoal(newSubgoal, onAction) },
+                    onKeyboardAction = { addSubgoal(newSubgoal, busy, onAction, onSubmitted = { submitted = it }) },
                     modifier = Modifier.weight(1f),
                 )
                 Button(
                     "Add",
-                    onClick = { addSubgoal(newSubgoal, onAction) },
+                    onClick = { addSubgoal(newSubgoal, busy, onAction, onSubmitted = { submitted = it }) },
                     variant = ButtonVariant.Secondary,
                     size = ButtonSize.Small,
                     enabled = busy == null && newSubgoal.text.isNotBlank(),
@@ -588,10 +627,12 @@ private fun Subgoals(goal: GoalControl, busy: ControlAction?, onAction: (Control
     }
 }
 
-private fun addSubgoal(field: TextFieldState, onAction: (ControlAction, String?, Int?) -> Unit) {
+private fun addSubgoal(field: TextFieldState, busy: ControlAction?, onAction: (ControlAction, String?, Int?) -> Unit, onSubmitted: (String) -> Unit) {
+    // The keyboard path bypasses the disabled Add button, so it has to respect busy on its own.
+    if (busy != null) return
     val text = field.text.toString().trim()
     if (text.isEmpty()) return
-    field.clearText()
+    onSubmitted(text)
     onAction(ControlAction.SubgoalAdd, text, null)
 }
 
@@ -606,7 +647,7 @@ private fun LoopSection(loop: LoopControl, use24Hour: Boolean, busy: ControlActi
             color = Theme[colors][textSecondary],
         )
         if (loop.status == "active" && !loop.deferredByGoal && loop.nextDueAt > 0) {
-            Detail("Next run ${messageTime(loop.nextDueAt, use24Hour)}")
+            Detail(if (loop.nextDueAt * 1000 <= Clock.System.now().toEpochMilliseconds()) "Due now" else "Next run ${messageTime(loop.nextDueAt, use24Hour)}")
         }
         if (loop.until.isNotBlank()) Detail("Until: ${loop.until}")
         if (loop.deferredByGoal) Detail("Waits while the goal is working.")
