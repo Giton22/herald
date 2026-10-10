@@ -96,18 +96,25 @@ jobs:
           xcrun simctl boot "$udid"
           xcrun simctl bootstatus "$udid" -b
           xcrun simctl install "$udid" iosApp/build/Build/Products/Debug-iphonesimulator/Herald.app
-          xcrun simctl launch "$udid" dev.herald.ios
+          # The app's own output, where Kotlin prints an uncaught exception before the crash.
+          xcrun simctl launch --stdout="$PWD/ios-launch.log" --stderr="$PWD/ios-launch.log" "$udid" dev.herald.ios
           sleep 20
           xcrun simctl io "$udid" screenshot ios-launch.png
           # Still running after 20 s: it didn't crash on start.
-          xcrun simctl spawn "$udid" launchctl list | grep -q "UIKitApplication:dev.herald.ios" || { echo "Herald isn't running"; exit 1; }
+          xcrun simctl spawn "$udid" launchctl list | grep -q "UIKitApplication:dev.herald.ios" || {
+            echo "Herald isn't running"
+            cat ios-launch.log || true
+            exit 1
+          }
 
       - name: Simulator screenshot
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: ios-screenshots
-          path: ios-launch.png
+          path: |
+            ios-launch.png
+            ios-launch.log
           if-no-files-found: ignore
 
       - name: Crash reports

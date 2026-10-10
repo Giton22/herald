@@ -64,8 +64,9 @@ class KeychainKeyValueStore(
                 // Locked (before the first unlock since boot) isn't "no value": reading null would let the next
                 // write replace the saved sign-in.
                 check(status != errSecInteractionNotAllowed) { "The Keychain is locked until the phone is unlocked." }
-                // Likewise any other failure: only a missing item is "no value".
-                if (status == errSecItemNotFound) return@memScoped null
+                // Likewise any other failure: only a missing item is "no value". A build without the Keychain
+                // entitlement (an unsigned simulator build) has no Keychain at all, so nothing was ever saved.
+                if (status == errSecItemNotFound || status == ERR_SEC_MISSING_ENTITLEMENT) return@memScoped null
                 check(status == errSecSuccess) { "Couldn't read from the Keychain ($status)." }
                 (CFBridgingRelease(result.value) as? NSData)?.toByteArray()?.decodeToString()
             }
@@ -103,6 +104,11 @@ class KeychainKeyValueStore(
             CFRelease(query)
         }
         Unit
+    }
+
+    private companion object {
+        /** `errSecMissingEntitlement`, which the Security headers don't export to Kotlin. */
+        const val ERR_SEC_MISSING_ENTITLEMENT = -34018
     }
 
     private fun item(key: String): List<Pair<CFStringRef?, Any?>> = buildList {
