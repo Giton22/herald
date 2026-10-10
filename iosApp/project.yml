@@ -51,6 +51,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Herald/Herald.entitlements
     dependencies:
       - target: HeraldShare
+      - target: HeraldWidgets
       - package: WebRTC
   # The share sheet's "Herald": plain Swift, no shared framework (an extension has little memory).
   HeraldShare:
@@ -64,6 +65,21 @@ targets:
         PRODUCT_NAME: HeraldShare
         INFOPLIST_FILE: HeraldShare/Info.plist
         CODE_SIGN_ENTITLEMENTS: HeraldShare/HeraldShare.entitlements
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SWIFT_VERSION: "5.0"
+        CODE_SIGN_STYLE: Automatic
+  # Home Screen and Lock Screen widgets: plain SwiftUI that reads what the app writes to the App Group.
+  HeraldWidgets:
+    type: app-extension
+    platform: iOS
+    sources:
+      - path: HeraldWidgets
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: dev.herald.ios.widgets
+        PRODUCT_NAME: HeraldWidgets
+        INFOPLIST_FILE: HeraldWidgets/Info.plist
+        CODE_SIGN_ENTITLEMENTS: HeraldWidgets/HeraldWidgets.entitlements
         TARGETED_DEVICE_FAMILY: "1,2"
         SWIFT_VERSION: "5.0"
         CODE_SIGN_STYLE: Automatic

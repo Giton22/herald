@@ -13,6 +13,7 @@ import dev.hermeskotlin.core.chat.ChatLinks
 import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.SessionWatcher
 import dev.hermeskotlin.core.sessions.ActiveSessions
+import dev.hermeskotlin.core.sessions.RecentChats
 import dev.hermeskotlin.core.sessions.SeenStore
 import io.ktor.util.date.getTimeMillis
 import dev.hermeskotlin.core.chat.LastChatStore
@@ -103,6 +104,7 @@ val coreModule = module {
     single(createdAtStart = true) { SessionWatcher(get(), get(), get(), get(), get()) }
     single { SeenStore(get()) { getTimeMillis() / 1000.0 } }
     single { ChatLinks() }
+    single { RecentChats() }
     single { ModelsApi(get()) }
     single { SlashApi(get()) }
     single { PetApi(get()) }

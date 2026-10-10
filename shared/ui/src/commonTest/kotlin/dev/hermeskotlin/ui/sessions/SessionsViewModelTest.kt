@@ -8,6 +8,7 @@ import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.sessions.ActiveSessions
+import dev.hermeskotlin.core.sessions.RecentChats
 import dev.hermeskotlin.core.sessions.SeenStore
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.rpc.RpcTransport
@@ -76,6 +77,7 @@ class SessionsViewModelTest {
         cache: OfflineCache? = null,
         /** The list can't be read while this says so, whatever [listStatus] is. */
         listFails: () -> Boolean = { false },
+        recentChats: RecentChats? = null,
     ): SessionsViewModel {
         // On the test dispatcher, so no request is still finishing on another thread when a test ends
         // (and resuming onto Dispatchers.Main while the next test sets it).
@@ -106,8 +108,31 @@ class SessionsViewModelTest {
         return SessionsViewModel(
             SessionsApi(client), auth, connection, LastChatStore(InMemoryKeyValueStore()), ProfilesApi(client),
             attention, SeenStore(InMemoryKeyValueStore()) { 0.0 }, DraftStore(InMemoryKeyValueStore()), ProjectsApi(connection),
-            cache,
+            cache, recentChats,
         )
+    }
+
+    @Test
+    fun theRecentListReadFromTheGatewayFeedsTheWidget() = runTest(dispatcher) {
+        val recent = RecentChats()
+        val vm = viewModel(recentChats = recent)
+
+        vm.bind(gateway)
+
+        assertEquals(listOf("a", "b"), recent.latest.value?.sessions?.map { it.id })
+        assertEquals(gateway.gatewayUrl, recent.latest.value?.gateway)
+    }
+
+    @Test
+    fun aSavedCopyNeverFeedsTheWidget() = runTest(dispatcher) {
+        val cache = OfflineCache(InMemoryOfflineDao(), PlainSealer, EmptyCoroutineContext) { 7_000L }
+        cache.saveList(gateway.gatewayUrl, null, SessionListFilter.Recent, listOf(SessionSummary("old")))
+        val recent = RecentChats()
+        val vm = viewModel(listStatus = HttpStatusCode.InternalServerError, cache = cache, recentChats = recent)
+
+        vm.bind(gateway)
+
+        assertEquals(null, recent.latest.value)
     }
 
     @Test

@@ -15,6 +15,7 @@ import dev.hermeskotlin.ui.di.sharedModules
 import dev.hermeskotlin.ui.platform.IosAppLock
 import dev.hermeskotlin.ui.platform.IosChatNotifier
 import dev.hermeskotlin.ui.platform.IosLinks
+import dev.hermeskotlin.ui.platform.IosWidgets
 import dev.hermeskotlin.ui.platform.SafariUriHandler
 import org.koin.core.context.startKoin
 import org.koin.dsl.module
@@ -61,6 +62,7 @@ internal val iosAppModule = module {
     single { IosAppLock(get(), get()) }
     single { IosLinks(get(), get(), get(), get(), get()) }
     single { IosChatNotifier(get(), get(), links = { get<IosLinks>().open(it) }, scope = get()) }
+    single(createdAtStart = true) { IosWidgets(get(), get(), get(), get()) }
     single<VoiceKeepAlive> { IosVoiceKeepAlive() }
     single<PushKeys> { NoPushKeys }
     single { PushSetup(get(), get(), get(), get(), get(), get(), deviceName = { UIDevice.currentDevice.name }) }

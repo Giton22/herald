@@ -11,6 +11,7 @@ import dev.hermeskotlin.core.chat.AttentionTracker
 import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.chat.Waiting
+import dev.hermeskotlin.core.sessions.RecentChats
 import dev.hermeskotlin.core.sessions.SeenChats
 import dev.hermeskotlin.core.sessions.SeenStore
 import kotlinx.coroutines.flow.combine
@@ -137,6 +138,8 @@ class SessionsViewModel(
     private val projectsApi: ProjectsApi,
     /** The list as last read, shown while the gateway can't be. */
     private val cache: OfflineCache? = null,
+    /** The newest chats, for the Home Screen widget. */
+    private val recentChats: RecentChats? = null,
 ) : ViewModel() {
 
     /** Stamps an archive's undo offer, so it runs out on time even if the screen goes and comes back. */
@@ -638,7 +641,10 @@ class SessionsViewModel(
             // Keep however many rows are already showing so a background refetch doesn't truncate the list.
             val limit = _state.value.sessions.size.coerceIn(SessionsApi.PAGE_SIZE, 100)
             val result = api.list(url, limit = limit, filter = filter, profile = profile)
-            if (result is ApiResult.Success) cache?.saveList(url, profile, filter, result.value.sessions)
+            if (result is ApiResult.Success) {
+                cache?.saveList(url, profile, filter, result.value.sessions)
+                if (filter == SessionListFilter.Recent) recentChats?.publish(url, profile, result.value.sessions)
+            }
             _state.update { state ->
                 if (state.filter != filter) return@update state
                 if (result is ApiResult.Success) savedShownAt = null
