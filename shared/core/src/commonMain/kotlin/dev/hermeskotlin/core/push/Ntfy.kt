@@ -10,7 +10,7 @@ import io.ktor.http.encodeURLPathPart
 import io.ktor.http.isSuccess
 import io.ktor.utils.io.readUTF8Line
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.channelFlow
 import kotlinx.serialization.Serializable
 
 /** One event of an ntfy subscription stream (`/<topic>/json`). Only `message` events carry a body. */
@@ -28,7 +28,7 @@ class NtfyClient(private val client: HttpClient) {
      * The messages of [topic] from [sinceSeconds] (the unix time of the last one read; ntfy keeps messages
      * for hours) or all it still holds. Ends when the stream does; the caller reconnects.
      */
-    fun subscribe(server: String, topic: String, sinceSeconds: Long?): Flow<NtfyEvent> = flow {
+    fun subscribe(server: String, topic: String, sinceSeconds: Long?): Flow<NtfyEvent> = channelFlow {
         client.prepareGet(topicUrl(server, topic) + "/json") {
             // A time, not the last message's id: ntfy doesn't say what an id that has left its cache means,
             // and that is exactly the case after a long stretch offline. The message at that very second
@@ -47,7 +47,8 @@ class NtfyClient(private val client: HttpClient) {
                 val line = channel.readUTF8Line(MAX_LINE) ?: break
                 if (line.isBlank()) continue
                 val event = runCatching { HermesJson.decodeFromString(NtfyEvent.serializer(), line) }.getOrNull() ?: continue
-                if (event.event == "message" && event.topic == topic) emit(event)
+                // Sent, not emitted: Ktor may run this block on its own dispatcher (it does on iOS).
+                if (event.event == "message" && event.topic == topic) send(event)
             }
         }
     }
