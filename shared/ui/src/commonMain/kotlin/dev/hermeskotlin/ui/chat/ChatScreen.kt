@@ -1042,12 +1042,14 @@ private fun Greeting(
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 StartPill(Lucide.Paperclip, "Attach", onClick = onAttach, enabled = canAttach)
                 // Tracks the composer's mic: while recording the same tap finishes it.
-                StartPill(
-                    if (dictation.recording) Lucide.Square else Lucide.Mic,
-                    dictateLabel(dictation),
-                    onClick = onDictate,
-                    enabled = connected && !dictation.transcribing,
-                )
+                if (showMic(dictation)) {
+                    StartPill(
+                        if (dictation.recording) Lucide.Square else Lucide.Mic,
+                        dictateLabel(dictation),
+                        onClick = onDictate,
+                        enabled = connected && !dictation.transcribing,
+                    )
+                }
                 StartPill(Lucide.AudioLines, "Voice chat", onClick = onVoiceChat, enabled = connected)
             }
         }
@@ -2612,21 +2614,14 @@ private fun Composer(
                         Box(Modifier.weight(1f).padding(start = 2.dp), contentAlignment = Alignment.CenterStart) {
                             ModelPill(state, picker, onClick = onOpenModels, compact = segments)
                         }
-                        DictationButton(dictation, onClick = onDictate, enabled = connected)
+                        if (showMic(dictation)) Snug { DictationButton(dictation, onClick = onDictate, enabled = connected) }
                         // Voice chat waits for the task to end, so while one runs its place goes to the ways to send.
-                        if (!state.running) {
-                            ComposerButton(
-                                icon = Lucide.AudioLines,
-                                contentDescription = "Start a voice chat",
-                                onClick = onVoiceChat,
-                                enabled = connected && !dictation.active,
-                            )
-                        }
+                        if (!state.running) Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active) }
                         // Stop is on the live task card above; a message typed meanwhile is queued or steers the task.
                         if (state.running && hasText && !editing) {
                             if (command) {
                                 // A command runs at once; there's nothing to choose.
-                                SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected)
+                                Snug { SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected) }
                             } else {
                                 RunningSendSegments(
                                     mode = runningMode,
@@ -2637,7 +2632,7 @@ private fun Composer(
                             }
                         } else {
                             // While a task runs this only waits: nothing typed yet, or an edit, which goes once it ends.
-                            SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected && hasText && !state.running)
+                            Snug { SendButton(SendIcon.Send, onClick = { actions.send() }, enabled = connected && hasText && !state.running) }
                         }
                     }
                 }
@@ -2731,16 +2726,15 @@ private fun FoldedComposer(
                 )
             }
         }
-        DictationButton(dictation, onClick = onDictate, enabled = connected)
+        if (showMic(dictation)) Snug { DictationButton(dictation, onClick = onDictate, enabled = connected) }
         // Stop is on the live task card above, so this stays voice chat, which waits for the task to end.
-        ComposerButton(
-            icon = Lucide.AudioLines,
-            contentDescription = "Start a voice chat",
-            onClick = onVoiceChat,
-            enabled = connected && !dictation.active && !state.running,
-        )
+        Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active && !state.running) }
     }
 }
+
+/** The mic shows with the Dictation setting on, and while a dictation still runs, so it can be finished. */
+@Composable
+private fun showMic(dictation: DictationState): Boolean = LocalAppSettings.current.dictation || dictation.active
 
 /** Says that a command typed while a task runs goes at once, not into the task. */
 @Composable
@@ -2858,41 +2852,76 @@ private fun RunningSendSegments(mode: RunningSend, attachments: Boolean, enabled
 /** The dock's shadow: soft and wide, a little below it, so it floats over the chat. */
 internal val DockShadow =Shadow(radius = 24.dp, color = Color.Black.copy(alpha = 0.18f), offset = DpOffset(0.dp, 8.dp))
 
-/** The composer's +: a 36dp disc, with the full touch target around it. */
+/** The composer's +. */
 @Composable
-private fun AttachButton(onClick: () -> Unit, enabled: Boolean) {
+private fun AttachButton(onClick: () -> Unit, enabled: Boolean) =
+    DiscButton(Lucide.Plus, contentDescription = "Add photos or files", onClick = onClick, enabled = enabled, iconSize = 20.dp)
+
+/** Voice chat, on a disc like + and Send so the row reads as three round buttons and the mic. */
+@Composable
+private fun VoiceChatButton(onClick: () -> Unit, enabled: Boolean) =
+    DiscButton(Lucide.AudioLines, contentDescription = "Start a voice chat", onClick = onClick, enabled = enabled, iconSize = 19.dp)
+
+/** A composer button drawn as a 36dp disc, with the full touch target around it. */
+@Composable
+private fun DiscButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean, iconSize: Dp) {
     val tint = if (enabled) Theme[colors][textSecondary] else Theme[colors][textTertiary].copy(alpha = 0.5f)
-    UnstyledButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.size(MinTouchTarget).clip(CircleShape),
-        indication = rememberColoredIndication(tint),
-    ) {
-        Box(Modifier.size(36.dp).background(Theme[colors][surface3], CircleShape), contentAlignment = Alignment.Center) {
-            UnstyledIcon(Lucide.Plus, contentDescription = "Add photos or files", tint = tint, modifier = Modifier.size(20.dp))
-        }
+    DiscTarget(onClick = onClick, enabled = enabled, tint = tint) {
+        UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(iconSize))
     }
 }
 
-/** A plain icon button inside the composer, like the microphone. */
+/** A grey disc in the full touch target; a press shows on the disc itself, as on Send. [disc] draws over its fill. */
 @Composable
-internal fun ComposerButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean) {
-    val tint = if (enabled) Theme[colors][textSecondary] else Theme[colors][textTertiary].copy(alpha = 0.5f)
-    UnstyledButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusMedium])),
-        indication = rememberColoredIndication(tint),
+private fun DiscTarget(onClick: () -> Unit, enabled: Boolean, tint: Color, disc: Modifier = Modifier, content: @Composable () -> Unit) {
+    val interaction = remember { MutableInteractionSource() }
+    Box(
+        Modifier
+            .size(MinTouchTarget)
+            .clickable(interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick),
+        contentAlignment = Alignment.Center,
     ) {
-        UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(22.dp))
+        Box(
+            Modifier
+                .size(ComposerDisc)
+                .background(Theme[colors][surface3], CircleShape)
+                .then(disc)
+                .clip(CircleShape)
+                .indication(interaction, rememberColoredIndication(tint)),
+            contentAlignment = Alignment.Center,
+        ) { content() }
     }
 }
+
+/** The size the composer's round buttons are drawn at: +, the mic, voice chat and Send. */
+private val ComposerDisc = 36.dp
+
+/**
+ * Sets a round button [SNUG_TRIM] narrower on each side, so neighbouring discs sit 8dp apart instead of 12dp;
+ * each still takes taps over its full touch target, which only overlap at their edges.
+ */
+@Composable
+private fun Snug(button: @Composable () -> Unit) {
+    Layout(button) { measurables, constraints ->
+        val placeable = measurables.first().measure(constraints)
+        val trim = SNUG_TRIM.roundToPx()
+        // In a window too narrow for the button at all, there's nothing to trim.
+        layout((placeable.width - 2 * trim).coerceAtLeast(0), placeable.height) { placeable.place(-trim, 0) }
+    }
+}
+
+private val SNUG_TRIM = 2.dp
+
+/** A round button for another composer, like the assistant's lasso, on the same disc as the chat's. */
+@Composable
+internal fun ComposerButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean) =
+    DiscButton(icon, contentDescription = contentDescription, onClick = onClick, enabled = enabled, iconSize = 19.dp)
 
 internal enum class SendIcon { Send, Stop }
 
 /**
  * The round send: an accent disc that glows when there's something to send, a quiet grey one otherwise.
- * The disc stays 40dp; the button around it takes taps over the full [MinTouchTarget].
+ * The disc is drawn at [ComposerDisc], like +; the button around it takes taps over the full [MinTouchTarget].
  */
 @Composable
 internal fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
@@ -2915,7 +2944,7 @@ internal fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
                     SendIcon.Stop -> "Stop the task"
                 },
                 tint = tint,
-                modifier = Modifier.size(if (icon == SendIcon.Stop) 16.dp else 20.dp),
+                modifier = Modifier.size(if (icon == SendIcon.Stop) 15.dp else 19.dp),
             )
         }
     }
@@ -2926,12 +2955,12 @@ internal fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
 private fun sendColors(enabled: Boolean): Pair<Color, Color> =
     if (enabled) Theme[colors][accent] to Theme[colors][onAccent] else Theme[colors][surface3] to Theme[colors][textMuted]
 
-/** Send's 40dp disc, which glows in its own color when it can send; a press on the button around it shows on the disc. */
+/** Send's disc, which glows in its own color when it can send; a press on the button around it shows on the disc. */
 @Composable
 private fun SendDisc(fill: Color, tint: Color, glow: Boolean, interaction: MutableInteractionSource, content: @Composable () -> Unit) {
     Box(
         Modifier
-            .size(40.dp)
+            .size(ComposerDisc)
             // Tighter than the bubble's glow: Send sits near the dock's edge, which would cut a wider one off.
             .then(if (glow) Modifier.glow(CircleShape, Shadow(radius = 10.dp, color = fill.copy(alpha = 0.45f), offset = DpOffset(0.dp, 3.dp))) else Modifier)
             .background(fill, CircleShape)
@@ -2945,7 +2974,12 @@ private fun SendDisc(fill: Color, tint: Color, glow: Boolean, interaction: Mutab
 @Composable
 internal fun DictationButton(state: DictationState, onClick: () -> Unit, enabled: Boolean) {
     if (state.transcribing) {
-        Box(Modifier.size(MinTouchTarget), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
+        // The spinner sits on the mic's disc while the words are written down.
+        Box(Modifier.size(MinTouchTarget), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(ComposerDisc).background(Theme[colors][surface3], CircleShape), contentAlignment = Alignment.Center) {
+                Spinner(Modifier.size(16.dp))
+            }
+        }
         return
     }
     val recording = state.recording
@@ -2954,20 +2988,17 @@ internal fun DictationButton(state: DictationState, onClick: () -> Unit, enabled
         enabled -> Theme[colors][textSecondary]
         else -> Theme[colors][textTertiary].copy(alpha = 0.5f)
     }
-    UnstyledButton(
+    DiscTarget(
         onClick = onClick,
         enabled = enabled,
-        modifier = Modifier
-            .size(MinTouchTarget)
-            .clip(CircleShape)
-            .then(if (recording) Modifier.border(2.dp, tint.copy(alpha = 0.25f + 0.75f * state.level), CircleShape) else Modifier),
-        indication = rememberColoredIndication(tint),
+        tint = tint,
+        disc = if (recording) Modifier.border(2.dp, tint.copy(alpha = 0.25f + 0.75f * state.level), CircleShape) else Modifier,
     ) {
         UnstyledIcon(
             if (recording) Lucide.Square else Lucide.Mic,
             contentDescription = if (recording) "Finish dictating" else "Dictate",
             tint = tint,
-            modifier = Modifier.size(if (recording) 16.dp else 22.dp),
+            modifier = Modifier.size(if (recording) 15.dp else 19.dp),
         )
     }
 }

@@ -27,6 +27,22 @@ class SettingsStoreTest {
     }
 
     @Test
+    fun dictationIsOnUnlessTurnedOff() = runTest {
+        val disk = InMemoryKeyValueStore()
+        // Settings saved before the option existed keep the mic.
+        disk.put("settings.v1", """{"dictationEngine":"Gateway"}""")
+        val first = SettingsStore(disk, backgroundScope)
+        assertEquals(true, first.settings.filterNotNull().first().dictation)
+
+        first.update { it.copy(dictation = false) }
+        advanceUntilIdle()
+
+        val restored = SettingsStore(disk, backgroundScope).settings.filterNotNull().first()
+        assertEquals(false, restored.dictation)
+        assertEquals(DictationEngine.Gateway, restored.dictationEngine)
+    }
+
+    @Test
     fun glowIsOnUnlessTurnedOff() = runTest {
         val disk = InMemoryKeyValueStore()
         // Settings saved before the option existed keep the glow.

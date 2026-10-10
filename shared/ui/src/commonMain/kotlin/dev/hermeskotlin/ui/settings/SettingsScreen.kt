@@ -433,21 +433,30 @@ internal fun SettingsView(
                 }
 
                 Section("Voice") {
-                    Field(
-                        "Dictation",
-                        detail = when (settings.dictationEngine) {
-                            DictationEngine.Device -> "The phone's speech recognizer writes as you talk. Falls back to the gateway on a phone without one."
-                            DictationEngine.Gateway -> "The profile's speech-to-text on the gateway, once you stop talking."
-                        },
-                    ) {
-                        SegmentedControl(
-                            options = DictationEngine.entries,
-                            selected = settings.dictationEngine,
-                            onSelect = { engine -> onUpdate { it.copy(dictationEngine = engine) } },
-                            optionLabel = { it.name },
-                        )
-                    }
+                    SwitchRow(
+                        title = "Dictation",
+                        detail = "A mic in the composer to talk instead of type. Off, the model name gets its room.",
+                        checked = settings.dictation,
+                        onCheckedChange = { on -> onUpdate { it.copy(dictation = on) } },
+                    )
                     Divider()
+                    if (settings.dictation) {
+                        Field(
+                            "Dictate with",
+                            detail = when (settings.dictationEngine) {
+                                DictationEngine.Device -> "The phone's speech recognizer writes as you talk. Falls back to the gateway on a phone without one."
+                                DictationEngine.Gateway -> "The profile's speech-to-text on the gateway, once you stop talking."
+                            },
+                        ) {
+                            SegmentedControl(
+                                options = DictationEngine.entries,
+                                selected = settings.dictationEngine,
+                                onSelect = { engine -> onUpdate { it.copy(dictationEngine = engine) } },
+                                optionLabel = { it.name },
+                            )
+                        }
+                        Divider()
+                    }
                     Field("Pause before sending", detail = "How long a voice chat waits after you stop talking. Short is Desktop's timing.") {
                         SegmentedControl(
                             options = VoicePause.entries,
