@@ -8,11 +8,15 @@ import kotlinx.cinterop.alloc
 import kotlinx.cinterop.memScoped
 import kotlinx.cinterop.ptr
 import kotlinx.cinterop.value
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
 import platform.AVFAudio.AVAudioPlayer
@@ -20,9 +24,13 @@ import platform.AVFAudio.AVAudioPlayerDelegateProtocol
 import platform.AVFAudio.AVAudioRecorder
 import platform.AVFAudio.AVAudioSession
 import platform.AVFAudio.AVAudioSessionCategoryOptionAllowBluetooth
+import platform.AVFAudio.AVAudioSessionCategoryOptionAllowBluetoothA2DP
 import platform.AVFAudio.AVAudioSessionCategoryOptionDefaultToSpeaker
 import platform.AVFAudio.AVAudioSessionCategoryPlayAndRecord
+import platform.AVFAudio.AVAudioSessionCategoryPlayback
+import platform.AVFAudio.AVAudioSessionInterruptionNotification
 import platform.AVFAudio.AVAudioSessionModeDefault
+import platform.AVFAudio.AVAudioSessionModeSpokenAudio
 import platform.AVFAudio.AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation
 import platform.AVFAudio.AVFormatIDKey
 import platform.AVFAudio.AVLinearPCMBitDepthKey
@@ -35,56 +43,94 @@ import platform.CoreAudioTypes.kAudioFormatLinearPCM
 import platform.Foundation.NSData
 import platform.Foundation.NSError
 import platform.Foundation.NSFileManager
+import platform.Foundation.NSNotificationCenter
+import platform.Foundation.NSOperationQueue
 import platform.Foundation.NSTemporaryDirectory
 import platform.Foundation.NSURL
 import platform.Foundation.NSUUID
 import platform.Foundation.dataWithContentsOfURL
 import platform.darwin.NSObject
+import kotlin.concurrent.Volatile
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
 import kotlin.math.min
 import kotlin.math.pow
+import kotlin.time.TimeSource
 
 /**
- * The app's audio session while the microphone or the speaker is in use: play-and-record, out of the
- * loudspeaker (or a headset), the way a voice assistant sounds. Held by count, so recording right after
- * playing doesn't drop it; given up when the last user is done, so other apps' audio comes back.
+ * The app's audio session while the microphone or the speaker is in use. Recording takes play-and-record
+ * (out of the loudspeaker, a headset's mic over Bluetooth); playing alone takes playback, so AirPods play a
+ * reply in full quality rather than call quality. Held by count and let go a moment after the last user, so
+ * the pause between a reply's clips, or between a reply and listening, doesn't hand the audio back to
+ * another app for a second.
  */
 @OptIn(ExperimentalForeignApi::class)
 internal object VoiceAudioSession {
-    private var users = 0
+    enum class Use { Record, Play }
 
-    suspend fun <T> use(block: suspend () -> T): T {
-        withContext(Dispatchers.Main) { acquire() }
-        try {
-            return block()
-        } finally {
-            withContext(NonCancellable + Dispatchers.Main) { release() }
+    private val main = CoroutineScope(Dispatchers.Main + SupervisorJob())
+    private var recorders = 0
+    private var players = 0
+    private var active = false
+    private var release: Job? = null
+
+    init {
+        // A call or an alarm takes the session away: it has to be asked for again afterwards.
+        NSNotificationCenter.defaultCenter.addObserverForName(AVAudioSessionInterruptionNotification, null, NSOperationQueue.mainQueue) { _ ->
+            active = false
         }
     }
 
-    private fun acquire() {
-        if (users++ > 0) return
+    suspend fun <T> use(use: Use, block: suspend () -> T): T {
+        withContext(Dispatchers.Main) { acquire(use) }
+        try {
+            return block()
+        } finally {
+            withContext(NonCancellable + Dispatchers.Main) { release(use) }
+        }
+    }
+
+    private fun acquire(use: Use) {
+        release?.cancel()
+        release = null
+        if (use == Use.Record) recorders++ else players++
         memScoped {
             val error = alloc<ObjCObjectVar<NSError?>>()
             val session = AVAudioSession.sharedInstance()
-            val ready = session.setCategory(
-                AVAudioSessionCategoryPlayAndRecord,
-                AVAudioSessionModeDefault,
-                AVAudioSessionCategoryOptionDefaultToSpeaker or AVAudioSessionCategoryOptionAllowBluetooth,
-                error.ptr,
-            ) && session.setActive(true, error.ptr)
+            // Each time: a recording that starts while a reply plays needs the microphone added.
+            val categorized = if (recorders > 0) {
+                session.setCategory(
+                    AVAudioSessionCategoryPlayAndRecord,
+                    AVAudioSessionModeDefault,
+                    AVAudioSessionCategoryOptionDefaultToSpeaker or AVAudioSessionCategoryOptionAllowBluetooth or AVAudioSessionCategoryOptionAllowBluetoothA2DP,
+                    error.ptr,
+                )
+            } else {
+                session.setCategory(AVAudioSessionCategoryPlayback, AVAudioSessionModeSpokenAudio, 0u, error.ptr)
+            }
+            val ready = categorized && (active || session.setActive(true, error.ptr))
             if (!ready) {
-                users--
+                if (use == Use.Record) recorders-- else players--
                 error("The microphone isn't available: ${error.value?.localizedDescription ?: "audio session refused"}.")
+            }
+            active = true
+        }
+    }
+
+    private fun release(use: Use) {
+        if (use == Use.Record) recorders-- else players--
+        if (recorders + players > 0) return
+        release = main.launch {
+            delay(LINGER_MS)
+            if (recorders + players == 0 && active) {
+                active = false
+                AVAudioSession.sharedInstance().setActive(false, AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation, null)
             }
         }
     }
 
-    private fun release() {
-        if (--users > 0) return
-        AVAudioSession.sharedInstance().setActive(false, AVAudioSessionSetActiveOptionNotifyOthersOnDeactivation, null)
-    }
+    /** Long enough to bridge synthesizing the next clip or sending a transcript. */
+    private const val LINGER_MS = 4_000L
 }
 
 /**
@@ -95,10 +141,15 @@ internal object VoiceAudioSession {
 @OptIn(ExperimentalForeignApi::class)
 class IosVoiceRecorder : VoiceRecorder {
 
-    private var finishRequested = false
+    @Volatile private var finishRequested = false
 
-    override suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit, onSpeech: () -> Unit): Recording = VoiceAudioSession.use {
+    override suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit, onSpeech: () -> Unit): Recording {
+        // Before the session is set up, so a stop tapped meanwhile still counts.
         finishRequested = false
+        return VoiceAudioSession.use(VoiceAudioSession.Use.Record) { recordNow(activity, onLevel, onSpeech) }
+    }
+
+    private suspend fun recordNow(activity: VoiceActivity, onLevel: (Float) -> Unit, onSpeech: () -> Unit): Recording {
         val url = NSURL.fileURLWithPath(NSTemporaryDirectory() + "herald-voice-${NSUUID().UUIDString}.wav")
         val recorder = memScoped {
             val error = alloc<ObjCObjectVar<NSError?>>()
@@ -108,16 +159,20 @@ class IosVoiceRecorder : VoiceRecorder {
         try {
             recorder.meteringEnabled = true
             check(recorder.record()) { "The microphone isn't available." }
+            // The wall clock, not the recorder's: a recording paused by a call must still time out.
+            val started = TimeSource.Monotonic.markNow()
             while (!finishRequested) {
                 delay(FRAME_MS)
                 currentCoroutineContext().ensureActive()
+                // Interrupted (a call, Siri): keep what was said before it.
+                if (!recorder.recording) break
                 recorder.updateMeters()
                 // dBFS to a linear amplitude; Android's 16-bit RMS / 256 / 42 is the same amplitude × 32768 / 10752.
                 val amplitude = 10.0.pow(recorder.averagePowerForChannel(0u).toDouble() / 20.0)
                 val level = min(1.0, amplitude * FULL_SCALE / ANDROID_LOUD).toFloat()
                 onLevel(level)
                 val heardBefore = endOfSpeech.heardSpeech
-                val done = endOfSpeech.onFrame(level, (recorder.currentTime * 1000).toLong())
+                val done = endOfSpeech.onFrame(level, started.elapsedNow().inWholeMilliseconds)
                 if (endOfSpeech.heardSpeech && !heardBefore) onSpeech()
                 if (done) break
             }
@@ -127,7 +182,7 @@ class IosVoiceRecorder : VoiceRecorder {
         }
         try {
             val pcm = NSData.dataWithContentsOfURL(url)?.toByteArray()?.let(::wavSamples) ?: error("The recording couldn't be read.")
-            Recording(pcm16Wav(pcm, SAMPLE_RATE), "audio/wav", endOfSpeech.heardSpeech || finishRequested && pcm.size > SAMPLE_RATE / 2)
+            return Recording(pcm16Wav(pcm, SAMPLE_RATE), "audio/wav", endOfSpeech.heardSpeech || finishRequested && pcm.size > SAMPLE_RATE / 2)
         } finally {
             NSFileManager.defaultManager.removeItemAtURL(url, null)
         }
@@ -154,11 +209,14 @@ class IosVoiceRecorder : VoiceRecorder {
     }
 }
 
-/** Plays each reply clip with [AVAudioPlayer], out of the loudspeaker unless a headset is on. */
+/**
+ * Plays each reply clip with [AVAudioPlayer]. It decodes MP3, AAC, WAV and FLAC, which covers the gateway's
+ * speech providers except an Ogg/Opus setting; such a clip fails with a message saying so.
+ */
 @OptIn(ExperimentalForeignApi::class)
 class IosSpeechPlayer : SpeechPlayer {
 
-    override suspend fun play(audio: SpokenAudio) = VoiceAudioSession.use {
+    override suspend fun play(audio: SpokenAudio) = VoiceAudioSession.use(VoiceAudioSession.Use.Play) {
         withContext(Dispatchers.Main) {
             val player = memScoped {
                 val error = alloc<ObjCObjectVar<NSError?>>()
@@ -169,6 +227,12 @@ class IosSpeechPlayer : SpeechPlayer {
             // wait, so the coroutine holds it until the clip is over.
             val delegate = Ended { failure -> ended?.invoke(failure) }
             player.delegate = delegate
+            // An interrupted player pauses and never finishes: end the wait instead of hanging in it.
+            val interruptions = NSNotificationCenter.defaultCenter.addObserverForName(
+                AVAudioSessionInterruptionNotification,
+                null,
+                NSOperationQueue.mainQueue,
+            ) { _ -> ended?.invoke("The reply was interrupted.") }
             try {
                 suspendCancellableCoroutine { continuation ->
                     ended = { failure ->
@@ -180,6 +244,8 @@ class IosSpeechPlayer : SpeechPlayer {
                     if (!player.play()) continuation.resumeWithException(IllegalStateException("Couldn't play the reply."))
                 }
             } finally {
+                NSNotificationCenter.defaultCenter.removeObserver(interruptions)
+                player.stop()
                 if (player.delegate === delegate) player.delegate = null
             }
         }

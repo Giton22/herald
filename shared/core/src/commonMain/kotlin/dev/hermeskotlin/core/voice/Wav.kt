@@ -2,6 +2,8 @@ package dev.hermeskotlin.core.voice
 
 /** [pcm] (16-bit little-endian mono samples at [sampleRate]) as a plain WAV file, which every speech-to-text provider takes. */
 fun pcm16Wav(pcm: ByteArray, sampleRate: Int): ByteArray {
+    // Whole 16-bit samples, which also keeps the data chunk even, as RIFF wants.
+    require(pcm.size % 2 == 0) { "16-bit PCM has an even number of bytes." }
     val header = ByteArray(WAV_HEADER)
     fun text(at: Int, value: String) = value.encodeToByteArray().copyInto(header, at)
     fun int(at: Int, value: Int, bytes: Int = 4) {
