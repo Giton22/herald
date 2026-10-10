@@ -1,6 +1,5 @@
 package dev.hermeskotlin.core.auth
 
-import io.ktor.http.parseQueryString
 import kotlinx.cinterop.ExperimentalForeignApi
 import kotlinx.cinterop.IntVar
 import kotlinx.cinterop.addressOf
@@ -17,13 +16,25 @@ import kotlinx.coroutines.IO
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
 import platform.posix.AF_INET
+import platform.posix.EAGAIN
+import platform.posix.ECONNABORTED
+import platform.posix.EINTR
+import platform.posix.EWOULDBLOCK
+import platform.posix.F_GETFL
+import platform.posix.F_SETFL
 import platform.posix.IPPROTO_TCP
+import platform.posix.O_NONBLOCK
+import platform.posix.POLLERR
+import platform.posix.POLLHUP
 import platform.posix.POLLIN
+import platform.posix.POLLNVAL
 import platform.posix.SOCK_STREAM
 import platform.posix.SOL_SOCKET
 import platform.posix.SO_NOSIGPIPE
 import platform.posix.accept
 import platform.posix.bind
+import platform.posix.errno
+import platform.posix.fcntl
 import platform.posix.getsockname
 import platform.posix.listen
 import platform.posix.poll
@@ -35,6 +46,8 @@ import platform.posix.sockaddr
 import platform.posix.sockaddr_in
 import platform.posix.socket
 import platform.posix.socklen_tVar
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 
 /**
  * A one-request HTTP listener on 127.0.0.1 for the browser sign-in, as on Android: the gateway only accepts a
@@ -49,6 +62,8 @@ class IosLoopbackReceiver(private val returnUri: String) : LoopbackReceiver {
         val fd = socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
         check(fd >= 0) { "No socket for the sign-in." }
         val port = try {
+            // Non-blocking, so a connection dropped between poll and accept can't stall the listener.
+            check(fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) or O_NONBLOCK) == 0) { "Couldn't set up the sign-in port." }
             memScoped {
                 val address = alloc<sockaddr_in>().apply {
                     sin_len = sizeOf<sockaddr_in>().convert()
@@ -80,7 +95,11 @@ class IosLoopbackReceiver(private val returnUri: String) : LoopbackReceiver {
                 ensureActive()
                 if (!readable(fd, ACCEPT_TIMEOUT_MS)) continue
                 val client = accept(fd, null, null)
-                if (client < 0) continue
+                if (client < 0) {
+                    // Gone before it was taken, or nothing there after all: keep listening. Anything else is broken.
+                    if (errno in setOf(EAGAIN, EWOULDBLOCK, ECONNABORTED, EINTR)) continue
+                    error("The sign-in listener stopped working.")
+                }
                 query = try {
                     answer(client)
                 } finally {
@@ -92,6 +111,8 @@ class IosLoopbackReceiver(private val returnUri: String) : LoopbackReceiver {
 
         /** The callback's query, or null for anything else the browser asks for (a favicon) or a dropped connection. */
         private fun answer(client: Int): Map<String, String>? {
+            // The accepted socket inherits the listener's non-blocking mode; reads wait with poll anyway.
+            fcntl(client, F_SETFL, fcntl(client, F_GETFL) and O_NONBLOCK.inv())
             memScoped {
                 val on = alloc<IntVar>().apply { value = 1 }
                 setsockopt(client, SOL_SOCKET, SO_NOSIGPIPE, on.ptr, sizeOf<IntVar>().convert())
@@ -111,17 +132,21 @@ class IosLoopbackReceiver(private val returnUri: String) : LoopbackReceiver {
                 ("HTTP/1.1 302 Found\r\nLocation: $returnUri\r\nContent-Type: text/html; charset=utf-8\r\n" +
                     "Content-Length: ${body.size}\r\nCache-Control: no-store\r\nConnection: close\r\n\r\n").encodeToByteArray() + body,
             )
-            val parameters = parseQueryString(target.substringAfter('?', ""))
-            return parameters.names().associateWith { parameters[it].orEmpty() }
+            return callbackQuery(target)
         }
 
-        /** The request line and headers, up to the blank line; null when the browser goes quiet or hangs up first. */
+        /**
+         * The request line and headers, up to the blank line; null when the browser goes quiet, hangs up, or
+         * dribbles bytes past the overall deadline first.
+         */
         private fun readHead(client: Int): String? {
+            val deadline = TimeSource.Monotonic.markNow() + READ_TIMEOUT_MS.milliseconds
             val received = StringBuilder()
             val buffer = ByteArray(1024)
             while (!received.contains("\r\n\r\n")) {
                 // Short: a browser's idle preconnect would otherwise hold the callback up behind it.
-                if (!readable(client, READ_TIMEOUT_MS)) return null
+                val left = (-deadline.elapsedNow()).inWholeMilliseconds.toInt()
+                if (left <= 0 || !readable(client, left)) return null
                 val count = buffer.usePinned { recv(client, it.addressOf(0), buffer.size.convert(), 0) }.toInt()
                 if (count <= 0) return null
                 // Latin-1, as HTTP heads are: every byte is one character.
@@ -157,14 +182,20 @@ class IosLoopbackReceiver(private val returnUri: String) : LoopbackReceiver {
     }
 }
 
-/** Whether [fd] has something to read (a connection to accept, bytes to receive) within [timeoutMs]. */
+/**
+ * Whether [fd] is ready within [timeoutMs]: something to read, a connection to accept, or a hang-up or error
+ * that the next read or accept reports. A socket that isn't open any more is a bug, not a wait.
+ */
 @OptIn(ExperimentalForeignApi::class)
 private fun readable(fd: Int, timeoutMs: Int): Boolean = memScoped {
     val entry = alloc<pollfd>().apply {
         this.fd = fd
         events = POLLIN.convert()
     }
-    poll(entry.ptr, 1u, timeoutMs) > 0
+    if (poll(entry.ptr, 1u, timeoutMs) <= 0) return@memScoped false
+    val revents = entry.revents.toInt()
+    check(revents and POLLNVAL == 0) { "The sign-in socket closed." }
+    revents and (POLLIN or POLLHUP or POLLERR) != 0
 }
 
 /** 127.0.0.1 in host order. */
