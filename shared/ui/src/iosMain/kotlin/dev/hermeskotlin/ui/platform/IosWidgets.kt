@@ -10,6 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.IO
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -35,13 +36,29 @@ internal class IosWidgets(
     private data class Chat(val id: String, val title: String, val at: Double?)
 
     init {
-        val signedIn = connection.state.map { it !is ConnectionState.Idle && it !is ConnectionState.SessionExpired }.distinctUntilChanged()
+        // Null until the connection first starts: the Idle the app launches in isn't a sign-out, and the
+        // widget keeps what it showed. Idle after that is a sign-out or a switch to another gateway, whose
+        // chats aren't this one's.
+        var started = false
+        val signedIn = connection.state.map { state ->
+            val out = state is ConnectionState.Idle || state is ConnectionState.SessionExpired
+            if (!out) started = true
+            if (started) !out else null
+        }.distinctUntilChanged()
+        scope.launch {
+            signedIn.collect { if (it == false) recentChats.clear() }
+        }
         val locked = settings.settings.map { it?.appLock == true }.distinctUntilChanged()
         scope.launch {
             combine(recentChats.latest, locked, signedIn) { latest, locked, signedIn ->
-                val sessions = if (locked || !signedIn) emptyList() else latest?.sessions.orEmpty()
-                Shown(locked, signedIn, sessions.map { Chat(it.id, it.displayTitle, it.activityAt) })
-            }.distinctUntilChanged().collect { shown ->
+                when {
+                    locked -> Shown(locked = true, signedIn = signedIn != false, chats = emptyList())
+                    signedIn == false -> Shown(locked = false, signedIn = false, chats = emptyList())
+                    // Nothing read from this gateway yet (launching, or offline): the widget keeps what it showed.
+                    latest == null -> null
+                    else -> Shown(locked = false, signedIn = true, chats = latest.sessions.map { Chat(it.id, it.displayTitle, it.activityAt) })
+                }
+            }.filterNotNull().distinctUntilChanged().collect { shown ->
                 withContext(Dispatchers.IO) { write(json(shown)) }
                 withContext(Dispatchers.Main) { reload?.invoke() }
             }

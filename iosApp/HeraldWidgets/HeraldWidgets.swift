@@ -108,10 +108,13 @@ struct RecentChatsView: View {
             HStack {
                 Text("Herald").font(.headline)
                 Spacer()
-                Link(destination: WidgetData.Chat.newChat) {
-                    Image(systemName: "square.and.pencil").font(.headline)
+                // The small size opens one link for the whole widget: no button of its own there.
+                if family != .systemSmall {
+                    Link(destination: WidgetData.Chat.newChat) {
+                        Image(systemName: "square.and.pencil").font(.headline)
+                    }
+                    .accessibilityLabel("New chat")
                 }
-                .accessibilityLabel("New chat")
             }
             content
             Spacer(minLength: 0)
@@ -134,6 +137,8 @@ struct RecentChatsView: View {
                             Text(date, style: .relative).font(.caption2).foregroundStyle(.secondary)
                         }
                     }
+                    // Redacted where the widget shows on a locked device (StandBy, the iPad Lock Screen).
+                    .privacySensitive()
                 }
             }
         } else {
