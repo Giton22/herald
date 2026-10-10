@@ -86,7 +86,11 @@ class JsonRpcClient(
     private val sendMutex = Mutex()
     private val pending = mutableMapOf<String, CompletableDeferred<JsonElement>>()
     private val pendingMutex = Mutex()
+    /** Taken only under [pendingMutex]: callers run on several threads, and a shared id hands one caller another's reply. */
     private var nextId = 0L
+
+    /** The heartbeat's own count, so a ping never races a request for an id. */
+    private var nextPing = 0L
     @kotlin.concurrent.Volatile private var lastInboundAt = clock()
     private var heartbeatJob: Job? = null
 
@@ -139,9 +143,8 @@ class JsonRpcClient(
     suspend fun request(method: String, params: JsonObject = JsonObject(emptyMap()), timeoutMs: Long = 30_000): JsonElement {
         // Nothing will answer on a link that is gone; say so now rather than after the timeout.
         closedWith?.let { throw it }
-        val id = "c${++nextId}"
         val deferred = CompletableDeferred<JsonElement>()
-        pendingMutex.withLock { pending[id] = deferred }
+        val id = pendingMutex.withLock { "c${++nextId}".also { pending[it] = deferred } }
         try {
             send(buildJsonObject {
                 put("jsonrpc", "2.0")
@@ -255,7 +258,7 @@ class JsonRpcClient(
                 runCatching {
                     send(buildJsonObject {
                         put("jsonrpc", "2.0")
-                        put("id", "ping${++nextId}")
+                        put("id", "ping${++nextPing}")
                         put("method", "gateway.ping")
                         put("params", JsonObject(emptyMap()))
                     })

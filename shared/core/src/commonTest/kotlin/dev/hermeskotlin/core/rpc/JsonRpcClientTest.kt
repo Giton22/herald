@@ -3,12 +3,14 @@ package dev.hermeskotlin.core.rpc
 import dev.hermeskotlin.core.chat.InputRequest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
@@ -20,6 +22,10 @@ import kotlin.test.assertFailsWith
 import kotlin.test.assertTrue
 
 class JsonRpcClientTest {
+
+    private companion object {
+        const val CONCURRENT_CALLS = 2_000
+    }
 
     private fun JsonPrimitive.str() = content
 
@@ -50,6 +56,26 @@ class JsonRpcClientTest {
         transport.push("""{"jsonrpc":"2.0","id":"$id","result":{"sessions":[]}}""")
 
         assertEquals("{\"sessions\":[]}", call.await().toString())
+        pump.cancel()
+    }
+
+    @Test
+    fun requestsFromManyThreadsGetDistinctIds() = runTest {
+        val transport = FakeTransport()
+        val client = JsonRpcClient(transport)
+        val pump = launch { runCatching { client.run() } }
+
+        // The connection's scope is Dispatchers.Default, so callers really do race for the next id.
+        val calls = (1..CONCURRENT_CALLS).map { n ->
+            launch(Dispatchers.Default) { runCatching { client.request("call.$n") } }
+        }
+        val sent = withContext(Dispatchers.Default) {
+            transport.sent.first { list -> list.count { it["method"]?.jsonPrimitive?.str()?.startsWith("call.") == true } == CONCURRENT_CALLS }
+        }
+
+        val ids = sent.filter { it["method"]?.jsonPrimitive?.str()?.startsWith("call.") == true }.map { it["id"]!!.jsonPrimitive.str() }
+        assertEquals(CONCURRENT_CALLS, ids.toSet().size)
+        calls.forEach { it.cancel() }
         pump.cancel()
     }
 
