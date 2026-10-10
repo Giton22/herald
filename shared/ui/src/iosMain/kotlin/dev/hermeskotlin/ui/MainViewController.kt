@@ -13,6 +13,7 @@ import dev.hermeskotlin.core.voice.IosVoiceKeepAlive
 import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.ui.di.sharedModules
 import dev.hermeskotlin.ui.platform.IosAppLock
+import dev.hermeskotlin.ui.platform.IosChatNotifier
 import dev.hermeskotlin.ui.platform.IosLinks
 import dev.hermeskotlin.ui.platform.SafariUriHandler
 import org.koin.core.context.startKoin
@@ -25,6 +26,9 @@ import platform.UIKit.UIViewController
 /** Starts the shared code. The Swift app calls it once, before the first screen. */
 fun initKoin() {
     startKoin { modules(sharedModules + iosAppModule) }
+    // Before launch finishes: the notification center has to have its delegate by then, or a tap that
+    // launched the app is lost.
+    KoinPlatform.getKoin().get<IosChatNotifier>()
 }
 
 /**
@@ -53,6 +57,7 @@ fun openLink(url: String): Boolean = KoinPlatform.getKoin().get<IosLinks>().open
 internal val iosAppModule = module {
     single { IosAppLock(get(), get()) }
     single { IosLinks(get(), get(), get(), get(), get()) }
+    single { IosChatNotifier(get(), get(), links = { get<IosLinks>().open(it) }, scope = get()) }
     single<VoiceKeepAlive> { IosVoiceKeepAlive() }
     single<PushKeys> { NoPushKeys }
     single { PushSetup(get(), get(), get(), get(), get(), get(), deviceName = { UIDevice.currentDevice.name }) }
