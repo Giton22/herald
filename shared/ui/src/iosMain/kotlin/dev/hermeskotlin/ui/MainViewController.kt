@@ -13,6 +13,7 @@ import dev.hermeskotlin.core.voice.IosVoiceKeepAlive
 import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.ui.di.sharedModules
 import dev.hermeskotlin.ui.platform.IosAppLock
+import dev.hermeskotlin.ui.platform.IosChatNotifier
 import dev.hermeskotlin.ui.platform.IosLinks
 import dev.hermeskotlin.ui.platform.SafariUriHandler
 import org.koin.core.context.startKoin
@@ -35,6 +36,7 @@ fun MainViewController(onDarkTheme: (Boolean) -> Unit): UIViewController {
     val lock = KoinPlatform.getKoin().get<IosAppLock>()
     // Started with the UI: it follows the connection for the quick actions and the app for shares.
     KoinPlatform.getKoin().get<IosLinks>()
+    KoinPlatform.getKoin().get<IosChatNotifier>()
     return ComposeUIViewController {
         val locked by lock.timer.locked.collectAsState()
         CompositionLocalProvider(LocalUriHandler provides SafariUriHandler) {
@@ -53,6 +55,7 @@ fun openLink(url: String): Boolean = KoinPlatform.getKoin().get<IosLinks>().open
 internal val iosAppModule = module {
     single { IosAppLock(get(), get()) }
     single { IosLinks(get(), get(), get(), get(), get()) }
+    single { IosChatNotifier(get(), get(), links = { get<IosLinks>().open(it) }, scope = get()) }
     single<VoiceKeepAlive> { IosVoiceKeepAlive() }
     single<PushKeys> { NoPushKeys }
     single { PushSetup(get(), get(), get(), get(), get(), get(), deviceName = { UIDevice.currentDevice.name }) }
