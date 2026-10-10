@@ -1,5 +1,6 @@
 package dev.hermeskotlin.ui.assistant
 
+import dev.hermeskotlin.ui.imeVisible
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -9,7 +10,6 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -485,9 +485,9 @@ private fun Composer(
     var focused by remember { mutableStateOf(false) }
     // As in the chat: Back hides the keyboard but leaves the field focused, which lights the edge and brings the
     // keyboard back on the next relayout. Put away means done typing.
-    val imeVisible = WindowInsets.isImeVisible
+    val keyboardUp = imeVisible
     val focusManager = LocalFocusManager.current
-    LaunchedEffect(imeVisible) { if (!imeVisible && focused) focusManager.clearFocus() }
+    LaunchedEffect(keyboardUp) { if (!keyboardUp && focused) focusManager.clearFocus() }
     val tray: (@Composable () -> Unit)? = when {
         circled != null -> { { CircledChip(circled, onCircleAgain = actions::startCircling, onRemove = actions::dropCircled) } }
         !chat.hasConversation && screen.missed -> { { ScreenUnavailable(onOpenScreenSettings) } }

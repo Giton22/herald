@@ -25,6 +25,20 @@ class SpeechTest {
     }
 
     @Test
+    fun emojiRunsAreSilenceAndOtherSymbolsStay() {
+        assertEquals("Done ok", speakableText("Done 👍🏽✅ ok"))
+        assertEquals("Family time", speakableText("Family 👨‍👩‍👧 time"))
+        assertEquals("π ≈ 3.14 €5", speakableText("π ≈ 3.14 €5"))
+    }
+
+    @Test
+    fun stopIsHeardThroughAnyPunctuation() {
+        assertTrue(isVoiceStopCommand("Stop!"))
+        assertTrue(isVoiceStopCommand("„never mind…“"))
+        assertFalse(isVoiceStopCommand("Stop the container."))
+    }
+
+    @Test
     fun theFirstChunkIsShortSoSpeechStartsSoon() {
         val text = "First sentence here. " + "Another one follows with more words in it. ".repeat(12)
         val chunks = speechChunks(text, maxChars = 200, firstChars = 60)

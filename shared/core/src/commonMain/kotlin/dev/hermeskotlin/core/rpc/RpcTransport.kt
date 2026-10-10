@@ -82,7 +82,9 @@ suspend fun HttpClient.openGatewaySocket(url: GatewayUrl, ticket: String): RpcTr
     return KtorWebSocketTransport(session)
 }
 
-private val HANDSHAKE_STATUS = Regex("""but was '(\d{3})""")
+// OkHttp quotes the status line ("but was '403 Forbidden'"); Ktor's own check, which Darwin goes through, doesn't
+// ("expected status code 101 but was 403").
+private val HANDSHAKE_STATUS = Regex("""but was '?(\d{3})""")
 
 internal fun handshakeStatus(message: String?): Int? =
     message?.let { HANDSHAKE_STATUS.find(it)?.groupValues?.get(1)?.toIntOrNull() }
