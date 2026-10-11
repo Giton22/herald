@@ -71,7 +71,7 @@ class ChatSessionControlTest {
     }
 
     @Test
-    fun aGatewayWithoutSessionControlIsNotAskedAgainAfterAReconnect() = runTest {
+    fun aGatewayWithoutSessionControlIsAskedOncePerLink() = runTest {
         val connection = gateway(
             backgroundScope,
             mapOf("session.resume" to RESUME, "session.control.read" to "error:-32601"),
@@ -82,15 +82,18 @@ class ChatSessionControlTest {
         chat.state.first { it.runtimeSessionId == "rt1" }
         gateway.socket.awaitSent { it.isCall("session.control.read") }
         assertNull(chat.state.value.control)
+        // Let the read's error land, then ask again on the same link: the latch holds it back.
+        kotlinx.coroutines.delay(1_000)
+        chat.refreshControl()
+        assertEquals(1, gateway.sent("session.control.read").size)
 
+        // Updating a gateway restarts it, so a new link may well know the method now.
         gateway.socket.serverClose(1006)
         chat.state.first { it.runtimeSessionId == null }
-        // The re-attach's read would land on the fresh socket; the latch holds it back.
         chat.state.first { it.runtimeSessionId == "rt1" }
-        // Let the re-attach's launched refresh run before counting, so a missing latch is caught for sure.
-        kotlinx.coroutines.delay(1_000)
+        gateway.socket.awaitSent { it.isCall("session.control.read") }
 
-        assertEquals(1, gateway.sent("session.control.read").size)
+        assertEquals(2, gateway.sent("session.control.read").size)
     }
 
     @Test

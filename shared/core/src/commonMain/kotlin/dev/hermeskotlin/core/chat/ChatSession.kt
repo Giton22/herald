@@ -830,8 +830,11 @@ class ChatSession(
     private suspend fun liveIdForCheckpoints(client: JsonRpcClient): String? =
         _state.value.runtimeSessionId ?: if (rowExists) ensureAttached(client) else null
 
-    /** Set once `session.control.read` came back "no such method": the gateway predates it, so don't ask again. */
-    private var controlUnsupported = false
+    /**
+     * The link on which `session.control.read` came back "no such method": that gateway predates it, so
+     * don't ask it again. A new link may be to an updated gateway, so it asks once more.
+     */
+    private var controlUnsupportedOn: JsonRpcClient? = null
 
     /**
      * Reads the session's goal, loop and heartbeat once (`session.control.read`), since `session.resume`
@@ -839,8 +842,8 @@ class ChatSession(
      * that doesn't know the method hides the feature, and any other failure leaves the state as it is.
      */
     suspend fun refreshControl() {
-        if (controlUnsupported) return
         val client = connectedClient() ?: return
+        if (client === controlUnsupportedOn) return
         val runtimeId = _state.value.runtimeSessionId ?: return
         // An update that lands while the read is out is newer than the read's answer, so the answer yields to it.
         val before = _state.value.control
@@ -849,7 +852,7 @@ class ChatSession(
         } catch (e: CancellationException) {
             throw e
         } catch (e: RpcException) {
-            if (e.code == METHOD_NOT_FOUND) controlUnsupported = true
+            if (e.code == METHOD_NOT_FOUND) controlUnsupportedOn = client
             return
         } catch (_: Exception) {
             return
@@ -1902,9 +1905,12 @@ class ChatSession(
                 // Nothing runs, so the agent is built; its clear may have gone while this phone was away.
                 .let { if (running || resumable) it else it.withoutAgentNotices() }
         }
-        if (catchingUp) scope.launch { catchUp(client, runtimeId) }
         // session.resume doesn't carry the goal/loop/heartbeat; read them once, events take it from there.
-        scope.launch { refreshControl() }
+        // After the catch-up: a missed update it replays is older than the read, so it mustn't land after it.
+        scope.launch {
+            if (catchingUp) catchUp(client, runtimeId)
+            refreshControl()
+        }
         runtimeId
     }
 
