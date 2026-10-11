@@ -366,7 +366,8 @@ fun ChatScreen(
                 ChatRequest.OpenUsage -> usageOpen = true
                 ChatRequest.OpenProcesses -> processesOpen = true
                 ChatRequest.OpenCheckpoints -> checkpointsOpen = true
-                ChatRequest.OpenControl -> controlOpen = true
+                // The goal may have been cleared since the menu offered it; an empty sheet would stay up.
+                ChatRequest.OpenControl -> controlOpen = viewModel.state.value.control != null
                 ChatRequest.StartVoice -> startVoiceChat()
                 ChatRequest.StartDictation -> toggleDictation()
             }
@@ -419,10 +420,7 @@ fun ChatScreen(
         onDictate = toggleDictation,
         onVoiceChat = startVoiceChat,
         onOpenPets = { petsOpen = true },
-        onOpenControl = {
-            viewModel.control.clearError()
-            controlOpen = true
-        },
+        onOpenControl = viewModel::openControl,
         onViewImage = { viewing = it },
         onNotice = { notice = it },
         wallpaper = rememberChatWallpaper(),
