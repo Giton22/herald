@@ -70,26 +70,24 @@ fun extractReplyMedia(text: String, generated: List<GeneratedImage> = emptyList(
     val echoes = generated.flatMap { it.echoes }.toSet()
     if ("![" !in text && "MEDIA:" !in text && "::preview" !in text && echoes.none { it in text }) return text to emptyList()
     val media = LinkedHashMap<String, ReplyMedia>()
-    var cleaned = outsideCode(text) { prose ->
-        var part = MARKDOWN_IMAGE.replace(prose) { match ->
-            val source = match.groupValues[2]
-            media.getOrPut(source) { ReplyMedia(source, nameOf(source, match.groupValues[1]), isImage = true) }
-            ""
-        }
-        part = PREVIEW_DIRECTIVE.replace(part) { match ->
-            val source = match.groupValues[1]
-            media.getOrPut(source) { ReplyMedia(source, nameOf(source), isImage = false) }
-            ""
-        }
-        MEDIA_TOKEN.replace(part) { match ->
-            val source = match.groupValues[1]
-            media.getOrPut(source) { ReplyMedia(source, nameOf(source), isImagePath(source)) }
-            ""
-        }
+    var cleaned = MARKDOWN_IMAGE.replaceOutsideCode(text) { match ->
+        val source = match.groupValues[2]
+        media.getOrPut(source) { ReplyMedia(source, nameOf(source, match.groupValues[1]), isImage = true) }
+        ""
+    }
+    cleaned = PREVIEW_DIRECTIVE.replaceOutsideCode(cleaned) { match ->
+        val source = match.groupValues[1]
+        media.getOrPut(source) { ReplyMedia(source, nameOf(source), isImage = false) }
+        ""
+    }
+    cleaned = MEDIA_TOKEN.replaceOutsideCode(cleaned) { match ->
+        val source = match.groupValues[1]
+        media.getOrPut(source) { ReplyMedia(source, nameOf(source), isImagePath(source)) }
+        ""
     }
     // A bare path, where it stands alone: not inside a link or code, as Desktop does it.
     echoes.forEach { echo ->
-        cleaned = Regex("""(^|[\s\[\{])<?${Regex.escape(echo)}>?(?=[\]\}.,!?]*(?:\s|$))""", RegexOption.MULTILINE).replace(cleaned) { match ->
+        cleaned = Regex("""(^|[\s\[\{])<?${Regex.escape(echo)}>?(?=[\]\}.,!?]*(?:\s|$))""", RegexOption.MULTILINE).replaceOutsideCode(cleaned) { match ->
             // The space before it goes too, so no gap is left before the sentence's full stop.
             match.groupValues[1].takeUnless { it == " " || it == "\t" }.orEmpty()
         }
@@ -99,13 +97,12 @@ fun extractReplyMedia(text: String, generated: List<GeneratedImage> = emptyList(
     return cleaned to media.values.filterNot { it.gatewayPath in echoes || it.source in echoes }
 }
 
-/** [text] with [transform] applied to everything but its [CODE], which stays as it was. */
-private inline fun outsideCode(text: String, transform: (String) -> String): String {
-    val out = StringBuilder(text.length)
-    var from = 0
-    CODE.findAll(text).forEach { code ->
-        out.append(transform(text.substring(from, code.range.first))).append(code.value)
-        from = code.range.last + 1
-    }
-    return out.append(transform(text.substring(from))).toString()
+/**
+ * [text] with each match that starts outside its [CODE] replaced by [transform]; code stays as it was.
+ * The match is made on the whole text, so `^`, `$` and lookarounds see real lines and words, and an
+ * image whose alt text holds a code span is still one image.
+ */
+private fun Regex.replaceOutsideCode(text: String, transform: (MatchResult) -> CharSequence): String {
+    val code = CODE.findAll(text).map { it.range }.toList()
+    return replace(text) { match -> if (code.any { match.range.first in it }) match.value else transform(match) }
 }

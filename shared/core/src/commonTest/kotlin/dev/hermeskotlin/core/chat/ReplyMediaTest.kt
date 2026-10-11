@@ -112,6 +112,26 @@ class ReplyMediaTest {
     }
 
     @Test
+    fun aCodeSpanInAnImagesAltKeepsItAnImage() {
+        val (text, media) = extractReplyMedia("The run: ![`plot.py` output](/opt/data/plot.png)")
+        assertEquals("The run:", text)
+        assertEquals(listOf("/opt/data/plot.png"), media.map { it.source })
+    }
+
+    @Test
+    fun aDirectiveAfterACodeSpanIsNotAloneOnItsLine() {
+        val text = "Run `x` ::preview{file=\"a.html\"}"
+        assertEquals(text to emptyList(), extractReplyMedia(text))
+    }
+
+    @Test
+    fun anEchoInCodeStays() {
+        val generated = GeneratedImage("/opt/data/img.png", echoes = listOf("/tmp/sandbox/img.png"))
+        val reply = "Done.\n```bash\nls /tmp/sandbox/img.png\n```"
+        assertEquals(reply, extractReplyMedia(reply, listOf(generated)).first)
+    }
+
+    @Test
     fun anImageAddressKeepsItsBrackets() {
         val (text, media) = extractReplyMedia("See ![Foo](https://en.wikipedia.org/wiki/Foo_(bar).png) for details.")
         assertEquals("See  for details.", text)
