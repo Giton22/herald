@@ -177,12 +177,18 @@ fun SessionControlStrip(control: SessionControl?, hazeState: HazeState, onOpen: 
 @Composable
 private fun Strip(control: SessionControl, hazeState: HazeState, onOpen: () -> Unit) {
     val use24Hour = uses24HourClock()
-    val lines = listOfNotNull(
-        control.goal?.let { goalLine(it) to it.title },
-        control.loop?.let { loopLine(it, use24Hour) to it.prompt },
-        control.heartbeat?.let { heartbeatLine(it) to it.prompt },
+    val rows = listOfNotNull(
+        control.goal?.let { StripItem(Lucide.Target, phaseTint(it.phase), goalLine(it), it.title) },
+        control.loop?.let { loop ->
+            val tint = if (loop.status == "active" && !loop.deferredByGoal) Theme[colors][accentText] else Theme[colors][textSecondary]
+            StripItem(Lucide.Repeat, tint, loopLine(loop, use24Hour), loop.prompt)
+        },
+        control.heartbeat?.let { heartbeat ->
+            val tint = if (heartbeat.status == "paused") Theme[colors][textSecondary] else Theme[colors][accentText]
+            StripItem(Lucide.HeartPulse, tint, heartbeatLine(heartbeat), heartbeat.prompt)
+        },
     )
-    val spoken = lines.joinToString(". ") { (line, title) -> if (title.isBlank()) line else "$line: $title" }
+    val spoken = rows.joinToString(". ") { if (it.title.isBlank()) it.line else "${it.line}: ${it.title}" }
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     val page = Theme[colors][background]
     val frosted = remember(page) {
@@ -201,48 +207,33 @@ private fun Strip(control: SessionControl, hazeState: HazeState, onOpen: () -> U
             .background(Theme[colors][surfaceElevated].copy(alpha = 0.85f))
             .border(1.dp, Theme[colors][strokeStrong], shape)
             .clickable(role = Role.Button, onClickLabel = "Open goal and loops", onClick = onOpen)
-            .semantics { contentDescription = "$spoken. Open goal and loops" },
+            .semantics { contentDescription = "$spoken. Open goal and loops" }
+            // The whole strip is the touch target, so its rows sit close rather than 48dp apart each.
+            .heightIn(min = MinTouchTarget)
+            .padding(vertical = 6.dp),
+        verticalArrangement = Arrangement.Center,
     ) {
-        control.goal?.let { goal ->
-            StripRow(
-                icon = Lucide.Target,
-                tint = phaseTint(goal.phase),
-                line = goalLine(goal),
-                title = goal.title,
-            )
-        }
-        control.loop?.let { loop ->
-            StripRow(
-                icon = Lucide.Repeat,
-                tint = if (loop.status == "active" && !loop.deferredByGoal) Theme[colors][accentText] else Theme[colors][textSecondary],
-                line = loopLine(loop, use24Hour),
-                title = loop.prompt,
-            )
-        }
-        control.heartbeat?.let { heartbeat ->
-            StripRow(
-                icon = Lucide.HeartPulse,
-                tint = if (heartbeat.status == "paused") Theme[colors][textSecondary] else Theme[colors][accentText],
-                line = heartbeatLine(heartbeat),
-                title = heartbeat.prompt,
-            )
-        }
+        rows.forEach { StripRow(it) }
     }
 }
 
+/** One of the strip's lines, worked out once for both the row and what the strip says aloud. */
+private class StripItem(val icon: androidx.compose.ui.graphics.vector.ImageVector, val tint: Color, val line: String, val title: String)
+
 /** One of the strip's lines: the item's icon, its state summary, and what it's about, ellipsized. */
 @Composable
-private fun StripRow(icon: androidx.compose.ui.graphics.vector.ImageVector, tint: Color, line: String, title: String) {
+private fun StripRow(item: StripItem) {
     Row(
-        Modifier.fillMaxWidth().heightIn(min = MinTouchTarget).clearAndSetSemantics {}.padding(horizontal = 14.dp, vertical = 7.dp),
+        Modifier.fillMaxWidth().clearAndSetSemantics {}.padding(horizontal = 14.dp, vertical = 5.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        UnstyledIcon(icon, contentDescription = null, tint = tint, modifier = Modifier.size(14.dp))
-        Text(line, style = Theme[typography][label], color = Theme[colors][textSecondary], maxLines = 1)
-        if (title.isNotBlank()) {
+        UnstyledIcon(item.icon, contentDescription = null, tint = item.tint, modifier = Modifier.size(14.dp))
+        // On a narrow phone the state can fill the row; it ends in an ellipsis then, never cut mid-word.
+        Text(item.line, style = Theme[typography][label], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+        if (item.title.isNotBlank()) {
             Text(
-                title,
+                item.title,
                 style = Theme[typography][bodySmall],
                 color = Theme[colors][textTertiary],
                 maxLines = 1,
