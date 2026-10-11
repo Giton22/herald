@@ -63,6 +63,7 @@ class CronApiTest {
 
         assertEquals(listOf("gateway runner unreachable: connection refused", "model timeout", null), jobs.map { it.lastFireError })
         assertEquals("Missed its last scheduled run: gateway runner unreachable: connection refused", jobs[0].problem)
+        assertEquals("Missed its last scheduled run: model timeout", jobs[1].problem)
         assertEquals(null, jobs[2].problem)
         // Paused by the user since, it isn't a problem to flag.
         assertEquals(null, jobs[0].copy(state = "paused").problem)

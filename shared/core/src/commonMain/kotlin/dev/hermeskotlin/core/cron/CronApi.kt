@@ -23,7 +23,6 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
-import kotlinx.serialization.json.contentOrNull
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
@@ -70,12 +69,22 @@ data class CronJob(
 
     val paused: Boolean get() = state == "paused"
 
+    /** Whether a fire is stamped as never reaching the runner, even one stamped without a reason. */
+    val missedFire: Boolean get() = when (val raw = fireError) {
+        is JsonObject -> true
+        is JsonPrimitive -> raw.isString && raw.content.isNotBlank()
+        else -> false
+    }
+
     /** Why the scheduler couldn't start the last run, from [fireError] in either shape. */
     val lastFireError: String? get() = when (val raw = fireError) {
         is JsonObject -> raw.string("detail")
-        is JsonPrimitive -> raw.contentOrNull
+        is JsonPrimitive -> raw.takeIf { it.isString }?.content
         else -> null
     }?.takeIf { it.isNotBlank() }
+
+    /** When the missed fire was stamped, in epoch seconds; only the object shape says. */
+    val missedFireEpochSeconds: Double? get() = (fireError as? JsonObject).string("at").epochSeconds()
 
     /** Next run in epoch seconds, or null when none is planned (paused, finished, or unparseable). */
     val nextRunEpochSeconds: Double? get() = nextRunAt.epochSeconds()
