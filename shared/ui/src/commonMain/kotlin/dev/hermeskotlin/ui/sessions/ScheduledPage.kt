@@ -64,6 +64,7 @@ import com.composables.icons.lucide.Zap
 import com.composeunstyled.Text
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.cron.CronJob
+import dev.hermeskotlin.core.cron.missedLastFire
 import dev.hermeskotlin.core.cron.problem
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.sessions.SessionSummary
@@ -328,10 +329,12 @@ private fun JobRow(job: CronJob, onClick: () -> Unit) {
     }
 }
 
-/** "21h" over "next run", "failed" over "last run", or "paused" (over "last run failed" when it did). */
+/** "21h" over "next run", "failed" or "missed" over "last run", or "paused" (over "last run failed" when it did). */
 private fun CronJob.nextColumn(): Pair<String?, String?> = when {
     paused -> "paused" to ("last run failed".takeIf { problem != null })
     state == "completed" -> "done" to ("last run failed".takeIf { problem != null })
+    // The runner never got the fire, so nothing ran to fail.
+    missedLastFire -> "missed" to "last run"
     problem != null -> "failed" to "last run"
     else -> when (val until = timeUntil(nextRunEpochSeconds)) {
         "" -> null to null

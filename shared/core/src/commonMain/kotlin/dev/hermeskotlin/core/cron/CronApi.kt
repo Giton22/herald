@@ -22,6 +22,7 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.time.ExperimentalTime
 import kotlin.time.Instant
 
@@ -44,8 +45,12 @@ data class CronJob(
     @SerialName("last_error") val lastError: String? = null,
     /** The run worked but its result never reached its target (`last_status` is then `delivery_failed`). */
     @SerialName("last_delivery_error") val lastDeliveryError: String? = null,
-    /** Why the scheduler couldn't start the last run. */
-    @SerialName("last_fire_error") val lastFireError: String? = null,
+    /**
+     * Why the scheduler couldn't hand the last fire to the runner, kept loose: the dashboard stamps it as
+     * `{at, detail}` (`cron/jobs.py` `note_fire_forward_failure`), but it's typed as a string elsewhere.
+     * Read it through [lastFireError].
+     */
+    @SerialName("last_fire_error") val fireError: JsonElement? = null,
     /** Why the scheduler paused the job by itself, when it did. */
     @SerialName("paused_reason") val pausedReason: String? = null,
     /** The profile whose cron store holds the job, as the cross-profile list tags it. */
@@ -63,6 +68,23 @@ data class CronJob(
     val displayName: String get() = routineTitle.ifBlank { prompt.lineSequence().firstOrNull()?.take(50).orEmpty() }.ifBlank { id }
 
     val paused: Boolean get() = state == "paused"
+
+    /** Whether a fire is stamped as never reaching the runner, even one stamped without a reason. */
+    val missedFire: Boolean get() = when (val raw = fireError) {
+        is JsonObject -> true
+        is JsonPrimitive -> raw.isString && raw.content.isNotBlank()
+        else -> false
+    }
+
+    /** Why the scheduler couldn't start the last run, from [fireError] in either shape. */
+    val lastFireError: String? get() = when (val raw = fireError) {
+        is JsonObject -> raw.string("detail")
+        is JsonPrimitive -> raw.takeIf { it.isString }?.content
+        else -> null
+    }?.takeIf { it.isNotBlank() }
+
+    /** When the missed fire was stamped, in epoch seconds; only the object shape says. */
+    val missedFireEpochSeconds: Double? get() = (fireError as? JsonObject).string("at").epochSeconds()
 
     /** Next run in epoch seconds, or null when none is planned (paused, finished, or unparseable). */
     val nextRunEpochSeconds: Double? get() = nextRunAt.epochSeconds()
@@ -172,7 +194,7 @@ class CronApi(private val client: HttpClient) {
     }.map { it.body<CronJob>() }
 }
 
-/** An ISO 8601 time, with or without an offset, as epoch seconds; null when it doesn't parse. */
+/** An ISO 8601 time with an offset (the gateway's times are tz-aware) as epoch seconds; null when it doesn't parse. */
 @OptIn(ExperimentalTime::class)
 internal fun String?.epochSeconds(): Double? = this?.let {
     runCatching { Instant.parse(it) }.getOrNull()?.let { instant -> instant.toEpochMilliseconds() / 1000.0 }
