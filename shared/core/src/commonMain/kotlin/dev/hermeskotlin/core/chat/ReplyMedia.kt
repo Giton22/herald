@@ -31,8 +31,15 @@ private val MEDIA_TOKEN = Regex("""[ \t]*(?<![A-Za-z0-9_])MEDIA:(\S+?)(?=[.,;:!?
  * Fenced code blocks (one still streaming runs to the end) and code spans. What's in them is a sample,
  * shown as typed: the gateway delivers no `MEDIA:` path from code either (`gateway/platforms/base.py`
  * `_code_spans`).
+ *
+ * As in CommonMark: a fence opens at the start of a line and closes on a line of its own with at least
+ * as many of the same marks, so a ```` fence can show a ``` one; a ``` mid-sentence opens nothing. A
+ * span closes on the same number of backticks and stops at a blank line.
  */
-private val CODE = Regex("""(?s)(```|~~~)[^\n]*\n.*?(?:\1|\z)|`[^`\n]+`""")
+private val CODE = Regex(
+    """(?m)^[ \t]*((`|~)\2{2,})[^`\n]*\n[\s\S]*?(?:^[ \t]*\1\2*[ \t]*$|\z)""" +
+        """|(?<!`)(`+)(?!`)(?:[^\n]|\n(?![ \t]*\n))+?(?<!`)\3(?!`)""",
+)
 
 /** Desktop's inline widget directive, alone on its line; shown here as its file. */
 // Braces and brackets are escaped everywhere: Android's ICU regex rejects a bare `}` that the JVM allows.

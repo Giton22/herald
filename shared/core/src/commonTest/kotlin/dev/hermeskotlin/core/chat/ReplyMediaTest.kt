@@ -93,6 +93,25 @@ class ReplyMediaTest {
     }
 
     @Test
+    fun backticksMidSentenceOpenNoFence() {
+        val (text, media) = extractReplyMedia("Wrap it in ``` fences.\nHere is the chart: MEDIA:/opt/data/chart.png")
+        assertEquals("Wrap it in ``` fences.\nHere is the chart:", text)
+        assertEquals(listOf("/opt/data/chart.png"), media.map { it.source })
+    }
+
+    @Test
+    fun aLongerFenceHoldsAShorterOne() {
+        val reply = "Example:\n````markdown\n```markdown\n![cat](/opt/data/cat.png)\n```\n````\nDone."
+        assertEquals(reply to emptyList(), extractReplyMedia(reply))
+    }
+
+    @Test
+    fun aCodeSpanClosesOnTheSameNumberOfBackticks() {
+        val reply = "Type ``MEDIA:`x` `` or ``` `![a](b.png)` ```."
+        assertEquals(reply to emptyList(), extractReplyMedia(reply))
+    }
+
+    @Test
     fun anImageAddressKeepsItsBrackets() {
         val (text, media) = extractReplyMedia("See ![Foo](https://en.wikipedia.org/wiki/Foo_(bar).png) for details.")
         assertEquals("See  for details.", text)
