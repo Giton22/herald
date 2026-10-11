@@ -74,10 +74,14 @@ class ChatSession(
     private val cwd: String? = null,
     /** The device's copy of the transcript, shown while the gateway can't be read. */
     private val cache: OfflineCache? = null,
+    /** `/btw` and `/bg` cards from when this chat was last open ([ChatHost] keeps them across a switch). */
+    sideTasks: List<ChatMessage.Command> = emptyList(),
 ) {
     private fun nowSeconds(): Double = clock.now().toEpochMilliseconds() / 1000.0
 
-    private val _state = MutableStateFlow(ChatState(storedSessionId = initialStoredId, title = initialTitle))
+    private val _state = MutableStateFlow(
+        ChatState(storedSessionId = initialStoredId, title = initialTitle, messages = sideTasks.map(::reopenedSideTask)),
+    )
     val state: StateFlow<ChatState> = _state.asStateFlow()
 
     /** The stored row exists only after the first accepted prompt; until then a reconnect re-creates. */
@@ -139,7 +143,9 @@ class ChatSession(
             scope.launch { followConnection() },
             scope.launch { followEvents() },
             scope.launch { followServerRequests() },
-        )
+        ) + _state.value.messages.mapNotNull { card ->
+            (card as? ChatMessage.Command)?.takeIf { it.running && it.isBackground }?.taskId?.let { scope.launch { followBackgroundTask(it) } }
+        }
     }
 
     fun stop() {
@@ -849,27 +855,102 @@ class ChatSession(
             showCommandOutput("/btw", "Usage: /btw <question>. It's answered from a snapshot of this chat, without interrupting it.")
             return
         }
-        val key = addCommand("/btw ${question.trim()}")
+        startSideTask("/btw", "prompt.btw", question.trim(), "Couldn't ask the side question.")
+    }
+
+    /**
+     * `/bg <prompt>`: a fresh agent runs [prompt] in its own session beside this chat (`prompt.background`),
+     * as the TUI and Desktop do. The reply arrives later as `background.complete` and fills in the card.
+     * Through `slash.exec` the slash worker would print it after its output was already collected, so it
+     * never reached the chat (hermes-agent #97635). A gateway without the method still gets that path, and the
+     * answer is read from the task's own stored session instead.
+     */
+    suspend fun runInBackground(prompt: String) {
+        if (prompt.isBlank()) {
+            showCommandOutput("/bg", "Usage: /bg <prompt>. A separate agent runs it in the background, and its answer shows up here.")
+            return
+        }
+        startSideTask("/bg", "prompt.background", prompt.trim(), "Couldn't start the background task.") { client, runtimeId, key ->
+            val reply = client.request(
+                "slash.exec",
+                buildJsonObject {
+                    put("session_id", runtimeId)
+                    put("command", "bg ${prompt.trim()}")
+                },
+                timeoutMs = COMMAND_TIMEOUT_MS,
+            ) as? JsonObject
+            val output = (SlashResult.parse(reply) as? SlashResult.Output)?.text.orEmpty().replace(ANSI_ESCAPE, "").trim()
+            // The worker prints the task's id; its stored session holds the answer.
+            val taskId = WORKER_TASK_ID.find(output)?.value
+            if (taskId == null) finishCommand(key, output.ifEmpty { "Started in the background." })
+            taskId
+        }
+    }
+
+    /**
+     * Starts a side agent through [method] under a running card for [command]. Its answer comes back as an
+     * event with the returned `task_id`, which the reducer matches to the card; a `/bg` answer is also read
+     * from the task's stored session ([followBackgroundTask]), since the event is lost after a reconnect.
+     * A gateway without [method] runs [fallback] instead, which returns the task's id, or null when it
+     * finished the card itself.
+     */
+    private suspend fun startSideTask(
+        command: String,
+        method: String,
+        text: String,
+        failure: String,
+        fallback: (suspend (client: JsonRpcClient, runtimeId: String, key: String) -> String?)? = null,
+    ) {
+        val key = addCommand("$command $text")
         val client = connectedClient() ?: return finishCommand(key, NOT_CONNECTED, failed = true)
         try {
             val runtimeId = ensureAttached(client)
-            val result = client.request(
-                "prompt.btw",
-                buildJsonObject {
-                    put("session_id", runtimeId)
-                    put("text", question.trim())
-                },
-            ) as? JsonObject
-            val taskId = result.string("task_id")
+            val taskId = try {
+                (client.request(method, buildJsonObject { put("session_id", runtimeId); put("text", text) }) as? JsonObject).string("task_id")
+            } catch (e: RpcException) {
+                if (fallback == null || e.code != METHOD_NOT_FOUND) throw e
+                fallback(client, runtimeId, key) ?: return
+            }
             _state.update { state ->
                 state.copy(messages = state.messages.map { if (it is ChatMessage.Command && it.key == key) it.copy(taskId = taskId) else it })
             }
+            if (taskId != null && command == "/bg") scope.launch { followBackgroundTask(taskId) }
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            finishCommand(key, e.message ?: "Couldn't ask the side question.", failed = true)
+            finishCommand(key, e.message ?: failure, failed = true)
         }
     }
+
+    /**
+     * Fills the running `/bg` card for [taskId] from the task's own stored session (the agent runs under
+     * that id) once its last row is the final answer. `background.complete` usually gets there first; this
+     * covers the event going to a runtime this chat no longer holds (a reconnect, another chat open meanwhile)
+     * and gateways that only run `/bg` on the slash worker.
+     */
+    private suspend fun followBackgroundTask(taskId: String) {
+        repeat(BACKGROUND_POLLS) {
+            delay(BACKGROUND_POLL_MS)
+            if (!isRunningTask(taskId)) return
+            val rows = (sessions.messages(gateway, taskId, limit = 1, profile = profile) as? ApiResult.Success)?.value?.messages
+            val last = rows?.lastOrNull()
+            val answer = last?.takeIf { it.role == "assistant" && it.storedToolCalls.isEmpty() }?.text?.trim()
+            if (!answer.isNullOrEmpty()) {
+                _state.update { it.answerSideTask(taskId, answer, "/bg") }
+                return
+            }
+        }
+        if (isRunningTask(taskId)) {
+            _state.update { state ->
+                state.copy(messages = state.messages.map {
+                    if (it is ChatMessage.Command && it.taskId == taskId) it.copy(output = BACKGROUND_NO_ANSWER, running = false) else it
+                })
+            }
+        }
+    }
+
+    private fun isRunningTask(taskId: String) =
+        _state.value.messages.any { it is ChatMessage.Command && it.taskId == taskId && it.running }
 
     /**
      * `/reasoning [level|show|hide] [--global]` through `config.set reasoning`, as the TUI does; bare,
@@ -1870,8 +1951,30 @@ class ChatSession(
 
         /** `command.dispatch`'s "not a quick/plugin/bundle/skill command" (older gateways lack "bundle/"). */
         val NOT_DISPATCHABLE = Regex("""not a quick/plugin/(?:bundle/)?skill command""", RegexOption.IGNORE_CASE)
+
+        /** How often a running `/bg` card looks for its answer in the task's stored session, and for how long (an hour). */
+        const val BACKGROUND_POLL_MS = 15_000L
+        const val BACKGROUND_POLLS = 240
+
+        const val BACKGROUND_NO_ANSWER = "No answer yet. When it's done, it's in its own chat in the list."
+
+        /** The id the slash worker's `/bg` prints (`bg_<HHMMSS>_<hex>`), which its stored session is filed under. */
+        val WORKER_TASK_ID = Regex("""\bbg_\d{6}_[0-9a-f]{6}\b""")
     }
 }
+
+/** A `/bg` card, as opposed to a `/btw` one. */
+private val ChatMessage.Command.isBackground: Boolean get() = command == "/bg" || command.startsWith("/bg ")
+
+/**
+ * A side-task card brought back into its reopened chat, keyed by its task so it can't clash with this session's
+ * keys. A `/btw` answer that came while another chat was open is lost; only a `/bg` one can be read back.
+ */
+private fun reopenedSideTask(card: ChatMessage.Command): ChatMessage.Command = card.copy(
+    key = "task-${card.taskId}",
+    output = if (card.running && !card.isBackground) "Its answer may have come while another chat was open." else card.output,
+    running = card.running && card.isBackground,
+)
 
 /** How [ChatSession.stopAndSubmit] went: the send's [outcome], and the queued prompts the stop dropped, to give back. */
 data class StopAndSend(val outcome: SendOutcome, val dropped: List<String> = emptyList())

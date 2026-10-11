@@ -679,6 +679,7 @@ class ChatViewModel(
                 SlashRoute.Compress -> chat.compress(arg)
                 SlashRoute.Status -> chat.status()
                 SlashRoute.Aside -> chat.askAside(arg)
+                SlashRoute.Background -> chat.runInBackground(arg)
                 SlashRoute.Steer -> if (arg.isEmpty()) {
                     chat.showCommandOutput("/steer", "Usage: /steer <note>. The running reply reads it after its current step, without stopping.")
                 } else if (chat.steer(arg) == SendOutcome.NotSent) {
