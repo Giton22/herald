@@ -103,6 +103,9 @@ sealed interface SlashRoute {
     data object Compress : SlashRoute
     data object Status : SlashRoute
     data object Aside : SlashRoute
+
+    /** `/bg <prompt>`: a fresh agent runs it beside this chat (`prompt.background`); the answer comes back as `background.complete`. */
+    data object Background : SlashRoute
     data object Steer : SlashRoute
     data object Reasoning : SlashRoute
     data object Yolo : SlashRoute
@@ -156,6 +159,7 @@ sealed interface SlashRoute {
             "compress" to Compress,
             "status" to Status,
             "btw" to Aside,
+            "bg" to Background,
             "steer" to Steer,
             "reasoning" to Reasoning,
             "yolo" to Yolo,
@@ -181,6 +185,8 @@ sealed interface SlashRoute {
             "learning" to "journey",
             "memory-graph" to "journey",
             "pets" to "pet",
+            // The TUI's and Desktop's name for /bg; the catalog may not list it as an alias.
+            "background" to "bg",
         )
 
         /**

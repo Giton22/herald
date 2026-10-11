@@ -31,6 +31,9 @@ class ChatHost(
     private var profile: String? = null
     private var sessionScope: CoroutineScope? = null
 
+    /** Each closed chat's `/btw` and `/bg` cards, by gateway, profile and stored id, to show again when it reopens. */
+    private val sideTasks = mutableMapOf<Triple<GatewayUrl, String?, String>, List<ChatMessage.Command>>()
+
     /**
      * The session for [storedSessionId] on [gateway] and [profile]: the open one when it is already that
      * chat, else a fresh one replacing it. A null [storedSessionId] always starts a new chat, in [cwd] when
@@ -43,23 +46,47 @@ class ChatHost(
         ) {
             return current
         }
-        close()
+        stashSideTasks()
+        closeOpen()
         val childScope = CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job]))
         this.gateway = gateway
         this.profile = profile
         sessionScope = childScope
-        return ChatSession(gateway, storedSessionId, title, connection, sessions, childScope, profile, risks, cwd = cwd, cache = cache)
+        val cards = storedSessionId?.let { sideTasks.remove(Triple(gateway, profile, it)) }.orEmpty()
+        return ChatSession(gateway, storedSessionId, title, connection, sessions, childScope, profile, risks, cwd = cwd, cache = cache, sideTasks = cards)
             .also { it.start() }
             .also { _session.value = it }
     }
 
-    /** Drops the open chat, e.g. on sign-out. */
+    /** Drops the open chat, e.g. on sign-out, and the side-task cards kept for others: they belonged to that account. */
     fun close() {
+        sideTasks.clear()
+        closeOpen()
+    }
+
+    /** Keeps the open chat's side-task cards for when it reopens; the oldest chat's go past [KEPT_CHATS]. */
+    private fun stashSideTasks() {
+        val openGateway = gateway ?: return
+        val state = _session.value?.state?.value ?: return
+        val storedId = state.storedSessionId ?: return
+        // A quick answer can beat the task id onto its card and add a second one; keep the answered card.
+        val cards = state.messages.filterIsInstance<ChatMessage.Command>().filter { it.taskId != null }
+            .groupBy { it.taskId }.values.map { same -> same.firstOrNull { !it.running } ?: same.first() }
+        if (cards.isEmpty()) return
+        sideTasks[Triple(openGateway, profile, storedId)] = cards
+        if (sideTasks.size > KEPT_CHATS) sideTasks.remove(sideTasks.keys.first())
+    }
+
+    private fun closeOpen() {
         _session.value?.stop()
         sessionScope?.cancel()
         sessionScope = null
         gateway = null
         profile = null
         _session.value = null
+    }
+
+    private companion object {
+        const val KEPT_CHATS = 20
     }
 }
