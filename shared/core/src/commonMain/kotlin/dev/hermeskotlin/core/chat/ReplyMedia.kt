@@ -30,19 +30,28 @@ private val MARKDOWN_IMAGE = Regex(
 
 /**
  * Hermes' delivery directive, as a word of its own (not the end of `MULTIMEDIA:`); trailing sentence
- * punctuation is not part of the path.
+ * punctuation is not part of the path, nor is code written against it (blanked out as [CODE_MASK]).
  */
-private val MEDIA_TOKEN = Regex("""[ \t]*(?<![A-Za-z0-9_])MEDIA:(\S+?)(?=[.,;:!?)\]]*(?:\s|$))""")
+private val MEDIA_TOKEN = Regex("""[ \t]*(?<![A-Za-z0-9_])MEDIA:([^\s]+?)(?=[.,;:!?)\]]*(?:\s|$|))""")
 
-/** A fence's opening line, after any list or quote markers: the run of marks, then the info string. */
-private val FENCE_OPEN = Regex("""^(?:[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+|[ \t]*>[ \t]?)*+[ \t]*(`{3,}|~{3,})(.*)$""")
+/**
+ * A fence's opening line: the list or quote markers it sits in, the run of marks, then the info string.
+ * The markers' width is how far the item's lines are indented.
+ */
+private val FENCE_OPEN = Regex("""^((?:[ \t]*(?:[-*+]|\d{1,9}[.)])[ \t]+|[ \t]*>[ \t]?)*+)[ \t]*(`{3,}|~{3,})(.*)$""")
 
 /** A fence's closing line: only marks, after any indent or quote markers. */
 private val FENCE_CLOSE = Regex("""^[ \t>]*(`{3,}|~{3,})[ \t]*$""")
 
 private val BACKTICKS = Regex("`+")
 
-private val BLANK_LINE = Regex("""\n[ \t]*\n""")
+/** Where a paragraph ends: a blank line, or a line that starts a heading, list item or quote. */
+private val PARAGRAPH_END = Regex("""\n(?=[ \t]*(?:\n|#{1,6}[ \t]|[-*+][ \t]|\d{1,9}[.)][ \t]|>))""")
+
+/** A heading is a paragraph of its own line. */
+private val HEADING = Regex("""(?m)^[ \t]*#{1,6}[ \t][^\n]*""")
+
+private val QUOTED = Regex("""^[ \t]*>""")
 
 /** What code is blanked out with while the patterns run; nothing matches it but "any character". */
 private const val CODE_MASK = ''
@@ -141,23 +150,38 @@ private fun maskCode(text: String): String {
  *
  * As in CommonMark: a fence opens at the start of a line, after any list or quote markers, and closes on
  * a line of its own with at least as many of the same marks, so a ```` fence can show a ``` one; a ```
- * mid-sentence opens nothing. Spans are looked for only outside fences.
+ * mid-sentence opens nothing. A fence in a quote or list item ends with it too, closed or not. Spans are
+ * looked for only outside fences.
  */
 private fun codeRanges(text: String): List<IntRange> {
     val code = ArrayList<IntRange>()
     var fence: String? = null
+    var quoted = false
+    var indent = 0
     var fenceStart = 0
     var prose = 0
     var lineStart = 0
     while (lineStart <= text.length) {
         val lineEnd = text.indexOf('\n', lineStart).let { if (it < 0) text.length else it }
         val line = text.substring(lineStart, lineEnd)
+        val containerEnds = if (quoted) {
+            !QUOTED.containsMatchIn(line)
+        } else {
+            line.isNotBlank() && line.indexOfFirst { it != ' ' && it != '\t' } < indent
+        }
+        if (fence != null && containerEnds) {
+            code += fenceStart until lineStart - 1
+            fence = null
+            prose = lineStart - 1
+        }
         if (fence == null) {
             val open = FENCE_OPEN.find(line)
             // A ``` fence's info string holds no backtick: "```ls```" is a span.
-            if (open != null && !(open.groupValues[1][0] == '`' && '`' in open.groupValues[2])) {
+            if (open != null && !(open.groupValues[2][0] == '`' && '`' in open.groupValues[3])) {
                 addSpans(text, prose, lineStart, code)
-                fence = open.groupValues[1]
+                fence = open.groupValues[2]
+                quoted = '>' in open.groupValues[1]
+                indent = if (quoted) 0 else open.groupValues[1].length
                 fenceStart = lineStart
             }
         } else {
@@ -179,7 +203,8 @@ private fun addSpans(text: String, from: Int, to: Int, code: MutableList<IntRang
     val part = text.substring(from, to)
     if ('`' !in part) return
     val runs = BACKTICKS.findAll(part).map { it.range }.toList()
-    val breaks = BLANK_LINE.findAll(part).map { it.range.first }.toList()
+    val breaks = (PARAGRAPH_END.findAll(part).map { it.range.first } + HEADING.findAll(part).map { it.range.last + 1 })
+        .sorted().toList()
     var nextBreak = 0
     var i = 0
     while (i < runs.size) {

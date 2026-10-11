@@ -128,6 +128,32 @@ class ReplyMediaTest {
     }
 
     @Test
+    fun anUnclosedFenceEndsWithItsQuoteOrListItem() {
+        val (quoteText, quoteMedia) = extractReplyMedia("> ```py\n> MEDIA:/opt/in.png\n\nAfter: MEDIA:/opt/out.png")
+        assertEquals("> ```py\n> MEDIA:/opt/in.png\n\nAfter:", quoteText)
+        assertEquals(listOf("/opt/out.png"), quoteMedia.map { it.source })
+        val (listText, listMedia) = extractReplyMedia("1. ```bash\n   ls MEDIA:/opt/in.png\n\n   pwd\n2. Then MEDIA:/opt/out.png")
+        assertEquals("1. ```bash\n   ls MEDIA:/opt/in.png\n\n   pwd\n2. Then", listText)
+        assertEquals(listOf("/opt/out.png"), listMedia.map { it.source })
+    }
+
+    @Test
+    fun aCodeSpanStaysInItsListItemOrHeading() {
+        val (listText, listMedia) = extractReplyMedia("- a stray `\n- MEDIA:/opt/a.png and `b`")
+        assertEquals("- a stray `\n- and `b`", listText)
+        assertEquals(listOf("/opt/a.png"), listMedia.map { it.source })
+        val (_, headingMedia) = extractReplyMedia("# Title `x\nMEDIA:/opt/h.png `y`")
+        assertEquals(listOf("/opt/h.png"), headingMedia.map { it.source })
+    }
+
+    @Test
+    fun aMediaPathEndsWhereCodeStarts() {
+        val (text, media) = extractReplyMedia("MEDIA:/opt/a.png`x\ny` end")
+        assertEquals("`x\ny` end", text)
+        assertEquals(listOf("/opt/a.png"), media.map { it.source })
+    }
+
+    @Test
     fun markupInCodeNeitherStartsNorSwallowsAMatch() {
         val (text, media) = extractReplyMedia("Type `![` then the alt. Here: ![chart](/opt/data/c.png)")
         assertEquals("Type `![` then the alt. Here:", text)
