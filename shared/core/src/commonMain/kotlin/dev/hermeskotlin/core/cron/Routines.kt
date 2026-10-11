@@ -43,8 +43,28 @@ fun CronJob.isRoutineOf(bot: String): Boolean {
 }
 
 /** Why a job isn't doing what it's set to do, in a line; null while it's fine. */
-val CronJob.problem: String? get() {
-    val reason = listOf(lastFireError, lastDeliveryError, lastError, pausedReason).firstOrNull { !it.isNullOrBlank() }?.trim()
+val CronJob.problem: String? get() = if (missedLastFire) {
+    listOfNotNull("Missed its last scheduled run", lastFireError?.firstLine()).joinToString(": ")
+} else {
+    runProblem
+}
+
+/**
+ * The latest thing on record is a fire the runner never got: it leaves no run and no status, only a stamp
+ * that a good run clears (a failed one doesn't). A stamp older than a failed run defers to that failure,
+ * and a job that's paused, done or stopped isn't waiting on its fires.
+ */
+val CronJob.missedLastFire: Boolean get() {
+    if (!missedFire || state in setOf("paused", "completed", "error")) return false
+    if (runProblem == null) return true
+    val at = missedFireEpochSeconds ?: return false
+    return at > (lastRunEpochSeconds ?: return true)
+}
+
+private fun String.firstLine(): String = trim().lineSequence().first().take(160)
+
+private val CronJob.runProblem: String? get() {
+    val reason = listOf(lastDeliveryError, lastError, pausedReason).firstOrNull { !it.isNullOrBlank() }?.trim()
     val headline = when (lastStatus) {
         "error" -> "The last run failed"
         // The run worked, but its result never reached anyone: not a run to trust.
@@ -53,9 +73,9 @@ val CronJob.problem: String? get() {
         else -> return when {
             state == "error" -> reason ?: "Stopped after an error"
             // An older store, or a run that died before writing its status, leaves only the error.
-            lastStatus == null -> lastError?.takeIf { it.isNotBlank() }?.trim()?.lineSequence()?.firstOrNull()?.take(160)
+            lastStatus == null -> lastError?.takeIf { it.isNotBlank() }?.firstLine()
             else -> null
         }
     }
-    return listOfNotNull(headline, reason?.lineSequence()?.firstOrNull()?.take(160)).joinToString(": ")
+    return listOfNotNull(headline, reason?.firstLine()).joinToString(": ")
 }

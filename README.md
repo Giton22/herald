@@ -119,6 +119,8 @@ connection one at a time and says what to fix.
 
 ## Development
 
+Want to contribute? Read [CONTRIBUTING.md](CONTRIBUTING.md) first.
+
 **Requirements:** JDK 17+ (Android Studio's bundled JBR works) and the Android SDK with API 37.
 
 Build, test and install a debug build:

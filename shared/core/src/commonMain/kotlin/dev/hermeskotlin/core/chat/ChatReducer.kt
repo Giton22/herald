@@ -101,7 +101,8 @@ fun ChatState.reduce(event: GatewayEvent, now: Double? = null): ChatState {
         "error" -> copy(error = payload.string("message")).withoutAgentNotices()
         "session.title" -> copy(title = payload.string("title") ?: title)
         "session.info" -> withInfo(payload).copy(title = payload.string("title")?.takeIf { it.isNotBlank() } ?: title)
-        "btw.complete" -> answerAside(payload)
+        "btw.complete" -> answerSideTask(payload, "/btw")
+        "background.complete" -> answerSideTask(payload, "/bg")
         "todo.updated" -> withTodos(TodoList.parse(payload))
         // Pushed on every mutation, our own actions included; an empty snapshot is a clear, one without a snapshot nothing.
         "session.control.update" -> (payload?.get("control") as? JsonObject)?.let { withControl(SessionControl.parse(it)) } ?: this
@@ -143,19 +144,30 @@ internal fun ChatState.withControl(next: SessionControl?): ChatState {
     return copy(control = next)
 }
 
-/** A `/btw` answer: fills the card that asked it, or adds one when the question came from another client. */
-private fun ChatState.answerAside(payload: JsonObject?): ChatState {
+/**
+ * A side task's answer (`btw.complete` for `/btw`, `background.complete` for `/bg`): fills the card that
+ * started it, or adds one under [command] when it was started from another client. The gateway reports a
+ * task that crashed as `error: <why>` in the same text.
+ */
+private fun ChatState.answerSideTask(payload: JsonObject?, command: String): ChatState {
     val text = payload.string("text")?.trim()?.takeIf { it.isNotEmpty() } ?: return this
-    val taskId = payload.string("task_id")
+    return answerSideTask(payload.string("task_id"), text, command, failed = text.startsWith(SIDE_TASK_ERROR), asked = payload.string("question"))
+}
+
+/** Puts [text] on the card for [taskId], or on a new one under [command]; [asked] is a `/btw`'s question. */
+internal fun ChatState.answerSideTask(taskId: String?, text: String, command: String, failed: Boolean = false, asked: String? = null): ChatState {
     val index = messages.indexOfFirst { it is ChatMessage.Command && it.taskId != null && it.taskId == taskId }
     if (index >= 0) {
-        val asked = messages[index] as ChatMessage.Command
-        return copy(messages = messages.toMutableList().apply { set(index, asked.copy(output = text, running = false)) })
+        val card = messages[index] as ChatMessage.Command
+        return copy(messages = messages.toMutableList().apply { set(index, card.copy(output = text, running = false, failed = failed)) })
     }
-    val question = payload.string("question")?.trim().orEmpty()
-    val card = ChatMessage.Command("btw-$keySeq", "/btw $question".trimEnd(), text, running = false, taskId = taskId)
+    // Only /btw's answer repeats what was asked.
+    val card = ChatMessage.Command("side-$keySeq", "$command ${asked?.trim().orEmpty()}".trimEnd(), text, running = false, failed = failed, taskId = taskId)
     return copy(messages = messages + card, keySeq = keySeq + 1)
 }
+
+/** How `_spawn_side_agent` reports a side task that threw. */
+private const val SIDE_TASK_ERROR = "error: "
 
 /** Desktop's `providerWaitText` (store/provider-wait.ts): the waits the core explains after a long silence. */
 private val PROVIDER_WAIT = Regex(

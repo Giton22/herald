@@ -1,5 +1,8 @@
 package dev.hermeskotlin.core.cron
 
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -49,5 +52,38 @@ class RoutinesTest {
         assertEquals("The last run failed: 402 insufficient credits", CronJob(id = "a", lastStatus = "error", lastError = "402 insufficient credits\ntrace").problem)
         assertEquals("Couldn't run: something isn't set up", CronJob(id = "a", lastStatus = "blocked_config").problem)
         assertEquals("Stopped after an error", CronJob(id = "a", state = "error").problem)
+    }
+
+    @Test
+    fun aMissedFireIsSaidUntilARunSaysMore() {
+        fun stamp(at: String, detail: String) = buildJsonObject { put("at", at); put("detail", detail) }
+        val missed = CronJob(id = "a", lastStatus = "ok", lastRunAt = "2026-10-02T09:00:00+02:00", fireError = stamp("2026-10-03T09:00:00+02:00", "runner unreachable"))
+        assertTrue(missed.missedLastFire)
+        assertEquals("Missed its last scheduled run: runner unreachable", missed.problem)
+        // The gateway stamps `str(detail or "")`: a miss without a reason is still a miss.
+        assertEquals("Missed its last scheduled run", missed.copy(fireError = stamp("2026-10-03T09:00:00+02:00", "")).problem)
+        assertEquals("Missed its last scheduled run: model timeout", missed.copy(fireError = JsonPrimitive("model timeout")).problem)
+        assertNull(missed.copy(fireError = JsonPrimitive(true)).problem)
+
+        // A failed run keeps the stamp: whichever is newer is the one to say.
+        val failed = missed.copy(lastStatus = "error", lastError = "402 insufficient credits")
+        assertEquals("Missed its last scheduled run: runner unreachable", failed.problem)
+        assertEquals("The last run failed: 402 insufficient credits", failed.copy(lastRunAt = "2026-10-04T09:00:00+02:00").problem)
+        assertFalse(failed.copy(fireError = JsonPrimitive("old")).missedLastFire)
+        assertFalse(failed.copy(fireError = buildJsonObject { put("detail", "no time") }).missedLastFire)
+        assertTrue(failed.copy(lastRunAt = null).missedLastFire)
+        // Python's isoformat() writes microseconds.
+        assertTrue(failed.copy(fireError = stamp("2026-10-03T09:00:00.123456+02:00", "x")).missedLastFire)
+        assertEquals(
+            "Missed its last scheduled run: runner unreachable",
+            missed.copy(lastStatus = "delivery_failed", lastDeliveryError = "timed out").problem,
+        )
+        // A time without an offset doesn't parse.
+        assertEquals(null, "2026-10-03T09:00:00".epochSeconds())
+
+        // Paused, done or stopped: not waiting on fires.
+        assertNull(missed.copy(state = "paused").problem)
+        assertNull(missed.copy(state = "completed").problem)
+        assertEquals("Stopped after an error", missed.copy(state = "error", lastStatus = null).problem)
     }
 }
