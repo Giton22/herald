@@ -63,6 +63,18 @@ class SessionControlLabelsTest {
         assertEquals("2 of 6 runs", runsLabel(2, 6))
         assertEquals("2 runs", runsLabel(2, 0))
         assertEquals("", runsLabel(0, 6))
+        // The strip read "1 runs" after a loop's first wakeup.
+        assertEquals("1 run", runsLabel(1, 0))
+        assertEquals("1 of 6 runs", runsLabel(1, 6))
+    }
+
+    @Test
+    fun aPlainPauseHasNoReasonToShow() {
+        // The gateway's /goal pause and /loop pause say "user-paused"; the Paused label says it already.
+        assertEquals(null, pausedReasonLabel("user-paused"))
+        assertEquals(null, pausedReasonLabel(" "))
+        assertEquals(null, pausedReasonLabel(null))
+        assertEquals("turn budget exhausted (20/20)", pausedReasonLabel("turn budget exhausted (20/20)"))
     }
 
     @Test

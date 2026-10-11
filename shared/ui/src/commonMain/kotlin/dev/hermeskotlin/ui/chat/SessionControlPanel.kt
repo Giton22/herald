@@ -72,6 +72,7 @@ import dev.hermeskotlin.core.chat.HeartbeatControl
 import dev.hermeskotlin.core.chat.LoopControl
 import dev.hermeskotlin.core.chat.SessionControl
 import dev.hermeskotlin.core.chat.WaitBarrier
+import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
@@ -297,12 +298,22 @@ internal fun loopStateLabel(loop: LoopControl): String = when {
     else -> "Running"
 }
 
-/** "2 of 6 runs" with a cap, "2 runs" without; nothing before the first run. */
+/** "2 of 6 runs" with a cap, "2 runs" ("1 run") without; nothing before the first run. */
 internal fun runsLabel(ticksFired: Int, times: Int): String = when {
     ticksFired <= 0 -> ""
     times > 0 -> "$ticksFired of $times runs"
+    ticksFired == 1 -> "1 run"
     else -> "$ticksFired runs"
 }
+
+/**
+ * Why a goal or loop paused, as the gateway sent it. Its own reasons are sentences ("turn budget
+ * exhausted (20/20)"), except a plain pause, which says `user-paused`: the Paused label says that already.
+ */
+internal fun pausedReasonLabel(reason: String?): String? =
+    reason?.trim()?.takeIf { it.isNotEmpty() && it != USER_PAUSED }
+
+private const val USER_PAUSED = "user-paused"
 
 /** "3 fired"; "" when it never has. */
 internal fun firedLabel(fireCount: Int): String = if (fireCount <= 0) "" else "$fireCount fired"
@@ -485,17 +496,19 @@ private fun GoalSection(goal: GoalControl, use24Hour: Boolean, busy: ControlActi
         if (goal.maxTurns > 0) {
             val fraction = (goal.turnsUsed.toFloat() / goal.maxTurns).coerceIn(0f, 1f)
             Box(Modifier.fillMaxWidth().height(4.dp).clip(CircleShape).background(Theme[colors][surface3])) {
-                Box(Modifier.fillMaxWidth(fraction).fillMaxHeight().clip(CircleShape).background(Theme[colors][accentText]))
+                // Progress is one of the three things the accent fills (accentText is for text).
+                Box(Modifier.fillMaxWidth(fraction).fillMaxHeight().clip(CircleShape).background(Theme[colors][accent]))
             }
         }
         // The one line that matters now: what it's parked on, why it paused, or the judge's last word.
         val barrier = goal.waitBarrier
+        val pausedReason = pausedReasonLabel(goal.pausedReason)
         val relevant = when {
             barrier != null -> waitBarrierLabel(barrier, use24Hour).let { label ->
                 // The label already carries the reason when it replaced a past clock time.
                 if (barrier.reason.isBlank() || label.endsWith(barrier.reason)) label else "$label: ${barrier.reason}"
             }
-            !goal.pausedReason.isNullOrBlank() -> goal.pausedReason
+            pausedReason != null -> pausedReason
             !goal.lastReason.isNullOrBlank() -> goal.lastReason
             else -> null
         }
@@ -644,7 +657,7 @@ private fun LoopSection(loop: LoopControl, use24Hour: Boolean, busy: ControlActi
         if (loop.until.isNotBlank()) Detail("Until: ${loop.until}")
         if (loop.deferredByGoal) Detail("Waits while the goal is working.")
         if (loop.awaitingResponse) Detail("Waiting for its last reply.")
-        loop.pausedReason?.takeIf { it.isNotBlank() }?.let { Detail(it) }
+        pausedReasonLabel(loop.pausedReason)?.let { Detail(it) }
         loop.lastStopReason?.takeIf { it.isNotBlank() }?.let { Detail("Stopped: $it") }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             when (loop.status) {
