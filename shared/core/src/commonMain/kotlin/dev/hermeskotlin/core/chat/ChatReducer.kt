@@ -138,16 +138,18 @@ internal fun ChatState.withTodos(list: TodoList?): ChatState {
  */
 private fun ChatState.answerSideTask(payload: JsonObject?, command: String): ChatState {
     val text = payload.string("text")?.trim()?.takeIf { it.isNotEmpty() } ?: return this
-    val taskId = payload.string("task_id")
-    val failed = text.startsWith(SIDE_TASK_ERROR)
+    return answerSideTask(payload.string("task_id"), text, command, failed = text.startsWith(SIDE_TASK_ERROR), asked = payload.string("question"))
+}
+
+/** Puts [text] on the card for [taskId], or on a new one under [command]; [asked] is a `/btw`'s question. */
+internal fun ChatState.answerSideTask(taskId: String?, text: String, command: String, failed: Boolean = false, asked: String? = null): ChatState {
     val index = messages.indexOfFirst { it is ChatMessage.Command && it.taskId != null && it.taskId == taskId }
     if (index >= 0) {
-        val asked = messages[index] as ChatMessage.Command
-        return copy(messages = messages.toMutableList().apply { set(index, asked.copy(output = text, running = false, failed = failed)) })
+        val card = messages[index] as ChatMessage.Command
+        return copy(messages = messages.toMutableList().apply { set(index, card.copy(output = text, running = false, failed = failed)) })
     }
     // Only /btw's answer repeats what was asked.
-    val asked = payload.string("question")?.trim().orEmpty()
-    val card = ChatMessage.Command("side-$keySeq", "$command $asked".trimEnd(), text, running = false, failed = failed, taskId = taskId)
+    val card = ChatMessage.Command("side-$keySeq", "$command ${asked?.trim().orEmpty()}".trimEnd(), text, running = false, failed = failed, taskId = taskId)
     return copy(messages = messages + card, keySeq = keySeq + 1)
 }
 
