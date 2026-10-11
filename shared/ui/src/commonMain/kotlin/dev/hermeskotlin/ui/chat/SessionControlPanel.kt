@@ -386,6 +386,9 @@ internal fun SessionControlSheetView(
     if (control != null) shown = control
     val use24Hour = uses24HourClock()
     var confirm by remember { mutableStateOf<ConfirmAction?>(null) }
+    // A confirmation belongs to this showing: the sheet can close under it (the goal cleared on
+    // another client), and it mustn't come back over whatever the next showing holds.
+    LaunchedEffect(visible) { if (!visible) confirm = null }
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         val current = shown ?: return@BottomSheet
         SheetHeader("Goal and loops", "Set with /goal, /loop and /heartbeat")
