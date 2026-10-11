@@ -49,6 +49,10 @@ private val CODE = Regex(
 // Braces and brackets are escaped everywhere: Android's ICU regex rejects a bare `}` that the JVM allows.
 private val PREVIEW_DIRECTIVE = Regex("""(?m)^[ \t]*::preview\{[^\}]*?file="([^"]+)"[^\}]*\}[ \t]*$""")
 
+private val TRAILING_SPACE = Regex("""(?m)[ \t]+$""")
+
+private val BLANK_LINES = Regex("""\n{3,}""")
+
 private val IMAGE_EXTENSIONS = setOf("png", "jpg", "jpeg", "gif", "webp", "bmp", "svg")
 
 private fun isImagePath(source: String): Boolean =
@@ -96,8 +100,9 @@ fun extractReplyMedia(text: String, generated: List<GeneratedImage> = emptyList(
             match.groupValues[1].takeUnless { it == " " || it == "\t" }.orEmpty()
         }
     }
-    // Lines left empty by the removal shouldn't leave gaps in the reply.
-    cleaned = cleaned.lines().joinToString("\n") { it.trimEnd() }.replace(Regex("\n{3,}"), "\n\n").trim()
+    // Lines left empty by the removal shouldn't leave gaps in the reply; code keeps its blank lines.
+    cleaned = TRAILING_SPACE.replaceOutsideCode(cleaned) { "" }
+    cleaned = BLANK_LINES.replaceOutsideCode(cleaned) { "\n\n" }.trim()
     return cleaned to media.values.filterNot { it.gatewayPath in echoes || it.source in echoes }
 }
 

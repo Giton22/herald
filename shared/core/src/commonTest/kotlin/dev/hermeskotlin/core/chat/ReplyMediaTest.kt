@@ -132,6 +132,14 @@ class ReplyMediaTest {
     }
 
     @Test
+    fun theTidyingUpLeavesCodeAlone() {
+        val code = "```python\ndef a():\n    pass\n\n\ndef b():  \n    pass\n```"
+        val (text, media) = extractReplyMedia("Here: MEDIA:/opt/data/a.py\n\n\n\n$code")
+        assertEquals("Here:\n\n$code", text)
+        assertEquals(listOf("/opt/data/a.py"), media.map { it.source })
+    }
+
+    @Test
     fun anImageAddressKeepsItsBrackets() {
         val (text, media) = extractReplyMedia("See ![Foo](https://en.wikipedia.org/wiki/Foo_(bar).png) for details.")
         assertEquals("See  for details.", text)
