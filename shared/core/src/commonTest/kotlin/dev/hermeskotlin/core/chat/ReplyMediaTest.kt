@@ -139,6 +139,13 @@ class ReplyMediaTest {
     }
 
     @Test
+    fun aLoneBracketInAnImageAddressRunsToTheFirstClose() {
+        val (text, media) = extractReplyMedia("Saved ![x](/opt/data/a(1.png)")
+        assertEquals("Saved", text)
+        assertEquals(listOf("/opt/data/a(1.png"), media.map { it.source })
+    }
+
+    @Test
     fun mediaInsideAWordIsProse() {
         val text = "MULTIMEDIA:notes.txt is a heading"
         assertEquals(text to emptyList(), extractReplyMedia(text))

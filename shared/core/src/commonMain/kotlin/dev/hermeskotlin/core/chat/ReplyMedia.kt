@@ -18,8 +18,12 @@ data class ReplyMedia(
     val gatewayPath: String get() = source.removePrefix("file://")
 }
 
-/** The address may hold one level of balanced brackets, as Wikipedia's `Foo_(bar)` pages do. */
-private val MARKDOWN_IMAGE = Regex("""!\[([^\]]*)\]\(\s*<?((?:[^\(\)\s<>]|\([^\(\)\s]*\))+)>?(?:\s+"[^"]*")?\s*\)""")
+/**
+ * The address may hold one level of balanced brackets, as Wikipedia's `Foo_(bar)` pages do; failing
+ * that, it runs to the first `)`, so a lone `(` (`a(1.png`) still makes an image.
+ */
+private val MARKDOWN_IMAGE =
+    Regex("""!\[([^\]]*)\]\(\s*<?((?:[^\(\)\s<>]|\([^\(\)\s]*\))+|[^\)\s>]+)>?(?:\s+"[^"]*")?\s*\)""")
 
 /**
  * Hermes' delivery directive, as a word of its own (not the end of `MULTIMEDIA:`); trailing sentence
