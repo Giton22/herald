@@ -5,12 +5,14 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.take
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.jsonObject
@@ -60,22 +62,26 @@ class JsonRpcClientTest {
     }
 
     @Test
-    fun requestsFromManyThreadsGetDistinctIds() = runTest {
+    fun requestsFromManyThreadsGetTheirOwnReplies() = runTest {
         val transport = FakeTransport()
         val client = JsonRpcClient(transport)
         val pump = launch { runCatching { client.run() } }
 
-        // The connection's scope is Dispatchers.Default, so callers really do race for the next id.
-        val calls = (1..CONCURRENT_CALLS).map { n ->
-            launch(Dispatchers.Default) { runCatching { client.request("call.$n") } }
-        }
+        // Callers run on Dispatchers.Default, as on the app's connection scope, so they really do race for the next id.
+        val calls = (1..CONCURRENT_CALLS).map { n -> async(Dispatchers.Default) { client.request("call.$n") } }
+        // Real time, not the test clock: a call that never reaches the wire fails here rather than hanging the run.
+        // No READY was pushed, so these calls are the only frames sent.
         val sent = withContext(Dispatchers.Default) {
-            transport.sent.first { list -> list.count { it["method"]?.jsonPrimitive?.str()?.startsWith("call.") == true } == CONCURRENT_CALLS }
+            withTimeout(10_000) { transport.sent.first { it.size >= CONCURRENT_CALLS } }
         }
+        assertEquals(CONCURRENT_CALLS, sent.map { it["id"]!!.jsonPrimitive.str() }.toSet().size)
 
-        val ids = sent.filter { it["method"]?.jsonPrimitive?.str()?.startsWith("call.") == true }.map { it["id"]!!.jsonPrimitive.str() }
-        assertEquals(CONCURRENT_CALLS, ids.toSet().size)
-        calls.forEach { it.cancel() }
+        // Each reply echoes its method, so a reply handed to the wrong caller shows up as a mismatch.
+        sent.forEach {
+            transport.push("""{"jsonrpc":"2.0","id":"${it["id"]!!.jsonPrimitive.str()}","result":"${it["method"]!!.jsonPrimitive.str()}"}""")
+        }
+        val results = withContext(Dispatchers.Default) { withTimeout(10_000) { calls.awaitAll() } }
+        assertEquals((1..CONCURRENT_CALLS).map { "call.$it" }, results.map { it.jsonPrimitive.str() })
         pump.cancel()
     }
 
