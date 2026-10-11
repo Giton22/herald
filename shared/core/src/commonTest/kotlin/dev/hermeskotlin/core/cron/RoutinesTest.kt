@@ -70,6 +70,16 @@ class RoutinesTest {
         assertEquals("Missed its last scheduled run: runner unreachable", failed.problem)
         assertEquals("The last run failed: 402 insufficient credits", failed.copy(lastRunAt = "2026-10-04T09:00:00+02:00").problem)
         assertFalse(failed.copy(fireError = JsonPrimitive("old")).missedLastFire)
+        assertFalse(failed.copy(fireError = buildJsonObject { put("detail", "no time") }).missedLastFire)
+        assertTrue(failed.copy(lastRunAt = null).missedLastFire)
+        // Python's isoformat() writes microseconds.
+        assertTrue(failed.copy(fireError = stamp("2026-10-03T09:00:00.123456+02:00", "x")).missedLastFire)
+        assertEquals(
+            "Missed its last scheduled run: runner unreachable",
+            missed.copy(lastStatus = "delivery_failed", lastDeliveryError = "timed out").problem,
+        )
+        // A time without an offset doesn't parse.
+        assertEquals(null, "2026-10-03T09:00:00".epochSeconds())
 
         // Paused, done or stopped: not waiting on fires.
         assertNull(missed.copy(state = "paused").problem)

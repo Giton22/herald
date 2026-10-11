@@ -194,7 +194,7 @@ class CronApi(private val client: HttpClient) {
     }.map { it.body<CronJob>() }
 }
 
-/** An ISO 8601 time, with or without an offset, as epoch seconds; null when it doesn't parse. */
+/** An ISO 8601 time with an offset (the gateway's times are tz-aware) as epoch seconds; null when it doesn't parse. */
 @OptIn(ExperimentalTime::class)
 internal fun String?.epochSeconds(): Double? = this?.let {
     runCatching { Instant.parse(it) }.getOrNull()?.let { instant -> instant.toEpochMilliseconds() / 1000.0 }
