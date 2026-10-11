@@ -45,8 +45,11 @@ private val FENCE_CLOSE = Regex("""^[ \t>]*(`{3,}|~{3,})[ \t]*$""")
 
 private val BACKTICKS = Regex("`+")
 
-/** Where a paragraph ends: a blank line, or a line that starts a heading, list item or quote. */
-private val PARAGRAPH_END = Regex("""\n(?=[ \t]*(?:\n|#{1,6}[ \t]|[-*+][ \t]|\d{1,9}[.)][ \t]|>))""")
+/**
+ * Where a paragraph ends: a blank line, or a line that starts a heading, list item or quote. Of numbered
+ * items only a "1." breaks into a paragraph, as in CommonMark.
+ */
+private val PARAGRAPH_END = Regex("""\n(?=[ \t]*(?:\n|#{1,6}[ \t]|[-*+][ \t]|1[.)][ \t]|>))""")
 
 /** A heading is a paragraph of its own line. */
 private val HEADING = Regex("""(?m)^[ \t]*#{1,6}[ \t][^\n]*""")
@@ -167,7 +170,7 @@ private fun codeRanges(text: String): List<IntRange> {
         val containerEnds = if (quoted) {
             !QUOTED.containsMatchIn(line)
         } else {
-            line.isNotBlank() && line.indexOfFirst { it != ' ' && it != '\t' } < indent
+            line.isNotBlank() && columnOf(line.takeWhile { it == ' ' || it == '\t' }) < indent
         }
         if (fence != null && containerEnds) {
             code += fenceStart until lineStart - 1
@@ -181,7 +184,7 @@ private fun codeRanges(text: String): List<IntRange> {
                 addSpans(text, prose, lineStart, code)
                 fence = open.groupValues[2]
                 quoted = '>' in open.groupValues[1]
-                indent = if (quoted) 0 else open.groupValues[1].length
+                indent = if (quoted) 0 else columnOf(open.groupValues[1])
                 fenceStart = lineStart
             }
         } else {
@@ -197,6 +200,9 @@ private fun codeRanges(text: String): List<IntRange> {
     if (fence != null) code += fenceStart until text.length else addSpans(text, prose, text.length, code)
     return code
 }
+
+/** The column after [prefix], a tab moving to the next multiple of 4, as in CommonMark. */
+private fun columnOf(prefix: String): Int = prefix.fold(0) { column, c -> if (c == '\t') column + 4 - column % 4 else column + 1 }
 
 /** The code spans of [text] from [from] to [to]: a run of backticks to the next run as long, in one paragraph. */
 private fun addSpans(text: String, from: Int, to: Int, code: MutableList<IntRange>) {

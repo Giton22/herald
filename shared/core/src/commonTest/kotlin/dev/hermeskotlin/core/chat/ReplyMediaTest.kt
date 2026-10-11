@@ -138,6 +138,20 @@ class ReplyMediaTest {
     }
 
     @Test
+    fun aTabIndentsToTheNextFourColumns() {
+        val item = "1. ```go\n\tfmt.Println(\"MEDIA:/opt/in.png\")\n   ```"
+        val (text, media) = extractReplyMedia("$item\nMEDIA:/opt/out.png")
+        assertEquals(item, text)
+        assertEquals(listOf("/opt/out.png"), media.map { it.source })
+    }
+
+    @Test
+    fun onlyAFirstNumberedItemBreaksASpan() {
+        val text = "In `x\n2. MEDIA:/opt/in.png`"
+        assertEquals(text to emptyList(), extractReplyMedia(text))
+    }
+
+    @Test
     fun aCodeSpanStaysInItsListItemOrHeading() {
         val (listText, listMedia) = extractReplyMedia("- a stray `\n- MEDIA:/opt/a.png and `b`")
         assertEquals("- a stray `\n- and `b`", listText)
