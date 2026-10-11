@@ -112,6 +112,47 @@ class ReplyMediaTest {
     }
 
     @Test
+    fun aStrayBacktickRunDoesNotReachIntoTheNextFence() {
+        val code = "```py\nprint(\"MEDIA:/opt/data/a.png\")\n```"
+        val (text, media) = extractReplyMedia("Wrap it in ``` fences, like this:\n$code\nHere is the chart: MEDIA:/opt/data/chart.png")
+        assertEquals("Wrap it in ``` fences, like this:\n$code\nHere is the chart:", text)
+        assertEquals(listOf("/opt/data/chart.png"), media.map { it.source })
+    }
+
+    @Test
+    fun aFenceInAListItemIsCode() {
+        val item = "1. ```python\n   def a():\n       return \"MEDIA:/opt/data/in.png\"\n\n   def b(): pass\n   ```"
+        val (text, media) = extractReplyMedia("$item\n2. Result: MEDIA:/opt/data/out.png")
+        assertEquals("$item\n2. Result:", text)
+        assertEquals(listOf("/opt/data/out.png"), media.map { it.source })
+    }
+
+    @Test
+    fun markupInCodeNeitherStartsNorSwallowsAMatch() {
+        val (text, media) = extractReplyMedia("Type `![` then the alt. Here: ![chart](/opt/data/c.png)")
+        assertEquals("Type `![` then the alt. Here:", text)
+        assertEquals(listOf("/opt/data/c.png"), media.map { it.source })
+        val sample = "Use ![ syntax:\n```md\n![cat](/opt/data/cat.png)\n```\nok"
+        assertEquals(sample to emptyList(), extractReplyMedia(sample))
+    }
+
+    @Test
+    fun longRepliesDoNotOverflowTheMatcher() {
+        val list = (1..20_000).joinToString("\n") { "- item $it" }
+        val dataUrl = "data:image/png;base64," + "A".repeat(200_000)
+        val (text, media) = extractReplyMedia("A ` stray\n$list\n```\nMEDIA:/x.png\n```\n![big]($dataUrl) MEDIA:/opt/data/z.png")
+        assertTrue(text.endsWith("```\nMEDIA:/x.png\n```"))
+        assertEquals(listOf(dataUrl, "/opt/data/z.png"), media.map { it.source })
+    }
+
+    @Test
+    fun windowsLineBreaksAreTidiedToo() {
+        val (text, media) = extractReplyMedia("Here:\r\nMEDIA:/opt/data/a.png\r\n\r\n\r\n\r\nNext  \r\nline")
+        assertEquals("Here:\n\nNext\nline", text)
+        assertEquals(listOf("/opt/data/a.png"), media.map { it.source })
+    }
+
+    @Test
     fun aCodeSpanInAnImagesAltKeepsItAnImage() {
         val (text, media) = extractReplyMedia("The run: ![`plot.py` output](/opt/data/plot.png)")
         assertEquals("The run:", text)
