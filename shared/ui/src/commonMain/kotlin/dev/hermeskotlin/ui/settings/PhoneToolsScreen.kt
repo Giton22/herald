@@ -43,6 +43,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MapPin
 import com.composables.icons.lucide.MapPinned
 import com.composables.icons.lucide.PhoneIncoming
+import com.composables.icons.lucide.AudioLines
 import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.Trash2
@@ -123,8 +124,14 @@ fun PhoneToolsScreen(onBack: () -> Unit, viewModel: PhoneToolsViewModel = koinVi
         },
         ringsMissing = access::ringsMissing,
         onAllowRings = access::requestRings,
+        onRingsTalk = viewModel::setRingsTalk,
     )
 }
+
+/** Under the switch: what answering a call does. */
+internal const val RINGS_TALK_DETAIL =
+    "Answering puts Hermes on the line: it asks in its own words, you answer by voice, and you can talk on. Off, " +
+        "Answer opens the chat instead."
 
 /** Under the switch: what rings, and that the agent never calls anyone. */
 internal const val RINGS_DETAIL =
@@ -154,6 +161,7 @@ internal fun PhoneToolsView(
     onRings: (Boolean) -> Unit = {},
     ringsMissing: () -> String? = { null },
     onAllowRings: () -> Unit = {},
+    onRingsTalk: (Boolean) -> Unit = {},
     nowMillis: Long = Clock.System.now().toEpochMilliseconds(),
 ) {
     var removing by remember { mutableStateOf<KnownPhone?>(null) }
@@ -251,6 +259,16 @@ internal fun PhoneToolsView(
                         if (needs != null) {
                             Divider()
                             ActionRow("Allow on this phone", Lucide.ShieldCheck, onAllowRings)
+                        }
+                        if (settings.phoneRings) {
+                            Divider()
+                            SwitchRow(
+                                title = "Talk when I answer",
+                                detail = RINGS_TALK_DETAIL,
+                                checked = settings.phoneRingsTalk,
+                                onCheckedChange = onRingsTalk,
+                                icon = Lucide.AudioLines,
+                            )
                         }
                     }
                     // Only once the gateway knows this phone: the list is the gateway's.

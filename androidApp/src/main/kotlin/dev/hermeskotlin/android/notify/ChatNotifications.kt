@@ -82,12 +82,16 @@ class ChatNotifications(private val context: Context) {
     }
 
     /** A call ringing for an answer: what it's about, so Decline or ringing out can post the usual notification. */
-    class Ringing(val storedSessionId: String?, val title: String?, val request: InputRequest) {
+    /** [talk]: answering puts Hermes on the line to ask it aloud, rather than opening the chat. */
+    class Ringing(val storedSessionId: String?, val title: String?, val request: InputRequest, val talk: Boolean = false) {
         /** The ring-out's token: Android matches it by identity, and request ids come back as copies from intents. */
         internal val timer = Any()
     }
 
     private val _ringing = MutableStateFlow<Map<String, Ringing>>(emptyMap())
+
+    /** A voice chat or a call is on: nothing rings over it. */
+    var voiceOn: () -> Boolean = { false }
 
     /** The calls ringing now, by request id: the call screen closes once its own is gone. */
     val ringing: StateFlow<Map<String, Ringing>> = _ringing.asStateFlow()
@@ -149,11 +153,12 @@ class ChatNotifications(private val context: Context) {
      * A question the agent is blocked on, answerable in place when it fits a notification. Every answer
      * asks for an unlock first: from a locked phone, Approve would run a command for whoever holds it.
      * With [ring] an approval or a question rings like a call instead, once ([postCall]); passwords and codes never
-     * ring, they're typed in the app. False when Herald may not post notifications.
+     * ring, they're typed in the app. With [talk] too, answering puts Hermes on the line instead of opening the chat.
+     * False when Herald may not post notifications.
      */
-    fun postRequest(storedSessionId: String?, title: String?, request: InputRequest, ring: Boolean = false): Boolean {
-        val rings = ring && (request is InputRequest.Approval || request is InputRequest.Clarify) && synchronized(rang) { request.id !in rang }
-        if (rings) return postCall(storedSessionId, title, request)
+    fun postRequest(storedSessionId: String?, title: String?, request: InputRequest, ring: Boolean = false, talk: Boolean = false): Boolean {
+        val rings = ring && !voiceOn() && (request is InputRequest.Approval || request is InputRequest.Clarify) && synchronized(rang) { request.id !in rang }
+        if (rings) return postCall(Ringing(storedSessionId, title, request, talk))
         val builder = base(CHANNEL_REQUESTS, storedSessionId, title)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -228,8 +233,10 @@ class ChatNotifications(private val context: Context) {
      * takes the whole screen ([IncomingCallActivity]), which says only who's calling and why, never the question.
      */
     @SuppressLint("MissingPermission") // canPost checks it.
-    private fun postCall(storedSessionId: String?, title: String?, request: InputRequest): Boolean {
+    private fun postCall(call: Ringing): Boolean {
         if (!canPost) return false
+        val request = call.request
+        val title = call.title
         synchronized(rang) {
             rang += request.id
             if (rang.size > MAX_RANG) rang.remove(rang.first())
@@ -238,7 +245,7 @@ class ChatNotifications(private val context: Context) {
         val answer = PendingIntent.getActivity(
             context,
             (ACTION_ANSWER + request.id).hashCode(),
-            answerIntent(storedSessionId, title, request.id),
+            answerIntent(call),
             PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
         )
         val decline = action(NotificationActionReceiver.ACTION_DECLINE_CALL, request.id) {
@@ -268,7 +275,6 @@ class ChatNotifications(private val context: Context) {
             .build()
             // Rings on, as a call does, until it's answered, declined or rung out; else the ringtone plays once.
             .apply { flags = flags or Notification.FLAG_INSISTENT }
-        val call = Ringing(storedSessionId, title, request)
         _ringing.update { it + (request.id to call) }
         manager.notify(request.id, CALL_ID, notification)
         HandlerCompat.postDelayed(main, { decline(request.id) }, call.timer, RING_MS)
@@ -304,23 +310,29 @@ class ChatNotifications(private val context: Context) {
         return call
     }
 
-    /** Opens [storedSessionId]'s chat from a call's Answer; a locked phone asks for its unlock on the way. */
-    private fun answerIntent(storedSessionId: String?, title: String?, requestId: String): Intent =
-        context.packageManager.getLaunchIntentForPackage(context.packageName)!!
+    /**
+     * What [call]'s Answer opens: Hermes on the line ([PhoneCallActivity]) when it talks, else its chat. A locked
+     * phone asks for its unlock on the way either way.
+     */
+    private fun answerIntent(call: Ringing): Intent {
+        if (call.talk && call.storedSessionId != null) {
+            return Intent(context, PhoneCallActivity::class.java)
+                .putExtra(NotificationActionReceiver.EXTRA_REQUEST_ID, call.request.id)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        return context.packageManager.getLaunchIntentForPackage(context.packageName)!!
             .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-            .putExtra(EXTRA_ANSWERED_CALL, requestId)
+            .putExtra(EXTRA_ANSWERED_CALL, call.request.id)
             .apply {
-                if (storedSessionId != null) {
-                    putExtra(EXTRA_OPEN_SESSION, storedSessionId).putExtra(EXTRA_OPEN_TITLE, title)
+                if (call.storedSessionId != null) {
+                    putExtra(EXTRA_OPEN_SESSION, call.storedSessionId).putExtra(EXTRA_OPEN_TITLE, call.title)
                     addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
                 }
             }
+    }
 
     /** The call screen's Answer: the same as the notification's. */
-    fun answer(requestId: String): Intent? {
-        val call = _ringing.value[requestId] ?: return null
-        return answerIntent(call.storedSessionId, call.title, requestId)
-    }
+    fun answer(requestId: String): Intent? = _ringing.value[requestId]?.let(::answerIntent)
 
     /** A finished turn, with an inline Reply that sends the next prompt to the same chat. */
     fun postReply(storedSessionId: String, title: String?, text: String, failed: Boolean) {

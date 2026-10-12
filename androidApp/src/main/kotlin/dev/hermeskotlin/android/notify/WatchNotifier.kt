@@ -70,7 +70,7 @@ class WatchNotifier(
                         for (chat in waiting) {
                             for (request in chat.requests) {
                                 if (request.id in notified) continue
-                                if (notifications.postRequest(chat.storedId, chat.title.ifBlank { null }, request, prefs.ringsForAnswers)) notified.add(request.id)
+                                if (notifications.postRequest(chat.storedId, chat.title.ifBlank { null }, request, prefs.ringsForAnswers, prefs.phoneRingsTalk)) notified.add(request.id)
                             }
                         }
                     }

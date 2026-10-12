@@ -2,6 +2,9 @@ package dev.hermeskotlin.ui.voice
 
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatSession
+import dev.hermeskotlin.core.chat.ChatState
+import dev.hermeskotlin.core.chat.InputAnswers
+import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
@@ -14,6 +17,8 @@ import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.core.voice.SpeechPlayer
 import dev.hermeskotlin.core.voice.SpokenAudio
 import dev.hermeskotlin.core.voice.VoiceActivity
+import dev.hermeskotlin.core.voice.VoiceAnswers
+import dev.hermeskotlin.core.voice.DeviceLock
 import dev.hermeskotlin.core.voice.VoiceRecorder
 import dev.hermeskotlin.core.voice.isVoiceStopCommand
 import dev.hermeskotlin.core.voice.speakableText
@@ -86,6 +91,8 @@ class VoiceController(
     private val keepAlive: VoiceKeepAlive? = null,
     /** The phone's own speech recognizer, for dictation with [DictationEngine.Device]. */
     private val deviceDictation: DeviceDictation? = null,
+    /** An approval is only taken by voice while the phone is unlocked. */
+    private val deviceLock: DeviceLock = DeviceLock.None,
     private val liveCalls: LiveCalls? = null,
 ) {
     private val _chat = MutableStateFlow(VoiceChatState())
@@ -182,7 +189,7 @@ class VoiceController(
         if (status !is ApiResult.Success || !status.value.live) return false
         val call = calls.create() ?: return false
         _chat.value = VoiceChatState(VoicePhase.Connecting, live = true)
-        val conversation = LiveConversation(call, session, _chat)
+        val conversation = LiveConversation(call, session, _chat, deviceLock)
         live = conversation
         var error: String? = null
         try {
@@ -224,6 +231,75 @@ class VoiceController(
 
     /** One turn of the conversation; false when it should end. */
     private suspend fun converseOnce(session: ChatSession, gateway: GatewayUrl, profile: String?, activity: VoiceActivity): Boolean {
+        // Hermes already waits on an answer (the chat opened from a call for one): that comes first, then the rest of
+        // its turn, whose reply follows the last prompt.
+        if (session.state.value.inputRequests.any(VoiceAnswers::canAsk)) {
+            val from = session.state.value.messages.indexOfLast { it is ChatMessage.User } + 1
+            return finishTurn(session, from, gateway, profile, activity)
+        }
+        val transcript = hear(gateway, profile, activity) ?: return false
+        if (transcript.isBlank()) return true
+        if (isVoiceStopCommand(transcript)) return false
+
+        _chat.update { it.copy(phase = VoicePhase.Thinking, caption = transcript.trim(), captionIsVoice = false) }
+        val sentAt = session.state.value.messages.size
+        if (!session.send(transcript)) {
+            _chat.update { it.copy(error = session.state.value.error ?: "Couldn't send that.") }
+            return true
+        }
+        // The turn starts once the gateway takes it.
+        withTimeoutOrNull(TURN_START_MS) { session.state.first { it.running } }
+        return finishTurn(session, sentAt, gateway, profile, activity)
+    }
+
+    /**
+     * Waits for the turn running in [session] to end, answering aloud what it asks on the way, then reads its reply
+     * (the last one from message [from] on). False when the chat should end.
+     */
+    private suspend fun finishTurn(session: ChatSession, from: Int, gateway: GatewayUrl, profile: String?, activity: VoiceActivity): Boolean {
+        val pointedAt = mutableSetOf<String>()
+        while (true) {
+            // Looked at again now and then too: an approval held back while the phone was locked can be asked once it isn't.
+            val chat = withTimeoutOrNull(LOCK_CHECK_MS) {
+                session.state.first { !it.running || askable(it) != null || it.inputRequests.any { r -> r.id !in pointedAt } }
+            } ?: session.state.value
+            val request = askable(chat)
+            if (request != null) {
+                if (!askAloud(session, request, gateway, profile, activity)) return false
+                _chat.update { it.copy(phase = VoicePhase.Thinking) }
+                continue
+            }
+            // A password or a code is never said aloud, nor an approval taken from a locked phone: the turn waits,
+            // and the voice says so once.
+            val typed = chat.inputRequests.firstOrNull { it.id !in pointedAt }
+            if (typed != null) {
+                pointedAt += typed.id
+                val said = if (typed is InputRequest.Approval) {
+                    "Hermes needs your approval. Unlock the phone, and I'll ask you for it."
+                } else {
+                    "Hermes needs something typed in the chat to go on."
+                }
+                _chat.update { it.copy(phase = VoicePhase.Speaking, caption = said, captionIsVoice = true) }
+                speak(said, gateway, profile)
+                _chat.update { it.copy(phase = VoicePhase.Thinking) }
+                continue
+            }
+            if (!chat.running && chat.inputRequests.none(VoiceAnswers::canAsk)) break
+        }
+        val reply = session.state.value.messages.drop(from).lastOrNull { it is ChatMessage.Assistant } as? ChatMessage.Assistant
+        val text = reply?.text?.let(::speakableText).orEmpty()
+        if (text.isEmpty()) return true
+
+        _chat.update { it.copy(phase = VoicePhase.Speaking, caption = text, captionIsVoice = true) }
+        speak(text, gateway, profile)
+        return true
+    }
+
+    /**
+     * What's said next: blank when nothing was heard or it couldn't be written down (the error says which),
+     * null when the microphone failed and the chat can't go on.
+     */
+    private suspend fun hear(gateway: GatewayUrl, profile: String?, activity: VoiceActivity): String? {
         _chat.update { it.copy(phase = VoicePhase.Listening, level = 0f, hearing = false) }
         val recording = try {
             recorder.record(
@@ -235,37 +311,112 @@ class VoiceController(
             throw e
         } catch (e: Exception) {
             _chat.update { it.copy(error = e.message ?: "Couldn't use the microphone.") }
-            return false
+            return null
         }
-        if (!recording.heardSpeech) return true
+        // Silence isn't a failure: an error from before doesn't stand for it.
+        if (!recording.heardSpeech) return "".also { _chat.update { it.copy(error = null) } }
         _chat.update { it.copy(phase = VoicePhase.Transcribing, level = 0f, hearing = false) }
-        val transcript = when (val result = audio.transcribe(gateway, recording.bytes, recording.mimeType, profile)) {
-            is ApiResult.Success -> result.value
+        return when (val result = audio.transcribe(gateway, recording.bytes, recording.mimeType, profile)) {
+            is ApiResult.Success -> result.value.also { _chat.update { it.copy(error = null) } }
             else -> {
                 _chat.update { it.copy(error = result.errorMessage ?: "Couldn't transcribe that.") }
-                return true
+                ""
             }
         }
-        _chat.update { it.copy(error = null) }
-        if (transcript.isBlank()) return true
-        if (isVoiceStopCommand(transcript)) return false
+    }
 
-        _chat.update { it.copy(phase = VoicePhase.Thinking, caption = transcript.trim(), captionIsVoice = false) }
-        val sentAt = session.state.value.messages.size
-        if (!session.send(transcript)) {
-            _chat.update { it.copy(error = session.state.value.error ?: "Couldn't send that.") }
-            return true
+    /** The question or approval Hermes waits on in [session] that can be answered aloud. */
+    private fun askable(session: ChatSession): InputRequest? = askable(session.state.value)
+
+    private fun askable(chat: ChatState): InputRequest? = chat.inputRequests.firstOrNull {
+        VoiceAnswers.canAsk(it) && (it !is InputRequest.Approval || !deviceLock.locked())
+    }
+
+    /**
+     * Reads [request] aloud and sends what's said back as its answer, asking again when it isn't clear. False
+     * when the chat should end: "stop" said, no answer after a few tries (it stays on the screen), or it
+     * couldn't be sent.
+     */
+    private suspend fun askAloud(
+        session: ChatSession,
+        request: InputRequest,
+        gateway: GatewayUrl,
+        profile: String?,
+        activity: VoiceActivity,
+    ): Boolean {
+        val answer = when (request) {
+            is InputRequest.Approval -> {
+                val choice = askUntilClear(session, request, VoiceAnswers.approvalPrompt(request), gateway, profile, activity) {
+                    VoiceAnswers.approval(request, it)
+                } ?: return answeredElsewhere(session, request)
+                InputAnswers.approval(choice)
+            }
+            is InputRequest.Clarify -> {
+                val answers = request.questions.map { question ->
+                    askUntilClear(session, request, VoiceAnswers.questionPrompt(question), gateway, profile, activity) {
+                        VoiceAnswers.clarify(question, it).takeIf { picked -> picked.isNotEmpty() }
+                    } ?: return answeredElsewhere(session, request)
+                }
+                InputAnswers.clarify(request, answers)
+            }
+            else -> return true
         }
-        // The turn starts once the gateway takes it; then wait for it to end.
-        withTimeoutOrNull(TURN_START_MS) { session.state.first { it.running } }
-        session.state.first { !it.running }
-        val reply = session.state.value.messages.drop(sentAt).lastOrNull { it is ChatMessage.Assistant } as? ChatMessage.Assistant
-        val text = reply?.text?.let(::speakableText).orEmpty()
-        if (text.isEmpty()) return true
-
-        _chat.update { it.copy(phase = VoicePhase.Speaking, caption = text, captionIsVoice = true) }
-        speak(text, gateway, profile)
+        // Answered on the screen while it was being said: the gateway takes the first answer only.
+        if (answeredElsewhere(session, request)) return true
+        // The phone locked while it was asked: whoever is near it doesn't get to approve. It's asked again unlocked.
+        if (request is InputRequest.Approval && deviceLock.locked()) return true
+        if (!session.answer(request, answer)) {
+            _chat.update { it.copy(error = session.state.value.error ?: "Couldn't send the answer.") }
+            return false
+        }
         return true
+    }
+
+    /** True once [request] no longer waits: answered on the screen or another device, or withdrawn. */
+    private fun answeredElsewhere(session: ChatSession, request: InputRequest): Boolean =
+        session.state.value.inputRequests.none { it.id == request.id }
+
+    /**
+     * Says [prompt] and listens until [heard] makes something of the answer; null after a few unclear answers or
+     * failures, or "stop". Silence isn't an answer: it listens on, as someone thinking it over gets to.
+     */
+    private suspend fun <T : Any> askUntilClear(
+        session: ChatSession,
+        request: InputRequest,
+        prompt: String,
+        gateway: GatewayUrl,
+        profile: String?,
+        activity: VoiceActivity,
+        heard: (String) -> T?,
+    ): T? {
+        var tries = 0
+        var say = true
+        while (tries < MAX_ASKS) {
+            if (answeredElsewhere(session, request)) return null
+            if (say) {
+                val said = if (tries == 0) prompt else "Sorry, I didn't get that. $prompt"
+                _chat.update { it.copy(phase = VoicePhase.Speaking, caption = said, captionIsVoice = true) }
+                speak(said, gateway, profile)
+                if (answeredElsewhere(session, request)) return null
+            }
+            val transcript = hear(gateway, profile, activity) ?: return null
+            if (isVoiceStopCommand(transcript)) return null
+            if (transcript.isBlank()) {
+                // Nothing said listens on; a recording that couldn't be written down counts as a try.
+                say = false
+                if (_chat.value.error != null) tries++
+                continue
+            }
+            _chat.update { it.copy(caption = transcript.trim(), captionIsVoice = false) }
+            heard(transcript)?.let { return it }
+            tries++
+            say = true
+        }
+        // The chat ends here, so it says why, and where the question went.
+        val said = "I couldn't get that, so it's waiting in the chat."
+        _chat.update { it.copy(phase = VoicePhase.Speaking, caption = said, captionIsVoice = true) }
+        speak(said, gateway, profile)
+        return null
     }
 
     /** Reads [text] aloud piece by piece, synthesizing the next piece while the current one plays. */
@@ -393,6 +544,10 @@ class VoiceController(
 
     private companion object {
         const val MAX_FAILURES = 3
+        /** Times a question is asked before it's left for the screen. */
+        const val MAX_ASKS = 3
+        /** How often a waiting turn is looked at again, for an approval held back while the phone was locked. */
+        const val LOCK_CHECK_MS = 1_000L
         const val RETRY_PAUSE_MS = 1_000L
         const val TURN_START_MS = 15_000L
         const val DICTATION_SILENCE_MS = 3_000L

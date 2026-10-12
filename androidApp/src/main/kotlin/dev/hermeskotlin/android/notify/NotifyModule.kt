@@ -21,7 +21,11 @@ import org.koin.dsl.module
 
 val notifyModule = module {
     single { AppVisibility(androidApplication()) }
-    single { ChatNotifications(androidContext()) }
+    single {
+        val koin = getKoin()
+        // A voice chat or a call already on has the microphone: a question there is asked on it, not rung over it.
+        ChatNotifications(androidContext()).apply { voiceOn = { koin.get<VoiceCallKeeper>().holding } }
+    }
     single { VoiceCallKeeper(androidContext()) } bind VoiceKeepAlive::class
     single { ChatNotifier(androidContext(), get(), get(), get(), get(), get(), get(), get<WatchRelay>().busy) }
     single { WatchNotifier(get(), get(), get(), get(), get(), get(), get(), get()) }

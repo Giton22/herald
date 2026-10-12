@@ -48,6 +48,8 @@ class PhoneToolsViewModel(
 
     fun setRings(on: Boolean) = store.update { it.copy(phoneRings = on) }
 
+    fun setRingsTalk(on: Boolean) = store.update { it.copy(phoneRingsTalk = on) }
+
     fun setUp() = bridge.setUp()
 
     /** The user asked for the newer plugin the page offers. */

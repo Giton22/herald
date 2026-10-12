@@ -95,7 +95,7 @@ class ChatNotifier(
                     notified.clear()
                 } else if (prefs.notifyRequests) {
                     for (request in state.inputRequests) {
-                        if (request.id !in notified && notifications.postRequest(state.storedSessionId, state.title, request, prefs.ringsForAnswers)) {
+                        if (request.id !in notified && notifications.postRequest(state.storedSessionId, state.title, request, prefs.ringsForAnswers, prefs.phoneRingsTalk)) {
                             notified.add(request.id)
                         }
                     }

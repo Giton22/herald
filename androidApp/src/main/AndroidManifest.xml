@@ -286,6 +286,15 @@
             android:taskAffinity=""
             android:theme="@style/Theme.HermesKotlin" />
 
+        <!-- A call for an answer, picked up: Hermes on the line, no chat behind it. Its own task, as a call is, and
+             in Recents to come back to while it goes on. -->
+        <activity
+            android:name=".notify.PhoneCallActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity="dev.herald.call"
+            android:theme="@style/Theme.HermesKotlin" />
+
         <!-- Allow on a phone tool's question: does the change from the tap, invisible and out of Herald's task. -->
         <activity
             android:name=".phone.PhoneActionActivity"

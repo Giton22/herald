@@ -66,6 +66,11 @@ class IncomingCallActivity : ComponentActivity(), OutOfSight {
     /** Unlocks first: the chat it opens answers for whoever holds the phone. */
     private fun answer(requestId: String) {
         val open = notifications.answer(requestId) ?: return finish()
+        // Hermes on the line: the call screen unlocks and picks up itself.
+        if (open.component?.className == PhoneCallActivity::class.java.name) {
+            startActivity(open)
+            return finish()
+        }
         val keyguard = getSystemService(KeyguardManager::class.java)
         if (keyguard?.isKeyguardLocked != true) return open(requestId, open)
         keyguard.requestDismissKeyguard(

@@ -110,6 +110,8 @@ data class AppSettings(
      * Only with [phoneTools] on (see [ringsForAnswers]). It only ever rings this phone: the agent never calls anyone.
      */
     val phoneRings: Boolean = false,
+    /** Answering such a call puts Hermes on the line to ask it aloud, with no chat on screen; off, Answer opens the chat. */
+    val phoneRingsTalk: Boolean = true,
     /** Ask GitHub, where the app is published, whether a newer release is out. */
     val checkForUpdates: Boolean = true,
     /** Ask for a fingerprint, face or the screen lock when Herald opens, and keep it out of Recents. */
