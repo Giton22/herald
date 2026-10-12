@@ -33,6 +33,9 @@ enum class PhoneTool(val id: String, val title: String, val detail: String) {
 fun AppSettings.enabledPhoneTools(): Set<PhoneTool> =
     if (!phoneTools) emptySet() else phoneToolsOn.mapNotNull(PhoneTool::byId).toSet()
 
+/** An approval or a question rings this phone like a call: its own switch, under the Phone tools switch. */
+val AppSettings.ringsForAnswers: Boolean get() = phoneTools && phoneRings
+
 /** Why a tool couldn't do what the agent asked, in words the agent passes on to the user. */
 class PhoneToolException(message: String) : Exception(message)
 

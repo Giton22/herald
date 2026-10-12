@@ -42,6 +42,7 @@ import com.composables.icons.lucide.Hourglass
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MapPin
 import com.composables.icons.lucide.MapPinned
+import com.composables.icons.lucide.PhoneIncoming
 import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.Trash2
@@ -116,8 +117,19 @@ fun PhoneToolsScreen(onBack: () -> Unit, viewModel: PhoneToolsViewModel = koinVi
         onAllowOptional = access::requestOptional,
         places = places,
         onRemovePlace = viewModel::removePlace,
+        onRings = { on ->
+            viewModel.setRings(on)
+            if (on && access.ringsMissing() != null) access.requestRings()
+        },
+        ringsMissing = access::ringsMissing,
+        onAllowRings = access::requestRings,
     )
 }
+
+/** Under the switch: what rings, and that the agent never calls anyone. */
+internal const val RINGS_DETAIL =
+    "An approval or a question from a chat you're not looking at rings like a call. Decline it for the usual " +
+        "notification. It only ever rings you: the agent never calls anyone from this phone."
 
 /** The page itself, stateless so previews can draw it. */
 @Composable
@@ -139,6 +151,9 @@ internal fun PhoneToolsView(
     onAllowOptional: (PhoneTool) -> Unit = {},
     places: List<WatchedPlace> = emptyList(),
     onRemovePlace: (String) -> Unit = {},
+    onRings: (Boolean) -> Unit = {},
+    ringsMissing: () -> String? = { null },
+    onAllowRings: () -> Unit = {},
     nowMillis: Long = Clock.System.now().toEpochMilliseconds(),
 ) {
     var removing by remember { mutableStateOf<KnownPhone?>(null) }
@@ -222,6 +237,20 @@ internal fun PhoneToolsView(
                                 Divider()
                                 ActionRow(more, Lucide.ShieldCheck) { onAllowOptional(tool) }
                             }
+                        }
+                    }
+                    Section("Calls") {
+                        val needs = if (settings.phoneRings) ringsMissing() else null
+                        SwitchRow(
+                            title = "Ring me for an answer",
+                            detail = needs ?: RINGS_DETAIL,
+                            checked = settings.phoneRings,
+                            onCheckedChange = onRings,
+                            icon = Lucide.PhoneIncoming,
+                        )
+                        if (needs != null) {
+                            Divider()
+                            ActionRow("Allow on this phone", Lucide.ShieldCheck, onAllowRings)
                         }
                     }
                     // Only once the gateway knows this phone: the list is the gateway's.

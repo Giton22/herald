@@ -148,6 +148,25 @@ private class AndroidPhoneToolAccess(
         }
     }
 
+    override fun ringsMissing(): String? = when {
+        !notificationsOn(CALL_CHANNEL) -> "Turn on Herald's notifications: the call rings there."
+        !fullScreen() -> "Allow full-screen notifications, so the call shows over the lock screen."
+        else -> null
+    }
+
+    override fun requestRings() {
+        when {
+            !notificationsOn(CALL_CHANNEL) -> requestNotifications()
+            // Android 14 and later: a switch of its own, on Herald's page.
+            !fullScreen() -> open(
+                Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT).setData(Uri.fromParts("package", context.packageName, null)),
+            )
+        }
+    }
+
+    private fun fullScreen() = Build.VERSION.SDK_INT < Build.VERSION_CODES.UPSIDE_DOWN_CAKE ||
+        context.getSystemService(NotificationManager::class.java)?.canUseFullScreenIntent() == true
+
     private fun granted(permission: String) = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED
 
     /** The permission prompt, or Herald's page in Android's settings once the prompt was refused for good. */
@@ -165,9 +184,9 @@ private class AndroidPhoneToolAccess(
         }
     }
 
-    private fun notificationsOn() = NotificationManagerCompat.from(context).let { manager ->
+    private fun notificationsOn(channel: String = CHANNEL) = NotificationManagerCompat.from(context).let { manager ->
         manager.areNotificationsEnabled() &&
-            manager.getNotificationChannelCompat(CHANNEL)?.importance != NotificationManagerCompat.IMPORTANCE_NONE
+            manager.getNotificationChannelCompat(channel)?.importance != NotificationManagerCompat.IMPORTANCE_NONE
     }
 
     private fun requestNotifications() {
@@ -213,6 +232,9 @@ private class AndroidPhoneToolAccess(
         /** Tools that ask before changing the phone, in a notification on this channel (PhoneConfirmations). */
         val ASKS = setOf(PhoneTool.Sound, PhoneTool.Alarms, PhoneTool.Open, PhoneTool.Clipboard, PhoneTool.Geofences, PhoneTool.Calendar)
         const val CHANNEL = "phone_tools"
+
+        /** Where an approval or a question rings (ChatNotifications). */
+        const val CALL_CHANNEL = "calls"
         const val FINE = Manifest.permission.ACCESS_FINE_LOCATION
         const val COARSE = Manifest.permission.ACCESS_COARSE_LOCATION
         const val READ_CALENDAR = Manifest.permission.READ_CALENDAR

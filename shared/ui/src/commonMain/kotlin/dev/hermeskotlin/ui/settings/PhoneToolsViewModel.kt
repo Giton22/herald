@@ -46,6 +46,8 @@ class PhoneToolsViewModel(
         s.copy(phoneToolsOn = if (on) (s.phoneToolsOn + tool.id).distinct() else s.phoneToolsOn - tool.id)
     }
 
+    fun setRings(on: Boolean) = store.update { it.copy(phoneRings = on) }
+
     fun setUp() = bridge.setUp()
 
     /** The user asked for the newer plugin the page offers. */

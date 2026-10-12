@@ -3,6 +3,7 @@ package dev.hermeskotlin.android.notify
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.SessionWatcher
 import dev.hermeskotlin.core.chat.TurnOutcome
+import dev.hermeskotlin.core.phone.ringsForAnswers
 import dev.hermeskotlin.core.sessions.ActiveSessions
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
@@ -68,7 +69,8 @@ class WatchNotifier(
                     } else if (prefs.notifyRequests) {
                         for (chat in waiting) {
                             for (request in chat.requests) {
-                                if (request.id !in notified && notifications.postRequest(chat.storedId, chat.title.ifBlank { null }, request)) notified.add(request.id)
+                                if (request.id in notified) continue
+                                if (notifications.postRequest(chat.storedId, chat.title.ifBlank { null }, request, prefs.ringsForAnswers)) notified.add(request.id)
                             }
                         }
                     }

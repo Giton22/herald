@@ -271,7 +271,11 @@ Agent tools that run on the phone: a gateway plugin registers them, Herald answe
 - [x] Calendar (the phone's calendar provider: list events in a range; adding or moving asks first, showing when, where and which calendar; repeating events and invitations the user doesn't organize are left to the calendar app)
 - [x] Contacts lookup (by name from the start of a word, by at least 5 digits of a number, or by email; only names, numbers and emails of contacts the Contacts app shows, at most 20 people a call; never writes, and never calls them: the agent can't place calls from the phone)
 - [x] Health data (Health Connect, read only: steps, sleep sessions with stages, heart rate min/avg/max, each as the user allows there; totals per day, at most 31 days; while Herald is open, unless the user also allows reading while it's closed)
-- [ ] The agent calls you when it needs an answer: a clarify question or approval rings as a full-screen incoming call on the phone and watch; answer by voice in a live voice call, or decline and tap a choice. Off the gateway's network, the herald-push plugin carries the question. It only ever rings you: the agent never places calls from the phone
+- The agent calls you when it needs an answer. It only ever rings you: the agent never places calls from the phone (Herald has no CALL_PHONE)
+  - [x] The phone rings (Settings → Phone tools → Calls, off until turned on): an approval or a clarify question from a chat out of sight rings as an incoming call, once; over the lock screen or with the screen off it takes the whole screen, naming only the chat and whether it's an approval or a question. Answer unlocks and opens the chat; Decline, or 45 s without an answer, leaves the usual notification. Passwords and codes never ring
+  - [ ] Answer by voice: the call opens a voice chat that reads the question aloud and takes the spoken answer
+  - [ ] The watch rings too, and answers from the wrist
+  - [ ] Off the gateway's network, the herald-push plugin carries the question
 
 ### Auth & connectivity extras
 - [x] Browser sign-in for SSO/OIDC gateways (RFC 8252 PKCE via Custom Tab and a loopback redirect; `/auth/native/*`). Bearer tokens kept encrypted and refreshed before they expire

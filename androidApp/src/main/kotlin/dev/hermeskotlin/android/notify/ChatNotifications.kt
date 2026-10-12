@@ -7,6 +7,11 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.media.AudioAttributes
+import android.media.RingtoneManager
+import android.os.Handler
+import android.os.Looper
+import androidx.core.os.HandlerCompat
 import androidx.core.app.NotificationChannelCompat
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
@@ -18,6 +23,11 @@ import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.chat.ApprovalChoice
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.connection.ConnectionState
+import dev.hermeskotlin.ui.calls.callReason
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /** Builds and posts every notification the app shows; the actions land in [NotificationActionReceiver]. */
 /** One bot's line in a room's notification, with when it was written. */
@@ -54,9 +64,38 @@ class ChatNotifications(private val context: Context) {
                     .setDescription("Shown while a voice chat goes on with the screen off or another app open.")
                     .setShowBadge(false)
                     .build(),
+                NotificationChannelCompat.Builder(CHANNEL_CALLS, NotificationManagerCompat.IMPORTANCE_HIGH)
+                    .setName("Calls for an answer")
+                    .setDescription("An approval or a question rings like a call (Settings → Phone tools → Calls).")
+                    .setSound(
+                        RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_NOTIFICATION_RINGTONE)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build(),
+                    )
+                    .setVibrationEnabled(true)
+                    .setVibrationPattern(RING_VIBRATION)
+                    .build(),
             ),
         )
     }
+
+    /** A call ringing for an answer: what it's about, so Decline or ringing out can post the usual notification. */
+    class Ringing(val storedSessionId: String?, val title: String?, val request: InputRequest) {
+        /** The ring-out's token: Android matches it by identity, and request ids come back as copies from intents. */
+        internal val timer = Any()
+    }
+
+    private val _ringing = MutableStateFlow<Map<String, Ringing>>(emptyMap())
+
+    /** The calls ringing now, by request id: the call screen closes once its own is gone. */
+    val ringing: StateFlow<Map<String, Ringing>> = _ringing.asStateFlow()
+
+    /** Requests that already rang: one that comes back (Herald was opened and left again) is a plain notification. */
+    private val rang = LinkedHashSet<String>()
+
+    private val main = Handler(Looper.getMainLooper())
 
     val canPost: Boolean
         get() = manager.areNotificationsEnabled() && (
@@ -109,9 +148,12 @@ class ChatNotifications(private val context: Context) {
     /**
      * A question the agent is blocked on, answerable in place when it fits a notification. Every answer
      * asks for an unlock first: from a locked phone, Approve would run a command for whoever holds it.
-     * False when Herald may not post notifications.
+     * With [ring] an approval or a question rings like a call instead, once ([postCall]); passwords and codes never
+     * ring, they're typed in the app. False when Herald may not post notifications.
      */
-    fun postRequest(storedSessionId: String?, title: String?, request: InputRequest): Boolean {
+    fun postRequest(storedSessionId: String?, title: String?, request: InputRequest, ring: Boolean = false): Boolean {
+        val rings = ring && (request is InputRequest.Approval || request is InputRequest.Clarify) && synchronized(rang) { request.id !in rang }
+        if (rings) return postCall(storedSessionId, title, request)
         val builder = base(CHANNEL_REQUESTS, storedSessionId, title)
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -175,7 +217,110 @@ class ChatNotifications(private val context: Context) {
         return post(request.id, REQUEST_ID, builder.build())
     }
 
-    fun cancelRequest(id: String) = manager.cancel(id, REQUEST_ID)
+    fun cancelRequest(id: String) {
+        stopRinging(id)
+        manager.cancel(id, REQUEST_ID)
+    }
+
+    /**
+     * Rings for [request] like an incoming call: Answer opens its chat (unlocking first), Decline turns it into the
+     * usual notification, and so does no answer within [RING_MS]. Over the lock screen or with the screen off it
+     * takes the whole screen ([IncomingCallActivity]), which says only who's calling and why, never the question.
+     */
+    @SuppressLint("MissingPermission") // canPost checks it.
+    private fun postCall(storedSessionId: String?, title: String?, request: InputRequest): Boolean {
+        if (!canPost) return false
+        synchronized(rang) {
+            rang += request.id
+            if (rang.size > MAX_RANG) rang.remove(rang.first())
+        }
+        val caller = Person.Builder().setName(title?.takeIf { it.isNotBlank() } ?: "Hermes").setImportant(true).build()
+        val answer = PendingIntent.getActivity(
+            context,
+            (ACTION_ANSWER + request.id).hashCode(),
+            answerIntent(storedSessionId, title, request.id),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val decline = action(NotificationActionReceiver.ACTION_DECLINE_CALL, request.id) {
+            putExtra(NotificationActionReceiver.EXTRA_REQUEST_ID, request.id)
+        }
+        val screen = PendingIntent.getActivity(
+            context,
+            (ACTION_RING + request.id).hashCode(),
+            Intent(context, IncomingCallActivity::class.java)
+                .putExtra(NotificationActionReceiver.EXTRA_REQUEST_ID, request.id)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_NO_USER_ACTION),
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val notification = NotificationCompat.Builder(context, CHANNEL_CALLS)
+            .setSmallIcon(R.drawable.ic_notification)
+            .setColor(ContextCompat.getColor(context, R.color.notification_accent))
+            .setStyle(NotificationCompat.CallStyle.forIncomingCall(caller, decline, answer))
+            .setContentText(callReason(request is InputRequest.Approval))
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setFullScreenIntent(screen, true)
+            .setContentIntent(screen)
+            .setOngoing(true)
+            .setAutoCancel(false)
+            // Should Herald be gone before it rings out, Android takes it down itself.
+            .setTimeoutAfter(RING_MS + RING_GRACE_MS)
+            .build()
+            // Rings on, as a call does, until it's answered, declined or rung out; else the ringtone plays once.
+            .apply { flags = flags or Notification.FLAG_INSISTENT }
+        val call = Ringing(storedSessionId, title, request)
+        _ringing.update { it + (request.id to call) }
+        manager.notify(request.id, CALL_ID, notification)
+        HandlerCompat.postDelayed(main, { decline(request.id) }, call.timer, RING_MS)
+        return true
+    }
+
+    /**
+     * Declined, or rung out: the call goes and the usual notification takes its place. On the main thread, as the
+     * notifiers that cancel requests are: an answer elsewhere can't slip in between, leaving one for nothing.
+     */
+    fun decline(requestId: String) {
+        if (Looper.myLooper() != Looper.getMainLooper()) {
+            main.post { decline(requestId) }
+            return
+        }
+        val call = stopRinging(requestId) ?: return
+        postRequest(call.storedSessionId, call.title, call.request)
+    }
+
+    /** Answered: the call goes, and the chat it opens shows the question. */
+    fun answered(requestId: String) {
+        stopRinging(requestId)
+    }
+
+    private fun stopRinging(requestId: String): Ringing? {
+        manager.cancel(requestId, CALL_ID)
+        var call: Ringing? = null
+        _ringing.update {
+            call = it[requestId]
+            it - requestId
+        }
+        call?.let { main.removeCallbacksAndMessages(it.timer) }
+        return call
+    }
+
+    /** Opens [storedSessionId]'s chat from a call's Answer; a locked phone asks for its unlock on the way. */
+    private fun answerIntent(storedSessionId: String?, title: String?, requestId: String): Intent =
+        context.packageManager.getLaunchIntentForPackage(context.packageName)!!
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+            .putExtra(EXTRA_ANSWERED_CALL, requestId)
+            .apply {
+                if (storedSessionId != null) {
+                    putExtra(EXTRA_OPEN_SESSION, storedSessionId).putExtra(EXTRA_OPEN_TITLE, title)
+                    addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+                }
+            }
+
+    /** The call screen's Answer: the same as the notification's. */
+    fun answer(requestId: String): Intent? {
+        val call = _ringing.value[requestId] ?: return null
+        return answerIntent(call.storedSessionId, call.title, requestId)
+    }
 
     /** A finished turn, with an inline Reply that sends the next prompt to the same chat. */
     fun postReply(storedSessionId: String, title: String?, text: String, failed: Boolean) {
@@ -348,7 +493,13 @@ class ChatNotifications(private val context: Context) {
     fun cancelAttention() {
         unreadBotMessages.clear()
         unreadRoomLines.clear()
-        manager.activeNotifications.filter { it.id != WORKING_ID && it.id != VOICE_ID }.forEach { manager.cancel(it.tag, it.id) }
+        // A call stays: Herald starting behind its full screen isn't the user looking ([hangUp] is).
+        manager.activeNotifications.filter { it.id != WORKING_ID && it.id != VOICE_ID && it.id != CALL_ID }.forEach { manager.cancel(it.tag, it.id) }
+    }
+
+    /** Herald is in front: every call ringing is answered by looking, and posts no notification later. */
+    fun hangUp() {
+        _ringing.value.keys.forEach(::stopRinging)
     }
 
     /** Tapping it opens Herald on [storedSessionId]'s chat, when the notification is about one. */
@@ -391,6 +542,13 @@ class ChatNotifications(private val context: Context) {
         const val PUSH_TEST_ID = 5
         const val ROOM_ID = 6
         const val VOICE_ID = 7
+        const val CALL_ID = 8
+
+        /** On an Answer's launch intent: the request whose call was answered. */
+        const val EXTRA_ANSWERED_CALL = "answered_call"
+
+        /** How long a call rings before it becomes the usual notification. */
+        const val RING_MS = 45_000L
 
         /** On the launch intent of a room's notification: the hosted room's id (its name in [EXTRA_OPEN_TITLE]). */
         const val EXTRA_OPEN_ROOM = "open_room"
@@ -408,6 +566,14 @@ class ChatNotifications(private val context: Context) {
         private const val CHANNEL_REPLIES = "replies"
         private const val CHANNEL_BOTS = "bots"
         private const val CHANNEL_VOICE = "voice"
+
+        /** Read by PhoneToolAccess too, to tell whether calls can ring. */
+        private const val CHANNEL_CALLS = "calls"
+        private const val RING_GRACE_MS = 5_000L
+        private const val MAX_RANG = 200
+        private const val ACTION_ANSWER = "answer"
+        private const val ACTION_RING = "ring"
+        private val RING_VIBRATION = longArrayOf(0, 800, 600, 800, 600, 800, 1_600)
         private const val MAX_PREVIEW = 2_000
         private const val MAX_STACKED = 6
         private const val DEDUPE_PREFIX = 200
