@@ -128,4 +128,47 @@ class VoiceAnswersTest {
         val keep = ClarifyQuestion(null, "What now?", listOf("Delete it", "Keep it"))
         assertEquals(listOf("keep it, don't delete it"), VoiceAnswers.clarify(keep, "keep it, don't delete it"))
     }
+
+    @Test
+    fun whatsTakenAsTheAnswerWithoutTheVoiceHandingItOver() {
+        val color = InputRequest.Clarify("srq-2", listOf(ClarifyQuestion(null, "Which color?", listOf("Red", "Blue"))))
+        // Anything that answers, a choice or not.
+        listOf(
+            "Green", "Blue please", "the second one", "I think red", "um, blue", "Umm… blue", "how about blue", "tell it red",
+            "give me red", "do the first one", "sorry, the blue one", "when the tests pass", "use a second account",
+            "none of the options", "poll every one minute", "second", "give me one of each", "give me a few examples",
+            "give me updates every minute",
+        ).forEach { assertTrue(VoiceAnswers.takesAsAnswer(color, it), it) }
+        // A question back, a hedge or not knowing is the voice's to talk through.
+        listOf(
+            "Which one is brighter", "what are the options", "is red darker", "hmm, wait", "sorry?", "", "  ", "um",
+            "Umm…", "Hmmm", "Mhm", "Okay", "Yeah", "Alright", "let's see", "one sec", "One second.", "just a minute",
+            "give me a second", "say the options again", "do I need to pick", "I'm not sure", "let me think", "I don't know",
+            "I do not know", "dunno", "idk", "I didn't catch that", "one more time", "maybe", "hmm, maybe", "hang on",
+            "when does it run", "two seconds", "give me two minutes", "sorry, I missed that", "come again", "Got it", "cool",
+            "give me five minutes", "give me 5 minutes", "give me a couple of seconds", "give me a moment",
+        ).forEach { assertFalse(VoiceAnswers.takesAsAnswer(color, it), it) }
+        // A question without choices takes a plain yes.
+        val push = InputRequest.Clarify("srq-4", listOf(ClarifyQuestion(null, "Push it?")))
+        assertTrue(VoiceAnswers.takesAsAnswer(push, "Yeah"))
+        assertFalse(VoiceAnswers.takesAsAnswer(push, "Got it"))
+        // Several questions are never asked aloud.
+        val two = color.copy(questions = color.questions + ClarifyQuestion(null, "Why?"))
+        assertFalse(VoiceAnswers.takesAsAnswer(two, "Green"))
+        // An approval only when it's clear.
+        assertTrue(VoiceAnswers.takesAsAnswer(onceOnly, "yes"))
+        assertTrue(VoiceAnswers.takesAsAnswer(onceOnly, "no, don't"))
+        assertTrue(VoiceAnswers.takesAsAnswer(onceOnly, "Okay"))
+        assertTrue(VoiceAnswers.takesAsAnswer(onceOnly, "um, yes"))
+        assertTrue(VoiceAnswers.takesAsAnswer(onceOnly, "sorry, yes"))
+        // Both steps judge it alike: what's taken is what's granted.
+        assertEquals(ApprovalChoice.Once, VoiceAnswers.approval(onceOnly, "Um, yes."))
+        assertEquals(ApprovalChoice.Once, VoiceAnswers.approval(onceOnly, "Okay"))
+        assertNull(VoiceAnswers.approval(onceOnly, "Okay, can you run it"))
+        // Not knowing isn't a no.
+        listOf("I don't know what that does", "no wait, let me think", "not sure")
+            .forEach { assertFalse(VoiceAnswers.takesAsAnswer(onceOnly, it), it) }
+        assertFalse(VoiceAnswers.takesAsAnswer(onceOnly, "okay, let me think"))
+        assertFalse(VoiceAnswers.takesAsAnswer(onceOnly, "what does it delete"))
+    }
 }

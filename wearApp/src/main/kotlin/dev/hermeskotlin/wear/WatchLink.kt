@@ -19,6 +19,9 @@ import dev.hermeskotlin.wearlink.RecordedAsk
 import dev.hermeskotlin.wearlink.ReplyPhase
 import dev.hermeskotlin.wearlink.ReplySpeech
 import dev.hermeskotlin.wearlink.ReplyUpdate
+import dev.hermeskotlin.wearlink.RingEnd
+import dev.hermeskotlin.wearlink.RingOn
+import dev.hermeskotlin.wearlink.WatchRing
 import dev.hermeskotlin.wearlink.WatchAsk
 import dev.hermeskotlin.wearlink.WatchChat
 import dev.hermeskotlin.wearlink.WatchStop
@@ -115,6 +118,7 @@ class WatchLink(
     private val store: WatchStore,
     private val speech: SpeechOut,
     private val scope: CoroutineScope,
+    private val rings: WatchRings,
 ) {
     private val messages = Wearable.getMessageClient(context)
     private val channels = Wearable.getChannelClient(context)
@@ -254,6 +258,29 @@ class WatchLink(
         }
     }
 
+    /**
+     * Picks up the ring for [requestId]: the phone stops ringing, and the watch talks in its chat from now on. The
+     * call itself is started by the screen that holds it ([startCall]). Null once it's no longer ringing.
+     */
+    fun answerRing(requestId: String): WatchRing? {
+        val ring = rings.stop(requestId) ?: return null
+        store.setChat(ring.chatId, ring.title)
+        scope.launch {
+            // Again if it didn't go: else the phone rings on through the call.
+            repeat(ANSWER_TRIES) {
+                if (send(WearPaths.RING_END, WearJson.encode(RingEnd(requestId, answered = true))) != null) return@launch
+                delay(ANSWER_AGAIN_MS)
+            }
+        }
+        return ring
+    }
+
+    /** Declines the ring for [requestId]: it stops here and on the phone, where the question waits as a notification. */
+    fun declineRing(requestId: String) {
+        rings.stop(requestId)
+        scope.launch { send(WearPaths.RING_END, WearJson.encode(RingEnd(requestId))) }
+    }
+
     /** Hangs up. */
     fun endCall() {
         val now = _call.value?.takeIf { it.active } ?: return
@@ -389,6 +416,14 @@ class WatchLink(
             WearPaths.CHATS -> WearJson.decode<ChatList>(data)?.let { _chats.value = it }
             WearPaths.CALL_UPDATE -> WearJson.decode<CallUpdate>(data)?.let { scope.launch(main) { onCallUpdate(it) } }
             WearPaths.CALL_SEND -> WearJson.decode<CallEvents>(data)?.let { scope.launch(main) { onCallSend(it) } }
+            // Not over a call already on: the question is asked there anyway, and it waits on the phone.
+            // On a call it doesn't ring over it: the phone, told nothing, rings on and shows its own call here.
+            WearPaths.RING -> WearJson.decode<WatchRing>(data)?.let {
+                if (_call.value?.active != true && rings.ring(it)) {
+                    scope.launch { send(WearPaths.RING_ON, WearJson.encode(RingOn(it.requestId))) }
+                }
+            }
+            WearPaths.RING_END -> WearJson.decode<RingEnd>(data)?.let { rings.stop(it.requestId) }
             WearPaths.STATUS -> WearJson.decode<PhoneStatus>(data)?.let {
                 _liveVoice.value = it.liveVoice
                 _phone.value = when {
@@ -492,6 +527,8 @@ class WatchLink(
         /** The phone gives up on a call after 30 s without a word from the watch. */
         private const val HEARTBEAT_MS = 10_000L
         private const val DROP_GRACE_MS = 2_000L
+        private const val ANSWER_TRIES = 3
+        private const val ANSWER_AGAIN_MS = 1_000L
     }
 }
 

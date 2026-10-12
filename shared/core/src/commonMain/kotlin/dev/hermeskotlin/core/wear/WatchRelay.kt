@@ -100,6 +100,9 @@ class WatchRelay(
     // watch's messages arrive on their own thread. Calls are counted: a new one starts before the last has ended.
     private val askingNow = AtomicBoolean(false)
     private val calls = AtomicInt(0)
+
+    /** A live call is on, from the watch or answered on the phone: nothing rings over it. */
+    val onCall: Boolean get() = calls.load() > 0
     private var asking: Boolean
         get() = askingNow.load()
         set(value) {
@@ -213,6 +216,23 @@ class WatchRelay(
         return on
     }
 
+    /**
+     * Whether the signed-in gateway was last found to talk live, without asking it: for deciding at once whether the
+     * watch rings. Not yet asked (just switched to), it doesn't, until [checkLiveVoice] finds out.
+     */
+    val talksLive: Boolean
+        get() = liveVoice?.let { it.second && it.first == gateways.list.value.current?.gatewayUrl } == true
+
+    /** Asks the gateway whether it talks live, unless that was asked lately, so [talksLive] is fresh for the next call. */
+    fun checkLiveVoice() {
+        scope.launch {
+            val saved = gateways.current()
+            // Another gateway's answer, or none signed in: it doesn't talk live until it says so.
+            if (liveVoice?.first != saved?.gatewayUrl) liveVoice = null
+            if (saved != null && auth.hasStoredSession(saved.gatewayUrl)) liveVoiceOn(saved.gatewayUrl) else liveVoice = null
+        }
+    }
+
     /** What a call just found out of [gateway]'s live voice, so the watch is told it next, not minutes on. */
     fun liveVoiceIs(gateway: GatewayUrl, on: Boolean) {
         liveVoice = gateway to on
@@ -236,6 +256,9 @@ class WatchRelay(
             return CallChat.Failed("Herald can't reach your gateway right now.")
         }
         val session = turnLock.withLock {
+            // Another call on, from the phone or the watch: one chat is held at a time, and taking it would cut that
+            // call off mid-word. (Each call is counted before it gets here, this one too.)
+            if (calls.load() > 1) return CallChat.Failed(ON_ANOTHER_CALL)
             // A call takes over from an ask still being answered: one voice at a time.
             turn?.cancelAndJoin()
             sessionFor(gateway, profile, chatId)
@@ -454,6 +477,7 @@ class WatchRelay(
 
     companion object {
         const val SIGNED_OUT = "Sign in to Herald on your phone first."
+        const val ON_ANOTHER_CALL = "You're already on a call with Hermes. Hang up there first."
         const val NOTHING_HEARD = "I didn't catch that."
         private const val CHAT_LIST_SIZE = 15
         private const val MAX_TITLE = 80

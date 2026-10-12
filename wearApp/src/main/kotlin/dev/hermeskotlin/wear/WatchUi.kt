@@ -350,6 +350,59 @@ private fun CallScreen(call: WatchCallState, mood: OrbMood, onMute: () -> Unit, 
     }
 }
 
+/**
+ * Hermes calling for an answer, as the watch's own incoming call: who's calling at the top, why under the orb, and
+ * decline and answer either side. It never shows the question itself: that's asked on the call.
+ */
+@Composable
+fun RingScreen(title: String, approval: Boolean, onDecline: () -> Unit, onAnswer: () -> Unit) {
+    MaterialTheme(colorScheme = HeraldColors) {
+        BoxWithConstraints(Modifier.fillMaxSize().background(Color.Black)) {
+            val w = maxWidth
+            val h = maxHeight
+            val side = w * 0.27f
+            Text(
+                title,
+                style = geist(15, FontWeight.SemiBold),
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                // Two lines end above the buttons beside the orb.
+                modifier = Modifier.align(Alignment.TopCenter).widthIn(max = w * 0.66f).offset(y = h * 0.11f),
+            )
+            HeraldOrb(mood = OrbMood.Speaking, level = 0f, modifier = Modifier.size(w * 0.24f).align(Alignment.Center).offset(y = -h * 0.02f))
+            CallButton(
+                icon = R.drawable.ic_call_end,
+                label = "Decline",
+                color = EndCall,
+                tint = OnEndCall,
+                enabled = true,
+                onClick = onDecline,
+                modifier = Modifier.size(side).align(Alignment.Center).offset(x = -w * 0.354f),
+            )
+            CallButton(
+                icon = R.drawable.ic_call,
+                label = "Answer",
+                color = Connected,
+                tint = Color.Black,
+                enabled = true,
+                onClick = onAnswer,
+                modifier = Modifier.size(side).align(Alignment.Center).offset(x = w * 0.354f),
+            )
+            Text(
+                ringReason(approval),
+                style = geist(14, FontWeight.Medium, color = Muted),
+                textAlign = TextAlign.Center,
+                maxLines = 2,
+                modifier = Modifier.align(Alignment.TopCenter).widthIn(max = w * 0.6f).offset(y = h * 0.66f),
+            )
+        }
+    }
+}
+
+/** Why Hermes calls, never what it asks. */
+internal fun ringReason(approval: Boolean): String = if (approval) "Needs your approval" else "Has a question for you"
+
 /** The time on the call, counting: only this redraws each second, and only while it shows. */
 @Composable
 private fun CallTimer(since: Long, modifier: Modifier) {

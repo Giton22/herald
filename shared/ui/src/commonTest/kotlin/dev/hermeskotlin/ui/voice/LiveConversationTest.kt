@@ -441,6 +441,69 @@ class LiveConversationTest {
         voice.stopChat()
     }
 
+    @Test
+    fun anAnswerTheVoiceNeverHandsOverIsTakenOnceThePersonStops() = runTest {
+        val (socket, session, call, voice) = callWithATurn()
+        socket.push("""{"jsonrpc":"2.0","id":"srq-3","method":"clarify","params":{"session_id":"rt9","questions":[{"qid":"q1","question":"Which color?","choices":["Red","Blue"]}]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("Which color?") == true } }
+
+        // The voice just talks on ("Green, nice!") instead of handing the answer over.
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Green.","start_ms":2000,"end_ms":2600}""")
+        val answer = socket.answers.first { it.isNotEmpty() }.single()
+        assertEquals("Green.", answer["result"]!!.jsonObject["answers"]!!.jsonObject["q1"]!!.jsonPrimitive.content)
+        assertEquals(1, socket.submits.value.size)
+        assertTrue(session.state.value.running)
+
+        // Handed over late after all: not a second answer, nor a request that stops the turn. Told so while Hermes
+        // still works on it, not once its turn is over.
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
+        val reply = call.sent.first { sent -> sent.any { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d2" } }
+            .first { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d2" }
+        assertTrue(reply.toString().contains("already has that answer"), reply.toString())
+        assertTrue(session.state.value.running)
+        delay(5_000)
+        assertEquals(1, socket.answers.value.size)
+        assertEquals(1, socket.submits.value.size)
+        voice.stopChat()
+    }
+
+    @Test
+    fun aQuestionBackIsLeftToTheVoice() = runTest {
+        val (socket, _, call, voice) = callWithATurn()
+        socket.push("""{"jsonrpc":"2.0","id":"srq-3","method":"clarify","params":{"session_id":"rt9","questions":[{"qid":"q1","question":"Which color?","choices":["Red","Blue"]}]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("Which color?") == true } }
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Which one is brighter","start_ms":2000,"end_ms":2600}""")
+        delay(10_000)
+        assertTrue(socket.answers.value.isEmpty())
+        assertEquals(1, socket.submits.value.size)
+        voice.stopChat()
+    }
+
+    @Test
+    fun anApprovalIsTakenWithoutAHandOverOnlyWhenItsClear() = runTest {
+        val (socket, _, call, voice) = callWithATurn()
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","choices":["once","deny"]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("rm -rf build") == true } }
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Okay, let me think","start_ms":2000,"end_ms":2600}""")
+        delay(5_000)
+        assertTrue(socket.answers.value.isEmpty())
+        call.receive("""{"type":"session.input_transcript.delta","delta":"No, don't.","start_ms":9000,"end_ms":9600}""")
+        val answer = socket.answers.first { it.isNotEmpty() }.single()
+        assertEquals("deny", answer["result"]!!.jsonObject["choice"]!!.jsonPrimitive.content)
+        voice.stopChat()
+    }
+
+    @Test
+    fun aYesAfterAnUmIsTakenAsTheYes() = runTest {
+        val (socket, _, call, voice) = callWithATurn()
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","choices":["once","deny"]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("rm -rf build") == true } }
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Um, yes.","start_ms":2000,"end_ms":2600}""")
+        val answer = socket.answers.first { it.isNotEmpty() }.single()
+        assertEquals("once", answer["result"]!!.jsonObject["choice"]!!.jsonPrimitive.content)
+        voice.stopChat()
+    }
+
     /** Hears each of [said] in turn, then nothing more. [onRecord] is told as each starts. */
     private class Saying(vararg said: String, val onRecord: () -> Unit = {}) : VoiceRecorder {
         val left = ArrayDeque(said.toList())

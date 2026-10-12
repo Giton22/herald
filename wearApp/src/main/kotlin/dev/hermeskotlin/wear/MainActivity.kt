@@ -5,6 +5,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
 import android.os.Bundle
 import android.speech.RecognizerIntent
 import android.view.WindowManager
@@ -78,8 +79,17 @@ class MainActivity : ComponentActivity() {
                 else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
             }
         }
-        if (savedInstanceState == null) handle(intent)
+        if (savedInstanceState == null) {
+            handle(intent)
+            // Hermes rings the watch when it needs an answer, which takes notifications. Asked once; a no stays a no.
+            if (Build.VERSION.SDK_INT >= 33 && !app.rings.canRing && !app.store.askedToRing) {
+                app.store.askedToRing = true
+                notificationsAllowed.launch(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
     }
+
+    private val notificationsAllowed = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -92,7 +102,19 @@ class MainActivity : ComponentActivity() {
         val typed = if (BuildConfig.DEBUG) intent.getStringExtra(EXTRA_DEBUG_ASK) else null
         when {
             !typed.isNullOrBlank() -> app.link.ask(typed)
+            intent.getStringExtra(EXTRA_CALL) == app.callToken -> call()
             intent.getBooleanExtra(EXTRA_LISTEN, false) -> talk()
+        }
+    }
+
+    /** A ring answered: a live call in its chat, whatever the talk setting, since that's how the question is asked. */
+    private fun call() {
+        app.link.dismissCall()
+        listening.value = Listening()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            app.link.startCall()
+        } else {
+            callMicrophone.launch(Manifest.permission.RECORD_AUDIO)
         }
     }
 
@@ -163,11 +185,16 @@ class MainActivity : ComponentActivity() {
 
     companion object {
         const val EXTRA_LISTEN = "listen"
+        private const val EXTRA_CALL = "call"
         private const val EXTRA_DEBUG_ASK = "ask"
         private const val PHONE_CHECK_MS = 30_000L
         private const val NEEDS_MICROPHONE = "Herald needs the microphone to hear you."
 
         /** For a PendingIntent, which starts it in its own task (it's singleTask) and to its onNewIntent when open. */
         fun listenIntent(context: Context): Intent = Intent(context, MainActivity::class.java).putExtra(EXTRA_LISTEN, true)
+
+        /** A ring answered: starts the call in the watch's chat, which [WatchLink.answerRing] just set. */
+        fun callIntent(context: Context): Intent = Intent(context, MainActivity::class.java)
+            .putExtra(EXTRA_CALL, HeraldWatch.of(context).callToken)
     }
 }

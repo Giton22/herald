@@ -41,6 +41,21 @@ object WearPaths {
     /** Watch → phone: a [CallEnd], hung up on the watch. */
     const val CALL_END = "/herald/call/end"
 
+    /** Phone → watch: a [WatchRing], Hermes calling for an answer. */
+    const val RING = "/herald/ring"
+
+    /**
+     * Phone → watch: a [RingEnd], the ring is over (answered or declined on the phone, rung out, or answered
+     * elsewhere). Watch → phone: a [RingEnd], picked up ([RingEnd.answered]) or declined on the watch.
+     */
+    const val RING_END = "/herald/ring/end"
+
+    /**
+     * Watch → phone: a [RingOn], the watch rings. Without it (no Herald there, notifications off, on a call) the
+     * phone's own call shows on the watch, as any notification does.
+     */
+    const val RING_ON = "/herald/ring/on"
+
     /** Every path above and below starts with this; the apps' listeners filter on it. */
     const val PREFIX = "/herald/"
 
@@ -269,6 +284,21 @@ data class CallUpdate(
     val model: String? = null,
     val contextPercent: Int? = null,
 )
+
+/**
+ * Hermes calling for an answer: approval or question [requestId] waits in chat [chatId] ([title]). Answering on the
+ * watch starts a live call there, which asks it aloud. It never carries the question itself, only that there is one.
+ */
+@Serializable
+data class WatchRing(val requestId: String, val chatId: String, val title: String, val approval: Boolean = false)
+
+/** The ring for [requestId] is over; from the watch, [answered]: picked up there, else declined. */
+@Serializable
+data class RingEnd(val requestId: String, val answered: Boolean = false)
+
+/** The watch rings for [requestId]. */
+@Serializable
+data class RingOn(val requestId: String)
 
 /** The event-channel message types the phone acts on; the watch keeps the rest (audio deltas and the like) to itself. */
 val CALL_EVENT_TYPES = setOf(

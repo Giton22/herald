@@ -13,6 +13,11 @@
     <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
 
+    <!-- Hermes rings the watch, like an incoming call, when it needs an approval or an answer. -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
+    <uses-permission android:name="android.permission.VIBRATE" />
+
     <!-- The watch's own speech recognizer, used first; apps are hidden from Herald unless it says which it looks up. -->
     <queries>
         <intent>
@@ -48,6 +53,18 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Hermes calling for an answer, over the watch face and the lock screen, in its own task. Not noHistory:
+             the unlock asked for on Answer covers it, and it must still be there when that's done. -->
+        <activity
+            android:name=".RingActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:taskAffinity="dev.herald.ring" />
+
+        <receiver
+            android:name=".RingDeclineReceiver"
+            android:exported="false" />
 
         <!-- Herald on the phone answers here: the turn's updates, the chats, its status, and the reply's voice. -->
         <service

@@ -48,6 +48,7 @@ import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Smartphone
 import com.composables.icons.lucide.Trash2
 import com.composables.icons.lucide.Volume2
+import com.composables.icons.lucide.Watch
 import com.composables.icons.lucide.Wifi
 import com.composables.icons.lucide.Wrench
 import com.composeunstyled.Text
@@ -125,6 +126,7 @@ fun PhoneToolsScreen(onBack: () -> Unit, viewModel: PhoneToolsViewModel = koinVi
         ringsMissing = access::ringsMissing,
         onAllowRings = access::requestRings,
         onRingsTalk = viewModel::setRingsTalk,
+        onWatchRings = viewModel::setWatchRings,
     )
 }
 
@@ -132,6 +134,11 @@ fun PhoneToolsScreen(onBack: () -> Unit, viewModel: PhoneToolsViewModel = koinVi
 internal const val RINGS_TALK_DETAIL =
     "Answering puts Hermes on the line: it asks in its own words, you answer by voice, and you can talk on. Off, " +
         "Answer opens the chat instead."
+
+/** Under the switch: where the watch rings, and when it can't. */
+internal const val WATCH_RINGS_DETAIL =
+    "Herald on your watch rings as well. Answer there, and Hermes asks on a call from the watch. Only when your " +
+        "gateway talks live."
 
 /** Under the switch: what rings, and that the agent never calls anyone. */
 internal const val RINGS_DETAIL =
@@ -162,6 +169,7 @@ internal fun PhoneToolsView(
     ringsMissing: () -> String? = { null },
     onAllowRings: () -> Unit = {},
     onRingsTalk: (Boolean) -> Unit = {},
+    onWatchRings: (Boolean) -> Unit = {},
     nowMillis: Long = Clock.System.now().toEpochMilliseconds(),
 ) {
     var removing by remember { mutableStateOf<KnownPhone?>(null) }
@@ -268,6 +276,14 @@ internal fun PhoneToolsView(
                                 checked = settings.phoneRingsTalk,
                                 onCheckedChange = onRingsTalk,
                                 icon = Lucide.AudioLines,
+                            )
+                            Divider()
+                            SwitchRow(
+                                title = "Ring my watch too",
+                                detail = WATCH_RINGS_DETAIL,
+                                checked = settings.watchRings,
+                                onCheckedChange = onWatchRings,
+                                icon = Lucide.Watch,
                             )
                         }
                     }

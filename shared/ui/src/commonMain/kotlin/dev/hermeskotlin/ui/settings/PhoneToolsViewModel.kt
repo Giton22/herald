@@ -50,6 +50,8 @@ class PhoneToolsViewModel(
 
     fun setRingsTalk(on: Boolean) = store.update { it.copy(phoneRingsTalk = on) }
 
+    fun setWatchRings(on: Boolean) = store.update { it.copy(watchRings = on) }
+
     fun setUp() = bridge.setUp()
 
     /** The user asked for the newer plugin the page offers. */

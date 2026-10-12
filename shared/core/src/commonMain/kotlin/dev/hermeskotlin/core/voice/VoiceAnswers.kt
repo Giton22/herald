@@ -41,7 +41,8 @@ object VoiceAnswers {
      * grant word in passing ("okay, let me think", "show it in the chat") is asked again.
      */
     fun approval(request: InputRequest.Approval, transcript: String): ApprovalChoice? {
-        val words = words(transcript)
+        // "Um, yes" is yes; a lone "okay" is one too.
+        val words = words(transcript).let { all -> all.dropWhile(::filler).ifEmpty { all } }
         if (words.isEmpty()) return null
         val choice = when {
             words.any { it in DENY || it.endsWith("n't") } -> ApprovalChoice.Deny
@@ -57,6 +58,41 @@ object VoiceAnswers {
         }
         // A reach the gateway doesn't offer for this command is asked again rather than narrowed silently.
         return choice.takeIf { it in request.choices }
+    }
+
+    /**
+     * Whether [transcript], said once [request] was asked, is its answer as it stands, to take without the voice
+     * handing it over: a clear approval, or anything said to a question but a question back or a hedge ("which one is
+     * faster", "hmm, wait", "I'm not sure"). The rest is left to the voice, which talks it through and hands the
+     * answer over.
+     */
+    fun takesAsAnswer(request: InputRequest, transcript: String): Boolean {
+        // "Um, blue" is blue.
+        val words = words(transcript).dropWhile(::filler)
+        if ('?' in transcript) return false
+        // A lone "okay" grants an approval, and is no answer to a question.
+        if (words.isEmpty()) return request is InputRequest.Approval && approval(request, transcript) != null
+        val said = " ${words.joinToString(" ")} "
+        // "How about blue" offers an answer; "do I need to pick" asks.
+        val asksBack = (words.first() in ASKS_BACK && !said.startsWith(" how about ")) ||
+            (words.first() == "do" && words.getOrNull(1) in PEOPLE) ||
+            // "when the tests pass" answers; "when does it run" asks.
+            (words.first() == "when" && words.getOrNull(1) in AUXILIARIES)
+        val holdsOff = words.first() in QUESTION_STARTS || asksBack || words.none { it !in UNSURE } ||
+            words.none { it !in NOTED } || words.any { it in HOLD_ON } || HOLD_PHRASES.any { " $it " in said } ||
+            // "One minute" is putting it off, unless it's in an answer ("every one minute").
+            said.trim() in HOLD_ALONE || asksForTime(words)
+        if (holdsOff) return false
+        return when (request) {
+            // "I don't know what that does" isn't a no; "um, yes" is a yes.
+            is InputRequest.Approval -> approval(request, transcript) != null
+            is InputRequest.Clarify -> {
+                val question = request.questions.singleOrNull() ?: return false
+                // A bare "okay" while they think names none of the choices.
+                !(question.choices.isNotEmpty() && words.all { it in ACKS } && clarify(question, transcript) == listOf(transcript.trim()))
+            }
+            else -> false
+        }
     }
 
     /**
@@ -97,6 +133,14 @@ object VoiceAnswers {
 
     private fun String.containsPhrase(phrase: String): Boolean = " $this ".contains(" $phrase ")
 
+    /** "Give me five minutes", "give me a couple of seconds": a wait, however long; "updates every minute" isn't one. */
+    private fun asksForTime(words: List<String>) = words.windowed(2).withIndex().any { (i, pair) ->
+        val after = words.drop(i + 2).take(4)
+        pair == listOf("give", "me") && after.any { it in TIME_WORDS } && after.none { it in EVERY }
+    }
+
+    private fun filler(word: String) = word in FILLERS || FILLER_SOUND.matches(word)
+
     private fun number(word: String): Int? = word.toIntOrNull() ?: NUMBERS[word]
 
     private val WHITESPACE = Regex("\\s+")
@@ -110,7 +154,43 @@ object VoiceAnswers {
     /** Doubt or a question: asked again rather than taken as an answer. */
     private val HEDGES = setOf("but", "if", "what", "why", "how", "which", "when", "where", "who", "wait", "maybe", "unless", "first", "hold")
     private val QUESTION_STARTS = setOf("is", "can", "could", "would", "will", "should", "does", "are", "did", "shall", "may")
-    private val ALWAYS_WORDS =setOf("always", "permanently", "forever")
+
+    /** First words that ask back rather than answer (speech to text drops the "?": "which one is faster"). */
+    private val ASKS_BACK = setOf("what", "why", "how", "which", "where", "who", "pardon", "repeat", "huh", "explain", "say")
+    private val PEOPLE = setOf("i", "you", "we", "they")
+    private val AUXILIARIES = setOf("is", "are", "does", "do", "did", "will", "would", "should", "can", "could")
+    /** All "got it" or "cool" is made of: heard, not answered. */
+    private val NOTED = setOf("got", "it", "cool")
+
+    /** Words before the answer, not part of it: "sorry, the blue one". Said alone, there's no answer. */
+    private val FILLERS = setOf("so", "well", "sorry", "okay", "ok", "alright")
+    /** Sounds, however long they're drawn out: "umm", "hmmm", "mhm". */
+    private val FILLER_SOUND = Regex("u+h*m*|u+m+|h*m+|m+h+m+|e+r+m*|e+h+|a+h+|o+h+")
+
+    /** All a lone acknowledgement is made of. */
+    private val ACKS = setOf("yeah", "yes", "right", "sure", "got", "it", "fine", "cool")
+    /** All a guess with nothing in it is made of: "maybe", "I guess probably". */
+    private val UNSURE = setOf("maybe", "probably", "perhaps", "i", "guess", "think", "possibly")
+
+    /** Words that put the answer off. */
+    private val HOLD_ON = setOf("wait", "hold", "moment", "sec", "secs", "hang", "dunno", "idk", "unsure")
+
+    /** Ways of putting it off, of not knowing or of not having heard, that aren't an answer. */
+    private val HOLD_PHRASES = listOf(
+        "just a second", "just a minute", "just one second", "just one minute", "give me a second", "give me a minute",
+        "missed that", "come again",
+        "let me think", "let me see", "let me check", "let me look", "let's see", "lets see",
+        "not sure", "don't know", "dont know", "do not know", "don't remember", "no idea", "no clue", "not certain",
+        "didn't catch", "didn't hear", "one more time", "say again", "again please", "tell me", "remind me",
+        "options again", "read the options", "list the options",
+    )
+    private val EVERY = setOf("every", "each", "per")
+    private val TIME_WORDS = setOf("second", "seconds", "sec", "secs", "minute", "minutes", "min", "mins", "moment")
+    /** Said on its own, a wait. */
+    private val HOLD_ALONE = setOf(
+        "one second", "one minute", "two seconds", "two minutes", "a few seconds", "a few minutes", "a second", "a minute",
+    )
+    private val ALWAYS_WORDS = setOf("always", "permanently", "forever")
     private val SESSION_WORDS = setOf("chat", "session")
     /** Words that grant it, once unless they say how far. */
     private val ONCE = setOf(

@@ -112,6 +112,11 @@ data class AppSettings(
     val phoneRings: Boolean = false,
     /** Answering such a call puts Hermes on the line to ask it aloud, with no chat on screen; off, Answer opens the chat. */
     val phoneRingsTalk: Boolean = true,
+    /**
+     * Such a call rings Herald on the watch too, where answering puts Hermes on the line in a live call. Only when the
+     * gateway talks live, since the watch has no chat to open instead.
+     */
+    val watchRings: Boolean = true,
     /** Ask GitHub, where the app is published, whether a newer release is out. */
     val checkForUpdates: Boolean = true,
     /** Ask for a fingerprint, face or the screen lock when Herald opens, and keep it out of Recents. */

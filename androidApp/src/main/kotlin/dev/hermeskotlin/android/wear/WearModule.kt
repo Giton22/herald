@@ -14,6 +14,7 @@ val wearModule = module {
     single { WatchRelay(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { WatchCalls(get(), get(), get(), get()) }
     single { WearRequests(get(), get()) }
+    single { WatchRinger(androidContext(), get(), get(), get(), get(), get()) }
     // A call for an answer picked up on the phone holds its chat as a call from the watch does.
     viewModelOf(::PhoneCallModel)
 }

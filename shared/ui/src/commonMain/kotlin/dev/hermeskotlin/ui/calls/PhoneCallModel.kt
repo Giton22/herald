@@ -31,6 +31,8 @@ data class PhoneCallState(
     /** The call is over: hung up, "stop" said, or it couldn't go on ([error] says why). */
     val ended: Boolean = false,
     val error: String? = null,
+    /** Over before it went on the line (another call on, the gateway out of reach): its question wasn't asked. */
+    val notAsked: PickedUpCall? = null,
 )
 
 /** A call being picked up: the chat that rang, and the request it rang for. */
@@ -81,7 +83,10 @@ class PhoneCallModel(
         relay.callChat(call.storedSessionId)
         viewModelScope.launch {
             val chat = when (val found = relay.chatForCall(call.storedSessionId)) {
-                is CallChat.Failed -> return@launch end(found.message)
+                is CallChat.Failed -> {
+                    _state.update { it?.copy(notAsked = call) }
+                    return@launch end(found.message)
+                }
                 is CallChat.Ready -> found
             }
             if (_state.value?.ended == true) return@launch
