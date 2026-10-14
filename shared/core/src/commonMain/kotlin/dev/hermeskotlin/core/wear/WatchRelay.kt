@@ -2,6 +2,8 @@ package dev.hermeskotlin.core.wear
 
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.bots.BotsApi
+import dev.hermeskotlin.core.bots.BotChats
+import dev.hermeskotlin.core.bots.forRoster
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatSession
@@ -27,6 +29,7 @@ import dev.hermeskotlin.wearlink.ReplySpeech
 import dev.hermeskotlin.wearlink.ReplyUpdate
 import dev.hermeskotlin.wearlink.WatchAsk
 import dev.hermeskotlin.wearlink.WatchChat
+import dev.hermeskotlin.wearlink.WatchBot
 import dev.hermeskotlin.wearlink.WearJson
 import dev.hermeskotlin.wearlink.WearPaths
 import dev.hermeskotlin.wearlink.clipForWatch
@@ -88,6 +91,8 @@ class WatchRelay(
     private val host: ChatHost,
     appScope: CoroutineScope,
     private val outbox: WatchOutbox,
+    private val bots: BotsApi,
+    private val botChats: BotChats,
 ) {
     private val scope = CoroutineScope(appScope.coroutineContext + SupervisorJob(appScope.coroutineContext[Job]))
 
@@ -100,6 +105,7 @@ class WatchRelay(
     // watch's messages arrive on their own thread. Calls are counted: a new one starts before the last has ended.
     private val askingNow = AtomicBoolean(false)
     private val calls = AtomicInt(0)
+    private val lists = AtomicInt(0)
     private var asking: Boolean
         get() = askingNow.load()
         set(value) {
@@ -107,16 +113,16 @@ class WatchRelay(
             refreshBusy()
         }
 
-    /** Busy from both, checked again after writing: a write from another thread in between is then caught. */
+    /** Busy while asking, calling or listing; re-check writes made on another thread. */
     private fun refreshBusy() {
         while (true) {
-            val wanted = askingNow.load() || calls.load() > 0
+            val wanted = askingNow.load() || calls.load() > 0 || lists.load() > 0
             _busy.value = wanted
-            if (wanted == (askingNow.load() || calls.load() > 0)) return
+            if (wanted == (askingNow.load() || calls.load() > 0 || lists.load() > 0)) return
         }
     }
 
-    private var liveVoice: Pair<GatewayUrl, Boolean>? = null
+    private var liveVoice: Triple<GatewayUrl, String?, Boolean>? = null
     private var liveVoiceAt = 0L
 
     private val _session = MutableStateFlow<ChatSession?>(null)
@@ -186,60 +192,64 @@ class WatchRelay(
         }
     }
 
-    fun status(node: String) {
+    fun status(node: String, botProfile: String? = null) {
         scope.launch {
-            val (status, gateway) = currentStatus()
+            val (status, gateway) = currentStatus(botProfile)
             // Due or not is decided with what's sent: decided after, another ask's check could land during the
             // send and leave this stale answer last on the watch.
-            val due = gateway != null && !liveVoiceFresh(gateway)
+            val profile = gateway?.let { botProfile ?: profiles.get(it) }
+            val due = gateway != null && !liveVoiceFresh(gateway, profile)
             // Told at once with what's known: a gateway that's slow or out of reach (off the tailnet) would hold
             // the answer up to the request's timeout. A fresh check, when due, follows if it changed anything.
             outbox.sendSafely(node, WearPaths.STATUS, WearJson.encode(status))
             if (due && gateway != null) {
                 val known = status.liveVoice
-                val on = checkLiveVoice(gateway, known)
+                val on = checkLiveVoice(gateway, profile, known)
                 // Told as the phone stands now, not as before the check: signed out or switched meanwhile, this
                 // gateway's answer is no longer the watch's, and its next ask tells it how things stand.
-                val (now, nowGateway) = currentStatus()
-                if (on != known && nowGateway == gateway && now.liveVoice == on) {
-                    outbox.sendSafely(node, WearPaths.STATUS, WearJson.encode(now))
+                val (now, nowGateway) = currentStatus(botProfile)
+                val nowProfile = botProfile ?: profiles.get(gateway)
+                if (on != known && nowGateway == gateway && nowProfile == profile && (now.liveVoice == null || now.liveVoice == on)) {
+                    outbox.sendSafely(node, WearPaths.STATUS, WearJson.encode(now.copy(liveVoice = on)))
                 }
             }
         }
     }
 
     /** How the phone stands, and the gateway it's signed in to; its live voice null when not asked yet. */
-    private suspend fun currentStatus(): Pair<PhoneStatus, GatewayUrl?> {
+    private suspend fun currentStatus(botProfile: String?): Pair<PhoneStatus, GatewayUrl?> {
         val saved = gateways.current()
         val state = connection.state.value
         val signedIn = saved != null && auth.hasStoredSession(saved.gatewayUrl) && state !is ConnectionState.SessionExpired
         // Idle counts: Herald connects when asked, it just holds no connection while in the background.
         val reachable = state is ConnectionState.Connected || state is ConnectionState.Idle
         val gateway = saved?.gatewayUrl?.takeIf { signedIn }
-        val live = if (gateway == null) false else liveVoice?.takeIf { it.first == gateway }?.second
-        return PhoneStatus(signedIn, signedIn && reachable, failed = signedIn && state is ConnectionState.Failed, liveVoice = live) to gateway
+        val profile = gateway?.let { botProfile ?: profiles.get(it) }
+        val live = if (gateway == null) false else liveVoice?.takeIf { it.first == gateway && it.second == profile }?.third
+        return PhoneStatus(signedIn, signedIn && reachable, failed = signedIn && state is ConnectionState.Failed,
+            liveVoice = live, botChats = true, botProfile = botProfile) to gateway
     }
 
     /** Whether [gateway]'s live voice was asked lately: the watch asks how the phone stands often, the gateway every few minutes. */
-    private fun liveVoiceFresh(gateway: GatewayUrl): Boolean =
-        liveVoice?.first == gateway && Clock.System.now().toEpochMilliseconds() - liveVoiceAt < LIVE_VOICE_CHECK_MS
+    private fun liveVoiceFresh(gateway: GatewayUrl, profile: String?): Boolean =
+        liveVoice?.first == gateway && liveVoice?.second == profile && Clock.System.now().toEpochMilliseconds() - liveVoiceAt < LIVE_VOICE_CHECK_MS
 
     /** Whether the gateway talks live (GPT-Live); [known] is what it said last. */
-    private suspend fun checkLiveVoice(gateway: GatewayUrl, known: Boolean?): Boolean {
-        val result = audio.voiceLiveStatus(gateway, profiles.get(gateway))
+    private suspend fun checkLiveVoice(gateway: GatewayUrl, profile: String?, known: Boolean?): Boolean {
+        val result = audio.voiceLiveStatus(gateway, profile)
         // A failed check keeps what was known: an older gateway answers 404, a dropped one nothing.
         val on = when (result) {
             is ApiResult.Success -> result.value.live
             else -> known ?: false
         }
         // Not over the gateway switched to meanwhile: the one slot is for the current one.
-        if (gateways.current()?.gatewayUrl == gateway) liveVoiceIs(gateway, on)
+        if (gateways.current()?.gatewayUrl == gateway) liveVoiceIs(gateway, on, profile)
         return on
     }
 
     /** What a call just found out of [gateway]'s live voice, so the watch is told it next, not minutes on. */
-    fun liveVoiceIs(gateway: GatewayUrl, on: Boolean) {
-        liveVoice = gateway to on
+    fun liveVoiceIs(gateway: GatewayUrl, on: Boolean, profile: String?) {
+        liveVoice = Triple(gateway, profile, on)
         liveVoiceAt = Clock.System.now().toEpochMilliseconds()
     }
 
@@ -247,22 +257,27 @@ class WatchRelay(
      * The watch's chat [chatId] (null: a new one) for a live call from the watch, once the gateway is connected and
      * its history loaded (the call opens with it); else what went wrong, for the watch to say.
      */
-    suspend fun chatForCall(chatId: String?): CallChat {
+    suspend fun chatForCall(chatId: String?, botProfile: String? = null): CallChat {
         val saved = gateways.current()
         if (saved == null || !auth.hasStoredSession(saved.gatewayUrl) || connection.state.value is ConnectionState.SessionExpired) {
             return CallChat.Failed(SIGNED_OUT)
         }
         val gateway = saved.gatewayUrl
-        val profile = profiles.get(gateway)
+        val profile = botProfile ?: profiles.get(gateway)
         connection.start(gateway)
         if (withTimeoutOrNull(CONNECT_MS) { connection.state.first { it is ConnectionState.Connected } } == null) {
             connection.retry()
             return CallChat.Failed("Herald can't reach your gateway right now.")
         }
         val session = turnLock.withLock {
+            val storedId = try { if (botProfile == null) chatId else openBot(botProfile) } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                return CallChat.Failed(e.message ?: "Couldn't open the bot's conversation.")
+            }
             // A call takes over from an ask still being answered: one voice at a time.
             turn?.cancelAndJoin()
-            sessionFor(gateway, profile, chatId)
+            sessionFor(gateway, profile, storedId)
         }
         withTimeoutOrNull(CONNECT_MS) { session.state.first { it.historyLoaded } }
         return CallChat.Ready(session, gateway, profile)
@@ -286,23 +301,51 @@ class WatchRelay(
         if (left == 0) scope.launch { turnLock.withLock { releaseHeldChatLater() } }
     }
 
-    /** The recent chats for the watch [node] to pick from, bot chats left out (they talk on their own). */
+    /** Separate recent chats and bots for the watch [node]; listing holds the connection until the reply goes. */
     fun chats(node: String) {
+        lists.incrementAndFetch()
+        refreshBusy()
         scope.launch {
-            val list = run {
-                val saved = gateways.current() ?: return@run ChatList(error = SIGNED_OUT)
-                if (!auth.hasStoredSession(saved.gatewayUrl)) return@run ChatList(error = SIGNED_OUT)
-                when (val result = sessions.list(saved.gatewayUrl, limit = CHAT_LIST_SIZE, profile = profiles.get(saved.gatewayUrl))) {
-                    is ApiResult.Success -> ChatList(
-                        result.value.sessions
-                            .filter { !it.archived && it.title != BotsApi.BOT_CHAT_TITLE }
-                            .map { WatchChat(it.id, it.displayTitle.take(MAX_TITLE), it.activityAt) },
-                    )
-                    else -> ChatList(error = result.errorMessage ?: "Couldn't read your chats.")
-                }
+            try {
+                outbox.sendSafely(node, WearPaths.CHATS, WearJson.encode(readChats()))
+            } finally {
+                lists.updateAndFetch { (it - 1).coerceAtLeast(0) }
+                refreshBusy()
             }
-            outbox.sendSafely(node, WearPaths.CHATS, WearJson.encode(list))
         }
+    }
+
+    private suspend fun readChats(): ChatList {
+        val saved = gateways.current() ?: return ChatList(error = SIGNED_OUT, botError = SIGNED_OUT)
+        if (!auth.hasStoredSession(saved.gatewayUrl)) return ChatList(error = SIGNED_OUT, botError = SIGNED_OUT)
+        val result = sessions.list(saved.gatewayUrl, limit = CHAT_LIST_SIZE, profile = profiles.get(saved.gatewayUrl))
+        val chats = if (result is ApiResult.Success) result.value.sessions
+            .filter { !it.archived && it.title != BotsApi.BOT_CHAT_TITLE }
+            .map { WatchChat(it.id, it.displayTitle.take(MAX_TITLE), it.activityAt) } else emptyList()
+        var botError: String? = null
+        val rows = try {
+            connection.start(saved.gatewayUrl)
+            if (withTimeoutOrNull(CONNECT_MS) { connection.state.first { it is ConnectionState.Connected } } == null) {
+                connection.retry()
+                error("Herald can't reach your gateway right now.")
+            }
+            val roster = bots.roster().bots
+            botChats.note(roster)
+            roster.filter { !it.meta.hidden }.forRoster().map { WatchBot(it.name, it.label.take(MAX_TITLE), it.canonicalSession?.activityAt) }
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            botError = e.message ?: "Couldn't read your bots."
+            emptyList()
+        }
+        return ChatList(chats, if (result is ApiResult.Success) null else result.errorMessage ?: "Couldn't read your chats.", rows, botError)
+    }
+
+    private suspend fun openBot(profile: String): String {
+        val roster = bots.roster().bots
+        botChats.note(roster)
+        val bot = roster.firstOrNull { it.name == profile } ?: error("This bot is no longer available. Choose another conversation.")
+        return botChats.open(bot)
     }
 
     fun close() {
@@ -325,8 +368,21 @@ class WatchRelay(
             return fail(SIGNED_OUT)
         }
         val gateway = saved.gatewayUrl
-        val profile = profiles.get(gateway)
+        val botProfile = ask.botProfile
+        val profile = botProfile ?: profiles.get(gateway)
         connection.start(gateway)
+
+        val storedId = if (botProfile == null) ask.chatId else try {
+            if (withTimeoutOrNull(CONNECT_MS) { connection.state.first { it is ConnectionState.Connected } } == null) {
+                connection.retry()
+                return fail("Herald can't reach your gateway right now.")
+            }
+            openBot(botProfile)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return fail(e.message ?: "Couldn't open the bot's conversation.")
+        }
 
         var text = ask.text.trim()
         if (recording != null) {
@@ -346,10 +402,10 @@ class WatchRelay(
             connection.retry()
             return fail("Herald can't reach your gateway right now.")
         }
-        val session = sessionFor(gateway, profile, ask.chatId)
+        val session = sessionFor(gateway, profile, storedId)
         // A chat picked on the watch loads its history first; sent before it, the reply would be found among the old.
         withTimeoutOrNull(CONNECT_MS) { session.state.first { it.historyLoaded } }
-        ask.chatId?.let(::holdChat)
+        storedId?.let(::holdChat)
         if (!session.send(text)) return fail(session.state.value.error ?: "Couldn't send that.")
         session.state.value.storedSessionId?.let(::holdChat)
 

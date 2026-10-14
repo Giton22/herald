@@ -10,7 +10,7 @@ import kotlinx.coroutines.flow.asStateFlow
  * The chat the watch talks in (null id: the next ask starts one), with its [model] and how full its context is
  * ([contextPercent]) as the last turn there told.
  */
-data class WatchChatChoice(val id: String?, val title: String?, val model: String? = null, val contextPercent: Int? = null)
+data class WatchChatChoice(val id: String?, val title: String?, val model: String? = null, val contextPercent: Int? = null, val botProfile: String? = null)
 
 /** What the watch remembers between launches: its chat, whether replies are read aloud, and the last reply (for the tile). */
 class WatchStore(context: Context) {
@@ -23,6 +23,7 @@ class WatchStore(context: Context) {
             prefs.getString(CHAT_TITLE, null),
             prefs.getString(MODEL, null),
             prefs.getInt(CONTEXT, -1).takeIf { it >= 0 },
+            prefs.getString(BOT_PROFILE, null),
         ),
     )
     val chat: StateFlow<WatchChatChoice> = _chat.asStateFlow()
@@ -31,17 +32,18 @@ class WatchStore(context: Context) {
     val speak: StateFlow<Boolean> = _speak.asStateFlow()
 
     /** Picked here: another chat forgets the last one's model and context. */
-    fun setChat(id: String?, title: String?) = save(id, title, keepStats = id == _chat.value.id)
+    fun setChat(id: String?, title: String?, botProfile: String? = null) =
+        save(id, title, keepStats = id == _chat.value.id && botProfile == _chat.value.botProfile, botProfile = botProfile)
 
     /** Named in a reply: a new chat getting its id keeps what its turn told. */
     fun adoptChat(id: String, title: String?) {
         val now = _chat.value
-        save(id, title, keepStats = id == now.id || now.id == null)
+        save(id, if (now.botProfile != null) now.title else title, keepStats = id == now.id || now.id == null, botProfile = now.botProfile)
     }
 
-    private fun save(id: String?, title: String?, keepStats: Boolean) {
+    private fun save(id: String?, title: String?, keepStats: Boolean, botProfile: String?) {
         val now = _chat.value
-        save(WatchChatChoice(id, title?.takeIf { it.isNotBlank() }, now.model.takeIf { keepStats }, now.contextPercent.takeIf { keepStats }))
+        save(WatchChatChoice(id, title?.takeIf { it.isNotBlank() }, now.model.takeIf { keepStats }, now.contextPercent.takeIf { keepStats }, botProfile))
     }
 
     fun setStats(model: String?, contextPercent: Int?) {
@@ -57,6 +59,7 @@ class WatchStore(context: Context) {
             putString(CHAT_TITLE, choice.title)
             putString(MODEL, choice.model)
             putInt(CONTEXT, choice.contextPercent ?: -1)
+            putString(BOT_PROFILE, choice.botProfile)
         }
     }
 
@@ -81,6 +84,7 @@ class WatchStore(context: Context) {
 
     private companion object {
         const val CHAT_ID = "chat_id"
+        const val BOT_PROFILE = "bot_profile"
         const val CHAT_TITLE = "chat_title"
         const val MODEL = "chat_model"
         const val CONTEXT = "chat_context"

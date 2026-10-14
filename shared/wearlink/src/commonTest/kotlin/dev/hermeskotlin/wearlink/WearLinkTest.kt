@@ -13,6 +13,28 @@ import kotlin.test.assertTrue
 class WearLinkTest {
 
     @Test
+    fun botIdentitySurvivesBothAskAndCallMessagesWithoutChangingLegacyRequests() {
+        val ask = WearJson.decode<WatchAsk>("""{"id":"a","text":"hi","botProfile":"assistant"}""".encodeToByteArray())!!
+        val call = WearJson.decode<CallStart>("""{"id":"c","chatId":null,"offerSdp":"offer","botProfile":"assistant"}""".encodeToByteArray())!!
+        val askJson = WearJson.decode<kotlinx.serialization.json.JsonObject>(WearJson.encode(ask))!!
+        val callJson = WearJson.decode<kotlinx.serialization.json.JsonObject>(WearJson.encode(call))!!
+        assertEquals("\"assistant\"", askJson["botProfile"].toString())
+        assertEquals("\"assistant\"", callJson["botProfile"].toString())
+        assertEquals(WatchAsk("old", "hi"), WearJson.decode<WatchAsk>("""{"id":"old","text":"hi"}""".encodeToByteArray()))
+    }
+
+    @Test
+    fun botRecordingsUseADistinctPathThatLegacyPhonesCannotMistakeForRegularSpeech() {
+        val bot = WearPaths.recordingPath("ask/1", bot = true)
+        assertTrue(WearPaths.isRecording(bot))
+        assertTrue(WearPaths.isBotRecording(bot))
+        assertFalse(bot.startsWith("/herald/recording/"))
+        assertFalse(WearPaths.isBotRecording(WearPaths.recordingPath("ask/1")))
+        val ask = WatchAsk("a", botProfile = "assistant")
+        assertEquals(ask, RecordedAsk.read(RecordedAsk.write(ask, byteArrayOf(1, 2, 3)))?.first)
+    }
+
+    @Test
     fun aRecordingCarriesItsAskAndItsAudioInOnePiece() {
         val path = WearPaths.recordingPath("ask/1")
         assertTrue(path.startsWith(WearPaths.PREFIX))

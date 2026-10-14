@@ -11,6 +11,7 @@ import dev.hermeskotlin.wearlink.CallEnd
 import dev.hermeskotlin.wearlink.CallEvents
 import dev.hermeskotlin.wearlink.CallStart
 import dev.hermeskotlin.wearlink.RecordedAsk
+import dev.hermeskotlin.wearlink.PhoneStatusRequest
 import dev.hermeskotlin.wearlink.WatchAsk
 import dev.hermeskotlin.wearlink.WatchStop
 import dev.hermeskotlin.wearlink.WearJson
@@ -39,19 +40,21 @@ class WearBridgeService : WearableListenerService() {
     override fun onMessageReceived(event: MessageEvent) {
         val node = event.sourceNodeId
         when (event.path) {
-            WearPaths.ASK -> WearJson.decode<WatchAsk>(event.data)?.let {
+            WearPaths.ASK, WearPaths.BOT_ASK -> WearJson.decode<WatchAsk>(event.data)?.let {
+                if (event.path == WearPaths.BOT_ASK && it.botProfile.isNullOrBlank()) return
                 relay.ask(node, it)
                 keepUp()
             }
             WearPaths.STOP -> WearJson.decode<WatchStop>(event.data)?.let { relay.stop(it.askId) }
-            WearPaths.CALL_START -> WearJson.decode<CallStart>(event.data)?.let {
+            WearPaths.CALL_START, WearPaths.BOT_CALL_START -> WearJson.decode<CallStart>(event.data)?.let {
+                if (event.path == WearPaths.BOT_CALL_START && it.botProfile.isNullOrBlank()) return
                 calls.start(node, it)
                 keepUp()
             }
             WearPaths.CALL_EVENTS -> WearJson.decode<CallEvents>(event.data)?.let { calls.events(node, it) }
             WearPaths.CALL_END -> WearJson.decode<CallEnd>(event.data)?.let(calls::end)
-            WearPaths.CHATS -> relay.chats(node)
-            WearPaths.STATUS -> relay.status(node)
+            WearPaths.CHATS -> { relay.chats(node); keepUp() }
+            WearPaths.STATUS -> relay.status(node, WearJson.decode<PhoneStatusRequest>(event.data)?.botProfile)
         }
     }
 
@@ -93,7 +96,7 @@ class WearBridgeService : WearableListenerService() {
                 runCatching { channels.close(channel) }
             }
             val recorded = bytes?.let(RecordedAsk::read)
-            if (recorded == null) {
+            if (recorded == null || WearPaths.isBotRecording(channel.path) && recorded.first.botProfile.isNullOrBlank()) {
                 // Unreadable: no longer busy, so the service started for it stops.
                 relay.expectedNothing()
                 return@launch

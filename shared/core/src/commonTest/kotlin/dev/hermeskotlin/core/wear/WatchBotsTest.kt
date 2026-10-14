@@ -1,0 +1,174 @@
+package dev.hermeskotlin.core.wear
+
+import dev.hermeskotlin.core.auth.AuthApi
+import dev.hermeskotlin.core.auth.NativeSession
+import dev.hermeskotlin.core.auth.NativeTokens
+import dev.hermeskotlin.core.auth.PersistentCookiesStorage
+import dev.hermeskotlin.core.chat.ChatHost
+import dev.hermeskotlin.core.bots.BotsApi
+import dev.hermeskotlin.core.bots.BotChats
+import dev.hermeskotlin.core.gateway.GatewayRepository
+import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.profiles.ProfileStore
+import dev.hermeskotlin.core.rpc.FakeGateway
+import dev.hermeskotlin.core.rpc.json
+import dev.hermeskotlin.core.rpc.param
+import dev.hermeskotlin.core.sessions.SessionsApi
+import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
+import dev.hermeskotlin.core.storage.KeyValueStore
+import dev.hermeskotlin.core.voice.AudioApi
+import dev.hermeskotlin.wearlink.WatchAsk
+import dev.hermeskotlin.wearlink.WearJson
+import dev.hermeskotlin.wearlink.WearPaths
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withTimeout
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.jsonPrimitive
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertTrue
+import kotlin.test.assertIs
+
+class WatchBotsTest {
+    private val roster = """{"profiles":[{"name":"assistant","display_name":"Assistant","canonical_session":{"id":"root","resolved_id":"tip"}},{"name":"hidden","ui_meta":{"hermes-bots":{"hidden":true}}}]}"""
+    private class Outbox : WatchOutbox {
+        val messages = mutableListOf<Pair<String, JsonObject>>()
+        override suspend fun send(node: String, path: String, data: ByteArray): Boolean {
+            messages += path to WearJson.decode<JsonObject>(data)!!
+            return true
+        }
+        override suspend fun stream(node: String, path: String, data: ByteArray) = true
+    }
+    private var transcribedProfile: String? = null
+    private val voiceChecks = mutableListOf<String?>()
+    private data class Setup(val relay: WatchRelay, val gateway: FakeGateway, val outbox: Outbox)
+
+    private suspend fun TestScope.setup(profiles: String = roster, store: KeyValueStore = InMemoryKeyValueStore()): Setup {
+        val gateway = FakeGateway(backgroundScope).apply {
+            ready = { FakeGateway.QUIET_READY }
+            http = { request ->
+                if (request.url.encodedPath == "/api/audio/voice-live/status") {
+                    val profile = request.url.parameters["profile"]
+                    voiceChecks += profile
+                    json(if (profile == "assistant") """{"mode":"gpt-live","available":true}""" else """{"mode":"chained","available":true}""")
+                } else if (request.url.encodedPath == "/api/audio/transcribe") {
+                    transcribedProfile = request.url.parameters["profile"]
+                    json("""{"transcript":"hello"}""")
+                } else if (request.url.encodedPath == "/api/sessions") json("""{"sessions":[{"id":"ordinary","title":"Plans"}]}""")
+                else json("""{"session_id":"tip","messages":[]}""")
+            }
+            answer = { call -> when (call.method) {
+                "profiles.list" -> profiles
+                "session.resume" -> """{"session_id":"runtime","running":false}"""
+                else -> "{}"
+            } }
+        }
+        gateway.start()
+        val tokens = NativeTokens(store).apply { set(FakeGateway.URL, NativeSession("test-access", "test-refresh")) }
+        val auth = AuthApi(gateway.client, PersistentCookiesStorage(store), tokens)
+        val gateways = GatewayRepository(store).apply { save(SavedGateway(FakeGateway.URL.value)) }
+        val sessions = SessionsApi(gateway.client)
+        val outbox = Outbox()
+        val bots = BotsApi(gateway.connection)
+        val relay = WatchRelay(gateways, auth, ProfileStore(store), gateway.connection, sessions,
+            AudioApi(gateway.client), ChatHost(gateway.connection, sessions, backgroundScope), backgroundScope, outbox, bots, BotChats(bots))
+        return Setup(relay, gateway, outbox)
+    }
+
+    private suspend fun until(condition: () -> Boolean) = withTimeout(10_000) { while (!condition()) delay(10) }
+    private fun ask(profile: String) = WearJson.decode<WatchAsk>(
+        """{"id":"ask","text":"hello","chatId":"stale","speak":false,"botProfile":"$profile"}""".encodeToByteArray(),
+    )!!
+
+    @Test
+    fun thePickerListsVisibleBotsSeparatelyFromRegularSessions() = runTest {
+        val s = setup()
+        s.relay.chats("watch")
+        until { s.outbox.messages.any { it.first == WearPaths.CHATS } }
+        val list = s.outbox.messages.first { it.first == WearPaths.CHATS }.second
+        assertEquals("ordinary", (list["chats"] as JsonArray).first().let { (it as JsonObject)["id"]!!.jsonPrimitive.content })
+        val bots = list["bots"] as? JsonArray
+        assertEquals(1, bots?.size)
+        assertEquals("assistant", (bots!!.first() as JsonObject)["profile"]!!.jsonPrimitive.content)
+    }
+
+    @Test
+    fun aBotAskResolvesTheCurrentConversationAndUsesItsProfile() = runTest {
+        val s = setup()
+        s.relay.ask("watch", ask("assistant"))
+        until { s.gateway.sent("session.resume").isNotEmpty() }
+        val resumed = s.gateway.sent("session.resume").first()
+        assertEquals("assistant", resumed.param("profile"))
+        assertEquals("tip", resumed.param("session_id"))
+        assertTrue(s.gateway.sent("session.create").isEmpty())
+    }
+
+    @Test
+    fun aRemovedBotFailsInsteadOfSendingToRegularHermes() = runTest {
+        val s = setup("""{"profiles":[]}""")
+        s.relay.ask("watch", ask("removed"))
+        until { s.gateway.sent("session.resume").isNotEmpty() || s.outbox.messages.any { it.second["phase"]?.jsonPrimitive?.content == "Failed" } }
+        assertTrue(s.gateway.sent("session.resume").isEmpty())
+        assertTrue(s.gateway.sent("session.create").isEmpty())
+        assertTrue(s.gateway.sent("session.send").isEmpty())
+    }
+
+    @Test
+    fun recordedSpeechUsesTheBotsTranscriberAndConversation() = runTest {
+        val s = setup()
+        s.relay.ask("watch", ask("assistant").copy(audioType = "audio/wav"), ByteArray(32))
+        until { s.gateway.sent("session.resume").isNotEmpty() }
+        assertEquals("assistant", transcribedProfile)
+        assertEquals("assistant", s.gateway.sent("session.resume").first().param("profile"))
+        assertEquals("tip", s.gateway.sent("session.resume").first().param("session_id"))
+    }
+
+    @Test
+    fun callsUseTheBotsCurrentConversationAndRegularCallsStillUseTheSelectedSession() = runTest {
+        val s = setup()
+        assertEquals("assistant", assertIs<CallChat.Ready>(s.relay.chatForCall("stale", "assistant")).profile)
+        assertEquals("tip", s.gateway.sent("session.resume").first().param("session_id"))
+        s.relay.chatForCall("ordinary")
+        val regular = s.gateway.sent("session.resume").last()
+        assertEquals("ordinary", regular.param("session_id"))
+        assertEquals(null, regular.param("profile"))
+    }
+
+    @Test
+    fun liveVoiceAvailabilityBelongsToTheSelectedProfileRatherThanTheLastBotChecked() = runTest {
+        val s = setup()
+        s.relay.status("watch", "assistant")
+        until { s.outbox.messages.any { it.first == WearPaths.STATUS && it.second["liveVoice"]?.jsonPrimitive?.content == "true" } }
+        assertEquals("assistant", s.outbox.messages.last().second["botProfile"]?.jsonPrimitive?.content)
+        s.outbox.messages.clear()
+        s.relay.status("watch")
+        until { s.outbox.messages.any { it.first == WearPaths.STATUS && it.second["liveVoice"]?.jsonPrimitive?.content == "false" } }
+        assertEquals(listOf("assistant", null), voiceChecks)
+    }
+
+    @Test
+    fun aResolvedVoiceCheckIsDeliveredEvenWhenAnotherProfileReplacesTheCache() = runTest {
+        var profileRead: () -> Unit = {}
+        val memory = InMemoryKeyValueStore()
+        val store = object : KeyValueStore by memory {
+            override suspend fun get(key: String): String? {
+                if (key.startsWith("profile.v1.")) profileRead()
+                return memory.get(key)
+            }
+        }
+        val s = setup(store = store)
+        var reads = 0
+        profileRead = {
+            // An older bot check completes while the latest regular-chat status is being read.
+            if (++reads == 3) s.relay.liveVoiceIs(FakeGateway.URL, true, "assistant")
+        }
+        s.relay.status("watch")
+        until { reads >= 3 }
+        val resolved = s.outbox.messages.last().second
+        assertEquals("false", resolved["liveVoice"]?.jsonPrimitive?.content)
+        assertEquals(null, resolved["botProfile"]?.jsonPrimitive?.content)
+    }
+}

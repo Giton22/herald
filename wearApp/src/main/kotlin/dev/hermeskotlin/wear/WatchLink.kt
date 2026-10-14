@@ -14,12 +14,14 @@ import dev.hermeskotlin.wearlink.CallStart
 import dev.hermeskotlin.wearlink.CallUpdate
 import dev.hermeskotlin.wearlink.ChatList
 import dev.hermeskotlin.wearlink.PhoneStatus
+import dev.hermeskotlin.wearlink.PhoneStatusRequest
 import dev.hermeskotlin.wearlink.RecordedAsk
 import dev.hermeskotlin.wearlink.ReplyPhase
 import dev.hermeskotlin.wearlink.ReplySpeech
 import dev.hermeskotlin.wearlink.ReplyUpdate
 import dev.hermeskotlin.wearlink.WatchAsk
 import dev.hermeskotlin.wearlink.WatchChat
+import dev.hermeskotlin.wearlink.WatchBot
 import dev.hermeskotlin.wearlink.WatchStop
 import dev.hermeskotlin.wearlink.WearCapabilities
 import dev.hermeskotlin.wearlink.WearJson
@@ -131,6 +133,7 @@ class WatchLink(
     val phone: StateFlow<PhoneState> = _phone.asStateFlow()
 
     private val _liveVoice = MutableStateFlow(false)
+    @Volatile private var botChats = false
 
     /** The phone's gateway talks live, so the watch can hold a voice call instead of sending what it heard. */
     val liveVoice: StateFlow<Boolean> = _liveVoice.asStateFlow()
@@ -158,10 +161,13 @@ class WatchLink(
         dismissCall()
         val id = UUID.randomUUID().toString()
         val chat = store.chat.value
-        val ask = WatchAsk(id, text.orEmpty().trim(), chat.id, speak = store.speak.value && speech.canPlay(), audioType = audioType)
+        val ask = WatchAsk(id, text.orEmpty().trim(), chat.id, speak = store.speak.value && speech.canPlay(), audioType = audioType, botProfile = chat.botProfile)
         _turn.value = WatchTurn(id, text?.trim(), ReplyUpdate(id, if (audio != null) ReplyPhase.Transcribing else ReplyPhase.Sending, chatId = chat.id, title = chat.title))
+        if (chat.botProfile != null && !botChats) return fail(id, "Update Herald on your phone to talk to bots.")
         scope.launch {
-            val sent = if (audio != null) stream(WearPaths.recordingPath(id), RecordedAsk.write(ask, audio)) else send(WearPaths.ASK, WearJson.encode(ask))
+            val bot = chat.botProfile != null
+            val sent = if (audio != null) stream(WearPaths.recordingPath(id, bot), RecordedAsk.write(ask, audio))
+                else send(if (bot) WearPaths.BOT_ASK else WearPaths.ASK, WearJson.encode(ask))
             if (sent != null) fail(id, sent)
         }
         watchdog?.cancel()
@@ -210,12 +216,15 @@ class WatchLink(
         callSends = InOrder { batch -> watchCall?.let { call -> batch.events.forEach(call::send) } }
         _turn.value = null
         _call.value = WatchCallState(id, CallStage.Starting)
+        val chat = store.chat.value
+        if (chat.botProfile != null && !botChats) return finishCall(id, "Update Herald on your phone to call bots.")
         callJob = scope.launch(main) {
             val call = WatchCall(context)
             watchCall = call
             try {
                 val offer = call.offer()
-                send(WearPaths.CALL_START, WearJson.encode(CallStart(id, store.chat.value.id, offer)))?.let { return@launch finishCall(id, it) }
+                send(if (chat.botProfile == null) WearPaths.CALL_START else WearPaths.BOT_CALL_START,
+                    WearJson.encode(CallStart(id, chat.id, offer, chat.botProfile)))?.let { return@launch finishCall(id, it) }
                 _call.update { if (it?.id == id && it.stage == CallStage.Starting) it.copy(stage = CallStage.Connecting) else it }
                 launch {
                     delay(ANSWER_WITHIN_MS)
@@ -355,25 +364,39 @@ class WatchLink(
         endCall()
         dismissCall()
         store.setChat(null, null)
+        _liveVoice.value = false
+        refreshPhone()
         _turn.value = null
     }
 
     fun pickChat(chat: WatchChat) {
         speech.stop()
-        if (chat.id != store.chat.value.id) endCall()
+        if (chat.id != store.chat.value.id || store.chat.value.botProfile != null) endCall()
         dismissCall()
         store.setChat(chat.id, chat.title)
+        _liveVoice.value = false
+        refreshPhone()
+        _turn.value = null
+    }
+
+    fun pickBot(bot: WatchBot) {
+        speech.stop()
+        if (bot.profile != store.chat.value.botProfile) endCall()
+        dismissCall()
+        store.setChat(null, bot.title, bot.profile)
+        _liveVoice.value = false
+        refreshPhone()
         _turn.value = null
     }
 
     fun refreshChats() {
         scope.launch {
-            send(WearPaths.CHATS, ByteArray(0))?.let { _chats.value = ChatList(error = it) }
+            send(WearPaths.CHATS, ByteArray(0))?.let { _chats.value = ChatList(error = it, botError = it) }
         }
     }
 
     fun refreshPhone() {
-        scope.launch { send(WearPaths.STATUS, ByteArray(0)) }
+        scope.launch { send(WearPaths.STATUS, WearJson.encode(PhoneStatusRequest(store.chat.value.botProfile))) }
     }
 
     /** A message from the phone, from [WatchListenerService] or the fake phone. */
@@ -384,7 +407,8 @@ class WatchLink(
             WearPaths.CALL_UPDATE -> WearJson.decode<CallUpdate>(data)?.let { scope.launch(main) { onCallUpdate(it) } }
             WearPaths.CALL_SEND -> WearJson.decode<CallEvents>(data)?.let { scope.launch(main) { onCallSend(it) } }
             WearPaths.STATUS -> WearJson.decode<PhoneStatus>(data)?.let {
-                it.liveVoice?.let { live -> _liveVoice.value = live }
+                botChats = it.botChats
+                if (it.botProfile == store.chat.value.botProfile) it.liveVoice?.let { live -> _liveVoice.value = live }
                 _phone.value = when {
                     !it.signedIn -> PhoneState.SignedOut
                     it.connected -> PhoneState.Ready

@@ -14,6 +14,8 @@ import kotlinx.serialization.json.Json
 object WearPaths {
     /** Watch → phone: a [WatchAsk]. */
     const val ASK = "/herald/ask"
+    /** Dedicated bot paths keep an older phone from interpreting these as ordinary-chat requests. */
+    const val BOT_ASK = "/herald/bot/ask"
 
     /** Watch → phone: a [WatchStop], to end the running turn. */
     const val STOP = "/herald/stop"
@@ -29,6 +31,7 @@ object WearPaths {
 
     /** Watch → phone: a [CallStart], the watch's WebRTC offer for a live voice call. */
     const val CALL_START = "/herald/call/start"
+    const val BOT_CALL_START = "/herald/bot/call/start"
 
     /** Watch → phone: [CallEvents], what the voice model sent on the call's event channel. */
     const val CALL_EVENTS = "/herald/call/events"
@@ -46,20 +49,22 @@ object WearPaths {
     const val PREFIX = "/herald/"
 
     private const val RECORDING = "/herald/recording/"
+    private const val BOT_RECORDING = "/herald/bot/recording/"
     private const val SPEECH = "/herald/speech/"
 
     /**
      * Watch → phone channel: a spoken ask, for the gateway to transcribe. Its stream is a [RecordedAsk]: the
      * ask and the audio in one piece, so neither can arrive without the other.
      */
-    fun recordingPath(askId: String): String = RECORDING + encode(askId)
+    fun recordingPath(askId: String, bot: Boolean = false): String = (if (bot) BOT_RECORDING else RECORDING) + encode(askId)
 
     /** Phone → watch channel: clip [index] of [count] reading the reply to [askId] aloud, as [mimeType]. */
     fun speechPath(askId: String, index: Int, count: Int, mimeType: String): String =
         SPEECH + encode(askId) + "/" + index + "/" + count + "/" + encode(mimeType)
 
     /** Whether [path] is a [recordingPath]. */
-    fun isRecording(path: String): Boolean = path.startsWith(RECORDING) && path.length > RECORDING.length
+    fun isRecording(path: String): Boolean = path.startsWith(RECORDING) && path.length > RECORDING.length || isBotRecording(path)
+    fun isBotRecording(path: String): Boolean = path.startsWith(BOT_RECORDING) && path.length > BOT_RECORDING.length
 
     /** What a [speechPath] says; null for any other path. */
     fun parseSpeech(path: String): SpeechClip? {
@@ -114,6 +119,8 @@ data class WatchAsk(
     val chatId: String? = null,
     val speak: Boolean = true,
     val audioType: String? = null,
+    /** A bot's permanent conversation, resolved by the phone rather than a possibly stale stored id. */
+    val botProfile: String? = null,
 )
 
 /** What a [WearPaths.recordingPath] channel carries: the ask's length (4 bytes, big-endian), the ask, then the audio. */
@@ -201,14 +208,24 @@ data class ReplyUpdate(
 @Serializable
 data class WatchChat(val id: String, val title: String, val activityAt: Double? = null)
 
+/** A bot the watch can talk to; its one conversation is opened only when the user asks or calls. */
+@Serializable
+data class WatchBot(val profile: String, val title: String, val activityAt: Double? = null)
+
 /** The recent chats, newest first, or [error] when they couldn't be read. */
 @Serializable
-data class ChatList(val chats: List<WatchChat> = emptyList(), val error: String? = null)
+data class ChatList(
+    val chats: List<WatchChat> = emptyList(), val error: String? = null,
+    val bots: List<WatchBot> = emptyList(), val botError: String? = null,
+)
 
 /**
  * Whether Herald on the phone is signed in to a gateway, and [connected]: connected to it, or ready to connect
  * when asked; false while it's (re)connecting or failing to. [failed]: it gave up, and won't connect on its own.
  */
+@Serializable
+data class PhoneStatusRequest(val botProfile: String? = null)
+
 @Serializable
 data class PhoneStatus(
     val signedIn: Boolean,
@@ -219,6 +236,9 @@ data class PhoneStatus(
      * when the phone hasn't asked the gateway yet (or is older): the watch keeps what it was last told.
      */
     val liveVoice: Boolean? = null,
+    /** Older phones can't route a bot request; the watch must never send it as an ordinary chat. */
+    val botChats: Boolean = false,
+    val botProfile: String? = null,
 )
 
 /*
@@ -231,7 +251,7 @@ data class PhoneStatus(
 
 /** Starts call [id] in [chatId] (null: a new chat), with the watch's WebRTC [offerSdp]. */
 @Serializable
-data class CallStart(val id: String, val chatId: String?, val offerSdp: String)
+data class CallStart(val id: String, val chatId: String?, val offerSdp: String, val botProfile: String? = null)
 
 /** Event-channel messages of call [callId], in order; [seq] counts each side's batches, so a late one is told apart. */
 @Serializable

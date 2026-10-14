@@ -117,14 +117,14 @@ class WatchCalls(
         suspend fun end(error: String?) = tell(last.copy(phase = CallPhase.Ended, answerSdp = null, error = error, thinking = false, working = null))
 
         tell(last)
-        val chat = when (val found = relay.chatForCall(start.chatId)) {
+        val chat = when (val found = relay.chatForCall(start.chatId, start.botProfile)) {
             is CallChat.Failed -> return end(found.message)
             is CallChat.Ready -> found
         }
         if (held.over) return
         when (val status = audio.voiceLiveStatus(chat.gateway, chat.profile)) {
             is ApiResult.Success -> {
-                relay.liveVoiceIs(chat.gateway, status.value.live)
+                relay.liveVoiceIs(chat.gateway, status.value.live, chat.profile)
                 if (!status.value.live) return end(NOT_LIVE)
             }
             else -> return end(liveFailure(status))
