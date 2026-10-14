@@ -21,10 +21,11 @@ class AskComplicationService : SuspendingComplicationDataSourceService() {
     private fun data(type: ComplicationType, preview: Boolean): ComplicationData? {
         val icon = Icon.createWithResource(this, R.drawable.ic_call)
         val picture = if (preview) null else HeraldWatch.of(this).callDisplay.icon()
+        val imageType = if (picture == null) SmallImageType.ICON else SmallImageType.PHOTO
         val description = PlainComplicationText.Builder(if (preview) "Call Hermes" else "Call ${HeraldWatch.of(this).callDisplay.title}").build()
         val tap = PendingIntent.getActivity(this, 0, MainActivity.callIntent(this), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         return when (type) {
-            ComplicationType.SMALL_IMAGE -> SmallImageComplicationData.Builder(SmallImage.Builder(picture ?: icon, SmallImageType.PHOTO).build(), description)
+            ComplicationType.SMALL_IMAGE -> SmallImageComplicationData.Builder(SmallImage.Builder(picture ?: icon, imageType).build(), description)
                 .setTapAction(tap)
                 .build()
             else -> null
