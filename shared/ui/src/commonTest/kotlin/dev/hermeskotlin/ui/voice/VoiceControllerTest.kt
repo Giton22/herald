@@ -25,7 +25,9 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -59,13 +61,20 @@ class VoiceControllerTest {
         requests: MutableList<HttpRequestData>,
         /** Completed by the first `tts-lease` call, which the controller fires off without waiting for. */
         leased: CompletableDeferred<Unit>? = null,
+        /** How many transcriptions fail before they work again. */
+        transcribeFailures: Int = 0,
     ) = AudioApi(
         createHttpClient(
             MockEngine { request ->
                 requests += request
                 if (request.url.encodedPath == "/api/audio/tts-lease") leased?.complete(Unit)
+                val transcribes = requests.count { it.url.encodedPath == "/api/audio/transcribe" }
                 when (request.url.encodedPath) {
-                    "/api/audio/transcribe" -> respond("""{"ok":true,"transcript":"$transcript"}""", HttpStatusCode.OK, json)
+                    "/api/audio/transcribe" -> if (transcribes <= transcribeFailures) {
+                        respond("""{"ok":false,"error":"Speech-to-text is down."}""", HttpStatusCode.InternalServerError, json)
+                    } else {
+                        respond("""{"ok":true,"transcript":"$transcript"}""", HttpStatusCode.OK, json)
+                    }
                     else -> respond("""{"ok":true}""", HttpStatusCode.OK, json)
                 }
             },
@@ -256,5 +265,61 @@ class VoiceControllerTest {
         // The speech engine was warmed for the chat. The lease call isn't awaited and the mock answers on
         // another thread, so wait for it in real time rather than assume it has landed.
         withContext(Dispatchers.Default) { withTimeout(5_000) { leased.await() } }
+    }
+
+    /** Hears speech or nothing, listen by listen as [heard] says, then waits for good. */
+    private class ScriptedRecorder(private vararg val heard: Boolean) : VoiceRecorder {
+        var recordings = 0
+        /** Every scripted listen is done. */
+        val waiting = CompletableDeferred<Unit>()
+        override suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit, onSpeech: () -> Unit): Recording {
+            val speech = heard.getOrNull(recordings) ?: run {
+                waiting.complete(Unit)
+                awaitCancellation()
+            }
+            recordings++
+            if (speech) onSpeech()
+            return Recording(byteArrayOf(1, 2, 3), "audio/wav", speech)
+        }
+
+        override fun finish() = Unit
+    }
+
+    /** A chat that never connects: these voice chats end before anything is sent. */
+    private fun TestScope.offlineSession(): ChatSession {
+        val cookies = PersistentCookiesStorage(InMemoryKeyValueStore())
+        val http = createHttpClient(MockEngine { error("no REST in this test") }, cookies)
+        val connection = GatewayConnection(AuthApi(http, cookies), { _, _ -> error("not connecting") }, backgroundScope)
+        return ChatSession(gateway, null, null, connection, SessionsApi(http), backgroundScope)
+    }
+
+    /** #184: one failed turn, then a quiet room, used to end the chat after about 3 × 12 s of silence. */
+    @Test
+    fun quietListensAfterAnErrorDontEndTheChat() = runTest {
+        val recorder = ScriptedRecorder(true, false, false, false, false)
+        val voice = VoiceController(audio("unused", mutableListOf(), transcribeFailures = 1), recorder, FakePlayer(), backgroundScope, backgroundScope)
+
+        voice.startChat(offlineSession(), gateway, null)
+
+        recorder.waiting.await()
+        assertEquals(5, recorder.recordings)
+        assertEquals(VoicePhase.Listening, voice.chat.value.phase)
+        // The failure stays on show while the chat listens on.
+        assertTrue(voice.chat.value.error != null)
+        voice.stopChat()
+    }
+
+    @Test
+    fun failedTurnsInARowStillEndTheChat() = runTest {
+        // Quiet listens in between neither count nor reset the run of failures.
+        val recorder = ScriptedRecorder(true, false, true, false, true, true)
+        val voice = VoiceController(audio("unused", mutableListOf(), transcribeFailures = 3), recorder, FakePlayer(), backgroundScope, backgroundScope)
+
+        voice.startChat(offlineSession(), gateway, null)
+
+        val ended = voice.chat.first { it.phase == VoicePhase.Off }
+        assertEquals(5, recorder.recordings)
+        // An ending forced by errors says why.
+        assertTrue(ended.error != null)
     }
 }

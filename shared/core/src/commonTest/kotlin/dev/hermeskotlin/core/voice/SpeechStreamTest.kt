@@ -1,8 +1,16 @@
 package dev.hermeskotlin.core.voice
 
 import dev.hermeskotlin.core.gateway.GatewayUrl
+import io.ktor.websocket.Frame
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -87,6 +95,82 @@ class SpeechStreamTest {
         assertEquals("WAVEfmt ", file.decodeToString(8, 16))
         // The sample rate, little-endian, at byte 24.
         assertEquals(24_000, (file[24].toInt() and 0xff) or ((file[25].toInt() and 0xff) shl 8) or ((file[26].toInt() and 0xff) shl 16))
+    }
+
+    /** OkHttp fails a socket the gateway closed with its own cancellation (#183); it isn't the caller's. */
+    private fun closedByTheGateway() = CancellationException("WebSocket session closed with code NORMAL.")
+
+    @Test
+    fun aSocketTheGatewayClosedIsQuietToSendTo() = runTest {
+        val outgoing = Channel<Frame>(Channel.UNLIMITED).apply { cancel(closedByTheGateway()) }
+        var socketClosed = false
+        val stream = KtorSpeechStream(Channel(), outgoing) { socketClosed = true }
+
+        stream.append("More.")
+        stream.finish()
+        stream.close()
+
+        assertTrue(socketClosed)
+    }
+
+    @Test
+    fun aSocketTheGatewayClosedEndsTheEventsWithWhatWasSaid() = runTest {
+        val incoming = Channel<Frame>()
+        val stream = KtorSpeechStream(incoming, Channel(Channel.UNLIMITED)) {}
+        launch {
+            incoming.send(Frame.Text("""{"type":"start","sample_rate":24000}"""))
+            incoming.send(Frame.Binary(true, byteArrayOf(1, 0)))
+            incoming.cancel(closedByTheGateway())
+        }
+
+        val events = stream.events.toList()
+
+        assertEquals(SpeechStreamEvent.Start(sampleRate = 24_000), events.first())
+        assertEquals(2, events.size)
+    }
+
+    @Test
+    fun theCallersOwnCancellationStillGoesUp() = runTest {
+        // Nobody takes the frame: the send waits until the caller is cancelled.
+        val stream = KtorSpeechStream(Channel(), Channel()) {}
+        var after = false
+        val sending = launch {
+            stream.append("Hello.")
+            after = true
+        }
+        testScheduler.runCurrent()
+
+        sending.cancel()
+        sending.join()
+
+        assertFalse(after)
+    }
+
+    @Test
+    fun aCollectorCancelledWhileWaitingIsCancelledNotDone() = runTest {
+        val stream = KtorSpeechStream(Channel(), Channel()) {}
+        var done = false
+        val listening = launch {
+            stream.events.toList()
+            done = true
+        }
+        testScheduler.runCurrent()
+
+        listening.cancel()
+        listening.join()
+
+        assertFalse(done)
+    }
+
+    @Test
+    fun aCollectorThatStopsEarlyIsntSwallowed() = runTest {
+        val incoming = Channel<Frame>(Channel.UNLIMITED)
+        incoming.send(Frame.Text("""{"type":"start","sample_rate":24000}"""))
+        incoming.send(Frame.Binary(true, byteArrayOf(1, 0)))
+        val stream = KtorSpeechStream(incoming, Channel(Channel.UNLIMITED)) {}
+
+        // Taking one aborts the flow from downstream; swallowing that would break the flow's contract.
+        assertEquals(SpeechStreamEvent.Start(sampleRate = 24_000), stream.events.first())
     }
 
     @Test

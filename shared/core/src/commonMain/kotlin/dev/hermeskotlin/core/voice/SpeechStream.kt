@@ -5,7 +5,6 @@ import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.rpc.ticketProtocols
 import io.ktor.client.HttpClient
-import io.ktor.client.plugins.websocket.DefaultClientWebSocketSession
 import io.ktor.client.plugins.websocket.webSocketSession
 import io.ktor.client.request.header
 import io.ktor.http.HttpHeaders
@@ -15,6 +14,10 @@ import io.ktor.websocket.close
 import io.ktor.websocket.readBytes
 import io.ktor.websocket.readText
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.SendChannel
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 import kotlinx.serialization.json.Json
@@ -82,29 +85,40 @@ class GatewaySpeechStreams(private val client: HttpClient, private val auth: Aut
         } catch (_: Exception) {
             return null
         }
-        return KtorSpeechStream(session)
+        return KtorSpeechStream(session.incoming, session.outgoing) { session.close() }
     }
 }
 
-private class KtorSpeechStream(private val session: DefaultClientWebSocketSession) : SpeechStream {
+/**
+ * [SpeechStream] over a socket's frames. A socket the gateway has closed fails its channels, with a
+ * [CancellationException] on OkHttp (`WebSocket session closed with code NORMAL`); that isn't the caller's
+ * cancellation, so it ends the speech like any dropped socket instead of ending whoever was talking.
+ */
+internal class KtorSpeechStream(
+    private val incoming: ReceiveChannel<Frame>,
+    private val outgoing: SendChannel<Frame>,
+    private val closeSocket: suspend () -> Unit,
+) : SpeechStream {
 
     override val events: Flow<SpeechStreamEvent> = flow {
-        try {
-            for (frame in session.incoming) {
-                when (frame) {
-                    is Frame.Binary -> emit(SpeechStreamEvent.Audio(frame.readBytes()))
-                    is Frame.Text -> {
-                        val event = parseSpeechFrame(frame.readText()) ?: continue
-                        emit(event)
-                        if (event == SpeechStreamEvent.End || event == SpeechStreamEvent.Fallback) return@flow
-                    }
-                    else -> Unit
-                }
+        while (true) {
+            // Only the socket is guarded: what the collector throws back through emit isn't ours to swallow.
+            val frame = try {
+                incoming.receive()
+            } catch (_: Exception) {
+                // A dropped socket ends the speech with what was said.
+                currentCoroutineContext().ensureActive()
+                return@flow
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            // A dropped socket ends the speech with what was said.
+            when (frame) {
+                is Frame.Binary -> emit(SpeechStreamEvent.Audio(frame.readBytes()))
+                is Frame.Text -> {
+                    val event = parseSpeechFrame(frame.readText()) ?: continue
+                    emit(event)
+                    if (event == SpeechStreamEvent.End || event == SpeechStreamEvent.Fallback) return@flow
+                }
+                else -> Unit
+            }
         }
     }
 
@@ -116,16 +130,20 @@ private class KtorSpeechStream(private val session: DefaultClientWebSocketSessio
 
     override suspend fun close() {
         sendQuietly(buildJsonObject { put("stop", true) })
-        runCatching { session.close() }
+        try {
+            closeSocket()
+        } catch (_: Exception) {
+            currentCoroutineContext().ensureActive()
+        }
     }
 
     /** A socket already gone has nothing to say back; the events end on their own. */
     private suspend fun sendQuietly(frame: JsonObject) {
         try {
-            session.send(Frame.Text(frame.toString()))
-        } catch (e: CancellationException) {
-            throw e
+            outgoing.send(Frame.Text(frame.toString()))
         } catch (_: Exception) {
+            // Only the caller's own cancellation goes on up.
+            currentCoroutineContext().ensureActive()
         }
     }
 }

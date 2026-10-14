@@ -1385,14 +1385,18 @@ private fun SessionList(
                         ThreadReorder(threads, { projectIndex.labelFor(it.session, shownProject) }, onDone = onReordered)
                     }
                 } else {
-                    item(key = "label-threads") {
+                    item(key = "label-threads", contentType = SectionLabelType) {
                         if (onToggleThreads != null) {
                             SectionToggle("Threads", threads.size, threadsCollapsed, "threads", onToggleThreads)
                         } else {
                             ListLabel("Threads")
                         }
                     }
-                    items(visibleThreads(threads, threadsCollapsed, selectedId, statuses, drafts), key = { "thread-${it.thread.id}" }) { row ->
+                    items(
+                        visibleThreads(threads, threadsCollapsed, selectedId, statuses, drafts),
+                        key = { "thread-${it.thread.id}" },
+                        contentType = { SessionRowType },
+                    ) { row ->
                         SessionRow(
                             row.session.copy(title = row.thread.name),
                             selected = row.session.id == selectedId || row.thread.sessionId == selectedId,
@@ -1408,25 +1412,33 @@ private fun SessionList(
                 }
             }
             if (pinned.isNotEmpty()) {
-                item(key = "label-pinned") {
+                item(key = "label-pinned", contentType = SectionLabelType) {
                     if (onTogglePinned != null) {
                         SectionToggle("Pinned", pinned.size, pinnedCollapsed, "pinned chats", onTogglePinned)
                     } else {
                         ListLabel("Pinned")
                     }
                 }
-                items(visiblePinned(pinned, pinnedCollapsed, selectedId, statuses, drafts), key = { it.id }) { row(it) }
+                items(
+                    visiblePinned(pinned, pinnedCollapsed, selectedId, statuses, drafts),
+                    key = { it.id },
+                    contentType = { SessionRowType },
+                ) { row(it) }
             }
             // The filter chips head the rest, with no label of their own.
             status()
-            items(rest, key = { it.id }) { row(it) }
+            items(rest, key = { it.id }, contentType = { SessionRowType }) { row(it) }
             if (loadingMore) item(key = "loading-more") { ListSpinner() }
             return@LazyColumn
         }
-        items(pinned + rest, key = { it.id }) { row(it) }
+        items(pinned + rest, key = { it.id }, contentType = { SessionRowType }) { row(it) }
         if (loadingMore) item(key = "loading-more") { ListSpinner() }
     }
 }
+
+// Thread, pinned and other rows are all a SessionRow, so folding a section lets the list reuse their slots.
+private const val SessionRowType = "session-row"
+private const val SectionLabelType = "section-label"
 
 /**
  * The Threads section while it is being put in order: each row has a handle to drag it up or down, the rows

@@ -34,6 +34,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
@@ -168,11 +169,17 @@ class VoiceController(
         var failures = 0
         try {
             while (currentCoroutineContext().isActive) {
-                if (!converseOnce(session, gateway, profile, VoiceActivity(silenceMs = pauseMs))) break
-                failures = if (_chat.value.error == null) 0 else failures + 1
-                // A provider that keeps failing would loop forever; give up after a few in a row.
-                if (failures >= MAX_FAILURES) break
-                if (failures > 0) delay(RETRY_PAUSE_MS)
+                when (converseOnce(session, gateway, profile, VoiceActivity(silenceMs = pauseMs))) {
+                    Turn.End -> break
+                    Turn.Done -> failures = 0
+                    // Nobody spoke: nothing failed, nor came right. The last error stays on show meanwhile.
+                    Turn.Quiet -> Unit
+                    Turn.Failed -> {
+                        // A provider that keeps failing would loop forever; give up after a few in a row.
+                        if (++failures >= MAX_FAILURES) break
+                        delay(RETRY_PAUSE_MS)
+                    }
+                }
             }
         } finally {
             appScope.launch { audio.ttsLease(gateway, active = false, profile) }
@@ -239,8 +246,8 @@ class VoiceController(
 
     fun dismissChatError() = _chat.update { it.copy(error = null) }
 
-    /** One turn of the conversation; false when it should end. */
-    private suspend fun converseOnce(session: ChatSession, gateway: GatewayUrl, profile: String?, activity: VoiceActivity): Boolean {
+    /** One turn of the conversation, and how it went. */
+    private suspend fun converseOnce(session: ChatSession, gateway: GatewayUrl, profile: String?, activity: VoiceActivity): Turn {
         _chat.update { it.copy(phase = VoicePhase.Listening, level = 0f, hearing = false) }
         val recording = try {
             recorder.record(
@@ -252,20 +259,21 @@ class VoiceController(
             throw e
         } catch (e: Exception) {
             _chat.update { it.copy(error = e.message ?: "Couldn't use the microphone.") }
-            return false
+            return Turn.End
         }
-        if (!recording.heardSpeech) return true
+        if (!recording.heardSpeech) return Turn.Quiet
         _chat.update { it.copy(phase = VoicePhase.Transcribing, level = 0f, hearing = false) }
         val transcript = when (val result = audio.transcribe(gateway, recording.bytes, recording.mimeType, profile)) {
             is ApiResult.Success -> result.value
             else -> {
                 _chat.update { it.copy(error = result.errorMessage ?: "Couldn't transcribe that.") }
-                return true
+                return Turn.Failed
             }
         }
+        // From here, an error on show is this turn's own.
         _chat.update { it.copy(error = null) }
-        if (transcript.isBlank()) return true
-        if (isVoiceStopCommand(transcript)) return false
+        if (transcript.isBlank()) return Turn.Quiet
+        if (isVoiceStopCommand(transcript)) return Turn.End
 
         _chat.update { it.copy(phase = VoicePhase.Thinking, caption = transcript.trim(), captionIsVoice = false) }
         val sentAt = session.state.value.messages.size
@@ -288,21 +296,22 @@ class VoiceController(
                 // Not voiced after all (the prompt didn't go, or the chat ended first): the socket doesn't stay open.
                 if (!handedOver) withContext(NonCancellable) {
                     opening.cancel()
-                    runCatching { opening.await() }.getOrNull()?.close()
+                    runCatching { opening.await()?.close() }
                 }
             }
-        } ?: return true
+        } ?: return Turn.Failed
         // Skipped while the agent is still at work: listen again now rather than once it's done.
-        if (voiced == Voiced.Skipped) return true
+        if (voiced == Voiced.Skipped) return Turn.Done
         session.state.first { !it.running }
-        if (voiced == Voiced.Yes) return true
+        if (voiced == Voiced.Yes) return Turn.Done
         val reply = session.state.value.messages.drop(sentAt).lastOrNull { it is ChatMessage.Assistant } as? ChatMessage.Assistant
         val text = reply?.text?.let(::speakableText).orEmpty()
-        if (text.isEmpty()) return true
+        if (text.isEmpty()) return Turn.Done
 
         _chat.update { it.copy(phase = VoicePhase.Speaking, caption = text, captionIsVoice = true) }
         speak(text, gateway, profile)
-        return true
+        // The voice couldn't be made or played (a provider's 429, say).
+        return if (_chat.value.error == null) Turn.Done else Turn.Failed
     }
 
     /**
@@ -326,7 +335,12 @@ class VoiceController(
                         var format: SpeechStreamEvent.Start? = null
                         var playing = false
                         // A player that failed hears nothing more; the finished reply is read out instead.
-                        stream.events.takeWhile { !playFailed }.collect { event ->
+                        stream.events
+                            // A closed socket can end its events with a cancellation of its own (OkHttp's, #183):
+                            // the voice broke off, which isn't a skip. A real skip or the chat's end isn't caught.
+                            .catch { }
+                            .takeWhile { !playFailed }
+                            .collect { event ->
                             when (event) {
                                 is SpeechStreamEvent.Start -> format = event
                                 is SpeechStreamEvent.Audio -> {
@@ -359,7 +373,9 @@ class VoiceController(
             }
         } finally {
             speechJob = null
-            withContext(NonCancellable) { stream.close() }
+            // Closing a socket the gateway already closed can throw (OkHttp's own cancellation, #183); it would
+            // otherwise end the whole chat, silently, right after the reply.
+            withContext(NonCancellable) { runCatching { stream.close() } }
         }
         return when {
             skipped -> Voiced.Skipped
@@ -545,6 +561,21 @@ class VoiceController(
 
 /** Whether a reply was voiced as it was written. */
 private enum class Voiced { Yes, No, Skipped }
+
+/**
+ * How a turn of the chained voice chat went. Only [Failed] turns count towards giving up: a listen that heard
+ * nobody leaves the count as it was, so one error and then a quiet room doesn't end the chat (#184).
+ */
+private enum class Turn {
+    /** Said, sent and answered. */
+    Done,
+    /** Nobody spoke, or nothing that could be written down. */
+    Quiet,
+    /** Transcribing, sending or voicing the reply failed. */
+    Failed,
+    /** The chat ends: "stop" was said, or the microphone can't be used. */
+    End,
+}
 
 /**
  * Everything the agent has written since the prompt at [sentAt], its messages a paragraph apart. Empty ones
