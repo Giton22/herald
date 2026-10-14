@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
@@ -83,8 +84,16 @@ internal val LocalMediaLoader = staticCompositionLocalOf<suspend (String) -> Byt
 /** Opens the full-screen viewer for a picture. */
 internal val LocalOpenImage = staticCompositionLocalOf<(ViewerImage) -> Unit> { {} }
 
-/** What the viewer shows: bytes already at hand, or a source to load them from. */
-internal class ViewerImage(val name: String, val source: String? = null, val bytes: ByteArray? = null)
+/**
+ * What the viewer shows: bytes already at hand, a source to load them from, or its own [fetch] (a picture a
+ * reply linked to, read through the chat's profile).
+ */
+internal class ViewerImage(
+    val name: String,
+    val source: String? = null,
+    val bytes: ByteArray? = null,
+    val fetch: (suspend () -> FileDownload)? = null,
+)
 
 /** The pictures and files a reply delivered, under its text. */
 @Composable
@@ -135,7 +144,8 @@ private fun ReplyImage(item: ReplyMedia) {
         value = withTimeoutOrNull(20_000) { load(item.source) }
         if (value == null) failed = true
     }
-    val bitmap = bytes?.let { rememberImageBitmap(it, maxEdge = INLINE_EDGE) }
+    val decoded = bytes?.let { rememberDecodedImage(it, maxEdge = INLINE_EDGE) }
+    val bitmap = decoded?.bitmap
     Box(
         Modifier
             .widthIn(max = 420.dp)
@@ -155,7 +165,7 @@ private fun ReplyImage(item: ReplyMedia) {
                 contentScale = ContentScale.Fit,
                 modifier = Modifier.fillMaxWidth().aspectRatio(bitmap.width.toFloat() / bitmap.height.coerceAtLeast(1)).heightIn(max = 480.dp),
             )
-            failed || (bytes != null) -> Row(
+            failed || decoded?.decoding == false -> Row(
                 Modifier.padding(16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -231,7 +241,21 @@ internal fun ImageViewer(image: ViewerImage, onDismiss: () -> Unit) {
     val load = LocalMediaLoader.current
     val actions = rememberMediaActions()
     val scope = rememberCoroutineScope()
-    val bytes by produceState(image.bytes, image) { if (value == null) value = image.source?.let { load(it) } }
+    // Why the picture couldn't be had, shown in place of a spinner that would never stop.
+    var failed by remember(image) { mutableStateOf<String?>(null) }
+    val bytes by produceState(image.bytes, image) {
+        if (value != null) return@produceState
+        val fetch = image.fetch
+        if (fetch != null) {
+            when (val result = fetch()) {
+                is FileDownload.Ready -> value = result.bytes
+                is FileDownload.Failed -> failed = result.message
+            }
+        } else {
+            value = image.source?.let { load(it) }
+            if (value == null) failed = "Couldn't load this picture."
+        }
+    }
     var notice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(notice) {
         if (notice != null) {
@@ -248,7 +272,8 @@ internal fun ImageViewer(image: ViewerImage, onDismiss: () -> Unit) {
 
     Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
-            val bitmap = bytes?.let { rememberImageBitmap(it, maxEdge = VIEWER_EDGE) }
+            val decoded = bytes?.let { rememberDecodedImage(it, maxEdge = VIEWER_EDGE) }
+            val bitmap = decoded?.bitmap
             if (bitmap != null) {
                 Image(
                     bitmap = bitmap,
@@ -266,7 +291,14 @@ internal fun ImageViewer(image: ViewerImage, onDismiss: () -> Unit) {
                         .graphicsLayer(scaleX = scale, scaleY = scale, translationX = offset.x, translationY = offset.y),
                 )
             } else {
-                Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
+                Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
+                    val error = failed ?: "Couldn't show this picture.".takeIf { decoded?.decoding == false }
+                    if (error != null) {
+                        Text(error, style = Theme[typography][bodySmall], color = Color.White, textAlign = TextAlign.Center)
+                    } else {
+                        Spinner()
+                    }
+                }
             }
             Row(
                 Modifier

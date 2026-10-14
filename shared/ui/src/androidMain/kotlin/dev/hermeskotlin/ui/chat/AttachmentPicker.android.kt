@@ -14,6 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -24,6 +25,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
 import dev.hermeskotlin.core.chat.OutgoingAttachment
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -120,8 +122,21 @@ suspend fun readAttachments(context: Context, uris: List<Uri>): Pair<List<Outgoi
 
 @Composable
 actual fun rememberImageBitmap(bytes: ByteArray, maxEdge: Int): ImageBitmap? = remember(bytes, maxEdge) {
-    // A full-size photo is sampled down to what the view needs rather than decoded whole.
-    decodeUpright(bytes, maxEdge)?.asImageBitmap()
+    decodeImageBitmap(bytes, maxEdge)
+}
+
+// A full-size photo is sampled down to what the view needs rather than decoded whole.
+actual fun decodeImageBitmap(bytes: ByteArray, maxEdge: Int): ImageBitmap? = decodeUpright(bytes, maxEdge)?.asImageBitmap()
+
+@Composable
+actual fun rememberDecodedImage(bytes: ByteArray, maxEdge: Int): DecodedImage {
+    if (!isTiff(bytes)) return DecodedImage(rememberImageBitmap(bytes, maxEdge), decoding = false)
+    // Herald's own TIFF decoder is plain Kotlin: a big picture would hold up the UI thread.
+    return produceState(DecodedImage(null, decoding = true), bytes, maxEdge) {
+        // produceState keeps its last value across new keys: a different file starts at the spinner again.
+        value = DecodedImage(null, decoding = true)
+        value = DecodedImage(withContext(Dispatchers.Default) { decodeUpright(bytes, maxEdge)?.asImageBitmap() }, decoding = false)
+    }.value
 }
 
 /**
@@ -171,7 +186,7 @@ internal fun InputStream.readAtMost(limit: Long): ByteArray? {
 internal fun decodeUpright(bytes: ByteArray, maxEdge: Int): Bitmap? {
     val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
     BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return null
+    if (bounds.outWidth <= 0 || bounds.outHeight <= 0) return decodeTiffUpright(bytes, maxEdge)
     var sample = 1
     while (max(bounds.outWidth, bounds.outHeight) / (sample * 2) >= maxEdge) sample *= 2
     val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, BitmapFactory.Options().apply { inSampleSize = sample })
@@ -179,6 +194,25 @@ internal fun decodeUpright(bytes: ByteArray, maxEdge: Int): Bitmap? {
     val orientation = runCatching {
         ExifInterface(bytes.inputStream()).getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL)
     }.getOrDefault(ExifInterface.ORIENTATION_NORMAL)
+    return bitmap.oriented(orientation).scaledTo(maxEdge)
+}
+
+/** A TIFF, which Android doesn't decode: read by [decodeTiff], already within [maxEdge]. Null for anything else. */
+private fun decodeTiffUpright(bytes: ByteArray, maxEdge: Int): Bitmap? {
+    if (!isTiff(bytes)) return null
+    return try {
+        val tiff = decodeTiff(bytes, maxEdge) ?: return null
+        Bitmap.createBitmap(tiff.argb, tiff.width, tiff.height, Bitmap.Config.ARGB_8888).oriented(tiff.orientation)
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        // A file from an agent's reply: whatever goes wrong, out of memory included, the viewer says it can't show it.
+        null
+    }
+}
+
+/** This bitmap turned upright by an EXIF (or TIFF) orientation; the transposing ones are left as they are. */
+private fun Bitmap.oriented(orientation: Int): Bitmap {
     val matrix = Matrix().apply {
         when (orientation) {
             ExifInterface.ORIENTATION_ROTATE_90 -> postRotate(90f)
@@ -188,8 +222,7 @@ internal fun decodeUpright(bytes: ByteArray, maxEdge: Int): Bitmap? {
             ExifInterface.ORIENTATION_FLIP_VERTICAL -> postScale(1f, -1f)
         }
     }
-    val rotated = if (matrix.isIdentity) bitmap else Bitmap.createBitmap(bitmap, 0, 0, bitmap.width, bitmap.height, matrix, true)
-    return rotated.scaledTo(maxEdge)
+    return if (matrix.isIdentity) this else Bitmap.createBitmap(this, 0, 0, width, height, matrix, true)
 }
 
 private fun Bitmap.scaledTo(maxEdge: Int): Bitmap {

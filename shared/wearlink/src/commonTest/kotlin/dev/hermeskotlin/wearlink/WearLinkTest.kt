@@ -3,6 +3,9 @@ package dev.hermeskotlin.wearlink
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.jsonObject
 import kotlin.test.Test
 import kotlin.test.assertContentEquals
 import kotlin.test.assertEquals
@@ -79,6 +82,58 @@ class WearLinkTest {
         assertFalse(WearPaths.isBotRecording(WearPaths.recordingPath("ask/1")))
         val ask = WatchAsk("a", botProfile = "assistant")
         assertEquals(ask, RecordedAsk.read(RecordedAsk.write(ask, byteArrayOf(1, 2, 3)))?.first)
+    }
+
+    @Test
+    fun phoneAccentSurvivesStatusSerialization() {
+        val wire = """{"signedIn":true,"connected":true,"accent":{"revision":"dark:Violet:1","fill":-5796870,"text":-5796870,"onFill":-16119284,"dim":-5796870}}"""
+        val status = WearJson.decode<PhoneStatus>(wire.encodeToByteArray())!!
+        val resent = WearJson.decode<JsonObject>(WearJson.encode(status))!!
+        assertEquals(Json.parseToJsonElement(wire).jsonObject["accent"], resent["accent"])
+    }
+
+    @Test
+    fun legacyPhoneStatusHasNoAccent() {
+        val old = WearJson.decode<PhoneStatus>("""{"signedIn":true,"connected":true}""".encodeToByteArray())!!
+        assertFalse("accent" in WearJson.decode<JsonObject>(WearJson.encode(old))!!)
+        assertTrue(old.connected)
+    }
+
+    @Test
+    fun accentRevisionSurvivesARequestAndLegacyRequestsHaveNone() {
+        val request = PhoneStatusRequest(accentRevision = "dark:Violet:1")
+        assertEquals(request, WearJson.decode<PhoneStatusRequest>(WearJson.encode(request)))
+        assertEquals(PhoneStatusRequest(), WearJson.decode<PhoneStatusRequest>("{}".encodeToByteArray()))
+        assertNull(WearJson.decode<PhoneStatusRequest>(ByteArray(0)))
+    }
+
+    @Test
+    fun matchingRevisionOmitsColorsFromWire() {
+        val purple = WatchAccent("dark:Violet:1", -5796870, -5796870, -16119284, -5796870)
+        val response = PhoneStatus(signedIn = true, connected = true, accent = purple.updateFor("dark:Violet:1"))
+        assertFalse("accent" in WearJson.decode<JsonObject>(WearJson.encode(response))!!)
+    }
+
+    @Test
+    fun missingOldOrNewPaletteVersionSendsColors() {
+        val purple = WatchAccent("dark:Violet:2", -5796870, -5796870, -16119284, -5796870)
+        for (cached in listOf(null, "dark:Teal:2", "dark:Violet:1")) {
+            assertEquals(purple, purple.updateFor(cached))
+        }
+    }
+
+    @Test
+    fun anAccentsRevisionChangesWithAnyOfItsColors() {
+        val purple = WatchAccent.of(-5796870, -5796870, -16119284, -5796870)
+        assertEquals(purple.revision, WatchAccent.of(-5796870, -5796870, -16119284, -5796870).revision)
+        val changed = listOf(
+            WatchAccent.of(-5796871, -5796870, -16119284, -5796870),
+            WatchAccent.of(-5796870, -5796871, -16119284, -5796870),
+            WatchAccent.of(-5796870, -5796870, -16119285, -5796870),
+            WatchAccent.of(-5796870, -5796870, -16119284, -5796871),
+        )
+        for (accent in changed) assertEquals(accent, accent.updateFor(purple.revision))
+        assertNull(purple.updateFor(purple.revision))
     }
 
     @Test

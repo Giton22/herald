@@ -177,7 +177,7 @@ class WatchLink(
         profileChecked = false
         try {
             val chat = store.chat.value
-            if (send(WearPaths.STATUS, WearJson.encode(PhoneStatusRequest(chat.botProfile, id, chat.scope))) { statusRequest?.first == id } != null) {
+            if (send(WearPaths.STATUS, WearJson.encode(PhoneStatusRequest(chat.botProfile, id, chat.scope, store.accent.value?.revision))) { statusRequest?.first == id } != null) {
                 _chats.value = null
                 return@withContext false
             }
@@ -537,6 +537,7 @@ class WatchLink(
                 WearPaths.CALL_UPDATE -> WearJson.decode<CallUpdate>(data)?.let(::onCallUpdate)
                 WearPaths.CALL_SEND -> WearJson.decode<CallEvents>(data)?.let(::onCallSend)
                 WearPaths.STATUS -> WearJson.decode<PhoneStatus>(data)?.let { status ->
+                    if (status.accent?.let(store::setAccent) == true) TileService.getUpdater(context).requestUpdate(AskTileService::class.java)
                     val pending = statusRequest
                     if (status.requestId != latestStatus && (status.profileSync || status.requestId != null)) return@let
                     if (pending == null && (!profileChecked || status.activeScope != store.phoneScope)) return@let

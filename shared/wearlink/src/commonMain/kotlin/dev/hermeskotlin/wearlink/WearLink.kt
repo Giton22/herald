@@ -240,12 +240,24 @@ data class ChatList(
     val scope: WatchScope? = null,
 )
 
+/** The phone's dark accent colors, stored with their revision so the watch can ask only for changes. */
+@Serializable
+data class WatchAccent(val revision: String, val fill: Int, val text: Int, val onFill: Int, val dim: Int) {
+    fun updateFor(cachedRevision: String?): WatchAccent? = takeUnless { revision == cachedRevision }
+
+    companion object {
+        /** Its revision is the colors themselves, so any change to them reaches a watch that kept the old ones. */
+        fun of(fill: Int, text: Int, onFill: Int, dim: Int): WatchAccent =
+            WatchAccent(listOf(fill, text, onFill, dim).joinToString("-") { it.toUInt().toString(16) }, fill, text, onFill, dim)
+    }
+}
+
 /**
  * Whether Herald on the phone is signed in to a gateway, and [connected]: connected to it, or ready to connect
  * when asked; false while it's (re)connecting or failing to. [failed]: it gave up, and won't connect on its own.
  */
 @Serializable
-data class PhoneStatusRequest(val botProfile: String? = null, val requestId: String? = null, val scope: WatchScope? = null)
+data class PhoneStatusRequest(val botProfile: String? = null, val requestId: String? = null, val scope: WatchScope? = null, val accentRevision: String? = null)
 
 @Serializable
 data class PhoneStatus(
@@ -265,6 +277,7 @@ data class PhoneStatus(
     val activeScope: WatchScope? = null,
     val profileSync: Boolean = false,
     val scope: WatchScope? = null,
+    val accent: WatchAccent? = null,
 )
 
 /*

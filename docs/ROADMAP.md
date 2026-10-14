@@ -162,6 +162,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] File and PDF attachments (`file.attach` as `@file:` refs, `pdf.attach` with a `file.attach` fallback when the gateway can't render pages)
 - [x] Images in history: stored `@image:` refs fetched through `GET /api/media`, `@file:` refs as file cards, the attached-context block hidden
 - [x] Pictures and files the agent delivers (`MEDIA:` paths, Markdown images, `::preview` widget files) shown inline or as cards, fetched through `GET /api/files/download`
+- [x] Links to files on the gateway (`[name](/path)`, `file://`, `/src/App.kt:42`) open full screen: Markdown rendered, JSON indented, CSV/TSV as a table, code with line numbers at the linked line; Save and Share fetch the whole file (`GET /api/fs/read-text`, `GET /api/fs/download`)
 - [x] Full-screen image viewer with pinch-zoom; Save (Pictures / Download `Herald`) and Share for pictures and files
 - [x] Chats open as the `desktop` surface (`source` on `session.create` / `session.resume`), so the agent knows Markdown and files render
 - [ ] Run `::preview` widgets inline (a WebView with Desktop's theme prelude)
@@ -300,5 +301,6 @@ Agent tools that run on the phone: a gateway plugin registers them, Herald answe
 - [ ] Desktop (JVM) app
 - [x] Wear OS companion (`wearApp`, `shared/wearlink`): talk to Hermes from the watch through Herald on the phone (Data Layer relay, its own side chat); the watch's speech recognizer, or a recording the gateway transcribes; live progress, the reply and the chat's title; the gateway's voice played on the watch, the watch's own voice when there is none; pick, start or continue a chat; separate Chats and Bots tabs, with asks and calls routed to each bot's permanent conversation; a Call Hermes tile and complication using the phone’s Default Call Target; an image-only complication showing bot portrait/phone-badge artwork or the phone glyph; background target/artwork sync through Data Layer, with current destination resolved on every call; phone profile changes stop watch calls, return to its home screen and refresh its lists, also checked on reopening; saved call conversations retain their owning profile
 - [x] Wear OS live voice: with GPT-Live on the gateway, the watch holds the voice call itself (WebRTC, its microphone and speaker, over Wi-Fi or mobile data when it has them) while Herald on the phone gets the model's answer and runs each request as a Hermes turn in the watch's chat; captions, Hermes at work, mute and hang up on the watch; "Talk live" in the watch's settings
+- [x] watch follows phone accent colors
 - [ ] Wear OS direct mode: the watch talks to the gateway itself, without the phone
 - [ ] Localization (`i18n.catalog`)

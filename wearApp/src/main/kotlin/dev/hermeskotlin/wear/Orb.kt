@@ -23,6 +23,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
+import androidx.wear.compose.material3.MaterialTheme
 import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -54,10 +55,10 @@ val Amber = Color(0xFFF5A524)
 val Danger = Color(0xFFF85149)
 
 /** The color the orb and the halo take for [mood]. */
-fun orbTint(mood: OrbMood): Color = when (mood) {
+fun orbTint(mood: OrbMood, accent: Color = HeraldBlue): Color = when (mood) {
     OrbMood.Waiting -> Amber
     OrbMood.Failed -> Danger
-    else -> HeraldBlue
+    else -> accent
 }
 
 /**
@@ -69,7 +70,8 @@ fun orbTint(mood: OrbMood): Color = when (mood) {
 @Composable
 fun HeraldOrb(mood: OrbMood, level: Float, modifier: Modifier = Modifier, context: Float? = null) {
     val fill by animateFloatAsState(context?.coerceIn(0f, 1f) ?: 0f, tween(600), label = "context")
-    val tint by animateColorAsState(orbTint(mood), label = "tint")
+    val accentText = MaterialTheme.colorScheme.primary
+    val tint by animateColorAsState(orbTint(mood, MaterialTheme.colorScheme.primaryContainer), label = "tint")
     val time by rememberInfiniteTransition(label = "orb").animateFloat(
         initialValue = 0f,
         targetValue = 1f,
@@ -120,7 +122,7 @@ fun HeraldOrb(mood: OrbMood, level: Float, modifier: Modifier = Modifier, contex
             val box = Size(rim * 2, rim * 2)
             drawCircle(Color.White.copy(alpha = 0.1f), radius = rim, style = Stroke(width))
             if (fill > 0f) {
-                drawArc(contextTint(fill), startAngle = -90f, sweepAngle = 360f * fill, useCenter = false, topLeft = topLeft, size = box, style = Stroke(width, cap = StrokeCap.Round))
+                drawArc(contextTint(fill, accentText), startAngle = -90f, sweepAngle = 360f * fill, useCenter = false, topLeft = topLeft, size = box, style = Stroke(width, cap = StrokeCap.Round))
             }
         }
         if (circling) {
@@ -140,11 +142,11 @@ fun HeraldOrb(mood: OrbMood, level: Float, modifier: Modifier = Modifier, contex
     }
 }
 
-/** The context ring's color: Herald blue, amber from three quarters full, red from nine tenths. */
-internal fun contextTint(fill: Float): Color = when {
+/** The context ring's color: the accent, amber from three quarters full, red from nine tenths. */
+internal fun contextTint(fill: Float, accentText: Color = HeraldBlueText): Color = when {
     fill >= 0.9f -> Danger
     fill >= 0.75f -> Amber
-    else -> HeraldBlueText
+    else -> accentText
 }
 
 private val BAR_HEIGHTS = listOf(18, 34, 24, 40, 20)

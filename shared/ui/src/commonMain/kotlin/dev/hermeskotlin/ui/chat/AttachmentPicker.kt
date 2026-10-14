@@ -26,3 +26,16 @@ expect fun rememberAttachmentPicker(
 /** Decodes an encoded image, sampled down to about [maxEdge] px on its long side; null when it can't be read. */
 @Composable
 expect fun rememberImageBitmap(bytes: ByteArray, maxEdge: Int = 320): ImageBitmap?
+
+/** [rememberImageBitmap] outside composition, for decoding off the main thread. */
+expect fun decodeImageBitmap(bytes: ByteArray, maxEdge: Int): ImageBitmap?
+
+/** A picture being decoded: [bitmap] once it's read, null while [decoding] or when it can't be read. */
+class DecodedImage(val bitmap: ImageBitmap?, val decoding: Boolean)
+
+/**
+ * [rememberImageBitmap] for a file from a reply: a format that decodes slowly (a TIFF on Android) is read in
+ * the background, and [DecodedImage.decoding] says so meanwhile, so a view shows a spinner rather than a failure.
+ */
+@Composable
+expect fun rememberDecodedImage(bytes: ByteArray, maxEdge: Int): DecodedImage

@@ -91,6 +91,7 @@ import androidx.compose.foundation.text.InlineTextContent
 import androidx.compose.foundation.text.appendInlineContent
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.platform.LocalDensity
@@ -108,6 +109,14 @@ import kotlinx.coroutines.withContext
 import org.intellij.markdown.MarkdownElementTypes
 import org.intellij.markdown.MarkdownTokenTypes
 import org.intellij.markdown.ast.getTextInNode
+import androidx.compose.foundation.clickable
+import androidx.compose.ui.graphics.ColorFilter
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.painter.BitmapPainter
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
+import com.composables.icons.lucide.ImageOff
+import com.mikepenz.markdown.model.ImageData
+import com.mikepenz.markdown.model.ImageTransformer
 
 /** Code blocks wrap long lines instead of scrolling sideways (the "Wrap code lines" setting). */
 val LocalCodeWrap = compositionLocalOf { false }
@@ -194,7 +203,8 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier, streaming: Boolean
     val annotator = markdownAnnotator(annotate = annotate)
     val inlineContent = remember(prepared, math, density) { DefaultMarkdownInlineContent(inlineFormulas(prepared, math, density)) }
     val parentUris = LocalUriHandler.current
-    val webOnly = remember(parentUris) { WebLinksOnly(parentUris) }
+    val fileLinks = LocalFileLinks.current
+    val webOnly = remember(parentUris, fileLinks) { WebLinksOnly(parentUris, fileLinks) }
     CompositionLocalProvider(LocalUriHandler provides webOnly, LocalStreaming provides streaming, LocalMathStyle provides math) {
         Markdown(
             content = prepared,
@@ -205,6 +215,7 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier, streaming: Boolean
             dimens = markdownDimens(codeBackgroundCornerSize = Theme[radii][radiusMedium], tableCornerSize = Theme[radii][radiusMedium]),
             annotator = annotator,
             inlineContent = inlineContent,
+            imageTransformer = PictureTransformer,
             components = components,
             retainState = true,
             immediate = !streaming,
@@ -282,13 +293,57 @@ private fun DisplayFormula(formula: MathFormula, math: MathStyle) {
 }
 
 /**
- * Opens only web and mail links. The text may come from a page the agent read, so a link to an
- * `intent:`, `file:` or app scheme must not reach another app on a tap.
+ * Where a tapped link that isn't a web or mail link goes, a file path for instance; the handler ignores
+ * what it can't open. Null (the default) leaves such links inert.
  */
-private class WebLinksOnly(private val parent: UriHandler) : UriHandler {
+val LocalFileLinks = staticCompositionLocalOf<((String) -> Unit)?> { null }
+
+/** A picture a Markdown image links to, as the screen's loader has it. */
+sealed interface MarkdownPicture {
+    data object Loading : MarkdownPicture
+
+    /** [onOpen] shows it full screen. */
+    class Ready(val bitmap: ImageBitmap, val onOpen: (() -> Unit)? = null) : MarkdownPicture
+
+    data object Failed : MarkdownPicture
+}
+
+/**
+ * Loads the picture a Markdown image (`![chart](chart.png)`) links to, or returns null to leave that image
+ * out. Null (the default) shows no linked pictures: a reply doesn't fetch what its text points at.
+ */
+val LocalMarkdownPictures = staticCompositionLocalOf<(@Composable (String) -> MarkdownPicture?)?> { null }
+
+/** Draws images through [LocalMarkdownPictures]: nothing while one loads, a broken-picture icon when it fails. */
+private object PictureTransformer : ImageTransformer {
+    @Composable
+    override fun transform(link: String): ImageData? {
+        val load = LocalMarkdownPictures.current ?: return null
+        return when (val picture = load(link)) {
+            null, MarkdownPicture.Loading -> null
+            is MarkdownPicture.Ready -> ImageData(
+                BitmapPainter(picture.bitmap),
+                modifier = picture.onOpen?.let { Modifier.clickable(onClickLabel = "Open the picture", onClick = it) } ?: Modifier,
+                contentDescription = null,
+            )
+            MarkdownPicture.Failed -> ImageData(
+                rememberVectorPainter(Lucide.ImageOff),
+                contentDescription = "Picture couldn't load",
+                colorFilter = ColorFilter.tint(Theme[colors][textTertiary]),
+            )
+        }
+    }
+}
+
+/**
+ * Opens only web and mail links. The text may come from a page the agent read, so a link to an
+ * `intent:`, `file:` or app scheme must not reach another app on a tap; [files] may still show it in
+ * the app (a path on the gateway, opened in a preview).
+ */
+private class WebLinksOnly(private val parent: UriHandler, private val files: ((String) -> Unit)?) : UriHandler {
     override fun openUri(uri: String) {
         val scheme = uri.substringBefore(':', "").lowercase()
-        if (scheme in setOf("http", "https", "mailto")) runCatching { parent.openUri(uri) }
+        if (scheme in setOf("http", "https", "mailto")) runCatching { parent.openUri(uri) } else files?.invoke(uri)
     }
 }
 

@@ -121,6 +121,24 @@ fun extractReplyMedia(text: String, generated: List<GeneratedImage> = emptyList(
 }
 
 /**
+ * A link already written (group 1: a `[label](dest)` link or a `<...>` autolink), or else a bare `file://`
+ * URI in prose (not inside a web address), trailing sentence punctuation left out of it.
+ */
+private val BARE_FILE_URI = Regex(
+    """(\[[^\]\n]*]\([^)\n]*\)|<[^<>\s]+>)|(?<![<(\[\w/=#&?])file://[^\s<>()\[\]`]+?(?=[.,;:!?'"]*(?:\s|$))""",
+)
+
+/**
+ * [text] with each bare `file://` URI outside code made a Markdown autolink (`<file:///x>`), so a tap
+ * can open it like a `[name](file:///x)` link; Markdown only links web addresses written bare. One in a
+ * link's label or in an autolink stays as it is: a link can't hold another.
+ */
+fun linkFileUris(text: String): String {
+    if ("file://" !in text) return text
+    return BARE_FILE_URI.replaceOutsideCode(text) { groups -> if (groups[1].isNotEmpty()) groups[0] else "<${groups[0]}>" }
+}
+
+/**
  * [text] with each match replaced by [transform] of its groups, its code left as it was. The pattern runs
  * on the whole text with the code blanked out: `^`, `$` and lookarounds see real lines and words, nothing
  * starts in a sample or runs into one, and an image whose alt text holds a code span is still one image.

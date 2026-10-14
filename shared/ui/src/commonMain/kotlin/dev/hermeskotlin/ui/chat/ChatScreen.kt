@@ -21,6 +21,10 @@ import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.runtime.Stable
+import dev.hermeskotlin.core.chat.linkFileUris
+import dev.hermeskotlin.core.media.GatewayFile
+import dev.hermeskotlin.core.media.GatewayFileKind
+import dev.hermeskotlin.designsystem.components.LocalFileLinks
 import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.abs
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
@@ -347,6 +351,7 @@ fun ChatScreen(
     val hasControl = state.control != null
     LaunchedEffect(hasControl) { if (!hasControl) controlOpen = false }
     var viewing by remember { mutableStateOf<ViewerImage?>(null) }
+    var previewing by remember { mutableStateOf<GatewayFile?>(null) }
     var notice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(notice) {
         if (notice != null) {
@@ -447,6 +452,14 @@ fun ChatScreen(
         onOpenPets = { petsOpen = true },
         onOpenControl = viewModel::openControl,
         onViewImage = { viewing = it },
+        onOpenFile = { file ->
+            // A picture opens in the viewer, like one the reply delivered.
+            if (file.kind == GatewayFileKind.Image) {
+                viewing = ViewerImage(file.name, fetch = { viewModel.downloadFile(file) })
+            } else {
+                previewing = file
+            }
+        },
         onNotice = { notice = it },
         wallpaper = rememberChatWallpaper(),
         place = target.gateway.label,
@@ -499,6 +512,12 @@ fun ChatScreen(
         controller = viewModel.control,
         onAction = viewModel::runControl,
         onDismiss = { controlOpen = false },
+    )
+    FileViewer(
+        file = previewing,
+        onDismiss = { previewing = null },
+        load = viewModel::previewFile,
+        download = viewModel::downloadFile,
     )
     viewing?.let { image ->
         CompositionLocalProvider(LocalMediaLoader provides viewModel::loadMedia) {
@@ -574,6 +593,8 @@ internal fun ChatView(
     /** Opens the goal and loops sheet from the strip above the composer. */
     onOpenControl: () -> Unit = {},
     onViewImage: (ViewerImage) -> Unit,
+    /** A tapped link to a file on the gateway. */
+    onOpenFile: (GatewayFile) -> Unit = {},
     onNotice: (String) -> Unit,
     /** The chat background from Settings, drawn behind the conversation (and frosted under the composer). */
     wallpaper: ImageBitmap? = null,
@@ -669,6 +690,7 @@ internal fun ChatView(
                         CompositionLocalProvider(
                             LocalMediaLoader provides actions::loadMedia,
                             LocalOpenImage provides onViewImage,
+                            LocalFileLinks provides { link -> GatewayFile.fromLink(link)?.let(onOpenFile) },
                             LocalNotice provides onNotice,
                             LocalSubagents provides SubagentContext(state.subagents, actions::stopSubagent),
                             LocalCommentHost provides commentHost,
@@ -2000,7 +2022,9 @@ private fun AssistantReply(
                 )
             }
             // Not while it streams: the text and its blocks are still changing under the selection.
-            CommentableSelection(source.takeUnless { message.streaming }) { MarkdownText(text, streaming = message.streaming) }
+            CommentableSelection(source.takeUnless { message.streaming }) {
+                MarkdownText(remember(text) { linkFileUris(text) }, streaming = message.streaming)
+            }
         }
         if (media.isNotEmpty()) ReplyMediaList(media)
         when (message.outcome) {

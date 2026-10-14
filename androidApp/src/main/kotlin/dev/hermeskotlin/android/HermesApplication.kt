@@ -9,6 +9,7 @@ import dev.hermeskotlin.android.notify.WatchNotifier
 import dev.hermeskotlin.android.notify.notifyModule
 import dev.hermeskotlin.android.phone.Geofences
 import dev.hermeskotlin.android.push.PushListener
+import dev.hermeskotlin.android.wear.WatchAccentSync
 import dev.hermeskotlin.android.wear.WearRequests
 import dev.hermeskotlin.android.wear.wearModule
 import dev.hermeskotlin.core.phone.PhoneToolsBridge
@@ -36,6 +37,7 @@ class HermesApplication : Application() {
             modules(sharedModules + notifyModule + wearModule)
         }.koin
         koin.get<WearRequests>().start()
+        koin.get<WatchAccentSync>().start()
         koin.get<ChatNotifier>().start()
         koin.get<BotNotifier>().start()
         koin.get<RoomNotifier>().start()

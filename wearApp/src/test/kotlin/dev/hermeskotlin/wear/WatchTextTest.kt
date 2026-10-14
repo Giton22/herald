@@ -1,11 +1,51 @@
 package dev.hermeskotlin.wear
 
+import androidx.compose.ui.graphics.Color
 import dev.hermeskotlin.wearlink.ReplyPhase
+import dev.hermeskotlin.wearlink.WatchAccent
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class WatchTextTest {
+
+    @Test
+    fun normalOrbAndContextFollowAccentButWarningsDoNot() {
+        val purple = Color(0xFFA78BFA)
+        assertEquals(purple, orbTint(OrbMood.Working, purple))
+        assertEquals(Amber, orbTint(OrbMood.Waiting, purple))
+        assertEquals(Danger, orbTint(OrbMood.Failed, purple))
+        assertEquals(purple, contextTint(0.2f, purple))
+        assertEquals(Amber, contextTint(0.8f, purple))
+        assertEquals(Danger, contextTint(0.95f, purple))
+    }
+
+    @Test
+    fun syncedPaletteChangesAccentRolesOnly() {
+        val colors = watchColors(WatchAccent("dark:Violet:1", 0xFFA78BFA.toInt(), 0xFFA78BFA.toInt(),
+            0xFF0A0A0C.toInt(), 0xFFA78BFA.toInt()))
+        assertEquals(Color(0xFFA78BFA), colors.primary)
+        assertEquals(Color(0xFFA78BFA), colors.primaryContainer)
+        assertEquals(Color(0xFFA78BFA), colors.primaryDim)
+        assertEquals(Color(0xFF0A0A0C), colors.onPrimaryContainer)
+        assertEquals(Color.Black, colors.background)
+        assertEquals(Color(0xFFF4F4F6), colors.onSurface)
+    }
+
+    @Test
+    fun noPaletteKeepsOriginalBlueTheme() {
+        val colors = watchColors(null)
+        assertEquals(Color(0xFF2F6BF5), colors.primaryContainer)
+        assertEquals(Color(0xFF7AA5FF), colors.primary)
+        assertEquals(Color(0xFF4A84FE), colors.primaryDim)
+        assertEquals(Color.White, colors.onPrimaryContainer)
+    }
+
+    @Test
+    fun tileRingIsTheAccentAtAQuarter() {
+        assertEquals(0x402F6BF5, softRing(0xFF2F6BF5.toInt()))
+        assertEquals(0x40A78BFA, softRing(0xFFA78BFA.toInt()))
+    }
 
     @Test
     fun agoSaysHowLongAgoTheWayAListDoes() {

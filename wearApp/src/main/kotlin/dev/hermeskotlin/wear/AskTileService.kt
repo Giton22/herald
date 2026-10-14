@@ -22,10 +22,12 @@ import com.google.common.util.concurrent.ListenableFuture
 class AskTileService : TileService() {
 
     override fun onTileRequest(requestParams: RequestBuilders.TileRequest): ListenableFuture<TileBuilders.Tile> {
-        val last = HeraldWatch.of(this).store.lastReply?.let(::spokenText)?.takeIf { it.isNotBlank() }
+        val store = HeraldWatch.of(this).store
+        val last = store.lastReply?.let(::spokenText)?.takeIf { it.isNotBlank() }
+        val accent = store.accent.value
         val tile = TileBuilders.Tile.Builder()
             .setResourcesVersion(RESOURCES_VERSION)
-            .setTileTimeline(TimelineBuilders.Timeline.fromLayoutElement(layout(last)))
+            .setTileTimeline(TimelineBuilders.Timeline.fromLayoutElement(layout(last, accent?.fill ?: HERALD_BLUE, accent?.onFill ?: WHITE)))
             .build()
         return done(tile)
     }
@@ -43,7 +45,8 @@ class AskTileService : TileService() {
                 .build(),
         )
 
-    private fun layout(last: String?): LayoutElementBuilders.LayoutElement {
+    /** [fill] is the accent the mic sits on (the phone's, once synced), [onFill] the mic's own color. */
+    private fun layout(last: String?, fill: Int, onFill: Int): LayoutElementBuilders.LayoutElement {
         val open = ModifiersBuilders.Clickable.Builder()
             .setId("ask")
             .setOnClick(
@@ -66,7 +69,7 @@ class AskTileService : TileService() {
                     .setClickable(open)
                     .setBackground(
                         ModifiersBuilders.Background.Builder()
-                            .setColor(argb(HERALD_BLUE))
+                            .setColor(argb(fill))
                             .setCorner(ModifiersBuilders.Corner.Builder().setRadius(dp(MIC_BUTTON / 2)).build())
                             .build(),
                     )
@@ -76,6 +79,7 @@ class AskTileService : TileService() {
             .addContent(
                 LayoutElementBuilders.Image.Builder()
                     .setResourceId(MIC)
+                    .setColorFilter(LayoutElementBuilders.ColorFilter.Builder().setTint(argb(onFill)).build())
                     .setWidth(dp(MIC_ICON))
                     .setHeight(dp(MIC_ICON))
                     .build(),
@@ -89,7 +93,7 @@ class AskTileService : TileService() {
                 ModifiersBuilders.Modifiers.Builder()
                     .setBackground(
                         ModifiersBuilders.Background.Builder()
-                            .setColor(argb(HERALD_BLUE_SOFT))
+                            .setColor(argb(softRing(fill)))
                             .setCorner(ModifiersBuilders.Corner.Builder().setRadius(dp(RING / 2)).build())
                             .build(),
                     )
@@ -133,12 +137,15 @@ class AskTileService : TileService() {
         const val MIC = "mic"
         const val MIC_BUTTON = 52f
         const val RING = 70f
-        const val HERALD_BLUE_SOFT = 0x402F6BF5
         const val MIC_ICON = 26f
         const val LABEL_SIZE = 13f
         const val BODY_SIZE = 14f
         const val HERALD_BLUE = 0xFF2F6BF5.toInt()
+        const val WHITE = 0xFFFFFFFF.toInt()
         const val TEXT = 0xFFF4F4F6.toInt()
         const val MUTED = 0xFF8A8A94.toInt()
     }
 }
+
+/** The soft ring round the tile's mic: [fill] at a quarter strength, as Herald blue's ring always was. */
+internal fun softRing(fill: Int): Int = (fill and 0x00FFFFFF) or 0x40000000

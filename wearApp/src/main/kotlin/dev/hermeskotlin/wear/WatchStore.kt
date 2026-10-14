@@ -3,6 +3,7 @@ package dev.hermeskotlin.wear
 import android.content.Context
 import androidx.core.content.edit
 import dev.hermeskotlin.wearlink.WatchScope
+import dev.hermeskotlin.wearlink.WatchAccent
 import dev.hermeskotlin.wearlink.WearJson
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -28,6 +29,22 @@ class WatchStore(context: Context) {
         set(value) = prefs.edit { putString(PHONE_NODE, value) }
 
     private val savedScope = prefs.getString(CHAT_SCOPE, null)?.let { WearJson.decode<WatchScope>(it.encodeToByteArray()) }
+    private val _accent = MutableStateFlow(prefs.getString(ACCENT, null)
+        ?.let { WearJson.decode<WatchAccent>(it.encodeToByteArray()) })
+    val accent: StateFlow<WatchAccent?> = _accent.asStateFlow()
+
+    /**
+     * Keeps the phone's accent; false when it's the one already kept. Locked: two status replies can land at once,
+     * and the saved copy must end on the same one as [accent].
+     */
+    @Synchronized
+    fun setAccent(value: WatchAccent): Boolean {
+        if (_accent.value == value) return false
+        _accent.value = value
+        prefs.edit { putString(ACCENT, WearJson.encode(value).decodeToString()) }
+        return true
+    }
+
     private val _chat = MutableStateFlow(
         WatchChatChoice(
             prefs.getString(CHAT_ID, null),
@@ -99,6 +116,7 @@ class WatchStore(context: Context) {
         const val PHONE_SCOPE = "phone_scope"
         const val PHONE_NODE = "phone_node"
         const val CHAT_SCOPE = "chat_scope"
+        const val ACCENT = "accent"
         const val CHAT_ID = "chat_id"
         const val BOT_PROFILE = "bot_profile"
         const val CHAT_TITLE = "chat_title"
