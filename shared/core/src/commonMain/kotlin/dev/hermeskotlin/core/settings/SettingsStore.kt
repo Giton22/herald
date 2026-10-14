@@ -117,6 +117,8 @@ data class AppSettings(
     val recentModels: List<String> = emptyList(),
     /** The sidebar's Pinned section is folded: only pinned chats that are open or have something going on show. */
     val pinnedCollapsed: Boolean = false,
+    /** The sidebar's Threads section is folded the same way: only threads that are open or have something going on show. */
+    val threadsCollapsed: Boolean = false,
     /** The sidebar shows its projects as one button that opens a list, not a row of chips that scrolls sideways. */
     val projectsAsDropdown: Boolean = false,
 )

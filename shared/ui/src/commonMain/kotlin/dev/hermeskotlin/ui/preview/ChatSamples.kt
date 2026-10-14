@@ -6,6 +6,7 @@ import dev.hermeskotlin.core.chat.Attachment
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.GatewayNotice
 import dev.hermeskotlin.core.projects.Project
+import dev.hermeskotlin.core.threads.ChatThread
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.DelegatedTask
 import dev.hermeskotlin.core.chat.InputRequest
@@ -106,6 +107,27 @@ internal object ChatSamples {
 
     /** A finished turn: reasoning, tools, a diff and a Markdown answer. */
     val reply: ChatState = connected.copy(messages = listOf(ask, answer))
+
+    private val tableAnswer = ChatMessage.Assistant(
+        key = "a2",
+        text = """
+            Three jobs are still open. Here is where each stands:
+
+            | | Job | Where it stands |
+            |---|---|---|
+            | 🔥 | Backup script | Keeps the last 14 snapshots now. The first cleanup runs tonight and should free about 1.3 TB. |
+            | 🧵 | Photo import | Waiting on the NAS share to be remounted, then it picks up where it stopped. |
+            | 🎸 | Playlist sync | Done. |
+
+            | Disk | Used | Free |
+            |---|---|---|
+            | nas-1 | 1.9 TB | 0.1 TB |
+            | nas-2 | 0.4 TB | 1.6 TB |
+        """.trimIndent(),
+    )
+
+    /** A finished turn whose answer holds tables: a column of emoji, a wordy one, and a plain one. */
+    val tables: ChatState = connected.copy(messages = listOf(ask, tableAnswer))
 
     /** The finished turn with the gateway's notices: credits, and the agent still starting. */
     val notices: ChatState = reply.copy(
@@ -327,10 +349,30 @@ internal object ChatSamples {
     /** Chats in [sessions] holding unsent text. */
     val sessionDrafts = setOf("s5")
 
+    /** The sidebar's list with threads: three permanent chats, one busy, then [sessions]. */
+    fun threadSessions(nowSeconds: Double = Clock.System.now().epochSeconds.toDouble()): List<SessionSummary> {
+        fun ago(minutes: Int) = nowSeconds - minutes * 60
+        return listOf(
+            SessionSummary("t-misc", "Misc", pinned = true, lastActive = ago(40)),
+            SessionSummary("t-site", "Website", pinned = true, lastActive = ago(7)),
+            SessionSummary("t-backup", "Backups", pinned = true, lastActive = ago(60 * 30)),
+        ) + sessions(nowSeconds)
+    }
+
+    /** Threads over [threadSessions]' first three chats, in the order the user put them. */
+    val threads = listOf(
+        ChatThread("th1", "Misc", "t-misc"),
+        ChatThread("th2", "Website", "t-site", cwd = "/srv/site"),
+        ChatThread("th3", "Backups", "t-backup", cwd = "/srv/backup"),
+    )
+
+    /** What the sidebar says about [threadSessions]: [sessionStatuses], and the website thread running. */
+    val threadStatuses = sessionStatuses + ("t-site" to RowStatus(running = true))
+
     /** Projects the sample chats sit in: two git roots and Home. */
     val projects = listOf(
-        Project("/srv/backup", "backup", "/srv/backup", sessionCount = 6, isAuto = true, sessionIds = setOf("p1", "s2", "s7")),
-        Project("p-site", "website", "/srv/site", sessionCount = 3, sessionIds = setOf("s9")),
+        Project("/srv/backup", "backup", "/srv/backup", sessionCount = 6, isAuto = true, sessionIds = setOf("p1", "s2", "s7", "t-backup")),
+        Project("p-site", "website", "/srv/site", sessionCount = 3, sessionIds = setOf("s9", "t-site")),
         Project("__no_project__", "Home", null, sessionCount = 9, isNoProject = true),
     )
 

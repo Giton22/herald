@@ -4,6 +4,9 @@ import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.rpc.JsonRpcClient
 import dev.hermeskotlin.core.rpc.RpcException
+import dev.hermeskotlin.core.profiles.UI_META_ATTEMPTS
+import dev.hermeskotlin.core.profiles.writeUiMeta
+import dev.hermeskotlin.core.sessions.createTitledChat
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -42,24 +45,12 @@ class BotsApi(private val connection: GatewayConnection) : BotChatBackend {
      * revision so a concurrent edit from Desktop isn't overwritten; a lost race reads again and retries.
      */
     suspend fun updateMeta(name: String, changes: Map<String, JsonElement?>) {
-        repeat(META_ATTEMPTS) {
+        repeat(UI_META_ATTEMPTS) {
             val bot = roster().bots.firstOrNull { it.name == name } ?: throw RpcException(4064, "No bot named $name.")
             val merged = JsonObject(
                 (bot.metaBlock + changes.mapValues { it.value ?: JsonNull }).filterValues { it !is JsonNull },
             )
-            val reply = client().request(
-                "profiles.configure",
-                buildJsonObject {
-                    put("name", name)
-                    put("ui_meta", buildJsonObject { put(BotMeta.KEY, merged) })
-                    bot.metaRevision?.let { revision -> put("ui_meta_expected_revisions", buildJsonObject { put(BotMeta.KEY, revision) }) }
-                },
-            ) as? JsonObject
-            val applied = reply?.get("applied") as? JsonObject
-            if (applied?.get("ui_meta_conflicts") == null) {
-                if ((applied?.get("ui_meta") as? JsonPrimitive)?.booleanOrNull == false) throw RpcException(0, "The gateway didn't save it.")
-                return
-            }
+            if (client().writeUiMeta(name, BotMeta.KEY, merged, bot.metaRevision, refused = "The gateway didn't save it.")) return
         }
         throw RpcException(0, "Changed elsewhere at the same time. Try again.")
     }
@@ -244,52 +235,11 @@ class BotsApi(private val connection: GatewayConnection) : BotChatBackend {
         return name
     }
 
-    private suspend fun startChat(profile: String): Pair<String, String> {
-        val client = client()
-        val created = client.request(
-            "session.create",
-            buildJsonObject {
-                put("profile", profile)
-                put("title", BOT_CHAT_TITLE)
-                put("hidden", true)
-                put("follow_profile_config", true)
-                put("source", CLIENT_SOURCE)
-                put("cols", TERMINAL_COLUMNS)
-            },
-        ) as? JsonObject ?: throw RpcException(0, "Empty session.create reply")
-        val runtime = (created["session_id"] as? JsonPrimitive)?.contentOrNull
-        val stored = (created["stored_session_id"] as? JsonPrimitive)?.contentOrNull
-        if (runtime == null || stored == null) throw RpcException(0, "session.create returned no session")
-        try {
-            client.request(
-                "session.title",
-                buildJsonObject {
-                    put("session_id", runtime)
-                    put("title", BOT_CHAT_TITLE)
-                },
-            )
-        } catch (e: RpcException) {
-            // Our runtime is of no use now. The gateway doesn't prune the empty row it made for a
-            // non-"tui" source, so let go of the runtime and remove the row rather than leave a stray.
-            discard(client, profile, runtime, stored)
-            if (TITLE_TAKEN.containsMatchIn(e.message)) throw BotChatTakenException()
-            throw e
+    private suspend fun startChat(profile: String): Pair<String, String> =
+        client().createTitledChat(profile, BOT_CHAT_TITLE, taken = { BotChatTakenException() }) {
+            put("hidden", true)
+            put("follow_profile_config", true)
         }
-        return runtime to stored
-    }
-
-    private suspend fun discard(client: JsonRpcClient, profile: String, runtime: String, stored: String) {
-        runCatching { client.request("session.close", buildJsonObject { put("session_id", runtime) }) }
-        runCatching {
-            client.request(
-                "session.delete",
-                buildJsonObject {
-                    put("session_id", stored)
-                    put("profile", profile)
-                },
-            )
-        }
-    }
 
     private fun client(): JsonRpcClient = (connection.state.value as? ConnectionState.Connected)?.client
         ?: throw RpcException(0, "Not connected to the gateway.")
@@ -301,8 +251,6 @@ class BotsApi(private val connection: GatewayConnection) : BotChatBackend {
         /** Same surface hint as [dev.hermeskotlin.core.chat.ChatSession]: Markdown and pictures show here. */
         private const val CLIENT_SOURCE = "desktop"
         private const val TERMINAL_COLUMNS = 80
-        private val TITLE_TAKEN = Regex("already in use", RegexOption.IGNORE_CASE)
-        private const val META_ATTEMPTS = 4
 
         /** Making or copying a profile seeds its skills and writes files; it takes a while. */
         private const val SLOW_MS = 120_000L

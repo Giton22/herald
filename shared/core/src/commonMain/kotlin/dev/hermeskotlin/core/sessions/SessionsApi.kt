@@ -103,6 +103,19 @@ class SessionsApi(private val client: HttpClient) {
     suspend fun setArchived(url: GatewayUrl, sessionId: String, archived: Boolean, profile: String? = null): ApiResult<Unit> =
         patch(url, sessionId, SessionPatch(archived = archived, profile = profile))
 
+    /**
+     * Changes several of a chat's fields in one call; null leaves a field as it is. The gateway sets the title
+     * first, so a title another chat has (a 400 saying it is already in use) changes nothing.
+     */
+    suspend fun update(
+        url: GatewayUrl,
+        sessionId: String,
+        title: String? = null,
+        archived: Boolean? = null,
+        pinned: Boolean? = null,
+        profile: String? = null,
+    ): ApiResult<Unit> = patch(url, sessionId, SessionPatch(title = title, archived = archived, pinned = pinned, profile = profile))
+
     /** `DELETE /api/sessions/{id}`; an already-deleted session also succeeds. */
     suspend fun delete(url: GatewayUrl, sessionId: String, profile: String? = null): ApiResult<Unit> = apiCall {
         client.delete(url.resolve("api/sessions/${sessionId.encodeURLPathPart()}")) {

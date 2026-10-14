@@ -45,4 +45,13 @@ class MessageTimeTest {
         val label = messageTime(nowMillis / 1000.0 - 3, use24Hour = true, nowMillis = nowMillis)
         assertTrue(Regex("""^\d{2}:\d{2}$""").matches(label), label)
     }
+
+    @Test
+    fun dayHeadingsNameTheDay() {
+        assertEquals("Today", dayHeading(daysBefore(0, 8, 0), now))
+        assertEquals("Yesterday", dayHeading(daysBefore(1, 8, 0, dayOfWeek = 7), now))
+        assertEquals("Thursday", dayHeading(daysBefore(4, 8, 0, dayOfWeek = 4), now))
+        assertEquals("Sep 3", dayHeading(daysBefore(33, 8, 0, month = 9, day = 3), now))
+        assertEquals("Dec 24, 2024", dayHeading(daysBefore(286, 8, 0, month = 12, day = 24, year = 2024), now))
+    }
 }

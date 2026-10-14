@@ -10,6 +10,7 @@ import dev.hermeskotlin.ui.sessions.CapabilitiesViewModel
 import dev.hermeskotlin.ui.sessions.ConfigViewModel
 import dev.hermeskotlin.ui.plugins.PluginsViewModel
 import dev.hermeskotlin.ui.sessions.InsightsViewModel
+import dev.hermeskotlin.ui.inbox.InboxViewModel
 import dev.hermeskotlin.ui.sessions.ScheduledViewModel
 import dev.hermeskotlin.ui.rooms.RoomsViewModel
 import dev.hermeskotlin.ui.sessions.SessionsViewModel
@@ -30,11 +31,20 @@ val uiModule = module {
     viewModelOf(::BotsViewModel)
     viewModelOf(::RoomsViewModel)
     viewModelOf(::ScheduledViewModel)
+    viewModelOf(::InboxViewModel)
     viewModelOf(::CapabilitiesViewModel)
     viewModelOf(::ConfigViewModel)
     viewModelOf(::PluginsViewModel)
     viewModelOf(::InsightsViewModel)
-    viewModelOf(::ChatViewModel)
+    // Spelled out: past 22 parameters viewModelOf has no overload, and the last two are optional.
+    viewModel {
+        ChatViewModel(
+            get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(),
+            get(), get(), get(), get(), get(), get(), get(), get(), get(), get(),
+            seen = getOrNull(),
+            threads = getOrNull(),
+        )
+    }
     viewModelOf(::SettingsViewModel)
     // Watched places are the platform's; one without them shows none.
     viewModel { PhoneToolsViewModel(get(), get(), getOrNull<WatchedPlaces>() ?: NoWatchedPlaces) }

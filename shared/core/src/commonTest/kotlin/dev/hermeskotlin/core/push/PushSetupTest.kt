@@ -26,6 +26,7 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
@@ -77,6 +78,11 @@ class PushSetupTest {
         var version: String = PushApi.PLUGIN_VERSION,
         val latest: String = PushApi.PLUGIN_VERSION,
     ) {
+        val profiles = mutableMapOf<String, Copy?>()
+        val failedProfiles = mutableSetOf<String>()
+        val failedChecks = mutableSetOf<String>()
+        var profilesSupported = true
+        var profileListFails = false
         val calls = mutableListOf<JsonObject>()
         val registered = mutableSetOf<String>()
 
@@ -92,12 +98,16 @@ class PushSetupTest {
                     calls += request
                     val params = request["params"] as? JsonObject ?: JsonObject(emptyMap())
                     val reply = when ((request["method"] as JsonPrimitive).content) {
+                        "profiles.list" -> if (profileListFails) "ERROR:profiles unavailable" else if (profilesSupported) buildJsonObject {
+                            put("profiles", JsonArray(profiles.keys.map { name -> buildJsonObject { put("name", name) } }))
+                        }.toString() else "UNSUPPORTED"
                         "plugins.manage" -> manage(params)
                         "command.dispatch" -> if (!(installed && enabled)) null else command(params["arg"]!!.jsonPrimitive.content)
                         else -> "{}"
                     }
                     transport.push(
                         when {
+                            reply == "UNSUPPORTED" -> """{"jsonrpc":"2.0","id":$id,"error":{"code":-32601,"message":"unknown method"}}"""
                             reply == null -> """{"jsonrpc":"2.0","id":$id,"error":{"code":4018,"message":"not a command"}}"""
                             reply.startsWith("ERROR:") -> """{"jsonrpc":"2.0","id":$id,"error":{"code":5026,"message":"${reply.removePrefix("ERROR:")}"}}"""
                             else -> """{"jsonrpc":"2.0","id":$id,"result":$reply}"""
@@ -107,26 +117,49 @@ class PushSetupTest {
             }
         }
 
-        private fun manage(params: JsonObject): String? = when (params["action"]!!.jsonPrimitive.content) {
-            "install" -> {
-                val force = (params["force"] as? JsonPrimitive)?.booleanOrNull == true
-                if (installed && !force) {
-                    // Hermes refuses a plain install over an existing copy.
-                    "ERROR:Plugin 'herald-push' already exists. Use force reinstall"
-                } else {
-                    installed = true
-                    enabled = true
-                    version = latest
-                    """{"ok":true}"""
+        private fun manage(params: JsonObject): String? {
+            val profile = params["profile"]?.jsonPrimitive?.contentOrNull
+            if (profile != null) {
+                val copy = profiles[profile]
+                return when (params["action"]!!.jsonPrimitive.content) {
+                    "list" -> if (profile in failedChecks) "ERROR:profile unavailable" else buildJsonObject {
+                        put("plugins", JsonArray(listOfNotNull(copy?.let {
+                            buildJsonObject {
+                                put("name", "herald-push")
+                                put("version", it.version)
+                                put("source", it.source)
+                                put("status", if (it.enabled) "enabled" else "disabled")
+                            }
+                        })))
+                    }.toString()
+                    "install" -> if (profile in failedProfiles) "ERROR:install refused" else {
+                        profiles[profile] = Copy(latest, params["enable"]!!.jsonPrimitive.booleanOrNull == true)
+                        """{"ok":true}"""
+                    }
+                    else -> "{}"
                 }
             }
-            "toggle" -> if (installed) {
-                enabled = true
-                """{"ok":true}"""
-            } else {
-                """{"ok":false,"error":"not installed"}"""
+            return when (params["action"]!!.jsonPrimitive.content) {
+                "install" -> {
+                    val force = (params["force"] as? JsonPrimitive)?.booleanOrNull == true
+                    if (installed && !force) {
+                        // Hermes refuses a plain install over an existing copy.
+                        "ERROR:Plugin 'herald-push' already exists. Use force reinstall"
+                    } else {
+                        installed = true
+                        enabled = true
+                        version = latest
+                        """{"ok":true}"""
+                    }
+                }
+                "toggle" -> if (installed) {
+                    enabled = true
+                    """{"ok":true}"""
+                } else {
+                    """{"ok":false,"error":"not installed"}"""
+                }
+                else -> "{}"
             }
-            else -> "{}"
         }
 
         private suspend fun command(arg: String): String {
@@ -163,6 +196,8 @@ class PushSetupTest {
             (call["params"] as? JsonObject)?.let { p -> p["action"]?.jsonPrimitive?.contentOrNull ?: p["arg"]?.jsonPrimitive?.contentOrNull?.substringBefore(' ') }
         }
     }
+
+    private data class Copy(val version: String, val enabled: Boolean = true, val source: String = "git")
 
     private class Setup(val setup: PushSetup, val connection: GatewayConnection, val settings: SettingsStore, val gateways: GatewayRepository)
 
@@ -255,6 +290,170 @@ class PushSetupTest {
         assertEquals(listOf("info", "register"), gateway.actions())
         assertEquals(PushStatus.State.On, s.setup.status.value.state)
         assertEquals(PluginUpdate(PushApi.MIN_PLUGIN_VERSION, PushApi.PLUGIN_VERSION, needed = false), s.setup.status.value.update)
+    }
+
+    @Test
+    fun aCurrentGatewayStillOffersAnUpdateForAnOldBotCopy() = runTest {
+        val s = setup(FakeKeys())
+        val gateway = FakeGateway(installed = true).apply { profiles["assistant"] = Copy("0.1.1") }
+        connect(s, gateway)
+        s.setup.enable()
+
+        assertEquals(PushStatus.State.On, s.setup.status.value.state)
+        assertEquals("0.1.1", s.setup.status.value.update?.installed)
+        assertTrue(gateway.calls.none { (it["params"] as? JsonObject)?.get("action")?.jsonPrimitive?.contentOrNull == "install" })
+        s.setup.updatePlugin()
+        assertEquals(PushApi.PLUGIN_VERSION, gateway.profiles["assistant"]?.version)
+        assertNull(s.setup.status.value.update)
+    }
+
+    @Test
+    fun updatingCopiesPreservesDisabledBotsAndSkipsMissingCurrentAndNewerCopies() = runTest {
+        val s = setup(FakeKeys())
+        val gateway = FakeGateway(installed = true, version = "0.1.1").apply {
+            profiles["assistant"] = Copy("0.1.1", source = "user")
+            profiles["disabled"] = Copy("0.1.1", enabled = false)
+            profiles["missing"] = null
+            profiles["current"] = Copy(PushApi.PLUGIN_VERSION)
+            profiles["newer"] = Copy("9.0.0")
+            profiles["packaged"] = Copy("0.1.1", source = "entrypoint")
+            profiles["bundled"] = Copy("0.1.1", source = "bundled")
+        }
+        connect(s, gateway)
+        s.setup.enable()
+        s.setup.updatePlugin()
+
+        assertEquals(PushApi.PLUGIN_VERSION, gateway.version)
+        assertEquals(Copy(PushApi.PLUGIN_VERSION), gateway.profiles["assistant"])
+        assertEquals(Copy(PushApi.PLUGIN_VERSION, enabled = false), gateway.profiles["disabled"])
+        assertNull(gateway.profiles["missing"])
+        assertEquals(Copy("9.0.0"), gateway.profiles["newer"])
+        assertEquals(Copy("0.1.1", source = "entrypoint"), gateway.profiles["packaged"])
+        assertEquals(Copy("0.1.1", source = "bundled"), gateway.profiles["bundled"])
+        val installs = gateway.calls.mapNotNull { it["params"] as? JsonObject }.filter { it["action"]?.jsonPrimitive?.contentOrNull == "install" }
+        assertEquals(3, installs.size)
+        assertTrue(installs.all { it["ref"]?.jsonPrimitive?.content == PushApi.PLUGIN_REF && it["force"]?.jsonPrimitive?.booleanOrNull == true })
+        assertNull(s.setup.status.value.update)
+    }
+
+    @Test
+    fun aBotCopyWhoseVersionDoesNotReadAsOneIsNeverReplaced() = runTest {
+        val s = setup(FakeKeys())
+        val gateway = FakeGateway(installed = true).apply {
+            profiles["dev"] = Copy("0.4.0-dev")
+            profiles["blank"] = Copy("")
+        }
+        connect(s, gateway)
+        s.setup.enable()
+
+        // Maybe newer than the reviewed one: nothing is offered, and an update elsewhere doesn't touch it.
+        assertNull(s.setup.status.value.update)
+        s.setup.updatePlugin()
+        assertEquals(Copy("0.4.0-dev"), gateway.profiles["dev"])
+        assertEquals(Copy(""), gateway.profiles["blank"])
+    }
+
+    @Test
+    fun theBotsAreLookedAtOncePerConnection() = runTest {
+        val s = setup(FakeKeys())
+        val gateway = FakeGateway(installed = true).apply { profiles["assistant"] = Copy("0.1.1") }
+        connect(s, gateway)
+        s.setup.enable()
+        s.setup.enable()
+        s.setup.enable()
+
+        // Each look is one call per profile, under the lock every push and phone tools check waits on.
+        assertEquals(1, gateway.calls.count { (it["method"] as JsonPrimitive).content == "profiles.list" })
+        assertEquals("0.1.1", s.setup.status.value.update?.installed)
+        // An update always looks afresh.
+        s.setup.updatePlugin()
+        assertEquals(PushApi.PLUGIN_VERSION, gateway.profiles["assistant"]?.version)
+        assertNull(s.setup.status.value.update)
+    }
+
+    @Test
+    fun aLookThatFailedSomewhereIsTriedAgainNotKept() = runTest {
+        val s = setup(FakeKeys())
+        val gateway = FakeGateway(installed = true).apply {
+            profiles["flaky"] = Copy(PushApi.PLUGIN_VERSION)
+            failedChecks += "flaky"
+        }
+        connect(s, gateway)
+        s.setup.enable()
+        assertTrue(s.setup.status.value.detail.orEmpty().contains("flaky"))
+
+        // A timeout once isn't the gateway's state for the rest of the connection.
+        gateway.failedChecks.clear()
+        s.setup.enable()
+        assertNull(s.setup.status.value.detail)
+        assertNull(s.setup.status.value.update)
+    }
+
+    @Test
+    fun aBotUpdateFailureNamesTheProfileAndDoesNotPreventOtherUpdates() = runTest {
+        val s = setup(FakeKeys())
+        val gateway = FakeGateway(installed = true).apply {
+            profiles["unavailable"] = Copy("0.1.1")
+            profiles["assistant"] = Copy("0.1.1")
+            failedProfiles += "unavailable"
+        }
+        connect(s, gateway)
+        s.setup.enable()
+        s.setup.updatePlugin()
+
+        assertEquals(PushStatus.State.On, s.setup.status.value.state)
+        assertTrue(s.setup.status.value.detail.orEmpty().contains("unavailable"))
+        assertEquals("0.1.1", s.setup.status.value.update?.installed)
+        assertEquals("0.1.1", gateway.profiles["unavailable"]?.version)
+        assertEquals(PushApi.PLUGIN_VERSION, gateway.profiles["assistant"]?.version)
+        gateway.failedProfiles.clear()
+        s.setup.updatePlugin()
+        assertNull(s.setup.status.value.detail)
+        assertNull(s.setup.status.value.update)
+    }
+
+    @Test
+    fun anUnavailableBotDoesNotBlockLaunchProfileRegistration() = runTest {
+        for (failRoster in listOf(false, true)) {
+            val gateway = FakeGateway(installed = true).apply {
+                profiles["unavailable"] = Copy("0.1.1")
+                if (failRoster) profileListFails = true else failedChecks += "unavailable"
+            }
+            val s = setup(FakeKeys())
+            connect(s, gateway)
+            s.setup.enable()
+
+            assertEquals(PushStatus.State.On, s.setup.status.value.state)
+            assertEquals(setOf("device-1"), gateway.registered)
+            assertTrue(s.setup.status.value.detail.orEmpty().contains("unavailable"))
+            assertTrue(s.setup.status.value.update != null)
+        }
+    }
+
+    @Test
+    fun anUnavailableBotDoesNotHideTheRequiredLaunchProfileUpdate() = runTest {
+        val gateway = FakeGateway(installed = true, version = "0.1.0").apply {
+            profiles["unavailable"] = Copy("0.1.1")
+            failedChecks += "unavailable"
+        }
+        val s = setup(FakeKeys())
+        connect(s, gateway)
+        s.setup.enable()
+
+        assertEquals(PushStatus.State.Outdated, s.setup.status.value.state)
+        assertTrue(s.setup.status.value.update?.needed == true)
+    }
+
+    @Test
+    fun gatewaysWithoutProfilesKeepTheirExistingUpdateFlow() = runTest {
+        val s = setup(FakeKeys())
+        val gateway = FakeGateway(installed = true, version = "0.1.1").apply { profilesSupported = false }
+        connect(s, gateway)
+        s.setup.enable()
+        s.setup.updatePlugin()
+
+        assertEquals(PushApi.PLUGIN_VERSION, gateway.version)
+        assertEquals(PushStatus.State.On, s.setup.status.value.state)
     }
 
     @Test

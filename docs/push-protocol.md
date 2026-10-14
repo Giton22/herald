@@ -38,6 +38,11 @@ Desktop's Plugins hub makes, and the plugin is live without a restart. `ref` pin
 built against, so a later change to the repository never reaches a gateway unreviewed. A copy that is
 present but switched off is switched on (`plugins.manage {action: "toggle"}`) rather than reinstalled, and
 one older than Herald's minimum version is reinstalled at the pinned commit (`force: true`).
+The update also checks bot profiles for existing downloaded copies and replaces older ones at the same
+pinned commit using `profile` in `plugins.manage`. Disabled bot copies stay disabled; missing copies are
+not installed, and newer versions are not downgraded. An outdated bot copy is offered an update even when
+the launch profile is current. Failures name the affected profile. Tools in running agent sessions may
+require a session reload after an update; Herald does not interrupt those sessions.
 
 One phone identity serves one gateway. Moving to another gateway, or turning the feature off, retires the
 identity: the keys and topics are dropped, so the old gateway's pushes land on a topic nobody reads, and that

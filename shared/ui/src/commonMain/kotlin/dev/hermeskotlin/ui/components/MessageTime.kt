@@ -54,3 +54,21 @@ private fun clockTime(at: LocalMoment, use24Hour: Boolean): String {
 
 private val MONTHS = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
 private val WEEKDAYS = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
+
+/** A day heading for a list grouped by day: "Today", "Yesterday", "Monday" within the week, "Sep 3", "Sep 3, 2024". */
+fun dayHeading(at: LocalMoment, now: LocalMoment): String {
+    val daysAgo = now.epochDay - at.epochDay
+    return when {
+        daysAgo <= 0 -> "Today"
+        daysAgo == 1L -> "Yesterday"
+        daysAgo < 7 -> DAY_NAMES[at.dayOfWeek - 1]
+        at.year == now.year -> "${MONTHS[at.month - 1]} ${at.day}"
+        else -> "${MONTHS[at.month - 1]} ${at.day}, ${at.year}"
+    }
+}
+
+/** [dayHeading] for epoch seconds, on the device's calendar. */
+fun dayHeading(epochSeconds: Long, nowMillis: Long = Clock.System.now().toEpochMilliseconds()): String =
+    dayHeading(localMoment(epochSeconds * 1000), localMoment(nowMillis))
+
+private val DAY_NAMES = listOf("Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday")

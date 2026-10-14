@@ -1936,7 +1936,7 @@ private fun AssistantReply(
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         ReplyHeader(message.timestamp.takeUnless { message.streaming })
         // What's happening now is said once, above the composer; the reply keeps only what it's made of.
-        if (showReasoning) Reasoning(message.reasoning)
+        if (showReasoning) Reasoning(message.reasoning, message.streaming)
         // While the turn runs its finished steps are listed as they land; once it ends they fold into the pill.
         if (showTools) if (message.streaming) LiveSteps(listedTools, message.key) else Tools(listedTools, message.key)
         if (generated.isNotEmpty()) ReplyMediaList(remember(generated) { generated.map { it.asMedia() } })
@@ -2308,7 +2308,7 @@ private fun Disclosure(
 
 /** The reply's reasoning, folded; live progress is the dock's to show. */
 @Composable
-private fun Reasoning(text: String) {
+private fun Reasoning(text: String, streaming: Boolean) {
     var expanded by remember { mutableStateOf(false) }
     Disclosure(
         icon = { UnstyledIcon(Lucide.Brain, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp)) },
@@ -2316,7 +2316,7 @@ private fun Reasoning(text: String) {
         expanded = expanded,
         onToggle = { expanded = !expanded },
     ) {
-        Text(text.trim(), style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
+        MarkdownText(text.trim(), streaming = streaming, textStyle = Theme[typography][bodySmall].copy(color = Theme[colors][textSecondary]))
     }
 }
 

@@ -10,6 +10,8 @@ import dev.hermeskotlin.core.chat.Checkpoint
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.ChatSession
+import dev.hermeskotlin.core.threads.ChatThread
+import dev.hermeskotlin.core.threads.ThreadsRepository
 import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.ComposeDraft
@@ -187,6 +189,8 @@ class ChatViewModel(
     speechStreams: SpeechStreams,
     /** Where the user last looked in each chat, so a chat reopened from a notification starts at its new messages. */
     private val seen: SeenStore? = null,
+    /** The threads, so `/new` in a thread's chat starts the thread fresh instead of leaving it. */
+    private val threads: ThreadsRepository? = null,
 ) : ViewModel(), ChatActions {
 
     /** Dictation and voice chat for the open chat. */
@@ -741,6 +745,37 @@ class ChatViewModel(
         }
     }
 
+    /** The thread whose chat is open, when the chat is one and is in the profile the threads were read for. */
+    fun openThread(): ChatThread? {
+        val repo = threads ?: return null
+        val open = target ?: return null
+        val scope = repo.scope.value ?: return null
+        if (open.bot != null || scope.url != open.gateway.gatewayUrl || scope.profile != open.profile) return null
+        return repo.threadFor(session.value?.state?.value?.storedSessionId ?: open.storedSessionId)
+    }
+
+    /**
+     * Starts the open thread fresh and moves to its new chat. Asked for by [command] (`/new` or `/reset`), whose
+     * failure shows in the chat like any command's output.
+     */
+    fun startThreadFresh(command: String = "/new") {
+        val chat = session.value ?: return
+        viewModelScope.launch { startThreadFresh(chat, command) }
+    }
+
+    private suspend fun startThreadFresh(chat: ChatSession, command: String) {
+        val repo = threads ?: return
+        val thread = openThread() ?: return
+        try {
+            val fresh = repo.startFresh(thread)
+            _requests.send(ChatRequest.OpenChat(fresh.sessionId, fresh.title))
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            chat.showCommandOutput(command, e.message ?: "Couldn't start ${thread.name} fresh.", failed = true)
+        }
+    }
+
     /** A command typed in the composer: answered here when this app has its own control for it, else run on the gateway. */
     private fun runCommand(chat: ChatSession, command: SlashCommand) {
         viewModelScope.launch {
@@ -750,7 +785,12 @@ class ChatViewModel(
             }
             when (val route = SlashRoute.of(command.name, catalog())) {
                 // A bot keeps one chat forever, so a fresh start there is a fresh context, as on Desktop.
-                SlashRoute.NewChat -> if (target?.bot != null) chat.compress(arg) else _requests.send(ChatRequest.NewChat)
+                SlashRoute.NewChat -> when {
+                    target?.bot != null -> chat.compress(arg)
+                    // A thread keeps its place: its chat is filed away and a new one takes over.
+                    openThread() != null -> startThreadFresh(chat, "/${command.name}")
+                    else -> _requests.send(ChatRequest.NewChat)
+                }
                 // Like Desktop: bare opens the picker, `/model <name>` is for the gateway to parse.
                 SlashRoute.PickModel -> if (arg.isEmpty()) _requests.send(ChatRequest.PickModel) else onGateway()
                 SlashRoute.BrowseSessions -> if (arg.isEmpty()) _requests.send(ChatRequest.BrowseSessions) else resume(chat, arg)

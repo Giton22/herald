@@ -91,6 +91,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import dev.hermeskotlin.core.settings.SettingsStore
 import org.koin.compose.koinInject
+import com.composables.icons.lucide.Inbox
+import dev.hermeskotlin.core.inbox.InboxLink
+import dev.hermeskotlin.core.inbox.InboxStore
+import dev.hermeskotlin.ui.inbox.InboxPage
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -121,6 +125,18 @@ import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Ellipsis
 import com.composables.icons.lucide.FolderPlus
 import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Hash
+import com.composables.icons.lucide.GripVertical
+import com.composables.icons.lucide.ArrowUp
+import com.composables.icons.lucide.ArrowDown
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.key
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.zIndex
+import dev.hermeskotlin.core.threads.ChatThread
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Pin
 import com.composables.icons.lucide.RotateCcw
@@ -246,6 +262,9 @@ fun SessionsSidebar(
     onOpenPlugin: (DashboardPlugin) -> Unit = {},
     /** The open chat has a turn running. */
     selectedRunning: Boolean = false,
+    /** A tapped Inbox notification the app passed on: the Inbox opens, at its run; [onInboxLinkTaken] once it has. */
+    inboxLink: InboxLink? = null,
+    onInboxLinkTaken: (InboxLink) -> Unit = {},
     viewModel: SessionsViewModel = koinViewModel(),
     bots: BotsViewModel = koinViewModel(),
     rooms: RoomsViewModel = koinViewModel(),
@@ -278,11 +297,27 @@ fun SessionsSidebar(
     val settingsStore = koinInject<SettingsStore>()
     val settings = settingsStore.settings.collectAsStateWithLifecycle().value
     val pinnedCollapsed = settings?.pinnedCollapsed ?: false
+    val threadsCollapsed = settings?.threadsCollapsed ?: false
     val projectsAsDropdown = settings?.projectsAsDropdown ?: false
     var profilesOpen by remember { mutableStateOf(false) }
 
     var searchOpen by remember { mutableStateOf(false) }
     var scheduledOpen by remember { mutableStateOf(false) }
+    var inboxOpen by remember { mutableStateOf(false) }
+    // A tapped Inbox notification, passed on by the app once it opened the drawer: the Inbox, at that run. The
+    // page takes the key and opens the run itself.
+    var inboxOpenKey by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(inboxLink) {
+        val link = inboxLink ?: return@LaunchedEffect
+        inboxOpen = true
+        inboxOpenKey = link.key
+        onInboxLinkTaken(link)
+    }
+    // The badge is this gateway's Inbox: the store is bound here too, so it counts before the Inbox is opened.
+    val inboxStore = koinInject<InboxStore>()
+    LaunchedEffect(gateway) { inboxStore.bind(gateway.gatewayUrl.value) }
+    val inboxKept = inboxStore.state.collectAsStateWithLifecycle().value
+    val inboxUnread = if (inboxStore.bound == gateway.gatewayUrl.value) inboxKept.unread else 0
     var capabilitiesOpen by remember { mutableStateOf(false) }
     var configOpen by remember { mutableStateOf(false) }
     var pluginsOpen by remember { mutableStateOf(false) }
@@ -300,6 +335,11 @@ fun SessionsSidebar(
     var createProjectError by remember { mutableStateOf<String?>(null) }
     var accountOpen by remember { mutableStateOf(false) }
     var newRoomOpen by remember { mutableStateOf(false) }
+    val threads by viewModel.threads.collectAsStateWithLifecycle()
+    var threadActions by remember { mutableStateOf<ThreadRow?>(null) }
+    var renameThread by remember { mutableStateOf<ChatThread?>(null) }
+    var freshThread by remember { mutableStateOf<ChatThread?>(null) }
+    var reorderingThreads by remember { mutableStateOf(false) }
 
     fun closeSearch() {
         searchOpen = false
@@ -307,10 +347,11 @@ fun SessionsSidebar(
     }
 
     // Back steps out of search or the Scheduled / Archived pages before it closes the drawer.
-    PlatformBackHandler(enabled = visible && (searchOpen || scheduledOpen || routinesOf != null || capabilitiesOpen || configOpen || insightsOpen || state.filter != SessionListFilter.Recent)) {
+    PlatformBackHandler(enabled = visible && (searchOpen || scheduledOpen || inboxOpen || routinesOf != null || capabilitiesOpen || configOpen || insightsOpen || state.filter != SessionListFilter.Recent)) {
         when {
             searchOpen -> closeSearch()
             scheduledOpen -> scheduledOpen = false
+            inboxOpen -> inboxOpen = false
             routinesOf != null -> {
                 routinesOf = null
                 bots.refreshRoutines()
@@ -343,6 +384,11 @@ fun SessionsSidebar(
     }
 
     val projectIndex = remember(state.projects) { ProjectIndex(state.projects) }
+    val sections = remember(threads, state.listed, state.sessions, state.project, projectIndex) {
+        threadSections(threads, state.listed, state.sessions, state.project, projectIndex)
+    }
+    // The thread rows as the section shows them; moving one goes past its neighbour here, not in the whole list.
+    val shownThreads = sections.threads.filter { attentionFilter.keeps(statuses[it.session.id]) }
     val open: (SessionSummary) -> Unit = {
         // Taken before the chat counts as read, so it can show where the new messages start.
         val readUpTo = viewModel.readUpTo(it)
@@ -365,7 +411,16 @@ fun SessionsSidebar(
             .halo()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start)),
     ) {
-        if (scheduledOpen && !searchOpen) {
+        if (inboxOpen && !searchOpen) {
+            InboxPage(
+                gateway = gateway,
+                visible = visible,
+                onBack = { inboxOpen = false },
+                onOpenSettings = onOpenSettings,
+                openKey = inboxOpenKey,
+                onOpenedKey = { inboxOpenKey = null },
+            )
+        } else if (scheduledOpen && !searchOpen) {
             ScheduledPage(
                 gateway = gateway,
                 visible = visible,
@@ -520,14 +575,18 @@ fun SessionsSidebar(
                         else -> SessionList(searchResults, selectedId, open, rowActions, showSnippets = true, statuses = statuses, drafts = drafts)
                     }
                     state.filter == SessionListFilter.Recent -> SessionList(
-                        sessions = when (attentionFilter) {
-                            AttentionFilter.All -> state.listed
-                            AttentionFilter.Running -> state.listed.filter { statuses[it.id]?.running == true }
-                            AttentionFilter.NeedsAttention -> state.listed.filter { statuses[it.id]?.needsAttention == true }
-                        },
+                        sessions = sections.others.filter { attentionFilter.keeps(statuses[it.id]) },
                         selectedId = selectedId,
                         onOpen = open,
                         onActions = rowActions,
+                        threads = shownThreads,
+                        onOpenThread = { open(it.session) },
+                        onThreadActions = { threadActions = it },
+                        reorderingThreads = reorderingThreads && attentionFilter == AttentionFilter.All,
+                        onReordered = { ids ->
+                            reorderingThreads = false
+                            if (ids != shownThreads.map { it.thread.id }) viewModel.reorderThreads(ids)
+                        },
                         // A filtered list stays short, so the end is always in sight: paging on would
                         // fetch the whole history. What's running or waiting is recent anyway. A project's
                         // chats come whole.
@@ -541,6 +600,8 @@ fun SessionsSidebar(
                         shownProject = state.project,
                         pinnedCollapsed = pinnedCollapsed,
                         onTogglePinned = { settingsStore.update { it.copy(pinnedCollapsed = !it.pinnedCollapsed) } },
+                        threadsCollapsed = threadsCollapsed,
+                        onToggleThreads = { settingsStore.update { it.copy(threadsCollapsed = !it.threadsCollapsed) } },
                         status = {
                             if (!state.loading && state.error == null && (state.projects.isNotEmpty() || state.canMakeProjects)) {
                                 item(key = "projects") {
@@ -589,6 +650,7 @@ fun SessionsSidebar(
                         item(key = "nav") {
                             NavGrid(
                                 listOf(
+                                    NavLink(Lucide.Inbox, "Inbox", badge = inboxUnread) { inboxOpen = true },
                                     NavLink(Lucide.CalendarClock, "Scheduled") { scheduledOpen = true },
                                     NavLink(Lucide.ChartColumn, "Insights") { insightsOpen = true },
                                     NavLink(Lucide.Blocks, "Capabilities") { capabilitiesOpen = true },
@@ -640,7 +702,27 @@ fun SessionsSidebar(
         onRename = { renameTarget = it },
         onToggleArchived = { viewModel.toggleArchived(it) },
         onDelete = { deleteTarget = it },
+        onMakeThread = viewModel::makeThread.takeIf {
+            actionTarget?.let { s -> !s.archived && threads.none { t -> t.holds(s) } } == true
+        },
     )
+    ThreadActionsSheet(
+        row = threadActions,
+        shown = shownThreads.map { it.thread },
+        onDismiss = { threadActions = null },
+        onStartFresh = { freshThread = it.thread },
+        onRename = { renameThread = it.thread },
+        onMove = viewModel::moveThread,
+        onReorder = {
+            viewModel.setAttentionFilter(AttentionFilter.All)
+            reorderingThreads = true
+        },
+        onRemove = { viewModel.removeThread(it.thread) },
+    )
+    RenameThreadDialog(renameThread, onDismiss = { renameThread = null }, onRename = viewModel::renameThread)
+    StartThreadFreshDialog(freshThread, onDismiss = { freshThread = null }) { thread ->
+        viewModel.startFresh(thread) { fresh -> onOpenSession(SessionSummary(fresh.sessionId, title = fresh.title, pinned = true), null) }
+    }
     RenameDialog(renameTarget, onDismiss = { renameTarget = null }, onRename = viewModel::rename)
     ProjectActionsSheet(
         project = projectActions,
@@ -726,9 +808,12 @@ internal fun SessionsSidebarSample(
     canMakeProjects: Boolean = false,
     /** The projects as one button that opens a list, not chips. */
     projectsAsDropdown: Boolean = false,
+    /** The Threads section's threads, whose chats are among [sessions]. */
+    threads: List<ChatThread> = emptyList(),
 ) {
     // Folds for real in the gallery, kept only while the preview shows.
     var pinnedCollapsed by remember { mutableStateOf(false) }
+    var threadsCollapsed by remember { mutableStateOf(false) }
     Box(
         Modifier
             .fillMaxSize()
@@ -738,18 +823,23 @@ internal fun SessionsSidebarSample(
         Column(Modifier.fillMaxSize()) {
             MainHeader(gatewayLabel = "homelab", connection = null, onAccount = {}, onSettings = {}, onSearch = {})
             Box(Modifier.weight(1f).fillMaxWidth()) {
+                val index = remember(projects) { ProjectIndex(projects) }
+                val sections = threadSections(threads, sessions, sessions, selectedProject, index)
                 SessionList(
-                    sessions,
+                    sections.others,
                     selectedId,
                     onOpen = {},
                     onActions = {},
                     statuses = statuses,
                     drafts = drafts,
                     sectioned = true,
-                    projectIndex = remember(projects) { ProjectIndex(projects) },
+                    projectIndex = index,
                     shownProject = selectedProject,
+                    threads = sections.threads,
                     pinnedCollapsed = pinnedCollapsed,
                     onTogglePinned = { pinnedCollapsed = !pinnedCollapsed },
+                    threadsCollapsed = threadsCollapsed,
+                    onToggleThreads = { threadsCollapsed = !threadsCollapsed },
                     status = {
                         if (projects.isNotEmpty() || canMakeProjects) {
                             item(key = "projects") {
@@ -769,6 +859,7 @@ internal fun SessionsSidebarSample(
                     item(key = "nav") {
                         NavGrid(
                             listOf(
+                                NavLink(Lucide.Inbox, "Inbox", badge = 2) {},
                                 NavLink(Lucide.CalendarClock, "Scheduled") {},
                                 NavLink(Lucide.ChartColumn, "Insights") {},
                                 NavLink(Lucide.Blocks, "Capabilities") {},
@@ -1034,7 +1125,7 @@ private fun SearchHeader(viewModel: SessionsViewModel, onClose: () -> Unit) {
 }
 
 /** One of the sidebar's pages, as a tile in [NavGrid]. */
-internal class NavLink(val icon: ImageVector, val label: String, val onClick: () -> Unit)
+internal class NavLink(val icon: ImageVector, val label: String, val badge: Int = 0, val onClick: () -> Unit)
 
 /** The sidebar's pages as tiles, two to a row. */
 @Composable
@@ -1080,7 +1171,19 @@ private fun NavTile(link: NavLink, modifier: Modifier = Modifier) {
                 // Large text wraps rather than cutting the name off; the tile grows.
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
             )
+            if (link.badge > 0) {
+                Text(
+                    if (link.badge > 99) "99+" else link.badge.toString(),
+                    style = Theme[typography][code].copy(fontSize = 11.sp, fontWeight = FontWeight.SemiBold),
+                    color = Theme[colors][onAccent],
+                    modifier = Modifier
+                        .background(Theme[colors][accent], CircleShape)
+                        .padding(horizontal = 6.dp, vertical = 1.dp)
+                        .semantics { contentDescription = "${link.badge} unread" },
+                )
+            }
         }
     }
 }
@@ -1223,10 +1326,21 @@ private fun SessionList(
     projectIndex: ProjectIndex = ProjectIndex.Empty,
     /** The project the list is narrowed to, whose name the rows leave out. */
     shownProject: Project? = null,
+    /** The Threads section, above Pinned; [sessions] no longer holds their chats. */
+    threads: List<ThreadRow> = emptyList(),
+    onOpenThread: (ThreadRow) -> Unit = {},
+    onThreadActions: (ThreadRow) -> Unit = {},
+    /** The Threads section shows drag handles; [onReordered] gets the order once the user is done. */
+    reorderingThreads: Boolean = false,
+    onReordered: (List<String>) -> Unit = {},
     /** The Pinned section is folded to the chats [visiblePinned] keeps. */
     pinnedCollapsed: Boolean = false,
     /** Folds or unfolds the Pinned section; null, its label is plain text. */
     onTogglePinned: (() -> Unit)? = null,
+    /** The Threads section is folded to the threads [visibleThreads] keeps. */
+    threadsCollapsed: Boolean = false,
+    /** Folds or unfolds the Threads section; null, its label is plain text. */
+    onToggleThreads: (() -> Unit)? = null,
     /** Filters and the loading, error or empty notices, shown above the unpinned chats. */
     status: LazyListScope.() -> Unit = {},
     header: LazyListScope.() -> Unit = {},
@@ -1264,9 +1378,42 @@ private fun SessionList(
             )
         }
         if (sectioned) {
+            if (threads.isNotEmpty()) {
+                if (reorderingThreads) {
+                    // One item, so a dragged row moves among the others without the list recycling it.
+                    item(key = "threads-reorder") {
+                        ThreadReorder(threads, { projectIndex.labelFor(it.session, shownProject) }, onDone = onReordered)
+                    }
+                } else {
+                    item(key = "label-threads") {
+                        if (onToggleThreads != null) {
+                            SectionToggle("Threads", threads.size, threadsCollapsed, "threads", onToggleThreads)
+                        } else {
+                            ListLabel("Threads")
+                        }
+                    }
+                    items(visibleThreads(threads, threadsCollapsed, selectedId, statuses, drafts), key = { "thread-${it.thread.id}" }) { row ->
+                        SessionRow(
+                            row.session.copy(title = row.thread.name),
+                            selected = row.session.id == selectedId || row.thread.sessionId == selectedId,
+                            showSnippet = false,
+                            status = statuses[row.session.id],
+                            draft = row.session.id in drafts,
+                            projectLabel = projectIndex.labelFor(row.session, shownProject),
+                            thread = true,
+                            onClick = { onOpenThread(row) },
+                            onActions = { onThreadActions(row) },
+                        )
+                    }
+                }
+            }
             if (pinned.isNotEmpty()) {
                 item(key = "label-pinned") {
-                    if (onTogglePinned != null) PinnedLabel(pinned.size, pinnedCollapsed, onTogglePinned) else ListLabel("Pinned")
+                    if (onTogglePinned != null) {
+                        SectionToggle("Pinned", pinned.size, pinnedCollapsed, "pinned chats", onTogglePinned)
+                    } else {
+                        ListLabel("Pinned")
+                    }
                 }
                 items(visiblePinned(pinned, pinnedCollapsed, selectedId, statuses, drafts), key = { it.id }) { row(it) }
             }
@@ -1281,6 +1428,190 @@ private fun SessionList(
     }
 }
 
+/**
+ * The Threads section while it is being put in order: each row has a handle to drag it up or down, the rows
+ * making way as it passes them, and "Done" on the label saves the order.
+ */
+@Composable
+private fun ThreadReorder(rows: List<ThreadRow>, projectLabel: (ThreadRow) -> String?, onDone: (List<String>) -> Unit) {
+    val order = remember { mutableStateListOf<String>().apply { addAll(rows.map { it.thread.id }) } }
+    // A thread added or removed meanwhile (on another device) joins or leaves the order where it stands.
+    LaunchedEffect(rows) {
+        val ids = rows.map { it.thread.id }
+        order.retainAll(ids)
+        ids.filterNot { it in order }.forEach { order.add(it) }
+    }
+    var dragging by remember { mutableStateOf<String?>(null) }
+    var offset by remember { mutableStateOf(0f) }
+    var rowHeight by remember { mutableStateOf(1f) }
+    val byId = rows.associateBy { it.thread.id }
+    Column(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier.fillMaxWidth().padding(start = 10.dp, top = 6.dp).semantics(mergeDescendants = true) { heading() },
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text("THREADS · DRAG TO REORDER", style = Theme[typography][eyebrow], color = Theme[colors][textTertiary], maxLines = 1, modifier = Modifier.weight(1f))
+            Button("Done", onClick = { onDone(order.toList()) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+        }
+        order.forEach { id ->
+            val row = byId[id] ?: return@forEach
+            // Keyed, so a row that swaps places keeps its drag going rather than starting over.
+            key(id) {
+                val lifted = dragging == id
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = MinTouchTarget)
+                        .onSizeChanged { rowHeight = it.height.toFloat().coerceAtLeast(1f) }
+                        .zIndex(if (lifted) 1f else 0f)
+                        .graphicsLayer { translationY = if (lifted) offset else 0f }
+                        .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
+                        .then(if (lifted) Modifier.background(Theme[colors][surface2]) else Modifier)
+                        .padding(start = 10.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+                        UnstyledIcon(Lucide.Hash, contentDescription = null, tint = Theme[colors][textMuted], modifier = Modifier.size(14.dp))
+                    }
+                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            row.thread.name,
+                            style = Theme[typography][body].copy(fontSize = 14.5.sp, lineHeight = 19.sp),
+                            color = Theme[colors][text],
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        projectLabel(row)?.let { ProjectTag(it) }
+                    }
+                    Box(
+                        Modifier
+                            .size(MinTouchTarget)
+                            .pointerInput(id) {
+                                detectDragGestures(
+                                    onDragStart = {
+                                        dragging = id
+                                        offset = 0f
+                                    },
+                                    onDragEnd = { dragging = null; offset = 0f },
+                                    onDragCancel = { dragging = null; offset = 0f },
+                                ) { change, amount ->
+                                    change.consume()
+                                    offset += amount.y
+                                    val at = order.indexOf(id)
+                                    // Past half a row, it takes the neighbour's place and the offset starts from there.
+                                    if (offset > rowHeight / 2 && at < order.lastIndex) {
+                                        order.add(at + 1, order.removeAt(at))
+                                        offset -= rowHeight
+                                    } else if (offset < -rowHeight / 2 && at > 0) {
+                                        order.add(at - 1, order.removeAt(at))
+                                        offset += rowHeight
+                                    }
+                                }
+                            }
+                            .semantics { contentDescription = "Drag ${row.thread.name}" },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        UnstyledIcon(Lucide.GripVertical, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(18.dp))
+                    }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * A thread's verbs, from its row's long press. Move up and Move down go past the next thread in [shown] (the
+ * section as it shows now) and are left out at its ends.
+ */
+@Composable
+internal fun ThreadActionsSheet(
+    row: ThreadRow?,
+    shown: List<ChatThread>,
+    onDismiss: () -> Unit,
+    onStartFresh: (ThreadRow) -> Unit,
+    onRename: (ThreadRow) -> Unit,
+    /** Moves the thread past the other one. */
+    onMove: (ChatThread, ChatThread) -> Unit,
+    onReorder: () -> Unit,
+    onRemove: (ThreadRow) -> Unit,
+) {
+    // Keep the last row, and the section as it was then, while the sheet animates out: a move that lands
+    // meanwhile mustn't add or drop items.
+    var kept by remember { mutableStateOf(row to shown) }
+    if (row != null) kept = row to shown
+    BottomSheet(visible = row != null, onDismiss = onDismiss) {
+        val (r, order) = kept
+        r ?: return@BottomSheet
+        val at = order.indexOfFirst { it.id == r.thread.id }
+        val above = order.getOrNull(at - 1)?.takeIf { at >= 0 }
+        val below = order.getOrNull(at + 1)?.takeIf { at >= 0 }
+        SheetHeader(r.thread.name, "Thread")
+        fun act(block: (ThreadRow) -> Unit) = { onDismiss(); block(r) }
+        SheetAction("Start fresh", Lucide.RotateCcw, act(onStartFresh))
+        SheetAction("Rename thread", Lucide.Pencil, act(onRename))
+        above?.let { other -> SheetAction("Move up", Lucide.ArrowUp, act { onMove(it.thread, other) }) }
+        below?.let { other -> SheetAction("Move down", Lucide.ArrowDown, act { onMove(it.thread, other) }) }
+        if (above != null || below != null) SheetAction("Reorder", Lucide.GripVertical, { onDismiss(); onReorder() })
+        SheetAction("Remove thread", Lucide.X, act(onRemove))
+    }
+}
+
+/** Names a thread, and its chat the same. A thread always has a name, so Save waits for one. */
+@Composable
+internal fun RenameThreadDialog(thread: ChatThread?, onDismiss: () -> Unit, onRename: (ChatThread, String) -> Unit) {
+    var shown by remember { mutableStateOf(thread) }
+    if (thread != null) shown = thread
+    val t = shown ?: return
+    val name = rememberTextFieldState(t.name)
+    // On every open, so a cancelled edit doesn't come back.
+    LaunchedEffect(thread != null, t.id) { if (thread != null) name.edit { replace(0, length, t.name) } }
+    val blank = name.text.isBlank()
+    val submit = {
+        if (!blank) {
+            onDismiss()
+            onRename(t, name.text.toString())
+        }
+    }
+    Dialog(
+        visible = thread != null,
+        onDismissRequest = onDismiss,
+        title = "Rename thread",
+        message = "Its chat is renamed too, and each fresh chat takes this name.",
+        actions = {
+            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button("Save", onClick = submit, size = ButtonSize.Small, enabled = !blank)
+        },
+    ) {
+        TextField(
+            state = name,
+            placeholder = t.name,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            onKeyboardAction = { submit() },
+        )
+    }
+}
+
+/** Asks before a thread starts fresh: its chat is archived under the thread's name and the time. */
+@Composable
+internal fun StartThreadFreshDialog(thread: ChatThread?, onDismiss: () -> Unit, onConfirm: (ChatThread) -> Unit) {
+    var shown by remember { mutableStateOf(thread) }
+    if (thread != null) shown = thread
+    val t = shown ?: return
+    Dialog(
+        visible = thread != null,
+        onDismissRequest = onDismiss,
+        title = "Start ${t.name} fresh?",
+        message = "Its chat is archived as “${t.name} · date and time” and a new, empty one takes its place. " +
+            "Archived chats are kept for 30 days.",
+        actions = {
+            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button("Start fresh", onClick = { onDismiss(); onConfirm(t) }, size = ButtonSize.Small)
+        },
+    )
+}
+
 @Composable
 private fun ListLabel(text: String) {
     Text(
@@ -1293,17 +1624,17 @@ private fun ListLabel(text: String) {
 }
 
 /**
- * The "PINNED · n" label as a toggle: a chevron points down while the section is open and right while
- * it is folded.
+ * A section's "[title] · n" label as a toggle: a chevron points down while the section is open and right
+ * while it is folded. [rows] names what it holds for the click label ("Show [rows]").
  */
 @Composable
-private fun PinnedLabel(count: Int, collapsed: Boolean, onToggle: () -> Unit) {
+private fun SectionToggle(title: String, count: Int, collapsed: Boolean, rows: String, onToggle: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
             .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
-            .clickable(onClickLabel = if (collapsed) "Show pinned chats" else "Hide pinned chats", role = Role.Button, onClick = onToggle)
+            .clickable(onClickLabel = if (collapsed) "Show $rows" else "Hide $rows", role = Role.Button, onClick = onToggle)
             .semantics(mergeDescendants = true) {
                 heading()
                 stateDescription = if (collapsed) "Collapsed" else "Expanded"
@@ -1313,7 +1644,7 @@ private fun PinnedLabel(count: Int, collapsed: Boolean, onToggle: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "PINNED · $count",
+            "${title.uppercase()} · $count",
             style = Theme[typography][eyebrow],
             color = Theme[colors][textTertiary],
             maxLines = 1,
@@ -1342,6 +1673,27 @@ internal fun visiblePinned(
 ): List<SessionSummary> =
     if (!collapsed) pinned
     else pinned.filter { it.id == selectedId || rowTone(statuses[it.id], it.id in drafts) != RowTone.Idle }
+
+/** The [threads] the Threads section lists, folded the way [visiblePinned] folds Pinned. */
+internal fun visibleThreads(
+    threads: List<ThreadRow>,
+    collapsed: Boolean,
+    selectedId: String?,
+    statuses: Map<String, RowStatus>,
+    drafts: Set<String>,
+): List<ThreadRow> =
+    if (!collapsed) threads
+    else threads.filter {
+        it.session.id == selectedId || it.thread.sessionId == selectedId ||
+            rowTone(statuses[it.session.id], it.session.id in drafts) != RowTone.Idle
+    }
+
+/** Whether a row with [status] stays in the list under this filter. */
+internal fun AttentionFilter.keeps(status: RowStatus?): Boolean = when (this) {
+    AttentionFilter.All -> true
+    AttentionFilter.Running -> status?.running == true
+    AttentionFilter.NeedsAttention -> status?.needsAttention == true
+}
 
 /** What a row's disc shows, the most pressing first: waiting on the user, running, an unread reply, a draft. */
 internal enum class RowTone { Approval, Question, Running, Reply, Draft, Idle }
@@ -1377,6 +1729,8 @@ internal fun SessionRow(
     draft: Boolean = false,
     /** The project the chat is in, said lightly after the title; null shows none. */
     projectLabel: String? = null,
+    /** The row is a thread's: marked as one rather than as pinned. */
+    thread: Boolean = false,
     onClick: () -> Unit,
     onActions: () -> Unit,
 ) {
@@ -1408,10 +1762,13 @@ internal fun SessionRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val pinOnly = session.pinned && tone == RowTone.Idle
+        val marked = thread || session.pinned
+        val mark = if (thread) Lucide.Hash else Lucide.Pin
+        val markLabel = if (thread) "Thread" else "Pinned"
+        val pinOnly = marked && tone == RowTone.Idle
         if (pinOnly) {
             Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
-                UnstyledIcon(Lucide.Pin, contentDescription = "Pinned", tint = Theme[colors][textMuted], modifier = Modifier.size(14.dp))
+                UnstyledIcon(mark, contentDescription = markLabel, tint = Theme[colors][textMuted], modifier = Modifier.size(14.dp))
             }
         } else {
             StatusDisc(tone, toneColor)
@@ -1431,8 +1788,8 @@ internal fun SessionRow(
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 projectLabel?.let { ProjectTag(it) }
-                if (session.pinned && !pinOnly) {
-                    UnstyledIcon(Lucide.Pin, contentDescription = "Pinned", tint = Theme[colors][textMuted], modifier = Modifier.size(12.dp))
+                if (marked && !pinOnly) {
+                    UnstyledIcon(mark, contentDescription = markLabel, tint = Theme[colors][textMuted], modifier = Modifier.size(12.dp))
                 }
             }
             // Said in words as well as by the disc.
@@ -1761,6 +2118,8 @@ internal fun SessionActionsSheet(
     onControl: ((SessionSummary) -> Unit)? = null,
     /** A bot's chat: archive it and begin an empty one. */
     onStartFresh: ((SessionSummary) -> Unit)? = null,
+    /** Makes the chat a thread; null when it can't be one (a thread's chat already, or archived). */
+    onMakeThread: ((SessionSummary) -> Unit)? = null,
 ) {
     // Keep the last target while the sheet animates out.
     var shown by remember { mutableStateOf(session) }
@@ -1776,6 +2135,7 @@ internal fun SessionActionsSheet(
         fun act(block: (SessionSummary) -> Unit) = { onDismiss(); block(s) }
         onStartFresh?.let { SheetAction("Start fresh", Lucide.RotateCcw, act(it)) }
         onRename?.let { SheetAction("Rename", Lucide.Pencil, act(it)) }
+        onMakeThread?.let { SheetAction("Make thread", Lucide.Hash, act(it)) }
         onTogglePinned?.let { SheetAction(if (s.pinned) "Unpin" else "Pin", if (s.pinned) Lucide.PinOff else Lucide.Pin, act(it)) }
         onUsage?.let { SheetAction("Usage and cost", Lucide.Gauge, act(it)) }
         onProcesses?.let { SheetAction("Background processes", Lucide.SquareTerminal, act(it)) }

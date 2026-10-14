@@ -2,6 +2,8 @@ package dev.hermeskotlin.ui.sessions
 
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.projects.ProjectsApi
+import dev.hermeskotlin.core.threads.ThreadsApi
+import dev.hermeskotlin.core.threads.ThreadsRepository
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.chat.AttentionTracker
 import dev.hermeskotlin.core.chat.ChatHost
@@ -106,6 +108,7 @@ class SessionsViewModelTest {
         return SessionsViewModel(
             SessionsApi(client), auth, connection, LastChatStore(InMemoryKeyValueStore()), ProfilesApi(client),
             attention, SeenStore(InMemoryKeyValueStore()) { 0.0 }, DraftStore(InMemoryKeyValueStore()), ProjectsApi(connection),
+            ThreadsRepository(ThreadsApi(connection), SessionsApi(client), ProfilesApi(client)),
             cache,
         )
     }

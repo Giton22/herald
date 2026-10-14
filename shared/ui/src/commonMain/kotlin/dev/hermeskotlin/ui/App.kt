@@ -75,6 +75,8 @@ import dev.hermeskotlin.ui.update.LocalUpdateOffer
 import dev.hermeskotlin.ui.update.rememberUpdateOffer
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
+import dev.hermeskotlin.core.inbox.InboxLink
+import dev.hermeskotlin.core.inbox.InboxLinks
 import dev.hermeskotlin.core.rooms.RoomLinks
 import org.koin.compose.koinInject
 import org.koin.compose.viewmodel.koinViewModel
@@ -307,6 +309,21 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     LaunchedEffect(desktopRoom, roster.loading) {
         if (openDesktopRoom != null && desktopRoom == null && !roster.loading) openDesktopRoom = null
     }
+    // A tapped Inbox notification: the drawer opens here, then the sidebar takes the link and consumes it.
+    // Only one of them consumes, after the drawer has settled, so the opening isn't cut short. A touch that
+    // stops the opening halfway still hands the link on: kept pending, the same notification tapped again
+    // would change nothing and open nothing.
+    val inboxLinks = koinInject<InboxLinks>()
+    val inboxLink by inboxLinks.pending.collectAsStateWithLifecycle()
+    var shownInboxLink by remember { mutableStateOf<InboxLink?>(null) }
+    LaunchedEffect(inboxLink) {
+        val link = inboxLink ?: return@LaunchedEffect
+        try {
+            sidebar.open()
+        } finally {
+            shownInboxLink = link
+        }
+    }
     // A room asked for from outside the screens (a tapped notification) opens over the chat.
     val roomLinks = koinInject<RoomLinks>()
     val roomLink by roomLinks.pending.collectAsStateWithLifecycle()
@@ -389,6 +406,12 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                     }
                 },
                 selectedRunning = chatState.running,
+                inboxLink = shownInboxLink,
+                onInboxLinkTaken = { link ->
+                    // A newer link may be handed on already: it is left for the sidebar to take.
+                    if (shownInboxLink == link) shownInboxLink = null
+                    inboxLinks.consume(link)
+                },
             )
         },
     ) {
@@ -430,6 +453,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
         onControl = chat::openControl.takeIf { chatState.control != null },
         botChat = route.target.bot != null,
         onStartFresh = openBot?.let { bot -> { startOver = bot } },
+        onOpenChat = app::openSession,
     )
     StartOverDialog(startOver, onDismiss = { startOver = null }) { bot ->
         bots.startFresh(bot) { id -> app.openBotChat(bot, id) }

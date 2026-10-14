@@ -2,7 +2,9 @@ package dev.hermeskotlin.designsystem.components
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
@@ -41,6 +43,7 @@ import dev.hermeskotlin.designsystem.typography
  * A filter toggle: a ringed pill, filled with the inverse colour when selected. [count] follows the label
  * in mono, in [countColor] (e.g. warning for what needs the user) while unselected.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun Chip(
     text: String,
@@ -49,6 +52,9 @@ fun Chip(
     modifier: Modifier = Modifier,
     count: Int? = null,
     countColor: Color = Theme[colors][textTertiary],
+    /** A long press, such as for the chip's options; [onLongClickLabel] says what it does. Null: none. */
+    onLongClick: (() -> Unit)? = null,
+    onLongClickLabel: String? = null,
 ) {
     val shape = CircleShape
     val content = if (selected) Theme[colors][onInverse] else Theme[colors][textSecondary]
@@ -57,7 +63,20 @@ fun Chip(
     Box(
         modifier
             .heightIn(min = MinTouchTarget)
-            .clickable(interaction, indication = null, role = Role.Tab, onClick = onClick)
+            .then(
+                if (onLongClick == null) {
+                    Modifier.clickable(interaction, indication = null, role = Role.Tab, onClick = onClick)
+                } else {
+                    Modifier.combinedClickable(
+                        interactionSource = interaction,
+                        indication = null,
+                        role = Role.Tab,
+                        onLongClickLabel = onLongClickLabel,
+                        onLongClick = onLongClick,
+                        onClick = onClick,
+                    )
+                },
+            )
             .semantics { this.selected = selected },
         contentAlignment = Alignment.Center,
     ) {

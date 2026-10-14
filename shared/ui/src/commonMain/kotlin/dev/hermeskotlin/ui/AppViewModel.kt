@@ -20,6 +20,7 @@ import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.AccessTokens
 import dev.hermeskotlin.core.gateway.GatewayList
 import dev.hermeskotlin.core.gateway.GatewayRepository
+import dev.hermeskotlin.core.inbox.InboxStore
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.profiles.ProfileStore
 import dev.hermeskotlin.core.bots.BotsApi
@@ -81,6 +82,8 @@ class AppViewModel(
     private val cache: OfflineCache? = null,
     /** Where the user last looked in each chat, so one opened from a notification starts at its new messages. */
     private val seen: SeenStore? = null,
+    /** Each gateway's Inbox kept on the phone, which goes with the gateway. */
+    private val inbox: InboxStore? = null,
 ) : ViewModel() {
 
     private val _route = MutableStateFlow<Route>(Route.Loading)
@@ -301,6 +304,7 @@ class AppViewModel(
             // Again: a list read that was under way may have saved itself since.
             cache?.forgetGateway(gateway.gatewayUrl)
             gateways.remove(gateway.url)
+            inbox?.forget(gateway.gatewayUrl.value)
             forgetUnusedAccessTokens()
             sessionsChanged.update { it + 1 }
             if (wasCurrent) {

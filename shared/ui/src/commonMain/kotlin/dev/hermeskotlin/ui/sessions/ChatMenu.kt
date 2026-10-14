@@ -10,6 +10,8 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.sessions.SessionSummary
+import dev.hermeskotlin.core.threads.ChatThread
+import dev.hermeskotlin.core.threads.ThreadsRepository
 import dev.hermeskotlin.ui.chat.rememberMediaActions
 import dev.hermeskotlin.ui.chat.transcriptFileName
 import dev.hermeskotlin.ui.chat.transcriptMarkdown
@@ -40,9 +42,15 @@ internal fun ChatMenu(
     botChat: Boolean = false,
     /** For a bot's chat: start it over (archived, a new one begun). */
     onStartFresh: (() -> Unit)? = null,
+    /** Opens the stored chat a thread was started fresh into, by id and title. */
+    onOpenChat: (String, String) -> Unit = { _, _ -> },
     viewModel: SessionsViewModel = koinViewModel(),
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
+    val threads by viewModel.threads.collectAsStateWithLifecycle()
+    // A thread's chat starts fresh in place: the thread stays, its chat is filed away.
+    val thread = sessionId?.takeUnless { botChat }?.let { id -> ThreadsRepository.threadFor(id, threads, state.sessions) }
+    var freshThread by remember { mutableStateOf<ChatThread?>(null) }
     var renameTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var deleteTarget by remember { mutableStateOf<SessionSummary?>(null) }
     @Suppress("DEPRECATION") val clipboard = LocalClipboardManager.current
@@ -65,8 +73,12 @@ internal fun ChatMenu(
         onProcesses = { onProcesses() },
         onCheckpoints = { onCheckpoints() },
         onControl = onControl?.let { open -> { _: SessionSummary -> open() } },
-        onStartFresh = onStartFresh?.let { start -> { _: SessionSummary -> start() } },
+        onStartFresh = onStartFresh?.let { start -> { _: SessionSummary -> start() } }
+            ?: thread?.let { t -> { _: SessionSummary -> freshThread = t } },
     )
+    StartThreadFreshDialog(freshThread, onDismiss = { freshThread = null }) { t ->
+        viewModel.startFresh(t) { fresh -> onOpenChat(fresh.sessionId, fresh.title) }
+    }
     RenameDialog(
         renameTarget,
         onDismiss = { renameTarget = null },

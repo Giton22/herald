@@ -9,6 +9,8 @@ import dev.hermeskotlin.core.bots.BotMeta
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayRepository
+import dev.hermeskotlin.core.inbox.InboxRun
+import dev.hermeskotlin.core.inbox.InboxStore
 import dev.hermeskotlin.core.network.HermesJson
 import dev.hermeskotlin.core.phone.PhoneToolsBridge
 import dev.hermeskotlin.core.push.PushGateway
@@ -49,6 +51,7 @@ class PushListener(
     private val bots: BotNotifier,
     private val gateways: GatewayRepository,
     private val phoneTools: PhoneToolsBridge,
+    private val inbox: InboxStore,
 ) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val guard = PushGuard(PushMessage.MAX_AGE_G2P_SECONDS) { System.currentTimeMillis() / 1000 }
@@ -83,8 +86,10 @@ class PushListener(
     }
 
     private suspend fun receive(device: PushStore.Device, event: NtfyEvent) {
-        // Only the gateway Herald is signed in to may speak: not one it left, not one it never pinned.
-        val signer = gateways.current()?.gatewayUrl?.value?.let(store::pinned)
+        // Only the gateway Herald is signed in to may speak: not one it left, not one it never pinned. One look at
+        // which that is, so what it says goes to the gateway that signed it even if the app switches meanwhile.
+        val gatewayUrl = gateways.current()?.gatewayUrl?.value
+        val signer = gatewayUrl?.let(store::pinned)
         val message = signer?.let { withContext(Dispatchers.Default) { open(device, event, it) } }
         if (event.time > 0) store.sinceSeconds = event.time
         if (message == null || !guard.accept(message)) return
@@ -94,7 +99,23 @@ class PushListener(
             PushMessage.PING -> notifications.postPushTest()
             // Only a nudge: the call itself is fetched over the authenticated socket.
             PushMessage.PHONE_REQUEST -> phoneTools.wake()
+            PushMessage.CRON_RUN -> showCronRun(message, gatewayUrl ?: return)
         }
+    }
+
+    /**
+     * A finished run of a job this phone follows: into the Inbox kept on the phone (so it reads offline), and a
+     * notification when the user asked for one. In sight and connected, the Inbox shows it already.
+     */
+    private suspend fun showCronRun(message: PushMessage, url: String) {
+        val run = InboxRun.from(message) ?: return
+        // Into that gateway's Inbox, without moving the shared store there: the app may have switched meanwhile.
+        val groups = inbox.receive(url, run)
+        if (!message.notify) return
+        // In sight and connected, the Inbox shows it already. A failed run too: it is in the Inbox, and the app open.
+        if (visibility.visible.value && connection.state.value is ConnectionState.Connected) return
+        // The name the user gave the job on this phone, when they did.
+        notifications.postCronRun(run.key, run.bot, run.job, groups.nameOf(run), run.text, run.failed)
     }
 
     /** The message inside [event], or null for anything that isn't a valid envelope signed by [gateway]. */

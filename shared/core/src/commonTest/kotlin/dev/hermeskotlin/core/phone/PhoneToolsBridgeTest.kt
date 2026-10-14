@@ -70,6 +70,8 @@ class PhoneToolsBridgeTest {
 
     /** What the gateway's herald-push plugin answers, with its phone tool calls kept in memory. */
     private class Plugin(var installed: Boolean = true, var version: String = PushApi.PLUGIN_VERSION) {
+        var botVersion: String? = null
+        var botInstallFails = false
         val reports = mutableListOf<List<String>>()
         val reportBodies = mutableListOf<JsonObject>()
         val keys = mutableSetOf<String>()
@@ -106,17 +108,31 @@ class PhoneToolsBridgeTest {
                     val id = request["id"] ?: continue
                     val params = request["params"] as? JsonObject ?: JsonObject(emptyMap())
                     val reply = when ((request["method"] as JsonPrimitive).content) {
+                        "profiles.list" -> if (botVersion == null) """{"profiles":[]}""" else """{"profiles":[{"name":"assistant"}]}"""
                         "plugins.manage" -> {
-                            installs += params
-                            installed = true
-                            version = PushApi.PLUGIN_VERSION
-                            """{"ok":true}"""
+                            if (params["profile"] != null) {
+                                if (params["action"]?.jsonPrimitive?.content == "list") {
+                                    """{"plugins":[{"name":"herald-push","version":"$botVersion","source":"git","status":"enabled"}]}"""
+                                } else if (botInstallFails) {
+                                    "ERROR:install refused"
+                                } else {
+                                    botVersion = PushApi.PLUGIN_VERSION
+                                    """{"ok":true}"""
+                                }
+                            } else {
+                                installs += params
+                                installed = true
+                                version = PushApi.PLUGIN_VERSION
+                                """{"ok":true}"""
+                            }
                         }
                         "command.dispatch" -> if (!installed) null else command(params["arg"]!!.jsonPrimitive.content)
                         else -> "{}"
                     }
                     transport.push(
-                        if (reply == null) {
+                        if (reply?.startsWith("ERROR:") == true) {
+                            """{"jsonrpc":"2.0","id":$id,"error":{"code":5026,"message":"${reply.removePrefix("ERROR:")}"}}"""
+                        } else if (reply == null) {
                             """{"jsonrpc":"2.0","id":$id,"error":{"code":4018,"message":"not a command"}}"""
                         } else {
                             """{"jsonrpc":"2.0","id":$id,"result":$reply}"""
@@ -227,7 +243,7 @@ class PhoneToolsBridgeTest {
         }
     }
 
-    private class Setup(val bridge: PhoneToolsBridge, val connection: GatewayConnection, val settings: SettingsStore, val store: KeyValueStore)
+    private class Setup(val bridge: PhoneToolsBridge, val connection: GatewayConnection, val settings: SettingsStore, val store: KeyValueStore, val api: PushApi)
 
     private val transports = ArrayDeque<FakeTransport>()
 
@@ -246,11 +262,12 @@ class PhoneToolsBridgeTest {
         settings.settings.filterNotNull().first()
         settings.update { it.copy(phoneTools = all, phoneToolsOn = on.map { t -> t.id }, pushAnywhere = pushAnywhere) }
         val gateways = GatewayRepository(InMemoryKeyValueStore()).apply { save(SavedGateway(URL)) }
+        val api = PushApi(connection)
         val bridge = PhoneToolsBridge(
-            PushApi(connection), keys, store, connection, gateways, settings, runner, backgroundScope, { "Pixel" }, { currentTime },
+            api, keys, store, connection, gateways, settings, runner, backgroundScope, { "Pixel" }, { currentTime },
         )
         bridge.start()
-        return Setup(bridge, connection, settings, store)
+        return Setup(bridge, connection, settings, store, api)
     }
 
     private suspend fun TestScope.connect(s: Setup, plugin: Plugin): FakeTransport {
@@ -266,6 +283,28 @@ class PhoneToolsBridgeTest {
     private suspend fun until(condition: () -> Boolean) = withTimeout(60_000) { while (!condition()) delay(10) }
 
     private fun Plugin.error(id: String) = answers[id]?.get("error")?.jsonPrimitive?.contentOrNull
+
+    @Test
+    fun aPartialUpdateKeepsPhoneToolsWorkingAndTheFailedBotVisible() = runTest {
+        for (fromNotifications in listOf(false, true)) {
+            val runner = Runner()
+            val s = setup(runner, on = listOf(PhoneTool.Battery))
+            val plugin = Plugin(version = if (fromNotifications) "0.2.0" else "0.3.0").apply { botVersion = "0.1.1"; botInstallFails = true }
+            connect(s, plugin)
+            until { s.bridge.status.value.state == if (fromNotifications) PhoneToolsStatus.State.Outdated else PhoneToolsStatus.State.On }
+            if (fromNotifications) s.api.prepare(install = true, update = true) else s.bridge.updatePlugin()
+            until { s.bridge.status.value.detail.orEmpty().contains("assistant") }
+            delay(5_000)
+
+            assertEquals(PhoneToolsStatus.State.On, s.bridge.status.value.state)
+            assertTrue(s.bridge.status.value.detail.orEmpty().contains("assistant"))
+            assertEquals("0.1.1", s.bridge.status.value.update?.installed)
+            plugin.call("a".repeat(32), PhoneTool.Battery.id)
+            until { plugin.answers.containsKey("a".repeat(32)) }
+            assertEquals(listOf(PhoneTool.Battery), runner.runs)
+            s.connection.stop()
+        }
+    }
 
     @Test
     fun aPhoneThatNeverTurnedToolsOnIsNotAnnounced() = runTest {

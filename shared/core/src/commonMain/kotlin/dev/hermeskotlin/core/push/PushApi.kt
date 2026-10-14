@@ -1,10 +1,12 @@
 package dev.hermeskotlin.core.push
 
+import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.network.HermesJson
 import dev.hermeskotlin.core.rpc.JsonRpcClient
 import dev.hermeskotlin.core.rpc.RpcException
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -47,7 +49,7 @@ data class PushPluginReply(
 }
 
 /**
- * A newer herald-push plugin than the gateway runs: [installed] there, [available] as this Herald was reviewed
+ * A newer herald-push plugin than the gateway or a bot runs: [installed] there, [available] as this Herald was reviewed
  * with. [needed] when this Herald can't work with the installed one. Shown to the user, installed only when asked.
  */
 data class PluginUpdate(val installed: String, val available: String, val needed: Boolean)
@@ -55,7 +57,7 @@ data class PluginUpdate(val installed: String, val available: String, val needed
 /** Where the gateway's herald-push plugin stands after [PushApi.prepare]. */
 sealed interface PluginState {
     /** Usable; [update] when a newer one is available. */
-    data class Ready(val info: PushPluginReply, val update: PluginUpdate? = null) : PluginState
+    data class Ready(val info: PushPluginReply, val update: PluginUpdate? = null, val detail: String? = null) : PluginState
     data object Missing : PluginState
 
     /** Too old for this Herald, and not updated because the user hasn't asked to. */
@@ -115,6 +117,7 @@ data class KnownPhone(
 class PushApi(private val connection: GatewayConnection) {
 
     private val preparing = Mutex()
+    private var updateFailure: Pair<JsonRpcClient, List<String>>? = null
     private val _updates = MutableStateFlow(0)
 
     /**
@@ -139,7 +142,7 @@ class PushApi(private val connection: GatewayConnection) {
      * Installs the plugin from its repository at the reviewed commit (git clone on the gateway, live without
      * a restart). With [force] an existing copy is replaced, which is how an old version is brought up to date.
      */
-    suspend fun install(force: Boolean = false) {
+    suspend fun install(force: Boolean = false, profile: String? = null, enabled: Boolean = true) {
         client().request(
             "plugins.manage",
             buildJsonObject {
@@ -147,8 +150,9 @@ class PushApi(private val connection: GatewayConnection) {
                 put("identifier", PLUGIN_REPO)
                 // A reviewed commit, never whatever the branch holds today: this code runs on the gateway.
                 put("ref", PLUGIN_REF)
-                put("enable", true)
+                put("enable", enabled)
                 put("force", force)
+                if (profile != null) put("profile", profile)
             },
             timeoutMs = INSTALL_TIMEOUT_MS,
         )
@@ -188,6 +192,8 @@ class PushApi(private val connection: GatewayConnection) {
         update: Boolean = false,
         onStep: (String) -> Unit = {},
     ): PluginState = preparing.withLock {
+        val rpc = client()
+        if (update || updateFailure?.first !== rpc) updateFailure = null
         var info = info()
         if (info == null && install) {
             // Present but switched off (in Desktop's Plugins hub, say): a toggle is enough, and an
@@ -200,22 +206,128 @@ class PushApi(private val connection: GatewayConnection) {
                 info = info()
             }
         }
+        val failures = mutableListOf<String>()
+        var changed = false
         if (update && info != null && info.ok && !info.versionAtLeast(PLUGIN_VERSION)) {
             onStep("Updating the gateway's plugin to $PLUGIN_VERSION…")
-            install(force = true)
-            _updates.update { it + 1 }
-            info = info()
-            if (info != null && info.ok && !info.versionAtLeast(minimum)) {
-                return@withLock PluginState.Failed("The gateway's herald-push plugin is still ${info.version}. Update it there.")
+            try {
+                install(force = true)
+                changed = true
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                failures += "gateway: ${e.message}"
             }
+            info = info()
+            if (info == null || !info.ok || !info.versionAtLeast(PLUGIN_VERSION)) {
+                failures += "The gateway's herald-push plugin was not updated to $PLUGIN_VERSION."
+            }
+        }
+        // An update always looks afresh: the copies may have changed since (Desktop's Plugins hub, another phone).
+        if (update) scannedBots = null
+        val copies = if (info?.ok == true && (update || info.versionAtLeast(minimum))) botCopies(rpc, failures) else emptyList()
+        val pending = copies.toMutableList()
+        if (update) {
+            for (copy in copies) {
+                onStep("Updating ${copy.profile}'s plugin to $PLUGIN_VERSION…")
+                try {
+                    install(force = true, profile = copy.profile, enabled = copy.enabled)
+                    changed = true
+                    val installed = botCopy(copy.profile)
+                    if (installed == null || !PushPluginReply(version = installed.version).versionAtLeast(PLUGIN_VERSION) || installed.enabled != copy.enabled) {
+                        failures += "${copy.profile}: the plugin update could not be verified."
+                    } else pending.remove(copy)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    failures += "${copy.profile}: ${e.message}"
+                }
+            }
+        }
+        // Both bridges refresh after an update; keep partial failures visible until another ask or connection.
+        if (update) updateFailure = failures.takeIf {
+            it.isNotEmpty() && info?.ok == true && info.versionAtLeast(PLUGIN_VERSION)
+        }?.let { rpc to it.toList() }
+        // What's still old after the update, verified copy by copy: the refreshes it sets off needn't look again.
+        // Only after a look that saw every profile; else they look again, and say again which they couldn't.
+        if (update && copies.isNotEmpty() && scannedBots?.rpc === rpc) scannedBots = ScannedBots(rpc, pending.toList(), emptyList())
+        if (changed) _updates.update { it + 1 }
+        val detail = (failures + updateFailure?.second.orEmpty()).distinct().takeIf { it.isNotEmpty() }?.joinToString("\n")
+        if (detail != null && (info == null || !info.ok || !info.versionAtLeast(minimum))) {
+            return@withLock PluginState.Failed(detail)
+        }
+        val botUpdate = (pending.firstOrNull()?.version ?: detail?.let { "unknown" })?.let {
+            PluginUpdate(it, PLUGIN_VERSION, needed = false)
         }
         when {
             info == null -> PluginState.Missing
             !info.ok -> PluginState.Failed(info.error)
             !info.versionAtLeast(minimum) -> PluginState.Outdated(PluginUpdate(info.version ?: "unknown", PLUGIN_VERSION, needed = true))
-            !info.versionAtLeast(PLUGIN_VERSION) -> PluginState.Ready(info, PluginUpdate(info.version ?: "unknown", PLUGIN_VERSION, needed = false))
-            else -> PluginState.Ready(info)
+            !info.versionAtLeast(PLUGIN_VERSION) -> PluginState.Ready(info, PluginUpdate(info.version ?: "unknown", PLUGIN_VERSION, needed = false), detail)
+            else -> PluginState.Ready(info, botUpdate, detail)
         }
+    }
+
+    private data class BotCopy(val profile: String, val version: String, val enabled: Boolean)
+
+    /** One look at the bots' copies on connection [rpc]: the old ones, and what couldn't be looked at. */
+    private data class ScannedBots(val rpc: JsonRpcClient, val copies: List<BotCopy>, val failures: List<String>)
+
+    /**
+     * Kept for the connection: push and phone tools both prepare on every connect, and each look is a call per
+     * profile, each a fraction of a second on the gateway, while every other prepare waits on the lock. Only a
+     * look that saw every profile is kept: one that failed somewhere (a timeout, say) is tried again.
+     */
+    private var scannedBots: ScannedBots? = null
+
+    private suspend fun botCopies(rpc: JsonRpcClient, failures: MutableList<String>): List<BotCopy> {
+        val scan = scannedBots?.takeIf { it.rpc === rpc }
+            ?: scanBots(rpc).also { scannedBots = it.takeIf { scan -> scan.failures.isEmpty() } }
+        failures += scan.failures
+        return scan.copies
+    }
+
+    /** Only existing downloaded copies need replacing; no plugin is installed on an unrelated profile. */
+    private suspend fun scanBots(rpc: JsonRpcClient): ScannedBots {
+        val failures = mutableListOf<String>()
+        val bots = try {
+            BotsApi(connection).roster().bots
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Older gateways have no profiles API.
+            if (!(e is RpcException && e.code == -32601)) failures += "bot profiles: ${e.message}"
+            return ScannedBots(rpc, emptyList(), failures)
+        }
+        val copies = bots.mapNotNull { bot ->
+            try {
+                // A version that doesn't read as one may be newer (a dev copy): never replaced.
+                botCopy(bot.name)?.takeIf { it.version.isVersion() && !PushPluginReply(version = it.version).versionAtLeast(PLUGIN_VERSION) }
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                failures += "${bot.name}: ${e.message}"
+                null
+            }
+        }
+        return ScannedBots(rpc, copies, failures)
+    }
+
+    private fun String.isVersion(): Boolean = isNotEmpty() && split('.').all { it.toIntOrNull() != null }
+
+    private suspend fun botCopy(profile: String): BotCopy? {
+        val result = client().request("plugins.manage", buildJsonObject {
+            put("action", "list")
+            put("profile", profile)
+        }) as? JsonObject
+        val plugins = result?.get("plugins") as? JsonArray
+            ?: throw RpcException(0, "The gateway didn't return the profile's plugins.")
+        val copy = plugins.filterIsInstance<JsonObject>().firstOrNull {
+            (it["name"] as? JsonPrimitive)?.contentOrNull == PLUGIN_COMMAND &&
+                (it["source"] as? JsonPrimitive)?.contentOrNull in setOf("user", "git")
+        } ?: return null
+        return BotCopy(profile, (copy["version"] as? JsonPrimitive)?.contentOrNull ?: "unknown",
+            (copy["status"] as? JsonPrimitive)?.contentOrNull == "enabled")
     }
 
     /**
@@ -287,6 +399,9 @@ class PushApi(private val connection: GatewayConnection) {
         return output("phone answer $body")?.let(::phoneReply)?.ok == true
     }
 
+    /** What `/herald-push cron <arg>` printed (the Inbox's calls), or null when the plugin isn't loaded. */
+    suspend fun cron(arg: String): String? = output("cron $arg")
+
     private fun phoneReply(output: String): PhoneReply? =
         runCatching { HermesJson.decodeFromString(PhoneReply.serializer(), output) }.getOrNull()
 
@@ -323,10 +438,10 @@ class PushApi(private val connection: GatewayConnection) {
         const val PLUGIN_REPO = "https://github.com/Giton22/hermes-herald-push"
 
         /** The plugin commit this Herald was built and reviewed against. */
-        const val PLUGIN_REF = "37926e1e68ec29eb517b3f25313686ce7a22930e"
+        const val PLUGIN_REF = "45e76c00c1536245cfca9d5336226e8edb017e69"
 
         /** The version at [PLUGIN_REF]: an older copy on the gateway is offered this as an update. */
-        const val PLUGIN_VERSION = "0.3.3"
+        const val PLUGIN_VERSION = "0.4.2"
 
         /** The oldest plugin this Herald works with; an older copy waits for the user to update it. */
         const val MIN_PLUGIN_VERSION = "0.1.1"

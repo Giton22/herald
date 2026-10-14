@@ -59,10 +59,6 @@ import com.mikepenz.markdown.compose.components.markdownComponents
 import com.mikepenz.markdown.compose.elements.MarkdownCodeBlock
 import com.mikepenz.markdown.compose.elements.MarkdownCodeFence
 import com.mikepenz.markdown.compose.elements.MarkdownParagraph
-import com.mikepenz.markdown.compose.elements.MarkdownTable
-import com.mikepenz.markdown.compose.elements.MarkdownTableHeader
-import com.mikepenz.markdown.compose.elements.MarkdownTableRow
-import androidx.compose.ui.text.style.TextOverflow
 import com.mikepenz.markdown.compose.elements.MarkdownText as LibraryMarkdownText
 import dev.hermeskotlin.designsystem.accent
 import org.intellij.markdown.ast.ASTNode
@@ -119,22 +115,43 @@ val LocalCodeWrap = compositionLocalOf { false }
 /** The Markdown being drawn is still streaming in. */
 private val LocalStreaming = compositionLocalOf { false }
 
+/** [textStyle] laid over the reply's [body] style: what it leaves unset (color, line height, font) stays the body's. */
+internal fun compactStyle(body: TextStyle, textStyle: TextStyle?): TextStyle? = textStyle?.let(body::merge)
+
+/** A compact text style keeps every block small, while code keeps its own font and links their accent. */
+internal fun DefaultMarkdownTypography.withTextStyle(style: TextStyle?): DefaultMarkdownTypography {
+    if (style == null) return this
+    val heading = style.copy(fontWeight = FontWeight.SemiBold)
+    val codeStyle = code.copy(fontSize = style.fontSize, lineHeight = style.lineHeight, color = style.color)
+    return copy(
+        h1 = heading, h2 = heading, h3 = heading, h4 = heading, h5 = heading, h6 = heading,
+        text = style, paragraph = style, ordered = style, bullet = style, list = style, table = style,
+        // A quote keeps its own muted color so it still stands apart from the text around it.
+        quote = style.copy(color = quote.color), code = codeStyle,
+        inlineCode = inlineCode.copy(fontSize = style.fontSize, lineHeight = style.lineHeight, color = style.color),
+        alertTitle = heading,
+    )
+}
+
 /**
  * GitHub-flavoured Markdown in the app's type and colors. Fenced code gets a language label, syntax
  * colors, horizontal scrolling (or wrapping, per [LocalCodeWrap]) and a copy button. TeX math between
  * `$…$`, `\(…\)`, `$$…$$` or `\[…\]` is typeset (see [MathMarkup]). [streaming] parses off the main thread
  * and keeps the previous render while text grows; settled text parses synchronously so list items don't
- * change height after they appear.
+ * change height after they appear. [textStyle] keeps blocks compact, for folded reasoning summaries;
+ * headings use weight rather than size and code keeps its monospace font.
  */
 @Composable
-fun MarkdownText(text: String, modifier: Modifier = Modifier, streaming: Boolean = false) {
+fun MarkdownText(text: String, modifier: Modifier = Modifier, streaming: Boolean = false, textStyle: TextStyle? = null) {
     val prepared = remember(text) { MathMarkup.prepare(text) }
-    val bodyStyle = Theme[typography][body].copy(color = Theme[colors][textColor])
+    val replyStyle = Theme[typography][body].copy(color = Theme[colors][textColor])
+    val compact = compactStyle(replyStyle, textStyle)
+    val bodyStyle = compact ?: replyStyle
     val codeStyle = Theme[typography][code].copy(color = Theme[colors][textColor])
     val headingStyle = Theme[typography][heading].copy(color = Theme[colors][textColor])
     val linkColor = Theme[colors][accentText]
     val markdownColors = DefaultMarkdownColors(
-        text = Theme[colors][textColor],
+        text = bodyStyle.color,
         codeBackground = Theme[colors][well],
         inlineCodeBackground = Theme[colors][surface2],
         dividerColor = Theme[colors][stroke],
@@ -145,33 +162,33 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier, streaming: Boolean
         h2 = headingStyle.copy(fontSize = 19.sp, lineHeight = 26.sp),
         h3 = headingStyle,
         h4 = headingStyle,
-        h5 = bodyStyle.copy(fontWeight = FontWeight.SemiBold),
-        h6 = bodyStyle.copy(fontWeight = FontWeight.SemiBold),
-        text = bodyStyle,
+        h5 = replyStyle.copy(fontWeight = FontWeight.SemiBold),
+        h6 = replyStyle.copy(fontWeight = FontWeight.SemiBold),
+        text = replyStyle,
         code = codeStyle,
         inlineCode = codeStyle,
-        quote = bodyStyle.copy(color = Theme[colors][textTertiary]),
-        paragraph = bodyStyle,
-        ordered = bodyStyle,
-        bullet = bodyStyle,
-        list = bodyStyle,
+        quote = replyStyle.copy(color = Theme[colors][textTertiary]),
+        paragraph = replyStyle,
+        ordered = replyStyle,
+        bullet = replyStyle,
+        list = replyStyle,
         textLink = TextLinkStyles(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)),
-        table = bodyStyle,
-    )
+        table = replyStyle,
+    ).withTextStyle(compact)
     val components = remember {
         markdownComponents(
             codeFence = { MarkdownCodeFence(it.content, it.node, block = { code, language, style -> CodeBlock(code, language, style) }) },
             codeBlock = { MarkdownCodeBlock(it.content, it.node, block = { code, language, style -> CodeBlock(code, language, style) }) },
             paragraph = { HighlightedParagraph(it.content, it.node) },
             unorderedList = { DotList(it.content, it.node, it.listDepth) },
-            table = { WrappingTable(it.content, it.node, it.typography.table) },
+            table = { FittedTable(it.content, it.node, it.typography.table) },
         )
     }
     val density = LocalDensity.current
     val math = MathStyle(
         textSizePx = with(density) { bodyStyle.fontSize.toPx() },
-        argb = Theme[colors][textColor].toArgb(),
-        fallback = codeStyle.toSpanStyle(),
+        argb = bodyStyle.color.toArgb(),
+        fallback = markdownTypography.code.toSpanStyle(),
     )
     val annotate: AnnotatedString.Builder.(String, ASTNode) -> Boolean = remember(math) { { content, child -> appendFormula(content, child, math) } }
     val annotator = markdownAnnotator(annotate = annotate)
@@ -258,7 +275,7 @@ private fun DisplayFormula(formula: MathFormula, math: MathStyle) {
             if (picture != null) {
                 Image(picture, contentDescription = formula.latex)
             } else {
-                BasicText(formula.source(), style = Theme[typography][code].copy(color = Theme[colors][textColor]), softWrap = false)
+                BasicText(formula.source(), style = LocalMarkdownTypography.current.code, softWrap = false)
             }
         }
     }
@@ -302,32 +319,15 @@ private fun HighlightedParagraph(content: String, node: ASTNode) {
     LibraryMarkdownText(text, node, style = style)
 }
 
-/**
- * The library's table, but every cell shows all of its text on as many lines as it needs. The library
- * cuts each cell to one line with "…", which hides most words on a phone.
- */
-@Composable
-private fun WrappingTable(content: String, node: ASTNode, style: TextStyle) {
-    MarkdownTable(
-        content,
-        node,
-        style = style,
-        headerBlock = { text, header, width, cellStyle ->
-            MarkdownTableHeader(text, header, width, cellStyle, verticalAlignment = Alignment.Top, maxLines = Int.MAX_VALUE, overflow = TextOverflow.Clip)
-        },
-        rowBlock = { text, row, width, cellStyle ->
-            MarkdownTableRow(text, row, width, cellStyle, verticalAlignment = Alignment.Top, maxLines = Int.MAX_VALUE, overflow = TextOverflow.Clip)
-        },
-    )
-}
-
 /** A bullet list whose markers are small accent dots, centered on the first line; nested lists get muted ones. */
 @Composable
 private fun DotList(content: String, node: ASTNode, depth: Int) {
     val dot = Theme[colors][if (depth == 0) accentText else textMuted]
     // Centers the dot on the first line of the item's text. Only the dot is pushed down: a task item's
     // checkbox takes the same marker slot and sits on the line as it is.
-    val top = with(LocalDensity.current) { ((Theme[typography][body].lineHeight.toDp() - BULLET_DOT) / 2) }
+    // Only an sp line height converts to dp; any other falls back to the body's.
+    val lineHeight = LocalMarkdownTypography.current.list.lineHeight.takeIf { it.isSp } ?: Theme[typography][body].lineHeight
+    val top = with(LocalDensity.current) { ((lineHeight.toDp() - BULLET_DOT) / 2) }
     MarkdownListItems(content, node, depth, markerModifier = { Modifier.padding(start = 2.dp, end = 10.dp) }) { _, _, _ ->
         Box(Modifier.padding(top = top).size(BULLET_DOT).background(dot, CircleShape))
     }

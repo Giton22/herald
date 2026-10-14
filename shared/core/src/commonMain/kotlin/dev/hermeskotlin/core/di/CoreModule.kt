@@ -32,6 +32,8 @@ import dev.hermeskotlin.core.models.ModelsApi
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.profiles.ProfileStore
 import dev.hermeskotlin.core.push.NtfyClient
+import dev.hermeskotlin.core.inbox.InboxLinks
+import dev.hermeskotlin.core.inbox.InboxStore
 import dev.hermeskotlin.core.push.PushApi
 import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.settings.SettingsStore
@@ -45,6 +47,8 @@ import dev.hermeskotlin.core.bots.BotChats
 import dev.hermeskotlin.core.bots.BotHealth
 import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.projects.ProjectsApi
+import dev.hermeskotlin.core.threads.ThreadsApi
+import dev.hermeskotlin.core.threads.ThreadsRepository
 import dev.hermeskotlin.core.bots.SidebarModeStore
 import dev.hermeskotlin.core.rooms.RoomLinks
 import dev.hermeskotlin.core.rooms.RoomSeenStore
@@ -112,6 +116,8 @@ val coreModule = module {
     single { PetApi(get()) }
     single { BotsApi(get()) }
     single { ProjectsApi(get()) }
+    single { ThreadsApi(get()) }
+    single { ThreadsRepository(get(), get(), get(), get()) }
     single { BotChats(get<BotsApi>()) }
     single { RoomsApi(get()) }
     single { RoomSeenStore(get()) }
@@ -131,4 +137,6 @@ val coreModule = module {
     // ntfy is someone else's server: never send it the gateway's cookies.
     single { NtfyClient(get(named(OUTSIDE_CLIENT))) }
     single { PushApi(get()) }
+    single { InboxStore(get()) }
+    single { InboxLinks() }
 }

@@ -62,6 +62,10 @@ import dev.hermeskotlin.core.config.ConfigEntry
 import dev.hermeskotlin.ui.sessions.ChoiceSheet
 import kotlinx.serialization.json.JsonElement
 import dev.hermeskotlin.ui.sessions.ScheduledActions
+import dev.hermeskotlin.ui.inbox.FollowView
+import dev.hermeskotlin.ui.inbox.GroupsView
+import dev.hermeskotlin.ui.inbox.InboxView
+import dev.hermeskotlin.ui.inbox.RunView
 import dev.hermeskotlin.ui.sessions.ScheduledView
 import dev.hermeskotlin.ui.sessions.CapabilityTab
 import dev.hermeskotlin.ui.sessions.InsightsView
@@ -141,6 +145,11 @@ enum class PreviewScene(val label: String) {
     Assistant("The assistant, called up over another app"),
     AssistantAnswer("The assistant, after a question about the screen"),
     Scheduled("Scheduled jobs"),
+    Inbox("The Inbox's folders"),
+    InboxFolder("A folder in the Inbox"),
+    InboxReport("A report read in full"),
+    InboxJobs("The jobs in the Inbox"),
+    InboxGroups("Folders and groups"),
     ScheduledJob("A scheduled job and its runs"),
     JobEditor("A new scheduled job"),
     Usage("Usage and context"),
@@ -151,11 +160,13 @@ enum class PreviewScene(val label: String) {
     MidTask("Typing while a task runs"),
     ConnectionCheck("The connection check"),
     LongChat("A chat to scroll back through"),
+    Tables("Tables in an answer"),
     Notices("Notices from the gateway"),
     Archived("Archived, with Undo"),
     Checkpoints("Checkpoints, one opened on its changes"),
     ProjectOptions("A project's options"),
     NewProject("A new project"),
+    Threads("Threads above the pinned chats"),
     Models("Your starred and recent models in the model picker"),
     ModelsAll("Every model, one row per model, in the model picker"),
     ModelSearch("A search in the model picker"),
@@ -183,6 +194,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
         ) {
             when (scene) {
                 PreviewScene.Reply -> SampleChat(ChatSamples.reply)
+                PreviewScene.Tables -> SampleChat(ChatSamples.tables)
                 PreviewScene.Notices -> SampleChat(ChatSamples.notices)
                 PreviewScene.Working -> SampleChat(ChatSamples.working)
                 PreviewScene.Approval -> SampleChat(ChatSamples.approval)
@@ -203,6 +215,17 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                         statuses = ChatSamples.sessionStatuses,
                         drafts = ChatSamples.sessionDrafts,
                         projects = ChatSamples.projects,
+                    )
+                }
+                PreviewScene.Threads -> OpenSidebar {
+                    SessionsSidebarSample(
+                        ChatSamples.threadSessions(),
+                        selectedId = "s1",
+                        userLabel = ChatSamples.USER,
+                        statuses = ChatSamples.threadStatuses,
+                        drafts = ChatSamples.sessionDrafts,
+                        projects = ChatSamples.projects,
+                        threads = ChatSamples.threads,
                     )
                 }
                 PreviewScene.Bots -> OpenSidebar {
@@ -410,6 +433,31 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                             onOpenRun = {},
                         )
                     }
+                }
+                PreviewScene.Inbox, PreviewScene.InboxFolder -> OpenSidebar {
+                    SidebarPage {
+                        Column(Modifier.fillMaxSize()) {
+                            InboxView(
+                                if (scene == PreviewScene.Inbox) InboxSamples.folders() else InboxSamples.folder(),
+                                PreviewInboxActions,
+                                onBack = {},
+                                onOpenSettings = {},
+                            )
+                        }
+                    }
+                }
+                PreviewScene.InboxReport -> OpenSidebar {
+                    SidebarPage {
+                        Column(Modifier.fillMaxSize()) {
+                            RunView(InboxSamples.report(), "☀️ Morning briefing", loading = false, note = null, onBack = {})
+                        }
+                    }
+                }
+                PreviewScene.InboxJobs -> OpenSidebar {
+                    SidebarPage { Column(Modifier.fillMaxSize()) { FollowView(InboxSamples.jobs(), PreviewInboxActions) } }
+                }
+                PreviewScene.InboxGroups -> OpenSidebar {
+                    SidebarPage { Column(Modifier.fillMaxSize()) { GroupsView(InboxSamples.groups(), PreviewInboxActions) } }
                 }
                 PreviewScene.JobEditor -> OpenSidebar {
                     SidebarPage {
@@ -633,6 +681,10 @@ private fun NewChatPreview() = HeraldPreview(PreviewScene.NewChat)
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun SidebarPreview() = HeraldPreview(PreviewScene.Sidebar)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun ThreadsPreview() = HeraldPreview(PreviewScene.Threads)
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable

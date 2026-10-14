@@ -290,7 +290,9 @@ class PhoneToolsBridge(
             val missing = on.filter { it.id !in offered }
             _status.value = PhoneToolsStatus(
                 State.On,
-                if (missing.isEmpty()) null else "The gateway's plugin doesn't know ${missing.joinToString { it.title }} yet.",
+                listOfNotNull(ready.detail,
+                    if (missing.isEmpty()) null else "The gateway's plugin doesn't know ${missing.joinToString { it.title }} yet.",
+                ).joinToString("\n").ifEmpty { null },
                 ready.update,
             )
             return true

@@ -29,6 +29,13 @@ import dev.hermeskotlin.core.rpc.RpcException
 import dev.hermeskotlin.core.sessions.SessionListFilter
 import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.core.sessions.SessionsApi
+import dev.hermeskotlin.core.threads.ChatThread
+import dev.hermeskotlin.core.threads.FreshChat
+import dev.hermeskotlin.core.threads.ThreadsRepository
+import dev.hermeskotlin.core.threads.movedPast
+import dev.hermeskotlin.core.threads.ordered
+import dev.hermeskotlin.core.threads.renamed
+import dev.hermeskotlin.core.threads.withoutThread
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -135,6 +142,8 @@ class SessionsViewModel(
     private val seenStore: SeenStore,
     private val drafts: DraftStore,
     private val projectsApi: ProjectsApi,
+    /** The threads, shared with the open chat so `/new` there starts its thread fresh. */
+    private val threadsRepo: ThreadsRepository,
     /** The list as last read, shown while the gateway can't be. */
     private val cache: OfflineCache? = null,
 ) : ViewModel() {
@@ -143,6 +152,9 @@ class SessionsViewModel(
     internal var clock: Clock = Clock.System
 
     val connectionState: StateFlow<ConnectionState> = connection.state
+
+    /** The profile's threads, in their order. */
+    val threads: StateFlow<List<ChatThread>> = threadsRepo.threads
 
     private val bound = MutableStateFlow<Pair<GatewayUrl, String?>?>(null)
 
@@ -232,6 +244,7 @@ class SessionsViewModel(
         this.gateway = gateway
         this.profile = profile
         bound.value = gateway.gatewayUrl to profile
+        threadsRepo.bind(gateway.gatewayUrl, profile)
         _state.value = SessionsUiState()
         savedShownAt = null
         // The last list's projects mean nothing here; ask afresh.
@@ -580,6 +593,59 @@ class SessionsViewModel(
         },
     )
 
+    /** Makes [session] a thread at the end of the Threads section; its chat is pinned so the gateway keeps it. */
+    fun makeThread(session: SessionSummary) = threadAction("Couldn't make a thread.") {
+        threadsRepo.makeThread(session)
+        _state.update { state ->
+            fun List<SessionSummary>.pinnedRow() = map { if (it.id == session.id) it.copy(pinned = true) else it }
+            state.copy(sessions = state.sessions.pinnedRow(), projectSessions = state.projectSessions?.pinnedRow())
+        }
+    }
+
+    /** Takes [thread] out of the Threads section; its chat stays, as a pinned chat. */
+    fun removeThread(thread: ChatThread) = threadAction("Couldn't remove the thread.") {
+        threadsRepo.change { it.withoutThread(thread.id) }
+    }
+
+    /** Names [thread] [name]; its chat is retitled to match. */
+    fun renameThread(thread: ChatThread, name: String) = threadAction("Couldn't rename the thread.") {
+        threadsRepo.rename(thread, name.trim())
+        load(refresh = false)
+    }
+
+    /** Moves [thread] one place up or down, past [neighbour]: the thread next to it in the section as shown. */
+    fun moveThread(thread: ChatThread, neighbour: ChatThread) = threadAction("Couldn't move the thread.") {
+        threadsRepo.change { it.movedPast(thread.id, neighbour.id) }
+    }
+
+    /** Saves the threads in the order of [ids], as a drag left them. */
+    fun reorderThreads(ids: List<String>) = threadAction("Couldn't save the order.") {
+        threadsRepo.change { it.ordered(ids) }
+    }
+
+    /**
+     * Starts [thread] fresh: its chat is filed away in the archive under the thread's name and the time, and a new
+     * one takes its place, which [onOpened] opens.
+     */
+    fun startFresh(thread: ChatThread, onOpened: (FreshChat) -> Unit) = threadAction("Couldn't start the thread fresh.") {
+        val fresh = threadsRepo.startFresh(thread)
+        onOpened(fresh)
+        load(refresh = false)
+    }
+
+    /** Runs a thread change; a failure is said in the list's message, [fallback] when it has no words of its own. */
+    private fun threadAction(fallback: String, block: suspend () -> Unit) {
+        viewModelScope.launch {
+            try {
+                block()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                _state.update { it.copy(message = e.message?.takeIf { m -> m.isNotBlank() } ?: fallback) }
+            }
+        }
+    }
+
     /** Optimistic row update: apply locally (list, search results, project), call the server, roll back on failure. */
     private fun mutate(
         apply: (List<SessionSummary>) -> List<SessionSummary>,
@@ -642,6 +708,11 @@ class SessionsViewModel(
             val limit = _state.value.sessions.size.coerceIn(SessionsApi.PAGE_SIZE, 100)
             val result = api.list(url, limit = limit, filter = filter, profile = profile)
             if (result is ApiResult.Success) cache?.saveList(url, profile, filter, result.value.sessions)
+            if (result is ApiResult.Success && filter == SessionListFilter.Recent) {
+                threadsRepo.noteRows(url, profile, result.value.sessions)
+                // Threads come over the socket; another device may have changed them.
+                if (connection.state.value is ConnectionState.Connected) viewModelScope.launch { threadsRepo.refresh(force = refresh) }
+            }
             _state.update { state ->
                 if (state.filter != filter) return@update state
                 if (result is ApiResult.Success) savedShownAt = null
@@ -680,6 +751,7 @@ class SessionsViewModel(
         viewModelScope.launch {
             connection.state.map { it is ConnectionState.Connected }.distinctUntilChanged().filter { it }.collect {
                 if (gateway != null && _state.value.filter == SessionListFilter.Recent) loadProjects(force = true)
+                if (gateway != null) launch { threadsRepo.refresh(force = true) }
             }
         }
         viewModelScope.launch {

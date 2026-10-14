@@ -118,6 +118,22 @@ class SettingsStoreTest {
     }
 
     @Test
+    fun threadsStayOpenUntilFoldedAndRemembersIt() = runTest {
+        val disk = InMemoryKeyValueStore()
+        // Settings saved before the option existed show every thread, whatever Pinned does.
+        disk.put("settings.v1", """{"theme":"Dark","pinnedCollapsed":true}""")
+        val first = SettingsStore(disk, backgroundScope)
+        assertEquals(false, first.settings.filterNotNull().first().threadsCollapsed)
+
+        first.update { it.copy(threadsCollapsed = true) }
+        advanceUntilIdle()
+
+        val again = SettingsStore(disk, backgroundScope).settings.filterNotNull().first()
+        assertEquals(true, again.threadsCollapsed)
+        assertEquals(true, again.pinnedCollapsed)
+    }
+
+    @Test
     fun projectsShowAsChipsUntilSwitchedToAListAndRemembersIt() = runTest {
         val disk = InMemoryKeyValueStore()
         // Settings saved before the option existed keep the chips.

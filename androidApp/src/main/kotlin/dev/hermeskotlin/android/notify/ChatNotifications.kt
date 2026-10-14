@@ -49,6 +49,14 @@ class ChatNotifications(private val context: Context) {
                     .setName("Bot messages")
                     .setDescription("A bot wrote in its chat while the app was in the background.")
                     .build(),
+                NotificationChannelCompat.Builder(CHANNEL_INBOX, NotificationManagerCompat.IMPORTANCE_DEFAULT)
+                    .setName("Inbox")
+                    .setDescription("A scheduled job you follow reported, such as a morning briefing.")
+                    .build(),
+                NotificationChannelCompat.Builder(CHANNEL_INBOX_FAILED, NotificationManagerCompat.IMPORTANCE_HIGH)
+                    .setName("Failed jobs")
+                    .setDescription("A scheduled job's run failed.")
+                    .build(),
                 NotificationChannelCompat.Builder(CHANNEL_VOICE, NotificationManagerCompat.IMPORTANCE_LOW)
                     .setName("Voice chat")
                     .setDescription("Shown while a voice chat goes on with the screen off or another app open.")
@@ -317,6 +325,30 @@ class ChatNotifications(private val context: Context) {
     /** Bot messages posted lately: bot and opening words → (came through push, when). */
     private val recentBotMessages = LinkedHashMap<String, Pair<Boolean, Long>>()
 
+    /**
+     * A finished run of a cron job the user follows: the job as the title, the start of what it said, and a tap
+     * that opens it in the Inbox. One notification per job (a job id is only unique in its profile, [bot]), so a
+     * job's next run replaces its last.
+     */
+    fun postCronRun(key: String, bot: String, job: String, title: String, text: String, failed: Boolean) {
+        val body = text.toPlainText().take(MAX_PREVIEW).ifBlank { if (failed) "The run failed." else "Finished." }
+        val notification = base(if (failed) CHANNEL_INBOX_FAILED else CHANNEL_INBOX)
+            .setContentTitle(if (failed) "$title failed" else title)
+            .setContentText(body.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: body)
+            .setStyle(NotificationCompat.BigTextStyle().bigText(body))
+            .setCategory(if (failed) NotificationCompat.CATEGORY_ERROR else NotificationCompat.CATEGORY_MESSAGE)
+            .setContentIntent(openInbox(key))
+            .build()
+        post("cron:$bot/$job", INBOX_ID, notification)
+    }
+
+    private fun openInbox(key: String): PendingIntent {
+        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)!!
+            .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+            .putExtra(EXTRA_OPEN_INBOX, key)
+        return PendingIntent.getActivity(context, "inbox:$key".hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
+    }
+
     /** "Send a test" from the push setup: proof that a push got through ntfy and decrypted. */
     fun postPushTest() = post(
         null,
@@ -391,6 +423,10 @@ class ChatNotifications(private val context: Context) {
         const val PUSH_TEST_ID = 5
         const val ROOM_ID = 6
         const val VOICE_ID = 7
+        const val INBOX_ID = 8
+
+        /** On the launch intent of an Inbox notification: the run's key ([dev.hermeskotlin.core.inbox.InboxRun.key]). */
+        const val EXTRA_OPEN_INBOX = "open_inbox"
 
         /** On the launch intent of a room's notification: the hosted room's id (its name in [EXTRA_OPEN_TITLE]). */
         const val EXTRA_OPEN_ROOM = "open_room"
@@ -408,6 +444,8 @@ class ChatNotifications(private val context: Context) {
         private const val CHANNEL_REPLIES = "replies"
         private const val CHANNEL_BOTS = "bots"
         private const val CHANNEL_VOICE = "voice"
+        private const val CHANNEL_INBOX = "inbox"
+        private const val CHANNEL_INBOX_FAILED = "inbox_failed"
         private const val MAX_PREVIEW = 2_000
         private const val MAX_STACKED = 6
         private const val DEDUPE_PREFIX = 200

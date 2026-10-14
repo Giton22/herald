@@ -10,6 +10,7 @@ import dev.hermeskotlin.android.push.PushListener
 import dev.hermeskotlin.core.phone.PhoneToolRunner
 import dev.hermeskotlin.core.phone.PhoneToolsBridge
 import dev.hermeskotlin.android.push.PushStore
+import dev.hermeskotlin.core.inbox.InboxApi
 import dev.hermeskotlin.core.push.PushKeys
 import dev.hermeskotlin.core.push.PushSetup
 import dev.hermeskotlin.core.voice.VoiceKeepAlive
@@ -28,7 +29,8 @@ val notifyModule = module {
     single { BotNotifier(androidContext(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { RoomNotifier(get(), get(), get(), get(), get(), get()) }
     single { PushStore(androidContext()) } bind PushKeys::class
-    single { PushListener(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { InboxApi(get(), get()) }
+    single { PushListener(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { PushSetup(get(), get(), get(), get(), get(), get(), deviceName = { Build.MODEL ?: "Android phone" }) }
     single { PhoneConfirmations(androidContext()) }
     single { Geofences(androidContext(), get(), get()) } bind WatchedPlaces::class

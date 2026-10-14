@@ -69,6 +69,8 @@ fun <T> SegmentedControl(
     optionIcon: (T) -> ImageVector? = { null },
     /** A count beside the label, in mono, such as how many each tab holds. */
     optionBadge: (T) -> String? = { null },
+    /** Off, the options are dimmed and say so to accessibility services, and a tap does nothing. */
+    enabled: Boolean = true,
 ) {
     val track = Theme[colors][well]
     val ring = Theme[colors][stroke]
@@ -94,12 +96,12 @@ fun <T> SegmentedControl(
             val interaction = remember { MutableInteractionSource() }
             val fill by animateColorAsState(if (isSelected) Theme[colors][thumb] else Color.Transparent)
             val edge by animateColorAsState(if (isSelected) Theme[colors][strokeStrong] else Color.Transparent)
-            val content = if (isSelected) Theme[colors][text] else Theme[colors][textTertiary]
+            val content = (if (isSelected) Theme[colors][text] else Theme[colors][textTertiary]).let { if (enabled) it else it.copy(alpha = it.alpha * 0.5f) }
             Box(
                 Modifier
                     .weight(1f)
                     .fillMaxHeight()
-                    .selectable(selected = isSelected, interactionSource = interaction, indication = null, role = Role.RadioButton, onClick = { onSelect(option) }),
+                    .selectable(selected = isSelected, enabled = enabled, interactionSource = interaction, indication = null, role = Role.RadioButton, onClick = { onSelect(option) }),
                 contentAlignment = Alignment.Center,
             ) {
                 Row(

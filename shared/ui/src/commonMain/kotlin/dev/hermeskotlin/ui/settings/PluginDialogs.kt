@@ -37,7 +37,7 @@ internal fun PluginInstallDialog(visible: Boolean, feature: String, what: String
     )
 }
 
-/** A newer plugin is available: the row says from which version to which, and asks before installing it. */
+/** A newer plugin is available on the gateway or a bot; ask before replacing any installed copies. */
 @Composable
 internal fun PluginUpdateRow(update: PluginUpdate, onUpdate: () -> Unit) {
     var asking by remember { mutableStateOf(false) }
@@ -49,9 +49,10 @@ internal fun PluginUpdateRow(update: PluginUpdate, onUpdate: () -> Unit) {
         visible = asking,
         onDismissRequest = { asking = false },
         title = "Update the plugin?",
-        message = "The gateway runs herald-push ${update.installed}. Herald installs ${update.available} from " +
-            "$PLUGIN_SOURCE, at the commit this Herald was reviewed with, in its place." +
-            if (update.needed) " This Herald needs it." else " What you have keeps working until you do.",
+        message = "Herald updates older herald-push copies on the gateway and its bot profiles to ${update.available} from " +
+            "$PLUGIN_SOURCE, at the commit this Herald was reviewed with. Disabled copies stay disabled. " +
+            "Running chats gain new tools when their agent session reloads." +
+            if (update.needed) " This Herald needs the update." else " Updates are only installed when you choose to.",
         actions = {
             Button("Not now", onClick = { asking = false }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             Button(
