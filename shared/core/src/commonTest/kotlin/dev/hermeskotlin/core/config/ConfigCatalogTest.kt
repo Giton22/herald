@@ -21,7 +21,7 @@ class ConfigCatalogTest {
             "checkpoints.enabled" to ConfigField("boolean", "Checkpoints → Enabled", "agent"),
             "agent.max_turns" to ConfigField("number", "Agent → Max Turns", "agent"),
             "agent.disabled_toolsets" to ConfigField("list", "Agent → Disabled Toolsets", "agent"),
-            "timezone" to ConfigField("select", "IANA timezone", "general", options("Asia/Riyadh", "Europe/Berlin"), clearable = true, searchable = true),
+            "timezone" to ConfigField("select", "IANA timezone", "general", options("America/New_York", "Europe/Berlin"), clearable = true, searchable = true),
             "tts.provider" to ConfigField("select", "Text-to-speech provider", "tts", options("edge", "openai", "elevenlabs")),
             "tts.openai.voice" to ConfigField("string", "OpenAI voice", "tts"),
             "tts.openai.model" to ConfigField("string", "OpenAI model", "tts"),
@@ -141,7 +141,7 @@ class ConfigCatalogTest {
         val zone = assertIs<ConfigControl.Choice>(ConfigCatalog.entry("timezone", schema, config("""{"timezone":""}"""))!!.control)
 
         assertTrue(zone.searchable)
-        assertEquals(listOf("", "Asia/Riyadh", "Europe/Berlin"), zone.options)
+        assertEquals(listOf("", "America/New_York", "Europe/Berlin"), zone.options)
     }
 
     @Test

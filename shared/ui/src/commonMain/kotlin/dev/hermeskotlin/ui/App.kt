@@ -79,7 +79,21 @@ import dev.hermeskotlin.core.inbox.InboxLink
 import dev.hermeskotlin.core.inbox.InboxLinks
 import dev.hermeskotlin.core.rooms.RoomLinks
 import org.koin.compose.koinInject
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import androidx.lifecycle.compose.currentStateAsState
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.derivedStateOf
+import dev.hermeskotlin.ui.sessions.OtherChat
+import dev.hermeskotlin.ui.sessions.OtherChatEvent
+import dev.hermeskotlin.ui.sessions.OtherChatRow
+import dev.hermeskotlin.ui.sessions.OtherChatsViewModel
+import dev.hermeskotlin.ui.sessions.SessionsBadge
+import dev.hermeskotlin.ui.sessions.SessionsViewModel
 import org.koin.compose.viewmodel.koinViewModel
+import org.koin.core.parameter.parametersOf
 
 /** The current [AppSettings], for screens that change how they draw. */
 val LocalAppSettings = compositionLocalOf { AppSettings() }
@@ -346,6 +360,57 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
             pluginLabel = null
         }
     }
+    // Other chats that need the user: the Sessions badge, the banner over the chat, Next and the buzz, with
+    // "Alerts for other chats" on (off by default). Watched only while the chat itself is on screen with Herald in
+    // the foreground; that keeps the gateway's live list polled then (every 10 s, as while the sidebar shows), and
+    // never in the background.
+    val sessions: SessionsViewModel = koinViewModel()
+    val others: OtherChatsViewModel = koinViewModel { parametersOf(sessions) }
+    val settings = LocalAppSettings.current
+    val alerts = settings.otherChatsAlerts
+    LaunchedEffect(alerts, settings.otherChatsBanner) { others.setOtherChats(alerts, banner = settings.otherChatsBanner) }
+    val lifecycleState by LocalLifecycleOwner.current.lifecycle.currentStateAsState()
+    // A page drawn over the chat (Settings, a plugin, the bot editor) hides it too: a banner there would time out unseen.
+    val chatShown = lifecycleState.isAtLeast(Lifecycle.State.STARTED) && openRoom == null && desktopRoom == null &&
+        !settingsOpen && pluginUrl == null && editing == null
+    LaunchedEffect(chatShown) { others.setChatShown(chatShown) }
+    // The phone's drawer over the chat: the sidebar says it all there, so the banner waits until it closes.
+    val drawerOver by remember { derivedStateOf { sidebar.fraction > 0f && !sidebar.docked } }
+    DisposableEffect(others) { onDispose { others.setChatShown(false) } }
+    // Every id the open chat goes by (a bot's chat moves on after /compress), so it never counts as another.
+    val openIds = setOfNotNull(openSessionId, route.target.storedSessionId, openBot?.canonicalSession?.id, openBot?.canonicalSession?.openId)
+    LaunchedEffect(openIds) { others.setOpenChat(openIds) }
+    // Bot Chats are hidden sessions, so the chat list doesn't have them; the roster does, with what's unread.
+    LaunchedEffect(roster.all, roster.unread) {
+        others.setBotChats(
+            roster.all.filterNot { it.meta.hidden }.mapNotNull { bot ->
+                val chat = bot.canonicalSession ?: return@mapNotNull null
+                val id = chat.openId ?: return@mapNotNull null
+                OtherChatRow(
+                    OtherChat(id, bot.label, unread = bot.name in roster.unread, activityAt = chat.lastActive, bot = bot.name),
+                    ids = setOfNotNull(chat.id, id),
+                )
+            },
+        )
+    }
+    val sessionsBadge by others.badge.collectAsStateWithLifecycle()
+    val banner by others.banner.collectAsStateWithLifecycle()
+    val haptics = LocalHapticFeedback.current
+    val vibrate = alerts && settings.otherChatsVibrate
+    LaunchedEffect(others, vibrate) {
+        if (!vibrate) return@LaunchedEffect
+        others.otherChatEvents.collect { if (it.waiting) haptics.performHapticFeedback(HapticFeedbackType.LongPress) }
+    }
+
+    /** Opens another chat as a sidebar tap does, with where its new messages start. */
+    fun openOther(id: String, title: String, bot: String?) {
+        val botOf = bot?.let { name -> roster.all.firstOrNull { it.name == name } }
+        // A bot's chat opens as its sidebar row does, which finds where its new messages start.
+        if (botOf != null) bots.open(botOf) { storedId, readUpTo -> app.openBotChat(botOf, storedId, readUpTo) }
+        else app.openSession(id, title, others.openListed(id))
+        closeDrawerToChat()
+    }
+
     // On phones the keyboard makes way for the drawer.
     LaunchedEffect(sidebar) {
         snapshotFlow { sidebar.fraction > 0f && !sidebar.docked }.filter { it }.collect { focusManager.clearFocus() }
@@ -432,6 +497,21 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                     onOpenChat = { id, title -> app.openSession(id, title ?: "Untitled session") },
                     onSwitchProfile = app::switchProfile,
                     viewModel = chat,
+                    sessionsBadge = if (alerts) sessionsBadge else SessionsBadge(),
+                    otherChatBanner = banner.takeIf { alerts && settings.otherChatsBanner && !drawerOver },
+                    onOpenOtherChat = { event: OtherChatEvent ->
+                        others.dismissBanner(event)
+                        openOther(event.chatId, event.title, event.bot)
+                    },
+                    onDismissOtherChat = others::dismissBanner,
+                    onNextChat = if (!alerts) null else fun(): Boolean {
+                        val next = others.nextChat()
+                        if (next != null) {
+                            banner?.let(others::dismissBanner)
+                            openOther(next.id, next.title, next.bot)
+                        }
+                        return next != null
+                    },
                 )
             }
         }

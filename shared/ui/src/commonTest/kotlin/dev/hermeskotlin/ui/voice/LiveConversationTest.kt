@@ -161,24 +161,24 @@ class LiveConversationTest {
         assertTrue(offers.single().contains("v=0 offer\\r\\n"))
 
         call.receive("""{"type":"session.input_transcript.delta","delta":"What's the weather","start_ms":0,"end_ms":900}""")
-        call.receive("""{"type":"session.input_transcript.delta","delta":" in Khobar?","start_ms":900,"end_ms":1500}""")
+        call.receive("""{"type":"session.input_transcript.delta","delta":" in Chicago?","start_ms":900,"end_ms":1500}""")
         call.receive("""{"type":"session.delegation.created","delegation":{"id":"d1","type":"client","target":"backend"}}""")
 
         val submit = socket.submits.first { it.isNotEmpty() }.single()["params"]!!.jsonObject
-        assertEquals("What's the weather in Khobar?", submit["text"]!!.jsonPrimitive.content)
+        assertEquals("What's the weather in Chicago?", submit["text"]!!.jsonPrimitive.content)
         assertEquals("voice-live", submit["surface"]!!.jsonPrimitive.content)
-        assertEquals("User: What's the weather in Khobar?", submit["voice_context"]!!.jsonPrimitive.content)
+        assertEquals("User: What's the weather in Chicago?", submit["voice_context"]!!.jsonPrimitive.content)
         voice.chat.first { it.phase == VoicePhase.Thinking }
 
         socket.event("message.start")
-        socket.event("tool.start", """{"tool_id":"t1","name":"web_search","context":"weather Al Khobar"}""")
+        socket.event("tool.start", """{"tool_id":"t1","name":"web_search","context":"weather Chicago"}""")
         socket.event("message.delta", """{"text":"It's **sunny** and 34 degrees. "}""")
         socket.event("message.delta", """{"text":"Light"}""")
         // A whole sentence goes to the voice while the reply is still streaming.
         call.sent.first { sent -> sent.any { it["type"]?.jsonPrimitive?.contentOrNull == "session.commentary.append" } }
         assertEquals(listOf("It's sunny and 34 degrees."), call.said("session.commentary.append"))
-        assertEquals(listOf("Hermes is working: weather Al Khobar. Not done yet."), call.said("session.thinking.append"))
-        assertEquals("weather Al Khobar", voice.chat.value.working)
+        assertEquals(listOf("Hermes is working: weather Chicago. Not done yet."), call.said("session.thinking.append"))
+        assertEquals("weather Chicago", voice.chat.value.working)
         // The chip goes once the tool is done, while the reply still streams.
         socket.event("tool.complete", """{"tool_id":"t1"}""")
         voice.chat.first { it.working == null }

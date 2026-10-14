@@ -128,7 +128,9 @@ class BotNotifier(
         }
         scope.launch {
             connection.events.filter { it.type == "sessions.changed" }.debounce(DEBOUNCE_MS).collect {
-                runCatching { check(notify = !visibility.visible.value, watch = false) }
+                // In sight, only with notifications for other chats on; the open chat is skipped below either way.
+                val inApp = settings.settings.value?.notifyOtherChatsInApp == true
+                runCatching { check(notify = !visibility.visible.value || inApp, watch = false) }
             }
         }
         // Leaving the app: a bot removed, renamed or hidden in it leaves the share sheet and launcher now,

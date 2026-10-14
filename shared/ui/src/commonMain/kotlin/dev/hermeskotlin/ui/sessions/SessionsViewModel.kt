@@ -54,6 +54,9 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.launch
 import kotlin.time.Clock
 
@@ -126,6 +129,21 @@ data class RowStatus(val waiting: Waiting? = null, val unread: Boolean = false, 
     val needsAttention: Boolean get() = waiting != null || unread
 }
 
+/** The gateway and profile a list is of; null [profile] is the gateway's launch profile. */
+data class ListBinding(val gateway: SavedGateway, val profile: String?)
+
+/** A read of the list from the gateway, or the list no longer standing for the gateway's chats. */
+sealed interface ListRead {
+    /** Asked of [gateway] for [profile]'s chats in [filter]. */
+    data class Asked(val gateway: GatewayUrl, val profile: String?, val filter: SessionListFilter) : ListRead
+
+    /** The read of [filter] came back with the rows. */
+    data class Done(val filter: SessionListFilter) : ListRead
+
+    /** The link went: events may be missed meanwhile, so the list must be read again before it counts. */
+    data object Stale : ListRead
+}
+
 /**
  * Stored-session browser: list (REST, paged), search, and row actions. Refetches when the gateway
  * broadcasts `sessions.changed` / `session.title`, and after each reconnect (events may have been missed).
@@ -161,7 +179,8 @@ class SessionsViewModel(
     private val _attentionFilter = MutableStateFlow(AttentionFilter.All)
     val attentionFilter: StateFlow<AttentionFilter> = _attentionFilter.asStateFlow()
 
-    private val seen: StateFlow<SeenChats?> = bound
+    /** What the user has read of the listed chats; null until bound. */
+    internal val seen: StateFlow<SeenChats?> = bound
         .flatMapLatest { scope -> scope?.let { (url, profile) -> seenStore.seen(url, profile) } ?: flowOf(null) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
@@ -170,6 +189,7 @@ class SessionsViewModel(
 
     private val waiting = attention.waiting
     private val running = attention.running
+    private val requestsByChat = attention.requestsByChat
 
     fun setAttentionFilter(filter: AttentionFilter) {
         _attentionFilter.value = filter
@@ -209,6 +229,16 @@ class SessionsViewModel(
             }.toMap()
         }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(STOP_AFTER_MS), emptyMap())
+
+    private val _binding = MutableStateFlow<ListBinding?>(null)
+
+    /** The gateway and profile whose chats are listed ([bind]); null until bound. */
+    val binding: StateFlow<ListBinding?> = _binding.asStateFlow()
+
+    private val _listReads = MutableSharedFlow<ListRead>(extraBufferCapacity = 16)
+
+    /** Each read of the list from the gateway, as it is asked for and once it has come back, and each time the link goes. */
+    val listReads: SharedFlow<ListRead> = _listReads.asSharedFlow()
 
     /** The list is on screen (the sidebar open or docked), or no longer is. */
     fun setVisible(shown: Boolean) {
@@ -254,6 +284,7 @@ class SessionsViewModel(
         projectsAgain = false
         selectAfterLoad = null
         projectChangesMissing = false
+        _binding.value = ListBinding(gateway, profile)
         load(refresh = false)
         if (newGateway) {
             _user.value = null
@@ -736,7 +767,9 @@ class SessionsViewModel(
                     )
                 }
             }
+            if (result is ApiResult.Success) _listReads.tryEmit(ListRead.Done(filter))
         }
+        _listReads.tryEmit(ListRead.Asked(url, profile, filter))
     }
 
     @OptIn(FlowPreview::class)
@@ -758,6 +791,7 @@ class SessionsViewModel(
             var wasConnected = true
             connection.state.collect { state ->
                 val connected = state is ConnectionState.Connected
+                if (!connected) _listReads.tryEmit(ListRead.Stale)
                 if (connected && !wasConnected) load(refresh = false)
                 wasConnected = connected
             }

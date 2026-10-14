@@ -127,7 +127,7 @@ internal object PageSamples {
         "model_context_length":{"type":"number","description":"Context window override","category":"general"},
         "fallback_providers":{"type":"list","description":"Fallback Providers","category":"general"},
         "toolsets":{"type":"list","description":"Toolsets","category":"general"},
-        "timezone":{"type":"select","description":"IANA timezone","category":"general","options":["Asia/Riyadh","Europe/London","America/New_York"],"searchable":true,"clearable":true},
+        "timezone":{"type":"select","description":"IANA timezone","category":"general","options":["America/New_York","Europe/London","Asia/Tokyo"],"searchable":true,"clearable":true},
         "display.personality":{"type":"string","description":"Personality","category":"display"},
         "display.show_reasoning":{"type":"boolean","description":"Show reasoning","category":"display"},
         "approvals.mode":{"type":"select","description":"Dangerous command approval mode","category":"security","options":["manual","smart","off"]},
@@ -154,7 +154,7 @@ internal object PageSamples {
 
     private val CONFIG_VALUES = """{"model":"kimi-k3","model_context_length":0,
         "fallback_providers":[{"provider":"opencode-go","model":"glm-5.3"},{"provider":"openrouter","model":"google/gemini-3-flash"}],
-        "toolsets":["hermes-cli"],"timezone":"Asia/Riyadh","display":{"personality":"","show_reasoning":false},
+        "toolsets":["hermes-cli"],"timezone":"America/New_York","display":{"personality":"","show_reasoning":false},
         "approvals":{"mode":"smart","timeout":120},"command_allowlist":["git status","ls"],"security":{"redact_secrets":true},
         "checkpoints":{"enabled":true},"agent":{"max_turns":90},
         "memory":{"memory_enabled":true,"user_profile_enabled":true,"provider":"hindsight"},"compression":{"enabled":true,"threshold":0.5},

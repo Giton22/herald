@@ -89,6 +89,21 @@ class AttentionTracker(
         }
     }.stateIn(scope, SharingStarted.WhileSubscribed(), emptyMap())
 
+    /**
+     * The newest open request of each other chat this phone heard, by stored session id: what [waiting] says it
+     * waits on, in full, so a banner can say what is asked (the command, the question). Read by value when a
+     * banner comes, so it is kept up eagerly; it only combines what is already in memory, and asks the gateway nothing.
+     */
+    val requestsByChat: StateFlow<Map<String, InputRequest>> = combine(links, requests, open) { links, requests, open ->
+        val openId = open?.storedSessionId
+        buildMap {
+            requests.values.reversed().forEach { (runtimeId, request, _) ->
+                val storedId = links[runtimeId] ?: return@forEach
+                if (storedId != openId && storedId !in this) put(storedId, request)
+            }
+        }
+    }.stateIn(scope, SharingStarted.Eagerly, emptyMap())
+
     /** Whether a turn is running, by runtime session id, from each `message.start` and `message.complete`. */
     private val turns = MutableStateFlow<Map<String, Turn>>(emptyMap())
 

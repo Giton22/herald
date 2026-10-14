@@ -246,6 +246,30 @@ class SessionsViewModelTest {
     }
 
     @Test
+    fun eachReadOfTheListIsSaidAsItIsAskedAndWhenItComesBack() = runTest(dispatcher) {
+        val vm = viewModel()
+        val reads = mutableListOf<ListRead>()
+        backgroundScope.launch { vm.listReads.collect { reads += it } }
+        vm.bind(gateway, profile = "work")
+        vm.awaitLoaded()
+        assertEquals(ListBinding(gateway, "work"), vm.binding.value)
+        assertEquals(
+            setOf(ListRead.Asked(gateway.gatewayUrl, "work", SessionListFilter.Recent), ListRead.Done(SessionListFilter.Recent)),
+            reads.toSet(),
+        )
+    }
+
+    @Test
+    fun aReadThatFailsIsOnlyAsked() = runTest(dispatcher) {
+        val vm = viewModel(listStatus = HttpStatusCode.InternalServerError)
+        val reads = mutableListOf<ListRead>()
+        backgroundScope.launch { vm.listReads.collect { reads += it } }
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        assertEquals(listOf<ListRead>(ListRead.Asked(gateway.gatewayUrl, null, SessionListFilter.Recent)), reads)
+    }
+
+    @Test
     fun aTurnThisPhoneNeverOpenedShowsRunningButOnlyForListedChats() = runTest(dispatcher) {
         // "b" runs on another client; "elsewhere" is live in another profile and isn't in this list.
         val vm = viewModel(socket = LiveGateway(mapOf("b" to "working", "a" to "idle", "elsewhere" to "waiting")))

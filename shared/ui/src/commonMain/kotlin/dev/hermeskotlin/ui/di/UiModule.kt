@@ -13,6 +13,7 @@ import dev.hermeskotlin.ui.sessions.InsightsViewModel
 import dev.hermeskotlin.ui.inbox.InboxViewModel
 import dev.hermeskotlin.ui.sessions.ScheduledViewModel
 import dev.hermeskotlin.ui.rooms.RoomsViewModel
+import dev.hermeskotlin.ui.sessions.OtherChatsViewModel
 import dev.hermeskotlin.ui.sessions.SessionsViewModel
 import dev.hermeskotlin.ui.settings.PhoneToolsViewModel
 import dev.hermeskotlin.ui.settings.SettingsViewModel
@@ -28,6 +29,8 @@ val uiModule = module {
     viewModelOf(::ConnectViewModel)
     viewModelOf(::SignInViewModel)
     viewModelOf(::SessionsViewModel)
+    // Handed the sidebar's list view model, whose list it reads.
+    viewModel { params -> OtherChatsViewModel(params.get(), get(), get(), get()) }
     viewModelOf(::BotsViewModel)
     viewModelOf(::RoomsViewModel)
     viewModelOf(::ScheduledViewModel)

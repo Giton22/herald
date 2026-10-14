@@ -99,6 +99,20 @@ data class AppSettings(
     /** Notify when the agent waits on an approval or a question while the app is in the background. */
     val notifyRequests: Boolean = true,
     /**
+     * Replies and requests in chats other than the one on screen notify while Herald is open too, as they do
+     * in the background.
+     */
+    val notifyOtherChatsInApp: Boolean = false,
+    /**
+     * While in a chat, Herald tells of the other chats: a dot on Sessions, the banner, Next and the buzz. Off by
+     * default; off, nothing watches them and the gateway's live list isn't polled for them.
+     */
+    val otherChatsAlerts: Boolean = false,
+    /** With [otherChatsAlerts], a strip over the chat when another chat replies or starts waiting on the user. */
+    val otherChatsBanner: Boolean = true,
+    /** With [otherChatsAlerts], a short buzz when another chat starts waiting on the user (not for replies). */
+    val otherChatsVibrate: Boolean = true,
+    /**
      * Bot messages reach the phone off the gateway's network too, end-to-end encrypted through ntfy (herald-push).
      * The one thing that keeps Herald up in the background, with a quiet notification.
      */

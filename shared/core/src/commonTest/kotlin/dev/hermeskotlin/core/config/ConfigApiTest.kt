@@ -30,7 +30,7 @@ class ConfigApiTest {
             respond(
                 """{"fields":{
                      "approvals.mode":{"type":"select","description":"Dangerous command approval mode","category":"security","options":["manual","smart","off"]},
-                     "timezone":{"type":"select","description":"IANA timezone","category":"general","options":["Asia/Riyadh"],"searchable":true,"clearable":true},
+                     "timezone":{"type":"select","description":"IANA timezone","category":"general","options":["America/New_York"],"searchable":true,"clearable":true},
                      "agent.max_turns":{"type":"number","description":null,"category":"agent"}},
                    "category_order":["general","agent"]}""",
                 HttpStatusCode.OK, json,
