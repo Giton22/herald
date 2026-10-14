@@ -46,8 +46,10 @@ class WearBridgeService : WearableListenerService() {
                 keepUp()
             }
             WearPaths.STOP -> WearJson.decode<WatchStop>(event.data)?.let { relay.stop(it.askId) }
-            WearPaths.CALL_START, WearPaths.BOT_CALL_START -> WearJson.decode<CallStart>(event.data)?.let {
+            WearPaths.DEFAULT_CALL -> WearJson.decode<String>(event.data)?.let { relay.defaultCall(node, it); keepUp() }
+            WearPaths.CALL_START, WearPaths.BOT_CALL_START, WearPaths.DEFAULT_CALL_START -> WearJson.decode<CallStart>(event.data)?.let {
                 if (event.path == WearPaths.BOT_CALL_START && it.botProfile.isNullOrBlank()) return
+                if (event.path == WearPaths.DEFAULT_CALL_START && it.defaultRequestId.isNullOrBlank()) return
                 calls.start(node, it)
                 keepUp()
             }

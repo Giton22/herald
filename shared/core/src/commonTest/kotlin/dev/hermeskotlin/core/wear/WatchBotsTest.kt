@@ -17,9 +17,14 @@ import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import dev.hermeskotlin.core.storage.KeyValueStore
 import dev.hermeskotlin.core.voice.AudioApi
+import dev.hermeskotlin.core.settings.SettingsStore
+import dev.hermeskotlin.core.settings.CallTarget
+import dev.hermeskotlin.wearlink.DefaultCallTarget
 import dev.hermeskotlin.wearlink.WatchAsk
 import dev.hermeskotlin.wearlink.WearJson
 import dev.hermeskotlin.wearlink.WearPaths
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -44,16 +49,16 @@ class WatchBotsTest {
     }
     private var transcribedProfile: String? = null
     private val voiceChecks = mutableListOf<String?>()
-    private data class Setup(val relay: WatchRelay, val gateway: FakeGateway, val outbox: Outbox)
+    private data class Setup(val relay: WatchRelay, val gateway: FakeGateway, val outbox: Outbox, val settings: SettingsStore)
 
-    private suspend fun TestScope.setup(profiles: String = roster, store: KeyValueStore = InMemoryKeyValueStore()): Setup {
+    private suspend fun TestScope.setup(profiles: String = roster, store: KeyValueStore = InMemoryKeyValueStore(), liveForAll: Boolean = false): Setup {
         val gateway = FakeGateway(backgroundScope).apply {
             ready = { FakeGateway.QUIET_READY }
             http = { request ->
                 if (request.url.encodedPath == "/api/audio/voice-live/status") {
                     val profile = request.url.parameters["profile"]
                     voiceChecks += profile
-                    json(if (profile == "assistant") """{"mode":"gpt-live","available":true}""" else """{"mode":"chained","available":true}""")
+                    json(if (profile == "assistant" || liveForAll) """{"mode":"gpt-live","available":true}""" else """{"mode":"chained","available":true}""")
                 } else if (request.url.encodedPath == "/api/audio/transcribe") {
                     transcribedProfile = request.url.parameters["profile"]
                     json("""{"transcript":"hello"}""")
@@ -73,15 +78,116 @@ class WatchBotsTest {
         val sessions = SessionsApi(gateway.client)
         val outbox = Outbox()
         val bots = BotsApi(gateway.connection)
+        val settings = SettingsStore(store, backgroundScope)
         val relay = WatchRelay(gateways, auth, ProfileStore(store), gateway.connection, sessions,
-            AudioApi(gateway.client), ChatHost(gateway.connection, sessions, backgroundScope), backgroundScope, outbox, bots, BotChats(bots))
-        return Setup(relay, gateway, outbox)
+            AudioApi(gateway.client), ChatHost(gateway.connection, sessions, backgroundScope), backgroundScope, outbox, bots, BotChats(bots), settings)
+        return Setup(relay, gateway, outbox, settings)
     }
 
     private suspend fun until(condition: () -> Boolean) = withTimeout(10_000) { while (!condition()) delay(10) }
     private fun ask(profile: String) = WearJson.decode<WatchAsk>(
         """{"id":"ask","text":"hello","chatId":"stale","speak":false,"botProfile":"$profile"}""".encodeToByteArray(),
     )!!
+
+    private suspend fun Setup.target(id: String): DefaultCallTarget {
+        relay.defaultCall("watch", id)
+        until { outbox.messages.any { it.first == WearPaths.DEFAULT_CALL && it.second["requestId"]?.jsonPrimitive?.content == id } }
+        return WearJson.decode<DefaultCallTarget>(WearJson.encode(outbox.messages.last { it.first == WearPaths.DEFAULT_CALL }.second))!!
+    }
+
+    @Test
+    fun defaultCallsUseCurrentSettingsAndNewSessionNeverReusesTheLastCall() = runTest {
+        val s = setup(liveForAll = true)
+        s.settings.update { it.copy(callTargets = mapOf(FakeGateway.URL.value to CallTarget(sessionId = "ordinary", label = "Plans"))) }
+        assertEquals("ordinary", s.target("existing").chatId)
+        s.settings.update { it.copy(callTargets = emptyMap()) }
+        assertEquals(null, s.target("fresh1").chatId)
+        assertEquals(null, s.target("fresh2").chatId)
+    }
+
+    @Test
+    fun defaultBotResolvesCanonicalConversationAndRemovedBotDoesNotFallBack() = runTest {
+        val s = setup()
+        s.settings.update { it.copy(callTargets = mapOf(FakeGateway.URL.value to CallTarget(profile = "assistant"))) }
+        val target = s.target("bot")
+        assertEquals("assistant", target.botProfile)
+        assertEquals("Assistant", target.title)
+        assertEquals("tip", target.chatId)
+        s.settings.update { it.copy(callTargets = mapOf(FakeGateway.URL.value to CallTarget(profile = "removed"))) }
+        assertTrue(s.target("missing").error != null)
+        assertTrue(s.gateway.sent("session.create").isEmpty())
+    }
+
+    @Test
+    fun settingsChangeOrAnotherWatchCannotUseAnOldDefaultResolution() = runTest {
+        val s = setup(liveForAll = true)
+        val target = s.target("first")
+        s.settings.update { it.copy(callTargets = mapOf(FakeGateway.URL.value to CallTarget(sessionId = "ordinary"))) }
+        assertIs<CallChat.Failed>(s.relay.chatForCall(target.chatId, defaultRequestId = "first", node = "watch"))
+        s.target("second")
+        assertIs<CallChat.Failed>(s.relay.chatForCall("ordinary", defaultRequestId = "second", node = "other"))
+        assertTrue(s.gateway.sent("session.resume").isEmpty())
+    }
+
+    @Test
+    fun aLateResolutionCannotReplaceTheNewerRequest() = runTest {
+        val s = setup(liveForAll = true)
+        val arrived = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val http = s.gateway.http
+        var calls = 0
+        s.gateway.http = { request ->
+            if (request.url.encodedPath == "/api/audio/voice-live/status" && ++calls == 1) {
+                arrived.complete(Unit)
+                release.await()
+            }
+            http(request)
+        }
+        s.relay.defaultCall("watch", "slow")
+        arrived.await()
+        assertEquals(null, s.target("newer").error)
+        release.complete(Unit)
+        until { s.outbox.messages.any { it.second["requestId"]?.jsonPrimitive?.content == "slow" } }
+        assertTrue(s.relay.defaultCallCurrent("watch", "newer"))
+        assertTrue(!s.relay.defaultCallCurrent("watch", "slow"))
+    }
+
+    @Test
+    fun changingSettingsDuringHistoryLoadCannotReturnTheOldDefaultCall() = runTest {
+        val s = setup(liveForAll = true)
+        s.settings.update { it.copy(callTargets = mapOf(FakeGateway.URL.value to CallTarget(sessionId = "ordinary"))) }
+        s.target("call")
+        val arrived = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val http = s.gateway.http
+        s.gateway.http = { request ->
+            if (request.url.encodedPath.endsWith("/messages")) { arrived.complete(Unit); release.await() }
+            http(request)
+        }
+        val call = async { s.relay.chatForCall("ordinary", defaultRequestId = "call", node = "watch") }
+        arrived.await()
+        s.settings.update { it.copy(callTargets = emptyMap()) }
+        release.complete(Unit)
+        assertIs<CallChat.Failed>(call.await())
+    }
+
+    @Test
+    fun aDefaultWithNoLiveVoiceFailsWithoutCreatingOrResumingAChat() = runTest {
+        val s = setup()
+        assertTrue(s.target("unavailable").error != null)
+        assertTrue(s.gateway.sent("session.create").isEmpty())
+        assertTrue(s.gateway.sent("session.resume").isEmpty())
+    }
+
+    @Test
+    fun anUnavailableSavedDefaultDoesNotFallBackToANewSession() = runTest {
+        val s = setup(liveForAll = true)
+        s.settings.update { it.copy(callTargets = mapOf(FakeGateway.URL.value to CallTarget(sessionId = "removed"))) }
+        s.gateway.http = { json("{}", io.ktor.http.HttpStatusCode.NotFound) }
+        assertTrue(s.target("removed").error != null)
+        assertTrue(s.gateway.sent("session.create").isEmpty())
+        assertTrue(s.gateway.sent("session.resume").isEmpty())
+    }
 
     @Test
     fun thePickerListsVisibleBotsSeparatelyFromRegularSessions() = runTest {

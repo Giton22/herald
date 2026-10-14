@@ -1,5 +1,7 @@
 package dev.hermeskotlin.wear
 
+import com.google.android.gms.wearable.DataEvent
+import com.google.android.gms.wearable.DataEventBuffer
 import com.google.android.gms.wearable.ChannelClient
 import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
@@ -14,6 +16,10 @@ import kotlinx.coroutines.withContext
 class WatchListenerService : WearableListenerService() {
 
     private val app get() = HeraldWatch.of(this)
+
+    override fun onDataChanged(events: DataEventBuffer) {
+        events.filter { it.type == DataEvent.TYPE_CHANGED }.forEach { app.callDisplay.receive(it.dataItem) }
+    }
 
     override fun onMessageReceived(event: MessageEvent) {
         app.link.onMessage(event.path, event.data)

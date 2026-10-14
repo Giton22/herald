@@ -93,6 +93,7 @@ class BotNotifier(
             var previousConnection: ConnectionState? = null
             var pictureKey: Pair<String?, String?>? = null
             var callPicture: ByteArray? = null
+            val watchDisplay = dev.hermeskotlin.android.wear.CallDisplayPublisher(context)
             combine(settings.settings.filterNotNull(), gateways.list, connection.state) { prefs, gateways, state ->
                 Triple(gateways.current?.url, prefs.callTargets[gateways.current?.url], state)
             }.distinctUntilChanged().collectLatest { (url, target, state) ->
@@ -101,7 +102,10 @@ class BotNotifier(
                 previousConnection = state
                 val key = url to target?.profile
                 if (key != pictureKey) { pictureKey = key; callPicture = null }
-                withContext(Dispatchers.IO) { BotShortcuts.publishCall(context, callPicture) }
+                withContext(Dispatchers.IO) {
+                    BotShortcuts.publishCall(context, callPicture)
+                    watchDisplay.publish(url, target, callPicture)
+                }
                 if (switching || state !is ConnectionState.Connected || target?.profile == null) return@collectLatest
                 callPicture = try {
                     val bot = api.roster().bots.firstOrNull { it.name == target.profile }
@@ -109,7 +113,10 @@ class BotNotifier(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) { callPicture }
-                withContext(Dispatchers.IO) { BotShortcuts.publishCall(context, callPicture) }
+                withContext(Dispatchers.IO) {
+                    BotShortcuts.publishCall(context, callPicture)
+                    watchDisplay.publish(url, target, callPicture)
+                }
             }
         }
 

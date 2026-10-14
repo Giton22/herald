@@ -117,7 +117,7 @@ class WatchCalls(
         suspend fun end(error: String?) = tell(last.copy(phase = CallPhase.Ended, answerSdp = null, error = error, thinking = false, working = null))
 
         tell(last)
-        val chat = when (val found = relay.chatForCall(start.chatId, start.botProfile)) {
+        val chat = when (val found = relay.chatForCall(start.chatId, start.botProfile, start.defaultRequestId, node)) {
             is CallChat.Failed -> return end(found.message)
             is CallChat.Ready -> found
         }
@@ -180,6 +180,10 @@ class WatchCalls(
         val error = try {
             conversation.run {
                 held.connect { offer ->
+                    val defaultRequest = start.defaultRequestId
+                    if (defaultRequest != null && !relay.defaultCallCurrent(node, defaultRequest)) {
+                        error("Default Call Target changed. Tap Call again.")
+                    }
                     when (val result = audio.startVoiceLive(chat.gateway, offer, conversation.history(), chat.profile)) {
                         is ApiResult.Success -> result.value.ifBlank { error("GPT-Live sent no answer.") }
                         else -> error(liveFailure(result))

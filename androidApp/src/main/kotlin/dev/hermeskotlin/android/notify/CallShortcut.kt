@@ -28,7 +28,10 @@ internal object CallShortcut {
             .setRank(0)
             .build()
 
-    private fun icon(context: Context, picture: ByteArray?): IconCompat {
+    private fun icon(context: Context, picture: ByteArray?): IconCompat = pictureBitmap(context, picture)
+        ?.let(IconCompat::createWithAdaptiveBitmap) ?: IconCompat.createWithResource(context, R.mipmap.ic_shortcut_call)
+
+    fun pictureBitmap(context: Context, picture: ByteArray?): android.graphics.Bitmap? {
         val photo = picture?.let {
             val options = BitmapFactory.Options().apply { inJustDecodeBounds = true }
             BitmapFactory.decodeByteArray(it, 0, it.size, options)
@@ -37,7 +40,7 @@ internal object CallShortcut {
             options.inJustDecodeBounds = false
             BitmapFactory.decodeByteArray(it, 0, it.size, options)
         }
-            ?: return IconCompat.createWithResource(context, R.mipmap.ic_shortcut_call)
+            ?: return null
         val bitmap = createBitmap(216, 216)
         val canvas = Canvas(bitmap)
         canvas.drawColor(Color.rgb(24, 24, 27))
@@ -53,6 +56,6 @@ internal object CallShortcut {
             draw(canvas)
         }
         photo.recycle()
-        return IconCompat.createWithAdaptiveBitmap(bitmap)
+        return bitmap
     }
 }

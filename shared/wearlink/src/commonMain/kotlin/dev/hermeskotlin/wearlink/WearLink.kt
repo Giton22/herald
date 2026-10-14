@@ -29,7 +29,13 @@ object WearPaths {
     /** Phone → watch: a [ReplyUpdate], again each time the turn moves on. */
     const val REPLY = "/herald/reply"
 
-    /** Watch → phone: a [CallStart], the watch's WebRTC offer for a live voice call. */
+    /** Watch → phone: a request ID; phone → watch: its resolved [DefaultCallTarget]. */
+    const val DEFAULT_CALL = "/herald/call/default"
+    /** Phone-owned display snapshot and optional image Asset, synchronized by Data Layer. */
+    const val CALL_DISPLAY = "/herald/call/display"
+    /** A [CallStart] carrying a validated default request ID; older phones ignore this path. */
+    const val DEFAULT_CALL_START = "/herald/call/default/start"
+    /** Watch → phone: a [CallStart], the watch's WebRTC offer for a selected conversation. */
     const val CALL_START = "/herald/call/start"
     const val BOT_CALL_START = "/herald/bot/call/start"
 
@@ -239,6 +245,7 @@ data class PhoneStatus(
     /** Older phones can't route a bot request; the watch must never send it as an ordinary chat. */
     val botChats: Boolean = false,
     val botProfile: String? = null,
+    val defaultCalls: Boolean = false,
 )
 
 /*
@@ -251,7 +258,7 @@ data class PhoneStatus(
 
 /** Starts call [id] in [chatId] (null: a new chat), with the watch's WebRTC [offerSdp]. */
 @Serializable
-data class CallStart(val id: String, val chatId: String?, val offerSdp: String, val botProfile: String? = null)
+data class CallStart(val id: String, val chatId: String?, val offerSdp: String, val botProfile: String? = null, val defaultRequestId: String? = null)
 
 /** Event-channel messages of call [callId], in order; [seq] counts each side's batches, so a late one is told apart. */
 @Serializable
@@ -384,4 +391,16 @@ fun clipForWatch(text: String, max: Int = MAX_WATCH_TEXT): String {
     if (text.length <= max) return text
     val cut = text.lastIndexOf(' ', max - 1).takeIf { it > max * 3 / 4 } ?: (max - 1)
     return text.substring(0, cut).trimEnd() + "…"
+}
+
+/** Resolved on demand by the phone; cached artwork never determines the call destination. */
+@Serializable
+data class DefaultCallTarget(val requestId: String, val chatId: String? = null, val botProfile: String? = null,
+    val title: String = "New session", val error: String? = null)
+
+/** Display only: revision covers the current target and rendered image. */
+@Serializable
+data class CallDisplay(val revision: String, val title: String, val hasPicture: Boolean = false, val version: Int = 1, val targetKey: String = revision) {
+    val valid: Boolean get() = version == 1 && targetKey.length == 64 && revision.length == 64 && revision.all { it in '0'..'9' || it in 'a'..'f' } && title.length <= 256
+    companion object { const val MAX_IMAGE_BYTES = 64 * 1024 }
 }

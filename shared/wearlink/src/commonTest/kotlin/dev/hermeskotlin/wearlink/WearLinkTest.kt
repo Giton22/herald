@@ -13,6 +13,30 @@ import kotlin.test.assertTrue
 class WearLinkTest {
 
     @Test
+    fun defaultCallsRemainDistinctAndPreserveBotContracts() {
+        val request = PhoneStatusRequest(botProfile = "assistant")
+        assertEquals(request, WearJson.decode<PhoneStatusRequest>(WearJson.encode(request)))
+        val call = CallStart("call", "tip", "offer", "assistant", "resolution")
+        assertEquals(call, WearJson.decode<CallStart>(WearJson.encode(call)))
+        assertFalse(WearPaths.DEFAULT_CALL_START == WearPaths.CALL_START)
+        assertFalse(WearPaths.DEFAULT_CALL_START == WearPaths.BOT_CALL_START)
+        assertFalse(WearJson.decode<PhoneStatus>("{\"signedIn\":true,\"connected\":true}".encodeToByteArray())!!.defaultCalls)
+    }
+
+    @Test
+    fun malformedDisplaySnapshotsAreRejectedAndValidOnesRoundTrip() {
+        val display = CallDisplay("a".repeat(64), "Assistant", hasPicture = true)
+        assertTrue(display.valid)
+        assertEquals(display, WearJson.decode<CallDisplay>(WearJson.encode(display)))
+        assertFalse(display.copy(revision = "wrong").valid)
+        assertFalse(display.copy(version = 2).valid)
+        assertFalse(display.copy(targetKey = "wrong").valid)
+        assertFalse(display.copy(title = "x".repeat(257)).valid)
+        assertEquals(DefaultCallTarget("request", error = "Not available"),
+            WearJson.decode<DefaultCallTarget>(WearJson.encode(DefaultCallTarget("request", error = "Not available"))))
+    }
+
+    @Test
     fun botIdentitySurvivesBothAskAndCallMessagesWithoutChangingLegacyRequests() {
         val ask = WearJson.decode<WatchAsk>("""{"id":"a","text":"hi","botProfile":"assistant"}""".encodeToByteArray())!!
         val call = WearJson.decode<CallStart>("""{"id":"c","chatId":null,"offerSdp":"offer","botProfile":"assistant"}""".encodeToByteArray())!!

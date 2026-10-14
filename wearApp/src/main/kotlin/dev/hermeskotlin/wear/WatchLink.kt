@@ -26,6 +26,9 @@ import dev.hermeskotlin.wearlink.WatchStop
 import dev.hermeskotlin.wearlink.WearCapabilities
 import dev.hermeskotlin.wearlink.WearJson
 import dev.hermeskotlin.wearlink.WearPaths
+import dev.hermeskotlin.wearlink.DefaultCallTarget
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -207,7 +210,36 @@ class WatchLink(
      * Starts a live voice call in the chat: the watch makes the WebRTC call, the phone gets the voice model's
      * answer and runs the conversation. Needs the microphone permission.
      */
-    fun startCall() {
+    private var defaultRequest: Pair<String, CompletableDeferred<DefaultCallTarget>>? = null
+    private var resolvedDefault: String? = null
+
+    suspend fun resolveDefaultCall(): DefaultCallTarget {
+        endCall()
+        dismissCall()
+        val id = UUID.randomUUID().toString()
+        val waiting = CompletableDeferred<DefaultCallTarget>()
+        defaultRequest = id to waiting
+        return try {
+            refreshPhone()
+            send(WearPaths.DEFAULT_CALL, WearJson.encode(id))?.let { return DefaultCallTarget(id, error = it) }
+            val result = withTimeout(20_000) { waiting.await() }
+            if (result.error == null) {
+                store.setChat(result.chatId, result.title, result.botProfile)
+                resolvedDefault = id
+            }
+            result
+        } finally {
+            if (defaultRequest?.first == id) defaultRequest = null
+        }
+    }
+
+    private fun cancelDefault() {
+        defaultRequest?.second?.cancel()
+        defaultRequest = null
+        resolvedDefault = null
+    }
+
+    fun startCall(defaultRequestId: String? = null) {
         if (_call.value?.active == true) return
         quiet()
         val id = UUID.randomUUID().toString()
@@ -217,14 +249,15 @@ class WatchLink(
         _turn.value = null
         _call.value = WatchCallState(id, CallStage.Starting)
         val chat = store.chat.value
-        if (chat.botProfile != null && !botChats) return finishCall(id, "Update Herald on your phone to call bots.")
+        if (defaultRequestId != null && resolvedDefault != defaultRequestId) return finishCall(id, "Default Call Target changed. Tap Call again.")
+        if (defaultRequestId == null && chat.botProfile != null && !botChats) return finishCall(id, "Update Herald on your phone to call bots.")
         callJob = scope.launch(main) {
             val call = WatchCall(context)
             watchCall = call
             try {
                 val offer = call.offer()
-                send(if (chat.botProfile == null) WearPaths.CALL_START else WearPaths.BOT_CALL_START,
-                    WearJson.encode(CallStart(id, chat.id, offer, chat.botProfile)))?.let { return@launch finishCall(id, it) }
+                send(if (defaultRequestId != null) WearPaths.DEFAULT_CALL_START else if (chat.botProfile == null) WearPaths.CALL_START else WearPaths.BOT_CALL_START,
+                    WearJson.encode(CallStart(id, chat.id, offer, chat.botProfile, defaultRequestId)))?.let { return@launch finishCall(id, it) }
                 _call.update { if (it?.id == id && it.stage == CallStage.Starting) it.copy(stage = CallStage.Connecting) else it }
                 launch {
                     delay(ANSWER_WITHIN_MS)
@@ -264,6 +297,7 @@ class WatchLink(
 
     /** Hangs up. */
     fun endCall() {
+        cancelDefault()
         val now = _call.value?.takeIf { it.active } ?: return
         scope.launch { send(WearPaths.CALL_END, WearJson.encode(CallEnd(now.id))) }
         finishCall(now.id, null)
@@ -359,6 +393,7 @@ class WatchLink(
     }
 
     fun newChat() {
+        cancelDefault()
         speech.stop()
         // A call talks in its chat: another one hangs it up.
         endCall()
@@ -370,6 +405,7 @@ class WatchLink(
     }
 
     fun pickChat(chat: WatchChat) {
+        cancelDefault()
         speech.stop()
         if (chat.id != store.chat.value.id || store.chat.value.botProfile != null) endCall()
         dismissCall()
@@ -380,6 +416,7 @@ class WatchLink(
     }
 
     fun pickBot(bot: WatchBot) {
+        cancelDefault()
         speech.stop()
         if (bot.profile != store.chat.value.botProfile) endCall()
         dismissCall()
@@ -402,11 +439,19 @@ class WatchLink(
     /** A message from the phone, from [WatchListenerService] or the fake phone. */
     fun onMessage(path: String, data: ByteArray) {
         when (path) {
+            WearPaths.DEFAULT_CALL -> WearJson.decode<DefaultCallTarget>(data)?.let { target ->
+                scope.launch(main) { defaultRequest?.takeIf { it.first == target.requestId }?.second?.complete(target) }
+            }
             WearPaths.REPLY -> WearJson.decode<ReplyUpdate>(data)?.let(::onReply)
             WearPaths.CHATS -> WearJson.decode<ChatList>(data)?.let { _chats.value = it }
             WearPaths.CALL_UPDATE -> WearJson.decode<CallUpdate>(data)?.let { scope.launch(main) { onCallUpdate(it) } }
             WearPaths.CALL_SEND -> WearJson.decode<CallEvents>(data)?.let { scope.launch(main) { onCallSend(it) } }
             WearPaths.STATUS -> WearJson.decode<PhoneStatus>(data)?.let {
+                if (!it.defaultCalls) {
+                    scope.launch(main) { defaultRequest?.let { pending ->
+                        pending.second.complete(DefaultCallTarget(pending.first, error = "Update Herald on your phone to use Default Call Target."))
+                    } }
+                }
                 botChats = it.botChats
                 if (it.botProfile == store.chat.value.botProfile) it.liveVoice?.let { live -> _liveVoice.value = live }
                 _phone.value = when {
@@ -491,6 +536,7 @@ class WatchLink(
                 _phone.value = PhoneState.NotConnected
                 return NOT_CONNECTED
             }
+            HeraldWatch.of(context).callDisplay.bindPhone(node.id)
             block(node.id)
             null
         } catch (e: CancellationException) {
