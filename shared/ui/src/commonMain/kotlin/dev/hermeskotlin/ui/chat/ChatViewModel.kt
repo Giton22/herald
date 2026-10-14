@@ -1166,6 +1166,8 @@ class ChatViewModel(
 
     override fun skipSpeech() = voice.skipSpeech()
 
+    override fun sendVoiceNow() = voice.sendNow()
+
     override fun stopVoiceChat() = voice.stopChat()
 
     override fun toggleVoiceMute() = voice.toggleMute()

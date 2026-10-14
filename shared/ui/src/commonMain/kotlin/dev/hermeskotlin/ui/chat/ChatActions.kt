@@ -104,6 +104,9 @@ interface ChatActions {
 
     fun skipSpeech()
 
+    /** Sends what the voice chat has heard so far, without waiting for a pause. */
+    fun sendVoiceNow() {}
+
     fun stopVoiceChat()
 
     /** Turns the microphone off or on in a GPT-Live call. */

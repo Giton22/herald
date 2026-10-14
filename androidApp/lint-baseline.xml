@@ -46,17 +46,6 @@
     </issue>
 
     <issue
-        id="NotShrinkingResources"
-        message="If enabling minification, also set isShrinkResources = true"
-        errorLine1="            isMinifyEnabled = true"
-        errorLine2="            ~~~~~~~~~~~~~~~~~~~~~~">
-        <location
-            file="build.gradle.kts"
-            line="69"
-            column="13"/>
-    </issue>
-
-    <issue
         id="UseKtx"
         message="Use the KTX extension function `SharedPreferences.edit` instead?"
         errorLine1="        rosterPrefs.edit().putString(KEY_ROSTER, HermesJson.encodeToString(ListSerializer(Bot.serializer()), slim)).apply()"

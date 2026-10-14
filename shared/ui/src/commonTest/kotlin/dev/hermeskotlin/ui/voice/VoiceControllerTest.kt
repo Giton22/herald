@@ -267,6 +267,57 @@ class VoiceControllerTest {
         withContext(Dispatchers.Default) { withTimeout(5_000) { leased.await() } }
     }
 
+    /** Hears you, then never finds the pause (a car, wind) until it's told to finish. */
+    private class NoPauseRecorder : VoiceRecorder {
+        var finishes = 0
+        private val finished = CompletableDeferred<Unit>()
+        override suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit, onSpeech: () -> Unit): Recording {
+            onSpeech()
+            finished.await()
+            return Recording(byteArrayOf(1, 2, 3), "audio/wav", heardSpeech = true)
+        }
+
+        override fun finish() {
+            finishes++
+            finished.complete(Unit)
+        }
+    }
+
+    /** #185: where the pause never comes, Send now ends the recording and what was said goes. */
+    @Test
+    fun sendNowEndsTheRecordingWithoutAPause() = runTest {
+        val requests = mutableListOf<HttpRequestData>()
+        val recorder = NoPauseRecorder()
+        val voice = VoiceController(audio("Stop.", requests), recorder, FakePlayer(), backgroundScope, backgroundScope)
+        val cookies = PersistentCookiesStorage(InMemoryKeyValueStore())
+        val http = createHttpClient(MockEngine { error("no REST in this test") }, cookies)
+        val connection = GatewayConnection(AuthApi(http, cookies), { _, _ -> error("not connecting") }, backgroundScope)
+        val session = ChatSession(gateway, null, null, connection, SessionsApi(http), backgroundScope)
+
+        // Not listening yet: nothing to send.
+        voice.sendNow()
+        assertEquals(0, recorder.finishes)
+
+        voice.startChat(session, gateway, null)
+        voice.chat.first { it.hearing }
+        voice.sendNow()
+
+        // It was transcribed ("stop"), which ends the chat.
+        voice.chat.first { it.phase == VoicePhase.Off }
+        assertEquals(1, recorder.finishes)
+        assertTrue(requests.any { it.url.encodedPath == "/api/audio/transcribe" })
+    }
+
+    @Test
+    fun sendNowShowsOnlyOnceTheChainedChatHearsYou() {
+        assertTrue(canSendNow(VoiceChatState(VoicePhase.Listening, hearing = true)))
+        // Nothing heard yet, a live call, or no longer listening: nothing to send.
+        assertTrue(!canSendNow(VoiceChatState(VoicePhase.Listening)))
+        assertTrue(!canSendNow(VoiceChatState(VoicePhase.Listening, hearing = true, live = true)))
+        assertTrue(!canSendNow(VoiceChatState(VoicePhase.Transcribing, hearing = true)))
+        assertEquals("Pause when you're done, or tap send", hint(VoiceChatState(VoicePhase.Listening, hearing = true)))
+    }
+
     /** Hears speech or nothing, listen by listen as [heard] says, then waits for good. */
     private class ScriptedRecorder(private vararg val heard: Boolean) : VoiceRecorder {
         var recordings = 0

@@ -238,6 +238,7 @@ import dev.hermeskotlin.ui.voice.VoiceChatState
 import dev.hermeskotlin.ui.voice.VoicePanel
 import dev.hermeskotlin.ui.voice.VoicePhase
 import dev.hermeskotlin.ui.voice.VoiceScreen
+import dev.hermeskotlin.ui.voice.briefError
 import dev.hermeskotlin.core.voice.speakableText
 import androidx.compose.runtime.saveable.rememberSaveable
 import dev.hermeskotlin.ui.voice.rememberMicrophonePermission
@@ -771,6 +772,7 @@ internal fun ChatView(
                     typeAfterVoice = true
                     actions.stopVoiceChat()
                 },
+                onSendNow = actions::sendVoiceNow,
             )
         }
     }
@@ -827,8 +829,8 @@ private fun ColumnScope.Dock(
         )
     }
     attachmentError?.let { Banner(it, actionLabel = null, onAction = actions::dismissAttachmentError) }
-    voiceChat.error?.let { Banner(it, actionLabel = null, onAction = actions::dismissVoiceChatError) }
-    dictation.error?.let { Banner(it, actionLabel = null, onAction = actions::dismissDictationError) }
+    voiceChat.error?.let { Banner(briefError(it), actionLabel = null, onAction = actions::dismissVoiceChatError) }
+    dictation.error?.let { Banner(briefError(it), actionLabel = null, onAction = actions::dismissDictationError) }
     AnimatedVisibility(visible = notice != null) { NoticeLine(notice.orEmpty()) }
     // One place says what's happening: the current action, with the status text and plan folded beneath.
     AnimatedVisibility(visible = state.running, enter = fadeIn(), exit = fadeOut()) {
@@ -860,6 +862,7 @@ private fun ColumnScope.Dock(
                 onMute = actions::toggleVoiceMute,
                 onEnd = actions::stopVoiceChat,
                 onExpand = onExpandVoice,
+                onSendNow = actions::sendVoiceNow,
             )
         }
     } else {

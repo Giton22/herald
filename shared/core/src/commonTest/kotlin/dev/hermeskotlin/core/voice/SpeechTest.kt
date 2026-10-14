@@ -64,6 +64,41 @@ class SpeechTest {
         assertTrue(end != null && end in 3_700L..4_000L, "ended at $end")
     }
 
+    /** #185: road noise or a fan pokes above the quiet bar now and then; each blip used to start the pause over. */
+    @Test
+    fun briefNoiseAboveQuietDoesntHoldTheRecordingOpen() {
+        // A noisy room (0.1); after speech, 100 ms blips half way to speech every 400 ms, never quiet for 1.25 s.
+        val blips = List(15) { frames(0.1f, 300) + frames(0.2f, 100) }.flatten()
+        val end = endsAt(frames(0.1f, 1_000) + frames(0.6f, 1_500) + blips)
+        // Speech stops at 2.5 s: the pause runs on through the blips.
+        assertTrue(end != null && end in 3_700L..4_000L, "ended at $end")
+    }
+
+    @Test
+    fun knocksUpToSpeechDontHoldItOpenEither() {
+        // A bump or a click as loud as speech, 40 ms, every 340 ms: shorter than any syllable.
+        val knocks = List(15) { frames(0.1f, 300) + frames(0.6f, 40) }.flatten()
+        val end = endsAt(frames(0.1f, 1_000) + frames(0.6f, 1_500) + knocks)
+        assertTrue(end != null && end in 3_700L..4_000L, "ended at $end")
+    }
+
+    @Test
+    fun softTalkJustAboveQuietStillHoldsIt() {
+        // Trailing off: half a second of soft words, short of the speech bar but above quiet.
+        val end = endsAt(frames(0.1f, 1_000) + frames(0.6f, 1_500) + frames(0.38f, 500) + frames(0.1f, 3_000))
+        // The pause starts about when the soft words end (3.0 s), not at the end of the loud ones.
+        assertTrue(end != null && end in 4_100L..4_300L, "ended at $end")
+    }
+
+    @Test
+    fun clippedSyllablesWithGapsStillHoldIt() {
+        // "It's a, uh, to the…": 100 ms syllables, each followed by 100 ms back at the noise, for 2.4 s.
+        val syllables = List(12) { frames(0.6f, 100) + frames(0.1f, 100) }.flatten()
+        val end = endsAt(frames(0.1f, 1_000) + syllables + frames(0.1f, 3_000))
+        // The last syllable ends at 3.3 s; the recording runs until the whole pause after it.
+        assertTrue(end != null && end in 4_500L..4_700L, "ended at $end")
+    }
+
     @Test
     fun hummingAlongDoesNotCountAsSpeech() {
         // Steady noise alone never starts a turn; the idle limit ends the recording without speech.

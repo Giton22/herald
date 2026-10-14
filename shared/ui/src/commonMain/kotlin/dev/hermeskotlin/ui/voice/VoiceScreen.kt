@@ -72,6 +72,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
+import com.composables.icons.lucide.ArrowUp
 import com.composables.icons.lucide.Captions
 import com.composables.icons.lucide.CaptionsOff
 import com.composables.icons.lucide.ChevronDown
@@ -131,6 +132,8 @@ internal fun VoiceScreen(
     onMute: () -> Unit,
     onEnd: () -> Unit,
     onType: () -> Unit,
+    /** Sends what's been heard without waiting for the pause. */
+    onSendNow: () -> Unit = {},
 ) {
     PlatformBackHandler(enabled = active, onBack = onMinimize)
     val glow = Theme[colors][accent].copy(alpha = 0.22f)
@@ -196,6 +199,7 @@ internal fun VoiceScreen(
                         state.live && state.phase != VoicePhase.Connecting ->
                             SideButton(Lucide.Mic.takeUnless { state.muted } ?: Lucide.MicOff, "Mute", onMute, on = state.muted, toggle = true)
                         !state.live && state.phase == VoicePhase.Speaking -> SideButton(Lucide.SkipForward, "Skip the reply", onSkip)
+                        canSendNow(state) -> SideButton(Lucide.ArrowUp, "Send now", onSendNow)
                         // An empty slot keeps End in the middle.
                         else -> Spacer(Modifier.size(52.dp))
                     }

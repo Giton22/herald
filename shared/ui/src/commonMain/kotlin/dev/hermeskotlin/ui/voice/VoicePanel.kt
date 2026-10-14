@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.composables.icons.lucide.ArrowUp
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Mic
 import com.composables.icons.lucide.MicOff
@@ -86,10 +87,19 @@ import kotlin.math.sqrt
  * Takes the composer's place during a voice chat, the chat staying in view above it: an orb that swells with
  * your voice and ripples while the voice talks, what's happening, the words just said as captions, the tool
  * Hermes is running, and round buttons. A GPT-Live call has Mute (you talk over the voice to cut in); the
- * chained chat has Skip while it reads a reply. What you say sends itself; saying "stop" ends it.
+ * chained chat has Skip while it reads a reply, and Send now while it hears you. What you say sends itself
+ * after a pause; saying "stop" ends it.
  */
 @Composable
-internal fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onSkip: () -> Unit, onMute: () -> Unit, onEnd: () -> Unit, onExpand: () -> Unit) {
+internal fun VoicePanel(
+    hazeState: HazeState,
+    state: VoiceChatState,
+    onSkip: () -> Unit,
+    onMute: () -> Unit,
+    onEnd: () -> Unit,
+    onExpand: () -> Unit,
+    onSendNow: () -> Unit = {},
+) {
     val shape = RoundedCornerShape(28.dp)
     val page = Theme[colors][background]
     val frosted = remember(page) {
@@ -160,6 +170,13 @@ internal fun VoicePanel(hazeState: HazeState, state: VoiceChatState, onSkip: () 
                     tint = Theme[colors][textColor],
                     onClick = onSkip,
                 )
+                canSendNow(state) -> RoundButton(
+                    Lucide.ArrowUp,
+                    contentDescription = "Send now",
+                    fill = Theme[colors][textColor].copy(alpha = 0.08f),
+                    tint = Theme[colors][textColor],
+                    onClick = onSendNow,
+                )
             }
             RoundButton(Lucide.PhoneOff, contentDescription = "End voice chat", fill = Theme[colors][danger], tint = Color.White, onClick = onEnd)
         }
@@ -175,6 +192,9 @@ internal fun label(state: VoiceChatState) = when (state.phase) {
     VoicePhase.Off -> ""
 }
 
+/** The chained chat has heard you: what's said so far can go now, without waiting for the pause. */
+internal fun canSendNow(state: VoiceChatState) = !state.live && state.phase == VoicePhase.Listening && state.hearing
+
 /** What to do now, while there are no words to show. */
 internal fun hint(state: VoiceChatState) = when {
     state.muted -> "Tap the microphone to talk again"
@@ -182,6 +202,7 @@ internal fun hint(state: VoiceChatState) = when {
     state.phase == VoicePhase.Thinking -> "Hermes is on it"
     state.live && state.phase == VoicePhase.Speaking -> "Talk over it to cut in"
     state.phase == VoicePhase.Speaking -> "Tap skip to talk again"
+    canSendNow(state) -> "Pause when you're done, or tap send"
     else -> "Just talk · say “stop” to end"
 }
 

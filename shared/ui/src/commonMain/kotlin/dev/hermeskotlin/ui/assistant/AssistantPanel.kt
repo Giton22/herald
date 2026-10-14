@@ -135,6 +135,7 @@ import dev.hermeskotlin.ui.chat.currentAction
 import dev.hermeskotlin.ui.chat.rememberImageBitmap
 import dev.hermeskotlin.ui.chat.userBubbleShape
 import dev.hermeskotlin.ui.voice.DictationState
+import dev.hermeskotlin.ui.voice.briefError
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.serialization.json.JsonObject
 import org.koin.compose.koinInject
@@ -419,7 +420,7 @@ private fun ColumnScope.Ready(
             Text(currentAction(chat), style = Theme[typography][caption], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
     }
-    (chat.error ?: state.dictation.error)?.let {
+    (chat.error ?: state.dictation.error?.let(::briefError))?.let {
         Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger], modifier = Modifier.padding(start = 6.dp, end = 6.dp, bottom = 10.dp))
     }
 

@@ -1,0 +1,3 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Resources the shrinker can't see in use: Play services reads android_wear_capabilities by name (values/wear.xml). -->
+<resources xmlns:tools="http://schemas.android.com/tools" tools:keep="@array/android_wear_capabilities" />
