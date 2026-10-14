@@ -2,6 +2,8 @@ package dev.hermeskotlin.wear
 
 import android.content.Context
 import androidx.core.content.edit
+import dev.hermeskotlin.wearlink.WatchScope
+import dev.hermeskotlin.wearlink.WearJson
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -10,13 +12,22 @@ import kotlinx.coroutines.flow.asStateFlow
  * The chat the watch talks in (null id: the next ask starts one), with its [model] and how full its context is
  * ([contextPercent]) as the last turn there told.
  */
-data class WatchChatChoice(val id: String?, val title: String?, val model: String? = null, val contextPercent: Int? = null, val botProfile: String? = null)
+data class WatchChatChoice(val id: String?, val title: String?, val model: String? = null, val contextPercent: Int? = null, val botProfile: String? = null, val scope: WatchScope? = null)
 
 /** What the watch remembers between launches: its chat, whether replies are read aloud, and the last reply (for the tile). */
 class WatchStore(context: Context) {
 
     private val prefs = context.getSharedPreferences("herald_watch", Context.MODE_PRIVATE)
 
+    var phoneScope: WatchScope?
+        get() = prefs.getString(PHONE_SCOPE, null)?.let { WearJson.decode<WatchScope>(it.encodeToByteArray()) }
+        set(value) = prefs.edit { putString(PHONE_SCOPE, value?.let { WearJson.encode(it).decodeToString() }) }
+
+    var phoneNode: String?
+        get() = prefs.getString(PHONE_NODE, null)
+        set(value) = prefs.edit { putString(PHONE_NODE, value) }
+
+    private val savedScope = prefs.getString(CHAT_SCOPE, null)?.let { WearJson.decode<WatchScope>(it.encodeToByteArray()) }
     private val _chat = MutableStateFlow(
         WatchChatChoice(
             prefs.getString(CHAT_ID, null),
@@ -24,7 +35,8 @@ class WatchStore(context: Context) {
             prefs.getString(MODEL, null),
             prefs.getInt(CONTEXT, -1).takeIf { it >= 0 },
             prefs.getString(BOT_PROFILE, null),
-        ),
+            savedScope,
+        ).let { if (prefs.contains(CHAT_SCOPE) && savedScope == null) WatchChatChoice(null, null) else it },
     )
     val chat: StateFlow<WatchChatChoice> = _chat.asStateFlow()
 
@@ -32,18 +44,18 @@ class WatchStore(context: Context) {
     val speak: StateFlow<Boolean> = _speak.asStateFlow()
 
     /** Picked here: another chat forgets the last one's model and context. */
-    fun setChat(id: String?, title: String?, botProfile: String? = null) =
-        save(id, title, keepStats = id == _chat.value.id && botProfile == _chat.value.botProfile, botProfile = botProfile)
+    fun setChat(id: String?, title: String?, botProfile: String? = null, scope: WatchScope? = null) =
+        save(id, title, keepStats = id == _chat.value.id && botProfile == _chat.value.botProfile && scope == _chat.value.scope, botProfile = botProfile, scope = scope)
 
     /** Named in a reply: a new chat getting its id keeps what its turn told. */
-    fun adoptChat(id: String, title: String?) {
+    fun adoptChat(id: String, title: String?, scope: WatchScope? = null) {
         val now = _chat.value
-        save(id, if (now.botProfile != null) now.title else title, keepStats = id == now.id || now.id == null, botProfile = now.botProfile)
+        save(id, if (now.botProfile != null) now.title else title, keepStats = id == now.id || now.id == null, botProfile = now.botProfile, scope = scope ?: now.scope)
     }
 
-    private fun save(id: String?, title: String?, keepStats: Boolean, botProfile: String?) {
+    private fun save(id: String?, title: String?, keepStats: Boolean, botProfile: String?, scope: WatchScope?) {
         val now = _chat.value
-        save(WatchChatChoice(id, title?.takeIf { it.isNotBlank() }, now.model.takeIf { keepStats }, now.contextPercent.takeIf { keepStats }, botProfile))
+        save(WatchChatChoice(id, title?.takeIf { it.isNotBlank() }, now.model.takeIf { keepStats }, now.contextPercent.takeIf { keepStats }, botProfile, scope))
     }
 
     fun setStats(model: String?, contextPercent: Int?) {
@@ -60,6 +72,7 @@ class WatchStore(context: Context) {
             putString(MODEL, choice.model)
             putInt(CONTEXT, choice.contextPercent ?: -1)
             putString(BOT_PROFILE, choice.botProfile)
+            putString(CHAT_SCOPE, choice.scope?.let { WearJson.encode(it).decodeToString() })
         }
     }
 
@@ -83,6 +96,9 @@ class WatchStore(context: Context) {
         set(value) = prefs.edit { putString(LAST_REPLY, value?.take(MAX_KEPT)) }
 
     private companion object {
+        const val PHONE_SCOPE = "phone_scope"
+        const val PHONE_NODE = "phone_node"
+        const val CHAT_SCOPE = "chat_scope"
         const val CHAT_ID = "chat_id"
         const val BOT_PROFILE = "bot_profile"
         const val CHAT_TITLE = "chat_title"

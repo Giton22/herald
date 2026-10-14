@@ -18,6 +18,7 @@ import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
@@ -39,14 +40,19 @@ class MainActivity : ComponentActivity() {
     private var defaultCallJob: Job? = null
     private var permissionDefault: String? = null
     private var callPermissionPending = false
+    private var inputGeneration: Long? = null
+    private var recognitionGeneration: Long? = null
+    private var callGeneration: Long? = null
 
     private val recognize = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         val said = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()?.trim()
-        if (!said.isNullOrEmpty()) app.link.ask(said)
+        val generation = recognitionGeneration
+        recognitionGeneration = null
+        if (!said.isNullOrEmpty()) completeInput(generation) { app.link.ask(said) }
     }
 
     private val microphone = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) record() else listening.value = Listening(error = NEEDS_MICROPHONE)
+        if (granted) completeInput(inputGeneration, ::record) else listening.value = Listening(error = NEEDS_MICROPHONE)
     }
 
     private val callMicrophone = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -55,7 +61,7 @@ class MainActivity : ComponentActivity() {
         permissionDefault = null
         callPermissionPending = false
         if (granted) {
-            if (pending) app.link.startCall(target)
+            if (pending) completeInput(inputGeneration) { app.link.startCall(target) }
         } else listening.value = Listening(error = NEEDS_MICROPHONE)
     }
 
@@ -75,10 +81,26 @@ class MainActivity : ComponentActivity() {
         // How the phone stands, for the dot at the top edge: asked again now and then while the app is in sight.
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.STARTED) {
+                if (app.link.synchronizeProfile()) app.link.refreshChats()
                 while (true) {
-                    app.link.refreshPhone()
                     delay(PHONE_CHECK_MS)
+                    app.link.refreshPhone()
                 }
+            }
+        }
+        lifecycleScope.launch {
+            var previous = app.link.profileReset.value
+            app.link.profileReset.collect { generation ->
+                if (generation == previous) return@collect
+                previous = generation
+                recordingJob?.cancel()
+                permissionDefault = null
+                callPermissionPending = false
+                inputGeneration = null
+                // A shortcut waiting for its first check survives that check's initial reset.
+                if (callGeneration != null && callGeneration != generation) defaultCallJob?.cancel()
+                callGeneration = null
+                listening.value = Listening()
             }
         }
         // A call keeps the screen on: with it off, the activity stops, and the call with it.
@@ -129,7 +151,10 @@ class MainActivity : ComponentActivity() {
         defaultCallJob?.cancel()
         permissionDefault = null
         callPermissionPending = false
+        callGeneration = null
         defaultCallJob = lifecycleScope.launch {
+            if (!ready()) return@launch
+            callGeneration = app.link.profileReset.value
             val target = try { app.link.resolveDefaultCall() } catch (e: CancellationException) {
                 if (e !is kotlinx.coroutines.TimeoutCancellationException) throw e
                 listening.value = Listening(error = "Herald on your phone didn't answer. Try again.")
@@ -137,6 +162,7 @@ class MainActivity : ComponentActivity() {
             }
             if (target.error != null) { listening.value = Listening(error = target.error); return@launch }
             listening.value = Listening()
+            inputGeneration = app.link.profileReset.value
             if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
                 app.link.startCall(target.requestId)
             } else {
@@ -151,14 +177,35 @@ class MainActivity : ComponentActivity() {
         defaultCallJob?.cancel()
         permissionDefault = null
         callPermissionPending = false
-        if (!(app.link.liveVoice.value && app.store.live.value)) return listen()
-        app.link.dismissCall()
-        listening.value = Listening()
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-            app.link.startCall()
-        } else {
-            callPermissionPending = true
-            callMicrophone.launch(Manifest.permission.RECORD_AUDIO)
+        callGeneration = null
+        defaultCallJob = lifecycleScope.launch {
+            if (!ready()) return@launch
+            inputGeneration = app.link.profileReset.value
+            if (!(app.link.liveVoice.value && app.store.live.value)) return@launch listen()
+            app.link.dismissCall()
+            listening.value = Listening()
+            if (ContextCompat.checkSelfPermission(this@MainActivity, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                app.link.startCall()
+            } else {
+                callPermissionPending = true
+                callMicrophone.launch(Manifest.permission.RECORD_AUDIO)
+            }
+        }
+    }
+
+    private suspend fun ready(): Boolean {
+        lifecycle.currentStateFlow.first { it.isAtLeast(Lifecycle.State.STARTED) }
+        if (app.link.synchronizeProfile()) return true
+        listening.value = Listening(error = WatchLink.NO_HERALD)
+        return false
+    }
+
+    private fun completeInput(generation: Long?, action: () -> Unit) {
+        lifecycleScope.launch {
+            if (!ready()) return@launch
+            if (generation == null || generation != app.link.profileReset.value) {
+                listening.value = Listening(error = "Phone profile changed. Please try again.")
+            } else action()
         }
     }
 
@@ -171,6 +218,7 @@ class MainActivity : ComponentActivity() {
             .putExtra(RecognizerIntent.EXTRA_PROMPT, "Ask Hermes")
         if (intent.resolveActivity(packageManager) != null) {
             try {
+                recognitionGeneration = app.link.profileReset.value
                 recognize.launch(intent)
                 return
             } catch (_: ActivityNotFoundException) {
@@ -187,6 +235,7 @@ class MainActivity : ComponentActivity() {
     @Suppress("MissingPermission") // listen() checks it first.
     private fun record() {
         if (recordingJob?.isActive == true) return
+        val generation = app.link.profileReset.value
         listening.value = Listening(recording = true)
         recordingJob = lifecycleScope.launch {
             val audio = try {
@@ -200,7 +249,9 @@ class MainActivity : ComponentActivity() {
             } finally {
                 if (listening.value.recording) listening.value = Listening()
             }
-            if (audio == null) {
+            if (generation != app.link.profileReset.value) {
+                listening.value = Listening(error = "Phone profile changed. Please try again.")
+            } else if (audio == null) {
                 listening.value = Listening(error = "I didn't hear anything.")
             } else {
                 app.link.ask(null, audio, WatchRecorder.MIME_TYPE)

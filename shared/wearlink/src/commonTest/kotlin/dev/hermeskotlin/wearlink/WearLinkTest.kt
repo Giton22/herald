@@ -13,6 +13,29 @@ import kotlin.test.assertTrue
 class WearLinkTest {
 
     @Test
+    fun explicitLaunchScopeSurvivesRecordedMessagesAndLegacyCallsKeepNoScope() {
+        val scope = WatchScope("https://gateway.example", null)
+        val ask = WatchAsk("ask", chatId = "saved", scope = scope)
+        assertEquals(ask, RecordedAsk.read(RecordedAsk.write(ask, byteArrayOf(1)))!!.first)
+        assertEquals(scope, WearJson.decode<CallStart>(WearJson.encode(CallStart("call", "saved", "offer", scope = scope)))!!.scope)
+        assertNull(WearJson.decode<CallStart>("""{"id":"call","chatId":"saved","offerSdp":"offer"}""".encodeToByteArray())!!.scope)
+    }
+
+    @Test
+    fun contextChecksAndListsRetainTheirRequestAndScopeWithoutChangingOldPeers() {
+        val owner = WatchScope("https://gateway.example", "work")
+        val request = PhoneStatusRequest(requestId = "latest")
+        assertEquals(request, WearJson.decode<PhoneStatusRequest>(WearJson.encode(request)))
+        val status = PhoneStatus(true, true, requestId = "latest", activeScope = owner, profileSync = true)
+        assertEquals(status, WearJson.decode<PhoneStatus>(WearJson.encode(status)))
+        val list = ChatList(requestId = "list", scope = owner)
+        assertEquals(list, WearJson.decode<ChatList>(WearJson.encode(list)))
+        assertEquals(ChatListRequest("list"), WearJson.decode<ChatListRequest>(WearJson.encode(ChatListRequest("list"))))
+        assertFalse(WearJson.decode<PhoneStatus>("""{"signedIn":true,"connected":true}""".encodeToByteArray())!!.profileSync)
+        assertNull(WearJson.decode<ChatList>("""{"chats":[]}""".encodeToByteArray())!!.scope)
+    }
+
+    @Test
     fun defaultCallsRemainDistinctAndPreserveBotContracts() {
         val request = PhoneStatusRequest(botProfile = "assistant")
         assertEquals(request, WearJson.decode<PhoneStatusRequest>(WearJson.encode(request)))

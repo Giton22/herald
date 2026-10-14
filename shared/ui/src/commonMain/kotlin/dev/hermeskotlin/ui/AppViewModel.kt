@@ -216,7 +216,8 @@ class AppViewModel(
                     check(page is ApiResult.Success) { "Couldn't open the Default Call Target. ${page.errorMessage.orEmpty()}" }
                 }
                 if (_route.value !== route || generation != callGeneration) return@launch
-                val chat = newChatTarget(route.gateway, target.profile).copy(
+                val profile = target.profile ?: currentProfile().takeIf { target.sessionId == null }
+                val chat = newChatTarget(route.gateway, profile).copy(
                     storedSessionId = id, title = bot?.label ?: if (id == null) "New chat" else target.label,
                     draft = ComposeDraft(start = DraftStart.VoiceChat),
                     bot = bot?.let { BotIdentity(it.name, it.label, chatsProfile = currentProfile()) },

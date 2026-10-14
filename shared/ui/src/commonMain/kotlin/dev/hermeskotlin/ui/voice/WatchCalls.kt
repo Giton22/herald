@@ -8,6 +8,7 @@ import dev.hermeskotlin.core.wear.WatchOutbox
 import dev.hermeskotlin.core.wear.WatchRelay
 import dev.hermeskotlin.core.wear.contextPercentOf
 import dev.hermeskotlin.core.wear.modelOf
+import dev.hermeskotlin.wearlink.WatchScope
 import dev.hermeskotlin.wearlink.CallEnd
 import dev.hermeskotlin.wearlink.CallEvents
 import dev.hermeskotlin.wearlink.CallPhase
@@ -117,10 +118,11 @@ class WatchCalls(
         suspend fun end(error: String?) = tell(last.copy(phase = CallPhase.Ended, answerSdp = null, error = error, thinking = false, working = null))
 
         tell(last)
-        val chat = when (val found = relay.chatForCall(start.chatId, start.botProfile, start.defaultRequestId, node)) {
+        val chat = when (val found = relay.chatForCall(start.chatId, start.botProfile, start.defaultRequestId, node, start.scope)) {
             is CallChat.Failed -> return end(found.message)
             is CallChat.Ready -> found
         }
+        last = last.copy(scope = WatchScope(chat.gateway.value, chat.profile))
         if (held.over) return
         when (val status = audio.voiceLiveStatus(chat.gateway, chat.profile)) {
             is ApiResult.Success -> {

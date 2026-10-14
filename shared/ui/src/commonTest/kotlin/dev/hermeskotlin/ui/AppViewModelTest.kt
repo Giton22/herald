@@ -182,6 +182,25 @@ class AppViewModelTest {
     }
 
     @Test
+    fun freshDefaultCallsKeepTheSelectedProfileAndPickedSessionsKeepTheirOwnScope() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        gateways.save(home)
+        signedIn(home)
+        ProfileStore(store).set(home.gatewayUrl, "work")
+        val vm = viewModel()
+        runCurrent()
+        for (target in listOf(null, CallTarget(), CallTarget(sessionId = "s1"))) {
+            callSettings.update { it.copy(callTargets = target?.let { mapOf(home.url to it) }.orEmpty()) }
+            links.follow(AppLink.VoiceChat)
+            runCurrent()
+            val chat = assertIs<Route.Chat>(vm.route.value).target
+            assertEquals(if (target?.sessionId == null) "work" else null, chat.profile)
+            assertEquals(target?.sessionId, chat.storedSessionId)
+            assertEquals(DraftStart.VoiceChat, assertNotNull(chat.draft).start)
+        }
+    }
+
+    @Test
     fun defaultAndExistingSessionsReuseCallRoutingWithoutChangingDictation() = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         gateways.save(home)

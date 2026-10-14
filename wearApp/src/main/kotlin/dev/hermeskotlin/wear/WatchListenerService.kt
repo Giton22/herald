@@ -22,7 +22,7 @@ class WatchListenerService : WearableListenerService() {
     }
 
     override fun onMessageReceived(event: MessageEvent) {
-        app.link.onMessage(event.path, event.data)
+        app.link.onMessage(event.path, event.data, event.sourceNodeId)
     }
 
     override fun onChannelOpened(channel: ChannelClient.Channel) {
@@ -37,7 +37,7 @@ class WatchListenerService : WearableListenerService() {
             } finally {
                 runCatching { channels.close(channel) }
             }
-            bytes?.let { app.link.onSpeech(channel.path, it) }
+            bytes?.let { app.link.onSpeech(channel.path, it, channel.nodeId) }
         }
     }
 }

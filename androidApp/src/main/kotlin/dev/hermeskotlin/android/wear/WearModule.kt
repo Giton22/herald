@@ -12,4 +12,5 @@ val wearModule = module {
     single { WatchRelay(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { WatchCalls(get(), get(), get(), get()) }
     single { WearRequests(get(), get()) }
+    single(createdAtStart = true) { WatchProfileNotifier(androidContext(), get(), get(), get()).also { it.start() } }
 }

@@ -133,6 +133,10 @@ fun HeraldWatchApp(
     MaterialTheme(colorScheme = HeraldColors) {
         AppScaffold(timeText = { EdgeStatus(link, store) }) {
             val nav = rememberSwipeDismissableNavController()
+            val profileReset by link.profileReset.collectAsState()
+            LaunchedEffect(profileReset) {
+                if (profileReset > 0) nav.popBackStack(TALK, inclusive = false)
+            }
             SwipeDismissableNavHost(navController = nav, startDestination = TALK) {
                 composable(TALK) {
                     TalkScreen(

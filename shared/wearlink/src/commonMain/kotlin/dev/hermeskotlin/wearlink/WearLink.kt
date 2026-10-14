@@ -6,7 +6,7 @@ import kotlinx.serialization.json.Json
 
 /**
  * The Data Layer paths Herald's phone and watch apps talk on. The watch asks and the phone answers: the phone
- * holds the gateway connection, so the watch never stores a gateway address or a sign-in.
+ * holds the gateway connection; the watch remembers routing scope but never a gateway sign-in.
  *
  * Messages carry JSON ([WearJson]). Audio, too large for a message, goes over a channel whose path says what
  * it holds ([recordingPath], [speechPath]).
@@ -20,11 +20,14 @@ object WearPaths {
     /** Watch → phone: a [WatchStop], to end the running turn. */
     const val STOP = "/herald/stop"
 
-    /** Watch → phone, empty: asks for the recent chats. Phone → watch: a [ChatList]. */
+    /** Watch → phone: an optional [ChatListRequest] for the recent chats. Phone → watch: a [ChatList]. */
     const val CHATS = "/herald/chats"
 
-    /** Watch → phone, empty: asks how the phone stands. Phone → watch: a [PhoneStatus]. */
+    /** Watch → phone: an optional [PhoneStatusRequest] asking how the phone stands. Phone → watch: a [PhoneStatus]. */
     const val STATUS = "/herald/status"
+
+    /** Phone → watch: pull the current browsing context again. */
+    const val PROFILE_CHANGED = "/herald/profile/changed"
 
     /** Phone → watch: a [ReplyUpdate], again each time the turn moves on. */
     const val REPLY = "/herald/reply"
@@ -113,6 +116,10 @@ object WearCapabilities {
     const val WATCH = "herald_watch"
 }
 
+/** A conversation's owner; a present null profile means the gateway's launch profile. */
+@Serializable
+data class WatchScope(val gateway: String, val profile: String? = null)
+
 /**
  * Something said or typed on the watch for Hermes. [chatId] is the stored chat it goes to, null for a new one;
  * the phone names the chat in its [ReplyUpdate]s, and the watch sends the next ask there. A spoken ask comes as
@@ -127,6 +134,7 @@ data class WatchAsk(
     val audioType: String? = null,
     /** A bot's permanent conversation, resolved by the phone rather than a possibly stale stored id. */
     val botProfile: String? = null,
+    val scope: WatchScope? = null,
 )
 
 /** What a [WearPaths.recordingPath] channel carries: the ask's length (4 bytes, big-endian), the ask, then the audio. */
@@ -208,6 +216,7 @@ data class ReplyUpdate(
     val model: String? = null,
     /** How full the model's context window is, 0–100, once the gateway has said. */
     val contextPercent: Int? = null,
+    val scope: WatchScope? = null,
 )
 
 /** One of the recent chats, for picking which one the watch talks in. [activityAt] is in epoch seconds. */
@@ -218,11 +227,17 @@ data class WatchChat(val id: String, val title: String, val activityAt: Double? 
 @Serializable
 data class WatchBot(val profile: String, val title: String, val activityAt: Double? = null)
 
+/** A correlated request for the current profile's recent conversations. */
+@Serializable
+data class ChatListRequest(val requestId: String)
+
 /** The recent chats, newest first, or [error] when they couldn't be read. */
 @Serializable
 data class ChatList(
     val chats: List<WatchChat> = emptyList(), val error: String? = null,
     val bots: List<WatchBot> = emptyList(), val botError: String? = null,
+    val requestId: String? = null,
+    val scope: WatchScope? = null,
 )
 
 /**
@@ -230,7 +245,7 @@ data class ChatList(
  * when asked; false while it's (re)connecting or failing to. [failed]: it gave up, and won't connect on its own.
  */
 @Serializable
-data class PhoneStatusRequest(val botProfile: String? = null)
+data class PhoneStatusRequest(val botProfile: String? = null, val requestId: String? = null, val scope: WatchScope? = null)
 
 @Serializable
 data class PhoneStatus(
@@ -246,6 +261,10 @@ data class PhoneStatus(
     val botChats: Boolean = false,
     val botProfile: String? = null,
     val defaultCalls: Boolean = false,
+    val requestId: String? = null,
+    val activeScope: WatchScope? = null,
+    val profileSync: Boolean = false,
+    val scope: WatchScope? = null,
 )
 
 /*
@@ -258,7 +277,7 @@ data class PhoneStatus(
 
 /** Starts call [id] in [chatId] (null: a new chat), with the watch's WebRTC [offerSdp]. */
 @Serializable
-data class CallStart(val id: String, val chatId: String?, val offerSdp: String, val botProfile: String? = null, val defaultRequestId: String? = null)
+data class CallStart(val id: String, val chatId: String?, val offerSdp: String, val botProfile: String? = null, val defaultRequestId: String? = null, val scope: WatchScope? = null)
 
 /** Event-channel messages of call [callId], in order; [seq] counts each side's batches, so a late one is told apart. */
 @Serializable
@@ -299,6 +318,7 @@ data class CallUpdate(
     val error: String? = null,
     val model: String? = null,
     val contextPercent: Int? = null,
+    val scope: WatchScope? = null,
 )
 
 /** The event-channel message types the phone acts on; the watch keeps the rest (audio deltas and the like) to itself. */
@@ -396,7 +416,7 @@ fun clipForWatch(text: String, max: Int = MAX_WATCH_TEXT): String {
 /** Resolved on demand by the phone; cached artwork never determines the call destination. */
 @Serializable
 data class DefaultCallTarget(val requestId: String, val chatId: String? = null, val botProfile: String? = null,
-    val title: String = "New session", val error: String? = null)
+    val title: String = "New session", val error: String? = null, val scope: WatchScope? = null)
 
 /** Display only: revision covers the current target and rendered image. */
 @Serializable

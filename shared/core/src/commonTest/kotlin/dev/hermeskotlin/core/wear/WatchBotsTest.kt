@@ -20,6 +20,7 @@ import dev.hermeskotlin.core.voice.AudioApi
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.settings.CallTarget
 import dev.hermeskotlin.wearlink.DefaultCallTarget
+import dev.hermeskotlin.wearlink.WatchScope
 import dev.hermeskotlin.wearlink.WatchAsk
 import dev.hermeskotlin.wearlink.WearJson
 import dev.hermeskotlin.wearlink.WearPaths
@@ -103,6 +104,61 @@ class WatchBotsTest {
         s.settings.update { it.copy(callTargets = emptyMap()) }
         assertEquals(null, s.target("fresh1").chatId)
         assertEquals(null, s.target("fresh2").chatId)
+    }
+
+    @Test
+    fun defaultCallsUseTheSelectedProfileOnlyForFreshSessions() = runTest {
+        val store = InMemoryKeyValueStore()
+        ProfileStore(store).set(FakeGateway.URL, "work")
+        val s = setup(store = store, liveForAll = true)
+        val fresh = s.target("fresh")
+        assertEquals(WatchScope(FakeGateway.URL.value, "work"), fresh.scope)
+        assertEquals("work", voiceChecks.last())
+        assertEquals("work", assertIs<CallChat.Ready>(s.relay.chatForCall(fresh.chatId,
+            defaultRequestId = fresh.requestId, node = "watch")).profile)
+        val messageProfiles = mutableListOf<String?>()
+        val http = s.gateway.http
+        s.gateway.http = { request ->
+            if (request.url.encodedPath.endsWith("/messages")) messageProfiles += request.url.parameters["profile"]
+            http(request)
+        }
+        s.settings.update { it.copy(callTargets = mapOf(FakeGateway.URL.value to CallTarget(sessionId = "ordinary"))) }
+        val existing = s.target("existing")
+        assertEquals(null, voiceChecks.last())
+        ProfileStore(store).set(FakeGateway.URL, "other")
+        assertEquals(null, assertIs<CallChat.Ready>(s.relay.chatForCall(existing.chatId,
+            defaultRequestId = existing.requestId, node = "watch")).profile)
+        assertTrue(messageProfiles.isNotEmpty())
+        assertTrue(messageProfiles.all { it == null })
+        assertEquals(null, assertIs<CallChat.Ready>(s.relay.chatForCall(existing.chatId, scope = existing.scope)).profile)
+    }
+
+    @Test
+    fun scopedAsksAndRecordingsRetainLaunchProfileAndRejectAnotherGateway() = runTest {
+        val store = InMemoryKeyValueStore()
+        ProfileStore(store).set(FakeGateway.URL, "work")
+        val s = setup(store = store)
+        val owner = WatchScope(FakeGateway.URL.value)
+        s.relay.ask("watch", WatchAsk("text", "hello", "ordinary", speak = false, scope = owner))
+        until { s.gateway.sent("session.resume").isNotEmpty() }
+        assertEquals(null, s.gateway.sent("session.resume").last().param("profile"))
+        s.relay.ask("watch", WatchAsk("record", chatId = "ordinary", speak = false, scope = owner), ByteArray(32))
+        until { s.outbox.messages.any { it.second["askId"]?.jsonPrimitive?.content == "record" && it.second["heard"] != null } }
+        assertEquals(null, transcribedProfile)
+        val resumes = s.gateway.sent("session.resume").size
+        var transcriptions = 0
+        val http = s.gateway.http
+        s.gateway.http = { request ->
+            if (request.url.encodedPath == "/api/audio/transcribe") transcriptions++
+            http(request)
+        }
+        val wrong = WatchScope("https://other.example")
+        assertIs<CallChat.Failed>(s.relay.chatForCall("ordinary", scope = wrong))
+        s.relay.ask("watch", WatchAsk("wrong", "hello", "ordinary", scope = wrong), ByteArray(32))
+        until { s.outbox.messages.any { it.second["askId"]?.jsonPrimitive?.content == "wrong" && it.second["phase"]?.jsonPrimitive?.content == "Failed" } }
+        assertEquals(resumes, s.gateway.sent("session.resume").size)
+        assertEquals(0, transcriptions)
+        assertIs<CallChat.Failed>(s.relay.chatForCall("stale", "assistant", scope = owner))
     }
 
     @Test
@@ -241,6 +297,49 @@ class WatchBotsTest {
         val regular = s.gateway.sent("session.resume").last()
         assertEquals("ordinary", regular.param("session_id"))
         assertEquals(null, regular.param("profile"))
+    }
+
+    @Test
+    fun delayedListsKeepTheirRequestedProfileAndIdentity() = runTest {
+        val memory = InMemoryKeyValueStore()
+        val profiles = ProfileStore(memory)
+        profiles.set(FakeGateway.URL, "work")
+        val s = setup(store = memory)
+        val entered = CompletableDeferred<Unit>()
+        val release = CompletableDeferred<Unit>()
+        val original = s.gateway.http
+        s.gateway.http = { request ->
+            if (request.url.encodedPath == "/api/sessions" && request.url.parameters["profile"] == "work") {
+                entered.complete(Unit)
+                release.await()
+            }
+            original(request)
+        }
+        s.relay.chats("watch", "work-list")
+        entered.await()
+        profiles.set(FakeGateway.URL, "other")
+        s.relay.chats("watch", "other-list")
+        until { s.outbox.messages.any { it.second["requestId"]?.jsonPrimitive?.content == "other-list" } }
+        release.complete(Unit)
+        until { s.outbox.messages.count { it.first == WearPaths.CHATS } == 2 }
+        val lists = s.outbox.messages.map { WearJson.decode<dev.hermeskotlin.wearlink.ChatList>(WearJson.encode(it.second))!! }
+        assertEquals(listOf("other-list", "work-list"), lists.map { it.requestId })
+        assertEquals(listOf("other", "work"), lists.map { it.scope?.profile })
+        assertTrue(lists.all { it.bots.single().profile == "assistant" })
+    }
+
+    @Test
+    fun statusEchoesTheCheckAndSeparatesBrowsingFromTheConversationOwner() = runTest {
+        val memory = InMemoryKeyValueStore()
+        ProfileStore(memory).set(FakeGateway.URL, "work")
+        val s = setup(store = memory)
+        s.relay.status("watch", "assistant", "check", WatchScope(FakeGateway.URL.value, "assistant"))
+        until { s.outbox.messages.any { it.first == WearPaths.STATUS } }
+        val status = WearJson.decode<dev.hermeskotlin.wearlink.PhoneStatus>(WearJson.encode(s.outbox.messages.first().second))!!
+        assertEquals("check", status.requestId)
+        assertEquals(WatchScope(FakeGateway.URL.value, "work"), status.activeScope)
+        assertEquals(WatchScope(FakeGateway.URL.value, "assistant"), status.scope)
+        assertTrue(status.profileSync)
     }
 
     @Test
