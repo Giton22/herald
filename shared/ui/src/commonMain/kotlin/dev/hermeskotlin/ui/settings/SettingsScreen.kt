@@ -192,8 +192,11 @@ fun SettingsScreen(
     var checkOpen by remember { mutableStateOf(false) }
     var phoneToolsOpen by remember { mutableStateOf(false) }
     var callTargetOpen by remember { mutableStateOf(false) }
+    var assistantSetupOpen by remember { mutableStateOf(false) }
+    var assistantBusy by remember { mutableStateOf(false) }
+    var assistantError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(gateway) { viewModel.bind(gateway) }
-    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !callTargetOpen, onBack = onBack)
+    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !callTargetOpen && !assistantSetupOpen, onBack = onBack)
     SettingsView(
         settings, info, gateway.url, viewModel::update, onBack, onSignOut, onOpenGateways,
         gatewayName = gateway.label,
@@ -217,6 +220,36 @@ fun SettingsScreen(
         onOpenPhoneTools = { phoneToolsOpen = true },
         botFaces = botFaces,
         onChooseCallTarget = { callTargetOpen = true },
+        assistantProfile = settings.assistantProfiles[gateway.url],
+        onToggleAssistant = { on ->
+            if (on) {
+                assistantError = null
+                assistantSetupOpen = true
+            } else {
+                viewModel.update { it.copy(assistantProfiles = it.assistantProfiles - gateway.url) }
+            }
+        },
+    )
+    if (assistantSetupOpen) AssistantSetupSheet(
+        taken = botFaces.bots.map { it.name }.toSet(),
+        busy = assistantBusy,
+        error = assistantError,
+        onDismiss = {
+            if (!assistantBusy) assistantSetupOpen = false
+        },
+        onMake = { profile, toolsets ->
+            assistantBusy = true
+            assistantError = null
+            viewModel.makeAssistant(profile, toolsets) { error ->
+                assistantBusy = false
+                if (error == null) {
+                    viewModel.update { it.copy(assistantProfiles = it.assistantProfiles + (gateway.url to profile)) }
+                    assistantSetupOpen = false
+                } else {
+                    assistantError = error
+                }
+            }
+        },
     )
     if (callTargetOpen) CallTargetPicker(gateway, viewModel, botFaces, onDismiss = { callTargetOpen = false }) { target ->
         viewModel.update { it.copy(callTargets = it.callTargets + (gateway.url to target)) }
@@ -301,6 +334,9 @@ internal fun SettingsView(
     onOpenPhoneTools: () -> Unit = {},
     botFaces: BotFaces = BotFaces(),
     onChooseCallTarget: () -> Unit = {},
+    /** The voice assistant's profile on this gateway, or null when it's off. */
+    assistantProfile: String? = null,
+    onToggleAssistant: (Boolean) -> Unit = {},
 ) {
     Box(
         Modifier
@@ -465,6 +501,19 @@ internal fun SettingsView(
                         checked = settings.showPet,
                         onCheckedChange = { on -> onUpdate { it.copy(showPet = on) } },
                         icon = Lucide.Cat,
+                    )
+                }
+
+                Section("Assistant") {
+                    SwitchRow(
+                        title = "Voice assistant",
+                        detail = if (assistantProfile == null) {
+                            "Calls Herald up over the app you're in, with its screen. Off, it chats on your Chats profile."
+                        } else {
+                            "Runs on the \"$assistantProfile\" bot: short spoken-style answers and a small set of tools. Off, it goes back to your Chats profile; the bot stays in Bots."
+                        },
+                        checked = assistantProfile != null,
+                        onCheckedChange = onToggleAssistant,
                     )
                 }
 

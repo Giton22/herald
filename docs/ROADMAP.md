@@ -180,6 +180,8 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Live voice mode, Desktop's GPT-Live (`voice.voice_chat_mode: gpt-live`): the voice button opens a WebRTC call with OpenAI's voice model through the gateway (`/api/audio/voice-live/status`, `/api/audio/voice-live/session`); each request it hands over (`session.delegation.created`) is a Hermes turn in the chat (`prompt.submit` with `surface: voice-live` and the spoken context), and the reply streams back a sentence at a time (`session.commentary.append`) with the running tool as quiet progress; talk over it to cut in, Mute, say "stop" to end. Another mode, no OpenAI key on the gateway, or an older gateway keeps the voice chat above
 - [ ] Wake word (phone mic → `wake.feed`, `wake.detected`)
 
+- [x] Voice assistant profile (Settings → Assistant, #134): a switch that makes a bot for the assistant, with a spoken-style SOUL and only the web, memory, past-chats, to-do, questions, skills and screen-picture tools on (reminders off). The assistant panel's chats run on that profile while the switch is on; off, they use the Chats profile as before. Speaking the answer, the setup's model step and the digital-assistant button are not in yet
+
 ### Slash commands & composer
 - [x] Slash command catalog and autocomplete (`commands.catalog`, `complete.slash`, `slash.exec`, `command.dispatch`; skills, plus Desktop's own `/new`, `/model`, `/resume`, `/stop`, `/compress`, `/status`, `/btw`, `/reasoning`, `/yolo`, `/title`, `/branch`, `/profile`, `/handoff`, `/skin`)
 - [x] Pet: Petdex gallery, adopt or put away, animated on the composer by the agent's activity (`pet.gallery`, `pet.info`, `pet.select`, `pet.disable`; `/pet`)

@@ -6,6 +6,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.jsonArray
 import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -61,5 +62,24 @@ class BotsApiTest {
         val api = api(backgroundScope) { """{"ok":false,"applied":{"model":false}}""" }
 
         assertFailsWith<RpcException> { api.setModel("scribe", "x", "y") }
+    }
+
+    @Test
+    fun theAssistantsToolsetsArePinnedToExactlyThoseOn() = runTest {
+        val api = api(backgroundScope) { """{"ok":true,"applied":{"toolsets":true}}""" }
+
+        api.pinToolsets(ASSISTANT_PROFILE, ASSISTANT_TOOLSETS.toSet())
+
+        val sent = configured.single()
+        assertEquals(ASSISTANT_PROFILE, sent["name"]?.jsonPrimitive?.contentOrNull)
+        assertEquals(ASSISTANT_TOOLSETS.sorted(), sent["enabled_toolsets"]!!.jsonArray.map { it.jsonPrimitive.content })
+        assertNull(sent["model"])
+    }
+
+    @Test
+    fun toolsetsTheGatewayDidntSaveAreAnError() = runTest {
+        val api = api(backgroundScope) { """{"ok":false,"applied":{"toolsets":false}}""" }
+
+        assertFailsWith<RpcException> { api.pinToolsets(ASSISTANT_PROFILE, setOf("web")) }
     }
 }

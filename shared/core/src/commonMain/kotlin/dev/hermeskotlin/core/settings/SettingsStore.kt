@@ -89,6 +89,11 @@ data class AppSettings(
     val voicePause: VoicePause = VoicePause.Normal,
     /** Default call destination per saved gateway; absence starts a new conversation in its selected profile. */
     val callTargets: Map<String, CallTarget> = emptyMap(),
+    /**
+     * The voice assistant's profile per saved gateway (its URL). Absent: the assistant runs on the Chats profile, as it
+     * always has. Present: its calls run on that profile, which setup made and the Bots roster can edit.
+     */
+    val assistantProfiles: Map<String, String> = emptyMap(),
     /** The mic for dictation in the composer and on an empty chat. Off, it goes, and the model name gets the room. */
     val dictation: Boolean = true,
     val dictationEngine: DictationEngine = DictationEngine.Device,

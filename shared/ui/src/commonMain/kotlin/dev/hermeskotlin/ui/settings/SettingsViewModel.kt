@@ -3,10 +3,12 @@ package dev.hermeskotlin.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.auth.AuthApi
+import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.gateway.CheckStage
 import dev.hermeskotlin.core.gateway.ConnectionCheck
 import dev.hermeskotlin.core.gateway.GatewayProbe
 import dev.hermeskotlin.core.gateway.StageResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import dev.hermeskotlin.core.gateway.ProbeResult
@@ -44,7 +46,26 @@ class SettingsViewModel(
     private val wallpapers: WallpaperStore,
     private val profilesApi: ProfilesApi,
     private val sessionsApi: SessionsApi,
+    private val bots: BotsApi,
 ) : ViewModel() {
+
+    /**
+     * Makes the voice assistant's profile on the gateway ([AssistantSetupSheet]). [onDone] gets the error to show, or null
+     * when it's made; the caller records the profile in Settings only then.
+     */
+    fun makeAssistant(profile: String, toolsets: Set<String>, onDone: (String?) -> Unit) {
+        viewModelScope.launch {
+            val error = try {
+                bots.createAssistant(profile, toolsets)
+                null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                e.message?.takeIf { it.isNotBlank() } ?: "Couldn't make the assistant."
+            }
+            onDone(error)
+        }
+    }
 
     /** The chat background's encoded image, or null when there's none (or it isn't read yet). */
     val wallpaper: StateFlow<ByteArray?> =

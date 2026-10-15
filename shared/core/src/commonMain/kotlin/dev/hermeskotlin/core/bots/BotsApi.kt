@@ -15,6 +15,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
@@ -102,6 +103,32 @@ class BotsApi(private val connection: GatewayConnection) : BotChatBackend {
         updateMeta(draft.profile, draft.look() + mapOf("created" to JsonPrimitive(currentTimeMillis())))
         val check = runCatching { runtimeCheck(draft.profile) }.getOrNull()
         return BotCreated(draft.profile, readyToChat = check?.ok != false, problem = check?.error)
+    }
+
+    /**
+     * Makes the voice assistant's bot: [ASSISTANT_SOUL], and only [toolsets] on (`profiles.configure` pins them as the
+     * profile's CLI toolsets, which is what a Herald session reads). Everything else (the model, the skills, the
+     * memory) comes from the default, as with any new bot. A bot made but not configured is left behind for the user
+     * to see in the roster, so a failure here says so.
+     */
+    suspend fun createAssistant(profile: String, toolsets: Set<String>): BotCreated {
+        val made = createBot(BotDraft(profile = profile, title = ASSISTANT_TITLE, description = ASSISTANT_DESCRIPTION, soul = ASSISTANT_SOUL))
+        pinToolsets(profile, toolsets)
+        return made
+    }
+
+    /** Turns [profile]'s CLI toolsets to exactly [toolsets] (`profiles.configure`, replace semantics). */
+    suspend fun pinToolsets(profile: String, toolsets: Set<String>) {
+        val reply = client().request(
+            "profiles.configure",
+            buildJsonObject {
+                put("name", profile)
+                putJsonArray("enabled_toolsets") { toolsets.sorted().forEach { add(JsonPrimitive(it)) } }
+            },
+            timeoutMs = SLOW_MS,
+        ) as? JsonObject
+        val saved = ((reply?.get("applied") as? JsonObject)?.get("toolsets") as? JsonPrimitive)?.booleanOrNull
+        if (saved == false) throw RpcException(0, "The gateway didn't save the tools.")
     }
 
     /**
