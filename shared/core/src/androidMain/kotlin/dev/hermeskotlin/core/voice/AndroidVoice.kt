@@ -129,6 +129,10 @@ class AndroidVoiceRecorder : VoiceRecorder {
  * [AudioTrack] as it arrives, both as an assistant voice.
  */
 class AndroidSpeechPlayer(private val context: Context) : SpeechPlayer {
+    override suspend fun playRingback() {
+        val bytes = withContext(Dispatchers.IO) { context.assets.open("call_ringback.wav").use { it.readBytes() } }
+        play(SpokenAudio(bytes, "audio/wav"))
+    }
 
     override suspend fun playPcm(sampleRate: Int, channels: Int, chunks: ReceiveChannel<ByteArray>, onSound: (Boolean) -> Unit) = coroutineScope {
         val mask = when (channels) {
