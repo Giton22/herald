@@ -24,7 +24,7 @@ import java.io.File
 
 actual val platformModule: Module = module {
     single<KeyValueStore> { EncryptedKeyValueStore(androidContext()) }
-    // The browser sign-in comes back through this link; the app's manifest gives it to MainActivity.
+    // The browser sign-in comes back through this link; the app's manifest gives it to HeraldActivity.
     single<LoopbackReceiver> { AndroidLoopbackReceiver("${androidContext().packageName}:/signed-in") }
     single { WallpaperStore(AndroidBlobFile(File(androidContext().filesDir, "wallpaper.jpg")), get()) }
     factory<VoiceRecorder> { AndroidVoiceRecorder() }

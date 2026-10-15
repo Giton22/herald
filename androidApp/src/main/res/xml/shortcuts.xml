@@ -14,7 +14,7 @@
         <intent
             android:action="android.intent.action.VIEW"
             android:data="hermes://new-chat"
-            android:targetClass="dev.hermeskotlin.android.MainActivity"
+            android:targetClass="dev.hermeskotlin.android.HeraldActivity"
             android:targetPackage="dev.herald.android" />
     </shortcut>
     <shortcut
@@ -26,14 +26,14 @@
         <intent
             android:action="android.intent.action.VIEW"
             android:data="hermes://new-chat-voice"
-            android:targetClass="dev.hermeskotlin.android.MainActivity"
+            android:targetClass="dev.hermeskotlin.android.HeraldActivity"
             android:targetPackage="dev.herald.android" />
     </shortcut>
     <!--
         Bots in the share sheet: Android offers each bot's conversation shortcut (BotShortcuts, this
         category) as a direct share target. The share opens that bot's chat with the content as a draft.
     -->
-    <share-target android:targetClass="dev.hermeskotlin.android.MainActivity">
+    <share-target android:targetClass="dev.hermeskotlin.android.HeraldActivity">
         <data android:mimeType="*/*" />
         <category android:name="dev.hermeskotlin.category.BOT_SHARE" />
     </share-target>

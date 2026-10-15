@@ -12,6 +12,7 @@ import android.os.Bundle
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import dev.hermeskotlin.android.HeraldActivity
 import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.phone.PhoneToolException
 import kotlinx.coroutines.CompletableDeferred
@@ -137,9 +138,12 @@ class PhoneConfirmations(private val context: Context) {
     @SuppressLint("MissingPermission") // Without the permission Android drops it, which is all that can be done.
     fun tell(id: String, title: String, text: String) {
         createChannel()
-        val open = context.packageManager.getLaunchIntentForPackage(context.packageName)?.let {
-            PendingIntent.getActivity(context, id.hashCode(), it, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        }
+        // The activity, not the launch intent: that names the app icon's alias, which a new icon turns off.
+        val launch = Intent(context, HeraldActivity::class.java)
+            .setAction(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_LAUNCHER)
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
+        val open = PendingIntent.getActivity(context, id.hashCode(), launch, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         val notification = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_notification)
             .setColor(ContextCompat.getColor(context, R.color.notification_accent))

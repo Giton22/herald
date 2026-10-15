@@ -14,6 +14,7 @@ import androidx.core.app.Person
 import androidx.core.app.RemoteInput
 import dev.hermeskotlin.core.bots.Bot
 import androidx.core.content.ContextCompat
+import dev.hermeskotlin.android.HeraldActivity
 import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.chat.ApprovalChoice
 import dev.hermeskotlin.core.chat.InputRequest
@@ -301,8 +302,17 @@ class ChatNotifications(private val context: Context) {
     /** Each room's lines shown in its notification, oldest first. */
     private val unreadRoomLines = mutableMapOf<String, List<RoomNotice>>()
 
+    /**
+     * Opens Herald like its launcher icon does. Named by the activity, not the launch intent, which names the
+     * app icon's alias: picking another icon turns that alias off, and a notification posted before then would
+     * open nothing.
+     */
+    private fun appIntent(): Intent = Intent(context, HeraldActivity::class.java)
+        .setAction(Intent.ACTION_MAIN)
+        .addCategory(Intent.CATEGORY_LAUNCHER)
+
     private fun openRoom(roomId: String, name: String): PendingIntent {
-        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)!!
+        val intent = appIntent()
             .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             .putExtra(EXTRA_OPEN_ROOM, roomId)
             .putExtra(EXTRA_OPEN_TITLE, name)
@@ -343,7 +353,7 @@ class ChatNotifications(private val context: Context) {
     }
 
     private fun openInbox(key: String): PendingIntent {
-        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)!!
+        val intent = appIntent()
             .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             .putExtra(EXTRA_OPEN_INBOX, key)
         return PendingIntent.getActivity(context, "inbox:$key".hashCode(), intent, PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
@@ -361,7 +371,7 @@ class ChatNotifications(private val context: Context) {
     )
 
     private fun openBot(bot: Bot, storedSessionId: String): PendingIntent {
-        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)!!
+        val intent = appIntent()
             .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
             .putExtra(EXTRA_OPEN_BOT, bot.name)
             .putExtra(EXTRA_OPEN_SESSION, storedSessionId)
@@ -397,7 +407,7 @@ class ChatNotifications(private val context: Context) {
     }
 
     private fun openApp(storedSessionId: String?, title: String?): PendingIntent {
-        val intent = context.packageManager.getLaunchIntentForPackage(context.packageName)!!
+        val intent = appIntent()
             .setFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
         if (storedSessionId != null) {
             intent.putExtra(EXTRA_OPEN_SESSION, storedSessionId).putExtra(EXTRA_OPEN_TITLE, title)

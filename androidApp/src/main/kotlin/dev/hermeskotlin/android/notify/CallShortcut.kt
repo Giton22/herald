@@ -12,7 +12,7 @@ import androidx.core.content.ContextCompat
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.graphics.createBitmap
 import androidx.core.graphics.drawable.IconCompat
-import dev.hermeskotlin.android.MainActivity
+import dev.hermeskotlin.android.HeraldActivity
 import dev.hermeskotlin.android.R
 
 /** One mutable shortcut: its destination is read from Settings when tapped, including pinned copies. */
@@ -23,7 +23,7 @@ internal object CallShortcut {
         ShortcutInfoCompat.Builder(context, ID)
             .setShortLabel(context.getString(R.string.shortcut_voice_chat))
             .setIcon(icon(context, picture))
-            .setIntent(Intent(Intent.ACTION_VIEW, "hermes://voice-chat".toUri(), context, MainActivity::class.java)
+            .setIntent(Intent(Intent.ACTION_VIEW, "hermes://voice-chat".toUri(), context, HeraldActivity::class.java)
                 .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP))
             .setRank(0)
             .build()

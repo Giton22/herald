@@ -7,7 +7,7 @@ import android.os.Build
 import androidx.core.app.Person
 import androidx.core.content.pm.ShortcutInfoCompat
 import androidx.core.content.pm.ShortcutManagerCompat
-import dev.hermeskotlin.android.MainActivity
+import dev.hermeskotlin.android.HeraldActivity
 import dev.hermeskotlin.core.bots.Bot
 
 /**
@@ -102,11 +102,14 @@ object BotShortcuts {
 
     private fun info(context: Context, bot: Bot, picture: ByteArray?, rank: Int): ShortcutInfoCompat =
         ShortcutInfoCompat.Builder(context, ID_PREFIX + bot.name)
+            // Under the app icon's launcher entry by name. Left to Android, a shortcut published just after the
+            // user picks another icon goes under the old entry, and is dropped when Android notices it's off.
+            .apply { context.packageManager.getLaunchIntentForPackage(context.packageName)?.component?.let(::setActivity) }
             // The conversation's name and face in the shade come from here, so both are just the bot's.
             .setShortLabel(bot.label)
             .setLongLabel(bot.label)
             .setIcon(BotIcons.icon(bot, picture))
-            .setIntent(Intent(Intent.ACTION_VIEW, Uri.parse("hermes://bot/${Uri.encode(bot.name)}"), context, MainActivity::class.java))
+            .setIntent(Intent(Intent.ACTION_VIEW, Uri.parse("hermes://bot/${Uri.encode(bot.name)}"), context, HeraldActivity::class.java))
             .setLongLived(true)
             .setPerson(person(bot, picture))
             .setCategories(setOf(SHARE_CATEGORY))

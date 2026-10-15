@@ -59,7 +59,7 @@
     <issue
         id="UseKtx"
         message="Use the KTX extension function `String.toUri` instead?"
-        errorLine1="            .setIntent(Intent(Intent.ACTION_VIEW, Uri.parse(&quot;hermes://bot/${Uri.encode(bot.name)}&quot;), context, MainActivity::class.java))"
+        errorLine1="            .setIntent(Intent(Intent.ACTION_VIEW, Uri.parse(&quot;hermes://bot/${Uri.encode(bot.name)}&quot;), context, HeraldActivity::class.java))"
         errorLine2="                                                  ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~">
         <location
             file="src/main/kotlin/dev/hermeskotlin/android/notify/BotShortcuts.kt"

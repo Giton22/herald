@@ -29,7 +29,7 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
-import dev.hermeskotlin.android.MainActivity
+import dev.hermeskotlin.android.HeraldActivity
 import dev.hermeskotlin.android.notify.ChatNotifications
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.voice.DeviceDictation
@@ -195,7 +195,7 @@ class HeraldAssistSession(context: Context) :
 
     /** Herald, on the panel's chat once it has one; also where the microphone is allowed. */
     private fun openInHerald(storedSessionId: String?) {
-        val intent = Intent(context, MainActivity::class.java)
+        val intent = Intent(context, HeraldActivity::class.java)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         storedSessionId?.let { intent.putExtra(ChatNotifications.EXTRA_OPEN_SESSION, it) }
         context.startActivity(intent)

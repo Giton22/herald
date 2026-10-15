@@ -6,7 +6,7 @@ import kotlin.test.assertTrue
 
 class AppLockTimerTest {
 
-    /** The app opened in a new process, the way MainActivity's first onCreate reports it. */
+    /** The app opened in a new process, the way HeraldActivity's first onCreate reports it. */
     private fun AppLockTimer.coldStart(enabled: Boolean) = apply { onLaunch(enabled, fresh = true) }
 
     @Test

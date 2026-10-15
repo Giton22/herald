@@ -39,6 +39,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -84,6 +85,7 @@ import com.composables.icons.lucide.Clock
 import com.composables.icons.lucide.Gauge
 import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.Image
+import com.composables.icons.lucide.LayoutGrid
 import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
@@ -192,8 +194,11 @@ fun SettingsScreen(
     var checkOpen by remember { mutableStateOf(false) }
     var phoneToolsOpen by remember { mutableStateOf(false) }
     var callTargetOpen by remember { mutableStateOf(false) }
+    var appIconOpen by remember { mutableStateOf(false) }
+    // Read again when the App icon page closes, so its row names the icon just applied.
+    val appIcons = key(appIconOpen) { rememberAppIcons() }
     LaunchedEffect(gateway) { viewModel.bind(gateway) }
-    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !callTargetOpen, onBack = onBack)
+    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !callTargetOpen, onBack = onBack)
     SettingsView(
         settings, info, gateway.url, viewModel::update, onBack, onSignOut, onOpenGateways,
         gatewayName = gateway.label,
@@ -217,12 +222,15 @@ fun SettingsScreen(
         onOpenPhoneTools = { phoneToolsOpen = true },
         botFaces = botFaces,
         onChooseCallTarget = { callTargetOpen = true },
+        appIcon = appIcons.current,
+        onOpenAppIcon = { appIconOpen = true },
     )
     if (callTargetOpen) CallTargetPicker(gateway, viewModel, botFaces, onDismiss = { callTargetOpen = false }) { target ->
         viewModel.update { it.copy(callTargets = it.callTargets + (gateway.url to target)) }
         callTargetOpen = false
     }
     if (phoneToolsOpen) PhoneToolsScreen(onBack = { phoneToolsOpen = false })
+    if (appIconOpen) AppIconScreen(onBack = { appIconOpen = false })
     ConnectionCheckSheet(
         visible = checkOpen,
         results = check.results,
@@ -301,6 +309,8 @@ internal fun SettingsView(
     onOpenPhoneTools: () -> Unit = {},
     botFaces: BotFaces = BotFaces(),
     onChooseCallTarget: () -> Unit = {},
+    appIcon: AppIcon = AppIcon.Blue,
+    onOpenAppIcon: () -> Unit = {},
 ) {
     Box(
         Modifier
@@ -341,6 +351,8 @@ internal fun SettingsView(
                             onSelect = { palette -> onUpdate { it.copy(accent = palette.name) } },
                         )
                     }
+                    Divider()
+                    NavRow(title = "App icon", detail = appIcon.label, icon = Lucide.LayoutGrid, onClick = onOpenAppIcon)
                     Divider()
                     SwitchRow(
                         title = "Pure black",
