@@ -3,10 +3,12 @@ package dev.hermeskotlin.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.auth.AuthApi
+import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.gateway.CheckStage
 import dev.hermeskotlin.core.gateway.ConnectionCheck
 import dev.hermeskotlin.core.gateway.GatewayProbe
 import dev.hermeskotlin.core.gateway.StageResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import dev.hermeskotlin.core.gateway.GatewayUrl
@@ -14,7 +16,6 @@ import dev.hermeskotlin.core.gateway.ProbeResult
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.plugins.NextPromptApi
-import kotlinx.coroutines.CancellationException
 import dev.hermeskotlin.core.push.PushPluginReply
 import dev.hermeskotlin.core.push.PushSetup
 import dev.hermeskotlin.core.push.PushStatus
@@ -71,7 +72,37 @@ class SettingsViewModel(
     private val profilesApi: ProfilesApi,
     private val sessionsApi: SessionsApi,
     private val nextPrompt: NextPromptApi,
+    private val bots: BotsApi,
 ) : ViewModel() {
+
+    /**
+     * Makes the voice assistant's profile on the gateway ([AssistantSetupSheet]). [onDone] gets the error to show, or null
+     * when it's made; the caller records the profile in Settings only then. A bot made but not pinned is deleted
+     * again, so a retry starts clean instead of tripping over the orphan.
+     */
+    fun makeAssistant(gatewayUrl: GatewayUrl, profile: String, toolsets: Set<String>, onDone: (String?) -> Unit) {
+        viewModelScope.launch {
+            val error = try {
+                bots.createAssistant(profile, toolsets) { made -> profilesApi.delete(gatewayUrl, made) }
+                null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                e.message?.takeIf { it.isNotBlank() } ?: "Couldn't make the assistant."
+            }
+            onDone(error)
+        }
+    }
+
+    /**
+     * Points the assistant at a profile the gateway already has (the setup sheet's Use existing). The only change
+     * is the local mapping in Settings: no profile is created, pinned, deleted or otherwise written on the gateway,
+     * so the chosen profile keeps its model, SOUL, skills and toolsets exactly as they are. Switching while the
+     * assistant is on just replaces the mapping; the previously chosen profile is untouched.
+     */
+    fun useAssistant(gateway: SavedGateway, profile: String) {
+        store.update { it.copy(assistantProfiles = it.assistantProfiles + (gateway.url to profile)) }
+    }
 
     /** The chat background's encoded image, or null when there's none (or it isn't read yet). */
     val wallpaper: StateFlow<ByteArray?> =

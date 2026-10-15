@@ -4,9 +4,12 @@ import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.rpc.JsonRpcClient
 import dev.hermeskotlin.core.rpc.RpcException
+import dev.hermeskotlin.core.rpc.TransportClosedException
 import dev.hermeskotlin.core.profiles.UI_META_ATTEMPTS
 import dev.hermeskotlin.core.profiles.writeUiMeta
 import dev.hermeskotlin.core.sessions.createTitledChat
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -15,6 +18,7 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.put
+import kotlinx.serialization.json.putJsonArray
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
@@ -102,6 +106,116 @@ class BotsApi(private val connection: GatewayConnection) : BotChatBackend {
         updateMeta(draft.profile, draft.look() + mapOf("created" to JsonPrimitive(currentTimeMillis())))
         val check = runCatching { runtimeCheck(draft.profile) }.getOrNull()
         return BotCreated(draft.profile, readyToChat = check?.ok != false, problem = check?.error)
+    }
+
+    /**
+     * Makes the voice assistant's bot: [ASSISTANT_SOUL], and only [toolsets] on (`profiles.configure` pins them as the
+     * profile's CLI toolsets, which is what a Herald session reads). Everything else (the model, the skills, the
+     * memory) comes from the default, as with any new bot. If the pin fails after the bot was made, [rollback] is
+     * called with the profile's name so the caller can delete it — a bot left behind would make a retry report that
+     * it already exists. The pin's error is the one thrown; a rollback that also fails doesn't mask it.
+     *
+     * A single transport drop mid-create (the socket reset before the gateway's reply) retries the whole create
+     * once, once the link is back, instead of surfacing: the dropped attempt may have made the profile before the
+     * socket died, so a retry the gateway answers "already exists" ([PROFILE_EXISTS]) adopts that profile and pins
+     * it, rather than failing. A second failure, an RPC refusal, or a cancellation is the error, as before.
+     */
+    suspend fun createAssistant(profile: String, toolsets: Set<String>, rollback: suspend (String) -> Unit = {}): BotCreated {
+        // An empty pin isn't "no tools": the gateway reads it as clear the pin, which grants the full default
+        // set. Nothing may be created before we know the pin will name at least one toolset.
+        require(toolsets.isNotEmpty()) { "An assistant needs at least one tool." }
+        val original = try {
+            return createAssistantOnce(profile, toolsets, rollback, adoptExisting = false, original = null)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Only a lost link retries; an RPC refusal (auth, validation, a name the gateway won't take)
+            // or the caller's cancellation is the error.
+            if (!e.isTransportDrop()) throw e
+            e
+        }
+        awaitReconnect(original)
+        return createAssistantOnce(profile, toolsets, rollback, adoptExisting = true, original = original)
+    }
+
+    /**
+     * One create-and-pin pass. With [adoptExisting] (the retry) a create the gateway refuses as already
+     * there is not an error when the profile really exists — the first attempt made it before the socket
+     * dropped — so that profile is pinned and completed as the assistant; a 4062 without the profile
+     * behind it surfaces [original], the drop that got us here.
+     */
+    private suspend fun createAssistantOnce(
+        profile: String,
+        toolsets: Set<String>,
+        rollback: suspend (String) -> Unit,
+        adoptExisting: Boolean,
+        original: Exception?,
+    ): BotCreated {
+        val made = if (adoptExisting) {
+            try {
+                createBot(assistantDraft(profile))
+            } catch (e: RpcException) {
+                if (e.code != PROFILE_EXISTS || roster().bots.none { it.name == profile }) throw original ?: e
+                val check = runCatching { runtimeCheck(profile) }.getOrNull()
+                BotCreated(profile, readyToChat = check?.ok != false, problem = check?.error)
+            }
+        } else {
+            createBot(assistantDraft(profile))
+        }
+        try {
+            pinToolsets(profile, toolsets)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            try {
+                rollback(profile)
+            } catch (rollbackError: Exception) {
+                e.addSuppressed(rollbackError)
+            }
+            throw e
+        }
+        return made
+    }
+
+    /**
+     * Waits out a transport drop, then for the link to come back on its own backoff ([GatewayConnection]
+     * reconnects). The pump can still show Connected when a failed call surfaces; a connection that settles
+     * into a terminal state rethrows the original failure.
+     */
+    private suspend fun awaitReconnect(original: Exception) {
+        connection.state.first { it !is ConnectionState.Connected }
+        val back = connection.state.first {
+            it is ConnectionState.Connected || it is ConnectionState.Failed || it is ConnectionState.SessionExpired
+        }
+        if (back !is ConnectionState.Connected) throw original
+    }
+
+    /** What makes the assistant's bot, shared by the create and the retry's adoption check. */
+    private fun assistantDraft(profile: String) =
+        BotDraft(profile = profile, title = ASSISTANT_TITLE, description = ASSISTANT_DESCRIPTION, soul = ASSISTANT_SOUL)
+
+    /** A lost link: the socket closed, or an IO-style failure whose message says reset/closed. RPC refusals don't qualify. */
+    private fun Throwable.isTransportDrop(): Boolean = when (this) {
+        is TransportClosedException -> true
+        is RpcException, is CancellationException -> false
+        else -> message?.lowercase()?.let { "reset" in it || "closed" in it } == true
+    }
+
+    /** Turns [profile]'s CLI toolsets to exactly [toolsets] (`profiles.configure`, replace semantics). */
+    suspend fun pinToolsets(profile: String, toolsets: Set<String>) {
+        // An empty list clears the pin on the gateway, which grants the full default toolset — never send it.
+        require(toolsets.isNotEmpty()) { "An assistant needs at least one tool." }
+        val reply = client().request(
+            "profiles.configure",
+            buildJsonObject {
+                put("name", profile)
+                putJsonArray("enabled_toolsets") { toolsets.sorted().forEach { add(JsonPrimitive(it)) } }
+            },
+            timeoutMs = SLOW_MS,
+        ) as? JsonObject
+        // A reply without `applied.toolsets` means the pin didn't take; only an explicit true is saved.
+        val saved = ((reply?.get("applied") as? JsonObject)?.get("toolsets") as? JsonPrimitive)?.booleanOrNull
+        if (saved != true) throw RpcException(0, "The gateway didn't save the tools.")
     }
 
     /**
@@ -254,6 +368,9 @@ class BotsApi(private val connection: GatewayConnection) : BotChatBackend {
 
         /** Making or copying a profile seeds its skills and writes files; it takes a while. */
         private const val SLOW_MS = 120_000L
+
+        /** `profiles.create` (`methods_profiles.py` maps FileExistsError here); on a retry it means the first attempt landed. */
+        private const val PROFILE_EXISTS = 4062
 
         /** Desktop's first line of a new bot's chat (canonical-chat.ts `kickoffText`). */
         const val KICKOFF = "Hey, tell me about yourself!"

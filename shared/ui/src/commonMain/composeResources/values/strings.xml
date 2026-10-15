@@ -130,6 +130,13 @@
     <string name="voice_pause_short">Short</string>
     <string name="voice_pause_normal">Normal</string>
     <string name="voice_pause_long">Long</string>
+    <string name="assistant_setup_tools_required">Turn on at least one tool to make the assistant.</string>
+    <string name="assistant_setup_use_existing">Use existing</string>
+    <string name="assistant_setup_create_new">Create new</string>
+    <string name="assistant_setup_use_existing_detail">Points the assistant at a profile that’s already on the gateway. It keeps its model, SOUL, skills and toolsets exactly as they are — nothing is written to the gateway.</string>
+    <string name="assistant_setup_no_profiles">No profiles on the gateway yet — make a new one instead.</string>
+    <string name="assistant_setup_loading_profiles">Looking for profiles…</string>
+    <string name="assistant_setup_use_profile">Use this profile</string>
     <string name="settings_notifications_anywhere">Notifications anywhere</string>
     <string name="settings_notifications_anywhere_detail">Hear from your bots even off your gateway’s network, end-to-end encrypted through ntfy.sh. Installs the herald-push plugin on the gateway. Keeps a quiet notification.</string>
     <string name="settings_notify_requests">Approvals and questions</string>
