@@ -4,9 +4,11 @@ import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayRepository
+import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.profiles.ProfileStore
+import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import dev.hermeskotlin.core.voice.AudioApi
@@ -28,6 +30,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotNull
 import kotlin.test.assertNotSame
+import kotlin.test.assertNull
 
 class AssistantPanelModelTest {
 
@@ -58,10 +61,11 @@ class AssistantPanelModelTest {
         override suspend fun play(audio: SpokenAudio) = Unit
     }
 
-    private fun TestScope.model(): AssistantPanelModel {
+    private fun TestScope.model(settings: SettingsStore? = null): AssistantPanelModel {
         val connection = GatewayConnection(auth, openSocket = { _, _ -> error("no socket in tests") }, scope = backgroundScope)
         return AssistantPanelModel(
             gateways, auth, ProfileStore(store), connection, SessionsApi(client), AudioApi(client), Silent, Silent, backgroundScope,
+            settings = settings,
         )
     }
 
@@ -100,6 +104,42 @@ class AssistantPanelModelTest {
         model.begin(expectText = false, expectScreenshot = false)
 
         assertEquals(first, model.session.value)
+        model.close()
+    }
+
+    @Test
+    fun aCallUpRunsOnTheVoiceAssistantsProfileWhileItIsOn() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        ProfileStore(store).set(GatewayUrl.parse(home.url), "coding")
+        val settings = SettingsStore(store, backgroundScope)
+        settings.update { it.copy(assistantProfiles = mapOf(home.url to "assistant")) }
+        val model = model(settings)
+
+        assertEquals("assistant", model.session.first { it != null }?.profile)
+        model.close()
+    }
+
+    @Test
+    fun withTheVoiceAssistantOffTheChatsProfileIsUsed() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        ProfileStore(store).set(GatewayUrl.parse(home.url), "coding")
+        val settings = SettingsStore(store, backgroundScope)
+        settings.update { it.copy(assistantProfiles = mapOf(work.url to "assistant")) }
+        val model = model(settings)
+
+        assertEquals("coding", model.session.first { it != null }?.profile)
+        model.close()
+    }
+
+    @Test
+    fun withNoChatsProfileOrAssistantTheGatewaysLaunchProfileIsUsed() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        val model = model(SettingsStore(store, backgroundScope))
+
+        assertNull(model.session.first { it != null }?.profile)
         model.close()
     }
 }

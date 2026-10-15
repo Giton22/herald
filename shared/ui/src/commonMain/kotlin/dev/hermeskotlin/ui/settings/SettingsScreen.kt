@@ -79,6 +79,7 @@ import com.composables.icons.lucide.Vibrate
 import com.composables.icons.lucide.ArrowLeftRight
 import com.composables.icons.lucide.Brain
 import com.composables.icons.lucide.Cat
+import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Clock
 import com.composables.icons.lucide.Gauge
 import com.composables.icons.lucide.Globe
@@ -89,6 +90,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageCircle
 import com.composables.icons.lucide.MessagesSquare
 import com.composables.icons.lucide.Moon
+import com.composables.icons.lucide.Phone
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Send
 import com.composables.icons.lucide.ShieldAlert
@@ -101,9 +103,11 @@ import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import com.composeunstyled.theme.rememberColoredIndication
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.phone.enabledPhoneTools
 import dev.hermeskotlin.core.push.PushStatus
 import dev.hermeskotlin.core.settings.AppSettings
+import dev.hermeskotlin.core.settings.CallTarget
 import dev.hermeskotlin.core.settings.RunningSend
 import dev.hermeskotlin.core.settings.TextSize
 import dev.hermeskotlin.core.settings.ThemeMode
@@ -146,6 +150,8 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.title
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.bots.BotFaces
+import dev.hermeskotlin.ui.bots.BotAvatar
 import dev.hermeskotlin.ui.LocalAppVersion
 import dev.hermeskotlin.ui.PlatformBackHandler
 import dev.hermeskotlin.ui.chat.AppMark
@@ -163,6 +169,7 @@ import kotlin.math.roundToInt
 @Composable
 fun SettingsScreen(
     gateway: SavedGateway,
+    botFaces: BotFaces = BotFaces(),
     onBack: () -> Unit,
     onSignOut: () -> Unit,
     onOpenGateways: () -> Unit,
@@ -184,8 +191,12 @@ fun SettingsScreen(
     )
     var checkOpen by remember { mutableStateOf(false) }
     var phoneToolsOpen by remember { mutableStateOf(false) }
+    var callTargetOpen by remember { mutableStateOf(false) }
+    var assistantSetupOpen by remember { mutableStateOf(false) }
+    var assistantBusy by remember { mutableStateOf(false) }
+    var assistantError by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(gateway) { viewModel.bind(gateway) }
-    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen, onBack = onBack)
+    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !callTargetOpen && !assistantSetupOpen, onBack = onBack)
     SettingsView(
         settings, info, gateway.url, viewModel::update, onBack, onSignOut, onOpenGateways,
         gatewayName = gateway.label,
@@ -207,7 +218,43 @@ fun SettingsScreen(
             viewModel.removeWallpaper()
         },
         onOpenPhoneTools = { phoneToolsOpen = true },
+        botFaces = botFaces,
+        onChooseCallTarget = { callTargetOpen = true },
+        assistantProfile = settings.assistantProfiles[gateway.url],
+        onToggleAssistant = { on ->
+            if (on) {
+                assistantError = null
+                assistantSetupOpen = true
+            } else {
+                viewModel.update { it.copy(assistantProfiles = it.assistantProfiles - gateway.url) }
+            }
+        },
     )
+    if (assistantSetupOpen) AssistantSetupSheet(
+        taken = botFaces.bots.map { it.name }.toSet(),
+        busy = assistantBusy,
+        error = assistantError,
+        onDismiss = {
+            if (!assistantBusy) assistantSetupOpen = false
+        },
+        onMake = { profile, toolsets ->
+            assistantBusy = true
+            assistantError = null
+            viewModel.makeAssistant(profile, toolsets) { error ->
+                assistantBusy = false
+                if (error == null) {
+                    viewModel.update { it.copy(assistantProfiles = it.assistantProfiles + (gateway.url to profile)) }
+                    assistantSetupOpen = false
+                } else {
+                    assistantError = error
+                }
+            }
+        },
+    )
+    if (callTargetOpen) CallTargetPicker(gateway, viewModel, botFaces, onDismiss = { callTargetOpen = false }) { target ->
+        viewModel.update { it.copy(callTargets = it.callTargets + (gateway.url to target)) }
+        callTargetOpen = false
+    }
     if (phoneToolsOpen) PhoneToolsScreen(onBack = { phoneToolsOpen = false })
     ConnectionCheckSheet(
         visible = checkOpen,
@@ -285,6 +332,11 @@ internal fun SettingsView(
     onChooseWallpaper: () -> Unit = {},
     onRemoveWallpaper: () -> Unit = {},
     onOpenPhoneTools: () -> Unit = {},
+    botFaces: BotFaces = BotFaces(),
+    onChooseCallTarget: () -> Unit = {},
+    /** The voice assistant's profile on this gateway, or null when it's off. */
+    assistantProfile: String? = null,
+    onToggleAssistant: (Boolean) -> Unit = {},
 ) {
     Box(
         Modifier
@@ -452,7 +504,22 @@ internal fun SettingsView(
                     )
                 }
 
+                Section("Assistant") {
+                    SwitchRow(
+                        title = "Voice assistant",
+                        detail = if (assistantProfile == null) {
+                            "Calls Herald up over the app you're in, with its screen. Off, it chats on your Chats profile."
+                        } else {
+                            "Runs on the \"$assistantProfile\" bot: short spoken-style answers and a small set of tools. Off, it goes back to your Chats profile; the bot stays in Bots."
+                        },
+                        checked = assistantProfile != null,
+                        onCheckedChange = onToggleAssistant,
+                    )
+                }
+
                 Section("Voice") {
+                    CallTargetRow(settings.callTargets[gatewayUrl] ?: CallTarget(), botFaces, onChooseCallTarget)
+                    Divider()
                     SwitchRow(
                         title = "Dictation",
                         detail = "A mic in the composer to talk instead of type. Off, the model name gets its room.",
@@ -757,6 +824,24 @@ internal fun Section(title: String, content: @Composable ColumnScope.() -> Unit)
 @Composable
 internal fun Divider() {
     Box(Modifier.padding(horizontal = 14.dp).fillMaxWidth().height(1.dp).background(Theme[colors][stroke]))
+}
+
+/** The whole row opens the picker; a bot keeps its face, either session choice uses the phone. */
+@Composable
+private fun CallTargetRow(target: CallTarget, faces: BotFaces, onClick: () -> Unit) {
+    val bot = target.profile?.let { name -> faces.bots.firstOrNull { it.name == name } ?: Bot(name = name, displayName = target.label) }
+    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (bot != null) BotAvatar(bot, faces.picture(bot), size = 32.dp)
+        else Box(Modifier.size(32.dp).background(Theme[colors][accent], RoundedCornerShape(Theme[radii][radiusSmall])), contentAlignment = Alignment.Center) {
+            UnstyledIcon(Lucide.Phone, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("Default Call target", style = Theme[typography][body], color = Theme[colors][text], maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(bot?.label ?: target.label, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Where your call is routed, when you use call Hermes. Hold the app icon from your app drawer to use it", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+        }
+        UnstyledIcon(Lucide.ChevronRight, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp))
+    }
 }
 
 /** A label with its control underneath, for controls too wide to sit at the end of a row. */

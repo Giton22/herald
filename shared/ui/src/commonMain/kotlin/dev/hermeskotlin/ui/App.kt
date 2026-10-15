@@ -39,8 +39,11 @@ import dev.hermeskotlin.designsystem.components.SidebarLayout
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.components.rememberSidebarState
 import dev.hermeskotlin.core.bots.Bot
+import dev.hermeskotlin.core.chat.DraftStart
 import dev.hermeskotlin.ui.bots.BotEditor
 import dev.hermeskotlin.ui.bots.BotFaces
+import dev.hermeskotlin.designsystem.components.Dialog
+import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.ui.bots.StartOverDialog
 import dev.hermeskotlin.ui.bots.BotsViewModel
 import dev.hermeskotlin.ui.bots.LocalBotFaces
@@ -155,9 +158,14 @@ fun App(
 private fun Routes() {
     val app: AppViewModel = koinViewModel()
     val route by app.route.collectAsStateWithLifecycle()
+    val callError by app.callError.collectAsStateWithLifecycle()
+    val openingCall by app.openingCall.collectAsStateWithLifecycle()
 
     val choices by app.gatewayChoices.collectAsStateWithLifecycle()
     var gatewaysOpen by remember { mutableStateOf(false) }
+    LaunchedEffect((route as? Route.Chat)?.target) {
+        if ((route as? Route.Chat)?.target?.draft?.start == DraftStart.VoiceChat) gatewaysOpen = false
+    }
 
     PlatformBackHandler(enabled = (route as? Route.SignIn)?.adding == true || (route as? Route.Connect)?.canCancel == true) { app.back() }
 
@@ -189,6 +197,17 @@ private fun Routes() {
         is Route.Chat -> Home(r, app, onOpenGateways = { gatewaysOpen = true })
     }
 
+    val dismissCall = if (openingCall) app::cancelPendingCall else app::dismissCallError
+    Dialog(
+        visible = openingCall || callError != null, onDismissRequest = dismissCall,
+        title = if (openingCall) "Opening call…" else "Couldn't start call",
+        message = if (openingCall) null else callError,
+        actions = { Button(if (openingCall) "Cancel" else "OK", onClick = dismissCall) },
+        content = {
+            PlatformBackHandler(enabled = openingCall) { app.cancelPendingCall() }
+            if (openingCall) Spinner()
+        },
+    )
     GatewaysSheet(
         visible = gatewaysOpen,
         choices = choices,
@@ -242,9 +261,10 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     // The open bot's chat was started over elsewhere (Desktop, another phone): follow it to the new one,
     // as Desktop does. Never mid-turn. A chat that only moved on by compression is still this one.
     val liveChat = openBot?.canonicalSession
-    LaunchedEffect(liveChat?.id, liveChat?.openId) {
+    LaunchedEffect(liveChat?.id, liveChat?.openId, route.target.takeIf { it.draft?.start == DraftStart.VoiceChat }) {
         val bot = openBot ?: return@LaunchedEffect
         val next = liveChat?.openId ?: return@LaunchedEffect
+        if (!app.shouldFollowBotChat(route.target, liveChat)) return@LaunchedEffect
         val open = openSessionId ?: return@LaunchedEffect
         // Just opened, the chat's state is still the previous chat's; the route already has the live one.
         if (next == route.target.storedSessionId) return@LaunchedEffect
@@ -271,8 +291,18 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     // room too. Only a change counts: coming back to the same chat, e.g. after a rotation, keeps it open.
     var shownTarget by remember { mutableStateOf(route.target) }
     LaunchedEffect(route.target) {
-        if (route.target != shownTarget) {
+        val showCall = app.consumeCallNavigation(route.target)
+        if (route.target != shownTarget || showCall) {
             shownTarget = route.target
+            if (showCall) {
+                closeDrawer()
+                settingsOpen = false
+                menuOpen = false
+                startOver = null
+                pluginUrl = null
+                pluginLabel = null
+                editing = null
+            }
             rooms.close()
             openDesktopRoom = null
         }
@@ -302,6 +332,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     var shownInboxLink by remember { mutableStateOf<InboxLink?>(null) }
     LaunchedEffect(inboxLink) {
         val link = inboxLink ?: return@LaunchedEffect
+        app.cancelPendingCall()
         try {
             sidebar.open()
         } finally {
@@ -313,6 +344,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     val roomLink by roomLinks.pending.collectAsStateWithLifecycle()
     LaunchedEffect(roomLink) {
         val link = roomLink ?: return@LaunchedEffect
+        app.cancelPendingCall()
         rooms.openById(link.roomId, link.name)
         openDesktopRoom = null
         roomLinks.consume(link)
@@ -588,6 +620,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     if (settingsOpen) {
         SettingsScreen(
             gateway = route.gateway,
+            botFaces = faces,
             onBack = { settingsOpen = false },
             onSignOut = app::signOut,
             onOpenGateways = onOpenGateways,

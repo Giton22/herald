@@ -1,13 +1,17 @@
 package dev.hermeskotlin.wear
 
+import dev.hermeskotlin.wearlink.ChatListRequest
+import dev.hermeskotlin.wearlink.WatchScope
 import dev.hermeskotlin.wearlink.ChatList
 import dev.hermeskotlin.wearlink.PhoneStatus
+import dev.hermeskotlin.wearlink.PhoneStatusRequest
 import dev.hermeskotlin.wearlink.RecordedAsk
 import dev.hermeskotlin.wearlink.ReplyPhase
 import dev.hermeskotlin.wearlink.ReplySpeech
 import dev.hermeskotlin.wearlink.ReplyUpdate
 import dev.hermeskotlin.wearlink.WatchAsk
 import dev.hermeskotlin.wearlink.WatchChat
+import dev.hermeskotlin.wearlink.WatchBot
 import dev.hermeskotlin.wearlink.WatchStop
 import dev.hermeskotlin.wearlink.WearJson
 import dev.hermeskotlin.wearlink.WearPaths
@@ -26,11 +30,16 @@ class FakePhone(private val scope: CoroutineScope, private val deliver: (String,
 
     fun receive(path: String, data: ByteArray) {
         when {
-            path == WearPaths.ASK -> WearJson.decode<WatchAsk>(data)?.let { answer(it, heard = null) }
+            path == WearPaths.ASK || path == WearPaths.BOT_ASK -> WearJson.decode<WatchAsk>(data)?.let { answer(it, heard = null) }
             WearPaths.isRecording(path) -> RecordedAsk.read(data)?.let { (ask, _) -> answer(ask, heard = SAMPLE_HEARD) }
             path == WearPaths.STOP -> WearJson.decode<WatchStop>(data)?.let { turn?.cancel() }
-            path == WearPaths.CHATS -> deliver(WearPaths.CHATS, WearJson.encode(ChatList(SAMPLE_CHATS)))
-            path == WearPaths.STATUS -> deliver(WearPaths.STATUS, WearJson.encode(PhoneStatus(signedIn = true, connected = true)))
+            path == WearPaths.CHATS -> deliver(WearPaths.CHATS, WearJson.encode(ChatList(SAMPLE_CHATS, bots = SAMPLE_BOTS, requestId = WearJson.decode<ChatListRequest>(data)?.requestId, scope = SAMPLE_SCOPE)))
+            path == WearPaths.STATUS -> {
+                val request = WearJson.decode<PhoneStatusRequest>(data)
+                deliver(WearPaths.STATUS, WearJson.encode(PhoneStatus(signedIn = true, connected = true, botChats = true,
+                    botProfile = request?.botProfile, requestId = request?.requestId, profileSync = true,
+                    activeScope = SAMPLE_SCOPE, scope = request?.scope ?: SAMPLE_SCOPE)))
+            }
         }
     }
 
@@ -40,7 +49,7 @@ class FakePhone(private val scope: CoroutineScope, private val deliver: (String,
             var seq = 0
             val chatId = ask.chatId ?: "sample-chat"
             fun tell(update: ReplyUpdate) = deliver(WearPaths.REPLY, WearJson.encode(update.copy(seq = ++seq)))
-            val base = ReplyUpdate(ask.id, ReplyPhase.Sending, chatId = chatId, title = "Weekend plans", heard = heard, model = "Sample model", contextPercent = 34)
+            val base = ReplyUpdate(ask.id, ReplyPhase.Sending, chatId = chatId, title = "Weekend plans", heard = heard, model = "Sample model", contextPercent = 34, scope = ask.scope ?: SAMPLE_SCOPE)
             if (heard != null) {
                 tell(base.copy(phase = ReplyPhase.Transcribing))
                 delay(700)
@@ -59,6 +68,7 @@ class FakePhone(private val scope: CoroutineScope, private val deliver: (String,
     }
 
     private companion object {
+        val SAMPLE_SCOPE = WatchScope("https://sample.example")
         const val SAMPLE_HEARD = "What's the weather like this weekend?"
         const val SAMPLE_REPLY = "Saturday looks sunny with a high of 22°C, so it's a good day to be outside. " +
             "Sunday turns cloudy in the afternoon, with a chance of light rain after 4 pm. " +
@@ -69,5 +79,6 @@ class FakePhone(private val scope: CoroutineScope, private val deliver: (String,
             WatchChat("sample-3", "Fix the build script"),
             WatchChat("sample-4", "Book recommendations"),
         )
+        val SAMPLE_BOTS = listOf(WatchBot("assistant", "Assistant"), WatchBot("research", "Research"))
     }
 }

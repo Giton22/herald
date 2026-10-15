@@ -364,6 +364,25 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun aStoredCallStillStartsAfterItsUnreadPositionChanges() = runTest(dispatcher) {
+        val (vm, _) = viewModel()
+        val requests = mutableListOf<ChatRequest>()
+        backgroundScope.launch(dispatcher) { vm.requests.collect { requests += it } }
+        vm.onScreen(false)
+        val call = ChatTarget(gateway, "s1", "Call target", nonce = 1, draft = ComposeDraft(start = DraftStart.VoiceChat))
+        vm.open(call)
+        val updated = call.copy(readUpTo = 1_000.0)
+        vm.open(updated)
+        connection.start(gateway.gatewayUrl)
+        vm.connectionState.first { it is ConnectionState.Connected }
+        assertEquals(emptyList(), requests)
+
+        vm.onScreen(true)
+        vm.open(updated)
+        assertEquals(listOf<ChatRequest>(ChatRequest.StartVoice), requests)
+    }
+
+    @Test
     fun theCallShortcutGivesUpQuietlyWhenThePersonStaysAway() = runTest(dispatcher) {
         val (vm, _) = viewModel()
         val requests = mutableListOf<ChatRequest>()

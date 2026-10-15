@@ -3,10 +3,12 @@ package dev.hermeskotlin.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.auth.AuthApi
+import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.gateway.CheckStage
 import dev.hermeskotlin.core.gateway.ConnectionCheck
 import dev.hermeskotlin.core.gateway.GatewayProbe
 import dev.hermeskotlin.core.gateway.StageResult
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import dev.hermeskotlin.core.gateway.ProbeResult
@@ -14,6 +16,8 @@ import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.push.PushSetup
 import dev.hermeskotlin.core.push.PushStatus
+import dev.hermeskotlin.core.profiles.ProfilesApi
+import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.settings.WallpaperStore
@@ -40,7 +44,28 @@ class SettingsViewModel(
     private val connectionCheck: ConnectionCheck,
     private val push: PushSetup,
     private val wallpapers: WallpaperStore,
+    private val profilesApi: ProfilesApi,
+    private val sessionsApi: SessionsApi,
+    private val bots: BotsApi,
 ) : ViewModel() {
+
+    /**
+     * Makes the voice assistant's profile on the gateway ([AssistantSetupSheet]). [onDone] gets the error to show, or null
+     * when it's made; the caller records the profile in Settings only then.
+     */
+    fun makeAssistant(profile: String, toolsets: Set<String>, onDone: (String?) -> Unit) {
+        viewModelScope.launch {
+            val error = try {
+                bots.createAssistant(profile, toolsets)
+                null
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                e.message?.takeIf { it.isNotBlank() } ?: "Couldn't make the assistant."
+            }
+            onDone(error)
+        }
+    }
 
     /** The chat background's encoded image, or null when there's none (or it isn't read yet). */
     val wallpaper: StateFlow<ByteArray?> =
@@ -86,6 +111,11 @@ class SettingsViewModel(
             _gateway.update { it.copy(version = status.status.version) }
         }
     }
+
+    suspend fun callProfiles(gateway: SavedGateway) = profilesApi.roster(gateway.gatewayUrl)
+
+    suspend fun callSessions(gateway: SavedGateway, offset: Int) =
+        sessionsApi.list(gateway.gatewayUrl, offset = offset)
 
     fun update(transform: (AppSettings) -> AppSettings) = store.update(transform)
 
