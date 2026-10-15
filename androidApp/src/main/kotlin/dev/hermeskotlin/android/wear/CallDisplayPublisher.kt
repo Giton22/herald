@@ -2,7 +2,9 @@ package dev.hermeskotlin.android.wear
 
 import android.content.Context
 import android.graphics.Bitmap
+import android.net.Uri
 import com.google.android.gms.wearable.Asset
+import com.google.android.gms.wearable.DataMapItem
 import com.google.android.gms.wearable.PutDataMapRequest
 import com.google.android.gms.wearable.Wearable
 import dev.hermeskotlin.android.notify.CallShortcut
@@ -19,7 +21,8 @@ import java.security.MessageDigest
 internal class CallDisplayPublisher(private val context: Context) {
     private var published: String? = null
 
-    suspend fun publish(gateway: String?, target: CallTarget?, picture: ByteArray?) {
+    suspend fun publish(gateway: String?, target: CallTarget?, picture: ByteArray?,
+        pictureKnown: Boolean = picture != null || target?.profile == null) {
         val bitmap = target?.profile?.let { CallShortcut.pictureBitmap(context, picture) }
         val bytes = bitmap?.let {
             try { ByteArrayOutputStream().use { out -> it.compress(Bitmap.CompressFormat.PNG, 100, out); out.toByteArray() } }
@@ -27,6 +30,21 @@ internal class CallDisplayPublisher(private val context: Context) {
         }?.takeIf { it.size <= CallDisplay.MAX_IMAGE_BYTES }
         val identity = WearJson.encode(listOf(gateway.orEmpty(), target?.profile.orEmpty(), target?.sessionId.orEmpty()))
         val targetKey = MessageDigest.getInstance("SHA-256").digest(identity).joinToString("") { "%02x".format(it) }
+        if (target?.profile != null && bytes == null && (!pictureKnown || picture != null)) {
+            try {
+                // A restart or failed fetch must not replace this bot's retained artwork with "no avatar".
+                val node = Wearable.getNodeClient(context).localNode.await()
+                val uri = Uri.Builder().scheme("wear").authority(node.id).path(WearPaths.CALL_DISPLAY).build()
+                val item = Wearable.getDataClient(context).getDataItem(uri).await()
+                val saved = item?.let { DataMapItem.fromDataItem(it).dataMap }
+                val display = saved?.getString("display")?.let { WearJson.decode<CallDisplay>(it.encodeToByteArray()) }
+                if (display?.valid == true && display.targetKey == targetKey && display.hasPicture && saved.getAsset("image") != null) return
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                return // Leave the retained snapshot intact until a later refresh can resolve it.
+            }
+        }
         val digest = MessageDigest.getInstance("SHA-256")
         digest.update(WearJson.encode(listOf(gateway.orEmpty(), target?.profile.orEmpty(), target?.sessionId.orEmpty(), target?.label ?: "New session")))
         bytes?.let(digest::update)

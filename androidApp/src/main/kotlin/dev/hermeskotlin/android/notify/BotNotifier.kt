@@ -107,15 +107,21 @@ class BotNotifier(
                     watchDisplay.publish(url, target, callPicture)
                 }
                 if (switching || state !is ConnectionState.Connected || target?.profile == null) return@collectLatest
+                var pictureKnown = callPicture != null
                 callPicture = try {
                     val bot = api.roster().bots.firstOrNull { it.name == target.profile }
-                    if (bot?.hasAvatar == true) api.avatar(bot.name) else null
+                    if (bot?.hasAvatar == true) {
+                        api.avatar(bot.name)?.also { pictureKnown = true } ?: callPicture
+                    } else {
+                        pictureKnown = true
+                        null
+                    }
                 } catch (e: CancellationException) {
                     throw e
                 } catch (_: Exception) { callPicture }
                 withContext(Dispatchers.IO) {
                     BotShortcuts.publishCall(context, callPicture)
-                    watchDisplay.publish(url, target, callPicture)
+                    watchDisplay.publish(url, target, callPicture, pictureKnown)
                 }
             }
         }
