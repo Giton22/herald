@@ -21,6 +21,7 @@ internal object CallShortcut {
 
     fun info(context: Context, picture: ByteArray? = null): ShortcutInfoCompat =
         ShortcutInfoCompat.Builder(context, ID)
+            .apply { context.packageManager.getLaunchIntentForPackage(context.packageName)?.component?.let(::setActivity) }
             .setShortLabel(context.getString(R.string.shortcut_voice_chat))
             .setIcon(icon(context, picture))
             .setIntent(Intent(Intent.ACTION_VIEW, "hermes://voice-chat".toUri(), context, HeraldActivity::class.java)
