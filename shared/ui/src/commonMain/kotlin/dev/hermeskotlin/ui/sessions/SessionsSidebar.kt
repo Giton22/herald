@@ -327,6 +327,17 @@ fun SessionsSidebar(
     var actionTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var renameTarget by remember { mutableStateOf<SessionSummary?>(null) }
     var deleteTarget by remember { mutableStateOf<SessionSummary?>(null) }
+    // Row swipes: Recent and search pin (right) and archive (left); Archived unarchives (right) and deletes
+    // (left), which asks first, as the actions sheet's Delete does.
+    val pinSwipe = { s: SessionSummary ->
+        if (s.pinned) SwipeAction("Unpin", Lucide.PinOff, SwipeKind.Pin) { viewModel.togglePinned(s) }
+        else SwipeAction("Pin", Lucide.Pin, SwipeKind.Pin) { viewModel.togglePinned(s) }
+    }
+    val archiveSwipe = { s: SessionSummary ->
+        if (s.archived) SwipeAction("Unarchive", Lucide.ArchiveRestore, SwipeKind.Archive) { viewModel.toggleArchived(s) }
+        else SwipeAction("Archive", Lucide.Archive, SwipeKind.Archive) { viewModel.toggleArchived(s) }
+    }
+    val deleteSwipe = { s: SessionSummary -> SwipeAction("Delete", Lucide.Trash2, SwipeKind.Delete) { deleteTarget = s } }
     var projectActions by remember { mutableStateOf<Project?>(null) }
     var renameProject by remember { mutableStateOf<Project?>(null) }
     var deleteProject by remember { mutableStateOf<Project?>(null) }
@@ -572,13 +583,22 @@ fun SessionsSidebar(
                     searchResults != null -> when {
                         state.searching && searchResults.isEmpty() -> CenteredSpinner()
                         searchResults.isEmpty() -> EmptyState(Lucide.SearchX, "No matches", "Search looks at titles, session ids and message text.")
-                        else -> SessionList(searchResults, selectedId, open, rowActions, showSnippets = true, statuses = statuses, drafts = drafts)
+                        else -> SessionList(
+                            searchResults, selectedId, open, rowActions,
+                            swipeRight = pinSwipe,
+                            swipeLeft = archiveSwipe,
+                            showSnippets = true,
+                            statuses = statuses,
+                            drafts = drafts,
+                        )
                     }
                     state.filter == SessionListFilter.Recent -> SessionList(
                         sessions = sections.others.filter { attentionFilter.keeps(statuses[it.id]) },
                         selectedId = selectedId,
                         onOpen = open,
                         onActions = rowActions,
+                        swipeRight = pinSwipe,
+                        swipeLeft = archiveSwipe,
                         threads = shownThreads,
                         onOpenThread = { open(it.session) },
                         onThreadActions = { threadActions = it },
@@ -672,6 +692,8 @@ fun SessionsSidebar(
                         selectedId = selectedId,
                         onOpen = open,
                         onActions = rowActions,
+                        swipeRight = archiveSwipe,
+                        swipeLeft = deleteSwipe,
                         canLoadMore = state.canLoadMore,
                         loadingMore = state.loadingMore,
                         onLoadMore = viewModel::loadMore,
@@ -1312,6 +1334,10 @@ private fun SessionList(
     selectedId: String?,
     onOpen: (SessionSummary) -> Unit,
     onActions: (SessionSummary) -> Unit,
+    /** What a right swipe on a chat's row does; null, the row doesn't swipe right. */
+    swipeRight: (SessionSummary) -> SwipeAction? = { null },
+    /** What a left swipe on a chat's row does; null, the row doesn't swipe left. */
+    swipeLeft: (SessionSummary) -> SwipeAction? = { null },
     showSnippets: Boolean = false,
     canLoadMore: Boolean = false,
     loadingMore: Boolean = false,
@@ -1365,17 +1391,24 @@ private fun SessionList(
         // Pinned chats stay on top, marked with a pin.
         val (pinned, rest) = sessions.partition { it.pinned }
         val row: @Composable (SessionSummary) -> Unit = { session ->
-            SessionRow(
-                session,
-                selected = session.id == selectedId,
-                showSnippet = showSnippets,
-                status = statuses[session.id],
-                draft = session.id in drafts,
-                // Pinned chats sit apart from their project's others, so their row names it.
-                projectLabel = if (sectioned && session.pinned) projectIndex.labelFor(session, shownProject) else null,
-                onClick = { onOpen(session) },
-                onActions = { onActions(session) },
-            )
+            SwipeRow(
+                start = swipeRight(session),
+                end = swipeLeft(session),
+                shape = RoundedCornerShape(Theme[radii][radiusMedium]),
+            ) { swipeActions ->
+                SessionRow(
+                    session,
+                    selected = session.id == selectedId,
+                    showSnippet = showSnippets,
+                    status = statuses[session.id],
+                    draft = session.id in drafts,
+                    // Pinned chats sit apart from their project's others, so their row names it.
+                    projectLabel = if (sectioned && session.pinned) projectIndex.labelFor(session, shownProject) else null,
+                    onClick = { onOpen(session) },
+                    onActions = { onActions(session) },
+                    modifier = swipeActions,
+                )
+            }
         }
         if (sectioned) {
             if (threads.isNotEmpty()) {
@@ -1745,6 +1778,8 @@ internal fun SessionRow(
     thread: Boolean = false,
     onClick: () -> Unit,
     onActions: () -> Unit,
+    /** Goes on the row's clickable node, as [SwipeRow]'s screen-reader actions must. */
+    modifier: Modifier = Modifier,
 ) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
     val tone = rowTone(status, draft)
@@ -1758,7 +1793,7 @@ internal fun SessionRow(
         },
     ]
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
             .clip(shape)
