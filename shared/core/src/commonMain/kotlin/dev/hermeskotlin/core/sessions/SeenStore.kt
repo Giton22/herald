@@ -23,9 +23,11 @@ data class SeenChats(val since: Double, val chats: Map<String, Double> = emptyMa
 
     /**
      * A chat with activity after the user last looked at it. `is_active` can't rule a reply out: the
-     * gateway keeps it set while the session stays loaded, well after the turn ends.
+     * gateway keeps it set while the session stays loaded, well after the turn ends. A chat from a messaging
+     * platform never is: its replies went to that platform and were read there, as Desktop has it.
      */
     fun isUnread(session: SessionSummary): Boolean {
+        if (isMessagingSource(session.source)) return false
         val activity = session.activityAt ?: return false
         return activity > (chats[session.id] ?: since) + SEEN_SLACK_SECONDS
     }

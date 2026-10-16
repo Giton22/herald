@@ -90,6 +90,18 @@ const val CRON_SOURCE = "cron"
 val MACHINE_SOURCES = listOf("acp", CRON_SOURCE, "kanban", "oneshot", "subagent", "tool")
 
 /**
+ * Sources of chats that come in through a messaging platform (matches Desktop's MESSAGING_SESSION_SOURCE_IDS in
+ * apps/desktop/src/lib/session-source.ts). Their replies are delivered on that platform, where the user reads them.
+ */
+val MESSAGING_SOURCES = setOf(
+    "telegram", "discord", "slack", "mattermost", "matrix", "signal", "whatsapp", "bluebubbles", "photon",
+    "homeassistant", "email", "sms", "webhook", "api_server", "weixin", "wecom", "qqbot", "yuanbao", "dingtalk", "feishu",
+)
+
+/** Whether [source] is a messaging platform's ([MESSAGING_SOURCES]); the gateway's ids are lowercase, but be lenient. */
+fun isMessagingSource(source: String?): Boolean = source?.trim()?.lowercase() in MESSAGING_SOURCES
+
+/**
  * The list views. Like Hermes Desktop, Recent leaves out machine-originated runs (cron, oneshot,
  * subagent, etc.) which would otherwise push real conversations off the first page. They stay
  * reachable through search, and cron runs also through their job (`CronApi.runs`).

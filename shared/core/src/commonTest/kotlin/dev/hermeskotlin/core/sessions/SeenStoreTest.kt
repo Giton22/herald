@@ -47,6 +47,17 @@ class SeenStoreTest {
     }
 
     @Test
+    fun aChatFromAMessagingPlatformIsReadThereNotHere() = runTest {
+        val seen = SeenStore(InMemoryKeyValueStore()) { clock }.seen(home).first()
+        val telegram = SessionSummary("tg", source = "telegram", lastActive = 1_100.0)
+
+        assertFalse(seen.isUnread(telegram))
+        assertNull(seen.readUpTo(telegram))
+        // A chat held in the app still gets its reply marked.
+        assertTrue(seen.isUnread(SessionSummary("app", source = "desktop", lastActive = 1_100.0)))
+    }
+
+    @Test
     fun aChatTheGatewayStillCallsActiveCanHaveAnUnreadReply() = runTest {
         val seen = SeenStore(InMemoryKeyValueStore()) { clock }.seen(home).first()
 
