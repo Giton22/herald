@@ -195,10 +195,15 @@ class SessionsViewModel(
         _attentionFilter.value = filter
     }
 
-    /** The user has looked at [session] as it is now: its reply is read. */
+    /**
+     * The user has looked at [session] as it is now: its reply is read. A chat the gateway holds as unread is
+     * marked read there too, as Desktop does on opening one, so its other clients clear it as well.
+     */
     fun markSeen(session: SessionSummary) {
         val (url, profile) = bound.value ?: return
         viewModelScope.launch { seenStore.markSeen(url, session, profile) }
+        // Best effort: a failed write leaves the gateway's flag, which this phone's last look already outranks.
+        if (session.unread) viewModelScope.launch { api.setUnread(url, session.id, unread = false, profile = profile) }
     }
 
     private val _user = MutableStateFlow<AuthUser?>(null)

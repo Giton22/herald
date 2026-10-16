@@ -83,6 +83,25 @@ class SessionsApiTest {
     }
 
     @Test
+    fun theGatewaysReadStateIsReadAndWritten() = runTest {
+        var body: String? = null
+        val api = api { request ->
+            if (request.method == HttpMethod.Patch) {
+                body = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                respond("""{"ok":true}""", HttpStatusCode.OK, json)
+            } else {
+                respond("""{"sessions":[{"id":"tg","source":"telegram","unread":true},{"id":"old","unread":0},{"id":"none"}]}""", HttpStatusCode.OK, json)
+            }
+        }
+
+        val rows = assertIs<ApiResult.Success<SessionPage>>(api.list(url)).value.sessions
+        assertIs<ApiResult.Success<Unit>>(api.setUnread(url, "tg", unread = false))
+
+        assertEquals(listOf(true, false, false), rows.map { it.unread })
+        assertEquals("""{"unread":false}""", body)
+    }
+
+    @Test
     fun renameClashSurfacesServerMessage() = runTest {
         val api = api { respond("""{"detail":"Title already in use"}""", HttpStatusCode.BadRequest, json) }
 

@@ -19,15 +19,25 @@ import kotlinx.serialization.Serializable
  * first launch doesn't mark the whole history unread.
  */
 @Serializable
-data class SeenChats(val since: Double, val chats: Map<String, Double> = emptyMap()) {
+data class SeenChats(
+    val since: Double,
+    val chats: Map<String, Double> = emptyMap(),
+    /** Chats the user left on this phone while a turn still ran in them, until they look at them again. */
+    val leftRunning: Set<String> = emptySet(),
+) {
 
     /**
      * A chat with activity after the user last looked at it. `is_active` can't rule a reply out: the
      * gateway keeps it set while the session stays loaded, well after the turn ends.
+     *
+     * A chat from outside the gateway's clients ([isExternalSource]: Telegram, Discord, a plugin's bridge) is read
+     * where it came in, so as in Hermes Desktop its activity alone doesn't count: only the gateway's read state
+     * ([SessionSummary.unread]) or a turn the user left running here does.
      */
     fun isUnread(session: SessionSummary): Boolean {
         val activity = session.activityAt ?: return false
-        return activity > (chats[session.id] ?: since) + SEEN_SLACK_SECONDS
+        if (activity <= lastLook(session.id) + SEEN_SLACK_SECONDS) return false
+        return !isExternalSource(session.source) || session.unread || session.id in leftRunning
     }
 
     /**
@@ -69,17 +79,19 @@ class SeenStore(private val store: KeyValueStore, private val now: () -> Double)
 
     /**
      * Records that the user had the chat [sessionId] open with everything up to [at] (epoch seconds) in it,
-     * e.g. when they leave the app on it. Never moves a last look back.
+     * e.g. when they leave the app on it, and whether a turn was [running] in it then. Never moves a last look back.
      */
-    suspend fun markLooked(gateway: GatewayUrl, sessionId: String, at: Double, profile: String? = null) {
+    suspend fun markLooked(gateway: GatewayUrl, sessionId: String, at: Double, profile: String? = null, running: Boolean = false) {
         val key = key(gateway, profile)
         mutex.withLock {
             val current = scopeLocked(key)
-            if ((current.chats[sessionId] ?: Double.MIN_VALUE) >= at) return
+            val leftRunning = if (running) current.leftRunning + sessionId else current.leftRunning - sessionId
+            val newer = (current.chats[sessionId] ?: Double.MIN_VALUE) < at
+            if (!newer && leftRunning == current.leftRunning) return
             // The oldest entries go first; anything dropped counts as read up to `since`, which is fine.
-            val chats = (current.chats + (sessionId to at)).entries.sortedByDescending { it.value }
+            val chats = if (!newer) current.chats else (current.chats + (sessionId to at)).entries.sortedByDescending { it.value }
                 .take(MAX_REMEMBERED).associate { it.key to it.value }
-            val next = current.copy(chats = chats)
+            val next = current.copy(chats = chats, leftRunning = leftRunning.filterTo(mutableSetOf()) { it in chats })
             store.put(key, HermesJson.encodeToString(SeenChats.serializer(), next))
             loaded.update { it + (key to next) }
         }
