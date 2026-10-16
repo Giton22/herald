@@ -35,6 +35,11 @@ data class SessionSummary(
     @SerialName("_lineage_ids") val lineageIds: List<String>? = null,
     /** The folder the chat runs in, when it has one. */
     val cwd: String? = null,
+    /**
+     * The gateway's read state (`last_read_at` against `last_active`, `SessionDB.session_unread`): set when a client
+     * marked the chat unread, or it had activity after a client last marked it read. False from a gateway without it.
+     */
+    @Serializable(with = LenientBooleanSerializer::class) val unread: Boolean = false,
 ) {
     /** What a list shows as the name: the title, else the first prompt, else a placeholder. */
     val displayTitle: String
@@ -88,6 +93,18 @@ const val CRON_SOURCE = "cron"
 
 /** Machine-originated session sources that Recent hides (matches Desktop's SIDEBAR_EXCLUDED_SOURCES). */
 val MACHINE_SOURCES = listOf("acp", CRON_SOURCE, "kanban", "oneshot", "subagent", "tool")
+
+/** Sources of chats held in the gateway's own clients, Herald's (`desktop`) among them (Desktop's LOCAL_SESSION_SOURCE_IDS). */
+val LOCAL_SOURCES = setOf("acp", "cli", "codex", "desktop", "gateway", "kanban", "local", "oneshot", "tui")
+
+/**
+ * Whether [source] is outside the gateway's own clients: a messaging platform (Telegram, Discord, …), the API server,
+ * a webhook or a plugin's bridge. Any source that isn't local or a machine's counts, so a bridge with an id of its own does too.
+ */
+fun isExternalSource(source: String?): Boolean {
+    val id = source?.trim()?.lowercase().orEmpty()
+    return id.isNotEmpty() && id != "unknown" && id !in LOCAL_SOURCES && id !in MACHINE_SOURCES
+}
 
 /**
  * The list views. Like Hermes Desktop, Recent leaves out machine-originated runs (cron, oneshot,

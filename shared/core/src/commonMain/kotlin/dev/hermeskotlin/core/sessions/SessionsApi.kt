@@ -21,6 +21,7 @@ private data class SessionPatch(
     val title: String? = null,
     val archived: Boolean? = null,
     val pinned: Boolean? = null,
+    val unread: Boolean? = null,
     val profile: String? = null,
 )
 
@@ -102,6 +103,10 @@ class SessionsApi(private val client: HttpClient) {
 
     suspend fun setArchived(url: GatewayUrl, sessionId: String, archived: Boolean, profile: String? = null): ApiResult<Unit> =
         patch(url, sessionId, SessionPatch(archived = archived, profile = profile))
+
+    /** Sets the gateway's read state (`last_read_at`), which every client shares; the chat's lineage follows. */
+    suspend fun setUnread(url: GatewayUrl, sessionId: String, unread: Boolean, profile: String? = null): ApiResult<Unit> =
+        patch(url, sessionId, SessionPatch(unread = unread, profile = profile))
 
     /**
      * Changes several of a chat's fields in one call; null leaves a field as it is. The gateway sets the title
