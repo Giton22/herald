@@ -87,6 +87,8 @@ data class AppSettings(
     /** Show the profile's pet (when the gateway has one on) above the composer. */
     val showPet: Boolean = true,
     val voicePause: VoicePause = VoicePause.Normal,
+    /** Default call destination per saved gateway; absence starts a new conversation in its selected profile. */
+    val callTargets: Map<String, CallTarget> = emptyMap(),
     /** The mic for dictation in the composer and on an empty chat. Off, it goes, and the model name gets the room. */
     val dictation: Boolean = true,
     val dictationEngine: DictationEngine = DictationEngine.Device,

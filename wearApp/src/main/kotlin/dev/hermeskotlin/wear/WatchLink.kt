@@ -13,6 +13,7 @@ import dev.hermeskotlin.wearlink.CallPhase
 import dev.hermeskotlin.wearlink.CallStart
 import dev.hermeskotlin.wearlink.CallUpdate
 import dev.hermeskotlin.wearlink.ChatList
+import dev.hermeskotlin.wearlink.ChatListRequest
 import dev.hermeskotlin.wearlink.PhoneStatus
 import dev.hermeskotlin.wearlink.PhoneStatusRequest
 import dev.hermeskotlin.wearlink.RecordedAsk
@@ -20,11 +21,17 @@ import dev.hermeskotlin.wearlink.ReplyPhase
 import dev.hermeskotlin.wearlink.ReplySpeech
 import dev.hermeskotlin.wearlink.ReplyUpdate
 import dev.hermeskotlin.wearlink.WatchAsk
+import dev.hermeskotlin.wearlink.WatchScope
 import dev.hermeskotlin.wearlink.WatchChat
+import dev.hermeskotlin.wearlink.WatchBot
 import dev.hermeskotlin.wearlink.WatchStop
 import dev.hermeskotlin.wearlink.WearCapabilities
 import dev.hermeskotlin.wearlink.WearJson
 import dev.hermeskotlin.wearlink.WearPaths
+import dev.hermeskotlin.wearlink.DefaultCallTarget
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -132,6 +139,7 @@ class WatchLink(
     val phone: StateFlow<PhoneState> = _phone.asStateFlow()
 
     private val _liveVoice = MutableStateFlow(false)
+    @Volatile private var botChats = false
 
     /** The phone's gateway talks live, so the watch can hold a voice call instead of sending what it heard. */
     val liveVoice: StateFlow<Boolean> = _liveVoice.asStateFlow()
@@ -149,6 +157,50 @@ class WatchLink(
     private var callSendGap: Job? = null
 
     private var watchdog: Job? = null
+    private var askJob: Job? = null
+    private val _profileReset = MutableStateFlow(0L)
+    val profileReset: StateFlow<Long> = _profileReset.asStateFlow()
+    @Volatile private var phoneNode: String? = store.phoneNode
+    private var statusRequest: Pair<String, CompletableDeferred<Boolean>>? = null
+    private var latestStatus: String? = null
+    private var listRequest: String? = null
+    private var profileChecked = false
+    private var profileSync = false
+
+    /** Checks the phone's browsing profile before the watch uses its remembered selection. */
+    suspend fun synchronizeProfile(): Boolean = withContext(main) {
+        statusRequest?.let { return@withContext it.second.await() }
+        val id = UUID.randomUUID().toString()
+        val waiting = CompletableDeferred<Boolean>()
+        statusRequest = id to waiting
+        latestStatus = id
+        profileChecked = false
+        try {
+            val chat = store.chat.value
+            if (send(WearPaths.STATUS, WearJson.encode(PhoneStatusRequest(chat.botProfile, id, chat.scope, store.accent.value?.revision))) { statusRequest?.first == id } != null) {
+                _chats.value = null
+                return@withContext false
+            }
+            withTimeoutOrNull(20_000) { waiting.await() } ?: false.also { _phone.value = PhoneState.NoHerald; _chats.value = null }
+        } finally {
+            if (statusRequest?.first == id) { waiting.complete(false); statusRequest = null }
+        }
+    }
+
+    private fun resetProfile(next: WatchScope?) {
+        stop()
+        endCall()
+        dismissCall()
+        watchdog?.cancel()
+        _turn.value = null
+        _liveVoice.value = false
+        _chats.value = null
+        listRequest = null
+        store.setChat(null, null, scope = next)
+        store.phoneScope = next
+        store.phoneNode = phoneNode
+        _profileReset.value++
+    }
 
     /** The ask whose voice was stopped here: its clips still arriving are dropped. */
     @Volatile private var silenced: String? = null
@@ -159,10 +211,18 @@ class WatchLink(
         dismissCall()
         val id = UUID.randomUUID().toString()
         val chat = store.chat.value
-        val ask = WatchAsk(id, text.orEmpty().trim(), chat.id, speak = store.speak.value && speech.canPlay(), audioType = audioType)
+        val ask = WatchAsk(id, text.orEmpty().trim(), chat.id, speak = store.speak.value && speech.canPlay(), audioType = audioType, botProfile = chat.botProfile, scope = chat.scope)
         _turn.value = WatchTurn(id, text?.trim(), ReplyUpdate(id, if (audio != null) ReplyPhase.Transcribing else ReplyPhase.Sending, chatId = chat.id, title = chat.title))
-        scope.launch {
-            val sent = if (audio != null) stream(WearPaths.recordingPath(id), RecordedAsk.write(ask, audio)) else send(WearPaths.ASK, WearJson.encode(ask))
+        if (chat.botProfile != null && !botChats) return fail(id, "Update Herald on your phone to talk to bots.")
+        val generation = _profileReset.value
+        askJob?.cancel()
+        askJob = scope.launch(main) {
+            if (!synchronizeProfile()) return@launch fail(id, NOT_CONNECTED)
+            if (generation != _profileReset.value || _turn.value?.askId != id) return@launch
+            if (chat.scope != null && !profileSync) return@launch fail(id, UPDATE_PROFILE)
+            val bot = chat.botProfile != null
+            val sent = if (audio != null) stream(WearPaths.recordingPath(id, bot), RecordedAsk.write(ask, audio)) { generation == _profileReset.value && profileChecked && _turn.value?.askId == id }
+                else send(if (bot) WearPaths.BOT_ASK else WearPaths.ASK, WearJson.encode(ask)) { generation == _profileReset.value && profileChecked && _turn.value?.askId == id }
             if (sent != null) fail(id, sent)
         }
         watchdog?.cancel()
@@ -178,6 +238,7 @@ class WatchLink(
 
     /** Stops the running turn, and the voice reading a reply. */
     fun stop() {
+        askJob?.cancel()
         quiet()
         val now = _turn.value ?: return
         if (!now.running) return
@@ -202,7 +263,41 @@ class WatchLink(
      * Starts a live voice call in the chat: the watch makes the WebRTC call, the phone gets the voice model's
      * answer and runs the conversation. Needs the microphone permission.
      */
-    fun startCall() {
+    private var defaultRequest: Pair<String, CompletableDeferred<DefaultCallTarget>>? = null
+    private var resolvedDefault: String? = null
+
+    suspend fun resolveDefaultCall(): DefaultCallTarget {
+        if (!synchronizeProfile()) return DefaultCallTarget("", error = NOT_CONNECTED)
+        if (!profileSync) return DefaultCallTarget("", error = UPDATE_PROFILE)
+        endCall()
+        dismissCall()
+        val id = UUID.randomUUID().toString()
+        val waiting = CompletableDeferred<DefaultCallTarget>()
+        defaultRequest = id to waiting
+        return try {
+            send(WearPaths.DEFAULT_CALL, WearJson.encode(id))?.let { return DefaultCallTarget(id, error = it) }
+            val result = withTimeout(20_000) { waiting.await() }
+            val owner = result.scope
+            if (result.error == null && (owner == null || owner.gateway != store.phoneScope?.gateway || result.botProfile != null && owner.profile != result.botProfile)) {
+                return DefaultCallTarget(id, error = "Call target changed. Tap Call again.")
+            }
+            if (result.error == null) {
+                store.setChat(result.chatId, result.title, result.botProfile, result.scope)
+                resolvedDefault = id
+            }
+            result
+        } finally {
+            if (defaultRequest?.first == id) defaultRequest = null
+        }
+    }
+
+    private fun cancelDefault() {
+        defaultRequest?.second?.cancel()
+        defaultRequest = null
+        resolvedDefault = null
+    }
+
+    fun startCall(defaultRequestId: String? = null) {
         if (_call.value?.active == true) return
         quiet()
         val id = UUID.randomUUID().toString()
@@ -211,12 +306,21 @@ class WatchLink(
         callSends = InOrder { batch -> watchCall?.let { call -> batch.events.forEach(call::send) } }
         _turn.value = null
         _call.value = WatchCallState(id, CallStage.Starting)
+        val chat = store.chat.value
+        if (defaultRequestId != null && resolvedDefault != defaultRequestId) return finishCall(id, "Default Call Target changed. Tap Call again.")
+        if (defaultRequestId == null && chat.botProfile != null && !botChats) return finishCall(id, "Update Herald on your phone to call bots.")
+        val generation = _profileReset.value
         callJob = scope.launch(main) {
+            if (!synchronizeProfile()) return@launch finishCall(id, NOT_CONNECTED)
+            if (generation != _profileReset.value || _call.value?.id != id) return@launch
+            if (chat.scope != null && !profileSync) return@launch finishCall(id, UPDATE_PROFILE)
             val call = WatchCall(context)
             watchCall = call
             try {
                 val offer = call.offer()
-                send(WearPaths.CALL_START, WearJson.encode(CallStart(id, store.chat.value.id, offer)))?.let { return@launch finishCall(id, it) }
+                if (generation != _profileReset.value || _call.value?.id != id) return@launch
+                send(if (defaultRequestId != null) WearPaths.DEFAULT_CALL_START else if (chat.botProfile == null) WearPaths.CALL_START else WearPaths.BOT_CALL_START,
+                    WearJson.encode(CallStart(id, chat.id, offer, chat.botProfile, defaultRequestId, chat.scope))) { generation == _profileReset.value && profileChecked && _call.value?.id == id }?.let { return@launch finishCall(id, it) }
                 _call.update { if (it?.id == id && it.stage == CallStage.Starting) it.copy(stage = CallStage.Connecting) else it }
                 launch {
                     delay(ANSWER_WITHIN_MS)
@@ -256,6 +360,7 @@ class WatchLink(
 
     /** Hangs up. */
     fun endCall() {
+        cancelDefault()
         val now = _call.value?.takeIf { it.active } ?: return
         scope.launch { send(WearPaths.CALL_END, WearJson.encode(CallEnd(now.id))) }
         finishCall(now.id, null)
@@ -306,7 +411,7 @@ class WatchLink(
         if (update.callId != now.id || !now.active || update.seq <= callUpdateSeq) return
         callUpdateSeq = update.seq
         _phone.value = PhoneState.Ready
-        update.chatId?.let { store.adoptChat(it, update.title ?: store.chat.value.title) }
+        update.chatId?.let { store.adoptChat(it, update.title ?: store.chat.value.title, update.scope) }
         store.setStats(update.model, update.contextPercent)
         if (update.phase == CallPhase.Ended) {
             finishCall(now.id, update.error)
@@ -351,64 +456,129 @@ class WatchLink(
     }
 
     fun newChat() {
+        cancelDefault()
         speech.stop()
         // A call talks in its chat: another one hangs it up.
         endCall()
         dismissCall()
-        store.setChat(null, null)
+        store.setChat(null, null, scope = store.phoneScope.takeIf { profileSync && profileChecked })
+        _liveVoice.value = false
+        refreshPhone()
         _turn.value = null
     }
 
     fun pickChat(chat: WatchChat) {
+        cancelDefault()
         speech.stop()
-        if (chat.id != store.chat.value.id) endCall()
+        if (chat.id != store.chat.value.id || store.chat.value.botProfile != null || _chats.value?.scope != store.chat.value.scope) endCall()
         dismissCall()
-        store.setChat(chat.id, chat.title)
+        store.setChat(chat.id, chat.title, scope = _chats.value?.scope)
+        _liveVoice.value = false
+        refreshPhone()
+        _turn.value = null
+    }
+
+    fun pickBot(bot: WatchBot) {
+        cancelDefault()
+        speech.stop()
+        if (bot.profile != store.chat.value.botProfile || _chats.value?.scope?.copy(profile = bot.profile) != store.chat.value.scope) endCall()
+        dismissCall()
+        store.setChat(null, bot.title, bot.profile, _chats.value?.scope?.copy(profile = bot.profile))
+        _liveVoice.value = false
+        refreshPhone()
         _turn.value = null
     }
 
     fun refreshChats() {
-        scope.launch {
-            send(WearPaths.CHATS, ByteArray(0))?.let { _chats.value = ChatList(error = it) }
+        scope.launch(main) {
+            if (!profileChecked && !synchronizeProfile()) {
+                _chats.value = ChatList(error = NOT_CONNECTED, botError = NOT_CONNECTED)
+                return@launch
+            }
+            val id = UUID.randomUUID().toString()
+            listRequest = id
+            send(WearPaths.CHATS, WearJson.encode(ChatListRequest(id))) { profileChecked && listRequest == id }?.let {
+                if (listRequest == id) _chats.value = ChatList(error = it, botError = it)
+            }
         }
     }
 
     fun refreshPhone() {
-        scope.launch { send(WearPaths.STATUS, WearJson.encode(PhoneStatusRequest(accentRevision = store.accent.value?.revision))) }
+        scope.launch(main) { synchronizeProfile() }
     }
 
-    /** A message from the phone, from [WatchListenerService] or the fake phone. */
-    fun onMessage(path: String, data: ByteArray) {
-        when (path) {
-            WearPaths.REPLY -> WearJson.decode<ReplyUpdate>(data)?.let(::onReply)
-            WearPaths.CHATS -> WearJson.decode<ChatList>(data)?.let { _chats.value = it }
-            WearPaths.CALL_UPDATE -> WearJson.decode<CallUpdate>(data)?.let { scope.launch(main) { onCallUpdate(it) } }
-            WearPaths.CALL_SEND -> WearJson.decode<CallEvents>(data)?.let { scope.launch(main) { onCallSend(it) } }
-            WearPaths.STATUS -> WearJson.decode<PhoneStatus>(data)?.let {
-                // The tile draws its mic in the accent too.
-                if (it.accent?.let(store::setAccent) == true) TileService.getUpdater(context).requestUpdate(AskTileService::class.java)
-                it.liveVoice?.let { live -> _liveVoice.value = live }
-                _phone.value = when {
-                    !it.signedIn -> PhoneState.SignedOut
-                    it.connected -> PhoneState.Ready
-                    it.failed -> PhoneState.Unreachable
-                    else -> PhoneState.Reconnecting
+    /** A message from the selected phone, or the debug fake phone. */
+    fun onMessage(path: String, data: ByteArray, sourceNode: String? = null) {
+        scope.launch(main) {
+            if (sourceNode != null && sourceNode != phoneNode) return@launch
+            when (path) {
+                WearPaths.PROFILE_CHANGED -> {
+                    profileChecked = false
+                    statusRequest?.second?.complete(false)
+                    statusRequest = null
+                    synchronizeProfile()
+                }
+                WearPaths.DEFAULT_CALL -> WearJson.decode<DefaultCallTarget>(data)?.let { target ->
+                    defaultRequest?.takeIf { it.first == target.requestId }?.second?.complete(target)
+                }
+                WearPaths.REPLY -> WearJson.decode<ReplyUpdate>(data)?.let(::onReply)
+                WearPaths.CHATS -> WearJson.decode<ChatList>(data)?.let {
+                    if (!profileChecked) return@let
+                    if (profileSync) {
+                        if (it.requestId != listRequest) return@let
+                        if (it.scope != store.phoneScope) {
+                            if (it.scope == null && (it.error != null || it.botError != null)) {
+                                _chats.value = it.copy(chats = emptyList(), bots = emptyList())
+                            }
+                            refreshPhone()
+                        } else _chats.value = it
+                    } else if (it.requestId == null || it.requestId == listRequest) _chats.value = it
+                }
+                WearPaths.CALL_UPDATE -> WearJson.decode<CallUpdate>(data)?.let(::onCallUpdate)
+                WearPaths.CALL_SEND -> WearJson.decode<CallEvents>(data)?.let(::onCallSend)
+                WearPaths.STATUS -> WearJson.decode<PhoneStatus>(data)?.let { status ->
+                    if (status.accent?.let(store::setAccent) == true) TileService.getUpdater(context).requestUpdate(AskTileService::class.java)
+                    val pending = statusRequest
+                    if (status.requestId != latestStatus && (status.profileSync || status.requestId != null)) return@let
+                    if (pending == null && (!profileChecked || status.activeScope != store.phoneScope)) return@let
+                    profileSync = status.profileSync
+                    val valid = status.signedIn && (!profileSync || status.activeScope != null)
+                    if (valid && (store.phoneNode != phoneNode || store.phoneScope != status.activeScope)) resetProfile(status.activeScope)
+                    else if (!valid && (store.phoneScope != null || store.chat.value.id != null || store.chat.value.botProfile != null || store.chat.value.scope != null || _chats.value != null)) resetProfile(null)
+                    profileChecked = valid
+                    botChats = status.botChats
+                    if (status.botProfile == store.chat.value.botProfile && (store.chat.value.scope == null || status.scope == store.chat.value.scope)) status.liveVoice?.let { _liveVoice.value = it }
+                    _phone.value = when {
+                        !status.signedIn -> PhoneState.SignedOut
+                        status.connected -> PhoneState.Ready
+                        status.failed -> PhoneState.Unreachable
+                        else -> PhoneState.Reconnecting
+                    }
+                    pending?.second?.complete(valid)
+                    if (valid && _chats.value == null) refreshChats()
+                    if (valid && profileSync && store.chat.value.scope != null && status.scope != store.chat.value.scope) {
+                        // The reset replaced the conversation whose voice capability was checked.
+                        if (statusRequest?.first == status.requestId) statusRequest = null
+                        refreshPhone()
+                    }
                 }
             }
         }
     }
 
     /** A clip of the reply's voice. */
-    fun onSpeech(path: String, bytes: ByteArray) {
+    fun onSpeech(path: String, bytes: ByteArray, sourceNode: String? = null) {
+        if (sourceNode != null && sourceNode != phoneNode) return
         val clip = WearPaths.parseSpeech(path) ?: return
         val now = _turn.value ?: return
         if (clip.askId != now.askId || clip.askId == silenced || !store.speak.value) return
-        scope.launch(Dispatchers.Main) { speech.clip(clip.askId, clip.index, clip.count, clip.mimeType, bytes) }
+        scope.launch(main) {
+            if ((sourceNode == null || sourceNode == phoneNode) && _turn.value?.askId == clip.askId && clip.askId != silenced) speech.clip(clip.askId, clip.index, clip.count, clip.mimeType, bytes)
+        }
     }
 
     private fun onReply(update: ReplyUpdate) {
         var taken = false
-        // Atomic: this runs off the main thread, where an ask() in between must not be written over.
         _turn.update { now ->
             taken = false
             // Only the ask on screen, and never an older update over a newer one.
@@ -419,7 +589,7 @@ class WatchLink(
         }
         if (!taken) return
         _phone.value = PhoneState.Ready
-        update.chatId?.let { store.adoptChat(it, update.title ?: store.chat.value.title) }
+        update.chatId?.let { store.adoptChat(it, update.title ?: store.chat.value.title, update.scope) }
         store.setStats(update.model, update.contextPercent)
         if (update.phase == ReplyPhase.Done) {
             if (update.text.isNotBlank()) {
@@ -427,7 +597,7 @@ class WatchLink(
                 TileService.getUpdater(context).requestUpdate(AskTileService::class.java)
             }
             if (update.speech == ReplySpeech.Unavailable && update.askId != silenced && store.speak.value && update.text.isNotBlank()) {
-                scope.launch(Dispatchers.Main) { speech.say(update.askId, spokenText(update.text)) }
+                if (_turn.value?.askId == update.askId) speech.say(update.askId, spokenText(update.text))
             }
         }
     }
@@ -439,14 +609,15 @@ class WatchLink(
     }
 
     /** Sends a message to Herald on the phone; null when it went, else what to tell the person. */
-    private suspend fun send(path: String, data: ByteArray): String? = reach(path, data) { node ->
+    private suspend fun send(path: String, data: ByteArray, current: () -> Boolean = { true }): String? = reach(path, data, current) { node ->
         messages.sendMessage(node, path, data).await()
     }
 
-    private suspend fun stream(path: String, data: ByteArray): String? = reach(path, data) { node ->
+    private suspend fun stream(path: String, data: ByteArray, current: () -> Boolean = { true }): String? = reach(path, data, current) { node ->
         val channel = channels.openChannel(node, path).await()
         try {
             val output = channels.getOutputStream(channel).await()
+            if (!current()) return@reach
             withContext(Dispatchers.IO) { output.use { it.write(data) } }
         } finally {
             channels.close(channel)
@@ -454,15 +625,17 @@ class WatchLink(
     }
 
     /** Runs [block] with Herald's phone node; [path] and [data] go to the fake phone when it stands in. */
-    private suspend fun reach(path: String, data: ByteArray, block: suspend (String) -> Unit): String? {
+    private suspend fun reach(path: String, data: ByteArray, current: () -> Boolean = { true }, block: suspend (String) -> Unit): String? {
         return try {
             val phone = capabilities.getCapability(WearCapabilities.PHONE, CapabilityClient.FILTER_REACHABLE).await().nodes
             // A phone's capabilities can reach the watch minutes after Herald is installed or updated there: until
             // then the connected phone is tried anyway, and one without Herald never answers (ANSWER_WITHIN_MS).
             val connected = if (phone.isEmpty()) nodes.connectedNodes.await() else emptyList()
             val node = phone.firstOrNull { it.isNearby } ?: phone.firstOrNull() ?: connected.firstOrNull { it.isNearby } ?: connected.firstOrNull()
+            if (!current()) return "Phone profile changed. Try again."
             if (node == null) {
                 if (fake != null) {
+                    phoneNode = "debug-fake"
                     _phone.value = PhoneState.Ready
                     fake.receive(path, data)
                     return null
@@ -470,6 +643,9 @@ class WatchLink(
                 _phone.value = PhoneState.NotConnected
                 return NOT_CONNECTED
             }
+            if (path != WearPaths.STATUS && phoneNode != null && phoneNode != node.id) { profileChecked = false; return "Phone changed. Try again." }
+            phoneNode = node.id
+            HeraldWatch.of(context).callDisplay.bindPhone(node.id)
             block(node.id)
             null
         } catch (e: CancellationException) {
@@ -480,6 +656,7 @@ class WatchLink(
     }
 
     companion object {
+        private const val UPDATE_PROFILE = "Update Herald on your phone to use profile-aware calls."
         const val NOT_CONNECTED = "Your phone isn't connected."
         const val NO_HERALD = "Herald on your phone didn't answer. Open it there, or update it."
         private const val ANSWER_WITHIN_MS = 30_000L

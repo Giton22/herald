@@ -8,7 +8,7 @@ sealed interface AppLink {
     /** `hermes://new-chat-voice`: a new chat that starts dictating into its composer. */
     data object NewChatVoice : AppLink
 
-    /** `hermes://voice-chat`: a new chat that starts a voice conversation. */
+    /** `hermes://voice-chat`: calls the destination selected in Default Call Target. */
     data object VoiceChat : AppLink
 
     /** `hermes://session/<id>`: a stored chat. */
