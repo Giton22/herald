@@ -462,6 +462,14 @@ internal fun SettingsView(
                         onCheckedChange = { on -> onUpdate { it.copy(showPet = on) } },
                         icon = Lucide.Cat,
                     )
+                    Divider()
+                    SwitchRow(
+                        title = "Show link previews",
+                        detail = "A card for each web link in a finished reply. Herald opens the linked pages and their pictures itself, without your gateway's cookies.",
+                        checked = settings.showLinkPreviews,
+                        onCheckedChange = { on -> onUpdate { it.copy(showLinkPreviews = on) } },
+                        icon = Lucide.Globe,
+                    )
                 }
 
                 Section("Voice") {

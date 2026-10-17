@@ -30,6 +30,8 @@ kotlin {
         }
         androidMain.dependencies {
             implementation(libs.ktor.client.okhttp)
+            implementation(libs.jsoup)
+            implementation(libs.markdown.parser)
             implementation(libs.koin.android)
             implementation(libs.androidx.core.ktx)
             implementation(libs.webrtc.android)

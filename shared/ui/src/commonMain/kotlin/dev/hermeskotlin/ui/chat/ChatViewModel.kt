@@ -25,6 +25,8 @@ import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.media.GatewayFile
+import dev.hermeskotlin.core.media.LinkPreview
+import dev.hermeskotlin.core.media.LinkPreviews
 import dev.hermeskotlin.core.media.MediaApi
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.models.ModelCatalog
@@ -192,6 +194,7 @@ class ChatViewModel(
     private val seen: SeenStore? = null,
     /** The threads, so `/new` in a thread's chat starts the thread fresh instead of leaving it. */
     private val threads: ThreadsRepository? = null,
+    private val linkPreviews: LinkPreviews? = null,
 ) : ViewModel(), ChatActions {
 
     /** Dictation and voice chat for the open chat. */
@@ -645,6 +648,8 @@ class ChatViewModel(
     }
 
     private val mediaCache = mutableMapOf<String, ByteArray>()
+
+    override suspend fun loadLinkPreview(url: String): LinkPreview? = linkPreviews?.load(url)
 
     /**
      * The bytes behind a picture or file the chat shows: a gateway path (`@image:` in a stored prompt,

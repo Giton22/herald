@@ -132,6 +132,24 @@ class SettingsStoreTest {
     }
 
     @Test
+    fun linkPreviewsRequireOptInAndRememberTheChoice() = runTest {
+        assertEquals(false, AppSettings().showLinkPreviews)
+        val disk = InMemoryKeyValueStore().apply { put("settings.v1", """{"theme":"Dark"}""") }
+        val first = SettingsStore(disk, backgroundScope)
+        assertEquals(false, first.settings.filterNotNull().first().showLinkPreviews)
+
+        first.update { it.copy(showLinkPreviews = true) }
+        advanceUntilIdle()
+        val reopened = SettingsStore(disk, backgroundScope)
+        assertEquals(true, reopened.settings.filterNotNull().first().showLinkPreviews)
+        assertEquals(ThemeMode.Dark, reopened.settings.value?.theme)
+
+        reopened.update { it.copy(showLinkPreviews = false) }
+        advanceUntilIdle()
+        assertEquals(false, SettingsStore(disk, backgroundScope).settings.filterNotNull().first().showLinkPreviews)
+    }
+
+    @Test
     fun unreadableStoredSettingsFallBackToDefaults() = runTest {
         val disk = InMemoryKeyValueStore().apply { put("settings.v1", """{"theme":"Neon"}""") }
         assertEquals(AppSettings(), SettingsStore(disk, backgroundScope).settings.filterNotNull().first())

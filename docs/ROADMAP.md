@@ -109,6 +109,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Markdown rendering (GFM: lists, tables, links, code blocks with language label and copy button; copy whole reply); only web and mail links open
 - [x] Tables in replies size each column by its cells (a column of emoji or numbers stays slim, wordy ones share the rest and wrap, and only a table whose longest words don't fit scrolls sideways), with faint grid lines and every second row tinted
 - [x] Pictures from the web load only on a tap, without gateway cookies
+- [x] Optional webpage cards beneath completed replies (Settings → Chat → Show link previews, off by default): up to three unique links, with title, description and thumbnail when available; fetched without gateway cookies, never from loopback, LAN, link-local or tailnet addresses (checked again after DNS)
 - [x] Syntax highlighting in code blocks (Highlights, cached by content; light and dark palettes); long lines scroll sideways or wrap ("Wrap code lines" setting)
 - [x] TeX math: inline `$…$` / `\(…\)` and display `$$…$$` / `\[…\]` typeset with JLaTeXMath (display formulas centered and scrollable); prices like "$5 and $10" stay text, code is left alone, and a formula that won't parse shows its source
 - [x] A small time under each prompt and finished reply ("Message timestamps" setting): the stored row's time, or when this device sent or saw it finish

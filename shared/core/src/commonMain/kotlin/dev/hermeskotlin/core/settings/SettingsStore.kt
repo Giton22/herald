@@ -86,6 +86,8 @@ data class AppSettings(
     val wrapCode: Boolean = false,
     /** Show the profile's pet (when the gateway has one on) above the composer. */
     val showPet: Boolean = true,
+    /** Automatically fetch linked webpages and thumbnails; off until the user opts in. */
+    val showLinkPreviews: Boolean = false,
     val voicePause: VoicePause = VoicePause.Normal,
     /** The mic for dictation in the composer and on an empty chat. Off, it goes, and the model name gets the room. */
     val dictation: Boolean = true,

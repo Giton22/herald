@@ -113,7 +113,10 @@ connection one at a time and says what to fix.
 
 - Herald talks only to your gateway, with these exceptions, each under your control:
   - it asks GitHub whether a newer release exists (can be turned off in Settings);
-  - it loads a picture from the web only when you tap it;
+  - it loads pictures embedded in replies when you tap them;
+  - webpage previews automatically fetch up to three linked pages per completed reply and their
+    thumbnails, without gateway cookies and never from addresses on your own networks, only if you
+    allow it;
   - if you install the push plugin, notifications from outside your network go through ntfy,
     end-to-end encrypted and signed.
 - Your sign-in and the offline copy of your chats are encrypted with a key held in the Android
