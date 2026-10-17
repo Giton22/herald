@@ -293,8 +293,10 @@ internal fun unwrapCorrection(text: String): String = CORRECTION_FRAME.find(text
  * Stored rows → chat messages: tool results and system/hidden rows drop out, and consecutive
  * assistant rows (text and tool-call steps) merge into one reply listing every tool it used.
  * [liveSessionId] is the session the page was read from; prompts stored under an older one can't be cut at.
+ * [turnStartedAt]: when the running turn began (gateway clock). Its saved steps start a reply of their own even
+ * when its prompt doesn't show (hidden, a system note), since they are what its live reply repeats.
  */
-fun historyToMessages(rows: List<SessionMessage>, liveSessionId: String? = null): List<ChatMessage> {
+fun historyToMessages(rows: List<SessionMessage>, liveSessionId: String? = null, turnStartedAt: Double? = null): List<ChatMessage> {
     val messages = mutableListOf<ChatMessage>()
     // Each call's result is a later `tool` row carrying its id.
     val results = rows.filter { it.role == "tool" && it.toolCallId != null }.associateBy { it.toolCallId }
@@ -357,11 +359,14 @@ fun historyToMessages(rows: List<SessionMessage>, liveSessionId: String? = null)
                 row.storedToolCalls.filter { it.name == MESSAGE_AGENT_TOOL }.forEach { call ->
                     messageTarget(call.arguments)?.let { messagedSinceUser += it.lowercase() }
                 }
+                // A step of the running turn is saved before its calls end: one with no result row yet still runs.
+                val runningTurn = turnStartedAt != null && row.timestamp != null && row.timestamp >= turnStartedAt
                 val tools = row.storedToolCalls.mapIndexed { i, call ->
                     val result = call.id?.let(results::get)?.content
                     ToolActivity(
                         id = call.id ?: "$key-$i",
                         name = call.name,
+                        running = runningTurn && call.id != null && call.id !in results,
                         input = ToolDetails.input(call.arguments),
                         output = ToolDetails.output(result),
                         failed = ToolDetails.failed(result),
@@ -371,7 +376,11 @@ fun historyToMessages(rows: List<SessionMessage>, liveSessionId: String? = null)
                     )
                 }
                 val reasoning = row.reasoning.orEmpty()
-                val previous = messages.lastOrNull() as? ChatMessage.Assistant
+                val previous = (messages.lastOrNull() as? ChatMessage.Assistant)?.takeUnless { before ->
+                    val at = row.timestamp
+                    val ended = before.timestamp
+                    turnStartedAt != null && at != null && ended != null && at >= turnStartedAt && ended < turnStartedAt
+                }
                 if (previous != null) {
                     messages[messages.lastIndex] = previous.copy(
                         text = listOf(previous.text, text).filter { it.isNotEmpty() }.joinToString("\n\n"),

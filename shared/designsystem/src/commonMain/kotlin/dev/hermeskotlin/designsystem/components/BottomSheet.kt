@@ -21,6 +21,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
@@ -64,7 +65,7 @@ import dev.hermeskotlin.designsystem.typography
 
 /**
  * Modal sheet from the bottom edge, sized to its content. Controlled: show with [visible];
- * a drag-down, scrim tap or Back calls [onDismiss], which should set [visible] to false.
+ * a drag-down, scrim tap or Back calls [onDismiss] once the sheet has slid out, which should set [visible] to false.
  */
 @Composable
 fun BottomSheet(
@@ -72,35 +73,37 @@ fun BottomSheet(
     onDismiss: () -> Unit,
     content: @Composable ColumnScope.() -> Unit,
 ) {
-    val state = rememberModalBottomSheetState(initialDetent = SheetDetent.Hidden)
+    val stillVisible by rememberUpdatedState(visible)
+    val dismiss by rememberUpdatedState(onDismiss)
+    val rules = remember { SheetDismissRules() }
+    // A tap outside or Back only hides a sheet that has come to rest open, so a second tap on whatever opened it
+    // lands on the scrim and does nothing while the sheet is still sliding in. (A drag that catches the sheet
+    // mid-slide still closes it: the library falls back to Hidden when it is refused there.)
+    val state = rememberModalBottomSheetState(
+        initialDetent = SheetDetent.Hidden,
+        confirmDetentChange = { it != SheetDetent.Hidden || rules.mayHide(stillVisible) },
+    )
     LaunchedEffect(visible) {
         state.targetDetent = if (visible) SheetDetent.FullyExpanded else SheetDetent.Hidden
     }
-    // The sheet reports a dismiss once per showing and forgets that it did only when a new showing comes to rest,
-    // so a tap outside while it is still sliding in after an earlier dismiss hides it without calling onDismiss:
-    // [visible] stays true and the sheet can never be shown again. Taps outside wait until it has come to rest,
-    // and a sheet that ends up hidden while still meant to be visible reports the dismiss here.
-    val opened = state.isIdle && state.currentDetent != SheetDetent.Hidden
-    val stillVisible by rememberUpdatedState(visible)
-    val dismiss by rememberUpdatedState(onDismiss)
+    // The one place a dismiss is reported, whichever way the user closed the sheet. The library's own onDismiss
+    // is not used: it fires twice for a drag next to this, and not at all for some taps outside.
     LaunchedEffect(state) {
-        var shown = false
-        snapshotFlow { state.isIdle && state.currentDetent == SheetDetent.Hidden && state.targetDetent == SheetDetent.Hidden }
-            .collect { hidden ->
-                if (!hidden) {
-                    shown = true
-                } else if (shown) {
-                    shown = false
-                    if (stillVisible) dismiss()
-                }
-            }
+        snapshotFlow {
+            val hidden = state.currentDetent == SheetDetent.Hidden && state.targetDetent == SheetDetent.Hidden
+            state.isIdle to hidden
+        }.collect { (idle, hidden) ->
+            if (rules.onPosition(idle = idle, hidden = hidden, visible = stillVisible)) dismiss()
+        }
     }
     val shape = RoundedCornerShape(topStart = Theme[radii][radiusLarge], topEnd = Theme[radii][radiusLarge])
 
     UnstyledModalBottomSheet(
         state = state,
-        properties = ModalBottomSheetProperties(dismissOnClickOutside = opened),
-        onDismiss = onDismiss,
+        // Constant on purpose: the library adds or drops a pointer input as this value changes, so a value derived
+        // from the sheet's state rebuilt it mid-drag and every drag-down was cancelled. confirmDetentChange above
+        // holds back early taps instead.
+        properties = ModalBottomSheetProperties(dismissOnClickOutside = true),
         overlay = { Scrim(scrimColor = Color.Black.copy(alpha = 0.45f), enter = fadeIn(), exit = fadeOut()) },
     ) {
         // A sheet tall enough to reach the top stops under the status bar rather than running beneath it.
