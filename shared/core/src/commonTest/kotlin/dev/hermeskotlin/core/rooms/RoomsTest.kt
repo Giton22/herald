@@ -19,6 +19,15 @@ class RoomsTest {
         RoomEvent(roomId = "r1", seq = seq, eventId = "e:$seq", kind = kind, actor = actor, payload = payload, createdAt = 0.0)
 
     @Test
+    fun attachmentOnlyUserMessagesSurviveHistoryWithoutDisplayingStorageFields() {
+        val payload = kotlinx.serialization.json.Json.parseToJsonElement("""{"text":"","attachments":[{"attachment_id":"att_one","kind":"file","name":"report.csv","mime":"text/csv","size":3}]}""") as JsonObject
+        val line = roomLine(event(1, "message.user", payload), members) as RoomLine.Message
+        assertEquals("", line.text)
+        assertEquals("report.csv", line.attachments.single().name)
+        assertEquals("att_one", line.attachments.single().attachmentId)
+    }
+
+    @Test
     fun theTranscriptDrawsMessagesFailuresAndRenamesAndHidesTheMachinery() {
         val user = event(
             1, "message.user",
