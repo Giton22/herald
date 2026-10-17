@@ -100,7 +100,15 @@ internal class ViewerImage(
 internal fun ReplyMediaList(media: List<ReplyMedia>) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         // Keyed, so a picture's loaded bytes never show under another one when the list changes.
-        media.forEach { item -> key(item.source) { if (item.isImage) ReplyImage(item) else ReplyFile(item) } }
+        media.forEach { item -> key(item.source) {
+            val file = widgetFile(item)
+            val files = LocalWidgetFiles.current
+            when {
+                file != null && files != null -> InlineWidget(item, file, files)
+                item.isImage -> ReplyImage(item)
+                else -> ReplyFile(item)
+            }
+        } }
     }
 }
 
@@ -189,7 +197,7 @@ internal fun webHost(source: String): String? {
 
 /** A delivered file: its name, with Save and Share. */
 @Composable
-private fun ReplyFile(item: ReplyMedia) {
+internal fun ReplyFile(item: ReplyMedia, download: (suspend () -> FileDownload)? = null) {
     val load = LocalMediaLoader.current
     val actions = rememberMediaActions()
     val notify = LocalNotice.current
@@ -201,9 +209,19 @@ private fun ReplyFile(item: ReplyMedia) {
         if (busy) return
         busy = true
         scope.launch {
-            val bytes = load(item.source)
-            if (bytes == null) notify("Couldn't get ${item.name} from the gateway.") else action(bytes)
-            busy = false
+            try {
+                if (download != null) {
+                    when (val result = download()) {
+                        is FileDownload.Ready -> action(result.bytes)
+                        is FileDownload.Failed -> notify(result.message)
+                    }
+                } else {
+                    val bytes = load(item.source)
+                    if (bytes == null) notify("Couldn't get ${item.name} from the gateway.") else action(bytes)
+                }
+            } finally {
+                busy = false
+            }
         }
     }
 

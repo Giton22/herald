@@ -1,5 +1,7 @@
 package dev.hermeskotlin.core.chat
 
+import dev.hermeskotlin.core.media.GatewayFile
+
 /**
  * A picture or file a reply points at: a Markdown image (`![alt](src)`) or a `MEDIA:<path>` delivery
  * token. [source] is a gateway path (`/opt/data/...`), an `http(s)` URL or a `data:` URL.
@@ -10,6 +12,8 @@ data class ReplyMedia(
     val isImage: Boolean,
     /** Made by `image_generate`: its address came from the tool, not from text the model wrote. */
     val generated: Boolean = false,
+    /** An explicit inline widget directive, rather than an ordinary delivered file. */
+    val preview: Boolean = false,
 ) {
     /** The file lives on the gateway's disk, so it has to be fetched through the dashboard. */
     val onGateway: Boolean get() = source.startsWith("/") || source.startsWith("file://") || source.startsWith("~")
@@ -99,7 +103,10 @@ fun extractReplyMedia(text: String, generated: List<GeneratedImage> = emptyList(
     }
     cleaned = PREVIEW_DIRECTIVE.replaceOutsideCode(cleaned) { groups ->
         val source = groups[1]
-        media.getOrPut(source) { ReplyMedia(source, nameOf(source), isImage = false) }
+        val previous = media[source]
+        val html = GatewayFile.fromLink(source)?.extension in setOf("html", "htm")
+        media[source] = previous?.copy(isImage = previous.isImage && !html, preview = true)
+            ?: ReplyMedia(source, nameOf(source), isImage = false, preview = true)
         ""
     }
     cleaned = MEDIA_TOKEN.replaceOutsideCode(cleaned) { groups ->
