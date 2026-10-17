@@ -32,6 +32,7 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import dev.hermeskotlin.core.bots.mentionQuery
@@ -69,6 +70,11 @@ import com.composeunstyled.TextInput
 import com.composeunstyled.UnstyledTextField
 import com.composeunstyled.theme.Theme
 import androidx.compose.foundation.text.input.TextFieldState
+import dev.hermeskotlin.core.chat.linkFileUris
+import dev.hermeskotlin.core.gateway.GatewayUrl
+import dev.hermeskotlin.core.media.GatewayFile
+import dev.hermeskotlin.core.media.MediaApi
+import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.rooms.Room
 import dev.hermeskotlin.core.rooms.RoomLine
 import dev.hermeskotlin.core.rooms.RoomPendingAction
@@ -83,6 +89,7 @@ import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.DropdownMenu
 import dev.hermeskotlin.designsystem.components.MarkdownText
+import dev.hermeskotlin.designsystem.components.LocalFileLinks
 import dev.hermeskotlin.designsystem.components.Spinner
 import dev.hermeskotlin.designsystem.components.Surface
 import dev.hermeskotlin.designsystem.radii
@@ -102,6 +109,9 @@ import dev.hermeskotlin.ui.bots.BotFaces
 import dev.hermeskotlin.ui.bots.LocalBotFaces
 import dev.hermeskotlin.ui.chat.BarButton
 import dev.hermeskotlin.ui.chat.MessageTimeLabel
+import dev.hermeskotlin.ui.chat.FileLoad
+import dev.hermeskotlin.ui.chat.FileDownload
+import dev.hermeskotlin.ui.chat.fileError
 import dev.hermeskotlin.ui.chat.SendButton
 import dev.hermeskotlin.ui.chat.BarStatus
 import dev.hermeskotlin.ui.chat.SendIcon
@@ -122,10 +132,11 @@ fun RoomScreen(
     viewModel: RoomsViewModel = koinViewModel(),
     onOpenSidebar: () -> Unit,
     onBack: () -> Unit,
+    onOpenFile: (String?, GatewayFile) -> Unit = { _, _ -> },
 ) {
     val open by viewModel.opened.collectAsStateWithLifecycle()
     val room = open ?: return
-    RoomView(room, viewModel, LocalBotFaces.current, onOpenSidebar = onOpenSidebar, onBack = onBack)
+    RoomView(room, viewModel, LocalBotFaces.current, onOpenSidebar = onOpenSidebar, onBack = onBack, onOpenFile = onOpenFile)
 }
 
 /** What an open room can ask for; [RoomsViewModel] does it all, previews nothing. */
@@ -144,7 +155,7 @@ interface RoomActions {
 
 /** An open room's layout, apart from the view model, so previews can draw it from sample data. */
 @Composable
-internal fun RoomView(room: OpenRoom, viewModel: RoomActions, faces: BotFaces, onOpenSidebar: () -> Unit, onBack: () -> Unit) {
+internal fun RoomView(room: OpenRoom, viewModel: RoomActions, faces: BotFaces, onOpenSidebar: () -> Unit, onBack: () -> Unit, onOpenFile: (String?, GatewayFile) -> Unit = { _, _ -> }) {
     var ask by remember { mutableStateOf<RoomAsk?>(null) }
     RoomAskDialogs(ask, onDismiss = { ask = null }, onRename = viewModel::renameRoom, onDelete = viewModel::deleteRoom)
     Box(
@@ -186,7 +197,7 @@ internal fun RoomView(room: OpenRoom, viewModel: RoomActions, faces: BotFaces, o
                 },
             )
             Box(Modifier.weight(1f).fillMaxWidth()) {
-                Transcript(room, faces, onLoadEarlier = viewModel::loadEarlier)
+                Transcript(room, faces, onLoadEarlier = viewModel::loadEarlier, onOpenFile = onOpenFile)
             }
             // A failed read in full, above whatever waits on the user; the loop keeps trying.
             room.error?.let { ListNotice(it) }
@@ -222,7 +233,7 @@ internal fun RoomView(room: OpenRoom, viewModel: RoomActions, faces: BotFaces, o
  * the lines before it, while the log goes back further.
  */
 @Composable
-private fun Transcript(room: OpenRoom, faces: BotFaces, onLoadEarlier: () -> Unit) {
+private fun Transcript(room: OpenRoom, faces: BotFaces, onLoadEarlier: () -> Unit, onOpenFile: (String?, GatewayFile) -> Unit) {
     val listState = rememberLazyListState()
     val lines = room.lines
     // A newer line brings the end of the conversation into view; older ones read in above don't move the reader.
@@ -259,7 +270,7 @@ private fun Transcript(room: OpenRoom, faces: BotFaces, onLoadEarlier: () -> Uni
         (room.loading || room.loadingEarlier || room.canLoadEarlier) && lines.isEmpty() -> ListSpinner()
         lines.isEmpty() -> ListNotice("The room is quiet. Say something to start it.")
         else -> Box(Modifier.fillMaxSize()) {
-            TranscriptList(lines, listState, faces)
+            TranscriptList(lines, listState, faces, onOpenFile)
             // Over the list, not in it: a row on top would hold the scroll there and pull the reader up.
             if (room.loadingEarlier) {
                 Spinner(Modifier.align(Alignment.TopCenter).padding(top = 8.dp).size(18.dp))
@@ -270,7 +281,7 @@ private fun Transcript(room: OpenRoom, faces: BotFaces, onLoadEarlier: () -> Uni
 
 /** The transcript's lines, keyed by seq. */
 @Composable
-private fun TranscriptList(lines: List<RoomLine>, listState: LazyListState, faces: BotFaces) {
+private fun TranscriptList(lines: List<RoomLine>, listState: LazyListState, faces: BotFaces, onOpenFile: (String?, GatewayFile) -> Unit) {
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
@@ -286,7 +297,7 @@ private fun TranscriptList(lines: List<RoomLine>, listState: LazyListState, face
                     val previous = lines.getOrNull(index - 1) as? RoomLine.Message
                     val continued = previous != null && !previous.fromUser &&
                         previous.profile == line.profile && previous.speaker == line.speaker
-                    MemberLine(line, continued, faces)
+                    MemberLine(line, continued, faces, onOpenFile)
                 }
                 is RoomLine.System -> SystemLine(line)
             }
@@ -322,7 +333,7 @@ internal fun UserLine(line: RoomLine.Message) {
  * toward its face tucked in.
  */
 @Composable
-internal fun MemberLine(line: RoomLine.Message, continued: Boolean, faces: BotFaces) {
+internal fun MemberLine(line: RoomLine.Message, continued: Boolean, faces: BotFaces, onOpenFile: (String?, GatewayFile) -> Unit = { _, _ -> }) {
     val bot = remember(line.profile, faces) { faces.roomBot(line.profile) }
     val tint = bot.roomColor()
     val shape = RoundedCornerShape(topStart = 6.dp, topEnd = 20.dp, bottomEnd = 20.dp, bottomStart = 20.dp)
@@ -353,7 +364,11 @@ internal fun MemberLine(line: RoomLine.Message, continued: Boolean, faces: BotFa
                     .border(1.dp, Theme[colors][stroke], shape)
                     .padding(horizontal = 13.dp, vertical = 9.dp),
             ) {
-                MarkdownText(line.text)
+                CompositionLocalProvider(LocalFileLinks provides { link ->
+                    GatewayFile.fromLink(link)?.let { onOpenFile(line.profile, it) }
+                }) {
+                    MarkdownText(remember(line.text) { linkFileUris(line.text) })
+                }
             }
         }
     }
@@ -506,3 +521,22 @@ private fun RoomMentions(room: OpenRoom, viewModel: RoomActions, faces: BotFaces
 
 /** How big a member's face is beside its lines. */
 private val FACE = 30.dp
+
+/** A room file keeps the gateway and speaking bot that own it, including for links inside its preview. */
+internal data class RoomFileLink(val gateway: GatewayUrl, val profile: String?, val file: GatewayFile) {
+    suspend fun preview(media: MediaApi, linked: GatewayFile = file): FileLoad {
+        if (profile.isNullOrBlank()) return FileLoad.Failed("The gateway didn't identify which bot owns this file.")
+        return when (val result = media.readText(gateway, linked.path, profile)) {
+            is ApiResult.Success -> FileLoad.Ready(result.value)
+            else -> FileLoad.Failed(fileError(result))
+        }
+    }
+
+    suspend fun download(media: MediaApi, linked: GatewayFile = file): FileDownload {
+        if (profile.isNullOrBlank()) return FileDownload.Failed("The gateway didn't identify which bot owns this file.")
+        return when (val result = media.download(gateway, linked.path, profile)) {
+            is ApiResult.Success -> FileDownload.Ready(result.value)
+            else -> FileDownload.Failed(fileError(result, whole = true))
+        }
+    }
+}

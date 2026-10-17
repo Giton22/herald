@@ -5,6 +5,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableStateOf
@@ -48,6 +49,12 @@ import dev.hermeskotlin.ui.chat.ChatScreen
 import dev.hermeskotlin.ui.rooms.RoomScreen
 import dev.hermeskotlin.ui.rooms.DesktopRoomScreen
 import dev.hermeskotlin.ui.rooms.RoomsViewModel
+import dev.hermeskotlin.ui.rooms.RoomFileLink
+import dev.hermeskotlin.core.media.GatewayFileKind
+import dev.hermeskotlin.core.media.MediaApi
+import dev.hermeskotlin.ui.chat.FileViewer
+import dev.hermeskotlin.ui.chat.ImageViewer
+import dev.hermeskotlin.ui.chat.ViewerImage
 import dev.hermeskotlin.ui.chat.ChatViewModel
 import dev.hermeskotlin.ui.chat.ModelConfirmDialog
 import dev.hermeskotlin.ui.chat.ModelSheet
@@ -231,6 +238,8 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     // A Desktop room open from the sidebar's "On Desktop" group: read-only, so it is only local state.
     var openDesktopRoom by rememberSaveable { mutableStateOf<String?>(null) }
     val desktopRoom = openDesktopRoom?.let { key -> roster.desktopRooms.firstOrNull { it.key == key } }
+    val roomKey = openRoom?.room?.roomId to desktopRoom?.key
+    var roomFile by remember(route.gateway.url, roomKey) { mutableStateOf<RoomFileLink?>(null) }
     // The bot whose chat is open, as the roster knows it now.
     val openBot = route.target.bot?.let { open -> roster.all.firstOrNull { it.name == open.name } }
     var startOver by remember { mutableStateOf<Bot?>(null) }
@@ -451,11 +460,17 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     ) {
         CompositionLocalProvider(LocalBotFaces provides faces) {
             when {
-                openRoom != null -> RoomScreen(viewModel = rooms, onOpenSidebar = { scope.launch { sidebar.toggle() } }, onBack = rooms::close)
+                openRoom != null -> RoomScreen(
+                    viewModel = rooms,
+                    onOpenSidebar = { scope.launch { sidebar.toggle() } },
+                    onBack = rooms::close,
+                    onOpenFile = { profile, file -> roomFile = RoomFileLink(route.gateway.gatewayUrl, profile, file) },
+                )
                 desktopRoom != null -> DesktopRoomScreen(
                     room = desktopRoom,
                     onOpenSidebar = { scope.launch { sidebar.toggle() } },
                     onBack = { openDesktopRoom = null },
+                    onOpenFile = { profile, file -> roomFile = RoomFileLink(route.gateway.gatewayUrl, profile, file) },
                 )
                 else -> ChatScreen(
                     target = route.target,
@@ -481,6 +496,19 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                         return next != null
                     },
                 )
+            }
+        }
+    }
+
+    roomFile?.let { target ->
+        key(target.gateway, roomKey, target.profile) {
+            val media = koinInject<MediaApi>()
+            if (target.file.kind == GatewayFileKind.Image) {
+                val image = remember(target) { ViewerImage(target.file.name, fetch = { target.download(media) }) }
+                ImageViewer(image, onDismiss = { roomFile = null })
+            } else {
+                FileViewer(target.file, onDismiss = { roomFile = null },
+                    load = { target.preview(media, it) }, download = { target.download(media, it) })
             }
         }
     }
