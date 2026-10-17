@@ -27,6 +27,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
@@ -125,7 +126,7 @@ class VoiceController(
     private var away = false
 
     /** [pauseMs] is how long a quiet spell after speech has to last before it's sent. */
-    fun startChat(session: ChatSession, gateway: GatewayUrl, profile: String?, pauseMs: Long = VoiceActivity().silenceMs) {
+    fun startChat(session: ChatSession, gateway: GatewayUrl, profile: String?, pauseMs: Long = VoiceActivity().silenceMs, ringback: Boolean = false) {
         if (chatJob?.isActive == true) return
         cancelDictation()
         _chat.value = VoiceChatState(VoicePhase.Listening)
@@ -142,10 +143,25 @@ class VoiceController(
             },
         ) == true
         val job = scope.launch {
+            val ringing = if (ringback) launch {
+                try {
+                    while (isActive) {
+                        player.playRingback()
+                        delay(3_000)
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    // A connection cue must never prevent the call.
+                }
+            } else null
             try {
-                if (startLive(session, gateway, profile)) return@launch
+                if (startLive(session, gateway, profile) { ringing?.cancelAndJoin() }) return@launch
+                ringing?.cancelAndJoin()
                 converseChained(session, gateway, profile, pauseMs)
             } finally {
+                ringing?.cancel()
+
                 // Also a chat ended before it found its mode (End during the status check). An ending the person
                 // chose needs no explanation; one forced by an error keeps it. A newer chat keeps its own.
                 if (chatJob == null || chatJob === coroutineContext.job) {
@@ -200,13 +216,13 @@ class VoiceController(
      * Runs a GPT-Live call when the profile picked it and it can start; false to fall back to the chained chat
      * (another mode, no OpenAI key on the gateway, an older gateway, or no WebRTC on this device).
      */
-    private suspend fun startLive(session: ChatSession, gateway: GatewayUrl, profile: String?): Boolean {
+    private suspend fun startLive(session: ChatSession, gateway: GatewayUrl, profile: String?, onConnectionResult: suspend () -> Unit): Boolean {
         val calls = liveCalls ?: return false
         val status = audio.voiceLiveStatus(gateway, profile)
         if (status !is ApiResult.Success || !status.value.live) return false
         val call = calls.create() ?: return false
         _chat.value = VoiceChatState(VoicePhase.Connecting, live = true)
-        val conversation = LiveConversation(call, session, _chat)
+        val conversation = LiveConversation(call, session, _chat, onConnectionResult)
         live = conversation
         var error: String? = null
         try {

@@ -121,6 +121,9 @@ sealed interface ChatRequest {
     /** `/voice`: the screen asks for the microphone, then starts a voice chat. */
     data object StartVoice : ChatRequest
 
+    /** The default-call shortcut uses a connection cue while GPT-Live answers. */
+    data object StartCall : ChatRequest
+
     /** The voice shortcut: the screen asks for the microphone, then dictates into the composer. */
     data object StartDictation : ChatRequest
 
@@ -465,9 +468,9 @@ class ChatViewModel(
                 combine(connectionState, shown) { state, shown -> state.takeIf { it !is ConnectionState.Connected || shown } }
                     .first { it is ConnectionState.Connected || it is ConnectionState.Failed || it is ConnectionState.SessionExpired }
             }
-            if (this@ChatViewModel.target != target) return@launch
+            if (this@ChatViewModel.target?.copy(readUpTo = null) != target.copy(readUpTo = null)) return@launch
             when {
-                ready is ConnectionState.Connected -> _requests.send(ChatRequest.StartVoice)
+                ready is ConnectionState.Connected -> _requests.send(ChatRequest.StartCall)
                 ready is ConnectionState.Failed || (ready == null && connectionState.value !is ConnectionState.Connected) ->
                     showAttachmentError("The call didn't start: Herald couldn't reach the gateway.")
             }
@@ -487,11 +490,11 @@ class ChatViewModel(
         if (draft.start == DraftStart.Dictation) viewModelScope.launch { _requests.send(ChatRequest.StartDictation) }
     }
 
-    fun startVoiceChat() {
+    fun startVoiceChat(ringback: Boolean = false) {
         val chat = session.value ?: return
         val target = target ?: return
         val pause = (settings.settings.value ?: AppSettings()).voicePause
-        voice.startChat(chat, target.gateway.gatewayUrl, target.profile, pause.millis)
+        voice.startChat(chat, target.gateway.gatewayUrl, target.profile, pause.millis, ringback)
     }
 
     /** Starts dictating into the composer, or finishes the dictation in progress. */

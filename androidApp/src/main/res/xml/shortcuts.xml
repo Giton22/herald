@@ -29,18 +29,6 @@
             android:targetClass="dev.hermeskotlin.android.HeraldActivity"
             android:targetPackage="dev.herald.android" />
     </shortcut>
-    <shortcut
-        android:enabled="true"
-        android:icon="@mipmap/ic_shortcut_call"
-        android:shortcutId="voice_chat"
-        android:shortcutLongLabel="@string/shortcut_voice_chat"
-        android:shortcutShortLabel="@string/shortcut_voice_chat">
-        <intent
-            android:action="android.intent.action.VIEW"
-            android:data="hermes://voice-chat"
-            android:targetClass="dev.hermeskotlin.android.HeraldActivity"
-            android:targetPackage="dev.herald.android" />
-    </shortcut>
     <!--
         Bots in the share sheet: Android offers each bot's conversation shortcut (BotShortcuts, this
         category) as a direct share target. The share opens that bot's chat with the content as a draft.

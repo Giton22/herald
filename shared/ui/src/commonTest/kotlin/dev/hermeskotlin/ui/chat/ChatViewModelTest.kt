@@ -306,14 +306,14 @@ class ChatViewModelTest {
 
         val call = ChatTarget(gateway, null, null, nonce = 1, draft = ComposeDraft(start = DraftStart.VoiceChat))
         vm.open(call)
-        assertEquals(listOf<ChatRequest>(ChatRequest.StartVoice), requests)
+        assertEquals(listOf<ChatRequest>(ChatRequest.StartCall), requests)
         assertNotSame(previous, host.session.value)
         assertNull(vm.state.value.storedSessionId)
 
         // The same shortcut isn't replayed, and a plain new chat starts nothing.
         vm.open(call)
         vm.open(ChatTarget(gateway, null, null, nonce = 2))
-        assertEquals(listOf<ChatRequest>(ChatRequest.StartVoice), requests)
+        assertEquals(listOf<ChatRequest>(ChatRequest.StartCall), requests)
     }
 
     @Test
@@ -327,7 +327,7 @@ class ChatViewModelTest {
 
         connection.start(gateway.gatewayUrl)
         vm.connectionState.first { it is ConnectionState.Connected }
-        assertEquals(listOf<ChatRequest>(ChatRequest.StartVoice), requests)
+        assertEquals(listOf<ChatRequest>(ChatRequest.StartCall), requests)
     }
 
     @Test
@@ -360,7 +360,26 @@ class ChatViewModelTest {
         assertEquals(emptyList(), requests)
 
         vm.onScreen(true)
-        assertEquals(listOf<ChatRequest>(ChatRequest.StartVoice), requests)
+        assertEquals(listOf<ChatRequest>(ChatRequest.StartCall), requests)
+    }
+
+    @Test
+    fun aStoredCallStillStartsAfterItsUnreadPositionChanges() = runTest(dispatcher) {
+        val (vm, _) = viewModel()
+        val requests = mutableListOf<ChatRequest>()
+        backgroundScope.launch(dispatcher) { vm.requests.collect { requests += it } }
+        vm.onScreen(false)
+        val call = ChatTarget(gateway, "s1", "Call target", nonce = 1, draft = ComposeDraft(start = DraftStart.VoiceChat))
+        vm.open(call)
+        val updated = call.copy(readUpTo = 1_000.0)
+        vm.open(updated)
+        connection.start(gateway.gatewayUrl)
+        vm.connectionState.first { it is ConnectionState.Connected }
+        assertEquals(emptyList(), requests)
+
+        vm.onScreen(true)
+        vm.open(updated)
+        assertEquals(listOf<ChatRequest>(ChatRequest.StartCall), requests)
     }
 
     @Test

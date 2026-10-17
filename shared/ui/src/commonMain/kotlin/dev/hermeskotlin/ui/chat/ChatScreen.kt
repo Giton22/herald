@@ -361,9 +361,9 @@ fun ChatScreen(
     }
     val attachmentPicker = rememberAttachmentPicker(onPicked = viewModel::addAttachments, onError = viewModel::showAttachmentError)
     val microphone = rememberMicrophonePermission()
-    val startVoiceChat = {
+    val startVoiceChat = { ringback: Boolean ->
         microphone.withMicrophone(onDenied = { notice = "Voice needs the microphone. Allow it in Android's settings." }) {
-            viewModel.startVoiceChat()
+            viewModel.startVoiceChat(ringback)
         }
     }
     val toggleDictation = {
@@ -396,7 +396,8 @@ fun ChatScreen(
                 ChatRequest.OpenCheckpoints -> checkpointsOpen = true
                 // The goal may have been cleared since the menu offered it; an empty sheet would stay up.
                 ChatRequest.OpenControl -> controlOpen = viewModel.state.value.control != null
-                ChatRequest.StartVoice -> startVoiceChat()
+                ChatRequest.StartVoice -> startVoiceChat(false)
+                ChatRequest.StartCall -> startVoiceChat(true)
                 ChatRequest.StartDictation -> toggleDictation()
             }
         }
@@ -448,7 +449,7 @@ fun ChatScreen(
         onOpenModels = { modelsOpen = true },
         onAttach = { attachOpen = true },
         onDictate = toggleDictation,
-        onVoiceChat = startVoiceChat,
+        onVoiceChat = { startVoiceChat(false) },
         onOpenPets = { petsOpen = true },
         onOpenControl = viewModel::openControl,
         onViewImage = { viewing = it },
