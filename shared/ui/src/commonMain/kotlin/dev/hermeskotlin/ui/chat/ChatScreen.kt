@@ -1345,6 +1345,7 @@ private fun Messages(
         }
     }
     val unservable = remember(messages) { unservableEchoes(messages) }
+    val unreadLine = remember(messages, unreadFrom, readUpTo) { unreadLineKey(messages, unreadFrom, readUpTo) }
     Box(Modifier.fillMaxSize()) {
         LazyColumn(
             state = listState,
@@ -1356,10 +1357,10 @@ private fun Messages(
                 // Rows of one exchange with another bot are tied together by a line in that bot's colour.
                 val partner = partners.getOrNull(index)
                 // The "New messages" line breaks the tie: it never runs through it.
-                val divided = message.key == unreadFrom
+                val divided = message.key == unreadLine
                 val linkedAbove = partner != null && !divided && partners.getOrNull(index - 1) == partner
                 val linkedBelow = partner != null && partners.getOrNull(index + 1) == partner &&
-                    messages.getOrNull(index + 1)?.key != unreadFrom
+                    messages.getOrNull(index + 1)?.key != unreadLine
                 val rail = partner?.let { name -> faces.find(name)?.let { Color(0xFF000000 or botLook(it).color.toLong()) } }
                 Column {
                     // The line marking where the new messages start sits on top of the first of them.
@@ -2130,6 +2131,17 @@ private fun UnreadDivider(modifier: Modifier = Modifier) {
  */
 internal fun firstUnreadKey(messages: List<ChatMessage>, readUpTo: Double): String? =
     messages.firstOrNull { it.isNewerThan(readUpTo) }?.key
+
+/**
+ * The message the "New messages" line sits on: the one placed for this visit ([unreadFrom]), or the first new message
+ * now once that one is gone or no longer new. A running turn's saved step folds into the live reply that repeats it,
+ * and splits off the answer before it when its prompt doesn't show, which leaves that answer's key and time.
+ */
+internal fun unreadLineKey(messages: List<ChatMessage>, unreadFrom: String?, readUpTo: Double?): String? {
+    if (unreadFrom == null || readUpTo == null) return unreadFrom
+    if (messages.firstOrNull { it.key == unreadFrom }?.isNewerThan(readUpTo) == true) return unreadFrom
+    return firstUnreadKey(messages, readUpTo)
+}
 
 /** What to do next about the "New messages" line, given what is loaded so far. */
 internal sealed interface UnreadLineStep {

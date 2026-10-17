@@ -7,11 +7,13 @@ import dev.hermeskotlin.core.rpc.FakeTransport
 import dev.hermeskotlin.core.rpc.isCall
 import dev.hermeskotlin.core.rpc.json
 import dev.hermeskotlin.core.rpc.param
+import dev.hermeskotlin.core.sessions.SessionMessage
 import dev.hermeskotlin.core.sessions.SessionsApi
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -106,6 +108,314 @@ class ChatSessionResumeTest {
         return chat to transports
     }
 
+    /** A turn that started at 100 (gateway clock) and saved its first step, text and a tool call, at [at]. */
+    private fun savedFirstStep(at: Int = 105) = rowsUpTo(3) + listOf(
+        """{"id":4,"role":"assistant","content":"Running it. First I need the address.","timestamp":$at,""" +
+            """"tool_calls":[{"id":"t1","type":"function","function":{"name":"terminal","arguments":"{}"}}]}""",
+        """{"id":5,"role":"tool","tool_call_id":"t1","content":"ok","timestamp":$at}""",
+    )
+
+    /** stored-1 opened while its turn runs, `session.resume` answering [resume]; the chat and its socket. */
+    private suspend fun openMidTurn(scope: CoroutineScope, resume: String): Pair<ChatSession, FakeTransport> {
+        answer = { _, method, _ -> if (method == "session.resume") resume else "{}" }
+        val (connection, transports) = connect(scope)
+        val chat = ChatSession(url, "stored-1", "Chat", connection, SessionsApi(scope.client()), scope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        return chat to transports.last()
+    }
+
+    private val lenient = Json { ignoreUnknownKeys = true }
+
+    private fun ChatState.replies(text: String) = messages.filterIsInstance<ChatMessage.Assistant>().filter { text in it.text }
+
+    private fun midTurn(assistant: String, startedAt: Int? = 100) =
+        """{"session_id":"rt1","running":true,${startedAt?.let { "\"turn_started_at\":$it," } ?: ""}"inflight":{"user":"p3","assistant":"$assistant","streaming":true}}"""
+
+    @Test
+    fun aChatOpenedMidTurnShowsTheStepsAlreadySavedOnce() = runTest {
+        transcript = savedFirstStep()
+        val (chat, socket) = openMidTurn(backgroundScope, midTurn("Running it. First I need the address."))
+
+        val reply = chat.state.value.replies("First I need the address").single()
+        assertTrue(reply.streaming)
+        assertEquals(listOf("t1"), reply.tools.map { it.id }, "the saved step's tool call was lost")
+        // The rest of the turn still lands on that one reply.
+        socket.push(delta(1, " Found it."))
+        val more = chat.state.first { it.replies("Found it").isNotEmpty() }
+        assertEquals("Running it. First I need the address. Found it.", more.replies("First I need").single().text)
+    }
+
+    @Test
+    fun aLiveCopyAheadOfTheSavedStepsKeepsItsText() = runTest {
+        transcript = savedFirstStep()
+        val (chat, _) = openMidTurn(backgroundScope, midTurn("Running it. First I need the address.Got it: the address works."))
+
+        val reply = chat.state.value.replies("First I need the address").single()
+        assertEquals("Running it. First I need the address.Got it: the address works.", reply.text)
+        assertEquals(listOf("t1"), reply.tools.map { it.id })
+    }
+
+    @Test
+    fun aReplyFromBeforeTheTurnStaysApart() = runTest {
+        // The same words answered the previous turn, saved before this one started.
+        transcript = savedFirstStep(at = 90)
+        val (chat, _) = openMidTurn(backgroundScope, midTurn("Running it. First I need the address."))
+
+        assertEquals(2, chat.state.value.replies("First I need the address").size)
+    }
+
+    @Test
+    fun aDifferentLiveReplyStaysApart() = runTest {
+        transcript = savedFirstStep()
+        val (chat, _) = openMidTurn(backgroundScope, midTurn("Something else entirely."))
+
+        val state = chat.state.value
+        assertEquals(1, state.replies("First I need the address").size)
+        assertEquals(1, state.replies("Something else entirely").size)
+    }
+
+    @Test
+    fun aTurnWhosePromptDoesntShowFoldsItsSavedStepsToo() = runTest {
+        // A turn started by a hidden prompt (a goal going on, say): its saved step follows the last turn's answer
+        // with no prompt between them.
+        transcript = rowsUpTo(1) + listOf(
+            """{"id":2,"role":"assistant","content":"The last answer.","timestamp":90}""",
+            """{"id":3,"role":"user","content":"Keep going.","display_kind":"hidden","timestamp":100}""",
+            """{"id":4,"role":"assistant","content":"Checking the goal.","timestamp":105,""" +
+                """"tool_calls":[{"id":"t1","type":"function","function":{"name":"terminal","arguments":"{}"}}]}""",
+        )
+        val (chat, _) = openMidTurn(backgroundScope, midTurn("Checking the goal."))
+
+        val state = chat.state.first { it.replies("Checking the goal").size == 1 }
+        val reply = state.replies("Checking the goal").single()
+        assertTrue(reply.streaming)
+        assertEquals(listOf("t1"), reply.tools.map { it.id }, "the saved step's tool call was lost")
+        assertFalse(state.replies("The last answer").single().streaming)
+    }
+
+    @Test
+    fun aSavedCallWithNoResultYetStillRunsUntilItEnds() = runTest {
+        // Opened while the step's call runs: its row is saved, its result isn't yet.
+        transcript = savedFirstStep().dropLast(1)
+        val (chat, socket) = openMidTurn(backgroundScope, midTurn("Running it. First I need the address."))
+
+        // The rows are laid out again once session.resume names the turn's start; then the call shows running.
+        chat.state.first { it.replies("First I need the address").singleOrNull()?.tools?.singleOrNull()?.running == true }
+
+        socket.push(event("tool.complete", 1, """{"tool_id":"t1","result":"ok"}"""))
+        val done = chat.state.first { s -> s.replies("First I need the address").single().tools.single().let { !it.running } }
+        assertEquals("ok", done.replies("First I need the address").single().tools.single().output)
+    }
+
+    @Test
+    fun theRunningTurnsSavedStepsStartAReplyOfTheirOwn() {
+        val rows = listOf(
+            """{"id":1,"role":"assistant","content":"The last answer.","timestamp":90}""",
+            """{"id":2,"role":"user","content":"[System: the goal goes on]","timestamp":100}""",
+            """{"id":3,"role":"assistant","content":"Checking the goal.","timestamp":105}""",
+        ).map { lenient.decodeFromString<SessionMessage>(it) }
+
+        assertEquals(1, historyToMessages(rows).size, "without a running turn the steps stay one reply")
+        assertEquals(listOf("The last answer.", "Checking the goal."), historyToMessages(rows, turnStartedAt = 100.0).map { (it as ChatMessage.Assistant).text })
+    }
+
+    @Test
+    fun aGatewayWithoutTheTurnsStartFoldsNothing() = runTest {
+        // Nothing says the saved reply is this turn's, so both stay rather than risk hiding one.
+        transcript = savedFirstStep()
+        val (chat, _) = openMidTurn(backgroundScope, midTurn("Running it. First I need the address.", startedAt = null))
+
+        assertEquals(2, chat.state.value.replies("First I need the address").size)
+    }
+
+    @Test
+    fun scrollingUpMidTurnKeepsTheSavedStepsInTheLiveReply() = runTest {
+        // A long chat: the newest page leaves older rows to load, and its turn is running with a step saved.
+        transcript = rowsUpTo(HISTORY_PAGE + 21) + listOf(
+            """{"id":${HISTORY_PAGE + 22},"role":"assistant","content":"Running it. First I need the address.","timestamp":105,""" +
+                """"tool_calls":[{"id":"t1","type":"function","function":{"name":"terminal","arguments":"{}"}}]}""",
+        )
+        val (chat, _) = openMidTurn(backgroundScope, midTurn("Running it. First I need the address."))
+        assertTrue(chat.state.value.olderMessages)
+
+        chat.loadOlder()
+
+        val reply = chat.state.value.replies("First I need the address").single()
+        assertTrue(reply.streaming)
+        assertEquals(listOf("t1"), reply.tools.map { it.id })
+    }
+
+    @Test
+    fun aTurnThatEndedWhileAwayShowsItsAnswerOnce() = runTest {
+        // Opened mid-turn; the link drops, the turn ends meanwhile, and the gateway can't replay what was missed.
+        transcript = savedFirstStep()
+        var resumes = 0
+        answer = { _, method, _ ->
+            when (method) {
+                "session.resume" -> if (resumes++ == 0) midTurn("Running it. First I need the address.") else """{"session_id":"rt2","running":false}"""
+                "session.events.since" -> "error:-32601"
+                else -> "{}"
+            }
+        }
+        val (connection, transports) = connect(backgroundScope)
+        val chat = ChatSession(url, "stored-1", "Chat", connection, SessionsApi(backgroundScope.client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        transcript = savedFirstStep() + listOf(
+            """{"id":6,"role":"assistant","content":"Found it: the address works.","timestamp":110}""",
+        )
+        transports.last().serverClose(1006)
+
+        val back = chat.state.first { it.runtimeSessionId == "rt2" && !it.running && it.replies("Found it").isNotEmpty() }
+        val answer = back.replies("First I need the address").single()
+        assertFalse(answer.streaming)
+        assertTrue("Found it" in answer.text)
+        assertEquals(listOf("t1"), answer.tools.map { it.id })
+    }
+
+    @Test
+    fun aLeftOverReplyOfAnEarlierTurnTakesInNothing() = runTest {
+        // This turn's first step has only a tool call; the live reply open is an older turn's, not the gateway's copy.
+        transcript = rowsUpTo(3) + listOf(
+            """{"id":4,"role":"assistant","content":"","timestamp":105,"tool_calls":[{"id":"t9","type":"function","function":{"name":"terminal","arguments":"{}"}}]}""",
+        )
+        val merged = (historyToMessages(transcript.map { lenient.decodeFromString<SessionMessage>(it) }) +
+            ChatMessage.Assistant("live-0", text = "An older answer, half sent", streaming = true))
+            .withSavedStepsInLiveReply(turnStartedAt = 100.0, inflightText = "")
+
+        assertEquals(2, merged.filterIsInstance<ChatMessage.Assistant>().count { it.tools.any { t -> t.id == "t9" } || it.streaming })
+        assertTrue((merged.last() as ChatMessage.Assistant).tools.isEmpty())
+    }
+
+    @Test
+    fun textStreamedOntoAToolOnlyStepStaysOneReplyWhenScrollingUp() = runTest {
+        // Opened while the turn's first step, a tool call with reasoning and no text yet, runs: the gateway's copy is
+        // empty. Text and more reasoning stream on after that, and then older rows load.
+        transcript = rowsUpTo(HISTORY_PAGE + 21) + listOf(
+            """{"id":${HISTORY_PAGE + 22},"role":"assistant","content":"","reasoning":"Look it up.","timestamp":105,""" +
+                """"tool_calls":[{"id":"t1","type":"function","function":{"name":"terminal","arguments":"{}"}}]}""",
+        )
+        val (chat, socket) = openMidTurn(backgroundScope, midTurn(""))
+        socket.push(delta(1, "Found it."))
+        socket.push(event("reasoning.delta", 2, """{"text":" Then check it."}"""))
+        chat.state.first { it.messages.any { m -> m is ChatMessage.Assistant && "Then check it" in m.reasoning } }
+
+        chat.loadOlder()
+
+        val replies = chat.state.value.messages.filterIsInstance<ChatMessage.Assistant>().filter { it.tools.any { t -> t.id == "t1" } }
+        val reply = replies.single()
+        assertTrue(reply.streaming)
+        assertEquals("Found it.", reply.text)
+        assertEquals(1, Regex("Look it up").findAll(reply.reasoning).count(), "the saved reasoning came again: ${reply.reasoning}")
+        assertTrue("Then check it" in reply.reasoning)
+    }
+
+    @Test
+    fun aNoteOfThisDeviceBetweenTheSavedStepAndTheLiveReplyDoesntPartThem() {
+        val rows = savedFirstStep().map { lenient.decodeFromString<SessionMessage>(it) }
+        val merged = (historyToMessages(rows) + ChatMessage.Notice("n1", "Reconnected") +
+            ChatMessage.Assistant("live-0", text = "Running it. First I need the address.", streaming = true))
+            .withSavedStepsInLiveReply(turnStartedAt = 100.0, inflightText = "Running it. First I need the address.")
+
+        val reply = merged.filterIsInstance<ChatMessage.Assistant>().single { "First I need the address" in it.text }
+        assertTrue(reply.streaming)
+        assertEquals(listOf("t1"), reply.tools.map { it.id })
+        assertTrue(merged.any { it is ChatMessage.Notice && it.key == "n1" })
+    }
+
+    @Test
+    fun aFoldAgainKeepsTheLiveCopyOfARunningTool() {
+        // Folded once; the saved row came again while its tool still ran, with no result row yet.
+        val rows = savedFirstStep().dropLast(1).map { lenient.decodeFromString<SessionMessage>(it) }
+        val saved = historyToMessages(rows, turnStartedAt = 100.0)
+        val savedTool = (saved.last() as ChatMessage.Assistant).tools.single()
+        val live = ChatMessage.Assistant(
+            "live-0",
+            text = "Running it. First I need the address.",
+            tools = listOf(savedTool.copy(running = true)),
+            streaming = true,
+        )
+        val merged = (saved + live).withSavedStepsInLiveReply(100.0, "Running it.", turnReplyKey = "live-0")
+
+        assertTrue((merged.last() as ChatMessage.Assistant).tools.single().running)
+    }
+
+    @Test
+    fun aSavedResultEndsALiveCopyStillRunning() {
+        // The call's end went while the link was down and wasn't replayed; the saved row has its result.
+        val saved = historyToMessages(savedFirstStep().map { lenient.decodeFromString<SessionMessage>(it) })
+        val savedTool = (saved.last() as ChatMessage.Assistant).tools.single()
+        val live = ChatMessage.Assistant(
+            "live-0",
+            text = "Running it. First I need the address.",
+            tools = listOf(savedTool.copy(running = true, output = null)),
+            streaming = true,
+        )
+        val tool = ((saved + live).withSavedStepsInLiveReply(100.0, "Running it.", turnReplyKey = "live-0").last() as ChatMessage.Assistant)
+            .tools.single()
+
+        assertFalse(tool.running)
+        assertEquals(savedTool.output, tool.output)
+    }
+
+    @Test
+    fun aSavedEmptyResultEndsALiveCopyStillRunning() {
+        // As above, with a call that printed nothing: its result row is there, its output empty.
+        val rows = savedFirstStep().dropLast(1) + """{"id":5,"role":"tool","tool_call_id":"t1","content":"","timestamp":105}"""
+        val saved = historyToMessages(rows.map { lenient.decodeFromString<SessionMessage>(it) }, turnStartedAt = 100.0)
+        val savedTool = (saved.last() as ChatMessage.Assistant).tools.single()
+        val live = ChatMessage.Assistant(
+            "live-0",
+            text = "Running it. First I need the address.",
+            tools = listOf(savedTool.copy(running = true)),
+            streaming = true,
+        )
+        val tool = ((saved + live).withSavedStepsInLiveReply(100.0, "Running it.", turnReplyKey = "live-0").last() as ChatMessage.Assistant)
+            .tools.single()
+
+        assertFalse(tool.running, "a call that ended with nothing to say kept running")
+    }
+
+    @Test
+    fun anEndTheLiveCopyGotStaysOverAnOlderSavedRow() {
+        // The rows were read before the call's result was saved; the live copy got the end itself since.
+        val saved = historyToMessages(savedFirstStep().dropLast(1).map { lenient.decodeFromString<SessionMessage>(it) }, turnStartedAt = 100.0)
+        val savedTool = (saved.last() as ChatMessage.Assistant).tools.single()
+        assertTrue(savedTool.running)
+        val live = ChatMessage.Assistant(
+            "live-0",
+            text = "Running it. First I need the address.",
+            tools = listOf(savedTool.copy(running = false, durationSeconds = 1.5)),
+            streaming = true,
+        )
+        val tool = ((saved + live).withSavedStepsInLiveReply(100.0, "Running it.", turnReplyKey = "live-0").last() as ChatMessage.Assistant)
+            .tools.single()
+
+        assertFalse(tool.running, "a call that ended ran again")
+        assertEquals(1.5, tool.durationSeconds)
+    }
+
+    @Test
+    fun aStepSavedAfterTextStreamedOnStillFoldsIn() = runTest {
+        // Opened while the turn's first step, a tool call with no text, ran and wasn't saved yet; text streams on,
+        // then the step's row is saved and read.
+        transcript = rowsUpTo(3)
+        val (chat, socket) = openMidTurn(backgroundScope, midTurn(""))
+        socket.push(delta(1, "Found it."))
+        chat.state.first { it.replies("Found it").isNotEmpty() }
+        transcript = rowsUpTo(3) + listOf(
+            """{"id":4,"role":"assistant","content":"","timestamp":105,"tool_calls":[{"id":"t1","type":"function","function":{"name":"terminal","arguments":"{}"}}]}""",
+        )
+        // Another client's turn starting reads the transcript again.
+        socket.push(event("message.start", 2))
+
+        val state = chat.state.first { s -> s.messages.any { it is ChatMessage.Assistant && it.tools.any { t -> t.id == "t1" } } }
+        val reply = state.messages.filterIsInstance<ChatMessage.Assistant>().single { it.tools.any { t -> t.id == "t1" } }
+        assertTrue(reply.streaming)
+        assertEquals("Found it.", reply.text)
+    }
+
     @Test
     fun aDropMidTurnPicksUpFromTheLastEventWithoutDuplicates() = runTest {
         answer = { transport, method, _ ->
@@ -189,6 +499,26 @@ class ChatSessionResumeTest {
         )
 
         assertEquals("Hello", chat.state.first { it.reply()?.text == "Hello" }.reply()?.text)
+    }
+
+    @Test
+    fun aStepSavedWhileTheReplayCantBeHadShowsOnce() = runTest {
+        // The turn saved a step past what streamed here ("Hel") while the link was down, and the gap can't be replayed.
+        transcript = rowsUpTo(3) + listOf(
+            """{"id":4,"role":"assistant","content":"Hello","timestamp":105,""" +
+                """"tool_calls":[{"id":"t1","type":"function","function":{"name":"terminal","arguments":"{}"}}]}""",
+        )
+        answer = { _, method, _ -> if (method == "session.events.since") "error:-32601" else "{}" }
+        val (chat, _) = droppedMidTurn(
+            backgroundScope,
+            resume = """{"session_id":"rt1","running":true,"turn_started_at":100,"inflight":{"assistant":"Hello wor"}}""",
+        )
+
+        val caught = chat.state.first { it.reply()?.text == "Hello wor" }
+
+        val reply = caught.messages.filterIsInstance<ChatMessage.Assistant>().single { it.text.startsWith("Hello") }
+        assertTrue(reply.streaming)
+        assertEquals(listOf("t1"), reply.tools.map { it.id }, "the saved step's tool call was lost")
     }
 
     @Test

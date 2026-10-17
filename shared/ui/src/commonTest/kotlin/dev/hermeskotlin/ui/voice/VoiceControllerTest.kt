@@ -31,6 +31,8 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlin.concurrent.atomics.AtomicReference
+import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
@@ -56,9 +58,29 @@ class VoiceControllerTest {
         override suspend fun play(audio: SpokenAudio) = Unit
     }
 
+    /**
+     * What the fake gateway was asked. Its engine adds to it on another thread (the `tts-lease` call isn't waited
+     * on) while the test reads it, so each read sees a whole list rather than one being added to.
+     */
+    @OptIn(ExperimentalAtomicApi::class)
+    private class Requests : AbstractList<HttpRequestData>() {
+        private val seen = AtomicReference(emptyList<HttpRequestData>())
+
+        fun add(request: HttpRequestData) {
+            while (true) {
+                val now = seen.load()
+                if (seen.compareAndSet(now, now + request)) return
+            }
+        }
+
+        override val size: Int get() = seen.load().size
+
+        override fun get(index: Int): HttpRequestData = seen.load()[index]
+    }
+
     private fun audio(
         transcript: String,
-        requests: MutableList<HttpRequestData>,
+        requests: Requests,
         /** Completed by the first `tts-lease` call, which the controller fires off without waiting for. */
         leased: CompletableDeferred<Unit>? = null,
         /** How many transcriptions fail before they work again. */
@@ -66,7 +88,7 @@ class VoiceControllerTest {
     ) = AudioApi(
         createHttpClient(
             MockEngine { request ->
-                requests += request
+                requests.add(request)
                 if (request.url.encodedPath == "/api/audio/tts-lease") leased?.complete(Unit)
                 val transcribes = requests.count { it.url.encodedPath == "/api/audio/transcribe" }
                 when (request.url.encodedPath) {
@@ -84,7 +106,7 @@ class VoiceControllerTest {
 
     @Test
     fun dictationPutsTheTranscriptInTheComposer() = runTest {
-        val requests = mutableListOf<HttpRequestData>()
+        val requests = Requests()
         val voice = VoiceController(audio("deploy the site", requests), FakeRecorder(), FakePlayer(), backgroundScope, backgroundScope)
         val text = CompletableDeferred<String>()
 
@@ -116,7 +138,7 @@ class VoiceControllerTest {
 
     @Test
     fun deviceDictationWritesAsYouTalkAndNeverUploads() = runTest {
-        val requests = mutableListOf<HttpRequestData>()
+        val requests = Requests()
         val recorder = FakeRecorder()
         val device = FakeDevice()
         val voice = VoiceController(audio("unused", requests), recorder, FakePlayer(), backgroundScope, backgroundScope, deviceDictation = device)
@@ -134,7 +156,7 @@ class VoiceControllerTest {
 
     @Test
     fun deviceDictationFallsBackToTheGatewayWithoutARecognizer() = runTest {
-        val requests = mutableListOf<HttpRequestData>()
+        val requests = Requests()
         val device = FakeDevice(available = false)
         val voice = VoiceController(audio("deploy the site", requests), FakeRecorder(), FakePlayer(), backgroundScope, backgroundScope, deviceDictation = device)
         val text = CompletableDeferred<String>()
@@ -147,7 +169,7 @@ class VoiceControllerTest {
 
     @Test
     fun aRecognizerThatCantStartHandsTheDictationToTheGateway() = runTest {
-        val requests = mutableListOf<HttpRequestData>()
+        val requests = Requests()
         val recorder = FakeRecorder()
         val device = object : DeviceDictation {
             override fun available() = true
@@ -177,7 +199,7 @@ class VoiceControllerTest {
             }
             override fun finish() = Unit
         }
-        val voice = VoiceController(audio("unused", mutableListOf()), recorder, FakePlayer(), backgroundScope, backgroundScope, deviceDictation = device)
+        val voice = VoiceController(audio("unused", Requests()), recorder, FakePlayer(), backgroundScope, backgroundScope, deviceDictation = device)
         var called = false
 
         voice.startDictation(gateway, null, DictationEngine.Device) { called = true }
@@ -193,7 +215,7 @@ class VoiceControllerTest {
     @Test
     fun aCancelledDeviceDictationSaysSoAndSendsNothing() = runTest {
         val device = FakeDevice().apply { waitForFinish = true }
-        val voice = VoiceController(audio("unused", mutableListOf()), FakeRecorder(), FakePlayer(), backgroundScope, backgroundScope, deviceDictation = device)
+        val voice = VoiceController(audio("unused", Requests()), FakeRecorder(), FakePlayer(), backgroundScope, backgroundScope, deviceDictation = device)
         val cancelled = CompletableDeferred<Unit>()
         var called = false
 
@@ -208,7 +230,7 @@ class VoiceControllerTest {
 
     @Test
     fun gatewayDictationIgnoresTheDeviceRecognizer() = runTest {
-        val requests = mutableListOf<HttpRequestData>()
+        val requests = Requests()
         val device = FakeDevice()
         val voice = VoiceController(audio("deploy the site", requests), FakeRecorder(), FakePlayer(), backgroundScope, backgroundScope, deviceDictation = device)
         val text = CompletableDeferred<String>()
@@ -222,7 +244,7 @@ class VoiceControllerTest {
     @Test
     fun finishingADeviceDictationStopsTheRecognizer() = runTest {
         val device = FakeDevice().apply { waitForFinish = true }
-        val voice = VoiceController(audio("unused", mutableListOf()), FakeRecorder(), FakePlayer(), backgroundScope, backgroundScope, deviceDictation = device)
+        val voice = VoiceController(audio("unused", Requests()), FakeRecorder(), FakePlayer(), backgroundScope, backgroundScope, deviceDictation = device)
         val text = CompletableDeferred<String>()
 
         voice.startDictation(gateway, null, DictationEngine.Device) { text.complete(it) }
@@ -235,7 +257,7 @@ class VoiceControllerTest {
     @Test
     fun aDeviceDictationThatHeardNothingSaysSo() = runTest {
         val voice = VoiceController(
-            audio("unused", mutableListOf()), FakeRecorder(), FakePlayer(), backgroundScope, backgroundScope,
+            audio("unused", Requests()), FakeRecorder(), FakePlayer(), backgroundScope, backgroundScope,
             deviceDictation = FakeDevice(said = " "),
         )
         var called = false
@@ -248,7 +270,7 @@ class VoiceControllerTest {
 
     @Test
     fun saying_stop_endsTheVoiceChatWithoutSendingIt() = runTest {
-        val requests = mutableListOf<HttpRequestData>()
+        val requests = Requests()
         val leased = CompletableDeferred<Unit>()
         val recorder = FakeRecorder()
         val voice = VoiceController(audio("Stop.", requests, leased), recorder, FakePlayer(), backgroundScope, backgroundScope)
@@ -286,7 +308,7 @@ class VoiceControllerTest {
     /** #185: where the pause never comes, Send now ends the recording and what was said goes. */
     @Test
     fun sendNowEndsTheRecordingWithoutAPause() = runTest {
-        val requests = mutableListOf<HttpRequestData>()
+        val requests = Requests()
         val recorder = NoPauseRecorder()
         val voice = VoiceController(audio("Stop.", requests), recorder, FakePlayer(), backgroundScope, backgroundScope)
         val cookies = PersistentCookiesStorage(InMemoryKeyValueStore())
@@ -348,7 +370,7 @@ class VoiceControllerTest {
     @Test
     fun quietListensAfterAnErrorDontEndTheChat() = runTest {
         val recorder = ScriptedRecorder(true, false, false, false, false)
-        val voice = VoiceController(audio("unused", mutableListOf(), transcribeFailures = 1), recorder, FakePlayer(), backgroundScope, backgroundScope)
+        val voice = VoiceController(audio("unused", Requests(), transcribeFailures = 1), recorder, FakePlayer(), backgroundScope, backgroundScope)
 
         voice.startChat(offlineSession(), gateway, null)
 
@@ -364,7 +386,7 @@ class VoiceControllerTest {
     fun failedTurnsInARowStillEndTheChat() = runTest {
         // Quiet listens in between neither count nor reset the run of failures.
         val recorder = ScriptedRecorder(true, false, true, false, true, true)
-        val voice = VoiceController(audio("unused", mutableListOf(), transcribeFailures = 3), recorder, FakePlayer(), backgroundScope, backgroundScope)
+        val voice = VoiceController(audio("unused", Requests(), transcribeFailures = 3), recorder, FakePlayer(), backgroundScope, backgroundScope)
 
         voice.startChat(offlineSession(), gateway, null)
 
