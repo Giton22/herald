@@ -28,6 +28,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -81,6 +82,7 @@ import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
+import dev.hermeskotlin.designsystem.components.CopyButton
 import dev.hermeskotlin.designsystem.components.DropdownMenu
 import dev.hermeskotlin.designsystem.components.MarkdownText
 import dev.hermeskotlin.designsystem.components.Spinner
@@ -310,7 +312,9 @@ internal fun UserLine(line: RoomLine.Message) {
                     .border(1.dp, Theme[colors][userBubbleStroke], shape)
                     .padding(horizontal = 14.dp, vertical = 9.dp),
             ) {
-                Text(line.text, style = Theme[typography][body], color = Theme[colors][onUserBubble])
+                SelectionContainer {
+                    Text(line.text, style = Theme[typography][body], color = Theme[colors][onUserBubble])
+                }
             }
         }
         MessageTimeLabel(line.createdAt)
@@ -353,8 +357,11 @@ internal fun MemberLine(line: RoomLine.Message, continued: Boolean, faces: BotFa
                     .border(1.dp, Theme[colors][stroke], shape)
                     .padding(horizontal = 13.dp, vertical = 9.dp),
             ) {
-                MarkdownText(line.text)
+                SelectionContainer {
+                    MarkdownText(line.text)
+                }
             }
+            CopyButton(line.text, Modifier.align(Alignment.End))
         }
     }
 }
