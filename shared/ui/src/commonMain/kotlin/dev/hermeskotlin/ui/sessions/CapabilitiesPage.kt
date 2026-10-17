@@ -228,7 +228,9 @@ internal fun skillGroups(skills: List<Skill>, query: String): Map<String, List<S
     skills
         .filter { query.isEmpty() || listOfNotNull(it.name, it.description, it.category).any { f -> f.contains(query, ignoreCase = true) } }
         .groupBy { it.category?.trim()?.lowercase()?.takeIf(String::isNotEmpty) ?: "other" }
-        .toSortedMap(compareBy<String> { it == "other" }.thenBy { it })
+        .entries
+        .sortedWith(compareBy<Map.Entry<String, List<Skill>>> { it.key == "other" }.thenBy { it.key })
+        .associate { it.key to it.value }
 
 /** A tab's loading, error and empty states around its list. */
 @Composable

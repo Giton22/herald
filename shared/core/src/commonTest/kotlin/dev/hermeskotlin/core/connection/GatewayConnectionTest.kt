@@ -101,6 +101,7 @@ class GatewayConnectionTest {
     @Test
     fun handshakeStatusIsParsedFromOkHttpMessage() {
         assertEquals(403, handshakeStatus("Expected HTTP 101 response but was '403 Forbidden'"))
+        assertEquals(404, handshakeStatus("Handshake exception, expected status code 101 but was 404"))
         assertEquals(null, handshakeStatus("Connection reset"))
     }
 
