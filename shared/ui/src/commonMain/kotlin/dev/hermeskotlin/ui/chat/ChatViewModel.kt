@@ -25,6 +25,8 @@ import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.media.GatewayFile
+import dev.hermeskotlin.core.media.LinkPreview
+import dev.hermeskotlin.core.media.LinkPreviews
 import dev.hermeskotlin.core.media.MediaApi
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.models.ModelCatalog
@@ -159,6 +161,9 @@ data class ChatTarget(
  */
 data class BotIdentity(val name: String, val label: String, val chatsProfile: String? = null)
 
+/** A transcript and its file callbacks travel together while the selected route changes. */
+internal data class ChatTranscript(val state: ChatState = ChatState(), val widgetFiles: WidgetFiles? = null)
+
 /**
  * Shows the [ChatSession] the app-wide [ChatHost] has open; opening another target replaces it.
  * Remembers the open chat in [LastChatStore] so the next launch returns to it: a stored session once
@@ -192,6 +197,7 @@ class ChatViewModel(
     private val seen: SeenStore? = null,
     /** The threads, so `/new` in a thread's chat starts the thread fresh instead of leaving it. */
     private val threads: ThreadsRepository? = null,
+    private val linkPreviews: LinkPreviews? = null,
 ) : ViewModel(), ChatActions {
 
     /** Dictation and voice chat for the open chat. */
@@ -228,12 +234,24 @@ class ChatViewModel(
 
     private var target: ChatTarget? = null
     private val session = MutableStateFlow<ChatSession?>(null)
+    private val widgetSession = MutableStateFlow<Pair<ChatSession, ChatTarget>?>(null)
 
     init {
         // A chat opened under the checkpoints sheet shows its own checkpoints, not the last chat's.
         viewModelScope.launch { session.collect { checkpoints.follow(it) } }
         viewModelScope.launch { session.collect { control.follow(it) } }
     }
+
+    internal val transcript: StateFlow<ChatTranscript> = widgetSession
+        .flatMapLatest { bound ->
+            if (bound == null) flowOf(ChatTranscript()) else {
+                val (chat, owner) = bound
+                // Keyed by whose files these are, so a new title or draft on the same chat doesn't reload its widgets.
+                val files = WidgetFiles(owner.gateway.gatewayUrl to owner.profile, { previewFile(it, owner) }, { downloadFile(it, owner) })
+                chat.state.map { ChatTranscript(it, files) }
+            }
+        }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, ChatTranscript())
 
     val state: StateFlow<ChatState> = session
         .flatMapLatest { it?.state ?: flowOf(ChatState()) }
@@ -411,6 +429,13 @@ class ChatViewModel(
         viewModelScope.launch { seen?.markLooked(target.gateway.gatewayUrl, id, newest, target.profile, running = state.running) }
     }
 
+    /** Opens [target]'s chat in the host, with the transcript's file callbacks bound to that target. */
+    private fun bind(target: ChatTarget) {
+        val chat = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title, target.profile, target.cwd)
+        session.value = chat
+        widgetSession.value = chat?.let { it to target }
+    }
+
     fun open(target: ChatTarget) {
         // The same chat, perhaps with a new read position (reopened from a notification): the screen places the
         // "New messages" line from the target; the chat itself, its draft and any voice chat stay as they are.
@@ -418,9 +443,7 @@ class ChatViewModel(
             this.target = target
             // An expired session or sign-out closes the host's chat; the same chat reopened after signing
             // back in needs a fresh session, not the stopped one this view model still holds.
-            if (session.value !== host.session.value) {
-                session.value = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title, target.profile, target.cwd)
-            }
+            if (session.value !== host.session.value) bind(target)
             return
         }
         markLooked()
@@ -437,7 +460,7 @@ class ChatViewModel(
         restoreDraft(target, typed)
         target.draft?.let(::takeDraft)
         if (target.storedSessionId == null) viewModelScope.launch { lastChats.set(target.gateway.gatewayUrl, null, target.profile) }
-        session.value = host.open(target.gateway.gatewayUrl, target.storedSessionId, target.title, target.profile, target.cwd)
+        bind(target)
         // The catalog marks the previous chat's model; a new chat must show the profile default instead.
         _picker.update { it.copy(catalog = null, confirm = null) }
         if (connectionState.value is ConnectionState.Connected) {
@@ -646,6 +669,8 @@ class ChatViewModel(
 
     private val mediaCache = mutableMapOf<String, ByteArray>()
 
+    override suspend fun loadLinkPreview(url: String): LinkPreview? = linkPreviews?.load(url)
+
     /**
      * The bytes behind a picture or file the chat shows: a gateway path (`@image:` in a stored prompt,
      * `MEDIA:` in a reply), a web URL or a `data:` URL. Cached per source; null when it can't be had.
@@ -670,9 +695,11 @@ class ChatViewModel(
      * The start of a gateway file a reply linked to, for its viewer; the reason in plain words
      * when the gateway won't hand it over.
      */
-    suspend fun previewFile(file: GatewayFile): FileLoad {
-        val gateway = target?.gateway?.gatewayUrl ?: return FileLoad.Failed("Not connected to a gateway.")
-        return when (val result = media.readText(gateway, file.path, target?.profile)) {
+    suspend fun previewFile(file: GatewayFile): FileLoad = previewFile(file, target)
+
+    internal suspend fun previewFile(file: GatewayFile, owner: ChatTarget?): FileLoad {
+        val gateway = owner?.gateway?.gatewayUrl ?: return FileLoad.Failed("Not connected to a gateway.")
+        return when (val result = media.readText(gateway, file.path, owner.profile)) {
             is ApiResult.Success -> FileLoad.Ready(result.value)
             else -> FileLoad.Failed(fileError(result))
         }
@@ -682,9 +709,11 @@ class ChatViewModel(
      * A whole gateway file a reply linked to, through the chat's profile: for Save and Share, and for a
      * linked picture. Fetched each time, so a file the agent has since rewritten comes back as it is now.
      */
-    suspend fun downloadFile(file: GatewayFile): FileDownload {
-        val gateway = target?.gateway?.gatewayUrl ?: return FileDownload.Failed("Not connected to a gateway.")
-        return when (val result = media.download(gateway, file.path, target?.profile)) {
+    suspend fun downloadFile(file: GatewayFile): FileDownload = downloadFile(file, target)
+
+    internal suspend fun downloadFile(file: GatewayFile, owner: ChatTarget?): FileDownload {
+        val gateway = owner?.gateway?.gatewayUrl ?: return FileDownload.Failed("Not connected to a gateway.")
+        return when (val result = media.download(gateway, file.path, owner.profile)) {
             is ApiResult.Success -> FileDownload.Ready(result.value)
             else -> FileDownload.Failed(fileError(result, whole = true))
         }

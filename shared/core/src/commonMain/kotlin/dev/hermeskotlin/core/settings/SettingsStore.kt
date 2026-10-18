@@ -86,6 +86,8 @@ data class AppSettings(
     val wrapCode: Boolean = false,
     /** Show the profile's pet (when the gateway has one on) above the composer. */
     val showPet: Boolean = true,
+    /** Automatically fetch linked webpages and thumbnails; off until the user opts in. */
+    val showLinkPreviews: Boolean = false,
     val voicePause: VoicePause = VoicePause.Normal,
     /** Default call destination per saved gateway; absence starts a new conversation in its selected profile. */
     val callTargets: Map<String, CallTarget> = emptyMap(),

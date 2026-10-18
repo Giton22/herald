@@ -24,6 +24,7 @@ import androidx.compose.runtime.Stable
 import dev.hermeskotlin.core.chat.linkFileUris
 import dev.hermeskotlin.core.media.GatewayFile
 import dev.hermeskotlin.core.media.GatewayFileKind
+import dev.hermeskotlin.core.media.LinkPreview
 import dev.hermeskotlin.designsystem.components.LocalFileLinks
 import kotlinx.coroutines.flow.collectLatest
 import kotlin.math.abs
@@ -333,7 +334,8 @@ fun ChatScreen(
     onNextChat: (() -> Boolean)? = null,
 ) {
     LaunchedEffect(target) { viewModel.open(target) }
-    val state = viewModel.state.collectAsStateWithLifecycle().value
+    val transcript = viewModel.transcript.collectAsStateWithLifecycle().value
+    val state = transcript.state
     val picker = viewModel.picker.collectAsStateWithLifecycle().value
     val connection = viewModel.connectionState.collectAsStateWithLifecycle().value
     val connected = connection is ConnectionState.Connected
@@ -438,6 +440,7 @@ fun ChatScreen(
         placeholder = remember(target) { (if (target.storedSessionId == null) NEW_CHAT_PROMPTS else FOLLOW_UP_PROMPTS).random() },
         notice = notice,
         actions = viewModel,
+        widgetFiles = transcript.widgetFiles,
         editing = viewModel.editing.collectAsStateWithLifecycle().value,
         // Only for the chat it was taken for, not one the screen moved on to (a branch, a fresh start).
         readUpTo = target.readUpTo?.takeIf { state.storedSessionId == target.storedSessionId },
@@ -578,6 +581,7 @@ internal fun ChatView(
     placeholder: String,
     notice: String?,
     actions: ChatActions,
+    widgetFiles: WidgetFiles? = null,
     /** The prompt being edited in the composer, whose send replaces it. */
     editing: String? = null,
     /** How far this chat had been read when it was opened (epoch seconds); later messages are marked new. */
@@ -665,6 +669,8 @@ internal fun ChatView(
                 typeAfterVoice = false
                 if (composerShown) composerFocus.requestFocus()
             }
+            // A new loader each time the link comes back, so cards that failed offline try again; good ones come from the cache.
+            val linkPreviewLoader = remember<suspend (String) -> LinkPreview?>(actions, connected) { { url -> actions.loadLinkPreview(url) } }
             val commentHost = remember(comments, actions, composerShown) {
                 if (!composerShown) return@remember null
                 object : CommentHost {
@@ -689,6 +695,8 @@ internal fun ChatView(
                     if (state.historyLoaded && state.messages.isNotEmpty()) {
                         CompositionLocalProvider(
                             LocalMediaLoader provides actions::loadMedia,
+                            LocalWidgetFiles provides widgetFiles,
+                            LocalLinkPreviewLoader provides linkPreviewLoader,
                             LocalOpenImage provides onViewImage,
                             LocalFileLinks provides { link -> GatewayFile.fromLink(link)?.let(onOpenFile) },
                             LocalNotice provides onNotice,
@@ -2027,6 +2035,7 @@ private fun AssistantReply(
                 MarkdownText(remember(text) { linkFileUris(text) }, streaming = message.streaming)
             }
         }
+        if (settings.showLinkPreviews && !message.streaming) LinkPreviewCards(text)
         if (media.isNotEmpty()) ReplyMediaList(media)
         when (message.outcome) {
             TurnOutcome.Error -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {

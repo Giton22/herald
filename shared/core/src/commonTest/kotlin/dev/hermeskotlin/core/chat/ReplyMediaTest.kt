@@ -40,7 +40,22 @@ class ReplyMediaTest {
     fun previewWidgetsBecomeTheirFile() {
         val (text, media) = extractReplyMedia("Here is the chart:\n::preview{file=\"/opt/data/out/chart.html\"}\nEnjoy.")
         assertEquals("Here is the chart:\n\nEnjoy.", text)
-        assertEquals(ReplyMedia("/opt/data/out/chart.html", "chart.html", isImage = false), media.single())
+        assertEquals(ReplyMedia("/opt/data/out/chart.html", "chart.html", isImage = false, preview = true), media.single())
+    }
+
+    @Test
+    fun explicitPreviewWinsOverAnImageMentionOfTheSameFile() {
+        val (_, media) = extractReplyMedia("![chart](/tmp/chart.html)\n::preview{file=\"/tmp/chart.html\"}\nMEDIA:/tmp/chart.html")
+        assertEquals(1, media.size)
+        assertFalse(media.single().isImage)
+        assertTrue(media.single().preview)
+    }
+
+    @Test
+    fun aNonHtmlPreviewDoesNotReplaceAnExistingImage() {
+        val (_, media) = extractReplyMedia("![cat](/tmp/cat.png)\n::preview{file=\"/tmp/cat.png\"}")
+        assertTrue(media.single().isImage)
+        assertTrue(media.single().preview)
     }
 
     @Test
