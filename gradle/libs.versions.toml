@@ -5,6 +5,7 @@ compose-multiplatform = "1.12.1"
 compose-unstyled = "2.10.0"
 lucide = "1.1.0"
 ktor = "3.6.0"
+jsoup = "1.23.2"
 koin = "4.2.2"
 kotlinx-coroutines = "1.11.0"
 kotlinx-serialization = "1.11.0"
@@ -16,6 +17,8 @@ biometric = "1.1.0"
 fragment = "1.8.9"
 health-connect = "1.1.0"
 markdown-renderer = "0.45.0"
+# The parser version already brought in by the Markdown renderer.
+markdown-parser = "0.7.9"
 # The version multiplatform-markdown-renderer-code 0.45.0 itself uses.
 highlights = "1.1.0"
 jlatexmath-android = "0.2.0"
@@ -36,6 +39,8 @@ android-targetSdk = "36"
 android-minSdk = "26"
 
 [libraries]
+markdown-parser = { module = "org.jetbrains:markdown", version.ref = "markdown-parser" }
+jsoup = { module = "org.jsoup:jsoup", version.ref = "jsoup" }
 # Compose Multiplatform
 compose-runtime = { module = "org.jetbrains.compose.runtime:runtime", version.ref = "compose-multiplatform" }
 compose-foundation = { module = "org.jetbrains.compose.foundation:foundation", version.ref = "compose-multiplatform" }

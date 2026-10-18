@@ -49,6 +49,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.jsonObject
@@ -117,13 +118,17 @@ class ChatViewModelTest {
     /** The connection of the last [viewModel]; [GatewayConnection.start] connects it to a [ReadyGateway]. */
     private lateinit var connection: GatewayConnection
 
-    private fun viewModel(drafts: DraftStore = DraftStore(InMemoryKeyValueStore())): Pair<ChatViewModel, ChatHost> {
+    private fun viewModel(drafts: DraftStore = DraftStore(InMemoryKeyValueStore()), fileReads: MutableList<Pair<String, String?>>? = null): Pair<ChatViewModel, ChatHost> {
         val cookies = PersistentCookiesStorage(InMemoryKeyValueStore())
         // On the test dispatcher, so no request is still finishing on another thread when a test ends.
         val engine = MockEngineConfig()
         engine.dispatcher = dispatcher
         engine.addHandler { request ->
-            if (request.url.encodedPath == "/api/auth/ws-ticket") respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
+            if (request.url.encodedPath.startsWith("/api/fs/")) {
+                fileReads?.add(request.url.host to request.url.parameters["profile"])
+                if (request.url.encodedPath.endsWith("read-text")) respond("""{"text":"<p>widget</p>","byte_size":13,"truncated":false,"binary":false}""", HttpStatusCode.OK, json)
+                else respond("<p>widget</p>", HttpStatusCode.OK)
+            } else if (request.url.encodedPath == "/api/auth/ws-ticket") respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
             else respond("{}", HttpStatusCode.OK, json)
         }
         val client = createHttpClient(MockEngine(engine), cookies)
@@ -144,6 +149,42 @@ class ChatViewModelTest {
         )
         viewModels.put("chat", vm)
         return vm to chatHost
+    }
+
+    @Test
+    fun widgetFilesStayWithTheirTranscriptWhileTheSelectedChatChanges() = runTest(dispatcher) {
+        Dispatchers.setMain(kotlinx.coroutines.test.StandardTestDispatcher(testScheduler))
+        val reads = mutableListOf<Pair<String, String?>>()
+        val (vm, _) = viewModel(fileReads = reads)
+        val first = ChatTarget(gateway, "same-id", "First", profile = "first")
+        vm.open(first)
+        runCurrent()
+        val oldTranscript = vm.transcript.value
+        val oldFiles = assertNotNull(oldTranscript.widgetFiles)
+        val file = dev.hermeskotlin.core.media.GatewayFile("/tmp/widget.html")
+
+        listOf(first.copy(profile = "second"), first.copy(gateway = SavedGateway("https://other.example"))).forEach { next ->
+            val previous = vm.transcript.value
+            vm.open(next)
+            // Session delivery is delayed: the old emission must still carry its old callbacks.
+            assertSame(previous, vm.transcript.value)
+            runCurrent()
+            val newTranscript = vm.transcript.value
+            assertEquals("same-id", newTranscript.state.storedSessionId)
+            assertEquals(next.gateway.gatewayUrl to next.profile, assertNotNull(newTranscript.widgetFiles).identity)
+            // The screen may still hold this prior emission while the selected route has changed.
+            assertTrue(loadWidget(oldFiles, file) is FileLoad.Ready)
+            assertTrue(downloadWidget(oldFiles, file) is FileDownload.Ready)
+        }
+        assertEquals<List<Pair<String, String?>>>(List(4) { "hermes.example.ts.net" to "first" }, reads)
+        assertEquals(first.gateway.gatewayUrl to first.profile, oldFiles.identity)
+        assertEquals("same-id", oldTranscript.state.storedSessionId)
+
+        // A new title on the same chat reads the same files, so its widgets keep their key and don't reload.
+        val current = vm.transcript.value.widgetFiles
+        vm.open(first.copy(gateway = SavedGateway("https://other.example"), title = "Renamed"))
+        runCurrent()
+        assertEquals(assertNotNull(current).identity, assertNotNull(vm.transcript.value.widgetFiles).identity)
     }
 
     @Test

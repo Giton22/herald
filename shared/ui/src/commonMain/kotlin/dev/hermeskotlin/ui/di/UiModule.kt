@@ -46,6 +46,7 @@ val uiModule = module {
             get(), get(), get(), get(), get(), get(), get(), get(), get(), get(),
             seen = getOrNull(),
             threads = getOrNull(),
+            linkPreviews = get(),
         )
     }
     viewModelOf(::SettingsViewModel)
