@@ -2,6 +2,7 @@ package dev.hermeskotlin.core.auth
 
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.ApiResult
+import io.ktor.http.parseQueryString
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlin.io.encoding.Base64
@@ -19,6 +20,14 @@ interface LoopbackListener : AutoCloseable {
 
     /** The query of the next request to [redirectUri]'s path; that request is answered by sending the browser back to the app. */
     suspend fun awaitCallback(): Map<String, String>
+}
+
+/** The query of a request [target] such as `/callback?code=…`; empty when it can't be decoded (a stray `%`). */
+internal fun callbackQuery(target: String): Map<String, String> = try {
+    val parameters = parseQueryString(target.substringAfter('?', ""))
+    parameters.names().associateWith { parameters[it].orEmpty() }
+} catch (e: Exception) {
+    emptyMap()
 }
 
 /**

@@ -310,7 +310,7 @@ Agent tools that run on the phone: a gateway plugin registers them, Herald answe
 - [ ] Home-screen widget and Quick Settings tile
 - [x] Offline cache of sessions and messages: the chat list and the newest rows of the last 50 chats read are kept on the device (Room, rows encrypted with a Keystore-held key) and shown while the gateway can't be reached, marked "Saved copy"; signing out of a gateway forgets its chats
 - [ ] Send prompts typed offline once the gateway is back (an outbox)
-- [ ] iOS app
+- [ ] iOS app 🚧 in progress: the shared UI in a UIKit host (`iosApp/`, an XcodeGen project), browser sign-in in an in-app session
 - [ ] Desktop (JVM) app
 - [x] Wear OS companion (`wearApp`, `shared/wearlink`): talk to Hermes from the watch through Herald on the phone (Data Layer relay, its own side chat); the watch's speech recognizer, or a recording the gateway transcribes; live progress, the reply and the chat's title; the gateway's voice played on the watch, the watch's own voice when there is none; pick, start or continue a chat; an "Ask Hermes" tile and complication
 - [x] Wear OS live voice: with GPT-Live on the gateway, the watch holds the voice call itself (WebRTC, its microphone and speaker, over Wi-Fi or mobile data when it has them) while Herald on the phone gets the model's answer and runs each request as a Hermes turn in the watch's chat; captions, Hermes at work, mute and hang up on the watch; "Talk live" in the watch's settings

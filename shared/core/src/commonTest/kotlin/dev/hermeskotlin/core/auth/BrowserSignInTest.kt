@@ -149,6 +149,13 @@ class BrowserSignInTest {
     }
 
     @Test
+    fun callbackQueryDecodesAndSurvivesBrokenEscapes() {
+        assertEquals(mapOf("code" to "a b", "state" to "s"), callbackQuery("/callback?code=a%20b&state=s"))
+        assertEquals(emptyMap(), callbackQuery("/callback"))
+        assertEquals(emptyMap(), callbackQuery("/callback?code=%zz&state=%"))
+    }
+
+    @Test
     fun challengeMatchesRfc7636Example() {
         assertEquals("E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM", pkceChallenge("dBjftJeZ4CVP-mB92K27uhbUJU1p1r_wW1gFWFOEjXk"))
     }
