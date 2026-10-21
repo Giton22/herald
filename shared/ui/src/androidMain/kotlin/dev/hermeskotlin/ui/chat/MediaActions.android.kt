@@ -44,15 +44,21 @@ private class AndroidMediaActions(private val context: Context) : MediaActions {
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
         val resolver = context.contentResolver
-        val uri = resolver.insert(collection, values) ?: return@withContext "Couldn't save $name."
-        try {
-            resolver.openOutputStream(uri)?.use { it.write(bytes) } ?: error("no stream")
-            resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
-            "Saved to $folder"
+        var savedUri: android.net.Uri? = null
+        val uri = try {
+            val inserted = resolver.insert(collection, values) ?: error("no entry")
+            savedUri = inserted
+            resolver.openOutputStream(inserted)?.use { it.write(bytes) } ?: error("no stream")
+            check(resolver.update(inserted, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null) > 0)
+            inserted
         } catch (e: Exception) {
-            resolver.delete(uri, null, null)
-            "Couldn't save $name."
+            savedUri?.let { runCatching { resolver.delete(it, null, null) } }
+            return@withContext "Couldn't save $name."
         }
+        // Notify only after publishing. A blocked notification must never delete a successfully saved file.
+        val openMime = mimeTypeOf(name).takeUnless { it == "application/octet-stream" } ?: mime
+        runCatching { notifySavedFile(context, uri, name, openMime, folder) }
+        "Saved to $folder"
     }
 
     override fun share(bytes: ByteArray, name: String) {

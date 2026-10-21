@@ -31,6 +31,9 @@ kotlin {
             // The Health switch asks for Health Connect's permissions through its own screen.
             implementation(libs.androidx.health.connect)
         }
+        getByName("androidHostTest").dependencies {
+            implementation("org.robolectric:robolectric:4.17")
+        }
         commonTest.dependencies {
             implementation(libs.kotlin.test)
             implementation(libs.kotlinx.coroutines.test)

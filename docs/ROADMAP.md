@@ -168,6 +168,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Pictures and files the agent delivers (`MEDIA:` paths, Markdown images, `::preview` widget files) shown inline or as cards, fetched through `GET /api/files/download`
 - [x] Links to files on the gateway (`[name](/path)`, `file://`, `/src/App.kt:42`) open full screen: Markdown rendered, JSON indented, CSV/TSV as a table, code with line numbers at the linked line; Save and Share fetch the whole file (`GET /api/fs/read-text`, `GET /api/fs/download`)
 - [x] Full-screen image viewer with pinch-zoom; Save (Pictures / Download `Herald`) and Share for pictures and files
+- [x] Completed saves post a Downloads notification; tap to open the saved file in a phone app, with a Downloads fallback when no viewer is installed. Notifications being off never prevents saving.
 - [x] Chats open as the `desktop` surface (`source` on `session.create` / `session.resume`), so the agent knows Markdown and files render
 - [x] Run self-contained HTML `::preview` widgets inline (an isolated WebView with Desktop-compatible theme colors and Herald's font; a scrollable panel, with Save and Share; requires Android System WebView 152+). External resources and widget-to-agent messages aren't supported yet
 - [x] Share sheet: text, links, pictures and files shared from other apps open a new chat with them as its draft (up to 10 files, through the composer's size limits); nothing sends until you do, and before sign-in the draft waits
