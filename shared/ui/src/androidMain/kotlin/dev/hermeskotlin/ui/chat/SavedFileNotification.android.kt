@@ -19,14 +19,8 @@ internal fun notifySavedFile(context: Context, uri: Uri, name: String, mime: Str
     ) return
     val manager = context.getSystemService(NotificationManager::class.java) ?: return
     if (!manager.areNotificationsEnabled()) return
-    // Android won't raise an existing channel's importance. Migrate the old app default,
-    // but keep a channel whose importance the user has explicitly chosen.
-    val legacy = manager.getNotificationChannel("downloads")
-    val keepLegacy = legacy != null && (
-        legacy.importance != NotificationManager.IMPORTANCE_DEFAULT ||
-            (Build.VERSION.SDK_INT >= 29 && legacy.hasUserSetImportance())
-        )
-    val channelId = if (keepLegacy) "downloads" else "download-completion"
+    // Created once at high importance for the heads-up banner; Android keeps any importance the user picks later.
+    val channelId = "download-completion"
     manager.createNotificationChannel(
         NotificationChannel(channelId, "Downloads", NotificationManager.IMPORTANCE_HIGH).apply {
             description = "Pop-up alerts for files and pictures saved to this phone"

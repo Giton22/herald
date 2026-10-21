@@ -1,5 +1,6 @@
 package dev.hermeskotlin.ui.chat
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -21,6 +22,17 @@ class DownloadedAttachmentTest {
         assertEquals(1, fetches)
         assertEquals(1, actions.saves)
         assertEquals(3, actions.opens)
+    }
+
+    @Test
+    fun slowDownloadIsNotCutOffBeforeTheHttpTimeout() = runTest {
+        val actions = FakeAttachmentActions()
+        val result = useDownloadedAttachment(actions, "owner/source", "large.pdf", share = false) {
+            delay(25_000) // Slower than the old 20-second cap, inside the HTTP client's 30 seconds.
+            FileDownload.Ready(byteArrayOf(1))
+        }
+        assertTrue(result.saved)
+        assertEquals(1, actions.saves)
     }
 
     @Test

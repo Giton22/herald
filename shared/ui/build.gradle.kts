@@ -33,7 +33,7 @@ kotlin {
             implementation(libs.androidx.health.connect)
         }
         getByName("androidHostTest").dependencies {
-            implementation("org.robolectric:robolectric:4.17")
+            implementation(libs.robolectric)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

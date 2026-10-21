@@ -2,7 +2,6 @@ package dev.hermeskotlin.ui.chat
 
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.withTimeoutOrNull
 
 /** Length prefixes keep gateway, nullable profile and the exact source path unambiguous. */
 internal fun downloadedAttachmentKey(identity: Any?, source: String): String? {
@@ -32,9 +31,8 @@ internal suspend fun useDownloadedAttachment(
             val usedLocal = if (share) actions.shareSaved(sourceKey) else actions.openSaved(sourceKey)
             if (usedLocal) return AttachmentUseResult(saved = true)
         }
-        val fetched = withTimeoutOrNull(20_000) { download() }
-            ?: return AttachmentUseResult(false, "Getting $name took too long. Tap to try again.")
-        val bytes = when (fetched) {
+        // The HTTP client's own request timeout bounds this; a shorter one here cut off slow but working downloads.
+        val bytes = when (val fetched = download()) {
             is FileDownload.Ready -> fetched.bytes
             is FileDownload.Failed -> return AttachmentUseResult(false, fetched.message)
         }
