@@ -513,7 +513,7 @@ private val StackSaver = listSaver<List<GatewayFile>, Any>(
 private const val PICTURE_EDGE = 1600
 
 @Composable
-private fun FileBody(file: GatewayFile, kind: GatewayFileKind, text: FileText, raw: Boolean, wrap: Boolean) {
+internal fun FileBody(file: GatewayFile, kind: GatewayFileKind, text: FileText, raw: Boolean, wrap: Boolean) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
     val framed = Modifier.fillMaxSize().clip(shape).background(Theme[colors][well]).border(1.dp, Theme[colors][stroke], shape)
     when {

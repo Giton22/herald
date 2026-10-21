@@ -45,6 +45,14 @@ class MediaSaveTest {
     }
 
     @Test
+    fun completionIsCompactAndCarriesTheSavedName() = runTest {
+        actions.save(byteArrayOf(1), "report.pdf")
+        val notification = shadowOf(context.getSystemService(NotificationManager::class.java)).allNotifications.single()
+        assertEquals(null, notification.extras.getCharSequence(Notification.EXTRA_BIG_TEXT), "A one-line completion doesn't need an expanded body")
+        assertEquals("report.pdf", shadowOf(notification.contentIntent).savedIntent.getStringExtra(android.content.Intent.EXTRA_TITLE))
+    }
+
+    @Test
     fun completedSaveUsesHeadsUpImportance() = runTest {
         actions.save(byteArrayOf(1), "report.pdf")
         val manager = context.getSystemService(NotificationManager::class.java)

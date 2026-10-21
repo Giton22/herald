@@ -3,6 +3,8 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Saved APKs open the system installer only after an explicit tap; Android still requires user approval. -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <!-- A GPT-Live call switches the audio to call mode and the speaker. -->
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />

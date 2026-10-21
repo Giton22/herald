@@ -37,28 +37,33 @@ private suspend fun openPdf(cache: File, bytes: ByteArray): PdfOpen = withContex
         } catch (e: Exception) {
             return@withContext PdfOpen.Failed(PDF_NO_ROOM)
         }
-        val renderer = try {
-            PdfRenderer(descriptor)
-        } catch (e: SecurityException) {
-            descriptor.close()
-            return@withContext PdfOpen.Failed(PDF_LOCKED)
-        } catch (e: Exception) {
-            descriptor.close()
-            return@withContext PdfOpen.Failed(PDF_BROKEN)
-        }
-        val aspects = try {
-            List(renderer.pageCount) { index -> renderer.openPage(index).use { it.width.toFloat() / it.height } }
-        } catch (e: Exception) {
-            null
-        }
-        if (aspects.isNullOrEmpty()) {
-            renderer.close()
-            PdfOpen.Failed(PDF_BROKEN)
-        } else {
-            PdfOpen.Ready(AndroidPdfPages(renderer, aspects))
-        }
+        openPdfDescriptor(descriptor)
     } finally {
         file?.delete()
+    }
+}
+
+/** Owns a seekable descriptor, for both downloaded bytes and a file already saved on the phone. */
+internal fun openPdfDescriptor(descriptor: ParcelFileDescriptor): PdfOpen {
+    val renderer = try {
+        PdfRenderer(descriptor)
+    } catch (e: SecurityException) {
+        descriptor.close()
+        return PdfOpen.Failed(PDF_LOCKED)
+    } catch (e: Exception) {
+        descriptor.close()
+        return PdfOpen.Failed(PDF_BROKEN)
+    }
+    val aspects = try {
+        List(renderer.pageCount) { index -> renderer.openPage(index).use { it.width.toFloat() / it.height } }
+    } catch (e: Exception) {
+        null
+    }
+    return if (aspects.isNullOrEmpty()) {
+        renderer.close()
+        PdfOpen.Failed(PDF_BROKEN)
+    } else {
+        PdfOpen.Ready(AndroidPdfPages(renderer, aspects))
     }
 }
 

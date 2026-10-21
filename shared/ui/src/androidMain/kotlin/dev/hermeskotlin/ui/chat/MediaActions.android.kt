@@ -57,7 +57,7 @@ private class AndroidMediaActions(private val context: Context) : MediaActions {
         }
         // Notify only after publishing. A blocked notification must never delete a successfully saved file.
         val openMime = mimeTypeOf(name).takeUnless { it == "application/octet-stream" } ?: mime
-        runCatching { notifySavedFile(context, uri, name, openMime, folder) }
+        runCatching { notifySavedFile(context, uri, name, openMime) }
         "Saved to $folder"
     }
 
