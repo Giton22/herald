@@ -7,6 +7,18 @@ interface MediaActions {
     /** Saves to the device's shared storage; returns a sentence saying where, or what went wrong. */
     suspend fun save(bytes: ByteArray, name: String): String
 
+    /** Saves an attachment and remembers its source, so later taps can use the local copy. */
+    suspend fun saveDownloaded(bytes: ByteArray, name: String, sourceKey: String): String = save(bytes, name)
+
+    /** Whether the remembered file still exists and can be read. */
+    suspend fun hasSaved(sourceKey: String): Boolean = false
+
+    /** Returns false when the saved copy is missing; callers may then download it again. */
+    suspend fun openSaved(sourceKey: String): Boolean = false
+
+    /** Shares the original saved URI rather than downloading a second copy. */
+    suspend fun shareSaved(sourceKey: String): Boolean = false
+
     /** Opens the system share sheet for the file. */
     fun share(bytes: ByteArray, name: String)
 }

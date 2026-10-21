@@ -11,6 +11,10 @@ import android.net.Uri
 import android.os.ParcelFileDescriptor
 import android.provider.MediaStore
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.setMain
+import kotlinx.coroutines.test.resetMain
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.Dispatchers
 import org.junit.Before
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -31,8 +35,10 @@ class MediaSaveTest {
     private lateinit var provider: SavedFileProvider
     private lateinit var actions: MediaActions
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Before
     fun setUp() {
+        Dispatchers.setMain(UnconfinedTestDispatcher())
         context = RuntimeEnvironment.getApplication()
         provider = SavedFileProvider(File(context.cacheDir, "saved.pdf"))
         provider.attachInfo(context, android.content.pm.ProviderInfo().apply { authority = "media" })
@@ -42,6 +48,114 @@ class MediaSaveTest {
         constructor.isAccessible = true
         actions = constructor.newInstance(context) as MediaActions
         shadowOf(context).grantPermissions(android.Manifest.permission.POST_NOTIFICATIONS)
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @org.junit.After
+    fun resetDispatcher() { Dispatchers.resetMain() }
+
+    @Test
+    fun savedAttachmentCanBeReopenedAfterActionsAreRecreated() = runTest {
+        actions.saveDownloaded("local document".encodeToByteArray(), "report.pdf", "gateway/profile/source")
+        val constructor = Class.forName("dev.hermeskotlin.ui.chat.AndroidMediaActions").getDeclaredConstructor(Context::class.java)
+        constructor.isAccessible = true
+        val reopened = constructor.newInstance(context) as MediaActions
+        assertTrue(reopened.hasSaved("gateway/profile/source"), "A downloaded chat attachment must remember its local copy")
+        assertTrue(reopened.openSaved("gateway/profile/source"))
+        val intent = shadowOf(context).nextStartedActivity
+        assertEquals(OpenSavedFileActivity::class.java.name, intent.component?.className)
+        assertEquals("content://media/external_primary/downloads/42", intent.data.toString())
+        assertEquals("report.pdf", intent.getStringExtra(android.content.Intent.EXTRA_TITLE))
+        assertEquals("application/pdf", intent.type)
+    }
+
+    @Test
+    fun savingTheSameSourceAgainDoesNotCreateAnotherFile() = runTest {
+        actions.saveDownloaded("original".encodeToByteArray(), "report.pdf", "owner/source")
+        actions.saveDownloaded("replacement".encodeToByteArray(), "report.pdf", "owner/source")
+        assertEquals(1, provider.inserts)
+        assertEquals("original", provider.file.readText())
+    }
+
+    @Test
+    fun aDeletedSavedFileIsForgottenAndCanBeDownloadedAgain() = runTest {
+        actions.saveDownloaded(byteArrayOf(1), "report.pdf", "owner/source")
+        assertTrue(provider.file.delete())
+        assertEquals(false, actions.hasSaved("owner/source"))
+        assertEquals(false, actions.openSaved("owner/source"))
+        assertEquals(null, shadowOf(context).nextStartedActivity)
+        actions.saveDownloaded(byteArrayOf(2), "report.pdf", "owner/source")
+        assertTrue(actions.hasSaved("owner/source"))
+        assertEquals(2, provider.inserts)
+    }
+
+    @Test
+    fun aSavedCopyDoesNotMatchAnotherOwnerOrSource() = runTest {
+        actions.saveDownloaded(byteArrayOf(1), "report.pdf", "owner-a/source-a")
+        assertEquals(false, actions.hasSaved("owner-b/source-a"))
+        assertEquals(false, actions.hasSaved("owner-a/source-b"))
+        actions.saveDownloaded(byteArrayOf(2), "report.pdf", "owner-b/source-a")
+        assertEquals(2, provider.inserts)
+    }
+
+    @Test
+    fun failedSavesDoNotLeaveASavedAttachment() = runTest {
+        provider.failPublish = true
+        assertEquals("Couldn't save report.pdf.", actions.saveDownloaded(byteArrayOf(1), "report.pdf", "owner/source"))
+        assertEquals(false, actions.hasSaved("owner/source"))
+    }
+
+    @Test
+    fun localShareUsesSavedUriAndDoesNotRewriteTheFile() = runTest {
+        actions.saveDownloaded("original".encodeToByteArray(), "report.pdf", "owner/source")
+        assertTrue(actions.shareSaved("owner/source"))
+        val chooser = shadowOf(context).nextStartedActivity
+        @Suppress("DEPRECATION")
+        val send = chooser.getParcelableExtra<android.content.Intent>(android.content.Intent.EXTRA_INTENT)!!
+        @Suppress("DEPRECATION")
+        val uri = send.getParcelableExtra<Uri>(android.content.Intent.EXTRA_STREAM)
+        assertEquals("content://media/external_primary/downloads/42", uri.toString())
+        assertEquals(uri, send.clipData?.getItemAt(0)?.uri)
+        assertTrue(send.flags and android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION != 0)
+        assertEquals("original", provider.file.readText())
+        assertEquals(1, provider.inserts)
+    }
+
+    @Test
+    fun inaccessibleSavedFilesAreNotOfferedForOpening() = runTest {
+        actions.saveDownloaded(byteArrayOf(1), "report.pdf", "owner/source")
+        provider.failWrite = true
+        assertEquals(false, actions.hasSaved("owner/source"))
+        assertEquals(false, actions.shareSaved("owner/source"))
+    }
+
+    @Test
+    fun chatTapThenRecreatedOfflineTapAndShareFetchOnlyOnce() = runTest {
+        val key = downloadedAttachmentKey("https://gateway.example" to "test-profile", "/files/report.pdf")!!
+        var fetches = 0
+        val first = useDownloadedAttachment(actions, key, "report.pdf", share = false) {
+            fetches++
+            FileDownload.Ready("local document".encodeToByteArray())
+        }
+        assertTrue(first.saved)
+        val firstIntent = shadowOf(context).nextStartedActivity
+        val constructor = Class.forName("dev.hermeskotlin.ui.chat.AndroidMediaActions").getDeclaredConstructor(Context::class.java)
+        constructor.isAccessible = true
+        val reopened = constructor.newInstance(context) as MediaActions
+        val offline = useDownloadedAttachment(reopened, key, "report.pdf", share = false) {
+            fetches++
+            error("Offline: no network allowed")
+        }
+        assertTrue(offline.saved)
+        assertEquals(firstIntent.data, shadowOf(context).nextStartedActivity.data)
+        val share = useDownloadedAttachment(reopened, key, "report.pdf", share = true) {
+            fetches++
+            error("Sharing must use the local copy")
+        }
+        assertTrue(share.saved)
+        assertEquals(1, fetches)
+        assertEquals(1, provider.inserts)
+        assertEquals("local document", provider.file.readText())
     }
 
     @Test
@@ -218,16 +332,18 @@ private class SavedFileProvider(val file: File) : ContentProvider() {
     var failWrite = false
     var failPublish = false
     var deletes = 0
+    var inserts = 0
     private var nextId = 42
     override fun onCreate() = true
     override fun insert(uri: Uri, values: ContentValues?): Uri {
+        inserts++
         if (failInsert) throw java.io.IOException("Storage unavailable")
         inserted = values
         return Uri.parse("content://media/external_primary/downloads/${nextId++}")
     }
     override fun openFile(uri: Uri, mode: String): ParcelFileDescriptor {
         if (failWrite) throw java.io.FileNotFoundException("Storage unavailable")
-        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.MODE_CREATE or ParcelFileDescriptor.MODE_READ_WRITE or ParcelFileDescriptor.MODE_TRUNCATE)
+        return ParcelFileDescriptor.open(file, ParcelFileDescriptor.parseMode(mode))
     }
     override fun update(uri: Uri, values: ContentValues?, selection: String?, selectionArgs: Array<out String>?): Int {
         if (failPublish) return 0

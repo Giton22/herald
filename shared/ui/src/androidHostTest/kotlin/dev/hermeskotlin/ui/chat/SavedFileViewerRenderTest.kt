@@ -46,6 +46,7 @@ class SavedFileViewerRenderTest {
     fun savedFileScreensRenderWithoutAChooser() {
         // Compose caches AndroidUiDispatcher's Looper. Render the fixtures in one Robolectric
         // sandbox rather than retaining a dispatcher whose Looper a previous test has reset.
+        DownloadedAttachmentRenderFixtures.actualAttachmentCardsRenderDownloadAndSavedStates()
         renderFixture("download-test.pdf", "application/pdf", "This is not a PDF".encodeToByteArray())
         renderFixture("download-test.json", "application/json", """{"status":"saved","items":[1,2,3]}""".encodeToByteArray())
         renderFixture("download-test.csv", "text/csv", "Item,Status,Count\nDocument,Saved,2\nImage,Ready,1".encodeToByteArray())
