@@ -25,19 +25,28 @@ internal fun notifySavedFile(context: Context, uri: Uri, name: String, mime: Str
     ) return
     val manager = context.getSystemService(NotificationManager::class.java) ?: return
     if (!manager.areNotificationsEnabled()) return
+    // Android won't raise an existing channel's importance. Migrate the old app default,
+    // but keep a channel whose importance the user has explicitly chosen.
+    val legacy = manager.getNotificationChannel("downloads")
+    val keepLegacy = legacy != null && (
+        legacy.importance != NotificationManager.IMPORTANCE_DEFAULT ||
+            (Build.VERSION.SDK_INT >= 29 && legacy.hasUserSetImportance())
+        )
+    val channelId = if (keepLegacy) "downloads" else "download-completion"
     manager.createNotificationChannel(
-        NotificationChannel("downloads", "Downloads", NotificationManager.IMPORTANCE_DEFAULT).apply {
-            description = "Files and pictures saved to this phone"
+        NotificationChannel(channelId, "Downloads", NotificationManager.IMPORTANCE_HIGH).apply {
+            description = "Pop-up alerts for files and pictures saved to this phone"
         },
     )
     val open = Intent(context, OpenSavedFileActivity::class.java).setDataAndType(uri, mime)
     val tap = PendingIntent.getActivity(context, 0, open, PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE)
-    val notification = NotificationCompat.Builder(context, "downloads")
+    val notification = NotificationCompat.Builder(context, channelId)
         .setSmallIcon(android.R.drawable.stat_sys_download_done)
         .setContentTitle(name)
         .setContentText("Download complete · Tap to open")
         .setStyle(NotificationCompat.BigTextStyle().bigText("Saved to $folder · Tap to open"))
         .setContentIntent(tap)
+        .addAction(android.R.drawable.ic_menu_view, "Open", tap)
         .setAutoCancel(true)
         .setVisibility(NotificationCompat.VISIBILITY_PRIVATE)
         .build()

@@ -45,6 +45,66 @@ class MediaSaveTest {
     }
 
     @Test
+    fun completedSaveUsesHeadsUpImportance() = runTest {
+        actions.save(byteArrayOf(1), "report.pdf")
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val notification = shadowOf(manager).allNotifications.single()
+        assertEquals(NotificationManager.IMPORTANCE_HIGH, manager.getNotificationChannel(notification.channelId).importance)
+    }
+
+    @Test
+    fun existingDefaultChannelIsMigratedForHeadsUpOnUpgrade() = runTest {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(android.app.NotificationChannel("downloads", "Downloads", NotificationManager.IMPORTANCE_DEFAULT))
+        actions.save(byteArrayOf(1), "report.pdf")
+        val notification = shadowOf(manager).allNotifications.single()
+        assertEquals(NotificationManager.IMPORTANCE_HIGH, manager.getNotificationChannel(notification.channelId).importance)
+    }
+
+    @Test
+    fun completionOffersAnExplicitOpenButton() = runTest {
+        actions.save(byteArrayOf(1), "report.pdf")
+        val notification = shadowOf(context.getSystemService(NotificationManager::class.java)).allNotifications.single()
+        val open = notification.actions?.singleOrNull()
+        assertNotNull(open, "The completion alert should offer an Open action")
+        assertEquals("Open", open.title)
+        assertEquals(notification.contentIntent, open.actionIntent)
+    }
+
+    @Test
+    fun silencedLegacyChannelIsNotBypassedOnUpgrade() = runTest {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(android.app.NotificationChannel("downloads", "Downloads", NotificationManager.IMPORTANCE_NONE))
+        assertEquals("Saved to Download/Herald", actions.save(byteArrayOf(1), "report.pdf"))
+        assertEquals(null, manager.getNotificationChannel("download-completion"))
+        assertEquals(NotificationManager.IMPORTANCE_NONE, manager.getNotificationChannel("downloads").importance)
+    }
+
+    @Test
+    fun explicitLegacyImportanceIsPreservedOnUpgrade() = runTest {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        val legacy = android.app.NotificationChannel("downloads", "Downloads", NotificationManager.IMPORTANCE_DEFAULT)
+        // Simulate Android locking importance after the user chooses it in Settings.
+        org.robolectric.util.ReflectionHelpers.callInstanceMethod<Void>(legacy, "lockFields",
+            org.robolectric.util.ReflectionHelpers.ClassParameter.from(Int::class.javaPrimitiveType, 4))
+        manager.createNotificationChannel(legacy)
+        actions.save(byteArrayOf(1), "report.pdf")
+        val notification = shadowOf(manager).allNotifications.single()
+        assertEquals("downloads", notification.channelId)
+        assertEquals(NotificationManager.IMPORTANCE_DEFAULT, manager.getNotificationChannel(notification.channelId).importance)
+    }
+
+    @Test
+    fun newChannelKeepsUserLoweredImportanceOnLaterSaves() = runTest {
+        val manager = context.getSystemService(NotificationManager::class.java)
+        manager.createNotificationChannel(android.app.NotificationChannel("download-completion", "Downloads", NotificationManager.IMPORTANCE_LOW))
+        actions.save(byteArrayOf(1), "report.pdf")
+        val notification = shadowOf(manager).allNotifications.single()
+        assertEquals("download-completion", notification.channelId)
+        assertEquals(NotificationManager.IMPORTANCE_LOW, manager.getNotificationChannel(notification.channelId).importance)
+    }
+
+    @Test
     fun failedInsertReturnsAnErrorWithoutANotification() = runTest {
         provider.failInsert = true
         assertEquals("Couldn't save report.pdf.", actions.save(byteArrayOf(1), "report.pdf"))
