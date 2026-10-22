@@ -28,7 +28,8 @@ data class Listening(val recording: Boolean = false, val level: Float = 0f, val 
 /**
  * The talk screen. A tap on the mic opens the watch's own speech recognizer, so only words go to the phone;
  * a watch without one records and the gateway transcribes. Launched with
- * [EXTRA_LISTEN] (the tile, the complication) it starts listening at once.
+ * [EXTRA_LISTEN] (the tile, the complication) or as the watch's assistant (`ACTION_ASSIST`) it starts
+ * listening at once.
  */
 class MainActivity : ComponentActivity() {
 
@@ -103,7 +104,7 @@ class MainActivity : ComponentActivity() {
         when {
             !typed.isNullOrBlank() -> app.link.ask(typed)
             intent.getStringExtra(EXTRA_CALL) == app.callToken -> call()
-            intent.getBooleanExtra(EXTRA_LISTEN, false) -> talk()
+            AssistEntry.asksToListen(intent.action, intent.getBooleanExtra(EXTRA_LISTEN, false)) -> talk()
         }
     }
 
@@ -127,6 +128,8 @@ class MainActivity : ComponentActivity() {
 
     /** The mic: a live call when the gateway talks live and it's on, else listening for one ask. */
     private fun talk() {
+        // A second call-up while the microphone is already open (the assistant button pressed twice) changes nothing.
+        if (listening.value.recording) return
         if (!(app.link.liveVoice.value && app.store.live.value)) return listen()
         app.link.dismissCall()
         listening.value = Listening()

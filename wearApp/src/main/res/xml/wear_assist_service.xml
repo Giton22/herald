@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Herald as the watch's assistant: the assist gesture opens Herald's own listening screen, and the recognizer
+     is the stub Android requires of an assistant. -->
+<voice-interaction-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:sessionService="dev.hermeskotlin.wear.assist.HeraldWearAssistSessionService"
+    android:recognitionService="dev.hermeskotlin.wear.assist.HeraldWearRecognitionService"
+    android:supportsAssist="true" />
