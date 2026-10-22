@@ -550,6 +550,13 @@ internal fun SettingsView(
                         }
                         Divider()
                     }
+                    SwitchRow(
+                        title = "Live voice on ChatGPT",
+                        detail = "When the gateway's Talk Desktop plugin is signed in to ChatGPT, a voice chat is a live call on that plan instead of the OpenAI key.",
+                        checked = settings.subscriptionVoice,
+                        onCheckedChange = { on -> onUpdate { it.copy(subscriptionVoice = on) } },
+                    )
+                    Divider()
                     Field("Pause before sending", detail = "How long a voice chat waits after you stop talking. Short is Desktop's timing.") {
                         SegmentedControl(
                             options = VoicePause.entries,

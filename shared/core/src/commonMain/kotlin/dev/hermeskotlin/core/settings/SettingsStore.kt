@@ -91,6 +91,11 @@ data class AppSettings(
     /** The gateway's Next Prompt plugin's suggested next message, over the composer once a turn ends. */
     val suggestedReplies: Boolean = true,
     val voicePause: VoicePause = VoicePause.Normal,
+    /**
+     * A voice chat is a live call on the ChatGPT plan when the gateway's talk-desktop plugin is signed in to it, before
+     * GPT-Live on the OpenAI key or the chained chat. Off, the profile's voice chat mode decides, as before.
+     */
+    val subscriptionVoice: Boolean = true,
     /** The mic for dictation in the composer and on an empty chat. Off, it goes, and the model name gets the room. */
     val dictation: Boolean = true,
     val dictationEngine: DictationEngine = DictationEngine.Device,
