@@ -58,6 +58,9 @@ import dev.hermeskotlin.ui.chat.SessionControlSheetView
 import dev.hermeskotlin.ui.chat.UsageSheetView
 import dev.hermeskotlin.ui.sessions.CapabilitiesActions
 import dev.hermeskotlin.ui.sessions.CapabilitiesView
+import dev.hermeskotlin.ui.sessions.SkillsHubActions
+import dev.hermeskotlin.ui.sessions.SkillsHubView
+import dev.hermeskotlin.core.capabilities.HubSkill
 import dev.hermeskotlin.ui.sessions.ConfigActions
 import dev.hermeskotlin.ui.sessions.ConfigPlace
 import dev.hermeskotlin.ui.sessions.ConfigView
@@ -147,6 +150,10 @@ enum class PreviewScene(val label: String) {
     Journey("What the agent has learned"),
     Insights("Insights"),
     Capabilities("Capabilities"),
+    SkillsHub("The skills hub"),
+    SkillsHubDetail("A hub skill opened, scan clean"),
+    SkillsHubCaution("A hub skill whose scan wants a yes"),
+    SkillsHubBlocked("A hub skill the scan blocked"),
     Config("Hermes's settings"),
     ConfigVoice("Hermes's voice settings, one saving"),
     ConfigSearch("A search across Hermes's settings"),
@@ -372,6 +379,15 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 }
                 PreviewScene.Capabilities -> OpenSidebar {
                     SidebarPage { CapabilitiesView(PageSamples.capabilities, remember { TextFieldState() }, PreviewCapabilitiesActions, onBack = {}) }
+                }
+                PreviewScene.SkillsHub, PreviewScene.SkillsHubDetail, PreviewScene.SkillsHubCaution, PreviewScene.SkillsHubBlocked -> OpenSidebar {
+                    val hub = when (scene) {
+                        PreviewScene.SkillsHubDetail -> PageSamples.skillsHubDetail
+                        PreviewScene.SkillsHubCaution -> PageSamples.skillsHubCaution
+                        PreviewScene.SkillsHubBlocked -> PageSamples.skillsHubBlocked
+                        else -> PageSamples.skillsHub
+                    }
+                    SidebarPage { SkillsHubView(hub, remember { TextFieldState() }, PreviewSkillsHubActions, onBack = {}, subtitle = "Installs into the main profile") }
                 }
                 PreviewScene.Config, PreviewScene.ConfigVoice, PreviewScene.ConfigSearch, PreviewScene.ConfigPicker -> OpenSidebar {
                     val config = PageSamples.config(place = "voice".takeIf { scene == PreviewScene.ConfigVoice || scene == PreviewScene.ConfigPicker })
@@ -604,6 +620,21 @@ private object PreviewCapabilitiesActions : CapabilitiesActions {
     override fun setServerEnabled(server: McpServer, enabled: Boolean) = Unit
     override fun testServer(server: McpServer) = Unit
     override fun dismissMessage() = Unit
+    override fun openHub() = Unit
+    override fun uninstallSkill(skill: Skill) = Unit
+}
+
+private object PreviewSkillsHubActions : SkillsHubActions {
+    override fun refresh() = Unit
+    override fun search(query: String) = Unit
+    override fun open(skill: HubSkill) = Unit
+    override fun closeDetail() = Unit
+    override fun install(skill: HubSkill) = Unit
+    override fun confirmInstall() = Unit
+    override fun cancelConfirm() = Unit
+    override fun uninstall(name: String) = Unit
+    override fun updateAll() = Unit
+    override fun dismissMessage() = Unit
 }
 
 private object PreviewConfigActions : ConfigActions {
@@ -738,6 +769,22 @@ private fun InsightsPreview() = HeraldPreview(PreviewScene.Insights)
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun CapabilitiesPreview() = HeraldPreview(PreviewScene.Capabilities)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun SkillsHubPreview() = HeraldPreview(PreviewScene.SkillsHub)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun SkillsHubDetailPreview() = HeraldPreview(PreviewScene.SkillsHubDetail)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun SkillsHubCautionPreview() = HeraldPreview(PreviewScene.SkillsHubCaution)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun SkillsHubBlockedPreview() = HeraldPreview(PreviewScene.SkillsHubBlocked)
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable

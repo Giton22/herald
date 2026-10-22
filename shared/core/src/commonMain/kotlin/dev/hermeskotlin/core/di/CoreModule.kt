@@ -18,6 +18,7 @@ import io.ktor.util.date.getTimeMillis
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.chat.ToolRiskStore
 import dev.hermeskotlin.core.capabilities.CapabilitiesApi
+import dev.hermeskotlin.core.capabilities.SkillsHubApi
 import dev.hermeskotlin.core.plugins.NextPromptApi
 import dev.hermeskotlin.core.plugins.PluginsApi
 import dev.hermeskotlin.core.cron.CronApi
@@ -95,6 +96,7 @@ val coreModule = module {
     single { SessionsApi(get()) }
     single { CronApi(get()) }
     single { CapabilitiesApi(get()) }
+    single { SkillsHubApi(get()) }
     single { PluginsApi(get()) }
     single { NextPromptApi(get(), get(), get()) }
     single { InsightsApi(get()) }

@@ -601,6 +601,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                     CapabilitiesPage(
                         gateway = route.gateway,
                         profile = bot.name,
+                        profileLabel = bot.label,
                         onBack = { capabilitiesOpen = false },
                         onSessionExpired = app::onSessionExpired,
                         title = "${bot.label}'s capabilities",

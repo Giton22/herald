@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -17,6 +18,12 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.foundation.background
@@ -26,8 +33,10 @@ import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.runtime.key
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -47,6 +56,13 @@ import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.surface3
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.CloudOff
+import com.composables.icons.lucide.Ellipsis
+import dev.hermeskotlin.designsystem.components.BottomSheet
+import dev.hermeskotlin.designsystem.components.IconButton
+import dev.hermeskotlin.designsystem.components.MinTouchTarget
+import dev.hermeskotlin.designsystem.components.Spinner
+import dev.hermeskotlin.designsystem.components.SheetHeader
+import dev.hermeskotlin.ui.PlatformBackHandler
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Search
@@ -88,12 +104,18 @@ internal fun CapabilitiesPage(
     profile: String?,
     onBack: () -> Unit,
     onSessionExpired: () -> Unit,
+    /** The profile's display name, e.g. a bot's label; the hub and the uninstall sheet name it instead of [profile]. */
+    profileLabel: String? = null,
     title: String = "Capabilities",
     /** A line above the tabs, e.g. on when changes take effect. */
     note: String? = null,
     viewModel: CapabilitiesViewModel = koinViewModel(),
+    hubViewModel: SkillsHubViewModel = koinViewModel(key = "skills-hub-${profile ?: "default"}"),
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
+    val hub = hubViewModel.state.collectAsStateWithLifecycle().value
+    var hubOpen by remember { mutableStateOf(false) }
+    var uninstalling by remember { mutableStateOf<Skill?>(null) }
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
     // Consume before the callback: the route changes on it, and the view model outlives the screen,
     // so a stale flag must not bounce the next mount after a fresh sign-in.
@@ -109,7 +131,71 @@ internal fun CapabilitiesPage(
             viewModel.dismissMessage()
         }
     }
-    CapabilitiesView(state, viewModel.skillQuery, viewModel, onBack = onBack, title = title, note = note)
+    // The hub's own state is watched here too: an uninstall runs from this page's list, with the hub page closed.
+    LaunchedEffect(hubViewModel, profile, gateway) {
+        hubViewModel.onSkillsChanged = viewModel::refresh
+        hubViewModel.bind(gateway, profile)
+    }
+    LaunchedEffect(hub.sessionExpired, hubOpen) {
+        if (hub.sessionExpired && !hubOpen) {
+            hubViewModel.consumeSessionExpired()
+            onSessionExpired()
+        }
+    }
+    LaunchedEffect(hub.message) {
+        if (hub.message != null) {
+            delay(6_000)
+            hubViewModel.dismissMessage()
+        }
+    }
+    val actions = remember(viewModel) {
+        object : CapabilitiesActions by viewModel {
+            override fun openHub() { hubOpen = true }
+            override fun uninstallSkill(skill: Skill) { uninstalling = skill }
+        }
+    }
+    CapabilitiesView(
+        state,
+        viewModel.skillQuery,
+        actions,
+        hubOpen = hubOpen,
+        onBack = onBack,
+        title = title,
+        note = note,
+        hubMessage = hub.message.takeIf { !hubOpen },
+        removing = hub.running,
+        onDismissHubMessage = hubViewModel::dismissMessage,
+    )
+    UninstallSheet(uninstalling, profileLabel ?: profile) { confirmed ->
+        uninstalling?.let { if (confirmed) hubViewModel.uninstall(it.name) }
+        uninstalling = null
+    }
+    // The skills search stays composed under the hub; it must not keep the keyboard and the typing.
+    val focus = LocalFocusManager.current
+    LaunchedEffect(hubOpen) { if (hubOpen) focus.clearFocus() }
+    if (hubOpen) {
+        PlatformBackHandler(enabled = true) { hubOpen = false }
+        // The list beneath is hidden, not covered, so the hub sits on the same backdrop as any page.
+        // This consumes taps, so one on a gap in the hub page doesn't reach that list.
+        Box(Modifier.fillMaxSize().pointerInput(Unit) { detectTapGestures { } }) {
+            SkillsHubPage(gateway, profile, profileLabel, onBack = { hubOpen = false }, onSessionExpired = onSessionExpired, viewModel = hubViewModel)
+        }
+    }
+}
+
+/** Asks before a hub skill is removed from the profile. [onResult] gets true to remove it. */
+@Composable
+private fun UninstallSheet(skill: Skill?, profile: String?, onResult: (Boolean) -> Unit) {
+    var kept by remember { mutableStateOf(skill) }
+    if (skill != null) kept = skill
+    BottomSheet(visible = skill != null, onDismiss = { onResult(false) }) {
+        val s = kept ?: return@BottomSheet
+        SheetHeader(s.name, "Remove ${s.name} from ${profile ?: "the main profile"}? Turning it off keeps it installed.")
+        Row(Modifier.padding(horizontal = 18.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            Button("Uninstall", onClick = { onResult(true) }, variant = ButtonVariant.Danger)
+            Button("Cancel", onClick = { onResult(false) }, variant = ButtonVariant.Secondary)
+        }
+    }
 }
 
 /** What the Capabilities page can ask for; [CapabilitiesViewModel] does it all, previews nothing. */
@@ -121,6 +207,12 @@ interface CapabilitiesActions {
     fun setServerEnabled(server: McpServer, enabled: Boolean)
     fun testServer(server: McpServer)
     fun dismissMessage()
+
+    /** Opens the skills hub page. */
+    fun openHub() {}
+
+    /** Asks to remove a skill the hub installed. */
+    fun uninstallSkill(skill: Skill) {}
 }
 
 /** The Capabilities page's layout, apart from its view model, so previews can draw it from sample data. */
@@ -132,8 +224,15 @@ internal fun CapabilitiesView(
     onBack: () -> Unit,
     title: String = "Capabilities",
     note: String? = null,
+    /** A message from the hub, e.g. after an uninstall, shown with the page's own. */
+    hubMessage: String? = null,
+    onDismissHubMessage: () -> Unit = {},
+    /** Names of hub skills being removed; their "⋯" shows progress and can't be pressed. */
+    removing: Set<String> = emptySet(),
+    /** The hub page is drawn over this one: hide the list (kept, so it keeps its scroll) and keep screen readers off it. */
+    hubOpen: Boolean = false,
 ) {
-    Column(Modifier.fillMaxSize()) {
+    Column(Modifier.fillMaxSize().then(if (hubOpen) Modifier.alpha(0f).clearAndSetSemantics { } else Modifier)) {
         SubpageHeader(title, onBack = onBack, subtitle = note ?: "What the agent can use in new chats")
         SegmentedControl(
             options = CapabilityTab.entries,
@@ -152,7 +251,7 @@ internal fun CapabilitiesView(
         )
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (state.tab) {
-                CapabilityTab.Skills -> SkillsTab(state, skillQuery, actions)
+                CapabilityTab.Skills -> SkillsTab(state, skillQuery, actions, removing)
                 CapabilityTab.Tools -> TabList(state.toolsets, empty = "No toolsets configured.", onRetry = actions::refresh) { toolsets ->
                     item(key = "note") { Hint("Toolsets the agent gets in new chats.") }
                     item(key = "toolsets") {
@@ -180,11 +279,12 @@ internal fun CapabilitiesView(
             }
         }
         state.message?.let { MessageBanner(it, onDismiss = actions::dismissMessage, modifier = Modifier.padding(bottom = 96.dp)) }
+        hubMessage?.let { MessageBanner(it, onDismiss = onDismissHubMessage, modifier = Modifier.padding(bottom = 96.dp)) }
     }
 }
 
 @Composable
-private fun SkillsTab(state: CapabilitiesUiState, skillQuery: TextFieldState, actions: CapabilitiesActions) {
+private fun SkillsTab(state: CapabilitiesUiState, skillQuery: TextFieldState, actions: CapabilitiesActions, removing: Set<String>) {
     val query = skillQuery.text.toString().trim()
     val all = state.skills.items
     val groups = remember(all, query) { skillGroups(all.orEmpty(), query) }
@@ -198,6 +298,9 @@ private fun SkillsTab(state: CapabilitiesUiState, skillQuery: TextFieldState, ac
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                 modifier = Modifier.padding(bottom = 8.dp),
             )
+        }
+        item(key = "hub") {
+            Button("Browse hub", onClick = actions::openHub, variant = ButtonVariant.Secondary, size = ButtonSize.Small, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
         }
         if (groups.isEmpty()) item(key = "none") { Hint("No skills match “$query”.") }
         groups.forEach { (category, inGroup) ->
@@ -213,7 +316,7 @@ private fun SkillsTab(state: CapabilitiesUiState, skillQuery: TextFieldState, ac
                 )
             }
             item(key = "g-$category") {
-                RowCard(inGroup, key = { "s-${it.name}" }) { skill -> SkillRow(skill, onToggle = { on -> actions.setSkillEnabled(skill, on) }) }
+                RowCard(inGroup, key = { "s-${it.name}" }) { skill -> SkillRow(skill, removing = skill.name in removing, onToggle = { on -> actions.setSkillEnabled(skill, on) }, onMore = { actions.uninstallSkill(skill) }) }
             }
         }
     }
@@ -232,7 +335,7 @@ internal fun skillGroups(skills: List<Skill>, query: String): Map<String, List<S
 
 /** A tab's loading, error and empty states around its list. */
 @Composable
-private fun <T> TabList(loadable: Loadable<T>, empty: String, onRetry: () -> Unit, content: LazyListScope.(List<T>) -> Unit) {
+internal fun <T> TabList(loadable: Loadable<T>, empty: String, onRetry: () -> Unit, content: LazyListScope.(List<T>) -> Unit) {
     val items = loadable.items
     when {
         items == null && loadable.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load", loadable.error, error = true) {
@@ -248,7 +351,7 @@ private fun <T> TabList(loadable: Loadable<T>, empty: String, onRetry: () -> Uni
 }
 
 @Composable
-private fun SkillRow(skill: Skill, onToggle: (Boolean) -> Unit) {
+private fun SkillRow(skill: Skill, removing: Boolean, onToggle: (Boolean) -> Unit, onMore: () -> Unit) {
     SwitchRow(
         title = skill.name,
         detail = skill.description.ifBlank { null },
@@ -260,6 +363,8 @@ private fun SkillRow(skill: Skill, onToggle: (Boolean) -> Unit) {
         },
         checked = skill.enabled,
         onToggle = onToggle,
+        onMore = onMore.takeIf { skill.provenance == "hub" },
+        moreBusy = removing,
     )
 }
 
@@ -318,7 +423,7 @@ private fun ServerRow(server: McpServer, test: McpTestResult?, testing: Boolean,
 
 /** Rows on one ringed surface card, a hairline between each. */
 @Composable
-private fun <T> RowCard(rows: List<T>, key: (T) -> Any, row: @Composable (T) -> Unit) {
+internal fun <T> RowCard(rows: List<T>, key: (T) -> Any, row: @Composable (T) -> Unit) {
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     Column(
         Modifier
@@ -349,6 +454,10 @@ private fun SwitchRow(
     checked: Boolean,
     onToggle: ((Boolean) -> Unit)?,
     lockedNote: String = "can't be changed here",
+    /** A "⋯" button after the switch, for a row with more to do. */
+    onMore: (() -> Unit)? = null,
+    /** Swaps the "⋯" for a spinner of the same size while its action runs. */
+    moreBusy: Boolean = false,
 ) {
     Row(
         Modifier
@@ -382,11 +491,15 @@ private fun SwitchRow(
             }
         }
         Switch(checked)
+        onMore?.let {
+            if (moreBusy) Box(Modifier.size(MinTouchTarget), contentAlignment = Alignment.Center) { Spinner(Modifier.size(16.dp)) }
+            else IconButton(Lucide.Ellipsis, contentDescription = "More for $title", onClick = it)
+        }
     }
 }
 
 @Composable
-private fun Tag(text: String, accent: Boolean) {
+internal fun Tag(text: String, accent: Boolean) {
     Text(
         text,
         style = Theme[typography][caption].copy(fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold),
@@ -399,6 +512,6 @@ private fun Tag(text: String, accent: Boolean) {
 }
 
 @Composable
-private fun Hint(text: String) {
+internal fun Hint(text: String) {
     Text(text, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary], modifier = Modifier.padding(start = 6.dp, end = 6.dp, top = 4.dp, bottom = 8.dp))
 }
