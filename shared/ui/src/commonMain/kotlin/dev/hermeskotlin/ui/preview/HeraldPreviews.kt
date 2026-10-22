@@ -139,6 +139,7 @@ enum class PreviewScene(val label: String) {
     Subagents("Subagents"),
     Voice("Voice chat"),
     VoiceCutIn("A reply read in the voice chat, talking over it on"),
+    VoiceChatGpt("A live call on the ChatGPT plan"),
     ReadAloud("A reply being read aloud"),
     ReadAloudFailed("A reply the gateway couldn't voice"),
     NewChat("A new chat"),
@@ -230,6 +231,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 PreviewScene.Subagents -> SampleChat(ChatSamples.subagents)
                 PreviewScene.Voice -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.listening)
                 PreviewScene.VoiceCutIn -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.speakingCutIn)
+                PreviewScene.VoiceChatGpt -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.chatGptLive)
                 PreviewScene.ReadAloud -> SampleChat(ChatSamples.reply, readAloud = ReadAloudState(key = "a1"))
                 PreviewScene.ReadAloudFailed -> SampleChat(ChatSamples.reply, readAloud = ReadAloudState(error = "Speech synthesis failed"))
                 PreviewScene.NewChat -> SampleChat(ChatSamples.empty, placeholder = "What are we building?")

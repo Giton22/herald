@@ -50,7 +50,7 @@ the app talks to your gateway directly.
 - A prompt that may not have arrived can be checked, resent or edited; nothing resends by itself
 - Model, thinking level, fast mode and profile per chat, with starred and recent models
 - Photos, camera, files and PDFs; pictures and files the agent sends back
-- Dictation (on the device or through the gateway), hands-free voice chat and live voice calls
+- Dictation (on the device or through the gateway), hands-free voice chat and live voice calls (GPT-Live, or the ChatGPT plan through the Talk Desktop plugin)
 
 **Control**
 - Approvals, questions, sudo, secret and password-manager prompts, also from a notification

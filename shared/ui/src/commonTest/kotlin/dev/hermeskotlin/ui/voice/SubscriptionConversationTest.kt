@@ -26,6 +26,7 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -92,7 +93,10 @@ class SubscriptionConversationTest {
             return true
         }
 
-        override fun speaking() = false
+        /** The voice is making sound, as the phone hears its own speaker. */
+        var speaking = false
+
+        override fun speaking() = speaking
         override fun micLevel() = 0f
         override fun setMuted(muted: Boolean) = Unit
 
@@ -122,8 +126,11 @@ class SubscriptionConversationTest {
         override suspend fun play(audio: SpokenAudio) = Unit
     }
 
-    /** The gateway's HTTP side: the plugin signed in as [codexOauth]; what the phone sent each route is kept. */
-    private class Gateway(val codexOauth: String) {
+    /**
+     * The gateway's HTTP side: the plugin signed in as [codexOauth]; what the phone sent each route is kept. [refusal]:
+     * the plugin can't start the call, and says this.
+     */
+    private class Gateway(val codexOauth: String, val refusal: String? = null) {
         val bodies = MutableStateFlow<Map<String, List<String>>>(emptyMap())
 
         fun sent(path: String) = bodies.value[path].orEmpty()
@@ -136,8 +143,11 @@ class SubscriptionConversationTest {
             when (path) {
                 "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
                 "/api/plugins/talk-desktop/codex/status" -> respond("""{"ok":true,"configured":true,"codexOauth":"${gw.codexOauth}"}""", HttpStatusCode.OK, json)
-                "/api/plugins/talk-desktop/codexlive/session" ->
+                "/api/plugins/talk-desktop/codexlive/session" -> if (gw.refusal != null) {
+                    respond("""{"detail":"${gw.refusal}"}""", HttpStatusCode.BadGateway, json)
+                } else {
                     respond("""{"ok":true,"engine":"codex","answer":"v=0 answer\r\n","threadId":"th-1","handoff":"client"}""", HttpStatusCode.OK, json)
+                }
                 "/api/audio/voice-live/status" -> respond("""{"ok":true,"mode":"chained","available":false}""", HttpStatusCode.OK, json)
                 else -> respond("""{"ok":true}""", HttpStatusCode.OK, json)
             }
@@ -151,8 +161,9 @@ class SubscriptionConversationTest {
         codexOauth: String = "valid",
         options: SubscriptionVoiceOptions = SubscriptionVoiceOptions(),
         profile: String? = "default",
+        refusal: String? = null,
     ): Call {
-        val gw = Gateway(codexOauth)
+        val gw = Gateway(codexOauth, refusal)
         val client = http(gw)
         val socket = Socket()
         val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> socket }, backgroundScope)
@@ -236,6 +247,9 @@ class SubscriptionConversationTest {
         c.voice.chat.first { it.live && it.phase == VoicePhase.Listening }
         val sent = Json.parseToJsonElement(c.gateway.sent("/api/plugins/talk-desktop/codexlive/session").single()).jsonObject
         assertEquals("maple", sent["voice"]!!.jsonPrimitive.content)
+        // The call says whose voice it is.
+        assertEquals("ChatGPT live voice · Maple", c.voice.chat.value.via)
+        assertEquals("ChatGPT live voice · Maple · say “stop” to end", hint(c.voice.chat.value))
         // The main bot's persona, whatever the chat's profile.
         assertFalse("profile" in sent)
         c.voice.stopChat()
@@ -273,6 +287,60 @@ class SubscriptionConversationTest {
         val report = Json.parseToJsonElement(c.gateway.sent("/api/plugins/talk-desktop/voice/usage/report").single()).jsonObject
         assertEquals(4200, report["audioMs"]!!.jsonPrimitive.content.toInt())
         assertTrue(report["durationMs"]!!.jsonPrimitive.content.toLong() >= 1)
+    }
+
+    @Test
+    fun talkingOverTheVoiceCutsItsTurnShort() = runTest {
+        val c = subscriptionCall()
+        c.voice.chat.first { it.live && it.phase == VoicePhase.Listening }
+        c.call.receive("""{"type":"turn.created","turn":{"role":"assistant","id":"t9"}}""")
+        c.call.speaking = true
+        c.voice.chat.first { it.phase == VoicePhase.Speaking }
+        // Past the voice's first moment.
+        delay(1_000)
+        c.call.receive("""{"type":"input_transcript.added","item":{"text":"Hold on a"}}""")
+        c.gateway.bodies.first { it["/api/plugins/talk-desktop/codexlive/interrupt"].orEmpty().isNotEmpty() }
+        val cut = Json.parseToJsonElement(c.gateway.sent("/api/plugins/talk-desktop/codexlive/interrupt").single()).jsonObject
+        assertEquals("t9", cut["turnId"]!!.jsonPrimitive.content)
+        assertEquals("th-1", cut["threadId"]!!.jsonPrimitive.content)
+        // Once per turn.
+        c.call.receive("""{"type":"input_transcript.added","item":{"text":" second please"}}""")
+        delay(500)
+        assertEquals(1, c.gateway.sent("/api/plugins/talk-desktop/codexlive/interrupt").size)
+        c.voice.stopChat()
+    }
+
+    @Test
+    fun aWordAsTheVoiceStartsOrAloneDoesNotCutIn() = runTest {
+        val c = subscriptionCall()
+        c.voice.chat.first { it.live && it.phase == VoicePhase.Listening }
+        c.call.receive("""{"type":"turn.created","turn":{"role":"assistant","id":"t9"}}""")
+        c.call.speaking = true
+        c.voice.chat.first { it.phase == VoicePhase.Speaking }
+        // The voice's first moment: not yet.
+        c.call.receive("""{"type":"input_transcript.added","item":{"text":"Hold on a second"}}""")
+        delay(1_000)
+        c.call.speaking = false
+        c.voice.chat.first { it.phase == VoicePhase.Listening }
+        c.call.speaking = true
+        delay(1_000)
+        // A lone "mm" over the voice isn't someone cutting in.
+        c.call.receive("""{"type":"input_transcript.added","item":{"text":"mm"}}""")
+        delay(500)
+        assertTrue(c.gateway.sent("/api/plugins/talk-desktop/codexlive/interrupt").isEmpty())
+        c.voice.stopChat()
+    }
+
+    @Test
+    fun aPlanOutOfLiveVoiceFallsBackToTheProfilesVoiceChat() = runTest {
+        val c = subscriptionCall(refusal = "LIVE_SIN_QUOTA: weekly limit reached")
+        // The chained chat listens, and says why it's that one.
+        val state = c.voice.chat.first { it.phase == VoicePhase.Listening && !it.live && it.error != null }
+        assertEquals("The ChatGPT plan is out of live voice for now. This is the profile's own voice chat instead.", state.error)
+        // Nothing to hang up or count: the call never came up.
+        assertTrue(c.gateway.sent("/api/plugins/talk-desktop/codexlive/stop").isEmpty())
+        assertTrue(c.gateway.sent("/api/plugins/talk-desktop/voice/usage/report").isEmpty())
+        c.voice.stopChat()
     }
 
     @Test

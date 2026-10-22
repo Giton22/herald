@@ -78,6 +78,9 @@ private data class SubscriptionSessionRequest(
 private data class SubscriptionStopRequest(val threadId: String)
 
 @Serializable
+private data class SubscriptionInterruptRequest(val turnId: String, val threadId: String)
+
+@Serializable
 private data class VoiceUsageReport(val durationMs: Long, val audioMs: Long)
 
 /**
@@ -189,6 +192,15 @@ class AudioApi(private val client: HttpClient) {
             timeout { requestTimeoutMillis = SUBSCRIPTION_SESSION_MS }
         }
     }.map { it.body<SubscriptionSession>() }
+
+    /** Cuts the voice's turn [turnId] short: someone is talking over it. */
+    suspend fun interruptSubscriptionVoice(url: GatewayUrl, turnId: String, threadId: String): ApiResult<Unit> = apiCall {
+        client.post(url.resolve("api/plugins/$TALK_PLUGIN/codexlive/interrupt")) {
+            contentType(ContentType.Application.Json)
+            setBody(SubscriptionInterruptRequest(turnId, threadId))
+            timeout { requestTimeoutMillis = LEASE_MS }
+        }
+    }.map { }
 
     /** Hangs up the plugin's voice; the next call is refused while one is still open. */
     suspend fun stopSubscriptionVoice(url: GatewayUrl, threadId: String): ApiResult<Unit> = apiCall {

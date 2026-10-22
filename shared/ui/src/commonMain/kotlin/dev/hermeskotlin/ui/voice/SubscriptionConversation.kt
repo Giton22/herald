@@ -14,6 +14,7 @@ import dev.hermeskotlin.core.voice.parseSubscriptionEvent
 import dev.hermeskotlin.core.voice.speakableText
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
@@ -37,6 +38,8 @@ internal class SubscriptionConversation(
     private val state: MutableStateFlow<VoiceChatState>,
     /** Requests the voice hands over run as Hermes turns; off, it's told the chat takes no work. */
     private val chatWork: Boolean = true,
+    /** Cuts the voice's turn short on the gateway: someone is talking over it. */
+    private val interrupt: suspend (turnId: String) -> Unit = {},
 ) {
     /** Herald runs what the voice hands over; false once the plugin said it runs it itself. */
     var clientHandoff = true
@@ -49,7 +52,16 @@ internal class SubscriptionConversation(
     /** The spoken exchange so far, newest last, as the turn's context. */
     private val exchange = ArrayDeque<String>()
     private var connectedAt: TimeMark? = null
+    /** The voice's turn under way, while it is: the one a cut-in stops. */
+    private var voiceTurn: String? = null
+    /** How long the voice has been making sound this time, as the call is polled; -1 while it's quiet. */
+    private var speakingMs = -1L
+    /** The person's words heard while the voice talks, since it started. */
+    private val talkedOver = StringBuilder()
     private var endedAfterMs: Long? = null
+
+    /** The call came up: the vendor answered and the call ran. */
+    val connected: Boolean get() = connectedAt != null
 
     /** How long the call was up, in milliseconds; 0 when it never connected. */
     val durationMs: Long get() = endedAfterMs ?: connectedAt?.elapsedNow()?.inWholeMilliseconds ?: 0
@@ -78,6 +90,12 @@ internal class SubscriptionConversation(
         val poll = launch {
             while (isActive) {
                 val speaking = call.speaking()
+                if (speaking) {
+                    speakingMs += if (speakingMs < 0) 1 else POLL_MS
+                } else {
+                    speakingMs = -1
+                    talkedOver.clear()
+                }
                 state.update {
                     it.copy(
                         phase = when {
@@ -104,12 +122,19 @@ internal class SubscriptionConversation(
         val reader = launch {
             for (raw in call.events) {
                 when (val event = parseSubscriptionEvent(raw)) {
-                    is SubscriptionEvent.Heard -> caption(event.speaker, event.text)
+                    is SubscriptionEvent.Heard -> {
+                        caption(event.speaker, event.text)
+                        if (event.speaker == LiveFragment.Speaker.User) cutInIfTalkedOver(event.text)
+                    }
+                    is SubscriptionEvent.TurnStarted -> if (event.speaker == LiveFragment.Speaker.Assistant) voiceTurn = event.id
                     is SubscriptionEvent.TurnDone -> {
                         val said = event.transcript.trim()
                         if (said.isEmpty()) continue
                         remember(event.speaker, said)
-                        if (event.speaker != LiveFragment.Speaker.User) continue
+                        if (event.speaker != LiveFragment.Speaker.User) {
+                            voiceTurn = null
+                            continue
+                        }
                         lastSaid = said
                         // The voice answers a bare "stop" itself and never hands it over.
                         if (isVoiceStopCommand(said)) ended.complete(null)
@@ -142,6 +167,23 @@ internal class SubscriptionConversation(
     }
 
     fun setMuted(muted: Boolean) = call.setMuted(muted)
+
+    /**
+     * The person's words, heard while the voice talks: once there are a couple, past the voice's first moment, its turn
+     * is cut short so it listens, as the desktop client cuts in. Words, not loudness: the phone's microphone level is
+     * read before the echo canceller, so the voice on the speaker would pass for someone; what the call transcribes as
+     * the person's is what came through it.
+     */
+    private fun CoroutineScope.cutInIfTalkedOver(text: String) {
+        val turn = voiceTurn ?: return
+        if (speakingMs < 0 || !call.speaking() || state.value.muted) return
+        talkedOver.append(text)
+        val words = talkedOver.split(NOT_A_WORD).count { it.isNotEmpty() }
+        if (speakingMs < CUT_IN_GRACE_MS || words < CUT_IN_WORDS) return
+        voiceTurn = null
+        talkedOver.clear()
+        launch { interrupt(turn) }
+    }
 
     /** Runs one request the voice handed over as a Hermes turn and gives the voice what came of it. */
     private suspend fun handle(handover: SubscriptionEvent.Delegation) {
@@ -214,6 +256,10 @@ internal class SubscriptionConversation(
         /** The longest a turn is waited on before the voice is told the result will be in the chat. */
         const val TURN_MS = 10 * 60_000L
         const val CAPTION_CHARS = 140
+        /** The voice's first moment can't be cut into, as on the desktop. */
+        const val CUT_IN_GRACE_MS = 600L
+        const val CUT_IN_WORDS = 2
+        val NOT_A_WORD = Regex("[^\\p{L}\\p{N}']+")
         const val CONTEXT_LINES = 12
         const val LINE_CHARS = 600
         val WHITESPACE = Regex("""\s+""")

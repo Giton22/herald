@@ -143,6 +143,9 @@ sealed interface SubscriptionEvent {
     /** A piece of what's being said, as it's heard: the person's ([LiveFragment.Speaker.User]) or the voice's. */
     data class Heard(val speaker: LiveFragment.Speaker, val text: String) : SubscriptionEvent
 
+    /** Someone's turn began; the voice's [id] is the one to cut short when someone talks over it. */
+    data class TurnStarted(val speaker: LiveFragment.Speaker, val id: String) : SubscriptionEvent
+
     /** Someone's turn ended, with all of what they said. */
     data class TurnDone(val speaker: LiveFragment.Speaker, val transcript: String) : SubscriptionEvent
 
@@ -173,6 +176,11 @@ fun parseSubscriptionEvent(raw: String): SubscriptionEvent? {
             ?.let { SubscriptionEvent.Heard(LiveFragment.Speaker.User, it) }
         "output_transcript.added" -> item?.text("text")?.takeIf { it.isNotEmpty() }
             ?.let { SubscriptionEvent.Heard(LiveFragment.Speaker.Assistant, it) }
+        "turn.created" -> {
+            val turn = event["turn"] as? JsonObject
+            val speaker = speaker(turn?.text("role")) ?: return null
+            turn?.text("id")?.takeIf { it.isNotEmpty() }?.let { SubscriptionEvent.TurnStarted(speaker, it) }
+        }
         "turn.done" -> {
             val turn = event["turn"] as? JsonObject
             speaker(turn?.text("role"))?.let { SubscriptionEvent.TurnDone(it, turn?.text("transcript").orEmpty()) }

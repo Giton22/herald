@@ -198,12 +198,12 @@ internal fun canSendNow(state: VoiceChatState) = !state.live && state.phase == V
 /** What to do now, while there are no words to show. */
 internal fun hint(state: VoiceChatState) = when {
     state.muted -> "Tap the microphone to talk again"
-    state.phase == VoicePhase.Connecting -> "Setting up the call"
+    state.phase == VoicePhase.Connecting -> state.via?.let { "Calling $it" } ?: "Setting up the call"
     state.phase == VoicePhase.Thinking -> "Hermes is on it"
     (state.live || state.bargeIn) && state.phase == VoicePhase.Speaking -> "Talk over it to cut in"
     state.phase == VoicePhase.Speaking -> "Tap skip to talk again"
     canSendNow(state) -> "Pause when you're done, or tap send"
-    else -> "Just talk · say “stop” to end"
+    else -> state.via?.let { "$it · say “stop” to end" } ?: "Just talk · say “stop” to end"
 }
 
 /** The tool Hermes is running for the request. */

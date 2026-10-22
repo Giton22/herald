@@ -28,6 +28,7 @@ import dev.hermeskotlin.core.voice.SpeechStream
 import dev.hermeskotlin.core.voice.SpeechStreamEvent
 import dev.hermeskotlin.core.voice.SpeechStreams
 import dev.hermeskotlin.core.voice.SpokenAudio
+import dev.hermeskotlin.core.voice.SUBSCRIPTION_VOICES
 import dev.hermeskotlin.core.voice.SubscriptionVoiceOptions
 import dev.hermeskotlin.core.voice.VoiceActivity
 import dev.hermeskotlin.core.voice.VoiceAnswers
@@ -92,7 +93,25 @@ data class VoiceChatState(
     val working: String? = null,
     /** Talking over the reply cuts in (the profile's `voice.barge_in`). */
     val bargeIn: Boolean = false,
+    /** Whose voice a live call is, when it isn't the profile's own: "ChatGPT live voice · Maple". */
+    val via: String? = null,
 )
+
+/** How a try at the ChatGPT plan's voice went. */
+private sealed interface SubscriptionStart {
+    /** Not tried: no plugin, no sign-in, no WebRTC here. */
+    data object Skipped : SubscriptionStart
+
+    /** The call ran, and it's over. */
+    data object Ran : SubscriptionStart
+
+    /** It couldn't start, for [reason]. */
+    data class Failed(val reason: String) : SubscriptionStart
+}
+
+/** What the voice screen calls a call on the ChatGPT plan. */
+internal fun subscriptionVia(options: SubscriptionVoiceOptions): String =
+    "ChatGPT live voice" + (SUBSCRIPTION_VOICES.firstOrNull { it.id == options.voice }?.let { " · ${it.label}" } ?: "")
 
 data class DictationState(
     val recording: Boolean = false,
@@ -214,8 +233,13 @@ class VoiceController(
         ) == true
         val job = scope.launch {
             try {
-                if (subscription != null && opener == null && startSubscription(session, gateway, profile, subscription)) return@launch
-                if (startLive(session, gateway, profile, opener)) return@launch
+                val tried = if (subscription != null && opener == null) startSubscription(session, gateway, profile, subscription) else SubscriptionStart.Skipped
+                if (tried == SubscriptionStart.Ran) return@launch
+                // The ChatGPT plan's voice didn't start: the profile's own takes over, saying why.
+                val notice = (tried as? SubscriptionStart.Failed)?.let { "${it.reason.trimEnd('.')}. This is the profile's own voice chat instead." }
+                if (startLive(session, gateway, profile, opener, notice)) return@launch
+                // Not the call screen any more: the chained chat listens, saying why when it took over.
+                if (notice != null) _chat.value = VoiceChatState(VoicePhase.Listening, error = notice)
                 converseChained(session, gateway, profile, pauseMs, opener)
             } finally {
                 // Also a chat ended before it found its mode (End during the status check). An ending the person
@@ -291,12 +315,12 @@ class VoiceController(
      * Runs a GPT-Live call when the profile picked it and it can start; false to fall back to the chained chat
      * (another mode, no OpenAI key on the gateway, an older gateway, or no WebRTC on this device).
      */
-    private suspend fun startLive(session: ChatSession, gateway: GatewayUrl, profile: String?, opener: CallReason?): Boolean {
+    private suspend fun startLive(session: ChatSession, gateway: GatewayUrl, profile: String?, opener: CallReason?, notice: String? = null): Boolean {
         val calls = liveCalls ?: return false
         val status = audio.voiceLiveStatus(gateway, profile)
         if (status !is ApiResult.Success || !status.value.live) return false
         val call = calls.create() ?: return false
-        _chat.value = VoiceChatState(VoicePhase.Connecting, live = true)
+        _chat.value = VoiceChatState(VoicePhase.Connecting, live = true, error = notice)
         val conversation = LiveConversation(call, session, _chat, deviceLock, opener?.liveOpener())
         live = conversation
         var error: String? = null
@@ -317,19 +341,21 @@ class VoiceController(
     }
 
     /**
-     * Runs a live call with the talk-desktop plugin's voice, on the ChatGPT plan the gateway signed it in with; false to
-     * fall back (no plugin, not signed in, an older gateway, or no WebRTC on this device). A call that can't start says
-     * why and ends; it doesn't silently turn into another kind of call.
+     * Runs a live call with the talk-desktop plugin's voice, on the ChatGPT plan the gateway signed it in with. Skipped
+     * without the plugin, a sign-in or WebRTC on this device; failed when the call couldn't start (the plan out of live
+     * voice, say), for the profile's own voice chat to take over and say why.
      */
-    private suspend fun startSubscription(session: ChatSession, gateway: GatewayUrl, profile: String?, options: SubscriptionVoiceOptions): Boolean {
-        val calls = liveCalls ?: return false
+    private suspend fun startSubscription(session: ChatSession, gateway: GatewayUrl, profile: String?, options: SubscriptionVoiceOptions): SubscriptionStart {
+        val calls = liveCalls ?: return SubscriptionStart.Skipped
         val status = audio.subscriptionVoiceStatus(gateway)
-        if (status !is ApiResult.Success || !status.value.signedIn) return false
-        val call = calls.create() ?: return false
-        _chat.value = VoiceChatState(VoicePhase.Connecting, live = true)
-        val conversation = SubscriptionConversation(call, session, _chat, options.chatWork)
-        subscription = conversation
+        if (status !is ApiResult.Success || !status.value.signedIn) return SubscriptionStart.Skipped
+        val call = calls.create() ?: return SubscriptionStart.Skipped
+        _chat.value = VoiceChatState(VoicePhase.Connecting, live = true, via = subscriptionVia(options))
         var threadId: String? = null
+        val conversation = SubscriptionConversation(call, session, _chat, options.chatWork) { turn ->
+            threadId?.let { thread -> audio.interruptSubscriptionVoice(gateway, turn, thread) }
+        }
+        subscription = conversation
         var error: String? = null
         try {
             error = conversation.run {
@@ -354,13 +380,15 @@ class VoiceController(
                 val audioMs = conversation.audioMs
                 appScope.launch {
                     audio.stopSubscriptionVoice(gateway, thread)
-                    // The plugin takes no call shorter than a millisecond.
-                    audio.reportSubscriptionVoice(gateway, durationMs.coerceAtLeast(1), audioMs)
+                    // A call that never came up isn't counted; the plugin takes none shorter than a millisecond.
+                    if (conversation.connected) audio.reportSubscriptionVoice(gateway, durationMs.coerceAtLeast(1), audioMs)
                 }
             }
-            _chat.value = VoiceChatState(error = error.takeUnless { stoppedByUser })
         }
-        return true
+        val reason = error
+        if (reason != null && !conversation.connected && !stoppedByUser) return SubscriptionStart.Failed(reason)
+        _chat.value = VoiceChatState(error = reason.takeUnless { stoppedByUser })
+        return SubscriptionStart.Ran
     }
 
     /** Turns the microphone off or on in a live call. */
