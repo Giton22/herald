@@ -134,6 +134,30 @@ class ConnectionCheckTest {
     }
 
     @Test
+    fun aCertDemandingServerFailsOnlyTheFirstStageWithACertFix() {
+        val results = ProbeResult.ClientCertRequired(url, "Received fatal alert: certificate_required").serverOnlyResults()
+
+        val server = assertIs<StageResult.Failed>(results[CheckStage.Server])
+        assertTrue(server.problem.contains("client certificate"), server.problem)
+        assertTrue(server.fix.contains("certificate"), server.fix)
+        assertIs<StageResult.Skipped>(results[CheckStage.SignIn])
+        assertIs<StageResult.Skipped>(results[CheckStage.Live])
+    }
+
+    @Test
+    fun aCertDemandingSocketFailsOnlyTheLiveStageWithACertFix() = runTest {
+        val failure = javax.net.ssl.SSLHandshakeException("Received fatal alert: bad_certificate")
+        val report = check(openSocket = { _, _ -> throw failure }).run(url)
+
+        assertIs<StageResult.Passed>(report.results[CheckStage.Server])
+        assertIs<StageResult.Passed>(report.results[CheckStage.SignIn])
+        assertEquals(CheckStage.Live, report.failedStage)
+        val live = assertIs<StageResult.Failed>(report.results[CheckStage.Live])
+        assertTrue(live.problem.contains("client certificate"), live.problem)
+        assertTrue(live.fix.contains("certificate"), live.fix)
+    }
+
+    @Test
     fun aReachableProbeLeavesTheLaterStagesToSignIn() = runTest {
         val probe = GatewayProbe(
             createHttpClient(MockEngine { respond("""{"version":"0.42.0","auth_required":true,"auth_providers":["basic"]}""", HttpStatusCode.OK, json) }),

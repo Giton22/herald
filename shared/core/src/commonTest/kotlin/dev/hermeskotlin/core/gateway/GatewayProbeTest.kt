@@ -9,6 +9,7 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
@@ -78,5 +79,34 @@ class GatewayProbeTest {
         val engine = MockEngine { throw IllegalStateException("Connection refused") }
         val result = assertIs<ProbeResult.Unreachable>(probeWith(engine).probe(url))
         assertEquals("Connection refused", result.reason)
+    }
+
+    @Test
+    fun aServerDemandingAClientCertificateIsNamed() = runTest {
+        val engine = MockEngine { throw javax.net.ssl.SSLHandshakeException("Received fatal alert: certificate_required") }
+        val result = assertIs<ProbeResult.ClientCertRequired>(probeWith(engine).probe(url))
+        assertTrue(result.reason.contains("certificate_required"))
+    }
+
+    @Test
+    fun aWrappedCertDemandIsNamed() = runTest {
+        val engine = MockEngine {
+            throw RuntimeException("handshake failed", javax.net.ssl.SSLHandshakeException("peer did not return a certificate"))
+        }
+        assertIs<ProbeResult.ClientCertRequired>(probeWith(engine).probe(url))
+    }
+
+    @Test
+    fun anUntrustedServerCertificateIsNotACertDemand() = runTest {
+        val engine = MockEngine {
+            throw javax.net.ssl.SSLHandshakeException("PKIX path building failed: unable to find valid certification path")
+        }
+        assertIs<ProbeResult.Unreachable>(probeWith(engine).probe(url))
+    }
+
+    @Test
+    fun aPlainTransportFailureIsNotACertDemand() = runTest {
+        assertFalse(isClientCertDemand(IllegalStateException("Connection refused")))
+        assertFalse(isClientCertDemand(javax.net.ssl.SSLHandshakeException("Remote host terminated the handshake")))
     }
 }

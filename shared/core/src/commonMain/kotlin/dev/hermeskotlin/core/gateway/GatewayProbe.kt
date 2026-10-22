@@ -33,6 +33,12 @@ sealed interface ProbeResult {
 
     /** Nothing answered (DNS, refused, timeout, TLS...). */
     data class Unreachable(val url: GatewayUrl, val reason: String) : ProbeResult
+
+    /**
+     * The TLS handshake failed because the server asked for a client certificate and got none it accepts
+     * (a gateway behind nginx with `ssl_verify_client on`). Attaching the certificate gets past it.
+     */
+    data class ClientCertRequired(val url: GatewayUrl, val reason: String) : ProbeResult
 }
 
 /** Public liveness probe used by "Test connection" before any sign-in. */
@@ -65,10 +71,39 @@ class GatewayProbe(private val client: HttpClient) {
     } catch (_: HttpRequestTimeoutException) {
         ProbeResult.Unreachable(url, "Timed out. Check the address, VPN or Tailscale connection.")
     } catch (e: Exception) {
-        ProbeResult.Unreachable(url, e.message ?: e::class.simpleName ?: "Connection failed")
+        if (isClientCertDemand(e)) ProbeResult.ClientCertRequired(url, e.message ?: e::class.simpleName ?: "TLS handshake failed")
+        else ProbeResult.Unreachable(url, e.message ?: e::class.simpleName ?: "Connection failed")
     }
 
     private companion object {
         const val PROBE_TIMEOUT_MS = 15_000L
     }
 }
+
+/**
+ * Whether [error] looks like a TLS handshake that failed because the server demanded a client certificate
+ * (nginx `ssl_verify_client`) and got none it accepts: an SSL/TLS/handshake failure in the cause chain whose
+ * messages name certificates, CAs or the certificate request. Anything else (a refused connection, an
+ * untrusted server certificate, a timeout) is not this.
+ */
+fun isClientCertDemand(error: Throwable): Boolean {
+    val chain = generateSequence<Throwable>(error) { it.cause }.toList()
+    if (chain.none { it::class.simpleName?.lowercase()?.contains(TLS_FAILURE) == true }) return false
+    val text = chain.mapNotNull { it.message }.joinToString(" ").lowercase()
+    return CERT_DEMAND_HINTS.any { it in text }
+}
+
+private val TLS_FAILURE = Regex("ssl|tls|handshake")
+
+private val CERT_DEMAND_HINTS = listOf(
+    "certificate_required",
+    "certificate required",
+    "bad_certificate",
+    "certificate_unknown",
+    "unknown_ca",
+    "unknown ca",
+    "peer did not return a certificate",
+    "no certificates",
+    "empty certificate",
+    "certificate request",
+)
