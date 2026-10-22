@@ -301,6 +301,7 @@ Agent tools that run on the phone: a gateway plugin registers them, Herald answe
 - [x] Browser sign-in for SSO/OIDC gateways (RFC 8252 PKCE via Custom Tab and a loopback redirect; `/auth/native/*`). Bearer tokens kept encrypted and refreshed before they expire
 - [ ] QR-code pairing
 - [ ] Tailscale / MagicDNS setup guide
+- [x] Client certificates (mTLS) for gateways behind `ssl_verify_client`: a per-gateway certificate picked from the system store, presented on the REST calls and the `/api/ws` upgrade; the connection check names a server that demands one
 - [ ] Gateway API server "lite" mode (`:8642`, static bearer key, Runs API + SSE)
 
 ### Platforms & polish
