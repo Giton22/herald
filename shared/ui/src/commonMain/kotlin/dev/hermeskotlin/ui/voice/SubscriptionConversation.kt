@@ -23,6 +23,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
+import kotlin.time.TimeMark
+import kotlin.time.TimeSource
 
 /**
  * One call with the talk-desktop plugin's voice, on the ChatGPT plan, in a chat: the voice owns the microphone and the
@@ -33,6 +35,8 @@ internal class SubscriptionConversation(
     private val call: LiveCall,
     private val session: ChatSession,
     private val state: MutableStateFlow<VoiceChatState>,
+    /** Requests the voice hands over run as Hermes turns; off, it's told the chat takes no work. */
+    private val chatWork: Boolean = true,
 ) {
     /** Herald runs what the voice hands over; false once the plugin said it runs it itself. */
     var clientHandoff = true
@@ -44,6 +48,15 @@ internal class SubscriptionConversation(
     private var lastSaid = ""
     /** The spoken exchange so far, newest last, as the turn's context. */
     private val exchange = ArrayDeque<String>()
+    private var connectedAt: TimeMark? = null
+    private var endedAfterMs: Long? = null
+
+    /** How long the call was up, in milliseconds; 0 when it never connected. */
+    val durationMs: Long get() = endedAfterMs ?: connectedAt?.elapsedNow()?.inWholeMilliseconds ?: 0
+
+    /** How much the voice spoke, in milliseconds, as it last reported. */
+    var audioMs = 0L
+        private set
 
     /**
      * Runs the call until it ends: hung up, "stop" said, or dropped. [connect] opens it (it throws when it can't).
@@ -60,6 +73,7 @@ internal class SubscriptionConversation(
             return@coroutineScope e.message ?: "Couldn't start the live call."
         }
         val ended = CompletableDeferred<String?>()
+        connectedAt = TimeSource.Monotonic.markNow()
         state.update { it.copy(phase = VoicePhase.Listening) }
         val poll = launch {
             while (isActive) {
@@ -100,10 +114,15 @@ internal class SubscriptionConversation(
                         // The voice answers a bare "stop" itself and never hands it over.
                         if (isVoiceStopCommand(said)) ended.complete(null)
                     }
-                    is SubscriptionEvent.Delegation -> if (clientHandoff) {
-                        working++
-                        handovers.trySend(event)
+                    is SubscriptionEvent.Delegation -> when {
+                        !clientHandoff -> Unit
+                        !chatWork -> respond(event.itemId, "Work in the chat is turned off. No task was submitted.")
+                        else -> {
+                            working++
+                            handovers.trySend(event)
+                        }
                     }
+                    is SubscriptionEvent.Usage -> audioMs = maxOf(audioMs, event.audioMs)
                     is SubscriptionEvent.Failure -> state.update { it.copy(error = event.message) }
                     SubscriptionEvent.Started, null -> Unit
                 }
@@ -113,6 +132,7 @@ internal class SubscriptionConversation(
         try {
             ended.await()
         } finally {
+            endedAfterMs = durationMs
             poll.cancel()
             reader.cancel()
             worker.cancel()

@@ -28,6 +28,7 @@ import dev.hermeskotlin.core.voice.SpeechStream
 import dev.hermeskotlin.core.voice.SpeechStreamEvent
 import dev.hermeskotlin.core.voice.SpeechStreams
 import dev.hermeskotlin.core.voice.SpokenAudio
+import dev.hermeskotlin.core.voice.SubscriptionVoiceOptions
 import dev.hermeskotlin.core.voice.VoiceActivity
 import dev.hermeskotlin.core.voice.VoiceAnswers
 import dev.hermeskotlin.core.voice.DeviceLock
@@ -182,8 +183,8 @@ class VoiceController(
 
     /**
      * [pauseMs] is how long a quiet spell after speech has to last before it's sent. [opener]: a call the agent placed,
-     * which the voice opens by saying why. [subscription]: a live call on the ChatGPT plan when the gateway's talk-desktop
-     * plugin is signed in, before GPT-Live or the chained chat.
+     * which the voice opens by saying why. [subscription]: a live call on the ChatGPT plan, made so, when the gateway's
+     * talk-desktop plugin is signed in, before GPT-Live or the chained chat; null for none.
      */
     fun startChat(
         session: ChatSession,
@@ -191,7 +192,7 @@ class VoiceController(
         profile: String?,
         pauseMs: Long = VoiceActivity().silenceMs,
         opener: CallReason? = null,
-        subscription: Boolean = false,
+        subscription: SubscriptionVoiceOptions? = null,
     ) {
         if (chatJob?.isActive == true) return
         cancelDictation()
@@ -213,7 +214,7 @@ class VoiceController(
         ) == true
         val job = scope.launch {
             try {
-                if (subscription && opener == null && startSubscription(session, gateway, profile)) return@launch
+                if (subscription != null && opener == null && startSubscription(session, gateway, profile, subscription)) return@launch
                 if (startLive(session, gateway, profile, opener)) return@launch
                 converseChained(session, gateway, profile, pauseMs, opener)
             } finally {
@@ -320,20 +321,21 @@ class VoiceController(
      * fall back (no plugin, not signed in, an older gateway, or no WebRTC on this device). A call that can't start says
      * why and ends; it doesn't silently turn into another kind of call.
      */
-    private suspend fun startSubscription(session: ChatSession, gateway: GatewayUrl, profile: String?): Boolean {
+    private suspend fun startSubscription(session: ChatSession, gateway: GatewayUrl, profile: String?, options: SubscriptionVoiceOptions): Boolean {
         val calls = liveCalls ?: return false
         val status = audio.subscriptionVoiceStatus(gateway)
         if (status !is ApiResult.Success || !status.value.signedIn) return false
         val call = calls.create() ?: return false
         _chat.value = VoiceChatState(VoicePhase.Connecting, live = true)
-        val conversation = SubscriptionConversation(call, session, _chat)
+        val conversation = SubscriptionConversation(call, session, _chat, options.chatWork)
         subscription = conversation
         var threadId: String? = null
         var error: String? = null
         try {
             error = conversation.run {
                 call.connect { offer ->
-                    when (val started = audio.startSubscriptionVoice(gateway, offer, profile?.takeUnless { it == "default" }, session.state.value.storedSessionId)) {
+                    val started = audio.startSubscriptionVoice(gateway, offer, options.profileFor(profile), session.state.value.storedSessionId, options.voice)
+                    when (started) {
                         is ApiResult.Success -> {
                             threadId = started.value.threadId
                             conversation.clientHandoff = started.value.handoff != "server"
@@ -345,8 +347,17 @@ class VoiceController(
             }
         } finally {
             subscription = null
-            // Always hung up on the gateway too: the plugin refuses the next call while this one is open.
-            threadId?.let { thread -> appScope.launch { audio.stopSubscriptionVoice(gateway, thread) } }
+            // Always hung up on the gateway too: the plugin refuses the next call while this one is open. Then counted,
+            // as the desktop app counts its calls, so the plugin's usage covers the phone's.
+            threadId?.let { thread ->
+                val durationMs = conversation.durationMs
+                val audioMs = conversation.audioMs
+                appScope.launch {
+                    audio.stopSubscriptionVoice(gateway, thread)
+                    // The plugin takes no call shorter than a millisecond.
+                    audio.reportSubscriptionVoice(gateway, durationMs.coerceAtLeast(1), audioMs)
+                }
+            }
             _chat.value = VoiceChatState(error = error.takeUnless { stoppedByUser })
         }
         return true

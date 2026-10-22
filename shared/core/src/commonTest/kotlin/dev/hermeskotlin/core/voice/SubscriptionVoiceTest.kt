@@ -56,6 +56,40 @@ class SubscriptionVoiceTest {
     }
 
     @Test
+    fun readsHowLongTheVoiceSpoke() {
+        assertEquals(SubscriptionEvent.Usage(4200), parseSubscriptionEvent("""{"type":"session.usage.updated","usage":{"audio_duration_ms":4200}}"""))
+        assertNull(parseSubscriptionEvent("""{"type":"session.usage.updated","usage":{}}"""))
+    }
+
+    @Test
+    fun thePersonaPicksTheProfileThePluginIsAskedFor() {
+        val chat = SubscriptionVoiceOptions()
+        assertEquals("work", chat.profileFor("work"))
+        // The default profile is the gateway's own bot.
+        assertNull(chat.profileFor("default"))
+        assertNull(chat.profileFor(null))
+        assertNull(SubscriptionVoiceOptions(persona = SubscriptionVoiceOptions.PERSONA_MAIN).profileFor("work"))
+        assertEquals("research", SubscriptionVoiceOptions(persona = "research").profileFor("work"))
+    }
+
+    @Test
+    fun readsTheSignInThePluginRuns() {
+        val json = Json { ignoreUnknownKeys = true }
+        val status = json.decodeFromString<SubscriptionVoiceStatus>(
+            """{"ok":true,"configured":false,"codexOauth":"missing","login":{"status":"pending","url":"https://auth.openai.com/codex/device","code":"K7QM-42XPA","message":null}}""",
+        )
+        assertFalse(status.signedIn)
+        assertTrue(status.login!!.pending)
+        assertEquals("K7QM-42XPA", status.login!!.code)
+    }
+
+    @Test
+    fun everyVoiceIsNamedOnce() {
+        assertEquals(9, SUBSCRIPTION_VOICES.map { it.id }.toSet().size)
+        assertEquals("Maple", SUBSCRIPTION_VOICES.single { it.id == "maple" }.label)
+    }
+
+    @Test
     fun onlyASignedInPluginCanTalk() {
         assertTrue(SubscriptionVoiceStatus(ok = true, codexOauth = "valid").signedIn)
         assertTrue(SubscriptionVoiceStatus(ok = true, codexOauth = "expired").signedIn)

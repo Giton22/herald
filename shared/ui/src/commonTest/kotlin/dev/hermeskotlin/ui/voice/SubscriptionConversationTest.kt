@@ -15,6 +15,7 @@ import dev.hermeskotlin.core.voice.LiveCall
 import dev.hermeskotlin.core.voice.Recording
 import dev.hermeskotlin.core.voice.SpeechPlayer
 import dev.hermeskotlin.core.voice.SpokenAudio
+import dev.hermeskotlin.core.voice.SubscriptionVoiceOptions
 import dev.hermeskotlin.core.voice.VoiceActivity
 import dev.hermeskotlin.core.voice.VoiceRecorder
 import io.ktor.client.engine.mock.MockEngine
@@ -146,7 +147,11 @@ class SubscriptionConversationTest {
 
     private class Call(val voice: VoiceController, val call: FakeCall, val socket: Socket, val gateway: Gateway)
 
-    private suspend fun TestScope.subscriptionCall(codexOauth: String = "valid"): Call {
+    private suspend fun TestScope.subscriptionCall(
+        codexOauth: String = "valid",
+        options: SubscriptionVoiceOptions = SubscriptionVoiceOptions(),
+        profile: String? = "default",
+    ): Call {
         val gw = Gateway(codexOauth)
         val client = http(gw)
         val socket = Socket()
@@ -157,7 +162,7 @@ class SubscriptionConversationTest {
         session.start()
         val call = FakeCall()
         val voice = VoiceController(AudioApi(client), NoRecorder, Silent, backgroundScope, backgroundScope) { call }
-        voice.startChat(session, gateway, "default", subscription = true)
+        voice.startChat(session, gateway, profile, subscription = options)
         return Call(voice, call, socket, gw)
     }
 
@@ -223,6 +228,51 @@ class SubscriptionConversationTest {
         assertTrue(c.call.closed)
         assertEquals(null, c.voice.chat.value.error)
         assertTrue(c.socket.submits.value.isEmpty())
+    }
+
+    @Test
+    fun thePickedVoiceAndPersonaGoToThePlugin() = runTest {
+        val c = subscriptionCall(options = SubscriptionVoiceOptions(voice = "maple", persona = SubscriptionVoiceOptions.PERSONA_MAIN), profile = "work")
+        c.voice.chat.first { it.live && it.phase == VoicePhase.Listening }
+        val sent = Json.parseToJsonElement(c.gateway.sent("/api/plugins/talk-desktop/codexlive/session").single()).jsonObject
+        assertEquals("maple", sent["voice"]!!.jsonPrimitive.content)
+        // The main bot's persona, whatever the chat's profile.
+        assertFalse("profile" in sent)
+        c.voice.stopChat()
+    }
+
+    @Test
+    fun theChatsProfileIsThePersonaByDefault() = runTest {
+        val c = subscriptionCall(profile = "work")
+        c.voice.chat.first { it.live && it.phase == VoicePhase.Listening }
+        val sent = Json.parseToJsonElement(c.gateway.sent("/api/plugins/talk-desktop/codexlive/session").single()).jsonObject
+        assertEquals("work", sent["profile"]!!.jsonPrimitive.content)
+        // The plugin's own voice when none is picked.
+        assertFalse("voice" in sent)
+        c.voice.stopChat()
+    }
+
+    @Test
+    fun withWorkOffTheVoiceIsToldAndNothingRuns() = runTest {
+        val c = subscriptionCall(options = SubscriptionVoiceOptions(chatWork = false))
+        c.voice.chat.first { it.live && it.phase == VoicePhase.Listening }
+        c.call.receive("""{"type":"delegation.created","item":{"id":"d3","content":[{"type":"input_text","text":"Delete the old logs"}]}}""")
+        c.call.sent.first { c.call.told("d3").isNotEmpty() }
+        assertEquals(listOf("Work in the chat is turned off. No task was submitted."), c.call.told("d3"))
+        assertTrue(c.socket.submits.value.isEmpty())
+        c.voice.stopChat()
+    }
+
+    @Test
+    fun aCallThatEndsIsCountedOnThePlugin() = runTest {
+        val c = subscriptionCall()
+        c.voice.chat.first { it.live && it.phase == VoicePhase.Listening }
+        c.call.receive("""{"type":"session.usage.updated","usage":{"audio_duration_ms":4200}}""")
+        c.call.receive("""{"type":"turn.done","turn":{"role":"user","transcript":"Stop."}}""")
+        c.gateway.bodies.first { it["/api/plugins/talk-desktop/voice/usage/report"].orEmpty().isNotEmpty() }
+        val report = Json.parseToJsonElement(c.gateway.sent("/api/plugins/talk-desktop/voice/usage/report").single()).jsonObject
+        assertEquals(4200, report["audioMs"]!!.jsonPrimitive.content.toInt())
+        assertTrue(report["durationMs"]!!.jsonPrimitive.content.toLong() >= 1)
     }
 
     @Test

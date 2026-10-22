@@ -96,6 +96,12 @@ data class AppSettings(
      * GPT-Live on the OpenAI key or the chained chat. Off, the profile's voice chat mode decides, as before.
      */
     val subscriptionVoice: Boolean = true,
+    /** The live voice's voice (one of `SUBSCRIPTION_VOICES`); blank for the one the gateway's plugin picks. */
+    val subscriptionVoiceName: String = "",
+    /** Whose persona the live voice takes (`SubscriptionVoiceOptions.persona`): blank for the chat's profile. */
+    val subscriptionPersona: String = "",
+    /** Requests the live voice hands over run in the open chat; off, it only talks. */
+    val subscriptionChatWork: Boolean = true,
     /** The mic for dictation in the composer and on an empty chat. Off, it goes, and the model name gets the room. */
     val dictation: Boolean = true,
     val dictationEngine: DictationEngine = DictationEngine.Device,
