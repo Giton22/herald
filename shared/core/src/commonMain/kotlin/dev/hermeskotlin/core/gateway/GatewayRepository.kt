@@ -15,6 +15,11 @@ data class SavedGateway(
     val url: String,
     val provider: String = "basic",
     val name: String? = null,
+    /**
+     * The system-store alias of the client certificate to present to this gateway, or null for none.
+     * Only the alias is kept: the key itself never leaves the system store. Missing from older stored gateways.
+     */
+    val clientCertAlias: String? = null,
 ) {
     val gatewayUrl: GatewayUrl get() = GatewayUrl.parse(url)
 
@@ -59,11 +64,12 @@ class GatewayRepository(private val store: KeyValueStore) {
 
     /**
      * Adds [gateway] (or updates the saved one with its address) and makes it current; the first one saved is
-     * primary. A saved gateway keeps its name: only [rename] changes it, so a copy taken earlier can't undo one.
+     * primary. A saved gateway keeps its name and client certificate: only [rename] changes the name and only
+     * [setClientCert] changes the certificate, so a copy taken earlier can't undo either.
      */
     suspend fun save(gateway: SavedGateway): SavedGateway = edit { list ->
         val existing = list.find(gateway.url)
-        val kept = existing?.let { gateway.copy(name = it.name) } ?: gateway
+        val kept = existing?.let { gateway.copy(name = it.name, clientCertAlias = gateway.clientCertAlias ?: it.clientCertAlias) } ?: gateway
         list.copy(
             gateways = if (existing == null) list.gateways + kept else list.gateways.map { if (it.url == kept.url) kept else it },
             currentUrl = kept.url,
@@ -83,6 +89,11 @@ class GatewayRepository(private val store: KeyValueStore) {
     suspend fun rename(url: String, name: String?) {
         val trimmed = name?.trim()?.takeIf { it.isNotEmpty() }
         edit { list -> list.copy(gateways = list.gateways.map { if (it.url == url) it.copy(name = trimmed) else it }) }
+    }
+
+    /** Picks the client certificate to present to [url]; a null [alias] goes back to presenting none. */
+    suspend fun setClientCert(url: String, alias: String?) {
+        edit { list -> list.copy(gateways = list.gateways.map { if (it.url == url) it.copy(clientCertAlias = alias) else it }) }
     }
 
     /** Forgets [url]. Removing the current gateway leaves none current; removing the primary hands it to the next one. */
