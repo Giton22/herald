@@ -16,6 +16,7 @@ import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.AccessToken
 import dev.hermeskotlin.core.gateway.AccessTokens
+import dev.hermeskotlin.core.gateway.ClientCertAliases
 import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.createHttpClient
@@ -91,11 +92,11 @@ class AppViewModelTest {
     @AfterTest fun tearDown() = Dispatchers.resetMain()
 
     // The connection's retry loop runs in the test's background scope, so it stops with the test.
-    private fun TestScope.viewModel(): AppViewModel {
+    private fun TestScope.viewModel(certs: ClientCertAliases = ClientCertAliases()): AppViewModel {
         val connection = GatewayConnection(auth, openSocket = { _, _ -> error("no socket in tests") }, scope = backgroundScope)
         val host = ChatHost(connection, SessionsApi(client), backgroundScope)
         val push = PushSetup(PushApi(connection), NoPushKeys, connection, gateways, SettingsStore(store, backgroundScope), backgroundScope) { "Test" }
-        return AppViewModel(gateways, auth, connection, lastChats, host, ProfileStore(store), links, BotChats(NoBotChats), push, access, cache, seen)
+        return AppViewModel(gateways, auth, connection, lastChats, host, ProfileStore(store), links, BotChats(NoBotChats), push, access, cache, seen, certs = certs)
     }
 
     private val links = ChatLinks()
@@ -248,6 +249,35 @@ class AppViewModelTest {
         vm.onGatewayChosen(home)
 
         vm.awaitChat(home)
+    }
+
+    @Test
+    fun aPickedClientCertificateIsSavedWithItsGateway() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        val vm = viewModel()
+        vm.awaitChat(home)
+
+        vm.setClientCert(home, "homelab-cert")
+        gateways.list.first { it.gateways.singleOrNull()?.clientCertAlias == "homelab-cert" }
+
+        vm.setClientCert(home, null)
+        gateways.list.first { it.gateways.singleOrNull()?.clientCertAlias == null }
+    }
+
+    @Test
+    fun removingAGatewayForgetsAPendingCertificatePickForItsHost() = runTest {
+        val certs = ClientCertAliases()
+        certs.set(home.gatewayUrl.host, "picked-cert")
+        gateways.save(home)
+        signedIn(home)
+        val vm = viewModel(certs)
+        vm.awaitChat(home)
+
+        vm.removeGateway(home)
+
+        gateways.list.first { it.gateways.isEmpty() }
+        assertNull(certs.get(home.gatewayUrl.host))
     }
 
     @Test

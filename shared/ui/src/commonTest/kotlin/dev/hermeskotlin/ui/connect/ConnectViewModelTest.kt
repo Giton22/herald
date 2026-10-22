@@ -5,6 +5,7 @@ import dev.hermeskotlin.core.gateway.AccessToken
 import dev.hermeskotlin.core.gateway.AccessTokens
 import dev.hermeskotlin.core.gateway.CF_ACCESS_CLIENT_ID
 import dev.hermeskotlin.core.gateway.CF_ACCESS_CLIENT_SECRET
+import dev.hermeskotlin.core.gateway.ClientCertAliases
 import dev.hermeskotlin.core.gateway.GatewayProbe
 import dev.hermeskotlin.core.gateway.ProbeResult
 import dev.hermeskotlin.core.network.createHttpClient
@@ -44,7 +45,7 @@ class ConnectViewModelTest {
     private val access = AccessTokens(InMemoryKeyValueStore())
     private val seen = mutableListOf<HttpRequestData>()
 
-    private fun viewModel(): ConnectViewModel {
+    private fun viewModel(certs: ClientCertAliases = ClientCertAliases()): ConnectViewModel {
         // On the test dispatcher, so no request is still finishing on another thread when a test ends.
         val config = MockEngineConfig()
         config.dispatcher = dispatcher
@@ -56,7 +57,7 @@ class ConnectViewModelTest {
                 headersOf(HttpHeaders.ContentType, "application/json"),
             )
         }
-        return ConnectViewModel(GatewayProbe(createHttpClient(MockEngine(config), access = access)), access)
+        return ConnectViewModel(GatewayProbe(createHttpClient(MockEngine(config), access = access)), access, certs)
     }
 
     /** The mock engine completes on Ktor's own dispatcher, so wait for the state instead of the test scheduler. */
@@ -146,5 +147,38 @@ class ConnectViewModelTest {
         vm.testConnection()
         awaitResult(vm)
         assertEquals("id.access", seen.single().headers[CF_ACCESS_CLIENT_ID])
+    }
+
+    @Test
+    fun aPickedCertificateIsRememberedForTheAddressAndCanBeCleared() = runTest(dispatcher) {
+        val certs = ClientCertAliases()
+        val vm = viewModel(certs)
+        vm.url.setTextAndPlaceCursorAtEnd("https://hermes.example.com")
+
+        vm.pickClientCert("user-cert")
+        assertEquals("user-cert", vm.certAlias.value)
+        assertEquals("user-cert", certs.get("hermes.example.com"))
+
+        // Retyping the address finds the pending pick again.
+        vm.onUrlEdited()
+        assertEquals("user-cert", vm.certAlias.value)
+
+        vm.clearClientCert()
+        assertNull(vm.certAlias.value)
+        assertNull(certs.get("hermes.example.com"))
+    }
+
+    @Test
+    fun typingAnotherAddressShowsItsOwnCertificate() = runTest(dispatcher) {
+        val certs = ClientCertAliases()
+        certs.set("other.example.com", "other-cert")
+        val vm = viewModel(certs)
+        vm.url.setTextAndPlaceCursorAtEnd("https://hermes.example.com")
+        vm.onUrlEdited()
+        assertNull(vm.certAlias.value)
+
+        vm.url.setTextAndPlaceCursorAtEnd("https://other.example.com")
+        vm.onUrlEdited()
+        assertEquals("other-cert", vm.certAlias.value)
     }
 }

@@ -6,10 +6,12 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.gateway.AccessToken
 import dev.hermeskotlin.core.gateway.AccessTokens
+import dev.hermeskotlin.core.gateway.ClientCertAliases
 import dev.hermeskotlin.core.gateway.GatewayProbe
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.gateway.InvalidGatewayUrlException
 import dev.hermeskotlin.core.gateway.ProbeResult
+import dev.hermeskotlin.core.gateway.clientCertAliasFor
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -24,7 +26,11 @@ data class ConnectUiState(
     val result: ProbeResult? = null,
 )
 
-class ConnectViewModel(private val probe: GatewayProbe, private val access: AccessTokens) : ViewModel() {
+class ConnectViewModel(
+    private val probe: GatewayProbe,
+    private val access: AccessTokens,
+    private val certs: ClientCertAliases = ClientCertAliases(),
+) : ViewModel() {
 
     val url = TextFieldState()
 
@@ -40,6 +46,11 @@ class ConnectViewModel(private val probe: GatewayProbe, private val access: Acce
     /** Whether a service token is saved for the address typed, so blank fields keep using it. */
     val accessSaved: StateFlow<Boolean> = _accessSaved.asStateFlow()
 
+    private val _certAlias = MutableStateFlow<String?>(null)
+
+    /** The client certificate picked for the address typed, shown by its system-store alias. */
+    val certAlias: StateFlow<String?> = _certAlias.asStateFlow()
+
     private var probeJob: Job? = null
     private var lookupJob: Job? = null
 
@@ -50,6 +61,20 @@ class ConnectViewModel(private val probe: GatewayProbe, private val access: Acce
             access.set(host, null)
             _accessSaved.value = false
         }
+    }
+
+    /** Remembers the picked certificate for the address typed, so the probe, the sign-in and the chat present it. */
+    fun pickClientCert(alias: String) {
+        val host = GatewayUrl.parseOrNull(url.text.toString())?.host ?: return
+        certs.set(host, alias)
+        _certAlias.value = alias
+    }
+
+    /** Goes back to presenting no certificate to the address typed. */
+    fun clearClientCert() {
+        val host = GatewayUrl.parseOrNull(url.text.toString())?.host ?: return
+        certs.set(host, null)
+        _certAlias.value = null
     }
 
     fun testConnection() {
@@ -82,7 +107,7 @@ class ConnectViewModel(private val probe: GatewayProbe, private val access: Acce
         }
     }
 
-    /** Typing invalidates the previous result, and looks up whether the new address has a token saved. */
+    /** Typing invalidates the previous result, and looks up what the new address already has picked or saved. */
     fun onUrlEdited() {
         if (_state.value.result != null || _state.value.urlError != null || _state.value.accessError != null) {
             probeJob?.cancel()
@@ -90,6 +115,9 @@ class ConnectViewModel(private val probe: GatewayProbe, private val access: Acce
         }
         val host = GatewayUrl.parseOrNull(url.text.toString())?.host
         lookupJob?.cancel()
-        lookupJob = viewModelScope.launch { _accessSaved.value = host != null && access.get(host) != null }
+        lookupJob = viewModelScope.launch {
+            _accessSaved.value = host != null && access.get(host) != null
+            _certAlias.value = host?.let { clientCertAliasFor(it, certs, emptyList()) }
+        }
     }
 }

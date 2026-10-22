@@ -17,6 +17,7 @@ import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.AccessTokens
+import dev.hermeskotlin.core.gateway.ClientCertAliases
 import dev.hermeskotlin.core.gateway.GatewayList
 import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.inbox.InboxStore
@@ -71,6 +72,8 @@ class AppViewModel(
     private val seen: SeenStore? = null,
     /** Each gateway's Inbox kept on the phone, which goes with the gateway. */
     private val inbox: InboxStore? = null,
+    /** Aliases picked on the Connect screen before their gateway is saved; saved gateways carry their own. */
+    private val certs: ClientCertAliases = ClientCertAliases(),
 ) : ViewModel() {
 
     private val _route = MutableStateFlow<Route>(Route.Loading)
@@ -182,6 +185,14 @@ class AppViewModel(
         viewModelScope.launch { gateways.rename(gateway.url, name) }
     }
 
+    /** Picks the client certificate to present to [gateway]; a null [alias] goes back to presenting none. */
+    fun setClientCert(gateway: SavedGateway, alias: String?) {
+        viewModelScope.launch {
+            gateways.setClientCert(gateway.url, alias)
+            certs.set(gateway.gatewayUrl.host, alias)
+        }
+    }
+
     /** Signs out of [gateway] and forgets it; removing the current one moves to the primary (or to [Route.Connect]). */
     fun removeGateway(gateway: SavedGateway) {
         viewModelScope.launch {
@@ -198,6 +209,11 @@ class AppViewModel(
             // Again: a list read that was under way may have saved itself since.
             cache?.forgetGateway(gateway.gatewayUrl)
             gateways.remove(gateway.url)
+            // The saved alias goes with the gateway; a pending pick stays only while another saved
+            // gateway on the same host still names a certificate.
+            if (gateways.all().gateways.none { it.gatewayUrl.host == gateway.gatewayUrl.host && it.clientCertAlias != null }) {
+                certs.set(gateway.gatewayUrl.host, null)
+            }
             inbox?.forget(gateway.gatewayUrl.value)
             forgetUnusedAccessTokens()
             sessionsChanged.update { it + 1 }
