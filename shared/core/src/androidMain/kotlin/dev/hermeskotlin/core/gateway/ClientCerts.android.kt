@@ -4,6 +4,7 @@ import android.content.Context
 import android.security.KeyChain
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
+import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
 import java.security.Principal
@@ -11,9 +12,40 @@ import java.security.PrivateKey
 import java.security.cert.X509Certificate
 import javax.net.ssl.SSLContext
 import javax.net.ssl.SSLEngine
+import javax.net.ssl.SSLSocketFactory
 import javax.net.ssl.TrustManagerFactory
 import javax.net.ssl.X509ExtendedKeyManager
 import javax.net.ssl.X509TrustManager
+
+/**
+ * The hostname OkHttp is handshaking with, captured from the socket factory on the connecting thread.
+ * OkHttp connects by IP, so the socket's own address is usually numeric while the pick is stored under
+ * the hostname; without this the alias lookup misses and no certificate is sent. Each TLS handshake
+ * overwrites it on the same thread that runs the KeyManager lookup, so it never goes stale.
+ */
+private val handshakeSniHost = ThreadLocal<String>()
+
+/** Passes every call through, remembering the hostname for [handshakeSniHost]. */
+private class SniCapturingSocketFactory(private val delegate: SSLSocketFactory) : SSLSocketFactory() {
+    override fun getDefaultCipherSuites(): Array<String> = delegate.defaultCipherSuites
+    override fun getSupportedCipherSuites(): Array<String> = delegate.supportedCipherSuites
+    override fun createSocket(s: Socket?, host: String?, port: Int, autoClose: Boolean): Socket? {
+        if (host != null) handshakeSniHost.set(host)
+        return delegate.createSocket(s, host, port, autoClose)
+    }
+    override fun createSocket(host: String?, port: Int): Socket? {
+        if (host != null) handshakeSniHost.set(host)
+        return delegate.createSocket(host, port)
+    }
+    override fun createSocket(host: String?, port: Int, localHost: InetAddress?, localPort: Int): Socket? {
+        if (host != null) handshakeSniHost.set(host)
+        return delegate.createSocket(host, port, localHost, localPort)
+    }
+    override fun createSocket(host: InetAddress?, port: Int): Socket? = delegate.createSocket(host, port)
+    override fun createSocket(address: InetAddress?, port: Int, localAddress: InetAddress?, localPort: Int): Socket? =
+        delegate.createSocket(address, port, localAddress, localPort)
+    override fun createSocket(): Socket? = delegate.createSocket()
+}
 
 /**
  * An [X509ExtendedKeyManager] that presents the alias [resolveAlias] picks for the socket's host, with the key
@@ -25,11 +57,22 @@ internal class MtlsKeyManager(
     private val resolveAlias: (host: String) -> String?,
     private val privateKey: (alias: String) -> PrivateKey?,
     private val chain: (alias: String) -> Array<X509Certificate>?,
+    private val fallbackAlias: () -> String? = { null },
+    private val sniHost: () -> String? = { handshakeSniHost.get() },
 ) : X509ExtendedKeyManager() {
 
     override fun chooseClientAlias(keyTypes: Array<String>, issuers: Array<Principal>?, socket: Socket?): String? {
-        val host = (socket?.remoteSocketAddress as? InetSocketAddress)?.hostString ?: return null
-        return resolveAlias(host)
+        // The socket address is usually numeric: OkHttp connects by IP, so the stored hostname never
+        // matches it. The SNI host captured from the socket factory is authoritative; the socket host
+        // stays as a second try (IP-literal gateways pick under the IP string, which matches it).
+        val socketHost = (socket?.remoteSocketAddress as? InetSocketAddress)?.hostString
+        val sni = sniHost()
+        val direct = listOfNotNull(sni, socketHost).distinct().firstNotNullOfOrNull { resolveAlias(it) }
+        if (direct != null) return direct
+        // The factory never saw this handshake (no hostname passed to any createSocket overload): with a
+        // single pending pick there is no other host it could be for. A present-but-unmatched SNI host is
+        // authoritative, so it never falls through — no certificate goes to a host it wasn't picked for.
+        return if (sni == null) fallbackAlias() else null
     }
 
     /** OkHttp handshakes on sockets, never engines, so there is no host to pick an alias for. */
@@ -58,12 +101,20 @@ internal actual fun mtlsEngine(certs: ClientCertAliases, gateways: GatewayReposi
         // built eagerly during startKoin while the platform module's createdAtStart setter still hasn't run.
         privateKey = { alias -> runCatching { KeyChain.getPrivateKey(MtlsAppContext.context, alias) }.getOrNull() },
         chain = { alias -> runCatching { KeyChain.getCertificateChain(MtlsAppContext.context, alias) }.getOrNull() },
+        // The Connect screen probes before its gateway is saved, so a single pending pick is the only
+        // alias there is: when the factory never saw the hostname (no SNI on this path), that pick is the
+        // certificate the probe is for. Two pending picks can't be told apart — the UI supports one.
+        fallbackAlias = {
+            val all = certs.all()
+            all.values.singleOrNull()
+                ?: all.entries.firstOrNull { (host, _) -> clientCertAliasFor(host, certs, gateways.list.value.gateways) != null }?.value
+        },
     )
     val trustManager = defaultTrustManager()
     val ssl = SSLContext.getInstance("TLS").apply { init(arrayOf(keyManager), arrayOf(trustManager), null) }
     return OkHttp.create {
         config {
-            sslSocketFactory(ssl.socketFactory, trustManager)
+            sslSocketFactory(SniCapturingSocketFactory(ssl.socketFactory), trustManager)
         }
     }
 }

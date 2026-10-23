@@ -19,6 +19,9 @@ class ClientCertAliases {
         val key = accessHostKey(host)
         pending = if (alias == null) pending - key else pending + (key to alias)
     }
+
+    /** Every pending pick, keyed by normalized host: the handshake fallback when the socket shows an IP. */
+    fun all(): Map<String, String> = pending
 }
 
 /**

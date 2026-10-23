@@ -13,10 +13,14 @@ class MtlsKeyManagerTest {
     private fun manager(
         pending: ClientCertAliases = ClientCertAliases(),
         saved: List<SavedGateway> = emptyList(),
+        sniHost: String? = null,
+        fallback: Boolean = false,
     ) = MtlsKeyManager(
         resolveAlias = { host -> clientCertAliasFor(host, pending, saved) },
         privateKey = { throw UnsupportedOperationException("no KeyChain in host tests") },
         chain = { throw UnsupportedOperationException("no KeyChain in host tests") },
+        fallbackAlias = { if (fallback) pending.all().values.singleOrNull() else null },
+        sniHost = { sniHost },
     )
 
     private fun connectedSocket(): Socket {
@@ -56,6 +60,55 @@ class MtlsKeyManagerTest {
         val saved = listOf(SavedGateway("https://other.example.net", clientCertAlias = "other-cert"))
         connectedSocket().use {
             assertNull(manager(saved = saved).chooseClientAlias(arrayOf("RSA"), null, it))
+        }
+    }
+
+    @Test fun theSniHostnameIsPreferredOverTheSocketsNumericAddress() {
+        // Real handshakes connect by IP: the socket's own address is numeric while the pick is stored
+        // under the hostname. The SNI host captured from the socket factory resolves it.
+        val pending = ClientCertAliases()
+        pending.set("hermes.example.ts.net", "hostname-cert")
+        connectedSocket().use {
+            assertEquals(
+                "hostname-cert",
+                manager(pending, sniHost = "hermes.example.ts.net")
+                    .chooseClientAlias(arrayOf("RSA"), null, it),
+            )
+        }
+    }
+
+    @Test fun aPresentButUnmatchedSniHostnameNeverFallsThrough() {
+        // A known SNI host is authoritative: the picked certificate belongs to another host, never this one.
+        val pending = ClientCertAliases()
+        pending.set("other.example.net", "other-cert")
+        connectedSocket().use {
+            assertNull(
+                manager(pending, sniHost = "hermes.example.ts.net", fallback = true)
+                    .chooseClientAlias(arrayOf("RSA"), null, it),
+            )
+        }
+    }
+
+    @Test fun aSinglePendingPickSurvivesAHostlessHandshake() {
+        // The Connect screen probes before its gateway is saved: without any SNI capture a single pick is
+        // the only certificate there is, so it presents. (The UI supports exactly one pending pick.)
+        val pending = ClientCertAliases()
+        pending.set("hermes.example.ts.net", "fresh-pick")
+        connectedSocket().use {
+            assertEquals(
+                "fresh-pick",
+                manager(pending, fallback = true).chooseClientAlias(arrayOf("RSA"), null, it),
+            )
+        }
+    }
+
+    @Test fun twoPendingPicksCannotBeToldApartWithoutSni() {
+        // With two pending picks and no SNI host, no host owns the handshake: nothing is presented.
+        val pending = ClientCertAliases()
+        pending.set("a.example.net", "a-cert")
+        pending.set("b.example.net", "b-cert")
+        connectedSocket().use {
+            assertNull(manager(pending, fallback = true).chooseClientAlias(arrayOf("RSA"), null, it))
         }
     }
 }
