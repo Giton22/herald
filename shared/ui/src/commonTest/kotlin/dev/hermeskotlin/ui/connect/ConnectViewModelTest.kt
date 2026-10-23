@@ -7,6 +7,7 @@ import dev.hermeskotlin.core.gateway.CF_ACCESS_CLIENT_ID
 import dev.hermeskotlin.core.gateway.CF_ACCESS_CLIENT_SECRET
 import dev.hermeskotlin.core.gateway.ClientCertAliases
 import dev.hermeskotlin.core.gateway.GatewayProbe
+import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.gateway.ProbeResult
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.gateway.clientCertAliasFor
@@ -47,7 +48,10 @@ class ConnectViewModelTest {
     private val access = AccessTokens(InMemoryKeyValueStore())
     private val seen = mutableListOf<HttpRequestData>()
 
-    private fun viewModel(certs: ClientCertAliases = ClientCertAliases()): ConnectViewModel {
+    private fun viewModel(
+        certs: ClientCertAliases = ClientCertAliases(),
+        gateways: GatewayRepository = GatewayRepository(InMemoryKeyValueStore()),
+    ): ConnectViewModel {
         // On the test dispatcher, so no request is still finishing on another thread when a test ends.
         val config = MockEngineConfig()
         config.dispatcher = dispatcher
@@ -59,7 +63,7 @@ class ConnectViewModelTest {
                 headersOf(HttpHeaders.ContentType, "application/json"),
             )
         }
-        return ConnectViewModel(GatewayProbe(createHttpClient(MockEngine(config), access = access)), access, certs)
+        return ConnectViewModel(GatewayProbe(createHttpClient(MockEngine(config), access = access)), access, certs, gateways)
     }
 
     /** The mock engine completes on Ktor's own dispatcher, so wait for the state instead of the test scheduler. */
@@ -208,5 +212,32 @@ class ConnectViewModelTest {
         vm.url.setTextAndPlaceCursorAtEnd("https://other.example.com")
         vm.onUrlEdited()
         assertEquals("other-cert", vm.certAlias.value)
+    }
+
+    @Test
+    fun typingASavedAddressShowsItsStoredCertificate() = runTest(dispatcher) {
+        val store = InMemoryKeyValueStore()
+        val gateways = GatewayRepository(store)
+        gateways.save(SavedGateway("https://saved.example.com", clientCertAlias = "saved-cert"))
+        val vm = viewModel(gateways = gateways)
+
+        vm.url.setTextAndPlaceCursorAtEnd("https://saved.example.com")
+        vm.onUrlEdited()
+        assertEquals("saved-cert", vm.certAlias.value)
+    }
+
+    @Test
+    fun pickingWithAnInvalidAddressClearsTheShownCertificate() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.url.setTextAndPlaceCursorAtEnd("https://hermes.example.com")
+        vm.pickClientCert("user-cert")
+        assertEquals("user-cert", vm.certAlias.value)
+
+        vm.url.setTextAndPlaceCursorAtEnd("not a url at all !!!")
+        vm.pickClientCert("ignored-cert")
+        assertNull(vm.certAlias.value)
+
+        vm.clearClientCert()
+        assertNull(vm.certAlias.value)
     }
 }

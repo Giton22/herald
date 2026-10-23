@@ -8,6 +8,7 @@ import dev.hermeskotlin.core.gateway.AccessToken
 import dev.hermeskotlin.core.gateway.AccessTokens
 import dev.hermeskotlin.core.gateway.ClientCertAliases
 import dev.hermeskotlin.core.gateway.GatewayProbe
+import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.gateway.InvalidGatewayUrlException
 import dev.hermeskotlin.core.gateway.ProbeResult
@@ -30,6 +31,7 @@ class ConnectViewModel(
     private val probe: GatewayProbe,
     private val access: AccessTokens,
     private val certs: ClientCertAliases,
+    private val gateways: GatewayRepository,
 ) : ViewModel() {
 
     val url = TextFieldState()
@@ -65,14 +67,22 @@ class ConnectViewModel(
 
     /** Remembers the picked certificate for the address typed, so the probe, the sign-in and the chat present it. */
     fun pickClientCert(alias: String) {
-        val host = GatewayUrl.parseOrNull(url.text.toString())?.host ?: return
+        val host = GatewayUrl.parseOrNull(url.text.toString())?.host
+        if (host == null) {
+            _certAlias.value = null
+            return
+        }
         certs.set(host, alias)
         _certAlias.value = alias
     }
 
     /** Goes back to presenting no certificate to the address typed. */
     fun clearClientCert() {
-        val host = GatewayUrl.parseOrNull(url.text.toString())?.host ?: return
+        val host = GatewayUrl.parseOrNull(url.text.toString())?.host
+        if (host == null) {
+            _certAlias.value = null
+            return
+        }
         certs.set(host, null)
         _certAlias.value = null
     }
@@ -117,7 +127,8 @@ class ConnectViewModel(
         lookupJob?.cancel()
         lookupJob = viewModelScope.launch {
             _accessSaved.value = host != null && access.get(host) != null
-            _certAlias.value = host?.let { clientCertAliasFor(it, certs, emptyList()) }
+            // Pending picks first, then the saved gateways: retyping a saved address shows its certificate.
+            _certAlias.value = host?.let { clientCertAliasFor(it, certs, gateways.all().gateways) }
         }
     }
 }

@@ -151,6 +151,9 @@ class AppViewModel(
         viewModelScope.launch {
             if (signedInGateway()?.url != gateway.url) host.close()
             val saved = gateways.save(gateway)
+            // The Connect-screen pick is persisted on the gateway now: drop the pending entry so it can't
+            // shadow the saved one (or another gateway's) with a stale value.
+            if (saved.clientCertAlias != null) certs.set(saved.gatewayUrl.host, null)
             sessionsChanged.update { it + 1 }
             connection.start(saved.gatewayUrl)
             _route.value = home(saved)

@@ -21,6 +21,6 @@ class ConnectViewModelInjectionTest {
             synthetic.isEmpty(),
             "ConnectViewModel must require ClientCertAliases (found synthetic overload among $ctors)",
         )
-        assertEquals(1, ctors.size, "expected the single (probe, access, certs) constructor")
+        assertEquals(1, ctors.size, "expected the single (probe, access, certs, gateways) constructor")
     }
 }
