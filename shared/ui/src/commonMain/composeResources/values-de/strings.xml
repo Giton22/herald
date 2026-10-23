@@ -23,6 +23,9 @@
     <string name="common_unlock">Entsperren</string>
     <string name="common_unknown">Unbekannt</string>
     <string name="common_settings">Einstellungen</string>
+    <string name="common_back">Zurück</string>
+    <string name="common_download">Herunterladen</string>
+    <string name="common_open_release">Release öffnen</string>
     <string name="settings_section_appearance">Darstellung</string>
     <string name="settings_section_chat">Chat</string>
     <string name="settings_section_voice">Stimme</string>
@@ -149,6 +152,8 @@
     <string name="settings_hermes_version">Hermes %1$s</string>
     <string name="settings_join_discord">Zum Discord</string>
     <string name="settings_join_discord_detail">Hilfe holen, Fehler melden, Funktionen vorschlagen und von neuen Versionen hören.</string>
+    <string name="update_available">Version %1$s ist da</string>
+    <string name="update_install_hint">Installiere sie über diese – Anmeldung und Einstellungen bleiben.</string>
     <string name="settings_check_sheet_detail">Jede Stufe wird einzeln geprüft.</string>
     <string name="start_instruction_title">Startanweisung</string>
     <string name="start_instruction_what">Jeder neue Chat in Herald sagt dem Agenten das zuerst. Es bleibt aus dem Chat heraus, hier und in deinen anderen Hermes-Apps. Laufende Chats behalten, womit sie gestartet sind. Leer lassen für keine.</string>

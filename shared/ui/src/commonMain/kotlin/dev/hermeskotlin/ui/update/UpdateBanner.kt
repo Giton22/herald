@@ -47,6 +47,8 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
+import dev.hermeskotlin.ui.resources.Res
+import org.jetbrains.compose.resources.stringResource
 
 /** A newer release, if one was found, and a way to stop offering it. */
 class UpdateOffer(val update: AppUpdate?, val onDismiss: () -> Unit)
@@ -90,19 +92,23 @@ fun UpdateBanner(modifier: Modifier = Modifier) {
     ) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f).padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Version ${update.version} is out", style = Theme[typography][bodySmall], color = Theme[colors][text])
                 Text(
-                    "Install it over this one; your sign-in and settings stay.",
+                    stringResource(Res.string.update_available, update.version),
+                    style = Theme[typography][bodySmall],
+                    color = Theme[colors][text],
+                )
+                Text(
+                    stringResource(Res.string.update_install_hint),
                     style = Theme[typography][caption],
                     color = Theme[colors][textSecondary],
                 )
             }
             UnstyledButton(onClick = offer.onDismiss, modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusSmall]))) {
-                UnstyledIcon(Lucide.X, contentDescription = "Not now", tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
+                UnstyledIcon(Lucide.X, contentDescription = stringResource(Res.string.common_not_now), tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
             }
         }
         Button(
-            if (update.apkUrl != null) "Download" else "Open release",
+            if (update.apkUrl != null) stringResource(Res.string.common_download) else stringResource(Res.string.common_open_release),
             onClick = { uriHandler.openUri(update.apkUrl ?: update.pageUrl) },
             size = ButtonSize.Small,
             leadingIcon = Lucide.Download,
