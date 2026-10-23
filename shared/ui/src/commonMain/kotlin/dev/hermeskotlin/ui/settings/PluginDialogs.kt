@@ -14,6 +14,8 @@ import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.Dialog
+import dev.hermeskotlin.ui.resources.Res
+import org.jetbrains.compose.resources.stringResource
 
 /** Where the plugin comes from, as the dialogs name it. */
 private val PLUGIN_SOURCE = PushApi.PLUGIN_REPO.substringAfter("://")
@@ -27,13 +29,17 @@ internal fun PluginInstallDialog(visible: Boolean, feature: String, what: String
     Dialog(
         visible = visible,
         onDismissRequest = onDismiss,
-        title = "Install on the gateway?",
-        message = "$feature needs the herald-push plugin on your gateway. If it isn't there yet, Herald installs " +
-            "version ${PushApi.PLUGIN_VERSION} from $PLUGIN_SOURCE, at the commit this Herald was reviewed with. $what " +
-            "Updates are only installed when you choose to, and you can remove the plugin on the gateway at any time.",
+        title = stringResource(Res.string.plugin_install_title),
+        message = stringResource(
+            Res.string.plugin_install_message,
+            feature,
+            PushApi.PLUGIN_VERSION,
+            PLUGIN_SOURCE,
+            what,
+        ),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Turn on", onClick = onConfirm, size = ButtonSize.Small)
+            Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(stringResource(Res.string.common_turn_on), onClick = onConfirm, size = ButtonSize.Small)
         },
     )
 }
@@ -47,15 +53,15 @@ internal fun SuggestionsInstallDialog(visible: Boolean, onDismiss: () -> Unit, o
     Dialog(
         visible = visible,
         onDismissRequest = onDismiss,
-        title = "Install Next Prompt?",
-        message = "Herald installs Next Prompt ${NextPromptApi.PLUGIN_VERSION}, a community plugin, from " +
-            "${NextPromptApi.PLUGIN_REPO.substringAfter("://")}, at the commit this Herald was reviewed with. After " +
-            "every turn, in Herald, Desktop and the terminal alike, it sends the last few messages of the chat to " +
-            "your model (or the one set for its auxiliary task) and keeps the reply it suggests. That's one more " +
-            "model call per turn. You can remove it on the gateway at any time.",
+        title = stringResource(Res.string.plugin_next_prompt_title),
+        message = stringResource(
+            Res.string.plugin_next_prompt_message,
+            NextPromptApi.PLUGIN_VERSION,
+            NextPromptApi.PLUGIN_REPO.substringAfter("://"),
+        ),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Install", onClick = onConfirm, size = ButtonSize.Small)
+            Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(stringResource(Res.string.common_install), onClick = onConfirm, size = ButtonSize.Small)
         },
     )
 }
@@ -65,21 +71,26 @@ internal fun SuggestionsInstallDialog(visible: Boolean, onDismiss: () -> Unit, o
 internal fun PluginUpdateRow(update: PluginUpdate, onUpdate: () -> Unit) {
     var asking by remember { mutableStateOf(false) }
     ActionRow(
-        if (update.needed) "Update the gateway's plugin to ${update.available}" else "Plugin update: ${update.installed} → ${update.available}",
+        if (update.needed) {
+            stringResource(Res.string.plugin_update_needed_row, update.available)
+        } else {
+            stringResource(Res.string.plugin_update_row, update.installed, update.available)
+        },
         Lucide.RefreshCw,
     ) { asking = true }
     Dialog(
         visible = asking,
         onDismissRequest = { asking = false },
-        title = "Update the plugin?",
-        message = "Herald updates older herald-push copies on the gateway and its bot profiles to ${update.available} from " +
-            "$PLUGIN_SOURCE, at the commit this Herald was reviewed with. Disabled copies stay disabled. " +
-            "Running chats gain new tools when their agent session reloads." +
-            if (update.needed) " This Herald needs the update." else " Updates are only installed when you choose to.",
+        title = stringResource(Res.string.plugin_update_title),
+        // The closing sentence is its own line, so each language can end the paragraph its own way.
+        message = stringResource(Res.string.plugin_update_message, update.available, PLUGIN_SOURCE) + " " +
+            stringResource(
+                if (update.needed) Res.string.plugin_update_needs_it else Res.string.plugin_update_optional,
+            ),
         actions = {
-            Button("Not now", onClick = { asking = false }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(stringResource(Res.string.common_not_now), onClick = { asking = false }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             Button(
-                "Update",
+                stringResource(Res.string.common_update),
                 onClick = {
                     asking = false
                     onUpdate()

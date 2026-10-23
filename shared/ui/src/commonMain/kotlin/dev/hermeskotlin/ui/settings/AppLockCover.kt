@@ -15,6 +15,8 @@ import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.ui.components.EmptyState
+import dev.hermeskotlin.ui.resources.Res
+import org.jetbrains.compose.resources.stringResource
 
 /** What the app shows instead of its screens while App lock is locked, until [onUnlock] succeeds. */
 @Composable
@@ -25,8 +27,12 @@ fun AppLockCover(onUnlock: () -> Unit) {
             .background(Theme[colors][background])
             .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
-        EmptyState(Lucide.Lock, "Herald is locked", "Unlock with your fingerprint, face or screen lock.") {
-            Button("Unlock", onClick = onUnlock)
+        EmptyState(
+            Lucide.Lock,
+            stringResource(Res.string.app_lock_title),
+            stringResource(Res.string.app_lock_detail),
+        ) {
+            Button(stringResource(Res.string.common_unlock), onClick = onUnlock)
         }
     }
 }
