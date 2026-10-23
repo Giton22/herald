@@ -2,8 +2,10 @@ package dev.hermeskotlin.wear
 
 import android.app.role.RoleManager
 import android.content.Context
+import android.content.Intent
 import android.media.AudioManager
 import android.os.SystemClock
+import android.provider.Settings
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
@@ -732,7 +734,13 @@ private fun SettingsScreen(link: WatchLink, store: WatchStore) {
     val askAssistant = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
         isAssistant = roles?.isRoleHeld(RoleManager.ROLE_ASSISTANT) == true
     }
-    val assistantRequest = remember(roles) { roles?.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT) }
+    // Wear's own "Digital assistant app" screen is where the role is picked there: some builds refuse the
+    // role request itself ("Role is not requestable"). The system picker stays the fallback for the ones that
+    // have no such screen.
+    val assistantRequest = remember(context, roles) {
+        Intent(Settings.ACTION_VOICE_INPUT_SETTINGS).takeIf { context.packageManager.resolveActivity(it, 0) != null }
+            ?: roles?.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT)
+    }
     val listState = rememberTransformingLazyColumnState()
     ScreenScaffold(scrollState = listState, modifier = Modifier.halo(OrbMood.Idle, MaterialTheme.colorScheme.primaryContainer)) { contentPadding ->
         TransformingLazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {

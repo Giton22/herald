@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-feature android:name="android.hardware.type.watch" />
 
@@ -17,6 +18,13 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- The watch's own "Digital assistant app" screen, which is where the assistant role is picked there. -->
+    <queries>
+        <intent>
+            <action android:name="android.settings.VOICE_INPUT_SETTINGS" />
+        </intent>
+    </queries>
 
     <!-- The watch's own speech recognizer, used first; apps are hidden from Herald unless it says which it looks up. -->
     <queries>
@@ -137,6 +145,17 @@
             android:name=".assist.HeraldWearAssistSessionService"
             android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION" />
+
+        <!-- The assist button's target on watches that can only map it to an activity: a listen, then out of
+             the way; invisible and never in Recents. -->
+        <activity
+            android:name=".assist.AssistLaunchActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay"
+            tools:ignore="CustomSplashScreen" />
 
         <!-- Android only accepts an assistant that names a recognizer of its own; this one turns other apps away. -->
         <service
