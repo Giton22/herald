@@ -1,4 +1,6 @@
-# Publishing a release (not drafting it) posts it to the Discord server's #announcement channel.
+# Publishing a release (not drafting it) posts it to the Discord server's #announcement channel. A release published
+# before this file was in its tag, or one whose post failed, can be posted by hand: Actions → Announce release →
+# Run workflow, with its tag.
 #
 # Repo secret (Settings → Secrets and variables → Actions):
 #   DISCORD_RELEASES_WEBHOOK  the channel's webhook URL (Discord: Server Settings → Integrations → Webhooks)
@@ -8,29 +10,36 @@ name: Announce release
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "The release's tag, like v1.2.3"
+        required: true
 
 permissions:
   contents: read
 
 jobs:
   discord:
-    if: ${{ !github.event.release.prerelease }}
+    if: ${{ github.event_name == 'workflow_dispatch' || !github.event.release.prerelease }}
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Post to Discord
         env:
           WEBHOOK: ${{ secrets.DISCORD_RELEASES_WEBHOOK }}
-          TAG: ${{ github.event.release.tag_name }}
-          PAGE: ${{ github.event.release.html_url }}
-          NOTES: ${{ github.event.release.body }}
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag || github.event.release.tag_name }}
         run: |
           if [ -z "$WEBHOOK" ]; then echo "::warning::DISCORD_RELEASES_WEBHOOK is not set, so nothing was posted"; exit 0; fi
+          release=$(gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url,body,isDraft)
+          if [ "$(jq -r .isDraft <<<"$release")" = true ]; then echo "::error::$TAG is still a draft"; exit 1; fi
+          page=$(jq -r .url <<<"$release")
           # Discord can't draw the "Which APK?" table, so it's left out, up to the next "## " heading wherever it sits;
           # an embed holds 4096 characters, so long notes are cut short.
-          notes=$(printf '%s\n' "$NOTES" | sed '/^### Which APK?/,/^## /{/^## /!d}')
+          notes=$(jq -r .body <<<"$release" | sed '/^### Which APK?/,/^## /{/^## /!d}')
           if [ "${#notes}" -gt 3700 ]; then notes="${notes:0:3700}…"; fi
-          jq -n --arg tag "$TAG" --arg page "$PAGE" --arg notes "$notes" '{
+          jq -n --arg tag "$TAG" --arg page "$page" --arg notes "$notes" '{
             embeds: [{
               title: ("New release: " + $tag),
               url: $page,
