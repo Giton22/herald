@@ -1,6 +1,8 @@
 package dev.hermeskotlin.ui.components
 
 import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
 import android.security.KeyChain
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -20,9 +22,17 @@ actual fun rememberClientCertPicker(
         object : ClientCertPicker {
             override fun pick() {
                 // The grant the picker hands out belongs to the calling activity; only it can use the key.
-                val activity = context as? Activity ?: return
+                // LocalContext is usually a wrapper (theme, layout), not the activity itself.
+                val activity = context.findActivity() ?: return
                 KeyChain.choosePrivateKeyAlias(activity, { alias -> picked(alias) }, null, null, host, port, null)
             }
         }
     }
+}
+
+/** Unwraps [ContextWrapper]s (theme, layout) to the hosting [Activity], or null when there isn't one. */
+private tailrec fun Context.findActivity(): Activity? = when (this) {
+    is Activity -> this
+    is ContextWrapper -> baseContext.findActivity()
+    else -> null
 }
