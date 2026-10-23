@@ -7,6 +7,7 @@ import dev.hermeskotlin.core.network.map
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.plugins.timeout
+import io.ktor.client.request.HttpRequestBuilder
 import io.ktor.client.request.get
 import io.ktor.client.request.parameter
 import io.ktor.client.request.post
@@ -79,7 +80,7 @@ class AudioApi(private val client: HttpClient) {
             contentType(ContentType.Application.Json)
             setBody(TranscribeRequest("data:$mimeType;base64,${Base64.encode(audio)}", mimeType))
             // Remote providers and long clips take a while.
-            timeout { requestTimeoutMillis = SLOW_MS }
+            waitUpTo(SLOW_MS)
         }
     }.map { it.body<TranscribeResponse>().transcript.trim() }
 
@@ -89,7 +90,7 @@ class AudioApi(private val client: HttpClient) {
             profile?.let { parameter("profile", it) }
             contentType(ContentType.Application.Json)
             setBody(SpeakRequest(text))
-            timeout { requestTimeoutMillis = SLOW_MS }
+            waitUpTo(SLOW_MS)
         }
     }.map { response ->
         val body = response.body<SpeakResponse>()
@@ -113,7 +114,7 @@ class AudioApi(private val client: HttpClient) {
             profile?.let { parameter("profile", it) }
             contentType(ContentType.Application.Json)
             setBody(LiveSessionRequest(offerSdp, history))
-            timeout { requestTimeoutMillis = LIVE_SESSION_MS }
+            waitUpTo(LIVE_SESSION_MS)
         }
     }.map { it.body<LiveSessionResponse>().transport?.sdp.orEmpty() }
 
@@ -126,9 +127,18 @@ class AudioApi(private val client: HttpClient) {
             profile?.let { parameter("profile", it) }
             contentType(ContentType.Application.Json)
             setBody(LeaseRequest(LEASE, active))
-            timeout { requestTimeoutMillis = LEASE_MS }
+            waitUpTo(LEASE_MS)
         }
     }.map { }
+
+    /**
+     * Gives the call [millis] in all, silence included: these answers come only once the work is done, and
+     * the engine's own read timeout (10 s on OkHttp) would cut them off long before.
+     */
+    private fun HttpRequestBuilder.waitUpTo(millis: Long) = timeout {
+        requestTimeoutMillis = millis
+        socketTimeoutMillis = millis
+    }
 
     /**
      * Whether talking over a reply cuts in, and how readily: the profile's `voice.barge_in`,

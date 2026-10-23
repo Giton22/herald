@@ -62,7 +62,13 @@ class ProfilesApi(private val client: HttpClient) {
      * refuses the default profile. It can take a few seconds while the profile's backend stops.
      */
     suspend fun delete(url: GatewayUrl, name: String): ApiResult<Unit> = apiCall {
-        client.delete(url.resolve("api/profiles/${name.encodeURLPathPart()}")) { timeout { requestTimeoutMillis = 30_000 } }
+        client.delete(url.resolve("api/profiles/${name.encodeURLPathPart()}")) {
+            // The answer comes only once the backend has stopped; OkHttp's 10 s read timeout would cut it off first.
+            timeout {
+                requestTimeoutMillis = 30_000
+                socketTimeoutMillis = 30_000
+            }
+        }
     }.map { }
 
     companion object {
