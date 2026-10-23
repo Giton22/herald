@@ -52,11 +52,12 @@ internal class MtlsKeyManager(
  * the same [HttpClient] serves the REST calls and the `/api/ws` upgrade. The context only feeds [KeyChain].
  */
 internal actual fun mtlsEngine(certs: ClientCertAliases, gateways: GatewayRepository): HttpClientEngine {
-    val appContext = MtlsAppContext.context
     val keyManager = MtlsKeyManager(
         resolveAlias = { host -> clientCertAliasFor(host, certs, gateways.list.value.gateways) },
-        privateKey = { alias -> runCatching { KeyChain.getPrivateKey(appContext, alias) }.getOrNull() },
-        chain = { alias -> runCatching { KeyChain.getCertificateChain(appContext, alias) }.getOrNull() },
+        // MtlsAppContext is read here, on the handshake thread, not at engine-construction time: the engine is
+        // built eagerly during startKoin while the platform module's createdAtStart setter still hasn't run.
+        privateKey = { alias -> runCatching { KeyChain.getPrivateKey(MtlsAppContext.context, alias) }.getOrNull() },
+        chain = { alias -> runCatching { KeyChain.getCertificateChain(MtlsAppContext.context, alias) }.getOrNull() },
     )
     val trustManager = defaultTrustManager()
     val ssl = SSLContext.getInstance("TLS").apply { init(arrayOf(keyManager), arrayOf(trustManager), null) }
