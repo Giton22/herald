@@ -51,6 +51,7 @@ import androidx.compose.ui.window.Dialog
 import androidx.compose.ui.window.DialogProperties
 import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.File
+import com.composables.icons.lucide.FolderOpen
 import com.composables.icons.lucide.Image
 import com.composables.icons.lucide.ImageOff
 import com.composables.icons.lucide.Lucide
@@ -195,57 +196,82 @@ internal fun webHost(source: String): String? {
     return source.substringAfter("://").substringBefore('/').substringBefore('?').substringBefore('#').substringAfterLast('@').ifEmpty { null } ?: "the web"
 }
 
-/** A delivered file: its name, with Save and Share. */
+/** A delivered file: download once, then open or share its saved local copy. */
 @Composable
 internal fun ReplyFile(item: ReplyMedia, download: (suspend () -> FileDownload)? = null) {
     val load = LocalMediaLoader.current
     val actions = rememberMediaActions()
     val notify = LocalNotice.current
-    val scope = rememberCoroutineScope()
-    var busy by remember { mutableStateOf(false) }
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    val owner = LocalWidgetFiles.current?.identity
+    val sourceKey = remember(owner, item.source) { downloadedAttachmentKey(owner, item.source) }
+    // Changing owners must also cancel in-flight work and discard the previous card's UI state.
+    key(owner, item.source) {
+        val scope = rememberCoroutineScope()
+        var busy by remember { mutableStateOf(false) }
+        var saved by remember { mutableStateOf(false) }
+        val shape = RoundedCornerShape(Theme[radii][radiusMedium])
 
-    fun withBytes(action: suspend (ByteArray) -> Unit) {
-        if (busy) return
-        busy = true
-        scope.launch {
-            try {
-                if (download != null) {
-                    when (val result = download()) {
-                        is FileDownload.Ready -> action(result.bytes)
-                        is FileDownload.Failed -> notify(result.message)
-                    }
-                } else {
-                    val bytes = load(item.source)
-                    if (bytes == null) notify("Couldn't get ${item.name} from the gateway.") else action(bytes)
-                }
-            } finally {
-                busy = false
+        suspend fun refreshSaved() {
+            if (busy) return
+            saved = try {
+                sourceKey != null && actions.hasSaved(sourceKey)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                false
             }
         }
-    }
-
-    Row(
-        Modifier
-            .widthIn(max = 420.dp)
-            .fillMaxWidth()
-            .clip(shape)
-            .border(1.dp, Theme[colors][stroke], shape)
-            .background(Theme[colors][surface])
-            .padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        UnstyledIcon(Lucide.File, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(22.dp))
-        Column(Modifier.weight(1f)) {
-            Text(item.name, style = Theme[typography][label], color = Theme[colors][textColor], maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(item.name.substringAfterLast('.', "file").uppercase(), style = Theme[typography][caption], color = Theme[colors][textTertiary])
+        LaunchedEffect(actions, sourceKey) { refreshSaved() }
+        androidx.lifecycle.compose.LifecycleEventEffect(androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+            scope.launch { refreshSaved() }
         }
-        if (busy) {
-            Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
-        } else {
-            IconButton(Lucide.Download, contentDescription = "Save ${item.name}", onClick = { withBytes { notify(actions.save(it, item.name)) } })
-            IconButton(Lucide.Share2, contentDescription = "Share ${item.name}", onClick = { withBytes { actions.share(it, item.name) } })
+
+        fun useFile(share: Boolean) {
+            if (busy) return
+            busy = true
+            scope.launch {
+                try {
+                    val result = useDownloadedAttachment(actions, sourceKey, item.name, share) {
+                        if (download != null) download()
+                        else load(item.source)?.let { FileDownload.Ready(it) }
+                            ?: FileDownload.Failed("Couldn't get ${item.name} from the gateway.")
+                    }
+                    saved = result.saved
+                    result.notice?.let(notify)
+                } finally {
+                    busy = false
+                }
+            }
+        }
+
+        Row(
+            Modifier
+                .widthIn(max = 420.dp)
+                .fillMaxWidth()
+                .clip(shape)
+                .border(1.dp, Theme[colors][stroke], shape)
+                .background(Theme[colors][surface])
+                .clickable(enabled = !busy, onClickLabel = if (saved) "Open ${item.name}" else "Download ${item.name}") { useFile(share = false) }
+                .padding(start = 14.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            UnstyledIcon(Lucide.File, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(22.dp))
+            Column(Modifier.weight(1f)) {
+                Text(item.name, style = Theme[typography][label], color = Theme[colors][textColor], maxLines = 1, overflow = TextOverflow.Ellipsis)
+                val status = when {
+                    busy -> "Working…"
+                    saved -> "Saved on device · Open"
+                    else -> "Download"
+                }
+                Text("${item.name.substringAfterLast('.', "file").uppercase()} · $status", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+            }
+            if (busy) {
+                Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
+            } else {
+                IconButton(if (saved) Lucide.FolderOpen else Lucide.Download, contentDescription = "${if (saved) "Open" else "Download"} ${item.name}", onClick = { useFile(share = false) })
+                IconButton(Lucide.Share2, contentDescription = "Share ${item.name}", onClick = { useFile(share = true) })
+            }
         }
     }
 }

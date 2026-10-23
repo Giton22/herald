@@ -10,7 +10,8 @@ kotlin {
         namespace = "dev.hermeskotlin.ui"
         compileSdk = libs.versions.android.compileSdk.get().toInt()
         minSdk = libs.versions.android.minSdk.get().toInt()
-        withHostTest {}
+        androidResources { enable = true }
+        withHostTest { isIncludeAndroidResources = true }
     }
 
     sourceSets {
@@ -30,6 +31,9 @@ kotlin {
             implementation(libs.androidx.core.ktx)
             // The Health switch asks for Health Connect's permissions through its own screen.
             implementation(libs.androidx.health.connect)
+        }
+        getByName("androidHostTest").dependencies {
+            implementation(libs.robolectric)
         }
         commonTest.dependencies {
             implementation(libs.kotlin.test)

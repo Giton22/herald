@@ -79,8 +79,11 @@ internal const val PDF_NO_ROOM = "The phone has no room to open it right now. Sa
  * Double tap zooms in, or back out. A zoomed page is drawn again, sharper, once the pinch settles.
  */
 @Composable
-internal fun PdfDocumentView(pages: PdfPages, modifier: Modifier = Modifier) {
-    val list = rememberLazyListState()
+internal fun PdfDocumentView(
+    pages: PdfPages,
+    modifier: Modifier = Modifier,
+    list: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
+) {
     var viewport by remember(pages) { mutableIntStateOf(0) }
     var scale by remember(pages) { mutableFloatStateOf(1f) }
     var offsetX by remember(pages) { mutableFloatStateOf(0f) }
