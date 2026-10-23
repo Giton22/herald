@@ -318,4 +318,4 @@ Agent tools that run on the phone: a gateway plugin registers them, Herald answe
 - [x] Wear OS live voice: with GPT-Live on the gateway, the watch holds the voice call itself (WebRTC, its microphone and speaker, over Wi-Fi or mobile data when it has them) while Herald on the phone gets the model's answer and runs each request as a Hermes turn in the watch's chat; captions, Hermes at work, mute and hang up on the watch; "Talk live" in the watch's settings
 - [x] watch follows phone accent colors
 - [ ] Wear OS direct mode: the watch talks to the gateway itself, without the phone
-- [ ] Localization (`i18n.catalog`)
+- [ ] Localization (`i18n.catalog`): the catalogue and German are in for Settings and everything it opens (`composeResources`, `docs/i18n.md`); chat, sessions, inbox, capabilities and Phone tools still hold their words in code

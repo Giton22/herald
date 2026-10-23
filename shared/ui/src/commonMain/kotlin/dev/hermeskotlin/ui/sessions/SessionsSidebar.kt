@@ -221,6 +221,8 @@ import dev.hermeskotlin.ui.rooms.CreateRoomDialog
 import dev.hermeskotlin.ui.plugins.PluginsPage
 import dev.hermeskotlin.ui.rooms.RoomsViewModel
 import org.koin.compose.viewmodel.koinViewModel
+import dev.hermeskotlin.ui.resources.Res
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The sessions sidebar beside the chat, laid out like ChatGPT's: a title with a search button,
@@ -1094,7 +1096,12 @@ internal fun SubpageHeader(title: String, onBack: () -> Unit, subtitle: String? 
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(Lucide.ArrowLeft, contentDescription = "Back", onClick = onBack, tint = Theme[colors][textSecondary])
+                IconButton(
+                    Lucide.ArrowLeft,
+                    contentDescription = stringResource(Res.string.common_back),
+                    onClick = onBack,
+                    tint = Theme[colors][textSecondary],
+                )
                 // The actions get all the room past Back, pushed to the end; a weighted one can take it all.
                 Row(
                     Modifier.weight(1f),

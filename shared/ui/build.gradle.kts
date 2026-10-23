@@ -24,6 +24,7 @@ kotlin {
             implementation(libs.compose.ui.tooling.preview)
             implementation(libs.haze)
             implementation(libs.haze.blur)
+            implementation(compose.components.resources)
         }
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
@@ -41,3 +42,9 @@ kotlin {
 
 // Lint only ever gets this module's test sources, and the app's lint ignores those (see androidApp).
 tasks.matching { it.name == "lintAnalyzeAndroidHostTest" }.configureEach { enabled = false }
+
+// The screens' words live in composeResources: values/ is English, values-de German, and a new language is a
+// folder beside them. Settings and its subpages read from it; docs/i18n.md says what is left in code.
+compose.resources {
+    packageOfResClass = "dev.hermeskotlin.ui.resources"
+}
