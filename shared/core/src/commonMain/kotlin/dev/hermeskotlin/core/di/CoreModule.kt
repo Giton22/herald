@@ -28,7 +28,9 @@ import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.AccessTokens
 import dev.hermeskotlin.core.gateway.ConnectionCheck
 import dev.hermeskotlin.core.gateway.GatewayProbe
+import dev.hermeskotlin.core.gateway.ClientCertAliases
 import dev.hermeskotlin.core.gateway.GatewayRepository
+import dev.hermeskotlin.core.gateway.mtlsEngine
 import dev.hermeskotlin.core.media.LinkPreviews
 import dev.hermeskotlin.core.media.MediaApi
 import dev.hermeskotlin.core.media.publicWebEngine
@@ -80,7 +82,9 @@ val coreModule = module {
     single { WebCookieJar(get(), get(), get(), get()) }
     single { AccessTokens(get()) }
     single { NativeTokens(get()) }
-    single { createHttpClient(cookies = get<PersistentCookiesStorage>(), access = get(), bearer = get()) }
+    single { ClientCertAliases() }
+    // One engine for the REST calls and the /api/ws upgrade, presenting each gateway's client certificate.
+    single { createHttpClient(engine = mtlsEngine(get(), get()), cookies = get<PersistentCookiesStorage>(), access = get(), bearer = get()) }
     single { GatewayProbe(get()) }
     single {
         val client = get<HttpClient>()

@@ -131,4 +131,51 @@ class GatewayRepositoryTest {
         assertEquals(home, list.current)
         assertEquals(work, list.primary)
     }
+
+    @Test
+    fun anOlderStoredGatewayHasNoClientCertificate() = runTest {
+        val store = InMemoryKeyValueStore()
+        store.put("gateways.v1", """{"gateways":[{"url":"http://100.64.0.1:9119","provider":"basic"}],"currentUrl":"http://100.64.0.1:9119"}""")
+
+        assertNull(GatewayRepository(store).current()?.clientCertAlias)
+    }
+
+    @Test
+    fun aClientCertificateRoundTripsThroughStorage() = runTest {
+        val store = InMemoryKeyValueStore()
+        val repo = GatewayRepository(store)
+        repo.save(home.copy(clientCertAlias = "homelab-cert"))
+
+        val reloaded = GatewayRepository(store).current()
+        assertEquals("homelab-cert", reloaded?.clientCertAlias)
+    }
+
+    @Test
+    fun signingInAgainKeepsTheClientCertificate() = runTest {
+        val repo = GatewayRepository(InMemoryKeyValueStore())
+        repo.save(home.copy(clientCertAlias = "homelab-cert"))
+        repo.save(home)
+
+        assertEquals("homelab-cert", repo.current()?.clientCertAlias)
+    }
+
+    @Test
+    fun anExplicitlyPickedCertificateWinsOverTheSavedOne() = runTest {
+        val repo = GatewayRepository(InMemoryKeyValueStore())
+        repo.save(home.copy(clientCertAlias = "old-cert"))
+        repo.save(home.copy(clientCertAlias = "new-cert"))
+
+        assertEquals("new-cert", repo.current()?.clientCertAlias)
+    }
+
+    @Test
+    fun theClientCertificateCanBeChangedAndCleared() = runTest {
+        val repo = GatewayRepository(InMemoryKeyValueStore())
+        repo.save(home)
+        repo.setClientCert(home.url, "homelab-cert")
+        assertEquals("homelab-cert", repo.current()?.clientCertAlias)
+
+        repo.setClientCert(home.url, null)
+        assertNull(repo.current()?.clientCertAlias)
+    }
 }

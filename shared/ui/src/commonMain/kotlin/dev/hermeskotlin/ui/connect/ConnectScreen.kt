@@ -55,10 +55,12 @@ import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.KeyRound
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.PlugZap
+import com.composables.icons.lucide.ShieldCheck
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.gateway.ProbeResult
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.gateway.serverOnlyResults
@@ -88,6 +90,7 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.components.ScreenHeader
 import dev.hermeskotlin.ui.components.ScreenScaffold
+import dev.hermeskotlin.ui.components.rememberClientCertPicker
 import kotlinx.coroutines.flow.drop
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -100,6 +103,7 @@ fun ConnectScreen(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val accessSaved by viewModel.accessSaved.collectAsStateWithLifecycle()
+    val certAlias by viewModel.certAlias.collectAsStateWithLifecycle()
 
     LaunchedEffect(viewModel) {
         snapshotFlow { viewModel.url.text.toString() }.drop(1).collect { viewModel.onUrlEdited() }
@@ -111,8 +115,11 @@ fun ConnectScreen(
         access = remember(viewModel, accessSaved) {
             AccessToken(viewModel.accessClientId, viewModel.accessClientSecret, accessSaved, viewModel::forgetAccessToken)
         },
+        cert = remember(viewModel, certAlias) {
+            ClientCert(certAlias, viewModel::pickClientCert, viewModel::clearClientCert)
+        },
         onTest = viewModel::testConnection,
-        onContinue = { onContinue(SavedGateway(it.url.value, provider = PASSWORD_PROVIDER)) },
+        onContinue = { onContinue(SavedGateway(it.url.value, provider = PASSWORD_PROVIDER, clientCertAlias = certAlias)) },
         onCancel = onCancel,
     )
 }
@@ -125,6 +132,13 @@ internal class AccessToken(
     val onForget: () -> Unit,
 )
 
+/** The client certificate picked for the address typed, shown by its system-store alias. */
+internal class ClientCert(
+    val alias: String?,
+    val onPick: (String) -> Unit,
+    val onClear: () -> Unit,
+)
+
 /**
  * The address, tested from inside its field; what the test found; help on which address to use and on
  * Cloudflare Access; and, once the gateway answers with a sign-in the app can use, the way on to it.
@@ -134,11 +148,14 @@ internal fun ConnectView(
     url: TextFieldState,
     state: ConnectUiState,
     access: AccessToken,
+    cert: ClientCert,
     onTest: () -> Unit,
     onContinue: (ProbeResult.Reachable) -> Unit,
     onCancel: (() -> Unit)?,
 ) {
     val result = state.result
+    val parsed = GatewayUrl.parseOrNull(url.text.toString())
+    val picker = rememberClientCertPicker(parsed?.host, parsed?.port ?: -1, onPicked = { it?.let(cert.onPick) })
     ScreenScaffold {
         ScreenHeader(
             icon = if (onCancel == null) null else Lucide.PlugZap,
@@ -194,6 +211,13 @@ internal fun ConnectView(
             }
             HelpRow(Lucide.KeyRound, "Behind Cloudflare Access?", accessOpen) { accessOpen = !accessOpen }
             if (accessOpen) AccessTokenFields(access, state.accessError, onTest)
+
+            var certOpen by rememberSaveable { mutableStateOf(false) }
+            LaunchedEffect(result) {
+                if (result is ProbeResult.ClientCertRequired) certOpen = true
+            }
+            HelpRow(Lucide.ShieldCheck, "Need a client certificate?", certOpen) { certOpen = !certOpen }
+            if (certOpen) ClientCertFields(cert, demanded = result is ProbeResult.ClientCertRequired, onPick = picker::pick)
         }
 
         val signInReady = result is ProbeResult.Reachable && result.status.authRequired && result.canSignIn
@@ -322,6 +346,38 @@ private fun AccessTokenFields(access: AccessToken, error: String?, onTest: () ->
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Go),
             onKeyboardAction = { onTest() },
         )
+    }
+}
+
+/** A client certificate to present to this address, picked from the system store for proxies that ask for one. */
+@Composable
+private fun ClientCertFields(cert: ClientCert, demanded: Boolean, onPick: () -> Unit) {
+    Column(Modifier.padding(start = 4.dp, end = 4.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        Hint(
+            if (demanded) "This server asks for a client certificate before it talks. Pick the one it gave you, " +
+                "then test again."
+            else "If a proxy in front of this address asks for a client certificate, pick it here so the test, " +
+                "the sign-in and the chat all present it.",
+        )
+        if (cert.alias != null) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                StatusDot(Status.Ok, cert.alias)
+                Button(
+                    text = "Forget",
+                    onClick = cert.onClear,
+                    variant = ButtonVariant.Ghost,
+                    size = ButtonSize.Small,
+                )
+            }
+            Hint("The key itself stays in the system store; only its name is kept, per gateway.")
+        } else {
+            Button(
+                text = "Pick certificate",
+                onClick = onPick,
+                variant = ButtonVariant.Secondary,
+                size = ButtonSize.Small,
+            )
+        }
     }
 }
 

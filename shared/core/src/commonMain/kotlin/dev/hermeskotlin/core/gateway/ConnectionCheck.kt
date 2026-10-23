@@ -131,6 +131,11 @@ class ConnectionCheck(
             StageResult.Failed("The chat connection was refused (HTTP ${e.status}).", "Behind a proxy, allow WebSocket upgrades on /api/ws.")
         e is TransportClosedException && e.code == GatewayCloseCodes.TICKET_REJECTED ->
             StageResult.Failed("The gateway rejected the chat ticket.", "Sign in again.")
+        isClientCertDemand(e) ->
+            StageResult.Failed(
+                "The server asked for a client certificate during the chat connection: ${e.message ?: e::class.simpleName}",
+                clientCertFix,
+            )
         else -> StageResult.Failed(
             "The chat connection failed: ${e.message ?: e::class.simpleName}",
             "Behind a proxy, allow WebSocket upgrades on /api/ws; otherwise try again.",
@@ -145,6 +150,10 @@ class ConnectionCheck(
 /** The server-access stage as the probe found it. */
 fun ProbeResult.toStageResult(): StageResult = when (this) {
     is ProbeResult.Reachable -> StageResult.Passed("Hermes ${status.version} answers at $url.")
+    is ProbeResult.ClientCertRequired -> StageResult.Failed(
+        "Can't reach $url: the server asked for a client certificate ($reason).",
+        clientCertFix,
+    )
     is ProbeResult.NotHermes -> StageResult.Failed(
         "Something answered at $url" + (httpStatus?.let { " (HTTP $it)" } ?: "") + ", but not a Hermes dashboard.",
         "Use the dashboard's own port, 9119 by default. Behind a proxy, check that it forwards to the dashboard.",
@@ -170,6 +179,10 @@ fun ProbeResult.serverOnlyResults(): Map<CheckStage, StageResult> {
 }
 
 private val NEEDS_SERVER = StageResult.Skipped("Needs server access first.")
+
+/** What to do when the server wants a client certificate before it talks. */
+private const val clientCertFix =
+    "Attach the client certificate this server asks for to the gateway (its system-store alias), then check again."
 
 /** What to do when nothing answers, by the kind of address: this phone, Tailscale, HTTPS, or the local network. */
 fun reachFix(url: GatewayUrl): String {

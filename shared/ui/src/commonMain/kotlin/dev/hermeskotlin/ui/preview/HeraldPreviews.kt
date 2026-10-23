@@ -22,6 +22,7 @@ import dev.hermeskotlin.designsystem.components.LocalGlow
 import dev.hermeskotlin.designsystem.components.SheetHeader
 import dev.hermeskotlin.ui.chat.PendingComment
 import dev.hermeskotlin.ui.connect.AccessToken
+import dev.hermeskotlin.ui.connect.ClientCert
 import dev.hermeskotlin.ui.connect.ConnectUiState
 import dev.hermeskotlin.ui.connect.ConnectView
 import dev.hermeskotlin.ui.connect.ConnectionChecklist
@@ -415,6 +416,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                         onSetPrimary = {},
                         onRename = { _, _ -> },
                         onRemove = {},
+                        onSetClientCert = { _, _ -> },
                     )
                 }
                 PreviewScene.BotEditor -> BotEditor(
@@ -843,6 +845,7 @@ private fun SampleConnect(result: ProbeResult, address: String = "hermes.example
         url = remember { TextFieldState(address) },
         state = ConnectUiState(result = result),
         access = AccessToken(remember { TextFieldState() }, remember { TextFieldState() }, saved = false, onForget = {}),
+        cert = ClientCert(alias = null, onPick = {}, onClear = {}),
         onTest = {},
         onContinue = {},
         onCancel = null,
