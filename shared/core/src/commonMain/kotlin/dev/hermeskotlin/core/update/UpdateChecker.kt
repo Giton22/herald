@@ -35,9 +35,13 @@ class UpdateChecker(
     suspend fun check(repo: String, current: String): AppUpdate? {
         if (repo.isBlank() || parseVersion(current) == null) return null
         val release = try {
-            val response = client.get("https://api.github.com/repos/$repo/releases/latest") {
-                header(HttpHeaders.Accept, "application/vnd.github+json")
-                header(HttpHeaders.UserAgent, "herald-android")
+            // A renamed repo answers at its old name with a redirect; the client doesn't follow those itself.
+            var url = "$GITHUB_API/repos/$repo/releases/latest"
+            var response = latest(url)
+            repeat(MAX_REDIRECTS) {
+                if (response.status.value !in REDIRECTS) return@repeat
+                url = response.headers[HttpHeaders.Location]?.takeIf { it.startsWith("$GITHUB_API/") } ?: return null
+                response = latest(url)
             }
             if (!response.status.isSuccess()) return null
             HermesJson.parseToJsonElement(response.bodyAsText()) as? JsonObject
@@ -55,8 +59,16 @@ class UpdateChecker(
     /** Stops offering [version]; a later one is offered again. */
     suspend fun dismiss(version: String) = store.put(DISMISSED_KEY, version)
 
+    private suspend fun latest(url: String) = client.get(url) {
+        header(HttpHeaders.Accept, "application/vnd.github+json")
+        header(HttpHeaders.UserAgent, "herald-android")
+    }
+
     private companion object {
         const val DISMISSED_KEY = "update.dismissed.v1"
+        const val GITHUB_API = "https://api.github.com"
+        const val MAX_REDIRECTS = 3
+        val REDIRECTS = setOf(301, 302, 307, 308)
     }
 }
 
