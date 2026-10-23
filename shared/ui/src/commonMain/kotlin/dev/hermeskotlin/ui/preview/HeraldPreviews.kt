@@ -104,6 +104,13 @@ import dev.hermeskotlin.ui.settings.ConnectionCheckSheet
 import dev.hermeskotlin.ui.settings.GatewayInfo
 import dev.hermeskotlin.ui.settings.SettingsView
 import dev.hermeskotlin.ui.settings.StartInstructionView
+import dev.hermeskotlin.ui.settings.LiveVoicePlugin
+import dev.hermeskotlin.ui.settings.LiveVoiceView
+import dev.hermeskotlin.core.voice.PlanUsage
+import dev.hermeskotlin.core.voice.PlanWindow
+import dev.hermeskotlin.core.voice.SubscriptionSignIn
+import dev.hermeskotlin.core.voice.VoiceMinutes
+import dev.hermeskotlin.core.voice.VoiceUsage
 import androidx.compose.ui.tooling.preview.Preview
 import com.composeunstyled.theme.ColorScheme
 import dev.hermeskotlin.core.chat.ChatState
@@ -135,6 +142,7 @@ enum class PreviewScene(val label: String) {
     Subagents("Subagents"),
     Voice("Voice chat"),
     VoiceCutIn("A reply read in the voice chat, talking over it on"),
+    VoiceChatGpt("A live call on the ChatGPT plan"),
     ReadAloud("A reply being read aloud"),
     ReadAloudFailed("A reply the gateway couldn't voice"),
     NewChat("A new chat"),
@@ -145,6 +153,8 @@ enum class PreviewScene(val label: String) {
     BotEditor("Editing a bot"),
     Settings("Settings"),
     StartInstruction("The starting instruction for new chats"),
+    LiveVoice("Live voice on the ChatGPT plan"),
+    LiveVoiceSignIn("Signing the live voice in to ChatGPT"),
     Gateways("Saved gateways"),
     Journey("What the agent has learned"),
     Insights("Insights"),
@@ -228,6 +238,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 PreviewScene.Subagents -> SampleChat(ChatSamples.subagents)
                 PreviewScene.Voice -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.listening)
                 PreviewScene.VoiceCutIn -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.speakingCutIn)
+                PreviewScene.VoiceChatGpt -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.chatGptLive)
                 PreviewScene.ReadAloud -> SampleChat(ChatSamples.reply, readAloud = ReadAloudState(key = "a1"))
                 PreviewScene.ReadAloudFailed -> SampleChat(ChatSamples.reply, readAloud = ReadAloudState(error = "Speech synthesis failed"))
                 PreviewScene.NewChat -> SampleChat(ChatSamples.empty, placeholder = "What are we building?")
@@ -571,6 +582,39 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                     onSignOut = {},
                     onOpenGateways = {},
                 )
+                PreviewScene.LiveVoice -> LiveVoiceView(
+                    settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light, glow = glow, subscriptionVoiceName = "maple"),
+                    plugin = LiveVoicePlugin.Ready(
+                        signedIn = true,
+                        bots = listOf("research", "work"),
+                        plan = PlanUsage(
+                            ok = true,
+                            plan = "plus",
+                            windows = mapOf(
+                                "5h" to PlanWindow(usedPercent = 23, windowMinutes = 300, resetsAt = previewNowSeconds() + 2 * 3600),
+                                "semanal" to PlanWindow(usedPercent = 41, windowMinutes = 7 * 1440, resetsAt = previewNowSeconds() + 3 * 86400),
+                            ),
+                        ),
+                        minutes = VoiceUsage(ok = true, today = VoiceMinutes(12.4, 3), rolling5h = VoiceMinutes(6.0, 2), week = VoiceMinutes(48.0, 11)),
+                    ),
+                    onUpdate = {},
+                    onCheck = {},
+                    onSignIn = {},
+                    onCancelSignIn = {},
+                    onBack = {},
+                )
+                PreviewScene.LiveVoiceSignIn -> LiveVoiceView(
+                    settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light, glow = glow),
+                    plugin = LiveVoicePlugin.Ready(
+                        signedIn = false,
+                        signIn = SubscriptionSignIn(status = "pending", url = "https://auth.openai.com/codex/device", code = "K7QM-42XPA"),
+                    ),
+                    onUpdate = {},
+                    onCheck = {},
+                    onSignIn = {},
+                    onCancelSignIn = {},
+                    onBack = {},
+                )
                 PreviewScene.StartInstruction -> StartInstructionView(
                     text = "I'm on my phone: keep replies short and skip long tables.",
                     onChange = {},
@@ -759,6 +803,16 @@ private fun SettingsPreview() = HeraldPreview(PreviewScene.Settings)
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun StartInstructionPreview() = HeraldPreview(PreviewScene.StartInstruction)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun LiveVoicePreview() = HeraldPreview(PreviewScene.LiveVoice)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun LiveVoiceSignInPreview() = HeraldPreview(PreviewScene.LiveVoiceSignIn)
+
+private fun previewNowSeconds(): Long = kotlin.time.Clock.System.now().epochSeconds
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable

@@ -89,6 +89,7 @@ import com.composables.icons.lucide.LayoutGrid
 import com.composables.icons.lucide.Lightbulb
 import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.LogOut
+import com.composables.icons.lucide.AudioLines
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageCircle
 import com.composables.icons.lucide.MessageSquarePlus
@@ -194,11 +195,12 @@ fun SettingsScreen(
     var phoneToolsOpen by remember { mutableStateOf(false) }
     var appIconOpen by remember { mutableStateOf(false) }
     var startInstructionOpen by remember { mutableStateOf(false) }
+    var liveVoiceOpen by remember { mutableStateOf(false) }
     // Read again when the App icon page closes, so its row names the icon just applied.
     val appIcons = key(appIconOpen) { rememberAppIcons() }
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
-    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen, onBack = onBack)
+    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !liveVoiceOpen, onBack = onBack)
     SettingsView(
         settings, info, gateway.url, viewModel::update, onBack, onSignOut, onOpenGateways,
         gatewayName = gateway.label,
@@ -223,11 +225,13 @@ fun SettingsScreen(
         appIcon = appIcons.current,
         onOpenAppIcon = { appIconOpen = true },
         onOpenStartInstruction = { startInstructionOpen = true },
+        onOpenLiveVoice = { liveVoiceOpen = true },
         suggestions = suggestions,
         onInstallSuggestions = viewModel::installSuggestions,
         onCheckSuggestions = viewModel::checkSuggestions,
     )
     if (phoneToolsOpen) PhoneToolsScreen(onBack = { phoneToolsOpen = false })
+    if (liveVoiceOpen) LiveVoiceScreen(settings, viewModel, onUpdate = viewModel::update, onBack = { liveVoiceOpen = false })
     if (startInstructionOpen) {
         StartInstructionScreen(
             text = settings.startInstruction,
@@ -319,6 +323,7 @@ internal fun SettingsView(
     suggestions: SuggestionsPlugin = SuggestionsPlugin.Checking,
     onInstallSuggestions: () -> Unit = {},
     onCheckSuggestions: () -> Unit = {},
+    onOpenLiveVoice: () -> Unit = {},
 ) {
     Box(
         Modifier
@@ -550,6 +555,13 @@ internal fun SettingsView(
                         }
                         Divider()
                     }
+                    NavRow(
+                        title = "Live voice on ChatGPT",
+                        detail = liveVoiceDetail(settings),
+                        icon = Lucide.AudioLines,
+                        onClick = onOpenLiveVoice,
+                    )
+                    Divider()
                     Field("Pause before sending", detail = "How long a voice chat waits after you stop talking. Short is Desktop's timing.") {
                         SegmentedControl(
                             options = VoicePause.entries,

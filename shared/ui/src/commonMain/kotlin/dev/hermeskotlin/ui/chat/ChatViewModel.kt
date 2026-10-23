@@ -48,6 +48,7 @@ import dev.hermeskotlin.core.sessions.SeenStore
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.settings.AppSettings
+import dev.hermeskotlin.core.voice.SubscriptionVoiceOptions
 import dev.hermeskotlin.core.settings.RunningSend
 import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.core.pet.PetApi
@@ -536,8 +537,9 @@ class ChatViewModel(
     fun startVoiceChat() {
         val chat = session.value ?: return
         val target = target ?: return
-        val pause = (settings.settings.value ?: AppSettings()).voicePause
-        voice.startChat(chat, target.gateway.gatewayUrl, target.profile, pause.millis)
+        val app = settings.settings.value ?: AppSettings()
+        val live = SubscriptionVoiceOptions(app.subscriptionVoiceName.ifBlank { null }, app.subscriptionPersona, app.subscriptionChatWork)
+        voice.startChat(chat, target.gateway.gatewayUrl, target.profile, app.voicePause.millis, subscription = live.takeIf { app.subscriptionVoice })
     }
 
     /** Starts dictating into the composer, or finishes the dictation in progress. */

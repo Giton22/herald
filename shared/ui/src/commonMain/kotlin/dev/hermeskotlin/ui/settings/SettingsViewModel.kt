@@ -13,6 +13,7 @@ import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.gateway.ProbeResult
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.ApiResult
+import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.plugins.NextPromptApi
 import kotlinx.coroutines.CancellationException
 import dev.hermeskotlin.core.push.PushPluginReply
@@ -21,6 +22,11 @@ import dev.hermeskotlin.core.push.PushStatus
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.settings.WallpaperStore
+import dev.hermeskotlin.core.voice.AudioApi
+import dev.hermeskotlin.core.voice.PlanUsage
+import dev.hermeskotlin.core.voice.SubscriptionSignIn
+import dev.hermeskotlin.core.voice.VoiceUsage
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.SharingStarted
@@ -30,6 +36,28 @@ import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+
+/** Where the gateway's Talk Desktop plugin, which Live voice needs, stands, and what it says of the ChatGPT plan. */
+sealed interface LiveVoicePlugin {
+    data object Checking : LiveVoicePlugin
+
+    /** The gateway doesn't have it. */
+    data object Missing : LiveVoicePlugin
+
+    /** It couldn't be asked: offline, or an error. */
+    data class Unknown(val message: String) : LiveVoicePlugin
+
+    data class Ready(
+        val signedIn: Boolean,
+        /** The bots whose persona the voice can take, besides the chat's and the main bot. */
+        val bots: List<String> = emptyList(),
+        /** A sign-in started here: its link and code while it waits, its message once it failed. */
+        val signIn: SubscriptionSignIn? = null,
+        /** The plan's limits; null when Hermes can't read them. */
+        val plan: PlanUsage? = null,
+        val minutes: VoiceUsage? = null,
+    ) : LiveVoicePlugin
+}
 
 /** Who is signed in where, for the Settings account and about sections. */
 data class GatewayInfo(val userLabel: String? = null, val version: String? = null)
@@ -63,6 +91,7 @@ class SettingsViewModel(
     private val push: PushSetup,
     private val wallpapers: WallpaperStore,
     private val nextPrompt: NextPromptApi,
+    private val audio: AudioApi,
 ) : ViewModel() {
 
     /** The chat background's encoded image, or null when there's none (or it isn't read yet). */
@@ -170,6 +199,78 @@ class SettingsViewModel(
         }
     }
 
+    private val _liveVoice = MutableStateFlow<LiveVoicePlugin>(LiveVoicePlugin.Checking)
+
+    /** The gateway's Talk Desktop plugin, for the Live voice page: read when the page opens. */
+    val liveVoice: StateFlow<LiveVoicePlugin> = _liveVoice.asStateFlow()
+    private var liveVoiceJob: Job? = null
+
+    fun checkLiveVoice() {
+        val url = bound?.gatewayUrl ?: return
+        liveVoiceJob?.cancel()
+        if (_liveVoice.value !is LiveVoicePlugin.Ready) _liveVoice.value = LiveVoicePlugin.Checking
+        liveVoiceJob = viewModelScope.launch { _liveVoice.value = lookUpLiveVoice(url) }
+    }
+
+    private suspend fun lookUpLiveVoice(url: GatewayUrl): LiveVoicePlugin {
+        val status = when (val result = audio.subscriptionVoiceStatus(url)) {
+            is ApiResult.Success -> result.value
+            is ApiResult.Failed -> return if (result.status == 404) LiveVoicePlugin.Missing else LiveVoicePlugin.Unknown(result.message)
+            else -> return LiveVoicePlugin.Unknown(result.errorMessage ?: "Couldn't reach the gateway.")
+        }
+        val bots = (audio.subscriptionVoicePlugin(url) as? ApiResult.Success)?.value?.bots.orEmpty()
+        val plan = (audio.subscriptionPlanUsage(url) as? ApiResult.Success)?.value?.takeIf { it.ok && it.windows.isNotEmpty() }
+        val minutes = (audio.subscriptionVoiceUsage(url) as? ApiResult.Success)?.value?.takeIf { it.ok }
+        return LiveVoicePlugin.Ready(status.signedIn, bots, status.login?.takeIf { it.pending || it.status == "error" }, plan, minutes)
+    }
+
+    /**
+     * Starts the plugin's sign-in to ChatGPT on the gateway and shows its link and code; looks again every few seconds
+     * until it's approved, fails or runs out, then reads the plugin afresh.
+     */
+    fun signInLiveVoice() {
+        val url = bound?.gatewayUrl ?: return
+        val ready = _liveVoice.value as? LiveVoicePlugin.Ready ?: return
+        liveVoiceJob?.cancel()
+        _liveVoice.value = ready.copy(signIn = SubscriptionSignIn(status = "pending"))
+        liveVoiceJob = viewModelScope.launch {
+            val started = audio.startSubscriptionSignIn(url)
+            val signIn = (started as? ApiResult.Success)?.value
+            if (signIn?.status == null) {
+                val why = signIn?.message ?: started.errorMessage ?: "The gateway couldn't start the sign-in."
+                _liveVoice.value = ready.copy(signIn = SubscriptionSignIn(status = "error", message = why))
+                return@launch
+            }
+            _liveVoice.update { (it as? LiveVoicePlugin.Ready)?.copy(signIn = signIn) ?: it }
+            repeat(SIGN_IN_CHECKS) {
+                delay(SIGN_IN_CHECK_MS)
+                val status = (audio.subscriptionVoiceStatus(url) as? ApiResult.Success)?.value ?: return@repeat
+                val login = status.login
+                if (status.signedIn && login?.pending != true) {
+                    _liveVoice.value = lookUpLiveVoice(url)
+                    return@launch
+                }
+                if (login != null && !login.pending) {
+                    _liveVoice.update { (it as? LiveVoicePlugin.Ready)?.copy(signIn = login.takeIf { l -> l.status == "error" }) ?: it }
+                    return@launch
+                }
+                // The code shows up a moment after the sign-in starts.
+                if (login?.code != null) _liveVoice.update { (it as? LiveVoicePlugin.Ready)?.copy(signIn = login) ?: it }
+            }
+            _liveVoice.update { (it as? LiveVoicePlugin.Ready)?.copy(signIn = SubscriptionSignIn(status = "error", message = "The code ran out. Start again.")) ?: it }
+        }
+    }
+
+    fun cancelLiveVoiceSignIn() {
+        val url = bound?.gatewayUrl ?: return
+        liveVoiceJob?.cancel()
+        _liveVoice.update { (it as? LiveVoicePlugin.Ready)?.copy(signIn = null) ?: it }
+        liveVoiceJob = viewModelScope.launch {
+            audio.cancelSubscriptionSignIn(url)
+            _liveVoice.value = lookUpLiveVoice(url)
+        }
+    }
+
     /** Notifications anywhere: where its setup stands on this gateway. */
     val pushStatus: StateFlow<PushStatus> = push.status
 
@@ -186,6 +287,12 @@ class SettingsViewModel(
     /** The user asked for the newer plugin Notifications anywhere offers. */
     fun updatePushPlugin() {
         viewModelScope.launch(Dispatchers.Default) { push.updatePlugin() }
+    }
+
+    private companion object {
+        const val SIGN_IN_CHECK_MS = 3_000L
+        /** The plugin's own sign-in gives up after 16 minutes. */
+        const val SIGN_IN_CHECKS = 330
     }
 
     fun sendPushTest() {

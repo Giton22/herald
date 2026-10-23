@@ -66,6 +66,24 @@ private data class LiveTransport(val sdp: String = "")
 @Serializable
 private data class LiveSessionResponse(val transport: LiveTransport? = null)
 
+@Serializable
+private data class SubscriptionSessionRequest(
+    val offer: String,
+    val profile: String?,
+    val sessionId: String?,
+    val voice: String?,
+    val language: String = "en",
+)
+
+@Serializable
+private data class SubscriptionStopRequest(val threadId: String)
+
+@Serializable
+private data class SubscriptionInterruptRequest(val turnId: String, val threadId: String)
+
+@Serializable
+private data class VoiceUsageReport(val durationMs: Long, val audioMs: Long)
+
 /**
  * The gateway's voice relay, the endpoints Desktop's voice chat uses: speech-to-text and
  * text-to-speech run with the profile's configured providers (hermes_cli/web_routers/audio.py).
@@ -118,6 +136,82 @@ class AudioApi(private val client: HttpClient) {
         }
     }.map { it.body<LiveSessionResponse>().transport?.sdp.orEmpty() }
 
+    /** Whether the gateway's talk-desktop plugin is there and signed in to ChatGPT; it fails where it isn't installed. */
+    suspend fun subscriptionVoiceStatus(url: GatewayUrl): ApiResult<SubscriptionVoiceStatus> = apiCall {
+        client.get(url.resolve("api/plugins/$TALK_PLUGIN/codex/status"))
+    }.map { it.body<SubscriptionVoiceStatus>() }
+
+    /** The plugin's bots, whose persona its voice can take; fails where it isn't installed. */
+    suspend fun subscriptionVoicePlugin(url: GatewayUrl): ApiResult<SubscriptionVoicePlugin> = apiCall {
+        client.get(url.resolve("api/plugins/$TALK_PLUGIN/status")) { timeout { requestTimeoutMillis = LEASE_MS } }
+    }.map { it.body<SubscriptionVoicePlugin>() }
+
+    /** Starts the plugin's sign-in to ChatGPT on the gateway: a link and a code to approve it with, in a moment. */
+    suspend fun startSubscriptionSignIn(url: GatewayUrl): ApiResult<SubscriptionSignIn> = apiCall {
+        client.post(url.resolve("api/plugins/$TALK_PLUGIN/codex/login/start")) { timeout { requestTimeoutMillis = LEASE_MS } }
+    }.map { it.body<SubscriptionSignIn>() }
+
+    /** Stops a sign-in still waiting; the plugin keeps the sign-in it had before. */
+    suspend fun cancelSubscriptionSignIn(url: GatewayUrl): ApiResult<Unit> = apiCall {
+        client.post(url.resolve("api/plugins/$TALK_PLUGIN/codex/login/cancel"))
+    }.map { }
+
+    /** The ChatGPT plan's limits, where Hermes itself is signed in to it. */
+    suspend fun subscriptionPlanUsage(url: GatewayUrl): ApiResult<PlanUsage> = apiCall {
+        client.get(url.resolve("api/plugins/$TALK_PLUGIN/codex/usage")) { timeout { requestTimeoutMillis = LEASE_MS } }
+    }.map { it.body<PlanUsage>() }
+
+    /** The live voice's time on this gateway, from every app that reports its calls. */
+    suspend fun subscriptionVoiceUsage(url: GatewayUrl): ApiResult<VoiceUsage> = apiCall {
+        client.get(url.resolve("api/plugins/$TALK_PLUGIN/voice/usage"))
+    }.map { it.body<VoiceUsage>() }
+
+    /** Adds a call to the plugin's count of live voice time, as the desktop app does with its own. */
+    suspend fun reportSubscriptionVoice(url: GatewayUrl, durationMs: Long, audioMs: Long): ApiResult<Unit> = apiCall {
+        client.post(url.resolve("api/plugins/$TALK_PLUGIN/voice/usage/report")) {
+            contentType(ContentType.Application.Json)
+            setBody(VoiceUsageReport(durationMs, audioMs))
+        }
+    }.map { }
+
+    /**
+     * Trades this device's WebRTC offer for the answer of the plugin's voice, on the ChatGPT plan. [profile] picks the
+     * persona (null: the gateway's own); [storedSessionId] lets the voice read the open chat, where the plugin can;
+     * [voice] null leaves the voice to the plugin.
+     */
+    suspend fun startSubscriptionVoice(
+        url: GatewayUrl,
+        offerSdp: String,
+        profile: String?,
+        storedSessionId: String?,
+        voice: String? = null,
+    ): ApiResult<SubscriptionSession> = apiCall {
+        client.post(url.resolve("api/plugins/$TALK_PLUGIN/codexlive/session")) {
+            contentType(ContentType.Application.Json)
+            setBody(SubscriptionSessionRequest(offerSdp, profile, storedSessionId, voice))
+            // The first call starts the plugin's Codex app-server.
+            timeout { requestTimeoutMillis = SUBSCRIPTION_SESSION_MS }
+        }
+    }.map { it.body<SubscriptionSession>() }
+
+    /** Cuts the voice's turn [turnId] short: someone is talking over it. */
+    suspend fun interruptSubscriptionVoice(url: GatewayUrl, turnId: String, threadId: String): ApiResult<Unit> = apiCall {
+        client.post(url.resolve("api/plugins/$TALK_PLUGIN/codexlive/interrupt")) {
+            contentType(ContentType.Application.Json)
+            setBody(SubscriptionInterruptRequest(turnId, threadId))
+            timeout { requestTimeoutMillis = LEASE_MS }
+        }
+    }.map { }
+
+    /** Hangs up the plugin's voice; the next call is refused while one is still open. */
+    suspend fun stopSubscriptionVoice(url: GatewayUrl, threadId: String): ApiResult<Unit> = apiCall {
+        client.post(url.resolve("api/plugins/$TALK_PLUGIN/codexlive/stop")) {
+            contentType(ContentType.Application.Json)
+            setBody(SubscriptionStopRequest(threadId))
+            timeout { requestTimeoutMillis = LEASE_MS }
+        }
+    }.map { }
+
     /**
      * Tells the gateway a voice surface is active, so it warms the speech engine before the first
      * reply (a local model load would otherwise be dead air), and releases it after.
@@ -165,6 +259,8 @@ class AudioApi(private val client: HttpClient) {
         const val SLOW_MS = 120_000L
         const val LEASE_MS = 180_000L
         const val LIVE_SESSION_MS = 45_000L
+        const val SUBSCRIPTION_SESSION_MS = 120_000L
         const val LEASE = "android:conversation"
+        const val TALK_PLUGIN = "talk-desktop"
     }
 }
