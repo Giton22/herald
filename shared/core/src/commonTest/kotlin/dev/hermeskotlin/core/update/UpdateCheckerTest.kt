@@ -80,6 +80,13 @@ class UpdateCheckerTest {
         // Only the watch's APK: the release page, not an APK the phone can't use.
         val wearOnly = release("herald-wear-0.9.0.apk" to "wear.apk")
         assertEquals(null, parseRelease(wearOnly, listOf("arm64-v8a"))?.apkUrl)
+
+        // Under another app name too, even listed before the phone's APKs.
+        val renamed = release("kyllene-wear-0.9.0.apk" to "wear.apk", "kyllene-0.9.0.apk" to "universal.apk", "kyllene-0.9.0_arm64-v8a.apk" to "arm64.apk")
+        assertEquals("https://x/universal.apk", parseRelease(renamed, listOf("x86"))?.apkUrl)
+        assertEquals("https://x/arm64.apk", parseRelease(renamed, listOf("arm64-v8a"))?.apkUrl)
+        assertEquals(null, parseRelease(release("Kyllene-Wear-0.9.0.apk" to "wear.apk"), listOf("arm64-v8a"))?.apkUrl)
+        assertEquals(null, parseRelease(release("kyllene-dev-wear-0.9.0.apk" to "wear.apk"), listOf("arm64-v8a"))?.apkUrl)
     }
 
     @Test
