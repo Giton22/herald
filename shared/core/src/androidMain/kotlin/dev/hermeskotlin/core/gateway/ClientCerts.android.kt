@@ -20,31 +20,41 @@ import javax.net.ssl.X509TrustManager
 /**
  * The hostname OkHttp is handshaking with, captured from the socket factory on the connecting thread.
  * OkHttp connects by IP, so the socket's own address is usually numeric while the pick is stored under
- * the hostname; without this the alias lookup misses and no certificate is sent. Each TLS handshake
- * overwrites it on the same thread that runs the KeyManager lookup, so it never goes stale.
+ * the hostname; without this the alias lookup misses and no certificate is sent. Every [createSocket]
+ * overload sets or clears this: host-less paths clear it so a pooled thread never presents one host's
+ * certificate to another host's handshake.
  */
 private val handshakeSniHost = ThreadLocal<String>()
 
-/** Passes every call through, remembering the hostname for [handshakeSniHost]. */
-private class SniCapturingSocketFactory(private val delegate: SSLSocketFactory) : SSLSocketFactory() {
+internal class SniCapturingSocketFactory(private val delegate: SSLSocketFactory) : SSLSocketFactory() {
     override fun getDefaultCipherSuites(): Array<String> = delegate.defaultCipherSuites
     override fun getSupportedCipherSuites(): Array<String> = delegate.supportedCipherSuites
     override fun createSocket(s: Socket?, host: String?, port: Int, autoClose: Boolean): Socket? {
-        if (host != null) handshakeSniHost.set(host)
+        if (host != null) handshakeSniHost.set(host) else handshakeSniHost.remove()
         return delegate.createSocket(s, host, port, autoClose)
     }
     override fun createSocket(host: String?, port: Int): Socket? {
-        if (host != null) handshakeSniHost.set(host)
+        if (host != null) handshakeSniHost.set(host) else handshakeSniHost.remove()
         return delegate.createSocket(host, port)
     }
     override fun createSocket(host: String?, port: Int, localHost: InetAddress?, localPort: Int): Socket? {
-        if (host != null) handshakeSniHost.set(host)
+        if (host != null) handshakeSniHost.set(host) else handshakeSniHost.remove()
         return delegate.createSocket(host, port, localHost, localPort)
     }
-    override fun createSocket(host: InetAddress?, port: Int): Socket? = delegate.createSocket(host, port)
-    override fun createSocket(address: InetAddress?, port: Int, localAddress: InetAddress?, localPort: Int): Socket? =
-        delegate.createSocket(address, port, localAddress, localPort)
-    override fun createSocket(): Socket? = delegate.createSocket()
+    // No hostname on these paths: clear any previous handshake's host so a pooled thread
+    // never presents one host's certificate to another host's handshake.
+    override fun createSocket(host: InetAddress?, port: Int): Socket? {
+        handshakeSniHost.remove()
+        return delegate.createSocket(host, port)
+    }
+    override fun createSocket(address: InetAddress?, port: Int, localAddress: InetAddress?, localPort: Int): Socket? {
+        handshakeSniHost.remove()
+        return delegate.createSocket(address, port, localAddress, localPort)
+    }
+    override fun createSocket(): Socket? {
+        handshakeSniHost.remove()
+        return delegate.createSocket()
+    }
 }
 
 /**
@@ -99,16 +109,20 @@ internal actual fun mtlsEngine(certs: ClientCertAliases, gateways: GatewayReposi
         resolveAlias = { host -> clientCertAliasFor(host, certs, gateways.list.value.gateways) },
         // MtlsAppContext is read here, on the handshake thread, not at engine-construction time: the engine is
         // built eagerly during startKoin while the platform module's createdAtStart setter still hasn't run.
-        privateKey = { alias -> runCatching { KeyChain.getPrivateKey(MtlsAppContext.context, alias) }.getOrNull() },
-        chain = { alias -> runCatching { KeyChain.getCertificateChain(MtlsAppContext.context, alias) }.getOrNull() },
+        // A null context (startup, or host tests) means no certificate rather than a crash.
+        privateKey = { alias ->
+            val ctx = MtlsAppContext.context
+            if (ctx == null) null else runCatching { KeyChain.getPrivateKey(ctx, alias) }.getOrNull()
+        },
+        chain = { alias ->
+            val ctx = MtlsAppContext.context
+            if (ctx == null) null else runCatching { KeyChain.getCertificateChain(ctx, alias) }.getOrNull()
+        },
         // The Connect screen probes before its gateway is saved, so a single pending pick is the only
         // alias there is: when the factory never saw the hostname (no SNI on this path), that pick is the
-        // certificate the probe is for. Two pending picks can't be told apart — the UI supports one.
-        fallbackAlias = {
-            val all = certs.all()
-            all.values.singleOrNull()
-                ?: all.entries.firstOrNull { (host, _) -> clientCertAliasFor(host, certs, gateways.list.value.gateways) != null }?.value
-        },
+        // certificate the probe is for. With two or more pending picks the handshake can't be told apart
+        // from any of them, so nothing is presented rather than the wrong certificate.
+        fallbackAlias = { certs.all().values.singleOrNull() },
     )
     val trustManager = defaultTrustManager()
     val ssl = SSLContext.getInstance("TLS").apply { init(arrayOf(keyManager), arrayOf(trustManager), null) }
@@ -121,7 +135,8 @@ internal actual fun mtlsEngine(certs: ClientCertAliases, gateways: GatewayReposi
 
 /** Holds the application context for [KeyChain], set once from the platform module at startup. */
 internal object MtlsAppContext {
-    lateinit var context: Context
+    /** Null until the platform module publishes it (and in host tests): handshakes then present no certificate. */
+    @Volatile var context: Context? = null
 }
 
 private fun defaultTrustManager(): X509TrustManager {
