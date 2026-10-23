@@ -29,7 +29,7 @@ data class ConnectUiState(
 class ConnectViewModel(
     private val probe: GatewayProbe,
     private val access: AccessTokens,
-    private val certs: ClientCertAliases = ClientCertAliases(),
+    private val certs: ClientCertAliases,
 ) : ViewModel() {
 
     val url = TextFieldState()

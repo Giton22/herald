@@ -73,7 +73,7 @@ class AppViewModel(
     /** Each gateway's Inbox kept on the phone, which goes with the gateway. */
     private val inbox: InboxStore? = null,
     /** Aliases picked on the Connect screen before their gateway is saved; saved gateways carry their own. */
-    private val certs: ClientCertAliases = ClientCertAliases(),
+    private val certs: ClientCertAliases,
 ) : ViewModel() {
 
     private val _route = MutableStateFlow<Route>(Route.Loading)

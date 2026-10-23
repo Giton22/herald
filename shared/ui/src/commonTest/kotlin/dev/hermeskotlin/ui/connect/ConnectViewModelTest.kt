@@ -8,6 +8,8 @@ import dev.hermeskotlin.core.gateway.CF_ACCESS_CLIENT_SECRET
 import dev.hermeskotlin.core.gateway.ClientCertAliases
 import dev.hermeskotlin.core.gateway.GatewayProbe
 import dev.hermeskotlin.core.gateway.ProbeResult
+import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.gateway.clientCertAliasFor
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import io.ktor.client.engine.mock.MockEngine
@@ -166,6 +168,32 @@ class ConnectViewModelTest {
         vm.clearClientCert()
         assertNull(vm.certAlias.value)
         assertNull(certs.get("hermes.example.com"))
+    }
+
+    @Test
+    fun aConnectScreenPickReachesTheHandshakeThroughTheSharedMap() = runTest(dispatcher) {
+        // Regression: the ViewModel and the mTLS engine must share one ClientCertAliases. A pick that
+        // lands in a ViewModel-local map never reaches the handshake, so the probe gets a 400/403 and
+        // the user sees "Test" fail even with the certificate picked.
+        val shared = ClientCertAliases()
+        val vm = viewModel(shared)
+        vm.url.setTextAndPlaceCursorAtEnd("https://hermes.example.com")
+
+        vm.pickClientCert("user-cert")
+
+        // The engine resolves live from the same instance (the socket's host, then the handshake's
+        // alias lookup), so both reads must see the pick.
+        assertEquals("user-cert", shared.get("hermes.example.com"), "engine-side map misses the pick")
+        assertEquals(
+            "user-cert",
+            clientCertAliasFor("hermes.example.com", shared, emptyList()),
+            "handshake-side resolve misses the pick",
+        )
+        assertEquals(
+            "user-cert",
+            clientCertAliasFor("hermes.example.com", shared, listOf(SavedGateway("https://hermes.example.com"))),
+            "pending pick must win before the gateway is saved",
+        )
     }
 
     @Test
