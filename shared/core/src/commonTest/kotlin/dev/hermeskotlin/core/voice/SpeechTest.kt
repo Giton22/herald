@@ -25,6 +25,20 @@ class SpeechTest {
     }
 
     @Test
+    fun emojiRunsAreSilenceAndOtherSymbolsStay() {
+        assertEquals("Done ok", speakableText("Done 👍🏽✅ ok"))
+        assertEquals("Family time", speakableText("Family 👨‍👩‍👧 time"))
+        assertEquals("π ≈ 3.14 €5", speakableText("π ≈ 3.14 €5"))
+    }
+
+    @Test
+    fun stopIsHeardThroughAnyPunctuation() {
+        assertTrue(isVoiceStopCommand("Stop!"))
+        assertTrue(isVoiceStopCommand("„never mind…“"))
+        assertFalse(isVoiceStopCommand("Stop the container."))
+    }
+
+    @Test
     fun readAloudLeavesOutWhatTheReplyShowsAsFilesAndPictures() {
         val reply = """
             Here's the chart: ![chart](/opt/data/out/chart.png)

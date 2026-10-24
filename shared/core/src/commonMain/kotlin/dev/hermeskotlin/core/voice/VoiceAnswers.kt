@@ -133,8 +133,10 @@ object VoiceAnswers {
         return if (line.length <= MAX_SPOKEN) line else line.take(MAX_SPOKEN).substringBeforeLast(' ') + "…"
     }
 
-    private fun words(text: String): List<String> =
-        text.lowercase().replace('’', '\'').replace('‘', '\'').replace(PUNCTUATION, " ").split(WHITESPACE).filter { it.isNotEmpty() }
+    // Letters, digits and apostrophes, by hand: Kotlin/Native's regex doesn't know `\p{L}` or `\p{N}`.
+    private fun words(text: String): List<String> = buildString {
+        text.lowercase().replace('’', '\'').replace('‘', '\'').forEach { append(if (it.isLetterOrDigit() || it == '\'') it else ' ') }
+    }.split(' ').filter { it.isNotEmpty() }
 
     private fun String.containsPhrase(phrase: String): Boolean = " $this ".contains(" $phrase ")
 
@@ -149,7 +151,6 @@ object VoiceAnswers {
     private fun number(word: String): Int? = word.toIntOrNull() ?: NUMBERS[word]
 
     private val WHITESPACE = Regex("\\s+")
-    private val PUNCTUATION = Regex("[^\\p{L}\\p{N}']+")
     private const val MAX_SPOKEN = 200
 
     private val DENY = setOf(

@@ -15,6 +15,9 @@ kotlin {
         // The apps build for JVM 11, and they inline WearJson's reified helpers: this module's bytecode must match.
         compilerOptions { jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11) }
     }
+    // shared:core exposes it on iOS too, where it's only types: there's no watch to talk to.
+    iosArm64()
+    iosSimulatorArm64()
 
     sourceSets {
         commonMain.dependencies {

@@ -7,6 +7,7 @@ import dev.hermeskotlin.core.chat.LoopControl
 import dev.hermeskotlin.core.chat.WaitBarrier
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertTrue
 
 class SessionControlLabelsTest {
 
@@ -98,7 +99,7 @@ class SessionControlLabelsTest {
     fun waitBarriersNameWhatTheGoalIsParkedOn() {
         // 2026-10-10 15:45 local in the test zone is derived from the clock, so only the shape is pinned here.
         val until = waitBarrierLabel(WaitBarrier.Until(1791819900.0, "CI is running"), use24Hour = true, nowMillis = 1791810000000L)
-        assert(until.startsWith("Waiting until ")) { until }
+        assertTrue(until.startsWith("Waiting until "), until)
         assertEquals("Waiting on another chat", waitBarrierLabel(WaitBarrier.OnSession("s_abc", ""), use24Hour = true))
         assertEquals("Waiting on process 4242", waitBarrierLabel(WaitBarrier.OnProcess(4242, ""), use24Hour = true))
     }
@@ -108,7 +109,8 @@ class SessionControlLabelsTest {
         val held = loop(deferredByGoal = true, ticksFired = 2, times = 6)
         assertEquals("Loop · Held by the goal · 2 of 6 runs", loopLine(held, use24Hour = true))
         val due = loop(ticksFired = 2, times = 6, nextDueAt = 1791819900.0)
-        assert(loopLine(due, use24Hour = true, nowMillis = 1791810000000L).startsWith("Loop · Running · 2 of 6 runs · next "))
+        val line = loopLine(due, use24Hour = true, nowMillis = 1791810000000L)
+        assertTrue(line.startsWith("Loop · Running · 2 of 6 runs · next "), line)
     }
 
     @Test
@@ -122,8 +124,8 @@ class SessionControlLabelsTest {
     fun loopLineHonoursTheTwelveHourClock() {
         val due = loop(ticksFired = 2, times = 6, nextDueAt = 1791819900.0)
         val line = loopLine(due, use24Hour = false, nowMillis = 1791810000000L)
-        assert(line.startsWith("Loop · Running · 2 of 6 runs · next ")) { line }
-        assert(line.contains("AM") || line.contains("PM")) { line }
+        assertTrue(line.startsWith("Loop · Running · 2 of 6 runs · next "), line)
+        assertTrue(line.contains("AM") || line.contains("PM"), line)
     }
 
     @Test

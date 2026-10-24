@@ -1,5 +1,6 @@
 package dev.hermeskotlin.ui.chat
 
+import dev.hermeskotlin.ui.inlineWidgetsShow
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -76,7 +77,13 @@ internal suspend fun loadWidget(files: WidgetFiles, file: GatewayFile): FileLoad
 }
 
 @Composable
-internal fun InlineWidget(item: ReplyMedia, file: GatewayFile, files: WidgetFiles) = key(files.identity, item.source) {
+internal fun InlineWidget(item: ReplyMedia, file: GatewayFile, files: WidgetFiles) {
+    // Without a web view to draw it in, the widget is a file row: nothing is fetched until it's opened.
+    if (inlineWidgetsShow) WidgetCard(item, file, files) else ReplyFile(item, download = { downloadWidget(files, file) })
+}
+
+@Composable
+private fun WidgetCard(item: ReplyMedia, file: GatewayFile, files: WidgetFiles) = key(files.identity, item.source) {
     var attempt by remember { mutableIntStateOf(0) }
     var failed by remember(attempt) { mutableStateOf<String?>(null) }
     val loaded by key(attempt) { produceState<FileLoad>(FileLoad.Loading) { value = loadWidget(files, file) } }

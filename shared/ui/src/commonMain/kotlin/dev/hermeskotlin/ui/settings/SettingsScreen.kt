@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui.settings
 
+import dev.hermeskotlin.ui.appIconsShow
+import dev.hermeskotlin.ui.phoneToolsShow
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -360,8 +362,10 @@ internal fun SettingsView(
                         )
                     }
                     Divider()
-                    NavRow(title = "App icon", detail = appIcon.label, icon = Lucide.LayoutGrid, onClick = onOpenAppIcon)
-                    Divider()
+                    if (appIconsShow) {
+                        NavRow(title = "App icon", detail = appIcon.label, icon = Lucide.LayoutGrid, onClick = onOpenAppIcon)
+                        Divider()
+                    }
                     SwitchRow(
                         title = "Pure black",
                         detail = "True black backgrounds in dark mode, easier on OLED screens.",
@@ -651,13 +655,15 @@ internal fun SettingsView(
                     }
                 }
 
-                Section("Phone") {
-                    NavRow(
-                        title = "Phone tools",
-                        detail = phoneToolsSummary(settings),
-                        icon = Lucide.Smartphone,
-                        onClick = onOpenPhoneTools,
-                    )
+                if (phoneToolsShow) {
+                    Section("Phone") {
+                        NavRow(
+                            title = "Phone tools",
+                            detail = phoneToolsSummary(settings),
+                            icon = Lucide.Smartphone,
+                            onClick = onOpenPhoneTools,
+                        )
+                    }
                 }
 
                 Section("Privacy") {

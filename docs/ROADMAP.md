@@ -13,11 +13,12 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 ## Tech stack
 
 - [x] Kotlin Multiplatform project: shared `core` / `designsystem` / `ui` modules plus `androidApp`
-- [ ] iOS targets (`iosArm64`/`iosSimulatorArm64`) and a `jvm` desktop target
+- [x] iOS targets (`iosArm64`/`iosSimulatorArm64`): the shared modules build for iOS, and CI runs their tests on the iOS simulator
+- [ ] `jvm` desktop target
 - [x] Compose Multiplatform UI built on **Compose Unstyled**, with our own design system (`HermesTheme` tokens + primitives), edge-to-edge
 - [x] Light/dark color schemes following the system, or forced from Settings, plus pure black
 - [x] Ktor client: OkHttp engine on Android, content negotiation, WebSockets plugin installed
-- [ ] Ktor Darwin engine (iOS)
+- [x] Ktor Darwin engine (iOS)
 - [x] kotlinx.serialization
 - [ ] Kotlin models generated from `gateway-contract.openrpc.json`
 - [x] Koin for dependency injection, androidx ViewModel (KMP), Coroutines/Flow
@@ -25,7 +26,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Room KMP for the local cache
 - [ ] DataStore for settings
 - [x] Secure storage on Android (AES-GCM key in the Android Keystore) for the session cookie jar
-- [ ] Secure storage on iOS (Keychain)
+- [x] Secure storage on iOS (Keychain items that open after the first unlock and stay on the device)
 - [x] Markdown rendering (`multiplatform-markdown-renderer`)
 - [ ] Coil 3 for images
 - [x] Unit tests (Ktor `MockEngine`, coroutines-test)

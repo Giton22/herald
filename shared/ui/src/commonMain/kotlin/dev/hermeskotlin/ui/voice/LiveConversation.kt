@@ -386,7 +386,8 @@ internal class LiveConversation(
         val voice = said.filter { it.speaker != LiveFragment.Speaker.User }.joinToString("") { it.text }
         if ('?' !in voice) return false
         if (asking !is InputRequest.Approval) return true
-        val words = voice.lowercase().split(NOT_A_WORD).toSet()
+        // Letters by hand: Kotlin/Native's regex doesn't know `\p{L}`.
+        val words = buildString { voice.lowercase().forEach { append(if (it.isLetter()) it else ' ') } }.split(' ').toSet()
         return APPROVAL_CUES.any { it in words }
     }
 
@@ -535,7 +536,6 @@ internal class LiveConversation(
         const val LOCK_CHECK_MS = 1_000L
         /** Words a voice asking for an approval offers as its answers. */
         val APPROVAL_CUES = setOf("yes", "no", "approve", "allow", "deny")
-        val NOT_A_WORD = Regex("[^\\p{L}]+")
         const val ALREADY_ANSWERED = "Hermes already has that answer."
         const val WAITING_ELSEWHERE = "Hermes is waiting on an answer in the chat, so it can't take a new request until then."
         const val ASKING_INSTRUCTIONS = "When Hermes needs an answer from the user (an approval or a question), ask it in your own " +

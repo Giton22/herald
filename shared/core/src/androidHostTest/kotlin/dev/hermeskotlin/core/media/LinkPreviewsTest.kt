@@ -24,6 +24,7 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
+// Android's link previews: the page reader and the link picker are Android's (iOS has no cards yet).
 class LinkPreviewsTest {
     private val html = headersOf(HttpHeaders.ContentType, "text/html; charset=utf-8")
 
