@@ -35,6 +35,7 @@ the app talks to your gateway directly.
 - [Requirements](#requirements)
 - [Privacy](#privacy)
 - [Community](#community)
+- [Support Herald](#support-herald)
 - [Development](#development)
 - [Releasing](#releasing)
 - [License](#license)
@@ -134,6 +135,11 @@ and hear about new releases first. In the app, it's under **Settings â†’ About â
 
 Found a bug? [Open an issue](https://github.com/Giton22/herald/issues/new/choose) here or post it in
 the server's #bug-reports.
+
+## Support Herald
+
+Herald is free and open source. If it's useful to you, you can support its development on
+[Ko-fi](https://ko-fi.com/giton).
 
 ## Development
 
