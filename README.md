@@ -138,8 +138,8 @@ the server's #bug-reports.
 
 ## Support Herald
 
-Herald is free and open source. If it's useful to you, you can support its development on
-[Ko-fi](https://ko-fi.com/giton).
+Herald is free and open source. If it's useful to you, you can support its development through
+[GitHub Sponsors](https://github.com/sponsors/Giton22) or [Ko-fi](https://ko-fi.com/giton).
 
 ## Development
 
