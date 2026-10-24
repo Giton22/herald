@@ -10,7 +10,7 @@ import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
 
 /**
- * `phone_call_me`: the agent rings this phone like an incoming call (and Herald on the watch), and hears how it
+ * `phone_call_me`: the agent rings this phone like an incoming call (and Kyllene on the watch), and hears how it
  * ended. It rings only the user: there's no number to give. Answer puts Hermes on the line in the chat the agent
  * called from, which opens with the reason.
  */
@@ -24,7 +24,7 @@ internal class CallMeTool(private val notifications: ChatNotifications, private 
         val target = chats.of(session)
         val chat = target?.storedSessionId ?: session.takeIf { it.isNotBlank() }
         val outcome = notifications.ringForAgent(chat, target?.title, CallReason(reason, details))
-            ?: throw PhoneToolException("Herald may not post notifications on this phone, so it can't ring.")
+            ?: throw PhoneToolException("Kyllene may not post notifications on this phone, so it can't ring.")
         return buildJsonObject {
             put("status", outcome.status)
             // When it may ring again, for the agent to send a reminder for then.

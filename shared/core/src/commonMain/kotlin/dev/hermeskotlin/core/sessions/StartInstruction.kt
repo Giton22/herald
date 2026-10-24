@@ -24,5 +24,5 @@ internal fun JsonObjectBuilder.putStartInstruction(instruction: String?) {
 
 /** Tells the model where the hidden row comes from, so it follows it instead of answering it. */
 internal const val START_INSTRUCTION_PREFACE =
-    "[A standing instruction the user set in Herald, the app they are chatting from, for every new chat. " +
+    "[A standing instruction the user set in Kyllene, the app they are chatting from, for every new chat. " +
         "Follow it for the whole conversation; don't reply to it.]"

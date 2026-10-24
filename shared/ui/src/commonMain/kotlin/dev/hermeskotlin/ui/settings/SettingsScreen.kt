@@ -497,7 +497,7 @@ internal fun SettingsView(
                     Divider()
                     SwitchRow(
                         title = "Show link previews",
-                        detail = "A card for each web link in a finished reply. Herald opens the linked pages and their pictures itself, without your gateway's cookies.",
+                        detail = "A card for each web link in a finished reply. Kyllene opens the linked pages and their pictures itself, without your gateway's cookies.",
                         checked = settings.showLinkPreviews,
                         onCheckedChange = { on -> onUpdate { it.copy(showLinkPreviews = on) } },
                         icon = Lucide.Globe,
@@ -582,15 +582,15 @@ internal fun SettingsView(
                     Divider()
                     SwitchRow(
                         title = "Finished replies",
-                        detail = "When a turn ends while Herald is in the background. Reply from the notification.",
+                        detail = "When a turn ends while Kyllene is in the background. Reply from the notification.",
                         checked = settings.notifyReplies,
                         onCheckedChange = { on -> onUpdate { it.copy(notifyReplies = on) } },
                         icon = Lucide.MessageCircle,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Notify for other chats while Herald is open",
-                        detail = "Replies and requests in chats other than the one on screen notify even while you're in Herald.",
+                        title = "Notify for other chats while Kyllene is open",
+                        detail = "Replies and requests in chats other than the one on screen notify even while you're in Kyllene.",
                         checked = settings.notifyOtherChatsInApp,
                         onCheckedChange = { on -> onUpdate { it.copy(notifyOtherChatsInApp = on) } },
                         icon = Lucide.BellRing,
@@ -665,8 +665,8 @@ internal fun SettingsView(
                     SwitchRow(
                         title = "App lock",
                         detail = if (canLock || settings.appLock) {
-                            "Ask for your fingerprint, face or screen lock when Herald opens and after a minute away. " +
-                                "Hides Herald in Recents and blocks screenshots of it. Notification actions keep working."
+                            "Ask for your fingerprint, face or screen lock when Kyllene opens and after a minute away. " +
+                                "Hides Kyllene in Recents and blocks screenshots of it. Notification actions keep working."
                         } else {
                             "Set a screen lock in Android's settings first."
                         },
@@ -711,7 +711,7 @@ internal fun SettingsView(
     }
 }
 
-/** The Herald community server; the invite never expires. */
+/** The Kyllene community server; the invite never expires. */
 private const val DISCORD_INVITE = "https://discord.gg/wCtyvQ3KcM"
 
 /** The Phone tools row's line: off, or how many tools the agent may use. */
@@ -757,7 +757,7 @@ private fun pushDetail(on: Boolean, push: PushStatus): String {
             "The gateway's herald-push plugin is ${it.installed}; this needs ${it.available}. Update it below."
         } ?: "The gateway's herald-push plugin is too old."
         PushStatus.State.Failed -> "Couldn't set up: ${push.detail ?: "unknown error"}"
-        PushStatus.State.Unknown, PushStatus.State.Off -> "On. Checks with the gateway the next time Herald reaches it."
+        PushStatus.State.Unknown, PushStatus.State.Off -> "On. Checks with the gateway the next time Kyllene reaches it."
     }
 }
 

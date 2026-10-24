@@ -69,7 +69,7 @@ interface WatchOutbox {
 }
 
 /**
- * Herald's side of the watch companion: what the watch asks goes to Hermes from here, over the phone's gateway
+ * Kyllene's side of the watch companion: what the watch asks goes to Hermes from here, over the phone's gateway
  * connection and sign-in, and the turn goes back to the watch as it runs ([ReplyUpdate]s), then read aloud in the
  * gateway's voice. The watch's chat runs in its own [ChatSession], never the one open in the app, so talking
  * on the watch doesn't move the phone off its chat; [ChatHost.sideChats] keeps its replies out of the phone's
@@ -225,7 +225,7 @@ class WatchRelay(
         val saved = gateways.current()
         val state = connection.state.value
         val signedIn = saved != null && auth.hasStoredSession(saved.gatewayUrl) && state !is ConnectionState.SessionExpired
-        // Idle counts: Herald connects when asked, it just holds no connection while in the background.
+        // Idle counts: Kyllene connects when asked, it just holds no connection while in the background.
         val reachable = state is ConnectionState.Connected || state is ConnectionState.Idle
         val gateway = saved?.gatewayUrl?.takeIf { signedIn }
         val live = if (gateway == null) false else liveVoice?.takeIf { it.first == gateway }?.second
@@ -290,7 +290,7 @@ class WatchRelay(
         connection.start(gateway)
         if (withTimeoutOrNull(CONNECT_MS) { connection.state.first { it is ConnectionState.Connected } } == null) {
             connection.retry()
-            return CallChat.Failed("Herald can't reach your gateway right now.")
+            return CallChat.Failed("Kyllene can't reach your gateway right now.")
         }
         val session = turnLock.withLock {
             // Another call on, from the phone or the watch: one chat is held at a time, and taking it would cut that
@@ -380,7 +380,7 @@ class WatchRelay(
         tell(last.copy(phase = ReplyPhase.Sending))
         if (withTimeoutOrNull(CONNECT_MS) { connection.state.first { it is ConnectionState.Connected } } == null) {
             connection.retry()
-            return fail("Herald can't reach your gateway right now.")
+            return fail("Kyllene can't reach your gateway right now.")
         }
         val session = sessionFor(gateway, profile, ask.chatId)
         // A chat picked on the watch loads its history first; sent before it, the reply would be found among the old.
@@ -513,7 +513,7 @@ class WatchRelay(
     }
 
     companion object {
-        const val SIGNED_OUT = "Sign in to Herald on your phone first."
+        const val SIGNED_OUT = "Sign in to Kyllene on your phone first."
         const val ON_ANOTHER_CALL = "You're already on a call with Hermes. Hang up there first."
         const val NOTHING_HEARD = "I didn't catch that."
         private const val CHAT_LIST_SIZE = 15

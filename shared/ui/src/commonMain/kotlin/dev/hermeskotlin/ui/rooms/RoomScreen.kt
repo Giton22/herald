@@ -629,7 +629,7 @@ internal data class RoomFileLink(val gateway: GatewayUrl, val room: String, val 
 
     companion object {
         /** No request goes out without an owner: another profile's file at the same path is not this one. */
-        const val NO_OWNER = "Herald can't tell which of this gateway's bots owns this file."
+        const val NO_OWNER = "Kyllene can't tell which of this gateway's bots owns this file."
 
         private const val HOSTED = "hosted:"
         private const val DESKTOP = "desktop:"

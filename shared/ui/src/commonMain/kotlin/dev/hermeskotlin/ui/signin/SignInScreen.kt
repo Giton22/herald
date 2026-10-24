@@ -169,7 +169,7 @@ internal fun SignInView(
                 )
                 if (state.waitingForBrowser) {
                     Text(
-                        "Finish signing in on the page that opened. Herald comes back by itself when you're done.",
+                        "Finish signing in on the page that opened. Kyllene comes back by itself when you're done.",
                         style = Theme[typography][bodySmall],
                         color = Theme[colors][textSecondary],
                     )

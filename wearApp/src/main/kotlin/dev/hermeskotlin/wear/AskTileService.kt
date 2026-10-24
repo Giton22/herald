@@ -103,7 +103,7 @@ class AskTileService : TileService() {
             .build()
         val column = LayoutElementBuilders.Column.Builder()
             .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
-            .addContent(text("Herald", LABEL_SIZE, MUTED, maxLines = 1))
+            .addContent(text("Kyllene", LABEL_SIZE, MUTED, maxLines = 1))
             .addContent(spacer(6f))
             .addContent(ring)
             .addContent(spacer(8f))

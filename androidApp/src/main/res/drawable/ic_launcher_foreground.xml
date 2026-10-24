@@ -1,23 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    The app mark: an H whose two halves reach for each other, the phone meeting the server.
-    Drawn in the 108dp adaptive-icon grid, inside the 66dp safe zone; also the themed (monochrome) icon.
+    The app mark, the summit at dawn: Mount Kyllene, where Hermes was born, with a lit face, a shaded face and a
+    snowcap, the sun rising off its right shoulder. Blue, the default icon; the sky is ic_launcher_background.
+    The shapes and colors are in launcher_icons.xml; the other accents repeat this file with their own colors.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M38.5,30a5.5,5.5 0,0 1,5.5 5.5v37a5.5,5.5 0,0 1,-5.5 5.5a5.5,5.5 0,0 1,-5.5 -5.5v-37a5.5,5.5 0,0 1,5.5 -5.5z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M69.5,30a5.5,5.5 0,0 1,5.5 5.5v37a5.5,5.5 0,0 1,-5.5 5.5a5.5,5.5 0,0 1,-5.5 -5.5v-37a5.5,5.5 0,0 1,5.5 -5.5z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M38,43h18a5,5 0,0 1,5 5a5,5 0,0 1,-5 5h-18a5,5 0,0 1,-5 -5a5,5 0,0 1,5 -5z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M52,55h18a5,5 0,0 1,5 5a5,5 0,0 1,-5 5h-18a5,5 0,0 1,-5 -5a5,5 0,0 1,5 -5z" />
+    <path android:pathData="@string/launcher_summit_sun">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="38" android:endX="0" android:endY="60"
+                android:startColor="@color/launcher_blue_sun_top" android:endColor="@color/launcher_blue_sun_bottom" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="@string/launcher_summit_gap" android:strokeWidth="4" android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient android:type="linear" android:startX="0" android:startY="18" android:endX="0" android:endY="90"
+                android:startColor="@color/launcher_blue_sky_top" android:endColor="@color/launcher_blue_sky_bottom" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="@string/launcher_summit_lit">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="30" android:startY="36" android:endX="54" android:endY="90"
+                android:startColor="@color/launcher_blue_lit_top" android:endColor="@color/launcher_blue_lit_bottom" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="@string/launcher_summit_shade">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="60" android:startY="36" android:endX="80" android:endY="90"
+                android:startColor="@color/launcher_blue_shade_top" android:endColor="@color/launcher_blue_shade_bottom" />
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#FFFFFF" android:pathData="@string/launcher_summit_snow" />
+    <path android:fillColor="@color/launcher_blue_snow_shade" android:pathData="@string/launcher_summit_snow_shade" />
 </vector>

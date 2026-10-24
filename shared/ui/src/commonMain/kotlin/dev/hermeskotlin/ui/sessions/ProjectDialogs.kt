@@ -141,7 +141,7 @@ internal fun NewProjectDialog(
             FolderPicker(dir, onOpen = { browsing = it }, listFolders = listFolders)
             return@Dialog
         }
-        TextField(state = name, label = "Name", placeholder = "Herald", enabled = !busy)
+        TextField(state = name, label = "Name", placeholder = "Kyllene", enabled = !busy)
         TextField(
             state = folder,
             label = "Folder on the gateway",

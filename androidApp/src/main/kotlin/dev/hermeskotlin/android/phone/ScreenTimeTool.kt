@@ -32,7 +32,7 @@ internal class ScreenTimeTool(private val context: Context) {
         val days = args.int("days") ?: 1
         if (days !in 1..7) throw PhoneToolException("days is 1 (today) to 7.")
         if (!allowed(context)) {
-            throw PhoneToolException("Herald isn't allowed to see screen time. The user can allow it in Settings → Phone tools.")
+            throw PhoneToolException("Kyllene isn't allowed to see screen time. The user can allow it in Settings → Phone tools.")
         }
         val stats = context.getSystemService(UsageStatsManager::class.java)
             ?: throw PhoneToolException("The phone doesn't keep screen time.")
@@ -116,7 +116,7 @@ internal class ScreenTimeTool(private val context: Context) {
         private const val MAX_APPS = 20
         private const val LOOK_BACK = 24 * 60 * MINUTE
 
-        /** Whether the user gave Herald Usage access in Android's settings. */
+        /** Whether the user gave Kyllene Usage access in Android's settings. */
         fun allowed(context: Context): Boolean {
             val ops = context.getSystemService(AppOpsManager::class.java) ?: return false
             val mode = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {

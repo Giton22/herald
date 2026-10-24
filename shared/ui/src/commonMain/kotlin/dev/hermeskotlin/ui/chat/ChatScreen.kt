@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -1214,19 +1215,18 @@ private fun Greeting(
     }
 }
 
-/** The app's mark: the white H on a Herald blue rounded square, with its glow under it unless it's small. */
+/** The app's mark: the summit at dawn in a rounded square, as on the launcher, with its glow under it unless it's small. */
 @Composable
 internal fun AppMark(size: Dp, glow: Boolean = true) {
     val shape = RoundedCornerShape(size * 0.29f)
-    Box(
-        Modifier
+    Image(
+        HeraldMark,
+        contentDescription = null,
+        modifier = Modifier
             .size(size)
             .then(if (glow) Modifier.glow(shape, bubbleGlow(HeraldBrandBlue)) else Modifier)
-            .background(HeraldBrandBlue, shape),
-        contentAlignment = Alignment.Center,
-    ) {
-        UnstyledIcon(HeraldMark, contentDescription = null, tint = Color.White, modifier = Modifier.size(size * 0.6f))
-    }
+            .clip(shape),
+    )
 }
 
 /** A pill on the empty chat: an accent icon and a label on a ringed surface. */

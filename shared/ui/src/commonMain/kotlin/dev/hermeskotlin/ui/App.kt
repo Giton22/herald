@@ -75,7 +75,9 @@ import dev.hermeskotlin.ui.settings.PhoneQuestionDialog
 import dev.hermeskotlin.ui.settings.SettingsScreen
 import dev.hermeskotlin.ui.plugins.PluginWebView
 import dev.hermeskotlin.ui.signin.SignInScreen
+import dev.hermeskotlin.ui.update.LocalRenameOffer
 import dev.hermeskotlin.ui.update.LocalUpdateOffer
+import dev.hermeskotlin.ui.update.rememberRenameOffer
 import dev.hermeskotlin.ui.update.rememberUpdateOffer
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.launch
@@ -144,6 +146,7 @@ fun App(
             LocalGlow provides settings.glow,
             LocalAppVersion provides appVersion,
             LocalUpdateOffer provides rememberUpdateOffer(releasesRepo, appVersion, settings.checkForUpdates),
+            LocalRenameOffer provides rememberRenameOffer(),
             LocalDensity provides Density(density.density, density.fontScale * settings.textSize.scale),
         ) {
             // The screens leave composition rather than sit under the cover, so their sheets and dialogs

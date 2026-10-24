@@ -188,7 +188,7 @@ class MainActivity : ComponentActivity() {
         private const val EXTRA_CALL = "call"
         private const val EXTRA_DEBUG_ASK = "ask"
         private const val PHONE_CHECK_MS = 30_000L
-        private const val NEEDS_MICROPHONE = "Herald needs the microphone to hear you."
+        private const val NEEDS_MICROPHONE = "Kyllene needs the microphone to hear you."
 
         /** For a PendingIntent, which starts it in its own task (it's singleTask) and to its onNewIntent when open. */
         fun listenIntent(context: Context): Intent = Intent(context, MainActivity::class.java).putExtra(EXTRA_LISTEN, true)

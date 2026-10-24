@@ -242,7 +242,7 @@ private fun ApiResult<Unit>.inWords(): ApiResult<Unit> {
         "session_busy" -> "The chat is busy right now. Try again in a moment."
         "not_found" -> GONE_MESSAGE
         "permission_denied", "profile_mismatch" -> "The gateway didn't allow this change to the chat."
-        "client_upgrade_required", "mutation_identity_required" -> "The gateway refused the change. Update Herald and try again."
+        "client_upgrade_required", "mutation_identity_required" -> "The gateway refused the change. Update Kyllene and try again."
         "owner_unreachable", "runtime_draining", "storage_unavailable" -> "The gateway can't change the chat right now. Try again in a moment."
         else -> return this
     }

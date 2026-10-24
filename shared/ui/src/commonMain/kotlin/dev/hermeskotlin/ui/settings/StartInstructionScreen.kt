@@ -71,7 +71,7 @@ internal fun StartInstructionView(text: String, onChange: (String) -> Unit, onBa
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Text(
-                    "Each new chat you start in Herald tells the agent this first. It stays out of the chat, here and on " +
+                    "Each new chat you start in Kyllene tells the agent this first. It stays out of the chat, here and on " +
                         "your other Hermes apps. Chats already going keep what they started with. Leave it empty for none.",
                     style = Theme[typography][bodySmall],
                     color = Theme[colors][textTertiary],

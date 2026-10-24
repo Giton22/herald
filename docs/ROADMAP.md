@@ -1,6 +1,6 @@
 # Roadmap
 
-What Herald does today and what's planned, feature by feature, with the gateway protocol each one
+What Kyllene (formerly Herald) does today and what's planned, feature by feature, with the gateway protocol each one
 uses. The protocol itself is described in [hermes-protocol-research.md](hermes-protocol-research.md).
 
 - [x] implemented
@@ -45,6 +45,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] `MarkdownText` (themed GFM via multiplatform-markdown-renderer core, no Material) and `CopyButton`
 - [x] `Switch` and `SegmentedControl`; a pure black dark scheme (`PureBlack`)
 - [x] The app mark (`HeraldMark`), also the launcher, themed and notification icons
+- [x] Renamed Herald → Kyllene in everything a user reads, with the summit-at-dawn mark and icon in every colour theme. Package, storage and class names stay, so an update keeps the sign-in; people who update see a one-time "Herald is now Kyllene" card
 - [x] `DropdownMenu`, and `Toast` with an action ("Archived · Undo")
 - [ ] Chat bubble, tool card, approval card as design-system components (they live in `shared/ui` for now)
 - [x] Theme picker (system / light / dark) and pure black
@@ -153,7 +154,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Text size on top of the system font scale
 - [x] Chat background: a photo behind the conversation (frosted under the composer), with how strongly it shows
 - [x] Show or hide reasoning and tool activity in the chat
-- [x] Starting instruction (Settings › Chat): text every new chat started in Herald (chats, threads, the watch, the assistant) tells the agent first, such as "I'm on my phone: keep replies short". It goes into `session.create` as a hidden seed row (`display_kind: "hidden"`), so no client shows it
+- [x] Starting instruction (Settings › Chat): text every new chat started in Kyllene (chats, threads, the watch, the assistant) tells the agent first, such as "I'm on my phone: keep replies short". It goes into `session.create` as a hidden seed row (`display_kind: "hidden"`), so no client shows it
 - [x] Account (sign out, change gateway) and about (app and gateway versions, update check)
 - [x] Manage several saved gateways: add, rename, remove (signs out of it), choose a primary (listed first, taken over when the gateway in use is removed). Switching keeps each one signed in and reopens where you left off on it; the app opens on the last one used
 
@@ -167,9 +168,9 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Images in history: stored `@image:` refs fetched through `GET /api/media`, `@file:` refs as file cards, the attached-context block hidden
 - [x] Pictures and files the agent delivers (`MEDIA:` paths, Markdown images, `::preview` widget files) shown inline or as cards, fetched through `GET /api/files/download`
 - [x] Links to files on the gateway (`[name](/path)`, `file://`, `/src/App.kt:42`) open full screen: Markdown rendered, JSON indented, CSV/TSV as a table, code with line numbers at the linked line; Save and Share fetch the whole file (`GET /api/fs/read-text`, `GET /api/fs/download`)
-- [x] Full-screen image viewer with pinch-zoom; Save (Pictures / Download `Herald`) and Share for pictures and files
+- [x] Full-screen image viewer with pinch-zoom; Save (Pictures / Download `Kyllene`) and Share for pictures and files
 - [x] Chats open as the `desktop` surface (`source` on `session.create` / `session.resume`), so the agent knows Markdown and files render
-- [x] Run self-contained HTML `::preview` widgets inline (an isolated WebView with Desktop-compatible theme colors and Herald's font; a scrollable panel, with Save and Share; requires Android System WebView 152+). External resources and widget-to-agent messages aren't supported yet
+- [x] Run self-contained HTML `::preview` widgets inline (an isolated WebView with Desktop-compatible theme colors and the app's font; a scrollable panel, with Save and Share; requires Android System WebView 152+). External resources and widget-to-agent messages aren't supported yet
 - [x] Share sheet: text, links, pictures and files shared from other apps open a new chat with them as its draft (up to 10 files, through the composer's size limits); nothing sends until you do, and before sign-in the draft waits
 
 ### Voice
@@ -240,7 +241,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Rooms: select message text to copy a passage, or copy a bot's whole message with its Markdown; also in read-only Desktop rooms
 - [x] Rooms: gateway file links open in the existing viewer, with Save and Share through the speaking bot's profile
 - [x] Rooms: scroll up for older messages (`groups.log` read back a window at a time, the reader's place kept)
-- [x] Rooms: notifications for bots' lines while Herald is out of sight (one conversation per room, a tap opens it), and an unread dot on room rows
+- [x] Rooms: notifications for bots' lines while Kyllene is out of sight (one conversation per room, a tap opens it), and an unread dot on room rows
 - [x] Rooms: @mention a member (`@` lists Everyone and the members with their faces; the composer says who answers first, by the gateway's own rule)
 - [x] Rooms: who's replying and who's next, read off the room's log; a member that passes says so
 
@@ -262,20 +263,20 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 ### Notifications & background
 - [x] Inbox: finished runs of the cron jobs you follow, newest first and grouped by day, each read in full as Markdown; per job Off, Inbox (quiet) or Notify, plus a notification for any failed run; an unread count on the sidebar tile. Chips along the top show one job's history (a chip per job, with its unread count) or only the failed runs; or, switched to My groups, the user's own groups of jobs (such as RUBIX and Personal, with Other for the rest), made, renamed and filled on a Chips and groups page and kept on the phone. Runs come from the herald-push plugin (0.4.0, `/herald-push cron`), which reads the gateway's cron output files, so a job keeps its own delivery (Telegram and so on). Pushed runs are kept on the phone and read offline
 - [x] Foreground service that keeps the WS alive during long runs
-- [x] One constant, quiet ongoing notification ("Herald · Connected to Hermes") in place of a Live Update; what a turn does shows in the app
+- [x] One constant, quiet ongoing notification ("Kyllene · Connected to Hermes") in place of a Live Update; what a turn does shows in the app
 - [x] Local notifications: approval waiting, run finished; tapping one opens its chat
 - [x] Session list filters All / Running / Needs attention, with text labels for a waiting approval or question (tracked across chats this phone has opened), "Running" and "New reply" (read state kept per gateway and profile)
 - [x] Answer from the notification: approve/deny, clarify answers, inline reply to a finished turn (each asks for an unlock first)
 - [x] Notification toggles in Settings; permission asked on the first turn
-- [x] Notifications anywhere is the one background mode: it keeps Herald up (quiet notification) and comes back after a reboot or update. Stay connected was removed
+- [x] Notifications anywhere is the one background mode: it keeps Kyllene up (quiet notification) and comes back after a reboot or update. Stay connected was removed
 - [x] The gateway's notices (`notification.show`, `notification.clear`): credits and "still starting the agent" show as banners above the composer, one per key, by level; timed ones go by themselves
 - [x] Follow all sessions: approvals, questions and finished replies notify for chats other than the open one, turns started on Desktop or the CLI included. Each chat that `session.active_list` shows running is attached with `session.activate` (never `session.close`, which would end it for every client). Approve, answer and reply from the notification. Needs the socket up: in sight, during a turn, or with Notifications anywhere
 - [x] Notifications anywhere: bot messages reach the phone off the gateway's network, end-to-end encrypted and signed through ntfy, without Google services. The herald-push plugin is installed from Settings in one tap ([protocol](push-protocol.md))
 - [ ] Reply and approve from a push notification when the gateway is out of reach (the `p2g` direction) ⛔
-- [ ] UnifiedPush distributor support, so the ntfy app holds the one connection instead of Herald's foreground service
+- [ ] UnifiedPush distributor support, so the ntfy app holds the one connection instead of Kyllene's foreground service
 
 ### Phone abilities for the agent
-Agent tools that run on the phone: a gateway plugin registers them, Herald answers over the dashboard socket (woken by push when it's away), and a tool says "phone offline" after a timeout. Every tool below, the incoming call included, has its own switch in Settings, plus one switch for all of them; all are off until the user turns them on. A tool that is off is not offered to the agent at all (the phone tells the plugin which tools it has, and the plugin offers only those), so the agent can't even ask. Turning a tool off takes effect at once, and a request already waiting for it is refused. Anything that changes the phone or your data asks on the phone first. Notifications, photos and files are left out on purpose: they would send one-time codes and private messages to the gateway, and text from strangers would reach the agent.
+Agent tools that run on the phone: a gateway plugin registers them, Kyllene answers over the dashboard socket (woken by push when it's away), and a tool says "phone offline" after a timeout. Every tool below, the incoming call included, has its own switch in Settings, plus one switch for all of them; all are off until the user turns them on. A tool that is off is not offered to the agent at all (the phone tells the plugin which tools it has, and the plugin offers only those), so the agent can't even ask. Turning a tool off takes effect at once, and a request already waiting for it is refused. Anything that changes the phone or your data asks on the phone first. Notifications, photos and files are left out on purpose: they would send one-time codes and private messages to the gateway, and text from strangers would reach the agent.
 - [x] Settings → Phone tools: one switch for all of them and one per tool, all off; the herald-push plugin (0.2) offers the agent only the tools switched on, in new chats (Hermes fixes a chat's tools when it starts; an open chat calling a tool that's off is refused). Calls are fetched when a watched chat starts a `phone_*` tool, on a push, and every 15 s; each phone answers with its own secret key; turns from messaging platforms are refused. The page lists what the agent used lately
 - [x] Battery and charging state
 - [x] Network state (Wi-Fi or mobile, offline)
@@ -285,15 +286,15 @@ Agent tools that run on the phone: a gateway plugin registers them, Herald answe
 - [x] App screen time (Usage Access): per app, screen-on time and unlocks, today or up to a week by day
 - [x] Open URLs, maps, apps or the share sheet (after Allow; a link's real site is shown first, lookalike and hidden-character links refused)
 - [x] Write to the clipboard (after Allow; up to 300 characters, all shown in the question; hidden characters refused; the clipboard is never read)
-- [x] Location (Android's own location service, no Google services; precise or approximate as the user allows; while Herald is open, or also while closed if the user allows that from its own row)
+- [x] Location (Android's own location service, no Google services; precise or approximate as the user allows; while Kyllene is open, or also while closed if the user allows that from its own row)
 - [x] Geofences ("when I get home…"): watched places on Android's own proximity alerts; adding asks first; arriving or leaving sends the message to the chat it was added from, marked as coming from the place; listed and removable in Settings → Phone tools
 - [x] Calendar (the phone's calendar provider: list events in a range; adding or moving asks first, showing when, where and which calendar; repeating events and invitations the user doesn't organize are left to the calendar app)
 - [x] Contacts lookup (by name from the start of a word, by at least 5 digits of a number, or by email; only names, numbers and emails of contacts the Contacts app shows, at most 20 people a call; never writes, and never calls them: the agent can't place calls from the phone)
-- [x] Health data (Health Connect, read only: steps, sleep sessions with stages, heart rate min/avg/max, each as the user allows there; totals per day, at most 31 days; while Herald is open, unless the user also allows reading while it's closed)
-- The agent calls you when it needs an answer. It only ever rings you: the agent never places calls from the phone (Herald has no CALL_PHONE)
+- [x] Health data (Health Connect, read only: steps, sleep sessions with stages, heart rate min/avg/max, each as the user allows there; totals per day, at most 31 days; while Kyllene is open, unless the user also allows reading while it's closed)
+- The agent calls you when it needs an answer. It only ever rings you: the agent never places calls from the phone (Kyllene has no CALL_PHONE)
   - [x] The phone rings (Settings → Phone tools → Calls, off until turned on): an approval or a clarify question from a chat out of sight rings as an incoming call, once; over the lock screen or with the screen off it takes the whole screen, naming only the chat and whether it's an approval or a question. Answer unlocks and opens the chat; Decline, or 45 s without an answer, leaves the usual notification. Passwords and codes never ring
   - [x] Answer by voice: picking up puts Hermes on the line, a call screen with no chat behind it (timer, captions, Mute, End): it asks in its own words, takes the spoken answer, and you can talk on ("Talk when I answer", on with the calls; off, Answer opens the chat). Hung up unanswered, the usual notification comes back. Any voice chat does the same for an approval or a question Hermes stops on: the chained one reads it out and listens, asking again when it isn't clear; a GPT-Live call has the voice ask it and takes the next thing said as the answer, without stopping the turn. Passwords and codes stay on the screen; several questions at once are left there too in a live call
-  - [x] The watch rings too, and answers from the wrist ("Ring my watch too", on with the calls; only when the gateway talks live): Herald on the watch rings at once, over the watch face or a dark screen, naming only the chat and whether it's an approval or a question. Answer unlocks the watch and starts a live call from it in that chat, where the voice asks; the phone stops ringing and keeps a quiet notification. Decline, on either, stops both and leaves the usual notification on the phone. One call with Hermes at a time, on the phone or the watch: nothing rings over one, and a second is refused with why
+  - [x] The watch rings too, and answers from the wrist ("Ring my watch too", on with the calls; only when the gateway talks live): Kyllene on the watch rings at once, over the watch face or a dark screen, naming only the chat and whether it's an approval or a question. Answer unlocks the watch and starts a live call from it in that chat, where the voice asks; the phone stops ringing and keeps a quiet notification. Decline, on either, stops both and leaves the usual notification on the phone. One call with Hermes at a time, on the phone or the watch: nothing rings over one, and a second is refused with why
   - [x] The agent calls you on demand ("Hermes can call me", Calls, off until turned on): `phone_call_me(reason, details?)` from any chat or a scheduled job rings the phone and the watch like the calls above. The ring travels in the push too, so it reaches the phone off the gateway's network. Answering starts a voice call in that chat that opens with why Hermes called; the tool waits for the call and tells the agent whether it was answered, declined, not answered in about 45 s or busy, and to reach you another way if not. It takes no number and only ever rings your own devices
   - [ ] Off the gateway's network, the herald-push plugin carries the question
 
@@ -314,8 +315,8 @@ Agent tools that run on the phone: a gateway plugin registers them, Herald answe
 - [ ] Send prompts typed offline once the gateway is back (an outbox)
 - [ ] iOS app
 - [ ] Desktop (JVM) app
-- [x] Wear OS companion (`wearApp`, `shared/wearlink`): talk to Hermes from the watch through Herald on the phone (Data Layer relay, its own side chat); the watch's speech recognizer, or a recording the gateway transcribes; live progress, the reply and the chat's title; the gateway's voice played on the watch, the watch's own voice when there is none; pick, start or continue a chat; an "Ask Hermes" tile and complication
-- [x] Wear OS live voice: with GPT-Live on the gateway, the watch holds the voice call itself (WebRTC, its microphone and speaker, over Wi-Fi or mobile data when it has them) while Herald on the phone gets the model's answer and runs each request as a Hermes turn in the watch's chat; captions, Hermes at work, mute and hang up on the watch; "Talk live" in the watch's settings
+- [x] Wear OS companion (`wearApp`, `shared/wearlink`): talk to Hermes from the watch through Kyllene on the phone (Data Layer relay, its own side chat); the watch's speech recognizer, or a recording the gateway transcribes; live progress, the reply and the chat's title; the gateway's voice played on the watch, the watch's own voice when there is none; pick, start or continue a chat; an "Ask Hermes" tile and complication
+- [x] Wear OS live voice: with GPT-Live on the gateway, the watch holds the voice call itself (WebRTC, its microphone and speaker, over Wi-Fi or mobile data when it has them) while Kyllene on the phone gets the model's answer and runs each request as a Hermes turn in the watch's chat; captions, Hermes at work, mute and hang up on the watch; "Talk live" in the watch's settings
 - [x] watch follows phone accent colors
 - [ ] Wear OS direct mode: the watch talks to the gateway itself, without the phone
 - [ ] Localization (`i18n.catalog`)

@@ -25,7 +25,7 @@ fun AppLockCover(onUnlock: () -> Unit) {
             .background(Theme[colors][background])
             .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
-        EmptyState(Lucide.Lock, "Herald is locked", "Unlock with your fingerprint, face or screen lock.") {
+        EmptyState(Lucide.Lock, "Kyllene is locked", "Unlock with your fingerprint, face or screen lock.") {
             Button("Unlock", onClick = onUnlock)
         }
     }

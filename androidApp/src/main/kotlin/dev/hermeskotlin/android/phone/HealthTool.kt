@@ -48,11 +48,11 @@ internal class HealthTool(private val context: Context) {
         val client = client()
         val granted = guarded { client.permissionController.getGrantedPermissions() }
         if (permission !in granted) {
-            throw PhoneToolException("Herald isn't allowed to read $metric in Health Connect. The user can allow it in Herald: Settings → Phone tools, or in the Health Connect app.")
+            throw PhoneToolException("Kyllene isn't allowed to read $metric in Health Connect. The user can allow it in Kyllene: Settings → Phone tools, or in the Health Connect app.")
         }
         // Health Connect itself refuses reads from an app out of sight, unless the user allowed that too.
         if (!visible() && HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND !in granted) {
-            throw PhoneToolException("Health data is only read while Herald is open on the phone; the user can also allow it while closed in Herald: Settings → Phone tools.")
+            throw PhoneToolException("Health data is only read while Kyllene is open on the phone; the user can also allow it while closed in Kyllene: Settings → Phone tools.")
         }
         val now = LocalDateTime.now()
         val from = args.string("from")?.let { time(it, "from") }
@@ -69,7 +69,7 @@ internal class HealthTool(private val context: Context) {
                 put("to", to.format(LOCAL))
                 // Health Connect gives an app only what's newer than 30 days before it was first allowed.
                 if (from < now.minusDays(HISTORY_DAYS)) {
-                    put("history_note", "Health Connect may hold back data from more than 30 days before Herald was first allowed to read it; missing data there isn't proof of none.")
+                    put("history_note", "Health Connect may hold back data from more than 30 days before Kyllene was first allowed to read it; missing data there isn't proof of none.")
                 }
                 when (metric) {
                     "steps" -> steps(client, from, to)
@@ -173,7 +173,7 @@ internal class HealthTool(private val context: Context) {
     private fun client(): HealthConnectClient = when (HealthConnectClient.getSdkStatus(context)) {
         HealthConnectClient.SDK_AVAILABLE -> HealthConnectClient.getOrCreate(context)
         HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED ->
-            throw PhoneToolException("Health Connect needs an update on the phone before Herald can read from it.")
+            throw PhoneToolException("Health Connect needs an update on the phone before Kyllene can read from it.")
         else -> throw PhoneToolException("This phone has no Health Connect.")
     }
 
@@ -185,7 +185,7 @@ internal class HealthTool(private val context: Context) {
     } catch (e: PhoneToolException) {
         throw e
     } catch (e: SecurityException) {
-        throw PhoneToolException("Health Connect refused the read: the user can allow it in Herald: Settings → Phone tools.")
+        throw PhoneToolException("Health Connect refused the read: the user can allow it in Kyllene: Settings → Phone tools.")
     } catch (e: Exception) {
         throw PhoneToolException("Health Connect didn't answer (${e.javaClass.simpleName}); try again later.")
     }

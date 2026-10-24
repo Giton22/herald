@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The summit in one color, for themed icons (androidApp's ic_launcher_monochrome.xml). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group>
+        <clip-path android:pathData="M36.5,0L99.1,108L108,108L108,0Z" />
+        <path android:fillColor="#FFFFFF" android:pathData="M60,49a11,11 0,1 0,22 0a11,11 0,1 0,-22 0z" />
+    </group>
+    <path android:fillColor="#FFFFFF" android:pathData="M45.2,50L51,40Q54,35 57,40L62.8,50L60,48.6L57.5,52.5L55,52L52,49L48.5,53Z" />
+    <path android:fillColor="#FFFFFF" android:pathData="M11.6,108L44.04,52L48.5,55.2L52,51.2L55,54.2L57.5,54.7L60,50.8L63.96,52L96.4,108Z" />
+</vector>

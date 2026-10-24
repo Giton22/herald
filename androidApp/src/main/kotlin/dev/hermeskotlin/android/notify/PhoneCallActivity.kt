@@ -36,7 +36,7 @@ class PhoneCallActivity : ComponentActivity() {
     private val model: PhoneCallModel by viewModel()
 
     private val microphone = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) model.start() else leave("Herald needs the microphone for calls. The question is in the chat.")
+        if (granted) model.start() else leave("Kyllene needs the microphone for calls. The question is in the chat.")
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

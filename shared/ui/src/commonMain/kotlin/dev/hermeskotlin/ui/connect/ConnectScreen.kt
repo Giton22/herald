@@ -142,7 +142,7 @@ internal fun ConnectView(
     ScreenScaffold {
         ScreenHeader(
             icon = if (onCancel == null) null else Lucide.PlugZap,
-            title = if (onCancel == null) "Welcome to Herald" else "Add a gateway",
+            title = if (onCancel == null) "Welcome to Kyllene" else "Add a gateway",
             subtitle = if (onCancel == null) "Connect to your Hermes Agent gateway. Nothing is sent until you sign in."
             else "Connect to another Hermes Agent gateway. You stay signed in to the ones you saved.",
         )

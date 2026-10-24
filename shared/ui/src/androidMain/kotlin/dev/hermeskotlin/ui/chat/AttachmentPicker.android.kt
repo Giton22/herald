@@ -113,7 +113,7 @@ suspend fun readAttachments(context: Context, uris: List<Uri>): Pair<List<Outgoi
         when (val e = result.exceptionOrNull()) {
             null -> null
             // A share whose app didn't grant access; Android's message is a raw URI.
-            is SecurityException -> "The app that shared it didn't let Herald read the file."
+            is SecurityException -> "The app that shared it didn't let Kyllene read the file."
             else -> e.message ?: "Couldn't read a file."
         }
     }
@@ -131,7 +131,7 @@ actual fun decodeImageBitmap(bytes: ByteArray, maxEdge: Int): ImageBitmap? = dec
 @Composable
 actual fun rememberDecodedImage(bytes: ByteArray, maxEdge: Int): DecodedImage {
     if (!isTiff(bytes)) return DecodedImage(rememberImageBitmap(bytes, maxEdge), decoding = false)
-    // Herald's own TIFF decoder is plain Kotlin: a big picture would hold up the UI thread.
+    // Kyllene's own TIFF decoder is plain Kotlin: a big picture would hold up the UI thread.
     return produceState(DecodedImage(null, decoding = true), bytes, maxEdge) {
         // produceState keeps its last value across new keys: a different file starts at the spinner again.
         value = DecodedImage(null, decoding = true)

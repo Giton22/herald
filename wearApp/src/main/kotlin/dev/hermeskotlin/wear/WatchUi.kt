@@ -709,8 +709,8 @@ internal fun ago(epochSeconds: Double?, nowMillis: Long = System.currentTimeMill
 private fun phoneProblem(phone: PhoneState): String? = when (phone) {
     PhoneState.NotConnected -> WatchLink.NOT_CONNECTED
     PhoneState.NoHerald -> WatchLink.NO_HERALD
-    PhoneState.SignedOut -> "Sign in to Herald on your phone first."
-    PhoneState.Unreachable -> "Herald can't reach your gateway. Check it on your phone."
+    PhoneState.SignedOut -> "Sign in to Kyllene on your phone first."
+    PhoneState.Unreachable -> "Kyllene can't reach your gateway. Check it on your phone."
     PhoneState.Unknown, PhoneState.Ready, PhoneState.Reconnecting -> null
 }
 

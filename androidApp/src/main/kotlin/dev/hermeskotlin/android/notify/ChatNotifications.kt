@@ -58,7 +58,7 @@ class ChatNotifications(
             listOf(
                 NotificationChannelCompat.Builder(CHANNEL_CONNECTION, NotificationManagerCompat.IMPORTANCE_MIN)
                     .setName("Background connection")
-                    .setDescription("Shown while Herald stays connected in the background, or works on a turn.")
+                    .setDescription("Shown while Kyllene stays connected in the background, or works on a turn.")
                     .setShowBadge(false)
                     .build(),
                 NotificationChannelCompat.Builder(CHANNEL_REQUESTS, NotificationManagerCompat.IMPORTANCE_HIGH)
@@ -176,7 +176,7 @@ class ChatNotifications(
             else -> "Not connected to Hermes"
         }
         return base(CHANNEL_CONNECTION)
-            .setContentTitle("Herald")
+            .setContentTitle("Kyllene")
             .setContentText(text)
             .setOngoing(true)
             .setOnlyAlertOnce(true)

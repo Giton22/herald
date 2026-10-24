@@ -2,7 +2,7 @@
 
 <img src="docs/logo.svg" alt="" width="96" height="96">
 
-# Herald
+# Kyllene
 
 **A native Android client for [Hermes Agent](https://github.com/NousResearch/hermes-agent).**
 Chat with your own agent, approve what it wants to do, and follow its work from your phone.
@@ -20,12 +20,16 @@ Chat with your own agent, approve what it wants to do, and follow its work from 
 
 </div>
 
-Herald connects to the `hermes dashboard` you already run on a server, homelab, VPS or Tailnet, the
-same way Hermes Desktop's "Remote gateway" connection does. There is no Herald server and no account:
+Kyllene connects to the `hermes dashboard` you already run on a server, homelab, VPS or Tailnet, the
+same way Hermes Desktop's "Remote gateway" connection does. There is no Kyllene server and no account:
 the app talks to your gateway directly.
 
 > [!NOTE]
-> Herald is an independent project. It isn't made or endorsed by Nous Research.
+> Kyllene is an independent project. It isn't made or endorsed by Nous Research.
+
+> [!TIP]
+> Kyllene was called **Herald** until this release. It's the same app: an update installs over Herald
+> and keeps your sign-in, chats and settings.
 
 ## Contents
 
@@ -97,14 +101,14 @@ The full feature list, and what's planned, is in the [roadmap](docs/ROADMAP.md).
    [latest release](https://github.com/Giton22/herald/releases/latest). For almost every phone that is
    the `arm64-v8a` build; the release notes say which fits other devices.
 2. Open it, and allow installing from your browser when Android asks.
-3. Herald tells you when a new release is out. Install it over the old one; your sign-in and settings stay.
+3. Kyllene tells you when a new release is out. Install it over the old one; your sign-in and settings stay.
 
 ## Requirements
 
 | | |
 |---|---|
-| **Hermes Agent** | The dashboard running (`hermes dashboard`) and reachable from your phone. Herald is built against Hermes Agent's main branch as of October 2026; older versions may lack some features. |
-| **Network** | The same Wi-Fi, [Tailscale](https://tailscale.com), or an `https://` address. Herald warns before it would send a password over the internet unencrypted. Gateways behind Cloudflare Access are supported with a service token. |
+| **Hermes Agent** | The dashboard running (`hermes dashboard`) and reachable from your phone. Kyllene is built against Hermes Agent's main branch as of October 2026; older versions may lack some features. |
+| **Network** | The same Wi-Fi, [Tailscale](https://tailscale.com), or an `https://` address. Kyllene warns before it would send a password over the internet unencrypted. Gateways behind Cloudflare Access are supported with a service token. |
 | **Sign-in** | A dashboard username and password, or browser sign-in on SSO/OIDC gateways. |
 
 If something doesn't connect, **Settings → Check connection** tests the server, the sign-in and the live
@@ -112,7 +116,7 @@ connection one at a time and says what to fix.
 
 ## Privacy
 
-- Herald talks only to your gateway, with these exceptions, each under your control:
+- Kyllene talks only to your gateway, with these exceptions, each under your control:
   - it asks GitHub whether a newer release exists (can be turned off in Settings);
   - it loads pictures embedded in replies when you tap them;
   - webpage previews automatically fetch up to three linked pages per completed reply and their
@@ -125,12 +129,12 @@ connection one at a time and says what to fix.
 - No analytics, no tracking.
 - Phone tools are off until you switch each one on in Settings → Phone tools. What a tool reads (your
   location, calendar, contacts, or steps, sleep and heart rate from Health Connect) goes only to your
-  gateway's agent, in the chat that asked, when the agent calls it. Herald only reads health data, never
+  gateway's agent, in the chat that asked, when the agent calls it. Kyllene only reads health data, never
   writes it, and keeps none of it.
 
 ## Community
 
-Join the [Herald Discord](https://discord.gg/wCtyvQ3KcM) to get help, share your setup, suggest features
+Join the [Discord](https://discord.gg/wCtyvQ3KcM) to get help, share your setup, suggest features
 and hear about new releases first. In the app, it's under **Settings → About → Join the Discord**.
 
 Found a bug? [Open an issue](https://github.com/Giton22/herald/issues/new/choose) here or post it in
@@ -218,9 +222,9 @@ the same values from an untracked `keystore.properties` at the repository root.
 
 ## License
 
-Herald is released under the [MIT License](LICENSE).
+Kyllene is released under the [MIT License](LICENSE).
 
 It's built to work with [Hermes Agent](https://github.com/NousResearch/hermes-agent) by Nous Research,
 also MIT-licensed, and follows Hermes Desktop's behaviour and some of its wording so the two feel alike.
-"Hermes" and "Hermes Agent" are names of Nous Research's project; Herald uses them only to say what it
+"Hermes" and "Hermes Agent" are names of Nous Research's project; Kyllene uses them only to say what it
 works with. Icons are from [Lucide](https://lucide.dev) (ISC License).

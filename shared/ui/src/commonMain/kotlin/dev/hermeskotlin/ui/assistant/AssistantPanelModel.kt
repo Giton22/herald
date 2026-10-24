@@ -96,9 +96,9 @@ fun interface ScreenCropper {
 }
 
 /**
- * The assistant panel shown over another app: a new chat with the gateway Herald is signed in to, whose
+ * The assistant panel shown over another app: a new chat with the gateway Kyllene is signed in to, whose
  * first prompt carries what was on the screen. The chat is its own, not the app's open one, so calling
- * the assistant up never takes the user away from a chat running in Herald; "Open in Herald" hands it over.
+ * the assistant up never takes the user away from a chat running in Kyllene; "Open in Kyllene" hands it over.
  *
  * Lives as long as one panel; [close] when the platform tears it down.
  */
@@ -178,7 +178,7 @@ class AssistantPanelModel(
         scope.launch { bind() }
     }
 
-    /** Takes up the gateway Herald is on, its picked profile and a new chat there. */
+    /** Takes up the gateway Kyllene is on, its picked profile and a new chat there. */
     private suspend fun bind() {
         // The last gateway's bot doesn't answer here, signed in or not. Under the lock, so a read that's just
         // finishing (cancelling is only a request) can't put it back.
@@ -196,7 +196,7 @@ class AssistantPanelModel(
         }
         gateway = saved
         profile = profiles.get(saved.gatewayUrl)
-        // Already running when Herald is open; otherwise the panel brings the socket up while the user speaks.
+        // Already running when Kyllene is open; otherwise the panel brings the socket up while the user speaks.
         connection.start(saved.gatewayUrl)
         newChat()
         _phase.value = AssistantPhase.Ready
@@ -263,7 +263,7 @@ class AssistantPanelModel(
             // "Add" on a screen that never came would send nothing with the question.
             if (_screen.value.let { it.callUp == callUp && it.missed }) _includeScreen.value = false
         }
-        // The panel outlives a call-up, and Herald may have switched gateways since: the socket is shared, so
+        // The panel outlives a call-up, and Kyllene may have switched gateways since: the socket is shared, so
         // the chat must move along with it.
         val current = gateways.list.value.current
         if (_phase.value != AssistantPhase.Loading && current?.url != gateway?.url) scope.launch { bind() }
@@ -426,7 +426,7 @@ class AssistantPanelModel(
         scope.launch { session.answer(request, result) }
     }
 
-    /** The chat's id once it exists on the gateway, for opening it in Herald. */
+    /** The chat's id once it exists on the gateway, for opening it in Kyllene. */
     fun storedSessionId(): String? = _session.value?.state?.value?.storedSessionId?.takeIf { _session.value?.state?.value?.hasConversation == true }
 
     fun close() {

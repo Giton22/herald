@@ -17,11 +17,11 @@ enum class PhoneTool(val id: String, val title: String, val detail: String) {
     ScreenTime("phone_screen_time", "Screen time", "Which apps you used and for how long, screen-on time and unlocks, up to a week back."),
     Open("phone_open", "Open links, maps and apps", "Opens a link, a place, an app or the share sheet after you allow it."),
     Clipboard("phone_clipboard", "Copy to the clipboard", "Puts text on your clipboard after you allow it. Never reads what's there."),
-    Location("phone_location", "Location", "Where the phone is and the nearest address, as precisely as you allow. While Herald is open, unless you also allow it while closed."),
+    Location("phone_location", "Location", "Where the phone is and the nearest address, as precisely as you allow. While Kyllene is open, unless you also allow it while closed."),
     Geofences("phone_geofence", "Watched places", "Arriving at or leaving a place sends its message to the chat it was added from. Adding or removing one asks you first; needs precise location all the time."),
     Calendar("phone_calendar", "Calendar", "Your events in a time range. Adding or moving one asks you first."),
     Contacts("phone_contacts", "Contacts", "Looks people up by name, number or email: only their names, numbers and emails, a few at a time."),
-    Health("phone_health", "Health", "Steps, sleep and heart rate from Health Connect, as much of it as you allow there. While Herald is open, unless you also allow it while closed."),
+    Health("phone_health", "Health", "Steps, sleep and heart rate from Health Connect, as much of it as you allow there. While Kyllene is open, unless you also allow it while closed."),
 
     /** Shown under Calls, not with the tools: it rings, as an approval does with [AppSettings.phoneRings]. */
     CallMe(

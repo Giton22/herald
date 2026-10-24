@@ -13,7 +13,7 @@ import java.net.SocketTimeoutException
 /**
  * A one-request HTTP listener on 127.0.0.1 for the browser sign-in. The gateway only accepts a loopback IP
  * literal as the redirect (RFC 8252 §7.3). The browser is answered with a redirect to [returnUri], a link only
- * this app opens, so it closes the browser tab and brings Herald back.
+ * this app opens, so it closes the browser tab and brings Kyllene back.
  */
 class AndroidLoopbackReceiver(private val returnUri: String) : LoopbackReceiver {
 
@@ -66,7 +66,7 @@ class AndroidLoopbackReceiver(private val returnUri: String) : LoopbackReceiver 
             }
             val body = "<!doctype html><meta charset=utf-8><meta name=viewport content=\"width=device-width\">" +
                 "<title>Signed in</title><p style=\"font-family:sans-serif;padding:24px\">Signed in. " +
-                "<a href=\"$returnUri\">Go back to Herald</a></p>"
+                "<a href=\"$returnUri\">Go back to Kyllene</a></p>"
             val bytes = body.toByteArray()
             out.write(
                 ("HTTP/1.1 302 Found\r\nLocation: $returnUri\r\nContent-Type: text/html; charset=utf-8\r\n" +

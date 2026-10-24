@@ -20,7 +20,7 @@ import kotlinx.coroutines.launch
  * Notifies for the chats [SessionWatcher] follows: those running on the gateway that aren't open here,
  * turns started on Desktop or the CLI included. Same rules as [ChatNotifier] for the open chat: a heads-up
  * for each approval or question, the reply when a turn ends, posted only while the app is out of sight (or,
- * with "Notify for other chats while Herald is open", in sight too) and only as the settings allow. The open chat and bot chats are left to their own notifiers.
+ * with "Notify for other chats while Kyllene is open", in sight too) and only as the settings allow. The open chat and bot chats are left to their own notifiers.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class WatchNotifier(
@@ -41,7 +41,7 @@ class WatchNotifier(
         }
         scope.launch {
             // Attaching keeps a chat loaded on the gateway until the socket closes, so only while something here
-            // would notify for it, and only once Herald has stayed out of sight a while: a quick switch to another
+            // would notify for it, and only once Kyllene has stayed out of sight a while: a quick switch to another
             // app attaches nothing. A request asked meanwhile still comes with the attach. Read again on each
             // change, so permission granted in system settings counts on the way back.
             // In sight with notifications for other chats on, they're attached at once: the user is there to see them.
@@ -61,14 +61,14 @@ class WatchNotifier(
         scope.launch {
             // Only what was actually posted counts, as in ChatNotifier.
             val notified = mutableSetOf<String>()
-            // Posted, then taken down as Herald came into sight: the user is here and has seen them, so they aren't
-            // posted again while Herald stays in sight, even with notifications for other chats on.
+            // Posted, then taken down as Kyllene came into sight: the user is here and has seen them, so they aren't
+            // posted again while Kyllene stays in sight, even with notifications for other chats on.
             val takenDown = mutableSetOf<String>()
             var wasVisible = visibility.visible.value
             combine(watcher.chats, visibility.visible, settings.settings) { chats, visible, prefs -> Triple(chats, visible, prefs ?: AppSettings()) }
                 .collect { (chats, visible, prefs) ->
                     // Coming into sight, ChatNotifier takes every notification down. What this kept as posted is gone
-                    // from the shade, so it's forgotten too: requests still waiting are posted again on leaving Herald.
+                    // from the shade, so it's forgotten too: requests still waiting are posted again on leaving Kyllene.
                     // Not now: ChatNotifier's clearing may run after, and take them down.
                     val cameIntoSight = visible && !wasVisible
                     wasVisible = visible
@@ -122,7 +122,7 @@ class WatchNotifier(
     private fun openChat(): String? = host.session.value?.state?.value?.storedSessionId
 
     private companion object {
-        /** How long Herald stays out of sight before running chats are attached. */
+        /** How long Kyllene stays out of sight before running chats are attached. */
         const val FOLLOW_AFTER_MS = 15_000L
     }
 }

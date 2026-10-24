@@ -516,7 +516,7 @@ class WatchLink(
 
     companion object {
         const val NOT_CONNECTED = "Your phone isn't connected."
-        const val NO_HERALD = "Herald on your phone didn't answer. Open it there, or update it."
+        const val NO_HERALD = "Kyllene on your phone didn't answer. Open it there, or update it."
         private const val ANSWER_WITHIN_MS = 30_000L
         private const val CALL_POLL_MS = 100L
         private const val EVENT_GATHER_MS = 120L

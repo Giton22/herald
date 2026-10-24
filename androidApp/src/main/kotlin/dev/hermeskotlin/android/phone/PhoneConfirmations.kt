@@ -74,12 +74,12 @@ class PhoneConfirmations(private val context: Context) {
         val channel = system?.getNotificationChannel(CHANNEL)
         return when {
             !manager.areNotificationsEnabled() || channel?.importance == NotificationManager.IMPORTANCE_NONE ->
-                "Herald's notifications for phone tools are off, so the phone couldn't ask the user."
+                "Kyllene's notifications for phone tools are off, so the phone couldn't ask the user."
             system?.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_NONE ||
                 system?.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_ALARMS ->
                 "Do Not Disturb hides every notification right now, so the phone couldn't ask the user."
             system?.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_PRIORITY && channel?.canBypassDnd() != true ->
-                "Do Not Disturb hides Herald's questions right now, so the phone couldn't ask the user."
+                "Do Not Disturb hides Kyllene's questions right now, so the phone couldn't ask the user."
             else -> null
         }
     }

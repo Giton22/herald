@@ -26,7 +26,7 @@ internal class ContactsTool(private val context: Context) {
 
     fun run(args: JsonObject): JsonObject {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
-            throw PhoneToolException("Herald isn't allowed to read the contacts. The user can allow it in Herald: Settings → Phone tools.")
+            throw PhoneToolException("Kyllene isn't allowed to read the contacts. The user can allow it in Kyllene: Settings → Phone tools.")
         }
         val query = args.string("query")?.trim()?.takeIf { it.length >= MIN_QUERY }
             ?: throw PhoneToolException("query is needed: at least $MIN_QUERY characters of a name, number or email.")

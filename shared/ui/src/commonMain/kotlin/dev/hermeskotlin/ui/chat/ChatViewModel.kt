@@ -515,7 +515,7 @@ class ChatViewModel(
             when {
                 ready is ConnectionState.Connected -> _requests.send(ChatRequest.StartVoice)
                 ready is ConnectionState.Failed || (ready == null && connectionState.value !is ConnectionState.Connected) ->
-                    showAttachmentError("The call didn't start: Herald couldn't reach the gateway.")
+                    showAttachmentError("The call didn't start: Kyllene couldn't reach the gateway.")
             }
         }
     }

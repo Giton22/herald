@@ -1,5 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- The brand mark keeps its own blue, as on the phone. -->
-    <color name="launcher_background">#0053FD</color>
+    <!-- The summit at dawn in Blue, as the phone's default launcher icon (androidApp's launcher_icons.xml). -->
+    <color name="launcher_sky_top">#0E1C47</color>
+    <color name="launcher_sky_bottom">#23409F</color>
+    <color name="launcher_sun_top">#FFC877</color>
+    <color name="launcher_sun_bottom">#FF6B3D</color>
+    <color name="launcher_lit_top">#5A90FF</color>
+    <color name="launcher_lit_bottom">#1F5CF2</color>
+    <color name="launcher_shade_top">#1A4FD6</color>
+    <color name="launcher_shade_bottom">#0A35A6</color>
+    <color name="launcher_snow_shade">#CBD7F7</color>
 </resources>

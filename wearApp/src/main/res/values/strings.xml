@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Herald</string>
+    <string name="app_name">Kyllene</string>
     <string name="tile_label">Ask Hermes</string>
     <string name="tile_description">Talk to Hermes, and see its last reply.</string>
     <string name="complication_label">Ask Hermes</string>

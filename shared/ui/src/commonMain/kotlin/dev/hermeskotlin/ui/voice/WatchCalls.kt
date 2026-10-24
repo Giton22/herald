@@ -41,10 +41,10 @@ import kotlinx.coroutines.withContext
 import kotlin.time.TimeSource
 
 /**
- * Herald's side of a live voice call held by the watch. The watch makes the WebRTC call (its microphone and
+ * Kyllene's side of a live voice call held by the watch. The watch makes the WebRTC call (its microphone and
  * speaker, straight to the voice model); this trades its offer for the model's answer through the gateway and
  * runs the conversation with [LiveConversation], as for a call on the phone: what the model sends on the call's
- * event channel comes from the watch, what Herald sends it goes back for the watch to send. Requests run as
+ * event channel comes from the watch, what Kyllene sends it goes back for the watch to send. Requests run as
  * Hermes turns in the watch's chat. One call at a time; a new one ends the last.
  *
  * Every message is handled on one thread, in the order it came, so a hang-up right after a start finds its call.
@@ -87,7 +87,7 @@ class WatchCalls(
 
     /**
      * The voice model's events of a call as the watch got them, or (empty) that the watch is still there. A call
-     * that's over here (the watch went quiet too long, Herald restarted) is told over, so the watch hangs up too.
+     * that's over here (the watch went quiet too long, Kyllene restarted) is told over, so the watch hangs up too.
      */
     fun events(node: String, events: CallEvents) {
         scope.launch {
@@ -260,7 +260,7 @@ class WatchCalls(
 
         override fun send(event: String): Boolean = outgoing.trySend(event).isSuccess
 
-        /** What Herald says to the model, gathered a moment so a reply's sentences go to the watch together. */
+        /** What Kyllene says to the model, gathered a moment so a reply's sentences go to the watch together. */
         private suspend fun sendBatches() {
             var seq = 0
             while (true) {
@@ -310,7 +310,7 @@ class WatchCalls(
 
     companion object {
         const val NOT_LIVE = "Live voice isn't set up on your gateway any more. Tap to ask one question at a time."
-        const val CALL_LOST = "Herald on your phone lost the call."
+        const val CALL_LOST = "Kyllene on your phone lost the call."
         private const val UPDATE_EVERY_MS = 250L
         private const val ANSWER_AGAIN_MS = 1_500L
         private const val SEND_GATHER_MS = 60L

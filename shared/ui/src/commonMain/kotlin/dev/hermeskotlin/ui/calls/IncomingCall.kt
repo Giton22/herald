@@ -89,7 +89,7 @@ internal fun IncomingCallView(caller: String, why: String, onAnswer: () -> Unit,
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("Herald call", style = Theme[typography][label], color = Theme[colors][textSecondary])
+            Text("Kyllene call", style = Theme[typography][label], color = Theme[colors][textSecondary])
             Text(
                 caller,
                 style = Theme[typography][display],

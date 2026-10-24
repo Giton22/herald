@@ -279,7 +279,7 @@ private fun RemoveGatewayDialog(gateway: SavedGateway?, onDismiss: () -> Unit, o
         visible = gateway != null,
         onDismissRequest = onDismiss,
         title = "Remove gateway?",
-        message = "Herald signs out of “${g.label}” and forgets it. Its chats stay on the gateway.",
+        message = "Kyllene signs out of “${g.label}” and forgets it. Its chats stay on the gateway.",
         actions = {
             Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             Button("Remove", onClick = { onDismiss(); onRemove(g) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)

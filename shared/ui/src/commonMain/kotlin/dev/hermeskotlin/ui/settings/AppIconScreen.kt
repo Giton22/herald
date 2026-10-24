@@ -115,7 +115,7 @@ internal fun AppIconView(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    "Herald restarts to switch its icon. Some launchers take it off the home screen; add it again " +
+                    "Kyllene restarts to switch its icon. Some launchers take it off the home screen; add it again " +
                         "from the app list.",
                     style = Theme[typography][bodySmall],
                     color = Theme[colors][textTertiary],

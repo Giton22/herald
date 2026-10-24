@@ -154,11 +154,11 @@ internal fun quietHoursDetail(settings: AppSettings): String {
 
 /**
  * What Do Not Disturb does to the calls, which ring with no contact behind them: Android holds them back unless
- * Herald's calls may interrupt or anyone may call, but lets one through as a repeat caller (the same chat's name
+ * Kyllene's calls may interrupt or anyone may call, but lets one through as a repeat caller (the same chat's name
  * again within 15 minutes).
  */
 internal const val DND_DETAIL =
-    "Do Not Disturb silences them too, unless you let Herald interrupt it. A second call from one chat within 15 " +
+    "Do Not Disturb silences them too, unless you let Kyllene interrupt it. A second call from one chat within 15 " +
         "minutes gets through, like a repeat caller."
 
 /** Under the switch: what answering a call does. */
@@ -168,7 +168,7 @@ internal const val RINGS_TALK_DETAIL =
 
 /** Under the switch: where the watch rings, and when it can't. */
 internal const val WATCH_RINGS_DETAIL =
-    "Herald on your watch rings as well. Answer there, and Hermes asks on a call from the watch. Only when your " +
+    "Kyllene on your watch rings as well. Answer there, and Hermes asks on a call from the watch. Only when your " +
         "gateway talks live."
 
 /** Under the switch: what rings, and that the agent never calls anyone. */
@@ -248,7 +248,7 @@ internal fun PhoneToolsView(
             ) {
                 Text(
                     "Let the agent use this phone: read how it is, or do something on it. Every tool is off until you " +
-                        "turn it on, and anything that changes the phone asks you first: in Herald while it's open, else " +
+                        "turn it on, and anything that changes the phone asks you first: in Kyllene while it's open, else " +
                         "in a notification. A tool you " +
                         "turn off is taken away from the agent at once.",
                     style = Theme[typography][bodySmall],
@@ -382,7 +382,7 @@ internal fun PhoneToolsView(
                             Text(
                                 "A chat you send from a phone uses that phone. Scheduled jobs and chats from Desktop or the " +
                                     "dashboard use the first phone in this list with the tool on. A phone you remove comes " +
-                                    "back if Herald on it is still signed in with phone tools on.",
+                                    "back if Kyllene on it is still signed in with phone tools on.",
                                 style = Theme[typography][bodySmall],
                                 color = Theme[colors][textTertiary],
                                 modifier = Modifier.padding(horizontal = 6.dp),
@@ -527,7 +527,7 @@ private fun RemovePhoneDialog(phone: KnownPhone?, onDismiss: () -> Unit, onRemov
         visible = phone != null,
         onDismissRequest = onDismiss,
         title = "Remove ${p.name}?",
-        message = "The agent stops using its phone tools, and calls waiting for it are refused. If Herald on that " +
+        message = "The agent stops using its phone tools, and calls waiting for it are refused. If Kyllene on that " +
             "phone is still signed in with phone tools on, it comes back the next time it connects.",
         actions = {
             Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)

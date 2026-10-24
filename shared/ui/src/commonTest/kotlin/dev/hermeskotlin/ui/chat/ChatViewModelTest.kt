@@ -381,7 +381,7 @@ class ChatViewModelTest {
         advanceTimeBy(30_001)
 
         assertEquals(emptyList(), requests)
-        assertEquals("The call didn't start: Herald couldn't reach the gateway.", vm.attachmentError.value)
+        assertEquals("The call didn't start: Kyllene couldn't reach the gateway.", vm.attachmentError.value)
         // Connecting afterwards doesn't start a call the person has given up on.
         connection.start(gateway.gatewayUrl)
         vm.connectionState.first { it is ConnectionState.Connected }

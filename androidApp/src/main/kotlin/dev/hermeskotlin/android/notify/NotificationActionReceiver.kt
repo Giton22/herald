@@ -76,7 +76,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 // The bot's answer comes back as its next notification.
                 val sent = scope.async { runCatching { bots.sendToBot(bot, storedId, text) }.isSuccess }
                 if (withTimeoutOrNull(RECEIVER_BUDGET_MS) { sent.await() } == false) {
-                    notifications.postFailure(bot, ChatNotifications.BOT_ID, "Couldn't send it. Open Herald to try again.")
+                    notifications.postFailure(bot, ChatNotifications.BOT_ID, "Couldn't send it. Open Kyllene to try again.")
                 }
             }
             ACTION_REPLY -> {
@@ -87,13 +87,13 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 if (session == null || session.state.value.storedSessionId != storedId) {
                     // A chat followed without being open takes the reply straight to its live session.
                     if (storedId !in watcher.chats.value) {
-                        notifications.postFailure(storedId, ChatNotifications.REPLY_ID, "That chat isn't open anymore. Open Herald to reply.")
+                        notifications.postFailure(storedId, ChatNotifications.REPLY_ID, "That chat isn't open anymore. Open Kyllene to reply.")
                         return
                     }
                     awaitConnection()
                     val sent = scope.async { watcher.reply(storedId, text) }
                     if (withTimeoutOrNull(RECEIVER_BUDGET_MS) { sent.await() } == false) {
-                        notifications.postFailure(storedId, ChatNotifications.REPLY_ID, "Couldn't send it. Open Herald to send it again.")
+                        notifications.postFailure(storedId, ChatNotifications.REPLY_ID, "Couldn't send it. Open Kyllene to send it again.")
                     }
                     return
                 }
@@ -101,7 +101,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 // The send itself outlives this receiver's few seconds; only the verdict is waited for.
                 val sent = scope.async { session.send(text) }
                 if (withTimeoutOrNull(RECEIVER_BUDGET_MS) { sent.await() } == false) {
-                    notifications.postFailure(storedId, ChatNotifications.REPLY_ID, session.state.value.error ?: "Open Herald to send it again.")
+                    notifications.postFailure(storedId, ChatNotifications.REPLY_ID, session.state.value.error ?: "Open Kyllene to send it again.")
                 }
             }
         }
@@ -123,7 +123,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
             if (watcher.answer(requestId, answer)) {
                 notifications.cancelRequest(requestId)
             } else {
-                notifications.postFailure(requestId, ChatNotifications.REQUEST_ID, "Not connected to the gateway. Open Herald to answer.")
+                notifications.postFailure(requestId, ChatNotifications.REQUEST_ID, "Not connected to the gateway. Open Kyllene to answer.")
             }
             return
         }
@@ -132,7 +132,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         if (session.answer(request, answer)) {
             notifications.cancelRequest(requestId)
         } else {
-            notifications.postFailure(requestId, ChatNotifications.REQUEST_ID, "Not connected to the gateway. Open Herald to answer.")
+            notifications.postFailure(requestId, ChatNotifications.REQUEST_ID, "Not connected to the gateway. Open Kyllene to answer.")
         }
     }
 
