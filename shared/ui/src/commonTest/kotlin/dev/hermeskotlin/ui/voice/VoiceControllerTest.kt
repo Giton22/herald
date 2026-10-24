@@ -19,13 +19,16 @@ import dev.hermeskotlin.core.voice.VoiceActivity
 import dev.hermeskotlin.core.voice.VoiceRecorder
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
+import io.ktor.client.engine.mock.toByteArray
 import io.ktor.client.request.HttpRequestData
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
@@ -35,6 +38,7 @@ import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class VoiceControllerTest {
@@ -394,5 +398,189 @@ class VoiceControllerTest {
         assertEquals(5, recorder.recordings)
         // An ending forced by errors says why.
         assertTrue(ended.error != null)
+    }
+
+    /** Plays each clip until told to finish it, or for good when [holds]; says which clips started and which were cut. */
+    private class HeldPlayer(private val holds: Boolean = false) : SpeechPlayer {
+        val started = Channel<String>(Channel.UNLIMITED)
+        val played = mutableListOf<String>()
+        var cut = 0
+        override suspend fun play(audio: SpokenAudio) {
+            val clip = audio.bytes.decodeToString()
+            started.send(clip)
+            try {
+                if (holds) awaitCancellation()
+                played += clip
+            } catch (e: CancellationException) {
+                cut++
+                throw e
+            }
+        }
+    }
+
+    /**
+     * The gateway's voice: each piece comes back as audio holding its own text, or fails as [failure] says.
+     * [said] gets what each `/api/audio/speak` was asked to say.
+     */
+    private fun voiced(requests: MutableList<HttpRequestData>, failure: String? = null, said: MutableList<String> = mutableListOf()) = AudioApi(
+        createHttpClient(
+            MockEngine { request ->
+                requests += request
+                if (request.url.encodedPath != "/api/audio/speak") return@MockEngine respond("""{"ok":true}""", HttpStatusCode.OK, json)
+                if (failure != null) return@MockEngine respond("""{"detail":"$failure"}""", HttpStatusCode.BadRequest, json)
+                val text = request.body.toByteArray().decodeToString().substringAfter("\"text\":\"").substringBefore('"')
+                said += text
+                @OptIn(kotlin.io.encoding.ExperimentalEncodingApi::class)
+                val data = kotlin.io.encoding.Base64.encode(text.encodeToByteArray())
+                respond("""{"data_url":"data:audio/mpeg;base64,$data","mime_type":"audio/mpeg"}""", HttpStatusCode.OK, json)
+            },
+            PersistentCookiesStorage(InMemoryKeyValueStore()),
+        ),
+    )
+
+    @Test
+    fun readAloudVoicesTheReplyWithoutItsCodeThenEnds() = runTest {
+        val requests = mutableListOf<HttpRequestData>()
+        val said = mutableListOf<String>()
+        val player = HeldPlayer()
+        val voice = VoiceController(voiced(requests, said = said), FakeRecorder(), player, backgroundScope, backgroundScope)
+
+        voice.readAloud("r1", "Built it.\n```\n./gradlew build\n```\nAll green.", gateway, "work")
+
+        assertEquals(ReadAloudState("r1"), voice.reading.value)
+        assertEquals(ReadAloudState(), voice.reading.first { it.key == null })
+        assertEquals(listOf("Built it. All green."), player.played)
+        val speak = requests.single { it.url.encodedPath == "/api/audio/speak" }
+        assertEquals("work", speak.url.parameters["profile"])
+        assertEquals(listOf("Built it. All green."), said)
+    }
+
+    /** The gateway's voice says the same text a little differently each time; read again, it's the same take. */
+    @Test
+    fun aReplyReadAgainPlaysTheSameVoiceWithoutAskingAgain() = runTest {
+        val said = mutableListOf<String>()
+        val player = HeldPlayer()
+        val voice = VoiceController(voiced(mutableListOf(), said = said), FakeRecorder(), player, backgroundScope, backgroundScope)
+
+        voice.readAloud("r1", "All green.", gateway, null)
+        voice.reading.first { it.key == null }
+        voice.readAloud("r1", "All green.", gateway, null)
+        voice.reading.first { it.key == null }
+
+        assertEquals(listOf("All green.", "All green."), player.played)
+        assertEquals(listOf("All green."), said)
+    }
+
+    @Test
+    fun aReplyStoppedAndReadAgainStartsOverWithTheSameVoice() = runTest {
+        val said = mutableListOf<String>()
+        val player = HeldPlayer(holds = true)
+        val voice = VoiceController(voiced(mutableListOf(), said = said), FakeRecorder(), player, backgroundScope, backgroundScope)
+
+        voice.readAloud("r1", "A long reply.", gateway, null)
+        assertEquals("A long reply.", player.started.receive())
+        voice.stopReading()
+        voice.readAloud("r1", "A long reply.", gateway, null)
+
+        assertEquals("A long reply.", player.started.receive())
+        assertEquals(listOf("A long reply."), said)
+        voice.stopReading()
+    }
+
+    @Test
+    fun anotherReplyStopsTheOneBeingRead() = runTest {
+        val player = HeldPlayer(holds = true)
+        val voice = VoiceController(voiced(mutableListOf()), FakeRecorder(), player, backgroundScope, backgroundScope)
+
+        voice.readAloud("r1", "The first reply.", gateway, null)
+        assertEquals("The first reply.", player.started.receive())
+        voice.readAloud("r2", "The second reply.", gateway, null)
+
+        assertEquals("The second reply.", player.started.receive())
+        assertEquals(1, player.cut)
+        // The first one's end doesn't clear the second.
+        assertEquals(ReadAloudState("r2"), voice.reading.value)
+        voice.stopReading()
+        assertEquals(ReadAloudState(), voice.reading.value)
+    }
+
+    @Test
+    fun stopCutsTheReplyBeingRead() = runTest {
+        val player = HeldPlayer(holds = true)
+        val voice = VoiceController(voiced(mutableListOf()), FakeRecorder(), player, backgroundScope, backgroundScope)
+
+        voice.readAloud("r1", "A long reply.", gateway, null)
+        player.started.receive()
+        voice.stopReading()
+
+        assertNull(voice.reading.value.key)
+        testScheduler.runCurrent()
+        assertEquals(1, player.cut)
+    }
+
+    @Test
+    fun aGatewayWithoutAVoiceSaysWhyAndShowsReadAloudAgain() = runTest {
+        val player = HeldPlayer()
+        val voice = VoiceController(voiced(mutableListOf(), failure = "No TTS provider is configured."), FakeRecorder(), player, backgroundScope, backgroundScope)
+
+        voice.readAloud("r1", "Hello there.", gateway, null)
+
+        val failed = voice.reading.first { it.key == null }
+        assertEquals("No TTS provider is configured.", failed.error)
+        assertTrue(player.played.isEmpty())
+        voice.dismissReadAloudError()
+        assertEquals(ReadAloudState(), voice.reading.value)
+    }
+
+    @Test
+    fun aReplyWithNothingToSayIsntRead() = runTest {
+        val requests = mutableListOf<HttpRequestData>()
+        val voice = VoiceController(voiced(requests), FakeRecorder(), HeldPlayer(), backgroundScope, backgroundScope)
+
+        voice.readAloud("r1", "```\nls -la\n```", gateway, null)
+
+        assertEquals(ReadAloudState(), voice.reading.value)
+        assertTrue(requests.isEmpty())
+    }
+
+    @Test
+    fun aVoiceChatOrDictationTakesTheSpeakerFromReadAloud() = runTest {
+        val player = HeldPlayer(holds = true)
+        val voice = VoiceController(voiced(mutableListOf()), ScriptedRecorder(), player, backgroundScope, backgroundScope)
+
+        voice.readAloud("r1", "A long reply.", gateway, null)
+        player.started.receive()
+        voice.startDictation(gateway, null) {}
+        assertNull(voice.reading.value.key)
+        testScheduler.runCurrent()
+        assertEquals(1, player.cut)
+        // Not while the microphone is open.
+        voice.readAloud("r2", "Another reply.", gateway, null)
+        assertNull(voice.reading.value.key)
+        voice.cancelDictation()
+
+        voice.readAloud("r3", "A third reply.", gateway, null)
+        player.started.receive()
+        voice.startChat(offlineSession(), gateway, null)
+        assertNull(voice.reading.value.key)
+        voice.readAloud("r4", "Another reply.", gateway, null)
+        assertNull(voice.reading.value.key)
+        voice.stopChat()
+    }
+
+    @Test
+    fun leavingTheChatOrTheAppStopsReadAloud() = runTest {
+        val player = HeldPlayer(holds = true)
+        val voice = VoiceController(voiced(mutableListOf()), FakeRecorder(), player, backgroundScope, backgroundScope)
+
+        voice.readAloud("r1", "A long reply.", gateway, null)
+        player.started.receive()
+        voice.stopAll()
+        assertNull(voice.reading.value.key)
+
+        voice.readAloud("r2", "Another long reply.", gateway, null)
+        player.started.receive()
+        voice.onBackground()
+        assertNull(voice.reading.value.key)
     }
 }

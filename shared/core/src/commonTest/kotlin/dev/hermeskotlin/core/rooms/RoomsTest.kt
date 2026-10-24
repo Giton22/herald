@@ -19,6 +19,27 @@ class RoomsTest {
         RoomEvent(roomId = "r1", seq = seq, eventId = "e:$seq", kind = kind, actor = actor, payload = payload, createdAt = 0.0)
 
     @Test
+    fun attachmentOnlyUserMessagesSurviveHistoryWithoutDisplayingStorageFields() {
+        val payload = kotlinx.serialization.json.Json.parseToJsonElement("""{"text":"","attachments":[{"attachment_id":"att_one","kind":"file","name":"report.csv","mime":"text/csv","size":3}]}""") as JsonObject
+        val line = roomLine(event(1, "message.user", payload), members) as RoomLine.Message
+        assertEquals("", line.text)
+        assertEquals("report.csv", line.attachments.single().name)
+        assertEquals("att_one", line.attachments.single().attachmentId)
+    }
+
+    @Test
+    fun oneOddAttachmentEntryLosesOnlyItself() {
+        val payload = kotlinx.serialization.json.Json.parseToJsonElement(
+            """{"attachments":[{"kind":"file","name":"no-id.csv"},{"attachment_id":"att_two","kind":"image","name":"photo.jpg","mime":"image/jpeg","size":3.0},{"attachment_id":"att_three"},"junk"]}""",
+        ) as JsonObject
+        val line = roomLine(event(1, "message.user", payload), members) as RoomLine.Message
+        assertEquals("", line.text)
+        assertEquals(listOf("att_two", "att_three"), line.attachments.map { it.attachmentId })
+        assertEquals(3, line.attachments[0].size)
+        assertEquals("Attachment", line.attachments[1].name)
+    }
+
+    @Test
     fun theTranscriptDrawsMessagesFailuresAndRenamesAndHidesTheMachinery() {
         val user = event(
             1, "message.user",

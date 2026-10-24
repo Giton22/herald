@@ -122,6 +122,7 @@ import dev.hermeskotlin.ui.chat.ComposerButton
 import dev.hermeskotlin.ui.chat.DictationButton
 import dev.hermeskotlin.ui.chat.DockShadow
 import dev.hermeskotlin.ui.chat.InputRequestPanel
+import dev.hermeskotlin.ui.chat.ProvideReplySpeaker
 import dev.hermeskotlin.ui.chat.ReplyHeader
 import dev.hermeskotlin.ui.chat.SendButton
 import dev.hermeskotlin.ui.chat.SendIcon
@@ -247,6 +248,7 @@ private fun Card(
     val circled by model.circledPart.collectAsState()
     val dictation by model.voice.dictation.collectAsState()
     val shows by model.shows.collectAsState()
+    val speaker by model.speaker.collectAsState()
 
     // Calling the assistant up is asking to talk: listen straight away, on every call-up, when the app may.
     if (phase == AssistantPhase.Ready) {
@@ -266,18 +268,21 @@ private fun Card(
             override fun dropCircled() = model.dropCircled()
         }
     }
-    AssistantCard(
-        state = AssistantCardState(
-            phase, chat, connection is ConnectionState.Connected, connectionLabel(connection), screen, includeScreen, circled, dictation,
-        ),
-        actions = actions,
-        microphoneAllowed = microphoneAllowed,
-        onOpenHerald = { onOpenHerald(model.storedSessionId()) },
-        onSignIn = { onOpenHerald(null) },
-        onAllowMicrophone = onAllowMicrophone,
-        onOpenScreenSettings = onOpenScreenSettings,
-        onClose = onClose,
-    )
+    // The bot answering, named above its replies; null leaves them to the mark and "Hermes".
+    ProvideReplySpeaker(speaker) {
+        AssistantCard(
+            state = AssistantCardState(
+                phase, chat, connection is ConnectionState.Connected, connectionLabel(connection), screen, includeScreen, circled, dictation,
+            ),
+            actions = actions,
+            microphoneAllowed = microphoneAllowed,
+            onOpenHerald = { onOpenHerald(model.storedSessionId()) },
+            onSignIn = { onOpenHerald(null) },
+            onAllowMicrophone = onAllowMicrophone,
+            onOpenScreenSettings = onOpenScreenSettings,
+            onClose = onClose,
+        )
+    }
 }
 
 /**
@@ -452,7 +457,7 @@ private fun Prompt(message: ChatMessage.User) {
     }
 }
 
-/** A reply as the chat shows one: the mark and "Hermes" above the text. */
+/** A reply as the chat shows one: the bot answering (or the mark and "Hermes") above the text. */
 @Composable
 private fun Reply(message: ChatMessage.Assistant) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {

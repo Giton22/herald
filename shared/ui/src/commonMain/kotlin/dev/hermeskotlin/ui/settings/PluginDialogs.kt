@@ -7,6 +7,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.RefreshCw
+import dev.hermeskotlin.core.plugins.NextPromptApi
 import dev.hermeskotlin.core.push.PluginUpdate
 import dev.hermeskotlin.core.push.PushApi
 import dev.hermeskotlin.designsystem.components.Button
@@ -33,6 +34,28 @@ internal fun PluginInstallDialog(visible: Boolean, feature: String, what: String
         actions = {
             Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             Button("Turn on", onClick = onConfirm, size = ButtonSize.Small)
+        },
+    )
+}
+
+/**
+ * Asked before Herald puts the Next Prompt plugin on the gateway: it's someone else's code, it runs after every
+ * turn, and it sends the end of each chat to a model, which costs a call each time.
+ */
+@Composable
+internal fun SuggestionsInstallDialog(visible: Boolean, onDismiss: () -> Unit, onConfirm: () -> Unit) {
+    Dialog(
+        visible = visible,
+        onDismissRequest = onDismiss,
+        title = "Install Next Prompt?",
+        message = "Herald installs Next Prompt ${NextPromptApi.PLUGIN_VERSION}, a community plugin, from " +
+            "${NextPromptApi.PLUGIN_REPO.substringAfter("://")}, at the commit this Herald was reviewed with. After " +
+            "every turn, in Herald, Desktop and the terminal alike, it sends the last few messages of the chat to " +
+            "your model (or the one set for its auxiliary task) and keeps the reply it suggests. That's one more " +
+            "model call per turn. You can remove it on the gateway at any time.",
+        actions = {
+            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button("Install", onClick = onConfirm, size = ButtonSize.Small)
         },
     )
 }

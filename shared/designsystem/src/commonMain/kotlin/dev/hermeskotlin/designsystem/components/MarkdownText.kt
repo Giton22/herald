@@ -515,15 +515,18 @@ private fun CopyPill(text: String) {
     }
 }
 
-/** Copies [text]; the icon turns into a check for a moment. */
+/**
+ * Copies [text]; the icon turns into a check for a moment. [label] is what a screen reader hears, so a list of
+ * them can say whose text each one copies.
+ */
 @Composable
-fun CopyButton(text: String, modifier: Modifier = Modifier) {
+fun CopyButton(text: String, modifier: Modifier = Modifier, label: String = "Copy") {
     val (copied, copy) = rememberCopy(text)
     IconButton(
         icon = if (copied) Lucide.Check else Lucide.Copy,
-        contentDescription = if (copied) "Copied" else "Copy",
+        contentDescription = if (copied) "Copied" else label,
         onClick = copy,
-        // Smaller than MinTouchTarget so it sits under the text; it stands alone, so Compose still stretches its taps to 48dp.
+        // Smaller than MinTouchTarget so it sits close to the text; it stands alone, so Compose still stretches its taps to 48dp.
         modifier = modifier.size(32.dp),
         tint = Theme[colors][textTertiary],
         iconSize = 16.dp,

@@ -316,6 +316,8 @@ internal object ChatSamples {
     /** A hands-free voice chat, a live call listening, so Mute shows. */
     val voice: ChatState = reply
     val listening = VoiceChatState(phase = VoicePhase.Listening, level = 0.55f, hearing = true, caption = "Yes, run it now, and mail me the report", live = true)
+    /** The chained chat reading a reply, with talking over it on. */
+    val speakingCutIn = VoiceChatState(phase = VoicePhase.Speaking, caption = "The backup finished overnight, and all three drives check out.", captionIsVoice = true, bargeIn = true)
 
     /** A new chat, before the first prompt. */
     val empty: ChatState = connected.copy(title = null)

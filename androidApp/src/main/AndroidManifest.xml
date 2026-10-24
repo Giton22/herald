@@ -41,6 +41,12 @@
     <uses-permission android:name="android.permission.health.READ_SLEEP" />
     <uses-permission android:name="android.permission.health.READ_HEART_RATE" />
     <uses-permission android:name="android.permission.health.READ_HEALTH_DATA_IN_BACKGROUND" />
+    <!--
+        Calls for an answer (Settings → Phone tools → Calls, off until turned on): an approval or a question rings over
+        the lock screen. Android 14 and later grant it to calling apps only, so the user allows it from that row.
+        Herald never places a phone call: it has no CALL_PHONE.
+    -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <!-- Location is one optional tool: a phone or tablet without GPS still installs Herald. -->
     <uses-feature
         android:name="android.hardware.location"
@@ -396,6 +402,24 @@
             android:noHistory="true"
             android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar" />
+
+        <!-- A call for an answer, full screen over the lock screen; out of Herald's task, so Back leaves it. -->
+        <activity
+            android:name=".notify.IncomingCallActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity=""
+            android:theme="@style/Theme.HermesKotlin" />
+
+        <!-- A call for an answer, picked up: Hermes on the line, no chat behind it. Its own task, as a call is, and
+             in Recents to come back to while it goes on. -->
+        <activity
+            android:name=".notify.PhoneCallActivity"
+            android:exported="false"
+            android:launchMode="singleTask"
+            android:taskAffinity="dev.herald.call"
+            android:theme="@style/Theme.HermesKotlin" />
 
         <!-- Allow on a phone tool's question: does the change from the tap, invisible and out of Herald's task. -->
         <activity

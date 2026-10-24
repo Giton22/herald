@@ -8,6 +8,7 @@ import android.net.NetworkCapabilities
 import android.os.BatteryManager
 import android.os.Build
 import android.os.PowerManager
+import dev.hermeskotlin.android.notify.ChatNotifications
 import dev.hermeskotlin.core.phone.PhoneTool
 import dev.hermeskotlin.core.phone.PhoneToolException
 import dev.hermeskotlin.core.phone.PhoneToolRunner
@@ -24,6 +25,7 @@ class AndroidPhoneTools(
     confirmations: PhoneConfirmations,
     places: Geofences,
     chats: ChatTargets,
+    notifications: ChatNotifications,
 ) : PhoneToolRunner {
 
     private val sound = SoundTool(context, confirmations)
@@ -36,6 +38,7 @@ class AndroidPhoneTools(
     private val calendar = CalendarTool(context, confirmations)
     private val contacts = ContactsTool(context)
     private val health = HealthTool(context)
+    private val callMe = CallMeTool(notifications, chats)
 
     override suspend fun run(tool: PhoneTool, args: JsonObject, session: String): JsonElement = withContext(Dispatchers.IO) {
         when (tool) {
@@ -51,6 +54,7 @@ class AndroidPhoneTools(
             PhoneTool.Calendar -> calendar.run(args)
             PhoneTool.Contacts -> contacts.run(args)
             PhoneTool.Health -> health.run(args)
+            PhoneTool.CallMe -> callMe.run(args, session)
         }
     }
 

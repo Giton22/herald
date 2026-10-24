@@ -46,6 +46,18 @@ class PhoneToolsViewModel(
         s.copy(phoneToolsOn = if (on) (s.phoneToolsOn + tool.id).distinct() else s.phoneToolsOn - tool.id)
     }
 
+    fun setRings(on: Boolean) = store.update { it.copy(phoneRings = on) }
+
+    fun setRingsTalk(on: Boolean) = store.update { it.copy(phoneRingsTalk = on) }
+
+    fun setWatchRings(on: Boolean) = store.update { it.copy(watchRings = on) }
+
+    fun setQuietHours(on: Boolean) = store.update { it.copy(quietHours = on) }
+
+    fun setQuietFrom(minuteOfDay: Int) = store.update { it.copy(quietFrom = minuteOfDay) }
+
+    fun setQuietUntil(minuteOfDay: Int) = store.update { it.copy(quietUntil = minuteOfDay) }
+
     fun setUp() = bridge.setUp()
 
     /** The user asked for the newer plugin the page offers. */

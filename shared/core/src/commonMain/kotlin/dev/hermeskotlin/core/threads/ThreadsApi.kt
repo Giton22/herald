@@ -8,6 +8,7 @@ import dev.hermeskotlin.core.profiles.writeUiMeta
 import dev.hermeskotlin.core.rpc.JsonRpcClient
 import dev.hermeskotlin.core.rpc.RpcException
 import dev.hermeskotlin.core.sessions.createTitledChat
+import dev.hermeskotlin.core.sessions.putStartInstruction
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
@@ -43,13 +44,14 @@ class ThreadsApi(private val connection: GatewayConnection) {
     }
 
     /**
-     * A new chat titled [title] in [profile] (null: the gateway's launch profile), running in [cwd] when given.
-     * Answers its runtime id and stored id. A title another chat has is a [ThreadTitleTakenException], with nothing
-     * left behind.
+     * A new chat titled [title] in [profile] (null: the gateway's launch profile), running in [cwd] when given and
+     * telling the agent [instruction] first, out of sight. Answers its runtime id and stored id. A title another chat
+     * has is a [ThreadTitleTakenException], with nothing left behind.
      */
-    suspend fun startChat(profile: String?, title: String, cwd: String?): Pair<String, String> =
+    suspend fun startChat(profile: String?, title: String, cwd: String?, instruction: String? = null): Pair<String, String> =
         client().createTitledChat(profile, title, taken = { ThreadTitleTakenException(title) }) {
             cwd?.let { put("cwd", it) }
+            putStartInstruction(instruction)
         }
 
     /** Lets go of the runtime [runtime] of a chat about to be deleted; a failure is ignored. */

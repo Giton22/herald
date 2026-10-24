@@ -71,6 +71,7 @@ class HeraldActivity : FragmentActivity() {
     private val settings: SettingsStore by inject()
     private val appScope: CoroutineScope by inject()
     private val bots: BotNotifier by inject()
+    private val notifications: ChatNotifications by inject()
     private val notificationPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) {}
 
     private val app get() = application as HermesApplication
@@ -135,6 +136,11 @@ class HeraldActivity : FragmentActivity() {
     /** A link, shortcut, notification or share, opened now or once App lock lets the user in. */
     private fun handleIntent(intent: Intent?) {
         intent ?: return
+        // A call's Answer: it stops ringing at once, App lock or not; the chat it names opens below.
+        intent.getStringExtra(ChatNotifications.EXTRA_ANSWERED_CALL)?.let {
+            notifications.answered(it)
+            intent.removeExtra(ChatNotifications.EXTRA_ANSWERED_CALL)
+        }
         if (appLock.locked.value) {
             app.heldIntent = intent
             return
@@ -222,6 +228,8 @@ class HeraldActivity : FragmentActivity() {
     override fun onResume() {
         super.onResume()
         resumed.value = true
+        // In front, so the user sees the chats: a call ringing for an answer is answered by looking.
+        notifications.hangUp()
         if (promptOnResume) {
             promptOnResume = false
             lockGate.ask()

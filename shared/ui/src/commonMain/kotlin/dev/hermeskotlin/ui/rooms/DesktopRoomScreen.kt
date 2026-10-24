@@ -31,6 +31,8 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
 import com.composeunstyled.Text
 import com.composeunstyled.theme.Theme
+import dev.hermeskotlin.core.bots.Bot
+import dev.hermeskotlin.core.media.GatewayFile
 import dev.hermeskotlin.core.rooms.DesktopLine
 import dev.hermeskotlin.core.rooms.DesktopRoom
 import dev.hermeskotlin.core.rooms.RoomLine
@@ -52,7 +54,7 @@ import dev.hermeskotlin.ui.chat.TopBar
  * here ever writes to the mirror.
  */
 @Composable
-fun DesktopRoomScreen(room: DesktopRoom, onOpenSidebar: () -> Unit, onBack: () -> Unit) {
+fun DesktopRoomScreen(room: DesktopRoom, onOpenSidebar: () -> Unit, onBack: () -> Unit, onOpenFile: (String?, GatewayFile) -> Unit = { _, _ -> }) {
     val faces = LocalBotFaces.current
     val members = remember(room.key, room.members) { room.roomMembers() }
     val lines = remember(room.lines) { room.roomLines() }
@@ -90,7 +92,7 @@ fun DesktopRoomScreen(room: DesktopRoom, onOpenSidebar: () -> Unit, onBack: () -
                         textAlign = TextAlign.Center,
                     )
                 } else {
-                    Transcript(room, lines, faces)
+                    Transcript(room, lines, faces, onOpenFile)
                 }
             }
         }
@@ -99,7 +101,7 @@ fun DesktopRoomScreen(room: DesktopRoom, onOpenSidebar: () -> Unit, onBack: () -
 
 /** The mirror's newest lines, drawn as the hosted room draws them; there is nothing older to read. */
 @Composable
-private fun Transcript(room: DesktopRoom, lines: List<RoomLine.Message>, faces: BotFaces) {
+private fun Transcript(room: DesktopRoom, lines: List<RoomLine.Message>, faces: BotFaces, onOpenFile: (String?, GatewayFile) -> Unit) {
     val listState = rememberLazyListState()
     val omittedRow = if (room.omitted > 0) 1 else 0
     // The newest line is what an open room is read for: opening lands there, and a line synced in since
@@ -137,7 +139,7 @@ private fun Transcript(room: DesktopRoom, lines: List<RoomLine.Message>, faces: 
                 // A member that goes on talking keeps its face and name from its first line.
                 val previous = lines.getOrNull(index - 1)
                 val continued = previous != null && !previous.fromUser && previous.profile == line.profile && previous.speaker == line.speaker
-                MemberLine(line, continued, faces)
+                MemberLine(line, continued, faces, onOpenFile)
             }
         }
     }
@@ -165,3 +167,11 @@ private fun DesktopLine.toRoomLine(index: Int, key: String): RoomLine.Message = 
     profile = speaker.takeUnless { fromUser },
     createdAt = at?.div(1000.0),
 )
+
+/**
+ * The profile a Desktop room's file is read through: a member whose name is one of this gateway's [bots].
+ * The mirror doesn't say which gateway a member ran on, so a name the roster doesn't know reads nothing.
+ * A name is all there is to go on: a member that ran elsewhere under a name this gateway also has (such as
+ * "default") still reads this gateway's file at that path.
+ */
+internal fun desktopFileOwner(speaker: String?, bots: List<Bot>): String? = speaker?.takeIf { name -> bots.any { it.name == name } }

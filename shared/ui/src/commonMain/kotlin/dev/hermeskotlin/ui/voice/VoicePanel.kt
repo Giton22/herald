@@ -200,7 +200,7 @@ internal fun hint(state: VoiceChatState) = when {
     state.muted -> "Tap the microphone to talk again"
     state.phase == VoicePhase.Connecting -> "Setting up the call"
     state.phase == VoicePhase.Thinking -> "Hermes is on it"
-    state.live && state.phase == VoicePhase.Speaking -> "Talk over it to cut in"
+    (state.live || state.bargeIn) && state.phase == VoicePhase.Speaking -> "Talk over it to cut in"
     state.phase == VoicePhase.Speaking -> "Tap skip to talk again"
     canSendNow(state) -> "Pause when you're done, or tap send"
     else -> "Just talk · say “stop” to end"

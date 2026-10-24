@@ -213,6 +213,8 @@ class SessionsViewModel(
 
     /** The gateway's profiles; null until loaded (or when the gateway doesn't list them). */
     val roster: StateFlow<ProfileRoster?> = _roster.asStateFlow()
+    private var profilesJob: Job? = null
+    private var profilesFor: GatewayUrl? = null
 
     private val _state = MutableStateFlow(SessionsUiState())
     val state: StateFlow<SessionsUiState> = _state.asStateFlow()
@@ -304,8 +306,13 @@ class SessionsViewModel(
     /** Refetches the profile list, e.g. when the account sheet opens (one may have been added on the host). */
     fun refreshProfiles() {
         val url = gateway?.gatewayUrl ?: return
-        viewModelScope.launch {
-            (profiles.roster(url) as? ApiResult.Success)?.let { _roster.value = it.value }
+        // One read at a time: the socket connecting while the first is out would only ask again.
+        if (profilesJob?.isActive == true && profilesFor == url) return
+        profilesFor = url
+        profilesJob = viewModelScope.launch {
+            val roster = (profiles.roster(url) as? ApiResult.Success)?.value ?: return@launch
+            // Another gateway taken up meanwhile has its own profiles.
+            if (gateway?.gatewayUrl == url) _roster.value = roster
         }
     }
 
@@ -790,6 +797,8 @@ class SessionsViewModel(
             connection.state.map { it is ConnectionState.Connected }.distinctUntilChanged().filter { it }.collect {
                 if (gateway != null && _state.value.filter == SessionListFilter.Recent) loadProjects(force = true)
                 if (gateway != null) launch { threadsRepo.refresh(force = true) }
+                // Profiles asked for while the gateway was out of reach never came: the chat's bot is named from them.
+                if (gateway != null && _roster.value == null) refreshProfiles()
             }
         }
         viewModelScope.launch {

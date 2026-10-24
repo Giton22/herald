@@ -85,11 +85,14 @@ import com.composables.icons.lucide.Clock
 import com.composables.icons.lucide.Gauge
 import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.Image
+import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.LayoutGrid
+import com.composables.icons.lucide.Lightbulb
 import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageCircle
+import com.composables.icons.lucide.MessageSquarePlus
 import com.composables.icons.lucide.MessagesSquare
 import com.composables.icons.lucide.Moon
 import com.composables.icons.lucide.Phone
@@ -107,6 +110,7 @@ import com.composeunstyled.theme.rememberColoredIndication
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.phone.enabledPhoneTools
+import dev.hermeskotlin.core.plugins.NextPromptApi
 import dev.hermeskotlin.core.push.PushStatus
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.CallTarget
@@ -175,6 +179,8 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onSignOut: () -> Unit,
     onOpenGateways: () -> Unit,
+    /** The profile the chats use, where Suggested replies looks for its plugin; null: the launch profile. */
+    profile: String? = null,
     viewModel: SettingsViewModel = koinViewModel(),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
@@ -195,10 +201,12 @@ fun SettingsScreen(
     var phoneToolsOpen by remember { mutableStateOf(false) }
     var callTargetOpen by remember { mutableStateOf(false) }
     var appIconOpen by remember { mutableStateOf(false) }
+    var startInstructionOpen by remember { mutableStateOf(false) }
     // Read again when the App icon page closes, so its row names the icon just applied.
     val appIcons = key(appIconOpen) { rememberAppIcons() }
-    LaunchedEffect(gateway) { viewModel.bind(gateway) }
-    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !callTargetOpen, onBack = onBack)
+    val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
+    LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
+    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen, onBack = onBack)
     SettingsView(
         settings, info, gateway.url, viewModel::update, onBack, onSignOut, onOpenGateways,
         gatewayName = gateway.label,
@@ -224,12 +232,23 @@ fun SettingsScreen(
         onChooseCallTarget = { callTargetOpen = true },
         appIcon = appIcons.current,
         onOpenAppIcon = { appIconOpen = true },
+        onOpenStartInstruction = { startInstructionOpen = true },
+        suggestions = suggestions,
+        onInstallSuggestions = viewModel::installSuggestions,
+        onCheckSuggestions = viewModel::checkSuggestions,
     )
     if (callTargetOpen) CallTargetPicker(gateway, viewModel, botFaces, onDismiss = { callTargetOpen = false }) { target ->
         viewModel.update { it.copy(callTargets = it.callTargets + (gateway.url to target)) }
         callTargetOpen = false
     }
     if (phoneToolsOpen) PhoneToolsScreen(onBack = { phoneToolsOpen = false })
+    if (startInstructionOpen) {
+        StartInstructionScreen(
+            text = settings.startInstruction,
+            onChange = { text -> viewModel.update { it.copy(startInstruction = text) } },
+            onBack = { startInstructionOpen = false },
+        )
+    }
     if (appIconOpen) AppIconScreen(onBack = { appIconOpen = false })
     ConnectionCheckSheet(
         visible = checkOpen,
@@ -311,6 +330,11 @@ internal fun SettingsView(
     onChooseCallTarget: () -> Unit = {},
     appIcon: AppIcon = AppIcon.Blue,
     onOpenAppIcon: () -> Unit = {},
+    onOpenStartInstruction: () -> Unit = {},
+    /** Where the Next Prompt plugin behind Suggested replies stands on the gateway. */
+    suggestions: SuggestionsPlugin = SuggestionsPlugin.Checking,
+    onInstallSuggestions: () -> Unit = {},
+    onCheckSuggestions: () -> Unit = {},
 ) {
     Box(
         Modifier
@@ -431,6 +455,14 @@ internal fun SettingsView(
                         )
                     }
                     Divider()
+                    NavRow(
+                        title = "Starting instruction",
+                        detail = settings.startInstruction.trim().ifEmpty { "None. Tell each new chat something first, like to keep replies short." },
+                        icon = Lucide.MessageSquarePlus,
+                        onClick = onOpenStartInstruction,
+                        detailLines = 2,
+                    )
+                    Divider()
                     SwitchRow(
                         title = "Show reasoning",
                         detail = "The model's thinking, collapsed above each reply.",
@@ -486,6 +518,27 @@ internal fun SettingsView(
                         onCheckedChange = { on -> onUpdate { it.copy(showLinkPreviews = on) } },
                         icon = Lucide.Globe,
                     )
+                    Divider()
+                    SwitchRow(
+                        title = "Suggested replies",
+                        detail = suggestionsDetail(settings.suggestedReplies, suggestions),
+                        checked = settings.suggestedReplies,
+                        onCheckedChange = { on -> onUpdate { it.copy(suggestedReplies = on) } },
+                        icon = Lucide.Lightbulb,
+                    )
+                    if (settings.suggestedReplies && (suggestions == SuggestionsPlugin.Missing || suggestions is SuggestionsPlugin.Failed)) {
+                        var asked by remember { mutableStateOf(false) }
+                        Divider()
+                        ActionRow("Install Next Prompt on the gateway", Lucide.Download) { asked = true }
+                        SuggestionsInstallDialog(asked, onDismiss = { asked = false }) {
+                            asked = false
+                            onInstallSuggestions()
+                        }
+                    }
+                    if (settings.suggestedReplies && (suggestions == SuggestionsPlugin.NeedsRestart || suggestions == SuggestionsPlugin.Unknown)) {
+                        Divider()
+                        ActionRow("Check again", Lucide.RefreshCw, onClick = onCheckSuggestions)
+                    }
                 }
 
                 Section("Voice") {
@@ -687,6 +740,24 @@ private fun phoneToolsSummary(settings: AppSettings): String {
         count == 0 -> "On, but no tool is turned on yet."
         count == 1 -> "1 tool on."
         else -> "$count tools on."
+    }
+}
+
+/** What Suggested replies does, or where the plugin it needs stands on the gateway. */
+internal fun suggestionsDetail(on: Boolean, plugin: SuggestionsPlugin): String {
+    val what = "After a reply, the message you'd likely send next, over the composer: tap it to edit and send. " +
+        "It comes from the gateway's Next Prompt plugin, which asks a model once per turn."
+    if (!on) return what
+    return when (plugin) {
+        SuggestionsPlugin.Missing -> "The gateway doesn't have the Next Prompt plugin, which makes the suggestions."
+        SuggestionsPlugin.Installing -> "Installing Next Prompt on the gateway…"
+        SuggestionsPlugin.NeedsRestart -> "Next Prompt is installed. Restart the gateway to start the suggestions."
+        is SuggestionsPlugin.Failed -> "Next Prompt wasn't installed: ${plugin.message}"
+        is SuggestionsPlugin.Installed -> if (plugin.outdated) {
+            "The gateway has Next Prompt ${plugin.version}. A gateway with several profiles needs " +
+                "${NextPromptApi.PLUGIN_VERSION} or later; update it in the dashboard's Plugins."
+        } else what
+        SuggestionsPlugin.Checking, SuggestionsPlugin.Unknown -> what
     }
 }
 

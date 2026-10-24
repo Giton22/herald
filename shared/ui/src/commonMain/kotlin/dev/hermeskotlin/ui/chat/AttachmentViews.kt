@@ -168,13 +168,13 @@ private val AttachmentKind.label: String
 
 /** The + button's choices. */
 @Composable
-internal fun AttachSheet(visible: Boolean, onDismiss: () -> Unit, picker: AttachmentPicker) {
+internal fun AttachSheet(visible: Boolean, onDismiss: () -> Unit, picker: AttachmentPicker, subtitle: String = "Up to ${OutgoingAttachment.MAX_COUNT} photos or files, ${OutgoingAttachment.MAX_BYTES / (1024 * 1024)} MB each") {
     fun pick(action: () -> Unit) {
         onDismiss()
         action()
     }
     BottomSheet(visible = visible, onDismiss = onDismiss) {
-        SheetHeader("Add to message", "Up to ${OutgoingAttachment.MAX_COUNT} photos or files, 25 MB each")
+        SheetHeader("Add to message", subtitle)
         SheetAction("Photos", Lucide.ImageIcon, onClick = { pick(picker::pickPhotos) })
         SheetAction("Camera", Lucide.Camera, onClick = { pick(picker::takePhoto) })
         SheetAction("Files", Lucide.Paperclip, onClick = { pick(picker::pickFiles) })

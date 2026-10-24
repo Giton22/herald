@@ -19,6 +19,12 @@ interface PhoneToolAccess {
 
     /** Asks for [optional]'s grant, when the user taps its row. */
     fun requestOptional(tool: PhoneTool) {}
+
+    /** What ringing for an answer still needs (notifications, full-screen calls), as a sentence; null when nothing. */
+    fun ringsMissing(): String? = null
+
+    /** Asks for [ringsMissing]'s grant. */
+    fun requestRings() {}
 }
 
 /** Reads again when the user comes back to the app, so a grant made in the system settings shows at once. */

@@ -1,5 +1,6 @@
 package dev.hermeskotlin.core.rooms
 
+import dev.hermeskotlin.core.chat.OutgoingAttachment
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.network.HermesJson
@@ -82,11 +83,28 @@ class RoomsApi(private val connection: GatewayConnection) {
             .getOrDefault(RoomLogPage())
     }
 
+    /** Upload to the room authority, not an individual member's runtime session. */
+    suspend fun upload(roomId: String, uploadId: String, file: OutgoingAttachment): RoomAttachment {
+        val reply = client().request("groups.attachment.upload", buildJsonObject {
+            put("room_id", roomId)
+            put("upload_id", uploadId)
+            put("kind", when (file.kind) {
+                dev.hermeskotlin.core.chat.AttachmentKind.Image -> "image"
+                dev.hermeskotlin.core.chat.AttachmentKind.Pdf -> "pdf"
+                else -> "file"
+            })
+            put("name", file.name)
+            put("mime", if (file.kind == dev.hermeskotlin.core.chat.AttachmentKind.Pdf) "application/pdf" else file.mimeType)
+            put("data_base64", file.base64())
+        }, timeoutMs = SEND_TIMEOUT_MS)
+        return decode(reply, RoomAttachment.serializer(), "an uploaded room file")
+    }
+
     /**
      * `groups.send`: one message.user, idempotent by [eventId], so a retry after a lost answer never
      * double-posts. [threadId] names the conversation line it belongs to.
      */
-    suspend fun send(roomId: String, text: String, threadId: String, eventId: String): RoomEvent {
+    suspend fun send(roomId: String, text: String, threadId: String, eventId: String, attachments: List<RoomAttachment> = emptyList()): RoomEvent {
         val reply = client().request(
             "groups.send",
             buildJsonObject {
@@ -95,6 +113,7 @@ class RoomsApi(private val connection: GatewayConnection) {
                 putJsonObject("payload") {
                     put("text", text)
                     put("thread_id", threadId)
+                    if (attachments.isNotEmpty()) put("attachments", HermesJson.encodeToJsonElement(ListSerializer(RoomAttachment.serializer()), attachments))
                 }
             },
             timeoutMs = SEND_TIMEOUT_MS,

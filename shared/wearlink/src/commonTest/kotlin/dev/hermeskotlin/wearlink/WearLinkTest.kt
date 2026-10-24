@@ -157,6 +157,16 @@ class WearLinkTest {
     }
 
     @Test
+    fun aRingAndItsEndRoundTripWithoutTheQuestion() {
+        val ring = WatchRing("srq-1", "s1", "Choose a colour", approval = true)
+        assertEquals(ring, WearJson.decode<WatchRing>(WearJson.encode(ring)))
+        assertFalse(WearJson.encode(ring).decodeToString().contains("question"))
+        assertEquals(RingEnd("srq-1"), WearJson.decode<RingEnd>("""{"requestId":"srq-1"}""".encodeToByteArray()))
+        assertEquals(RingOn("srq-1"), WearJson.decode<RingOn>(WearJson.encode(RingOn("srq-1"))))
+        assertTrue(listOf(WearPaths.RING, WearPaths.RING_END, WearPaths.RING_ON).all { it.startsWith(WearPaths.PREFIX) })
+    }
+
+    @Test
     fun speechPathRoundTrips() {
         val path = WearPaths.speechPath("a/b c", 1, 3, "audio/ogg; codecs=opus")
         assertEquals(WearPaths.SpeechClip("a/b c", 1, 3, "audio/ogg; codecs=opus"), WearPaths.parseSpeech(path))

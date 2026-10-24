@@ -14,6 +14,9 @@ import io.ktor.http.HttpStatusCode
 import io.ktor.http.content.OutgoingContent
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -26,6 +29,16 @@ class SessionsApiTest {
 
     private fun api(handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData) =
         SessionsApi(createHttpClient(MockEngine(handler)))
+
+    /** Answers each write's mutation-snapshot read with [snapshot]; every other request goes to [handler]. */
+    private fun writesApi(
+        snapshot: String = """{"session_id":"s","exists":true,"runtime_revision":7,"runtime_generation":2}""",
+        handler: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData,
+    ) = api { request ->
+        if (request.url.encodedPath.endsWith("/mutation-snapshot")) respond(snapshot, HttpStatusCode.OK, json) else handler(request)
+    }
+
+    private fun HttpRequestData.bodyText() = (body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
 
     @Test
     fun listParsesRowsAndSendsRecentOrder() = runTest {
@@ -64,30 +77,153 @@ class SessionsApiTest {
     }
 
     @Test
-    fun patchSendsOnlyTheChangedField() = runTest {
+    fun patchSendsTheChangedFieldWithTheRowsMutationIdentity() = runTest {
         var body: String? = null
         var method: HttpMethod? = null
         var path: String? = null
+        var snapshotQuery: String? = null
         val api = api { request ->
+            if (request.url.encodedPath.endsWith("/mutation-snapshot")) {
+                snapshotQuery = request.url.encodedPath + "?" + request.url.encodedQuery
+                return@api respond("""{"session_id":"a b","exists":true,"runtime_revision":7,"runtime_generation":2}""", HttpStatusCode.OK, json)
+            }
             method = request.method
             path = request.url.encodedPath
-            body = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+            body = request.bodyText()
             respond("""{"ok":true,"title":"x","pinned":true}""", HttpStatusCode.OK, json)
         }
 
-        assertIs<ApiResult.Success<Unit>>(api.setPinned(url, "a b", true))
+        assertIs<ApiResult.Success<Unit>>(api.setPinned(url, "a b", true, profile = "work"))
 
+        assertEquals("/api/sessions/a%20b/mutation-snapshot?profile=work", snapshotQuery)
         assertEquals(HttpMethod.Patch, method)
         assertEquals("/api/sessions/a%20b", path)
-        assertEquals("""{"pinned":true}""", body)
+        val sent = Json.parseToJsonElement(body!!).jsonObject
+        assertEquals(setOf("pinned", "profile", "request_id", "expected_revision", "expected_generation"), sent.keys)
+        assertEquals("7", sent.getValue("expected_revision").jsonPrimitive.content)
+        assertEquals("2", sent.getValue("expected_generation").jsonPrimitive.content)
+        assertTrue(sent.getValue("request_id").jsonPrimitive.content.isNotBlank())
+    }
+
+    @Test
+    fun deleteNamesTheRowsMutationIdentityInItsQuery() = runTest {
+        var query: String? = null
+        val api = writesApi(snapshot = """{"session_id":"s1","exists":true,"runtime_revision":3,"runtime_generation":0}""") { request ->
+            assertEquals(HttpMethod.Delete, request.method)
+            query = request.url.encodedQuery
+            respond("""{"ok":true,"deleted_ids":["s1"]}""", HttpStatusCode.OK, json)
+        }
+
+        assertIs<ApiResult.Success<Unit>>(api.delete(url, "s1", profile = "work"))
+
+        val params = query!!.split("&").associate { it.substringBefore("=") to it.substringAfter("=") }
+        assertEquals("work", params["profile"])
+        assertEquals("3", params["expected_revision"])
+        assertEquals("0", params["expected_generation"])
+        assertTrue(params["request_id"].orEmpty().isNotBlank())
+    }
+
+    @Test
+    fun deletingARowThatIsAlreadyGoneSucceedsWithoutAWrite() = runTest {
+        val api = writesApi(snapshot = """{"session_id":"s1","exists":false,"runtime_revision":0,"runtime_generation":null}""") {
+            error("no write for a row that is gone")
+        }
+
+        assertIs<ApiResult.Success<Unit>>(api.delete(url, "s1"))
+    }
+
+    @Test
+    fun aWriteThatLostARaceIsReadAndSentAgainOnce() = runTest {
+        val revisions = mutableListOf<String>()
+        val requestIds = mutableListOf<String>()
+        var reads = 0
+        val api = api { request ->
+            if (request.url.encodedPath.endsWith("/mutation-snapshot")) {
+                reads++
+                return@api respond("""{"session_id":"s1","exists":true,"runtime_revision":$reads,"runtime_generation":1}""", HttpStatusCode.OK, json)
+            }
+            val sent = Json.parseToJsonElement(request.bodyText()).jsonObject
+            revisions += sent.getValue("expected_revision").jsonPrimitive.content
+            requestIds += sent.getValue("request_id").jsonPrimitive.content
+            respond("""{"detail":"revision_conflict"}""", HttpStatusCode.Conflict, json)
+        }
+
+        val result = assertIs<ApiResult.Failed>(api.setArchived(url, "s1", true))
+
+        assertEquals(listOf("1", "2"), revisions)
+        assertEquals(2, requestIds.toSet().size)
+        assertEquals("The chat changed somewhere else meanwhile. Try again.", result.message)
+    }
+
+    @Test
+    fun aNewTitleThatLostARaceIsNotSentAgain() = runTest {
+        var writes = 0
+        val api = writesApi {
+            writes++
+            respond("""{"detail":"revision_conflict"}""", HttpStatusCode.Conflict, json)
+        }
+
+        assertIs<ApiResult.Failed>(api.rename(url, "s1", "Mine"))
+
+        assertEquals(1, writes)
+    }
+
+    @Test
+    fun aRefusedOrUnreadableSnapshotIsReturnedWithoutAWrite() = runTest {
+        val unreadable = writesApi(snapshot = "") { error("no write after an unreadable snapshot") }
+        val missingProfile = api { request ->
+            if (request.url.encodedPath.endsWith("/mutation-snapshot")) {
+                respond("""{"detail":"Profile 'gone' does not exist."}""", HttpStatusCode.NotFound, json)
+            } else {
+                error("no write for a missing profile")
+            }
+        }
+
+        assertEquals("Profile 'gone' does not exist.", assertIs<ApiResult.Failed>(missingProfile.delete(url, "s1", profile = "gone")).message)
+        assertIs<ApiResult.Failed>(unreadable.setPinned(url, "s1", true))
+    }
+
+    @Test
+    fun aChangeToARowThatIsGoneSaysSoWithoutAWrite() = runTest {
+        val api = writesApi(snapshot = """{"session_id":"s1","exists":false,"runtime_revision":0,"runtime_generation":null}""") {
+            error("no write for a row that is gone")
+        }
+
+        assertEquals("This chat no longer exists.", assertIs<ApiResult.Failed>(api.setPinned(url, "s1", true)).message)
+    }
+
+    @Test
+    fun aBusyRefusalIsSaidInWords() = runTest {
+        val api = writesApi { respond("""{"detail":"session_busy"}""", HttpStatusCode.Conflict, json) }
+
+        assertEquals("The chat is busy right now. Try again in a moment.", assertIs<ApiResult.Failed>(api.delete(url, "s1")).message)
+    }
+
+    @Test
+    fun aGatewayWithoutSnapshotsGetsTheWriteWithNoIdentity() = runTest {
+        // The dashboard's catch-all for an /api route it lacks, and FastAPI's own.
+        listOf("No such API endpoint: /api/sessions/s1/mutation-snapshot", "Not Found").forEach { missing ->
+            var body: String? = null
+            val api = api { request ->
+                if (request.url.encodedPath.endsWith("/mutation-snapshot")) {
+                    return@api respond("""{"detail":"$missing"}""", HttpStatusCode.NotFound, json)
+                }
+                body = request.bodyText()
+                respond("""{"ok":true}""", HttpStatusCode.OK, json)
+            }
+
+            assertIs<ApiResult.Success<Unit>>(api.setPinned(url, "s1", true))
+
+            assertEquals("""{"pinned":true}""", body, missing)
+        }
     }
 
     @Test
     fun theGatewaysReadStateIsReadAndWritten() = runTest {
         var body: String? = null
-        val api = api { request ->
+        val api = writesApi { request ->
             if (request.method == HttpMethod.Patch) {
-                body = (request.body as OutgoingContent.ByteArrayContent).bytes().decodeToString()
+                body = Json.parseToJsonElement(request.bodyText()).jsonObject.getValue("unread").toString()
                 respond("""{"ok":true}""", HttpStatusCode.OK, json)
             } else {
                 respond("""{"sessions":[{"id":"tg","source":"telegram","unread":true},{"id":"old","unread":0},{"id":"none"}]}""", HttpStatusCode.OK, json)
@@ -98,12 +234,12 @@ class SessionsApiTest {
         assertIs<ApiResult.Success<Unit>>(api.setUnread(url, "tg", unread = false))
 
         assertEquals(listOf(true, false, false), rows.map { it.unread })
-        assertEquals("""{"unread":false}""", body)
+        assertEquals("false", body)
     }
 
     @Test
     fun renameClashSurfacesServerMessage() = runTest {
-        val api = api { respond("""{"detail":"Title already in use"}""", HttpStatusCode.BadRequest, json) }
+        val api = writesApi { respond("""{"detail":"Title already in use"}""", HttpStatusCode.BadRequest, json) }
 
         val result = assertIs<ApiResult.Failed>(api.rename(url, "s1", "Dup"))
         assertEquals("Title already in use", result.message)

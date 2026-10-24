@@ -8,6 +8,7 @@ import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.TurnOutcome
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
+import dev.hermeskotlin.core.phone.ringsForAnswers
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
 import kotlinx.coroutines.CoroutineScope
@@ -94,7 +95,9 @@ class ChatNotifier(
                     notified.clear()
                 } else if (prefs.notifyRequests) {
                     for (request in state.inputRequests) {
-                        if (request.id !in notified && notifications.postRequest(state.storedSessionId, state.title, request)) notified.add(request.id)
+                        if (request.id !in notified && notifications.postRequest(state.storedSessionId, state.title, request, prefs.ringsForAnswers, prefs.phoneRingsTalk)) {
+                            notified.add(request.id)
+                        }
                     }
                 }
                 val open = state.inputRequests.mapTo(HashSet()) { it.id }
