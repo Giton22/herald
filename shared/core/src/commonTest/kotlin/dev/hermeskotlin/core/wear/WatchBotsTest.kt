@@ -376,4 +376,24 @@ class WatchBotsTest {
         assertEquals("false", resolved["liveVoice"]?.jsonPrimitive?.content)
         assertEquals(null, resolved["botProfile"]?.jsonPrimitive?.content)
     }
+
+    @Test
+    fun incomingCallsDoNotUseTheLastBotsVoiceAvailability() = runTest {
+        val s = setup()
+        s.relay.liveVoiceIs(FakeGateway.URL, true, "assistant")
+        assertEquals(false, s.relay.talksLive)
+        s.relay.checkLiveVoice()
+        until { voiceChecks.isNotEmpty() }
+        assertEquals(listOf<String?>(null), voiceChecks)
+        assertEquals(false, s.relay.talksLive)
+    }
+
+    @Test
+    fun incomingCallsStillUseTheLaunchProfileAfterCheckingABot() = runTest {
+        val s = setup(liveForAll = true)
+        s.relay.liveVoiceIs(FakeGateway.URL, false, "assistant")
+        s.relay.checkLiveVoice()
+        until { s.relay.talksLive }
+        assertEquals(listOf<String?>(null), voiceChecks)
+    }
 }

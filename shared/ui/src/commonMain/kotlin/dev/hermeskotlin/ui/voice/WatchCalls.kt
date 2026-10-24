@@ -1,6 +1,8 @@
 package dev.hermeskotlin.ui.voice
 
 import dev.hermeskotlin.core.network.ApiResult
+import dev.hermeskotlin.core.phone.CallOpeners
+import dev.hermeskotlin.core.phone.liveOpener
 import dev.hermeskotlin.core.voice.AudioApi
 import dev.hermeskotlin.core.voice.LiveCall
 import dev.hermeskotlin.core.wear.CallChat
@@ -55,6 +57,7 @@ class WatchCalls(
     private val audio: AudioApi,
     private val outbox: WatchOutbox,
     appScope: CoroutineScope,
+    private val openers: CallOpeners = CallOpeners(),
 ) {
     private val serial = Dispatchers.Default.limitedParallelism(1)
     private val scope = CoroutineScope(appScope.coroutineContext + SupervisorJob(appScope.coroutineContext[Job]) + serial)
@@ -134,7 +137,8 @@ class WatchCalls(
         if (held.over) return
 
         val voice = MutableStateFlow(VoiceChatState(VoicePhase.Connecting, live = true))
-        val conversation = LiveConversation(held, chat.session, voice)
+        // A call the agent placed, picked up on the watch: the voice opens with why.
+        val conversation = LiveConversation(held, chat.session, voice, opener = openers.take(start.chatId)?.liveOpener())
         var answer: String? = null
         held.onAnswer = { sdp ->
             answer = sdp

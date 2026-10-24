@@ -12,6 +12,7 @@ import dev.hermeskotlin.core.rpc.RpcException
 import dev.hermeskotlin.core.rpc.RpcTimeoutException
 import dev.hermeskotlin.core.sessions.SessionMessage
 import dev.hermeskotlin.core.sessions.SessionsApi
+import dev.hermeskotlin.core.sessions.putStartInstruction
 import dev.hermeskotlin.core.slash.SlashCommand
 import dev.hermeskotlin.core.slash.SlashResult
 import kotlinx.coroutines.CancellationException
@@ -76,6 +77,8 @@ class ChatSession(
     private val cache: OfflineCache? = null,
     /** `/btw` and `/bg` cards from when this chat was last open ([ChatHost] keeps them across a switch). */
     sideTasks: List<ChatMessage.Command> = emptyList(),
+    /** For a new chat: what it tells the agent first, out of sight (see `putStartInstruction`); read when it's created. */
+    private val startInstruction: () -> String? = { null },
 ) {
     private fun nowSeconds(): Double = clock.now().toEpochMilliseconds() / 1000.0
 
@@ -84,7 +87,10 @@ class ChatSession(
     )
     val state: StateFlow<ChatState> = _state.asStateFlow()
 
-    /** The stored row exists only after the first accepted prompt; until then a reconnect re-creates. */
+    /**
+     * The stored row exists only after the first accepted prompt, or once a chat seeded with a starting instruction is
+     * created; until then a reconnect re-creates.
+     */
     private var rowExists = initialStoredId != null
     private val attachMutex = Mutex()
 
@@ -447,7 +453,7 @@ class ChatSession(
                     put("text", trimmed)
                     put("truncate_before_row_id", rowId)
                     put("confirm_truncate", true)
-                    // Cutting at the first prompt empties the transcript, which the gateway wants said outright.
+                    // Cutting at the first prompt can empty the transcript (all but a hidden starting instruction), which the gateway wants said outright.
                     put("confirm_empty_truncate", true)
                 },
             ) as? JsonObject
@@ -1134,14 +1140,41 @@ class ChatSession(
             showCommandOutput("/branch", "Nothing to branch yet. Send a message first.", failed = true)
             return null
         }
+        // The gateway's count takes in the hidden rows (a starting instruction, compaction wrappers) the chat doesn't show.
+        val keep = count?.let {
+            if (!loadAllHistory()) return null
+            withHiddenRows(it)
+        }
+        return branchKeeping(keep)
+    }
+
+    /**
+     * "Branch from here": a new chat with this one up to and with the message [key], a reply with all its steps.
+     * Counted on the stored rows, as the gateway counts them: a reply split by its tool calls is one message here
+     * but a row per step there, and hidden rows show nowhere. Null when it failed.
+     */
+    suspend fun branchFrom(key: String): Pair<String, String?>? {
+        if (!rowExists) return branch(null)
+        // Counted from the first row, so the pages not scrolled back to yet are read first.
+        if (!loadAllHistory()) return null
+        val messages = _state.value.messages
+        val index = messages.indexOfFirst { it.key == key }
+        if (index < 0) return null
+        // Up to the row the next message starts at; the last message keeps every row.
+        val next = messages.drop(index + 1).firstNotNullOfOrNull { message -> storedRowId(message.key) }
+        val end = next?.let { id -> rows.indexOfFirst { it.id == id } }?.takeIf { it >= 0 } ?: rows.size
+        return branchKeeping(rows.take(end).count { it.countsInBranch })
+    }
+
+    private suspend fun branchKeeping(keep: Int?): Pair<String, String?>? {
         var branched: Pair<String, String?>? = null
         runOnGateway("/branch") { client, runtimeId ->
             val params = buildJsonObject {
                 put("session_id", runtimeId)
-                count?.let { put("count", it) }
+                keep?.let { put("count", it) }
             }
             val result = try {
-                client.request(if (count == null) "session.branch_whole" else "session.branch", params) as? JsonObject
+                client.request(if (keep == null) "session.branch_whole" else "session.branch", params) as? JsonObject
             } catch (e: RpcException) {
                 // Gateways older than branch_whole only have session.branch.
                 if (e.code != METHOD_NOT_FOUND) throw e
@@ -1154,6 +1187,29 @@ class ChatSession(
         }
         return branched
     }
+
+    /**
+     * How many stored user and assistant rows with text the first [visible] shown ones reach, as `session.branch`
+     * counts them (`_visible_branch_history`): with the hidden rows among them.
+     */
+    private fun withHiddenRows(visible: Int): Int {
+        var seen = 0
+        var counted = 0
+        for (row in rows) {
+            if (seen == visible) break
+            if (!row.countsInBranch) continue
+            counted++
+            if (!row.isHidden) seen++
+        }
+        return counted + (visible - seen)
+    }
+
+    /** A row `session.branch` counts (`_visible_branch_history`): a user or assistant one with text, hidden or not. */
+    private val SessionMessage.countsInBranch: Boolean
+        get() = (role == "user" || role == "assistant") && text.isNotBlank()
+
+    /** The stored row id a message's key names (`row-12`, or `row-12-0` for one of its parts); null for a live one. */
+    private fun storedRowId(key: String): Long? = ROW_KEY.matchEntire(key)?.groupValues?.get(1)?.toLongOrNull()
 
     /**
      * `/handoff <platform>`: queues this chat for a messaging platform's home channel and waits for the
@@ -1981,10 +2037,14 @@ class ChatSession(
     private fun readyEpoch(client: JsonRpcClient): String? =
         (connection.state.value as? ConnectionState.Connected)?.takeIf { it.client === client }?.ready.string("replay_epoch")
 
-    /** `session.create` for a brand-new chat; its stored row appears with the first prompt. */
+    /**
+     * `session.create` for a brand-new chat; its stored row appears with the first prompt, or at once when it starts
+     * with an instruction (a seeded chat's row is stored on create), so it's resumed from then on, not made again.
+     */
     private suspend fun create(client: JsonRpcClient): String = attachMutex.withLock {
         _state.update { it.copy(attachment = Attachment.Attaching) }
         val picks = _state.value
+        val instruction = startInstruction()
         val result = client.request(
             "session.create",
             buildJsonObject {
@@ -1999,9 +2059,11 @@ class ChatSession(
                 }
                 picks.reasoningEffort?.let { put("reasoning_effort", it) }
                 picks.fast?.let { put("fast", it) }
+                putStartInstruction(instruction)
             },
         ) as? JsonObject ?: error("Empty session.create reply")
         val runtimeId = result.string("session_id") ?: error("session.create returned no session_id")
+        if (!instruction.isNullOrBlank()) rowExists = true
         streamMutex.withLock {
             lastSeq = null
             seqRuntime = runtimeId
@@ -2025,6 +2087,9 @@ class ChatSession(
     private fun connectedClient(): JsonRpcClient? = (connection.state.value as? ConnectionState.Connected)?.client
 
     private companion object {
+        /** A message key made from a stored row (`historyToMessages`): `row-<id>`, or `row-<id>-<n>` for one of its events. */
+        val ROW_KEY = Regex("row-(\\d+)(?:-\\d+)?")
+
         /**
          * The surface the agent is told it's on (agent/prompt_builder.py PLATFORM_HINTS). "desktop", like
          * Hermes Desktop and the dashboard chat: Markdown renders and files come back as `MEDIA:` paths,

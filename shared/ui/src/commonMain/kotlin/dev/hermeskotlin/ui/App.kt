@@ -5,6 +5,7 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.key
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.mutableStateOf
@@ -51,9 +52,15 @@ import dev.hermeskotlin.ui.chat.ChatScreen
 import dev.hermeskotlin.ui.rooms.RoomScreen
 import dev.hermeskotlin.ui.rooms.DesktopRoomScreen
 import dev.hermeskotlin.ui.rooms.RoomsViewModel
+import dev.hermeskotlin.ui.rooms.RoomFileLink
+import dev.hermeskotlin.core.media.GatewayFile
+import dev.hermeskotlin.core.media.MediaApi
+import dev.hermeskotlin.ui.chat.GatewayFileViewer
 import dev.hermeskotlin.ui.chat.ChatViewModel
 import dev.hermeskotlin.ui.chat.ModelConfirmDialog
 import dev.hermeskotlin.ui.chat.ModelSheet
+import dev.hermeskotlin.ui.chat.ProvideReplySpeaker
+import dev.hermeskotlin.ui.chat.replySpeaker
 import dev.hermeskotlin.ui.sessions.CapabilitiesPage
 import dev.hermeskotlin.ui.sessions.ConfigPage
 import dev.hermeskotlin.core.chat.ChatState
@@ -250,6 +257,12 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     // A Desktop room open from the sidebar's "On Desktop" group: read-only, so it is only local state.
     var openDesktopRoom by rememberSaveable { mutableStateOf<String?>(null) }
     val desktopRoom = openDesktopRoom?.let { key -> roster.desktopRooms.firstOrNull { it.key == key } }
+    // A file a room's bot linked to, open over the room; it closes when the gateway or the room changes.
+    val roomKey = RoomFileLink.roomKey(openRoom?.room?.roomId, desktopRoom?.key)
+    var roomFile by rememberSaveable(route.gateway.url, roomKey, stateSaver = RoomFileLink.Saver) { mutableStateOf<RoomFileLink?>(null) }
+    val openRoomFile: (String?, GatewayFile) -> Unit = { profile, file ->
+        if (roomKey != null) roomFile = RoomFileLink(route.gateway.gatewayUrl, roomKey, profile, file)
+    }
     // The bot whose chat is open, as the roster knows it now.
     val openBot = route.target.bot?.let { open -> roster.all.firstOrNull { it.name == open.name } }
     var startOver by remember { mutableStateOf<Bot?>(null) }
@@ -365,6 +378,16 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     // the foreground; that keeps the gateway's live list polled then (every 10 s, as while the sidebar shows), and
     // never in the background.
     val sessions: SessionsViewModel = koinViewModel()
+    val profileRoster by sessions.roster.collectAsStateWithLifecycle()
+    // The bot answering in the open chat, named above its replies. Only a launch profile the gateway named counts:
+    // a guessed `default` could name the wrong bot. Equal unless what's drawn changed, so a roster refresh doesn't
+    // redraw the chat.
+    val speaker = replySpeaker(
+        faces,
+        route.target.bot?.name,
+        route.target.profile,
+        profileRoster?.takeIf { it.launchKnown }?.launch,
+    )
     val others: OtherChatsViewModel = koinViewModel { parametersOf(sessions) }
     val settings = LocalAppSettings.current
     val alerts = settings.otherChatsAlerts
@@ -483,37 +506,55 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     ) {
         CompositionLocalProvider(LocalBotFaces provides faces) {
             when {
-                openRoom != null -> RoomScreen(viewModel = rooms, onOpenSidebar = { scope.launch { sidebar.toggle() } }, onBack = rooms::close)
+                openRoom != null -> RoomScreen(
+                    viewModel = rooms,
+                    onOpenSidebar = { scope.launch { sidebar.toggle() } },
+                    onBack = rooms::close,
+                    onOpenFile = openRoomFile,
+                )
                 desktopRoom != null -> DesktopRoomScreen(
                     room = desktopRoom,
                     onOpenSidebar = { scope.launch { sidebar.toggle() } },
                     onBack = { openDesktopRoom = null },
+                    onOpenFile = openRoomFile,
                 )
-                else -> ChatScreen(
-                    target = route.target,
-                    onOpenSidebar = { scope.launch { sidebar.toggle() } },
-                    onNewChat = app::newChat,
-                    onOpenMenu = openSessionId?.let { { menuOpen = true } },
-                    onOpenChat = { id, title -> app.openSession(id, title ?: "Untitled session") },
-                    onSwitchProfile = app::switchProfile,
-                    viewModel = chat,
-                    sessionsBadge = if (alerts) sessionsBadge else SessionsBadge(),
-                    otherChatBanner = banner.takeIf { alerts && settings.otherChatsBanner && !drawerOver },
-                    onOpenOtherChat = { event: OtherChatEvent ->
-                        others.dismissBanner(event)
-                        openOther(event.chatId, event.title, event.bot)
-                    },
-                    onDismissOtherChat = others::dismissBanner,
-                    onNextChat = if (!alerts) null else fun(): Boolean {
-                        val next = others.nextChat()
-                        if (next != null) {
-                            banner?.let(others::dismissBanner)
-                            openOther(next.id, next.title, next.bot)
-                        }
-                        return next != null
-                    },
-                )
+                // Rooms draw their own transcripts, each bot under its own name; only the chat has one speaker.
+                else -> ProvideReplySpeaker(speaker) {
+                    ChatScreen(
+                        target = route.target,
+                        onOpenSidebar = { scope.launch { sidebar.toggle() } },
+                        onNewChat = app::newChat,
+                        onOpenMenu = openSessionId?.let { { menuOpen = true } },
+                        onOpenChat = { id, title -> app.openSession(id, title ?: "Untitled session") },
+                        onSwitchProfile = app::switchProfile,
+                        viewModel = chat,
+                        sessionsBadge = if (alerts) sessionsBadge else SessionsBadge(),
+                        otherChatBanner = banner.takeIf { alerts && settings.otherChatsBanner && !drawerOver },
+                        onOpenOtherChat = { event: OtherChatEvent ->
+                            others.dismissBanner(event)
+                            openOther(event.chatId, event.title, event.bot)
+                        },
+                        onDismissOtherChat = others::dismissBanner,
+                        onNextChat = if (!alerts) null else fun(): Boolean {
+                            val next = others.nextChat()
+                            if (next != null) {
+                                banner?.let(others::dismissBanner)
+                                openOther(next.id, next.title, next.bot)
+                            }
+                            return next != null
+                        },
+                    )
+                }
             }
+        }
+    }
+
+    roomFile?.shownIn(roomKey, roster.all)?.let { target ->
+        // Keyed by the whole link: the viewer caches by path, and the same path is another file for another bot.
+        key(target) {
+            val media = koinInject<MediaApi>()
+            GatewayFileViewer(target.file, onDismiss = { roomFile = null },
+                load = { target.preview(media, it) }, download = { target.download(media, it) })
         }
     }
 
@@ -591,6 +632,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                     CapabilitiesPage(
                         gateway = route.gateway,
                         profile = bot.name,
+                        profileLabel = bot.label,
                         onBack = { capabilitiesOpen = false },
                         onSessionExpired = app::onSessionExpired,
                         title = "${bot.label}'s capabilities",
@@ -624,6 +666,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
             onBack = { settingsOpen = false },
             onSignOut = app::signOut,
             onOpenGateways = onOpenGateways,
+            profile = chatsProfile,
         )
     }
 

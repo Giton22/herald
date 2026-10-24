@@ -25,6 +25,27 @@ class SpeechTest {
     }
 
     @Test
+    fun readAloudLeavesOutWhatTheReplyShowsAsFilesAndPictures() {
+        val reply = """
+            Here's the chart: ![chart](/opt/data/out/chart.png)
+            ::preview{file="/opt/data/out/report.html"}
+            The report is at file:///opt/data/out/report.pdf and MEDIA:/opt/data/out/report.pdf as well.
+        """.trimIndent()
+        assertEquals("Here's the chart. The report is at and as well.", readAloudText(reply))
+    }
+
+    @Test
+    fun aReplyOfOnlyCodeOrPicturesHasNothingToReadAloud() {
+        assertEquals("", readAloudText("```kotlin\nfun main() = println(\"hi\")\n```"))
+        assertEquals("", readAloudText("![plot](/tmp/plot.png)"))
+        assertEquals("Done.", readAloudText("Done.\n```\nls\n```"))
+        // Punctuation alone gives the gateway no words to say.
+        assertEquals("", readAloudText("…"))
+        assertEquals("", readAloudText("?! 😅"))
+        assertEquals("3.", readAloudText("3."))
+    }
+
+    @Test
     fun theFirstChunkIsShortSoSpeechStartsSoon() {
         val text = "First sentence here. " + "Another one follows with more words in it. ".repeat(12)
         val chunks = speechChunks(text, maxChars = 200, firstChars = 60)

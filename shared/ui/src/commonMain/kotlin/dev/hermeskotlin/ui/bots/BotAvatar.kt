@@ -15,6 +15,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.ContentScale
@@ -33,8 +34,12 @@ import kotlin.math.sin
  * picked from the profile name (or what the user chose on Desktop).
  */
 @Composable
-fun BotAvatar(bot: Bot, picture: ByteArray?, modifier: Modifier = Modifier, size: Dp = 36.dp) {
-    val bitmap = picture?.let { rememberImageBitmap(it, maxEdge = 160) }
+fun BotAvatar(bot: Bot, picture: ByteArray?, modifier: Modifier = Modifier, size: Dp = 36.dp) =
+    DecodedBotAvatar(bot, picture?.let { rememberImageBitmap(it, maxEdge = AVATAR_EDGE) }, modifier, size)
+
+/** [BotAvatar] with its picture already decoded, for a face drawn many times over (above every reply). */
+@Composable
+fun DecodedBotAvatar(bot: Bot, bitmap: ImageBitmap?, modifier: Modifier = Modifier, size: Dp = 36.dp) {
     if (bitmap != null) {
         Image(
             bitmap,
@@ -53,6 +58,9 @@ fun BotAvatar(bot: Bot, picture: ByteArray?, modifier: Modifier = Modifier, size
         }
     }
 }
+
+/** The longest side a bot's picture is decoded at. */
+const val AVATAR_EDGE = 160
 
 private fun shapePath(shape: BotShape, size: Size): Path {
     val w = size.width

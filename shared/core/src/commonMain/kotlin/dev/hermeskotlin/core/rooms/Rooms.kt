@@ -2,10 +2,12 @@ package dev.hermeskotlin.core.rooms
 
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.serialization.json.intOrNull
 
 /**
@@ -14,6 +16,25 @@ import kotlinx.serialization.json.intOrNull
  * follow the gateway's `groups_bot_relay` contract; fields the app doesn't need are left out and
  * unknown ones are ignored.
  */
+
+/** The room-owned manifest returned by upload; storage metadata never goes into Send. */
+@Serializable
+data class RoomAttachment(
+    @SerialName("attachment_id") val attachmentId: String,
+    val kind: String,
+    val name: String,
+    val mime: String,
+    val size: Int,
+) {
+    companion object {
+        const val MAX_COUNT = 8
+        const val MAX_BYTES = 15_000_000
+        const val MAX_TOTAL_BYTES = 25_000_000
+
+        /** The limits as the composer states them; the gateway counts megabytes in millions of bytes. */
+        val LIMITS = "Up to $MAX_COUNT files, ${MAX_BYTES / 1_000_000} MB each, ${MAX_TOTAL_BYTES / 1_000_000} MB per message"
+    }
+}
 
 /** One roster row of a room (`RoomMember`); legacy rooms may carry looser rows, so everything is optional. */
 @Serializable
@@ -135,6 +156,7 @@ sealed interface RoomLine {
         val profile: String? = null,
         /** When it was written, in epoch seconds; null when the log didn't say. */
         val createdAt: Double? = null,
+        val attachments: List<RoomAttachment> = emptyList(),
     ) : RoomLine
 
     /** A line the gateway wrote: a failure, a stop, a rename. */
@@ -147,6 +169,25 @@ internal fun JsonObject.payloadText(key: String): String? = (this[key] as? JsonP
 /** The words of a message event; null when it carries none. */
 val RoomEvent.messageText: String? get() = payload.payloadText("text")
 
+/**
+ * User attachments are part of the durable log, including when no text accompanied them. Each entry is
+ * read on its own: one odd entry loses only itself, never the message's other files.
+ */
+val RoomEvent.messageAttachments: List<RoomAttachment> get() =
+    (payload["attachments"] as? JsonArray).orEmpty().mapNotNull { (it as? JsonObject)?.roomAttachment() }
+
+/** A manifest entry; only its id is required, the rest has a stand-in for drawing it. */
+private fun JsonObject.roomAttachment(): RoomAttachment? {
+    val id = payloadText("attachment_id")?.takeIf { it.isNotBlank() } ?: return null
+    return RoomAttachment(
+        attachmentId = id,
+        kind = payloadText("kind") ?: "file",
+        name = payloadText("name")?.takeIf { it.isNotBlank() } ?: "Attachment",
+        mime = payloadText("mime") ?: "application/octet-stream",
+        size = (this["size"] as? JsonPrimitive)?.doubleOrNull?.toInt() ?: 0,
+    )
+}
+
 /** A payload integer, or null when the key is absent or not a number. */
 internal fun JsonObject.payloadInt(key: String): Int? = (this[key] as? JsonPrimitive)?.intOrNull
 
@@ -158,8 +199,8 @@ fun roomLine(event: RoomEvent, members: List<RoomMember>): RoomLine? {
     fun member(memberId: String?): String = members.firstOrNull { it.memberId == memberId }?.label ?: "A member"
     val createdAt = event.createdAt.takeIf { it > 0 }
     return when (event.kind) {
-        "message.user" -> event.messageText?.takeIf { it.isNotBlank() }
-            ?.let { RoomLine.Message(event.seq, fromUser = true, speaker = null, text = it, eventId = event.eventId, createdAt = createdAt) }
+        "message.user" -> event.messageText.orEmpty().takeIf { it.isNotBlank() || event.messageAttachments.isNotEmpty() }
+            ?.let { RoomLine.Message(event.seq, fromUser = true, speaker = null, text = it, eventId = event.eventId, createdAt = createdAt, attachments = event.messageAttachments) }
         "message.member" -> event.messageText?.takeIf { it.isNotBlank() }?.let { text ->
             val memberId = event.payload.payloadText("member_id")
             val row = members.firstOrNull { it.memberId == memberId }

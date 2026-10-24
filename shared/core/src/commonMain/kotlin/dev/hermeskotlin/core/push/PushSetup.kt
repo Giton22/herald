@@ -96,6 +96,7 @@ class PushSetup(
         val url = keys.pinnedGatewayUrl() ?: return
         // Retired first: if the gateway can't be told now, it's told on the next connection.
         keys.retire(url)
+        api.registrationChanged()
         withTimeoutOrNull(FORGET_BUDGET_MS) { runCatching { cleanUp() } }
     }
 
@@ -141,6 +142,7 @@ class PushSetup(
                 _status.value = PushStatus(State.Failed, "The gateway's plugin sent unusable keys.")
                 return@withLock
             }
+            api.registrationChanged()
             _status.value = PushStatus(State.On, listOfNotNull(ready.detail,
                 if (reply.watching) null else "Restart the gateway's dashboard to start sending.",
             ).joinToString("\n").ifEmpty { null }, ready.update)

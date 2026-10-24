@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui.chat
 
+import dev.hermeskotlin.core.voice.ReadAloudVoices
+import dev.hermeskotlin.core.voice.InMemoryReadAloudVoices
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
@@ -23,6 +25,7 @@ import dev.hermeskotlin.core.chat.LastChat
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
+import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.media.GatewayFile
 import dev.hermeskotlin.core.media.LinkPreview
@@ -39,6 +42,7 @@ import dev.hermeskotlin.core.chat.canEdit
 import dev.hermeskotlin.core.chat.promptNow
 import dev.hermeskotlin.core.chat.regenerateTarget
 import dev.hermeskotlin.core.network.errorMessage
+import dev.hermeskotlin.core.plugins.NextPromptApi
 import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.sessions.SeenStore
 import dev.hermeskotlin.core.sessions.SessionsApi
@@ -57,6 +61,7 @@ import dev.hermeskotlin.core.voice.SpeechPlayer
 import dev.hermeskotlin.core.voice.SpeechStreams
 import dev.hermeskotlin.core.voice.VoiceRecorder
 import dev.hermeskotlin.core.voice.DeviceDictation
+import dev.hermeskotlin.core.voice.DeviceLock
 import dev.hermeskotlin.ui.voice.VoiceController
 import kotlinx.coroutines.CoroutineScope
 import dev.hermeskotlin.core.slash.SlashApi
@@ -198,13 +203,21 @@ class ChatViewModel(
     /** The threads, so `/new` in a thread's chat starts the thread fresh instead of leaving it. */
     private val threads: ThreadsRepository? = null,
     private val linkPreviews: LinkPreviews? = null,
+    /** Where the voice of replies read aloud is kept; in memory without one. */
+    readAloudVoices: ReadAloudVoices? = null,
+    /** An approval is only taken by voice while the phone is unlocked. */
+    deviceLock: DeviceLock = DeviceLock.None,
+    /** The Next Prompt plugin's suggestions; none without it. */
+    nextPromptApi: NextPromptApi? = null,
 ) : ViewModel(), ChatActions {
 
-    /** Dictation and voice chat for the open chat. */
+    /** Dictation, voice chat and Read aloud for the open chat. */
     val voice = VoiceController(
         audioApi, recorder, player, viewModelScope, appScope, voiceKeepAlive, deviceDictation,
         speechStreams = speechStreams,
+        deviceLock = deviceLock,
         liveCalls = liveCalls,
+        readAloudVoices = readAloudVoices ?: InMemoryReadAloudVoices(),
     )
 
     /** The profile's pet and its gallery. */
@@ -225,6 +238,9 @@ class ChatViewModel(
     /** Runs goal, loop and heartbeat actions for the open chat's panel. */
     val control = SessionControlController(viewModelScope)
 
+    /** The message the gateway's Next Prompt plugin expects next in the open chat. */
+    val nextPrompt = NextPromptController(nextPromptApi, viewModelScope)
+
     override val composer = TextFieldState()
     val connectionState: StateFlow<ConnectionState> = connection.state
 
@@ -240,6 +256,13 @@ class ChatViewModel(
         // A chat opened under the checkpoints sheet shows its own checkpoints, not the last chat's.
         viewModelScope.launch { session.collect { checkpoints.follow(it) } }
         viewModelScope.launch { session.collect { control.follow(it) } }
+        viewModelScope.launch {
+            val enabled = settings.settings.map { it?.suggestedReplies ?: true }
+            widgetSession
+                .map { bound -> bound?.let { (chat, owner) -> Triple(chat, owner.gateway.gatewayUrl, owner.profile) } }
+                .distinctUntilChanged()
+                .collect { bound -> nextPrompt.follow(bound?.second, bound?.third, bound?.first?.state, enabled) }
+        }
     }
 
     internal val transcript: StateFlow<ChatTranscript> = widgetSession
@@ -699,10 +722,7 @@ class ChatViewModel(
 
     internal suspend fun previewFile(file: GatewayFile, owner: ChatTarget?): FileLoad {
         val gateway = owner?.gateway?.gatewayUrl ?: return FileLoad.Failed("Not connected to a gateway.")
-        return when (val result = media.readText(gateway, file.path, owner.profile)) {
-            is ApiResult.Success -> FileLoad.Ready(result.value)
-            else -> FileLoad.Failed(fileError(result))
-        }
+        return media.fileLoad(gateway, file, owner.profile)
     }
 
     /**
@@ -713,10 +733,7 @@ class ChatViewModel(
 
     internal suspend fun downloadFile(file: GatewayFile, owner: ChatTarget?): FileDownload {
         val gateway = owner?.gateway?.gatewayUrl ?: return FileDownload.Failed("Not connected to a gateway.")
-        return when (val result = media.download(gateway, file.path, owner.profile)) {
-            is ApiResult.Success -> FileDownload.Ready(result.value)
-            else -> FileDownload.Failed(fileError(result, whole = true))
-        }
+        return media.fileDownload(gateway, file, owner.profile)
     }
 
     /** Adds picked files to the composer tray, up to [OutgoingAttachment.MAX_COUNT]. */
@@ -765,6 +782,15 @@ class ChatViewModel(
     override fun pickSuggestion(suggestion: SlashSuggestion) {
         composer.setTextAndPlaceCursorAtEnd(if (suggestion.kind == SlashKind.Option) suggestion.text else "${suggestion.text} ")
     }
+
+    override fun useSuggestedReply(reply: SuggestedReply) {
+        // Only into an empty composer, where the chip shows: what the user typed is never replaced.
+        if (reply != nextPrompt.suggestion.value || composer.text.isNotEmpty()) return
+        composer.setTextAndPlaceCursorAtEnd(reply.text)
+        nextPrompt.used()
+    }
+
+    override fun dismissSuggestedReply() = nextPrompt.dismiss()
 
     private fun isSlashQuery(text: String): Boolean = '\n' !in text && SlashCommand.looksLikeCommand(text) || text == "/"
 
@@ -1070,16 +1096,7 @@ class ChatViewModel(
         if (!state.value.canChangeChat(connectionState.value is ConnectionState.Connected)) return
         if (state.value.messages.none { it.key == key }) return
         viewModelScope.launch {
-            // Counted from the first row, so the pages not scrolled back to yet are read first.
-            if (!chat.loadAllHistory()) return@launch
-            val messages = chat.state.value.messages
-            val index = messages.indexOfFirst { it.key == key }
-            if (index < 0) return@launch
-            // The gateway keeps the first N user and assistant rows that have text, so count those.
-            val count = messages.take(index + 1).count {
-                (it is ChatMessage.User && it.text.isNotBlank()) || (it is ChatMessage.Assistant && it.text.isNotBlank())
-            }
-            chat.branch(count)?.let { (id, title) -> _requests.send(ChatRequest.OpenChat(id, title)) }
+            chat.branchFrom(key)?.let { (id, title) -> _requests.send(ChatRequest.OpenChat(id, title)) }
         }
     }
 
@@ -1231,6 +1248,15 @@ class ChatViewModel(
 
     override fun dismissDictationError() = voice.dismissDictationError()
 
+    override fun readAloud(key: String, text: String) {
+        val target = target ?: return
+        voice.readAloud(key, text, target.gateway.gatewayUrl, target.profile)
+    }
+
+    override fun stopReading() = voice.stopReading()
+
+    override fun dismissReadAloudError() = voice.dismissReadAloudError()
+
     fun showTitle(title: String?) = session.value?.showTitle(title)
 
     private companion object {
@@ -1253,6 +1279,20 @@ class ChatViewModel(
         const val VOICE_CONNECT_WAIT_MS = 30_000L
     }
 }
+
+/** The start of gateway [file] for its viewer, read through [profile]; the reason in plain words when it can't be had. */
+internal suspend fun MediaApi.fileLoad(gateway: GatewayUrl, file: GatewayFile, profile: String?): FileLoad =
+    when (val result = readText(gateway, file.path, profile)) {
+        is ApiResult.Success -> FileLoad.Ready(result.value)
+        else -> FileLoad.Failed(fileError(result))
+    }
+
+/** The whole of gateway [file], read through [profile]: for Save, Share and a linked picture. */
+internal suspend fun MediaApi.fileDownload(gateway: GatewayUrl, file: GatewayFile, profile: String?): FileDownload =
+    when (val result = download(gateway, file.path, profile)) {
+        is ApiResult.Success -> FileDownload.Ready(result.value)
+        else -> FileDownload.Failed(fileError(result, whole = true))
+    }
 
 /**
  * Why a gateway file couldn't be read, in the words the file viewer shows. [whole] is for the whole file

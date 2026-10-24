@@ -8,11 +8,13 @@ import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.createHttpClient
+import dev.hermeskotlin.core.phone.CallReason
 import dev.hermeskotlin.core.rpc.RpcTransport
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import dev.hermeskotlin.core.voice.AudioApi
 import dev.hermeskotlin.core.voice.LiveCall
+import dev.hermeskotlin.core.voice.DeviceLock
 import dev.hermeskotlin.core.voice.Recording
 import dev.hermeskotlin.core.voice.SpeechPlayer
 import dev.hermeskotlin.core.voice.SpokenAudio
@@ -28,6 +30,7 @@ import io.ktor.http.headersOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -59,8 +62,12 @@ class LiveConversationTest {
         val submits = MutableStateFlow<List<JsonObject>>(emptyList())
         override val incoming: Flow<String> = inbound.receiveAsFlow()
 
+        /** What the phone answered the gateway's own requests (an approval, a question) with. */
+        val answers = MutableStateFlow<List<JsonObject>>(emptyList())
+
         override suspend fun send(text: String) {
             val message = Json.parseToJsonElement(text).jsonObject
+            if (message["method"] == null && message["result"] != null) return answers.update { it + message }
             val id = message["id"] ?: return
             val result = when (message["method"]?.jsonPrimitive?.contentOrNull) {
                 "session.create" -> """{"session_id":"rt9","stored_session_id":"stored-9","message_count":0,"messages":[],"info":{}}"""
@@ -74,6 +81,10 @@ class LiveConversationTest {
         }
 
         override suspend fun close(code: Short, reason: String) = Unit
+
+        fun push(raw: String) {
+            inbound.trySend(raw)
+        }
 
         fun event(type: String, payload: String = "{}") {
             inbound.trySend("""{"jsonrpc":"2.0","method":"event","params":{"type":"$type","session_id":"rt9","payload":$payload}}""")
@@ -91,8 +102,22 @@ class LiveConversationTest {
             this.answer = answer("v=0 offer\r\n")
         }
 
+        /** When the voice says what it's handed, as the real one does; null for one whose transcript has no times. */
+        var spokenAt: Long? = 1_000
+
+        /** What the voice says when it's handed a question; null: as a real voice asks it. */
+        var asks: String? = null
+
         override fun send(event: String): Boolean {
-            sent.update { it + Json.parseToJsonElement(event).jsonObject }
+            val sent = Json.parseToJsonElement(event).jsonObject
+            this.sent.update { it + sent }
+            // The voice asks what Hermes asks: its words come back as the call's transcript.
+            val content = sent["content"]?.jsonPrimitive?.contentOrNull.orEmpty()
+            if (content.startsWith("Hermes needs an answer")) {
+                val at = spokenAt?.let { ""","start_ms":$it,"end_ms":${it + 900}""" }.orEmpty()
+                val asked = asks ?: if ("approval" in content) "Should I go ahead, yes or no?" else "Which one would you like?"
+                receive("""{"type":"session.output_transcript.delta","delta":"$asked"$at}""")
+            }
             return true
         }
 
@@ -140,6 +165,32 @@ class LiveConversationTest {
         },
         PersistentCookiesStorage(InMemoryKeyValueStore()),
     )
+
+    @Test
+    fun aCallTheAgentPlacedOpensWithWhyOnceTheVoiceIsUp() = runTest {
+        val client = http("gpt-live", mutableListOf())
+        val socket = Socket()
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> socket }, backgroundScope)
+        connection.start(gateway)
+        connection.state.first { it is ConnectionState.Connected }
+        val session = ChatSession(gateway, null, null, connection, SessionsApi(client), backgroundScope)
+        session.start()
+        val call = FakeCall()
+        val voice = VoiceController(AudioApi(client), NoRecorder, Silent, backgroundScope, backgroundScope) { call }
+
+        voice.startChat(session, gateway, "work", opener = CallReason("The deploy failed", "Build 42"))
+        voice.chat.first { it.live && it.phase == VoicePhase.Listening }
+        // Nothing is said before the voice is up: it would drop it.
+        assertTrue(call.said("session.commentary.append").isEmpty())
+        call.receive("""{"type":"session.started","session":{"id":"live-1"}}""")
+        call.sent.first { sent -> sent.any { it["type"]?.jsonPrimitive?.contentOrNull == "session.commentary.append" } }
+        val said = call.said("session.commentary.append").single()
+        assertTrue(said.contains("tell them why, briefly: The deploy failed"), said)
+        assertTrue(said.contains("Build 42"), said)
+        // Said by the voice, not a request: no Hermes turn starts.
+        assertTrue(socket.submits.value.isEmpty())
+        voice.stopChat()
+    }
 
     @Test
     fun aRequestTheVoiceHandsOverIsAHermesTurnAndItsReplyGoesBackToTheVoice() = runTest {
@@ -193,6 +244,420 @@ class LiveConversationTest {
         voice.stopChat()
         voice.chat.first { it.phase == VoicePhase.Off }
         assertTrue(call.closed)
+    }
+
+    /** A live call whose request d1 started a turn that is now running. */
+    private suspend fun TestScope.callWithATurn(lock: DeviceLock = DeviceLock.None): Queued {
+        val client = http("gpt-live", mutableListOf())
+        val socket = Socket()
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> socket }, backgroundScope)
+        connection.start(gateway)
+        connection.state.first { it is ConnectionState.Connected }
+        val session = ChatSession(gateway, null, null, connection, SessionsApi(client), backgroundScope)
+        session.start()
+        val call = FakeCall()
+        val voice = VoiceController(AudioApi(client), NoRecorder, Silent, backgroundScope, backgroundScope, deviceLock = lock) { call }
+        voice.startChat(session, gateway, null)
+        voice.chat.first { it.live && it.phase == VoicePhase.Listening }
+        call.receive("""{"type":"session.started","session":{"id":"live-1"}}""")
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Clean the build","start_ms":0,"end_ms":900}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d1"}}""")
+        socket.submits.first { it.size == 1 }
+        socket.event("message.start")
+        session.state.first { it.running }
+        return Queued(socket, session, call, voice)
+    }
+
+    @Test
+    fun anApprovalHermesStopsOnIsAskedByTheVoiceAndTheSpokenAnswerGoesBack() = runTest {
+        val (socket, session, call, voice) = callWithATurn()
+
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","description":"Delete the build folder","choices":["once","session","deny"]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("Delete the build folder") == true } }
+        assertEquals(1, call.said("session.instructions.append").size)
+        assertEquals(
+            "Hermes needs an answer before it goes on. Hermes needs your approval: Delete the build folder. Say yes, for this chat, or no.",
+            call.said("session.commentary.append").last(),
+        )
+
+        // The person's own words answer it; the voice's request isn't a new turn and doesn't stop the waiting one.
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Yes, for this chat.","start_ms":2000,"end_ms":3000}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
+        val answer = socket.answers.first { it.isNotEmpty() }.single()
+        assertEquals("srq-1", answer["id"]!!.jsonPrimitive.content)
+        assertEquals("session", answer["result"]!!.jsonObject["choice"]!!.jsonPrimitive.content)
+        assertEquals(1, socket.submits.value.size)
+        assertTrue(session.state.value.running)
+
+        // The turn carries on, and its reply still goes to the request that started it.
+        socket.event("message.complete", """{"text":"Deleted.","status":"complete"}""")
+        call.sent.first { sent -> sent.any { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d1" && it["content"]?.jsonPrimitive?.contentOrNull == "Deleted." } }
+        voice.stopChat()
+    }
+
+    @Test
+    fun aLoneQuestionSentAsABatchIsAskedAndAnsweredUnderItsId() = runTest {
+        val (socket, _, call, voice) = callWithATurn()
+        socket.push("""{"jsonrpc":"2.0","id":"srq-3","method":"clarify","params":{"session_id":"rt9","questions":[{"qid":"q1","question":"Which color?","choices":["Red","Blue"]}]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("Which color?") == true } }
+
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Blue please","start_ms":2000,"end_ms":3000}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
+        val answer = socket.answers.first { it.isNotEmpty() }.single()
+        assertEquals("Blue", answer["result"]!!.jsonObject["answers"]!!.jsonObject["q1"]!!.jsonPrimitive.content)
+        voice.stopChat()
+    }
+
+    @Test
+    fun anApprovalIsntTakenFromALockedPhone() = runTest {
+        var locked = true
+        val (socket, session, call, voice) = callWithATurn { locked }
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","choices":["once","deny"]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("Unlock the phone") == true } }
+        assertTrue(call.said("session.commentary.append").none { it.contains("rm -rf build") })
+
+        // Unlocked, it's asked.
+        locked = false
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("rm -rf build") == true } }
+        assertTrue(session.state.value.running)
+        voice.stopChat()
+    }
+
+    @Test
+    fun aHandOverAfterTheAnswerDoesntStopTheTurn() = runTest {
+        val (socket, session, call, voice) = callWithATurn()
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","choices":["once","deny"]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("rm -rf build") == true } }
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Yes.","start_ms":2000,"end_ms":3000}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
+        socket.answers.first { it.isNotEmpty() }
+        // The voice hands the same answer over again: not a new request.
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d3"}}""")
+        call.sent.first { sent -> sent.any { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d3" } }
+        assertEquals(1, socket.submits.value.size)
+        assertEquals(1, socket.answers.value.size)
+        assertTrue(session.state.value.running)
+        voice.stopChat()
+    }
+
+    @Test
+    fun wordsBeforeTheVoiceAskedBackArentTheAnswer() = runTest {
+        val (socket, session, call, voice) = callWithATurn()
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","choices":["once","deny"]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("rm -rf build") == true } }
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Yes.","start_ms":2000,"end_ms":2500}""")
+        call.receive("""{"type":"session.output_transcript.delta","delta":"Are you sure?","start_ms":2600,"end_ms":3000}""")
+        call.receive("""{"type":"session.input_transcript.delta","delta":"No, don't.","start_ms":3200,"end_ms":3800}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
+        val answer = socket.answers.first { it.isNotEmpty() }.single()
+        assertEquals("deny", answer["result"]!!.jsonObject["choice"]!!.jsonPrimitive.content)
+        assertTrue(session.state.value.running)
+        voice.stopChat()
+    }
+
+    @Test
+    fun theVoiceRespondingDoesntCutTheAnswerShort() = runTest {
+        val (socket, _, call, voice) = callWithATurn()
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","choices":["once","deny"]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("rm -rf build") == true } }
+        // The person's transcript lags: the voice's "Okay" comes in before the rest of what they said before it.
+        call.receive("""{"type":"session.input_transcript.delta","delta":"No, don't","start_ms":2000,"end_ms":2400}""")
+        call.receive("""{"type":"session.output_transcript.delta","delta":"Okay.","start_ms":3000,"end_ms":3300}""")
+        call.receive("""{"type":"session.input_transcript.delta","delta":" do it.","start_ms":2400,"end_ms":2700}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
+        val answer = socket.answers.first { it.isNotEmpty() }.single()
+        assertEquals("deny", answer["result"]!!.jsonObject["choice"]!!.jsonPrimitive.content)
+        voice.stopChat()
+    }
+
+    @Test
+    fun wordsFromBeforeTheQuestionComingInLateArentTheAnswer() = runTest {
+        val (socket, _, call, voice) = callWithATurn()
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","choices":["once","deny"]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("rm -rf build") == true } }
+        // Said before the voice asked (to something else), and only now written down.
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Yes, go ahead.","start_ms":400,"end_ms":900}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
+        call.sent.first { sent -> sent.any { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d2" } }
+        assertTrue(socket.answers.value.isEmpty())
+        voice.stopChat()
+    }
+
+    @Test
+    fun withoutTimesTheAnswerAndANewRequestAreStillTold() = runTest {
+        val (socket, _, call, voice) = callWithATurn()
+        call.spokenAt = null
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","choices":["once","deny"]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("rm -rf build") == true } }
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Yes."}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
+        val answer = socket.answers.first { it.isNotEmpty() }.single()
+        assertEquals("once", answer["result"]!!.jsonObject["choice"]!!.jsonPrimitive.content)
+        // The same answer handed over again isn't a request; new words after it are.
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d3"}}""")
+        call.sent.first { sent -> sent.any { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d3" } }
+        assertEquals(1, socket.submits.value.size)
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Now check the disk space."}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d4"}}""")
+        socket.submits.first { it.size == 2 }
+        voice.stopChat()
+    }
+
+    @Test
+    fun anAnswerIsTakenOnceThePersonStops() = runTest {
+        val (socket, _, call, voice) = callWithATurn()
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","choices":["once","deny"]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("rm -rf build") == true } }
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Yes","start_ms":2000,"end_ms":2300}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
+        delay(500)
+        call.receive("""{"type":"session.input_transcript.delta","delta":", but first tell me what it does.","start_ms":2300,"end_ms":3000}""")
+        call.sent.first { sent -> sent.any { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d2" } }
+        assertEquals(
+            "That wasn't clear. Hermes needs your approval: rm -rf build. Say yes, or no.",
+            call.sent.value.single { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d2" }["content"]!!.jsonPrimitive.content,
+        )
+        assertTrue(socket.answers.value.isEmpty())
+        voice.stopChat()
+    }
+
+    @Test
+    fun aSecondHandOverWhileTheAnswerGoesIsntASecondAnswer() = runTest {
+        val (socket, _, call, voice) = callWithATurn()
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","choices":["once","deny"]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("rm -rf build") == true } }
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Yes.","start_ms":2000,"end_ms":2500}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d3"}}""")
+        call.sent.first { sent -> sent.any { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d3" } }
+        socket.answers.first { it.isNotEmpty() }
+        delay(5_000)
+        assertEquals(1, socket.answers.value.size)
+        assertEquals(1, socket.submits.value.size)
+        voice.stopChat()
+    }
+
+    @Test
+    fun aNewRequestRightAfterTheAnswerIsStillOne() = runTest {
+        val (socket, _, call, voice) = callWithATurn()
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","choices":["once","deny"]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("rm -rf build") == true } }
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Yes.","start_ms":2000,"end_ms":2500}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
+        socket.answers.first { it.isNotEmpty() }
+        // Handed over before the new words' transcript comes in.
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d3"}}""")
+        delay(300)
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Now check the disk space.","start_ms":6000,"end_ms":7000}""")
+        socket.submits.first { it.size == 2 }
+        assertTrue(socket.submits.value.last().toString().contains("check the disk space"))
+        voice.stopChat()
+    }
+
+    @Test
+    fun anUnclearAnswerIsAskedAgainAndNothingIsSent() = runTest {
+        val (socket, session, call, voice) = callWithATurn()
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","choices":["once","deny"]}}""")
+        session.state.first { it.inputRequests.isNotEmpty() }
+
+        call.receive("""{"type":"session.input_transcript.delta","delta":"What does it delete?","start_ms":2000,"end_ms":3000}""")
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
+        call.sent.first { sent -> sent.any { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d2" } }
+        assertEquals(
+            "That wasn't clear. Hermes needs your approval: rm -rf build. Say yes, or no.",
+            call.sent.value.single { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d2" }["content"]!!.jsonPrimitive.content,
+        )
+        assertTrue(socket.answers.value.isEmpty())
+        assertEquals(1, socket.submits.value.size)
+        voice.stopChat()
+    }
+
+    @Test
+    fun anAnswerTheVoiceNeverHandsOverIsTakenOnceThePersonStops() = runTest {
+        val (socket, session, call, voice) = callWithATurn()
+        socket.push("""{"jsonrpc":"2.0","id":"srq-3","method":"clarify","params":{"session_id":"rt9","questions":[{"qid":"q1","question":"Which color?","choices":["Red","Blue"]}]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("Which color?") == true } }
+
+        // The voice just talks on ("Green, nice!") instead of handing the answer over.
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Green.","start_ms":2000,"end_ms":2600}""")
+        val answer = socket.answers.first { it.isNotEmpty() }.single()
+        assertEquals("Green.", answer["result"]!!.jsonObject["answers"]!!.jsonObject["q1"]!!.jsonPrimitive.content)
+        assertEquals(1, socket.submits.value.size)
+        assertTrue(session.state.value.running)
+
+        // Handed over late after all: not a second answer, nor a request that stops the turn. Told so while Hermes
+        // still works on it, not once its turn is over.
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
+        val reply = call.sent.first { sent -> sent.any { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d2" } }
+            .first { it["delegation_id"]?.jsonPrimitive?.contentOrNull == "d2" }
+        assertTrue(reply.toString().contains("already has that answer"), reply.toString())
+        assertTrue(session.state.value.running)
+        delay(5_000)
+        assertEquals(1, socket.answers.value.size)
+        assertEquals(1, socket.submits.value.size)
+        voice.stopChat()
+    }
+
+    @Test
+    fun aQuestionBackIsLeftToTheVoice() = runTest {
+        val (socket, _, call, voice) = callWithATurn()
+        socket.push("""{"jsonrpc":"2.0","id":"srq-3","method":"clarify","params":{"session_id":"rt9","questions":[{"qid":"q1","question":"Which color?","choices":["Red","Blue"]}]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("Which color?") == true } }
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Which one is brighter","start_ms":2000,"end_ms":2600}""")
+        delay(10_000)
+        assertTrue(socket.answers.value.isEmpty())
+        assertEquals(1, socket.submits.value.size)
+        voice.stopChat()
+    }
+
+    @Test
+    fun anApprovalIsTakenWithoutAHandOverOnlyWhenItsClear() = runTest {
+        val (socket, _, call, voice) = callWithATurn()
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","choices":["once","deny"]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("rm -rf build") == true } }
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Okay, let me think","start_ms":2000,"end_ms":2600}""")
+        delay(5_000)
+        assertTrue(socket.answers.value.isEmpty())
+        call.receive("""{"type":"session.input_transcript.delta","delta":"No, don't.","start_ms":9000,"end_ms":9600}""")
+        val answer = socket.answers.first { it.isNotEmpty() }.single()
+        assertEquals("deny", answer["result"]!!.jsonObject["choice"]!!.jsonPrimitive.content)
+        voice.stopChat()
+    }
+
+    @Test
+    fun aYesBeforeTheVoiceAskedIsLeftToTheVoice() = runTest {
+        val (socket, _, call, voice) = callWithATurn()
+        // The end of what the voice said before it was given the approval: it hasn't asked yet.
+        call.asks = "Sure, I'll clean that up now."
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","choices":["once","deny"]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("rm -rf build") == true } }
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Yeah.","start_ms":2000,"end_ms":2400}""")
+        delay(10_000)
+        assertTrue(socket.answers.value.isEmpty())
+        // The voice hands it over once it asked: then it's the answer.
+        call.receive("""{"type":"session.delegation.created","delegation":{"id":"d2"}}""")
+        val answer = socket.answers.first { it.isNotEmpty() }.single()
+        assertEquals("once", answer["result"]!!.jsonObject["choice"]!!.jsonPrimitive.content)
+        voice.stopChat()
+    }
+
+    @Test
+    fun aYesToAQuestionLeftOverFromBeforeIsntTheApproval() = runTest {
+        val (socket, _, call, voice) = callWithATurn()
+        // A question of the voice's own, from before it was given the approval.
+        call.asks = "On it. Want me to keep you posted?"
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","choices":["once","deny"]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("rm -rf build") == true } }
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Yeah.","start_ms":2000,"end_ms":2400}""")
+        delay(10_000)
+        assertTrue(socket.answers.value.isEmpty())
+        voice.stopChat()
+    }
+
+    @Test
+    fun aLoneOkayToAnApprovalIsLeftToTheVoice() = runTest {
+        val (socket, _, call, voice) = callWithATurn()
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","choices":["once","deny"]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("rm -rf build") == true } }
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Okay.","start_ms":2000,"end_ms":2400}""")
+        delay(10_000)
+        assertTrue(socket.answers.value.isEmpty())
+        voice.stopChat()
+    }
+
+    @Test
+    fun aYesAfterAnUmIsTakenAsTheYes() = runTest {
+        val (socket, _, call, voice) = callWithATurn()
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","choices":["once","deny"]}}""")
+        call.sent.first { sent -> sent.any { it["content"]?.jsonPrimitive?.contentOrNull?.contains("rm -rf build") == true } }
+        call.receive("""{"type":"session.input_transcript.delta","delta":"Um, yes.","start_ms":2000,"end_ms":2600}""")
+        val answer = socket.answers.first { it.isNotEmpty() }.single()
+        assertEquals("once", answer["result"]!!.jsonObject["choice"]!!.jsonPrimitive.content)
+        voice.stopChat()
+    }
+
+    /** Hears each of [said] in turn, then nothing more. [onRecord] is told as each starts. */
+    private class Saying(vararg said: String, val onRecord: () -> Unit = {}) : VoiceRecorder {
+        val left = ArrayDeque(said.toList())
+
+        override suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit, onSpeech: () -> Unit): Recording {
+            onRecord()
+            if (left.isEmpty()) awaitCancellation()
+            return Recording(left.first().encodeToByteArray(), "audio/wav", heardSpeech = true)
+        }
+
+        override fun finish() = Unit
+    }
+
+    @Test
+    fun aQuestionInAChainedVoiceChatIsReadAloudAndTheAnswerSaidBackIsSent() = runTest {
+        val recorder = Saying("Tidy the repo", "the second one")
+        val spoken = mutableListOf<String>()
+        val (socket, voice) = chainedTurn(recorder, spoken)
+        socket.push("""{"jsonrpc":"2.0","id":"srq-2","method":"clarify","params":{"session_id":"rt9","question":"Which folder?","choices":["src","build"]}}""")
+
+        val answer = socket.answers.first { it.isNotEmpty() }.single()
+        assertEquals(listOf("Which folder? Say one. 1: src. 2: build. Or say something else."), spoken)
+        assertEquals("srq-2", answer["id"]!!.jsonPrimitive.content)
+        assertEquals("build", answer["result"]!!.jsonObject["answer"]!!.jsonPrimitive.content)
+        // Answering isn't a new prompt.
+        assertEquals(1, socket.submits.value.size)
+
+        socket.event("message.complete", """{"text":"Tidied build.","status":"complete"}""")
+        voice.chat.first { it.phase == VoicePhase.Listening && spoken.size == 2 }
+        assertEquals("Tidied build.", spoken.last())
+        voice.stopChat()
+    }
+
+    @Test
+    fun aYesSaidOnceThePhoneLockedIsntTaken() = runTest {
+        var locked = false
+        lateinit var recorder: Saying
+        // The phone locks while the answer is said.
+        recorder = Saying("Tidy the repo", "yes", onRecord = { if (recorder.left.size == 1) locked = true })
+        val spoken = mutableListOf<String>()
+        val (socket, voice) = chainedTurn(recorder, spoken) { locked }
+        socket.push("""{"jsonrpc":"2.0","id":"srq-1","method":"approval","params":{"session_id":"rt9","command":"rm -rf build","choices":["once","deny"]}}""")
+
+        voice.chat.first { spoken.any { it.contains("Unlock the phone") } }
+        assertTrue(socket.answers.value.isEmpty())
+        voice.stopChat()
+    }
+
+    /** A chained voice chat whose first request, said aloud, is a turn now running. */
+    private suspend fun TestScope.chainedTurn(
+        recorder: Saying,
+        spoken: MutableList<String>,
+        lock: DeviceLock = DeviceLock.None,
+    ): Pair<Socket, VoiceController> {
+        val client = createHttpClient(
+            MockEngine { request ->
+                when (request.url.encodedPath) {
+                    "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
+                    "/api/audio/voice-live/status" -> respond("""{"ok":true,"mode":"chained","available":false}""", HttpStatusCode.OK, json)
+                    "/api/audio/transcribe" -> respond("""{"transcript":"${recorder.left.removeFirst()}"}""", HttpStatusCode.OK, json)
+                    "/api/audio/speak" -> {
+                        spoken += Json.parseToJsonElement(request.body.toByteArray().decodeToString()).jsonObject["text"]!!.jsonPrimitive.content
+                        respond("""{"data_url":"data:audio/mpeg;base64,AAAA"}""", HttpStatusCode.OK, json)
+                    }
+                    else -> respond("""{"ok":true}""", HttpStatusCode.OK, json)
+                }
+            },
+            PersistentCookiesStorage(InMemoryKeyValueStore()),
+        )
+        val socket = Socket()
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> socket }, backgroundScope)
+        connection.start(gateway)
+        connection.state.first { it is ConnectionState.Connected }
+        val session = ChatSession(gateway, null, null, connection, SessionsApi(client), backgroundScope)
+        session.start()
+        val voice = VoiceController(AudioApi(client), recorder, Silent, backgroundScope, backgroundScope, deviceLock = lock) { FakeCall() }
+        voice.startChat(session, gateway, null)
+
+        socket.submits.first { it.size == 1 }
+        socket.event("message.start")
+        session.state.first { it.running }
+        return socket to voice
     }
 
     private data class Queued(val socket: Socket, val session: ChatSession, val call: FakeCall, val voice: VoiceController) {

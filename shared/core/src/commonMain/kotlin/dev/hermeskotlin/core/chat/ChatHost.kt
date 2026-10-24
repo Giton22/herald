@@ -4,6 +4,8 @@ import dev.hermeskotlin.core.cache.OfflineCache
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.sessions.SessionsApi
+import dev.hermeskotlin.core.settings.SettingsStore
+import dev.hermeskotlin.core.settings.startInstruction
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
@@ -24,7 +26,12 @@ class ChatHost(
     private val scope: CoroutineScope,
     private val risks: ToolRiskStore? = null,
     private val cache: OfflineCache? = null,
+    /** Where the instruction a new chat starts with comes from (see [startInstruction]). */
+    private val settings: SettingsStore? = null,
 ) {
+    /** What a new chat started on this device tells the agent first: the setting, read when the chat is created. */
+    val startInstruction: () -> String? = { settings?.startInstruction() }
+
     private val _session = MutableStateFlow<ChatSession?>(null)
     val session: StateFlow<ChatSession?> = _session.asStateFlow()
 
@@ -66,7 +73,7 @@ class ChatHost(
         this.profile = profile
         sessionScope = childScope
         val cards = storedSessionId?.let { sideTasks.remove(Triple(gateway, profile, it)) }.orEmpty()
-        return ChatSession(gateway, storedSessionId, title, connection, sessions, childScope, profile, risks, cwd = cwd, cache = cache, sideTasks = cards)
+        return ChatSession(gateway, storedSessionId, title, connection, sessions, childScope, profile, risks, cwd = cwd, cache = cache, sideTasks = cards, startInstruction = startInstruction)
             .also { it.start() }
             .also { _session.value = it }
     }

@@ -37,7 +37,12 @@ data class Profile(
 }
 
 /** The gateway's profiles, and which one it runs as when a call names none. */
-data class ProfileRoster(val profiles: List<Profile>, val launch: String)
+data class ProfileRoster(
+    val profiles: List<Profile>,
+    val launch: String,
+    /** Whether the gateway said which profile it was launched as; when it didn't, [launch] is a guess at `default`. */
+    val launchKnown: Boolean = true,
+)
 
 @Serializable
 private data class ProfilesResponse(val profiles: List<Profile> = emptyList())
@@ -49,14 +54,11 @@ class ProfilesApi(private val client: HttpClient) {
 
     /** `GET /api/profiles` plus `GET /api/profiles/active`, default profile first like Desktop's picker. */
     suspend fun roster(url: GatewayUrl): ApiResult<ProfileRoster> {
-        val launch = apiCall { client.get(url.resolve("api/profiles/active")) }
-            .map { it.body<ActiveProfileResponse>().current }
+        val launch = (apiCall { client.get(url.resolve("api/profiles/active")) }
+            .map { it.body<ActiveProfileResponse>().current } as? ApiResult.Success)?.value?.takeIf { it.isNotBlank() }
         return apiCall { client.get(url.resolve("api/profiles")) }.map { response ->
             val profiles = response.body<ProfilesResponse>().profiles.sortedByDescending { it.isDefault }
-            ProfileRoster(
-                profiles = profiles,
-                launch = (launch as? ApiResult.Success)?.value?.takeIf { it.isNotBlank() } ?: DEFAULT,
-            )
+            ProfileRoster(profiles = profiles, launch = launch ?: DEFAULT, launchKnown = launch != null)
         }
     }
 
@@ -65,7 +67,13 @@ class ProfilesApi(private val client: HttpClient) {
      * refuses the default profile. It can take a few seconds while the profile's backend stops.
      */
     suspend fun delete(url: GatewayUrl, name: String): ApiResult<Unit> = apiCall {
-        client.delete(url.resolve("api/profiles/${name.encodeURLPathPart()}")) { timeout { requestTimeoutMillis = 30_000 } }
+        client.delete(url.resolve("api/profiles/${name.encodeURLPathPart()}")) {
+            // The answer comes only once the backend has stopped; OkHttp's 10 s read timeout would cut it off first.
+            timeout {
+                requestTimeoutMillis = 30_000
+                socketTimeoutMillis = 30_000
+            }
+        }
     }.map { }
 
     companion object {

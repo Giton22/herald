@@ -44,6 +44,7 @@ class ThreadsRepositoryTest {
         patch: (String) -> Pair<HttpStatusCode, String>? = { null },
         /** Answers every other socket call; null falls through to the defaults. */
         rpc: (FakeGateway.Call) -> String? = { null },
+        startInstruction: String? = null,
     ): ThreadsRepository {
         val gateway = FakeGateway(scope, reconnects = false)
         gateway.answer = { call ->
@@ -60,6 +61,8 @@ class ThreadsRepositoryTest {
         }
         gateway.http = { request ->
             when {
+                // A gateway without snapshots, so writes go without an identity (SessionsApiTest covers that).
+                request.url.encodedPath.endsWith("/mutation-snapshot") -> json("""{"detail":"No such API endpoint"}""", HttpStatusCode.NotFound)
                 request.method == HttpMethod.Patch -> {
                     val body = request.body.toByteArray().decodeToString()
                     sent += "PATCH ${request.url.encodedPath.substringAfterLast('/')} $body"
@@ -76,7 +79,7 @@ class ThreadsRepositoryTest {
             }
         }
         val connection = gateway.start()
-        return ThreadsRepository(ThreadsApi(connection), SessionsApi(gateway.client), ProfilesApi(gateway.client), lastChats) { seconds ->
+        return ThreadsRepository(ThreadsApi(connection), SessionsApi(gateway.client), ProfilesApi(gateway.client), lastChats, { startInstruction }) { seconds ->
             if (seconds) "2026-10-13 09:30:15" else "2026-10-13 09:30"
         }.also { it.bind(URL, "work") }
     }
@@ -202,6 +205,19 @@ class ThreadsRepositoryTest {
         repo.refresh(force = true)
         repo.startFresh(repo.threads.value[1])
         assertEquals("/srv/work", cwd)
+    }
+
+    @Test
+    fun aThreadsNewChatStartsWithTheStartingInstruction() = runTest {
+        var seeded: JsonObject? = null
+        val repo = repository(backgroundScope, rpc = { call ->
+            if (call.method == "session.create") seeded = call.params["messages"]?.jsonArray?.single()?.jsonObject
+            null
+        }, startInstruction = "Keep replies short.")
+        repo.refresh(force = true)
+        repo.startFresh(repo.threads.value[1])
+        assertEquals("hidden", seeded?.get("display_kind")?.jsonPrimitive?.content)
+        assertTrue(seeded?.get("content")?.jsonPrimitive?.content.orEmpty().endsWith("\n\nKeep replies short."))
     }
 
     @Test

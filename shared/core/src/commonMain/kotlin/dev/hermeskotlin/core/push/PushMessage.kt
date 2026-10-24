@@ -22,6 +22,9 @@ data class PushMessage(
     val choices: List<String> = emptyList(),
     val expires: Long? = null,
     val choice: String? = null,
+    /** A [PHONE_CALL]'s reason and, maybe, its details. */
+    val reason: String? = null,
+    val details: String? = null,
     /** A [CRON_RUN]'s job id, its run (the output file's name, `YYYY-MM-DD_HH-MM-SS`), and how it went. */
     val job: String? = null,
     val run: String? = null,
@@ -39,6 +42,12 @@ data class PushMessage(
 
         /** A phone tool call waits on the gateway ([requestId]); the phone fetches it over the socket. */
         const val PHONE_REQUEST = "phone_request"
+
+        /**
+         * The agent calls the user (`phone_call_me`, request [requestId], until [expires]): the call itself, so the
+         * phone rings even when it can't reach the gateway. The answer goes back over the socket.
+         */
+        const val PHONE_CALL = "phone_call"
 
         /** A cron job the user follows finished a run ([job], [run], [status], [text] its start). */
         const val CRON_RUN = "cron_run"

@@ -19,6 +19,8 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
+import kotlin.test.assertFalse
+import kotlin.test.assertTrue
 import kotlin.test.assertIs
 import kotlin.test.assertNull
 
@@ -50,6 +52,7 @@ class ProfilesApiTest {
         assertEquals(listOf("default", "work"), roster.profiles.map { it.name })
         assertEquals(listOf("default", "Work bot"), roster.profiles.map { it.label })
         assertEquals("work", roster.launch)
+        assertTrue(roster.launchKnown)
     }
 
     @Test
@@ -63,7 +66,10 @@ class ProfilesApiTest {
             ),
         )
 
-        assertEquals("default", assertIs<ApiResult.Success<ProfileRoster>>(api.roster(url)).value.launch)
+        val guessed = assertIs<ApiResult.Success<ProfileRoster>>(api.roster(url)).value
+        assertEquals("default", guessed.launch)
+        // A guess: nothing that must name the right profile should rely on it.
+        assertFalse(guessed.launchKnown)
     }
 
     @Test

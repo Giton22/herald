@@ -210,6 +210,22 @@ internal fun FileViewer(
     picture?.let { ImageViewer(it, onDismiss = { picture = null }) }
 }
 
+/** A gateway file a link opened: a picture in the picture viewer, anything else in [FileViewer]. */
+@Composable
+internal fun GatewayFileViewer(
+    file: GatewayFile?,
+    onDismiss: () -> Unit,
+    load: suspend (GatewayFile) -> FileLoad,
+    download: suspend (GatewayFile) -> FileDownload,
+) {
+    if (file?.kind == GatewayFileKind.Image) {
+        val image = remember(file) { ViewerImage(file.name, fetch = { download(file) }) }
+        ImageViewer(image, onDismiss)
+    } else {
+        FileViewer(file, onDismiss, load, download)
+    }
+}
+
 /**
  * The viewer's page, apart from its window, so previews can draw it; [preset] skips loading for screenshots.
  * [onOpenFile] gets a gateway file a link in the text points at; [onOpenPicture] a picture shown in it.

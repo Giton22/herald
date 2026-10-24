@@ -31,6 +31,8 @@ import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import dev.hermeskotlin.android.HeraldActivity
 import dev.hermeskotlin.android.notify.ChatNotifications
+import dev.hermeskotlin.core.bots.BotsApi
+import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.voice.DeviceDictation
 import dev.hermeskotlin.ui.assistant.AssistantPanel
@@ -82,6 +84,8 @@ class HeraldAssistSession(context: Context) :
             get(), get(), get(), get(), get(), get(), get(), get(), get(),
             settings = get<SettingsStore>(),
             deviceDictation = get<DeviceDictation>(),
+            bots = get<BotsApi>(),
+            profileRoster = get<ProfilesApi>(),
         ) { region ->
             screenshot?.let { shot -> withContext(Dispatchers.Default) { runCatching { ScreenReader.crop(shot, region) }.getOrNull() } }
         }

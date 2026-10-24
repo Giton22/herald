@@ -51,6 +51,12 @@ interface ChatActions {
 
     fun pickSuggestion(suggestion: SlashSuggestion)
 
+    /** Puts the suggested next message in the composer, to look over and send. */
+    fun useSuggestedReply(reply: SuggestedReply) {}
+
+    /** Closes the suggested next message. */
+    fun dismissSuggestedReply() {}
+
     /** The bytes behind a picture or file in the chat, or null when it can't be had. */
     suspend fun loadMedia(source: String): ByteArray?
 
@@ -119,6 +125,13 @@ interface ChatActions {
     fun dismissVoiceChatError()
 
     fun dismissDictationError()
+
+    /** Reads reply [key] aloud with the gateway's voice; [text] is the reply as shown. Another being read stops. */
+    fun readAloud(key: String, text: String) {}
+
+    fun stopReading() {}
+
+    fun dismissReadAloudError() {}
 }
 
 /**

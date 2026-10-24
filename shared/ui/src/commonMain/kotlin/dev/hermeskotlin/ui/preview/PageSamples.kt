@@ -45,6 +45,12 @@ import dev.hermeskotlin.ui.chat.CheckpointsState
 import dev.hermeskotlin.ui.chat.ProcessesState
 import dev.hermeskotlin.ui.chat.UsageSheetState
 import dev.hermeskotlin.ui.sessions.CapabilitiesUiState
+import dev.hermeskotlin.ui.sessions.HubDetail
+import dev.hermeskotlin.ui.sessions.SkillsHubUiState
+import dev.hermeskotlin.core.capabilities.HubFinding
+import dev.hermeskotlin.core.capabilities.HubPreview
+import dev.hermeskotlin.core.capabilities.HubScan
+import dev.hermeskotlin.core.capabilities.HubSkill
 import dev.hermeskotlin.ui.sessions.InsightsUiState
 import dev.hermeskotlin.ui.sessions.JobEditor
 import dev.hermeskotlin.ui.sessions.Loadable
@@ -109,6 +115,49 @@ internal object PageSamples {
                 Skill("python-debug", "Read a traceback and find the failing line", category = "software", provenance = "bundled"),
             ),
         ),
+    )
+
+    private val hubFeatured = listOf(
+        HubSkill("grafana", "Build and edit Grafana dashboards from Prometheus metrics", source = "github", identifier = "acme/skills/grafana", trustLevel = "trusted"),
+        HubSkill("smart-disks", "Read SMART data and judge whether a disk is failing", source = "github", identifier = "acme/skills/smart-disks", trustLevel = "community"),
+    )
+    private val hubOfficial = listOf(
+        HubSkill("arxiv", "Search arXiv and summarize papers", source = "official", identifier = "official/research/arxiv", trustLevel = "builtin", category = "research"),
+        HubSkill("github-pr", "Open, review and merge pull requests with gh", source = "official", identifier = "official/software/github-pr", trustLevel = "builtin", category = "software"),
+    )
+    private val hubScan = HubScan(
+        name = "smart-disks",
+        identifier = "acme/skills/smart-disks",
+        trustLevel = "community",
+        verdict = "caution",
+        summary = "2 findings",
+        policy = "ask",
+        policyReason = "Community skills with findings need your yes.",
+        findings = listOf(
+            HubFinding("medium", "exec", "scripts/check.sh", 12, "Runs a shell command built from input"),
+            HubFinding("low", "network", "SKILL.md", 40, "Fetches a file from the web"),
+        ),
+    )
+    private val hubPreview = HubPreview(
+        name = "smart-disks",
+        description = "Read SMART data and judge whether a disk is failing",
+        identifier = "acme/skills/smart-disks",
+        trustLevel = "community",
+        tags = listOf("disks", "homelab"),
+        skillMd = "# smart-disks\n\nRead SMART data with `smartctl` and say whether a disk is failing.\n\n- Reallocated sectors\n- Pending sectors",
+        files = listOf("SKILL.md", "scripts/check.sh"),
+    )
+
+    val skillsHub = SkillsHubUiState(
+        featured = Loadable(hubFeatured),
+        official = Loadable(hubOfficial),
+        installed = setOf("acme/skills/grafana"),
+    )
+    val skillsHubDetail = skillsHub.copy(detail = HubDetail(hubFeatured[1], preview = hubPreview, scan = hubScan.copy(verdict = "safe", policy = "allow", findings = emptyList())))
+    val skillsHubCaution = skillsHub.copy(confirm = hubScan)
+    val skillsHubBlocked = skillsHub.copy(
+        detail = HubDetail(hubFeatured[1], preview = hubPreview, scan = hubScan.copy(verdict = "dangerous", policy = "block", summary = "1 high-risk finding", findings = hubScan.findings.take(1))),
+        message = "smart-disks was blocked by the security scan.",
     )
 
     /** Hermes's settings on a sample gateway, open at [place]: the sections, or one of them by id. */

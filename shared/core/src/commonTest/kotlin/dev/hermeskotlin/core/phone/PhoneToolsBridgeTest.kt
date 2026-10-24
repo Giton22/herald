@@ -14,6 +14,7 @@ import dev.hermeskotlin.core.push.PluginUpdate
 import dev.hermeskotlin.core.push.PushApi
 import dev.hermeskotlin.core.push.PushGateway
 import dev.hermeskotlin.core.push.PushKeys
+import dev.hermeskotlin.core.push.PushMessage
 import dev.hermeskotlin.core.push.PushRegistration
 import dev.hermeskotlin.core.rpc.FakeTransport
 import dev.hermeskotlin.core.settings.SettingsStore
@@ -56,7 +57,7 @@ private const val GATEWAY_NOW = 1_800_000_000L
 class PhoneToolsBridgeTest {
 
     /** A push identity, registered with [pinnedTo] when set. */
-    private class Keys(val pinnedTo: String? = null) : PushKeys {
+    private class Keys(var pinnedTo: String? = null) : PushKeys {
         override val deviceId = "0b6f2c1e-1111-4222-8333-944445555666"
         override fun registration(name: String) = PushRegistration(deviceId, name, "https://ntfy.sh", "hp-a", "hp-b", "E", "S")
         override fun pinned(gatewayUrl: String): PushGateway? = null
@@ -544,6 +545,100 @@ class PhoneToolsBridgeTest {
         assertEquals(PhoneToolsStatus.State.On, s.bridge.status.value.state)
     }
 
+    private fun ringPush(id: String, reason: String? = "The deploy failed", expires: Long = GATEWAY_NOW + 75, ts: Long = GATEWAY_NOW) = PushMessage(
+        id = "p-$id",
+        ts = ts,
+        type = PushMessage.PHONE_CALL,
+        session = "chat-1",
+        requestId = id,
+        expires = expires,
+        reason = reason,
+        details = "Build 42",
+    )
+
+    /** Records each call's args; each rings until [ended]. */
+    private class CallRunner : PhoneToolRunner {
+        val calls = mutableListOf<Pair<PhoneTool, JsonObject>>()
+        val ringing = CompletableDeferred<Unit>()
+
+        override suspend fun run(tool: PhoneTool, args: JsonObject, session: String): JsonElement {
+            calls += tool to args
+            ringing.await()
+            return buildJsonObject { put("status", "declined") }
+        }
+    }
+
+    @Test
+    fun aRingInAPushRingsWithoutTheGateway() = runTest {
+        val runner = CallRunner()
+        val s = setup(runner, on = listOf(PhoneTool.CallMe))
+        s.bridge.ring(ringPush("e".repeat(32)))
+        until { runner.calls.isNotEmpty() }
+        assertTrue(s.connection.state.value !is ConnectionState.Connected)
+        assertEquals(PhoneTool.CallMe, runner.calls.single().first)
+        assertEquals("""{"reason":"The deploy failed","details":"Build 42"}""", runner.calls.single().second.toString())
+    }
+
+    @Test
+    fun aCallDeclinedOffTheNetworkGetsBackOnceTheGatewayIsReachedInTime() = runTest {
+        val runner = CallRunner().apply { ringing.complete(Unit) }
+        val s = setup(runner, on = listOf(PhoneTool.CallMe))
+        val id = "e".repeat(32)
+        s.bridge.ring(ringPush(id))
+        until { runner.calls.isNotEmpty() }
+        // Back on the network well past the least wait, still before the gateway gives up: the answer goes through.
+        delay(40_000)
+        val plugin = Plugin()
+        plugin.call(id, PhoneTool.CallMe.id, expires = GATEWAY_NOW + 75)
+        connect(s, plugin)
+        until { plugin.answers.containsKey(id) }
+        assertEquals("""{"status":"declined"}""", plugin.answers[id]!!["result"].toString())
+        assertEquals(1, runner.calls.size)
+    }
+
+    @Test
+    fun aRingInAPushAndOnTheGatewayRingsOnceAndItsEndGoesBack() = runTest {
+        val runner = CallRunner()
+        val s = setup(runner, on = listOf(PhoneTool.CallMe))
+        val id = "e".repeat(32)
+        val plugin = Plugin()
+        connect(s, plugin)
+        until { plugin.reports.isNotEmpty() }
+        // The gateway lists it too: it doesn't ring a second time, and the answer gets there.
+        s.bridge.ring(ringPush(id))
+        plugin.call(id, PhoneTool.CallMe.id, expires = GATEWAY_NOW + 75)
+        s.bridge.wake()
+        until { runner.calls.isNotEmpty() }
+        delay(PhoneToolsBridge.EVENT_DRAINS_MS.last())
+        runner.ringing.complete(Unit)
+        until { plugin.answers.containsKey(id) }
+        assertEquals("""{"status":"declined"}""", plugin.answers[id]!!["result"].toString())
+        delay(PhoneToolsBridge.POLL_MS * 2)
+        assertEquals(1, runner.calls.size)
+    }
+
+    @Test
+    fun aRingPastItsTimeOrWithoutAReasonDoesntRing() = runTest {
+        val runner = CallRunner()
+        val s = setup(runner, on = listOf(PhoneTool.CallMe))
+        s.bridge.ring(ringPush("e".repeat(32), expires = GATEWAY_NOW + 5))
+        s.bridge.ring(ringPush("f".repeat(32), reason = " "))
+        s.bridge.ring(ringPush("not-an-id"))
+        // Read an hour after it was sent (this phone's clock is at 0): the agent gave up on it long ago.
+        s.bridge.ring(ringPush("d".repeat(32), ts = -3_600, expires = -3_600 + 75))
+        delay(1_000)
+        assertTrue(runner.calls.isEmpty())
+    }
+
+    @Test
+    fun aRingWithCallsOffDoesntRing() = runTest {
+        val runner = CallRunner()
+        val s = setup(runner, on = listOf(PhoneTool.Battery))
+        s.bridge.ring(ringPush("e".repeat(32)))
+        delay(1_000)
+        assertTrue(runner.calls.isEmpty())
+    }
+
     @Test
     fun aPushNudgeFetchesTheCall() = runTest {
         val s = setup(Runner(), on = listOf(PhoneTool.Battery))
@@ -574,6 +669,22 @@ class PhoneToolsBridgeTest {
         connect(other, second)
         until { second.reports.isNotEmpty() }
         assertNull(second.reportBodies.single()["push_id"])
+    }
+
+    @Test
+    fun notificationsAnywhereTurnedOnLaterTellTheGatewayWhereACallCanRing() = runTest {
+        val keys = Keys()
+        val s = setup(Runner(), on = listOf(PhoneTool.CallMe), keys = keys)
+        val plugin = Plugin()
+        connect(s, plugin)
+        until { plugin.reports.isNotEmpty() }
+        assertNull(plugin.reportBodies.last()["push_id"])
+        // Registered for push afterwards, on the same connection: the gateway hears of it without a reconnect.
+        s.settings.update { it.copy(pushAnywhere = true) }
+        keys.pinnedTo = URL
+        s.api.registrationChanged()
+        until { plugin.reportBodies.lastOrNull()?.get("push_id") != null }
+        assertEquals(keys.deviceId, plugin.reportBodies.last()["push_id"]?.jsonPrimitive?.content)
     }
 
     @Test

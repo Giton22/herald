@@ -57,6 +57,9 @@ import dev.hermeskotlin.ui.chat.SessionControlSheetView
 import dev.hermeskotlin.ui.chat.UsageSheetView
 import dev.hermeskotlin.ui.sessions.CapabilitiesActions
 import dev.hermeskotlin.ui.sessions.CapabilitiesView
+import dev.hermeskotlin.ui.sessions.SkillsHubActions
+import dev.hermeskotlin.ui.sessions.SkillsHubView
+import dev.hermeskotlin.core.capabilities.HubSkill
 import dev.hermeskotlin.ui.sessions.ConfigActions
 import dev.hermeskotlin.ui.sessions.ConfigPlace
 import dev.hermeskotlin.ui.sessions.ConfigView
@@ -100,6 +103,7 @@ import dev.hermeskotlin.ui.sessions.NewProjectDialog
 import dev.hermeskotlin.ui.settings.ConnectionCheckSheet
 import dev.hermeskotlin.ui.settings.GatewayInfo
 import dev.hermeskotlin.ui.settings.SettingsView
+import dev.hermeskotlin.ui.settings.StartInstructionView
 import androidx.compose.ui.tooling.preview.Preview
 import com.composeunstyled.theme.ColorScheme
 import dev.hermeskotlin.core.chat.ChatState
@@ -114,6 +118,7 @@ import dev.hermeskotlin.ui.chat.ChatView
 import dev.hermeskotlin.ui.chat.ModelPickerState
 import dev.hermeskotlin.ui.chat.ModelSheet
 import dev.hermeskotlin.ui.voice.DictationState
+import dev.hermeskotlin.ui.voice.ReadAloudState
 import dev.hermeskotlin.ui.voice.VoiceChatState
 
 /** The screens the README shows, drawn from [ChatSamples]. */
@@ -129,6 +134,9 @@ enum class PreviewScene(val label: String) {
     Undelivered("Messages that lost their reply"),
     Subagents("Subagents"),
     Voice("Voice chat"),
+    VoiceCutIn("A reply read in the voice chat, talking over it on"),
+    ReadAloud("A reply being read aloud"),
+    ReadAloudFailed("A reply the gateway couldn't voice"),
     NewChat("A new chat"),
     Sidebar("The sessions sidebar"),
     Bots("The bots and rooms"),
@@ -136,10 +144,15 @@ enum class PreviewScene(val label: String) {
     NewRoom("A new room"),
     BotEditor("Editing a bot"),
     Settings("Settings"),
+    StartInstruction("The starting instruction for new chats"),
     Gateways("Saved gateways"),
     Journey("What the agent has learned"),
     Insights("Insights"),
     Capabilities("Capabilities"),
+    SkillsHub("The skills hub"),
+    SkillsHubDetail("A hub skill opened, scan clean"),
+    SkillsHubCaution("A hub skill whose scan wants a yes"),
+    SkillsHubBlocked("A hub skill the scan blocked"),
     Config("Hermes's settings"),
     ConfigVoice("Hermes's voice settings, one saving"),
     ConfigSearch("A search across Hermes's settings"),
@@ -214,6 +227,9 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 PreviewScene.Undelivered -> SampleChat(ChatSamples.undelivered)
                 PreviewScene.Subagents -> SampleChat(ChatSamples.subagents)
                 PreviewScene.Voice -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.listening)
+                PreviewScene.VoiceCutIn -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.speakingCutIn)
+                PreviewScene.ReadAloud -> SampleChat(ChatSamples.reply, readAloud = ReadAloudState(key = "a1"))
+                PreviewScene.ReadAloudFailed -> SampleChat(ChatSamples.reply, readAloud = ReadAloudState(error = "Speech synthesis failed"))
                 PreviewScene.NewChat -> SampleChat(ChatSamples.empty, placeholder = "What are we building?")
                 PreviewScene.Sidebar -> OpenSidebar {
                     SessionsSidebarSample(
@@ -362,6 +378,15 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 }
                 PreviewScene.Capabilities -> OpenSidebar {
                     SidebarPage { CapabilitiesView(PageSamples.capabilities, remember { TextFieldState() }, PreviewCapabilitiesActions, onBack = {}) }
+                }
+                PreviewScene.SkillsHub, PreviewScene.SkillsHubDetail, PreviewScene.SkillsHubCaution, PreviewScene.SkillsHubBlocked -> OpenSidebar {
+                    val hub = when (scene) {
+                        PreviewScene.SkillsHubDetail -> PageSamples.skillsHubDetail
+                        PreviewScene.SkillsHubCaution -> PageSamples.skillsHubCaution
+                        PreviewScene.SkillsHubBlocked -> PageSamples.skillsHubBlocked
+                        else -> PageSamples.skillsHub
+                    }
+                    SidebarPage { SkillsHubView(hub, remember { TextFieldState() }, PreviewSkillsHubActions, onBack = {}, subtitle = "Installs into the main profile") }
                 }
                 PreviewScene.Config, PreviewScene.ConfigVoice, PreviewScene.ConfigSearch, PreviewScene.ConfigPicker -> OpenSidebar {
                     val config = PageSamples.config(place = "voice".takeIf { scene == PreviewScene.ConfigVoice || scene == PreviewScene.ConfigPicker })
@@ -546,6 +571,11 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                     onSignOut = {},
                     onOpenGateways = {},
                 )
+                PreviewScene.StartInstruction -> StartInstructionView(
+                    text = "I'm on my phone: keep replies short and skip long tables.",
+                    onChange = {},
+                    onBack = {},
+                )
                 PreviewScene.ConnectionCheck -> Box(Modifier.fillMaxSize()) {
                     SettingsView(
                         settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light, glow = glow),
@@ -587,6 +617,21 @@ private object PreviewCapabilitiesActions : CapabilitiesActions {
     override fun setToolsetEnabled(toolset: Toolset, enabled: Boolean) = Unit
     override fun setServerEnabled(server: McpServer, enabled: Boolean) = Unit
     override fun testServer(server: McpServer) = Unit
+    override fun dismissMessage() = Unit
+    override fun openHub() = Unit
+    override fun uninstallSkill(skill: Skill) = Unit
+}
+
+private object PreviewSkillsHubActions : SkillsHubActions {
+    override fun refresh() = Unit
+    override fun search(query: String) = Unit
+    override fun open(skill: HubSkill) = Unit
+    override fun closeDetail() = Unit
+    override fun install(skill: HubSkill) = Unit
+    override fun confirmInstall() = Unit
+    override fun cancelConfirm() = Unit
+    override fun uninstall(name: String) = Unit
+    override fun updateAll() = Unit
     override fun dismissMessage() = Unit
 }
 
@@ -632,6 +677,7 @@ private class PreviewRoomActions : RoomActions {
 private fun SampleChat(
     state: ChatState,
     voiceChat: VoiceChatState = VoiceChatState(),
+    readAloud: ReadAloudState = ReadAloudState(),
     placeholder: String = ChatSamples.PLACEHOLDER,
     comments: List<PendingComment> = emptyList(),
     composerText: String = "",
@@ -650,6 +696,7 @@ private fun SampleChat(
         comments = comments,
         voiceChat = voiceChat,
         dictation = DictationState(),
+        readAloud = readAloud,
         suggestions = emptyList(),
         sprite = null,
         placeholder = placeholder,
@@ -711,11 +758,31 @@ private fun SettingsPreview() = HeraldPreview(PreviewScene.Settings)
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
+private fun StartInstructionPreview() = HeraldPreview(PreviewScene.StartInstruction)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
 private fun InsightsPreview() = HeraldPreview(PreviewScene.Insights)
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun CapabilitiesPreview() = HeraldPreview(PreviewScene.Capabilities)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun SkillsHubPreview() = HeraldPreview(PreviewScene.SkillsHub)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun SkillsHubDetailPreview() = HeraldPreview(PreviewScene.SkillsHubDetail)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun SkillsHubCautionPreview() = HeraldPreview(PreviewScene.SkillsHubCaution)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun SkillsHubBlockedPreview() = HeraldPreview(PreviewScene.SkillsHubBlocked)
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable

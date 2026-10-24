@@ -40,6 +40,36 @@ class RoomsApiTest {
     }
 
     @Test
+    fun imageAndPdfUseRoomKindsWithoutSessionAttachmentCalls() = runTest {
+        val api = api(backgroundScope) { _, _ -> """{"attachment_id":"a","kind":"file","name":"n","mime":"text/plain","size":1}""" }
+        listOf("photo.jpg" to "image/jpeg", "report.pdf" to "application/octet-stream").forEach { (name, mime) ->
+            api.upload("r1", name, dev.hermeskotlin.core.chat.OutgoingAttachment(name, name, mime, byteArrayOf(1)))
+        }
+        val uploads = requests.filter { it.first == "groups.attachment.upload" }.map { it.second }
+        assertEquals(listOf("image", "pdf"), uploads.map { it["kind"]!!.jsonPrimitive.content })
+        assertEquals(listOf("image/jpeg", "application/pdf"), uploads.map { it["mime"]!!.jsonPrimitive.content })
+    }
+
+    @Test
+    fun roomUploadSendsBytesAndOnlyTheSafeManifestWithTheMessage() = runTest {
+        val api = api(backgroundScope) { method, _ -> when (method) {
+            "groups.attachment.upload" -> """{"attachment_id":"att_one","kind":"file","name":"report.csv","mime":"text/csv","size":3,"storage_path":"private","sha256":"private"}"""
+            else -> """{"event":{"room_id":"r1","seq":1,"event_id":"e1","kind":"message.user","actor":{"kind":"user","id":"u"}}}"""
+        } }
+        val picked = dev.hermeskotlin.core.chat.OutgoingAttachment("pick", "report.csv", "text/csv", byteArrayOf(97,44,98))
+        val uploaded = api.upload("r1", "stable-upload", picked)
+        val upload = sentTo("groups.attachment.upload")
+        assertEquals("r1", upload["room_id"]?.jsonPrimitive?.content)
+        assertEquals("stable-upload", upload["upload_id"]?.jsonPrimitive?.content)
+        assertEquals("YSxi", upload["data_base64"]?.jsonPrimitive?.content)
+        api.send("r1", "", "main", "stable-send", listOf(uploaded))
+        val manifest = sentTo("groups.send")["payload"]!!.jsonObject["attachments"]!!.jsonArray.single().jsonObject
+        assertEquals(setOf("attachment_id", "kind", "name", "mime", "size"), manifest.keys)
+        assertEquals("att_one", manifest["attachment_id"]?.jsonPrimitive?.content)
+        assertEquals(3, manifest["size"]?.jsonPrimitive?.int)
+    }
+
+    @Test
     fun capabilitiesSayWhetherTheDriverRuns() = runTest {
         val api = api(backgroundScope) { method, _ ->
             when (method) {

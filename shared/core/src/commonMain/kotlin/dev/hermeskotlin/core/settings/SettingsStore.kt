@@ -88,6 +88,8 @@ data class AppSettings(
     val showPet: Boolean = true,
     /** Automatically fetch linked webpages and thumbnails; off until the user opts in. */
     val showLinkPreviews: Boolean = false,
+    /** The gateway's Next Prompt plugin's suggested next message, over the composer once a turn ends. */
+    val suggestedReplies: Boolean = true,
     val voicePause: VoicePause = VoicePause.Normal,
     /** Default call destination per saved gateway; absence starts a new conversation in its selected profile. */
     val callTargets: Map<String, CallTarget> = emptyMap(),
@@ -96,6 +98,11 @@ data class AppSettings(
     val dictationEngine: DictationEngine = DictationEngine.Device,
     /** What tapping Send does while a reply is running; a long press on Send picks another for one message. */
     val runningSend: RunningSend = RunningSend.Steer,
+    /**
+     * What every new chat started here tells the agent first, out of sight (`putStartInstruction`), such as "I'm on
+     * my phone: keep replies short". Blank: nothing. Chats already going keep what they started with.
+     */
+    val startInstruction: String = "",
     /** Notify when a turn finishes while the app is in the background. */
     val notifyReplies: Boolean = true,
     /** Notify when the agent waits on an approval or a question while the app is in the background. */
@@ -123,6 +130,25 @@ data class AppSettings(
     val phoneTools: Boolean = false,
     /** The phone tools switched on, by gateway name (`PhoneTool.id`). Each starts off. */
     val phoneToolsOn: List<String> = emptyList(),
+    /**
+     * An approval or a question from a chat out of sight rings like an incoming call instead of a plain notification.
+     * Only with [phoneTools] on (see [ringsForAnswers]). It only ever rings this phone: the agent never calls anyone.
+     */
+    val phoneRings: Boolean = false,
+    /** Answering such a call puts Hermes on the line to ask it aloud, with no chat on screen; off, Answer opens the chat. */
+    val phoneRingsTalk: Boolean = true,
+    /**
+     * Such a call rings Herald on the watch too, where answering puts Hermes on the line in a live call. Only when the
+     * gateway talks live, since the watch has no chat to open instead.
+     */
+    val watchRings: Boolean = true,
+    /**
+     * Nothing rings from [quietFrom] to [quietUntil], minutes into the day on this phone's clock: the agent's calls
+     * don't get through, and an approval or a question is the usual notification (see `quietNow`).
+     */
+    val quietHours: Boolean = false,
+    val quietFrom: Int = 22 * 60,
+    val quietUntil: Int = 7 * 60,
     /** Ask GitHub, where the app is published, whether a newer release is out. */
     val checkForUpdates: Boolean = true,
     /** Ask for a fingerprint, face or the screen lock when Herald opens, and keep it out of Recents. */
@@ -138,6 +164,9 @@ data class AppSettings(
     /** The sidebar shows its projects as one button that opens a list, not a row of chips that scrolls sideways. */
     val projectsAsDropdown: Boolean = false,
 )
+
+/** The [AppSettings.startInstruction] a new chat starts with, trimmed; null when there is none or the settings aren't read yet. */
+fun SettingsStore.startInstruction(): String? = settings.value?.startInstruction?.trim()?.takeIf { it.isNotEmpty() }
 
 /**
  * Holds [AppSettings]: null until the stored copy is read, so the first frame can wait for the

@@ -35,9 +35,13 @@ class UpdateChecker(
     suspend fun check(repo: String, current: String): AppUpdate? {
         if (repo.isBlank() || parseVersion(current) == null) return null
         val release = try {
-            val response = client.get("https://api.github.com/repos/$repo/releases/latest") {
-                header(HttpHeaders.Accept, "application/vnd.github+json")
-                header(HttpHeaders.UserAgent, "herald-android")
+            // A renamed repo answers at its old name with a redirect; the client doesn't follow those itself.
+            var url = "$GITHUB_API/repos/$repo/releases/latest"
+            var response = latest(url)
+            repeat(MAX_REDIRECTS) {
+                if (response.status.value !in REDIRECTS) return@repeat
+                url = response.headers[HttpHeaders.Location]?.takeIf { it.startsWith("$GITHUB_API/") } ?: return null
+                response = latest(url)
             }
             if (!response.status.isSuccess()) return null
             HermesJson.parseToJsonElement(response.bodyAsText()) as? JsonObject
@@ -55,15 +59,24 @@ class UpdateChecker(
     /** Stops offering [version]; a later one is offered again. */
     suspend fun dismiss(version: String) = store.put(DISMISSED_KEY, version)
 
+    private suspend fun latest(url: String) = client.get(url) {
+        header(HttpHeaders.Accept, "application/vnd.github+json")
+        header(HttpHeaders.UserAgent, "herald-android")
+    }
+
     private companion object {
         const val DISMISSED_KEY = "update.dismissed.v1"
+        const val GITHUB_API = "https://api.github.com"
+        const val MAX_REDIRECTS = 3
+        val REDIRECTS = setOf(301, 302, 307, 308)
     }
 }
 
 /**
  * A release names one APK per ABI (`herald-1.2.3_arm64-v8a.apk`) beside the universal one (`herald-1.2.3.apk`):
  * the one for the first of [abis] that has its own wins, then the universal one, then any APK. The watch app's APK
- * (`herald-wear-1.2.3.apk`) is never offered: it installs on the watch, not the phone.
+ * (`herald-wear-1.2.3.apk`) is never offered: it installs on the watch, not the phone. It is known by `-wear-` after
+ * the app's name, whatever that name is, so releases can rename their APKs (`kyllene-wear-1.2.3.apk`).
  */
 internal fun parseRelease(release: JsonObject, abis: List<String>): AppUpdate? {
     val tag = release.text("tag_name") ?: return null
@@ -71,7 +84,7 @@ internal fun parseRelease(release: JsonObject, abis: List<String>): AppUpdate? {
     val apks = (release["assets"] as? JsonArray).orEmpty()
         .mapNotNull { it as? JsonObject }
         .mapNotNull { asset -> asset.text("name")?.takeIf { it.endsWith(".apk", ignoreCase = true) }?.let { it.dropLast(4) to asset } }
-        .filterNot { (name, _) -> name.startsWith(WEAR_APK_PREFIX, ignoreCase = true) }
+        .filterNot { (name, _) -> WEAR_APK.containsMatchIn(name) }
     val forAbi = abis.firstNotNullOfOrNull { abi -> apks.firstOrNull { (name, _) -> name.endsWith("_$abi") } }
     val universal = apks.firstOrNull { (name, _) -> APK_ABIS.none { name.endsWith("_$it") } }
     val apk = (forAbi ?: universal ?: apks.firstOrNull())?.second?.text("browser_download_url")
@@ -81,8 +94,8 @@ internal fun parseRelease(release: JsonObject, abis: List<String>): AppUpdate? {
 /** The ABIs a release builds an APK of its own for; see androidApp's `splits`. */
 private val APK_ABIS = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
 
-/** How release.yml names the Wear OS app's APK. */
-private const val WEAR_APK_PREFIX = "herald-wear-"
+/** How release.yml names the Wear OS app's APK: the app's name, then `-wear-` and the version. */
+private val WEAR_APK = Regex("-wear-\\d", RegexOption.IGNORE_CASE)
 
 /** True when [candidate] is a higher `major.minor.patch` than [current]; a leading `v` and any `-suffix` are ignored. */
 internal fun isNewer(candidate: String, current: String): Boolean {

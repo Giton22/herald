@@ -2,11 +2,13 @@ package dev.hermeskotlin.ui.di
 
 import dev.hermeskotlin.core.di.coreModule
 import dev.hermeskotlin.core.di.platformModule
+import dev.hermeskotlin.core.voice.DeviceLock
 import dev.hermeskotlin.ui.AppViewModel
 import dev.hermeskotlin.ui.bots.BotsViewModel
 import dev.hermeskotlin.ui.chat.ChatViewModel
 import dev.hermeskotlin.ui.connect.ConnectViewModel
 import dev.hermeskotlin.ui.sessions.CapabilitiesViewModel
+import dev.hermeskotlin.ui.sessions.SkillsHubViewModel
 import dev.hermeskotlin.ui.sessions.ConfigViewModel
 import dev.hermeskotlin.ui.plugins.PluginsViewModel
 import dev.hermeskotlin.ui.sessions.InsightsViewModel
@@ -36,6 +38,7 @@ val uiModule = module {
     viewModelOf(::ScheduledViewModel)
     viewModelOf(::InboxViewModel)
     viewModelOf(::CapabilitiesViewModel)
+    viewModelOf(::SkillsHubViewModel)
     viewModelOf(::ConfigViewModel)
     viewModelOf(::PluginsViewModel)
     viewModelOf(::InsightsViewModel)
@@ -47,6 +50,10 @@ val uiModule = module {
             seen = getOrNull(),
             threads = getOrNull(),
             linkPreviews = get(),
+            readAloudVoices = getOrNull(),
+            // Only Android says whether the phone is locked.
+            deviceLock = getOrNull() ?: DeviceLock.None,
+            nextPromptApi = get(),
         )
     }
     viewModelOf(::SettingsViewModel)

@@ -80,6 +80,13 @@ class UpdateCheckerTest {
         // Only the watch's APK: the release page, not an APK the phone can't use.
         val wearOnly = release("herald-wear-0.9.0.apk" to "wear.apk")
         assertEquals(null, parseRelease(wearOnly, listOf("arm64-v8a"))?.apkUrl)
+
+        // Under another app name too, even listed before the phone's APKs.
+        val renamed = release("kyllene-wear-0.9.0.apk" to "wear.apk", "kyllene-0.9.0.apk" to "universal.apk", "kyllene-0.9.0_arm64-v8a.apk" to "arm64.apk")
+        assertEquals("https://x/universal.apk", parseRelease(renamed, listOf("x86"))?.apkUrl)
+        assertEquals("https://x/arm64.apk", parseRelease(renamed, listOf("arm64-v8a"))?.apkUrl)
+        assertEquals(null, parseRelease(release("Kyllene-Wear-0.9.0.apk" to "wear.apk"), listOf("arm64-v8a"))?.apkUrl)
+        assertEquals(null, parseRelease(release("kyllene-dev-wear-0.9.0.apk" to "wear.apk"), listOf("arm64-v8a"))?.apkUrl)
     }
 
     @Test
@@ -95,5 +102,27 @@ class UpdateCheckerTest {
         assertNull(checker().check("o/r", "0.3.0"))
         assertNull(checker(HttpStatusCode.NotFound, """{"message":"Not Found"}""").check("o/r", "0.1.0"))
         assertNull(checker().check("", "0.1.0"))
+    }
+
+    @Test
+    fun aRenamedRepoIsFollowedToItsNewAddress() = runTest {
+        // GitHub answers a renamed repo's old name with a redirect to the repo's id.
+        fun redirecting(location: String) = UpdateChecker(
+            createHttpClient(
+                MockEngine { request ->
+                    if (request.url.encodedPath.startsWith("/repos/")) {
+                        respond("", HttpStatusCode.MovedPermanently, headersOf(HttpHeaders.Location, location))
+                    } else {
+                        respond(release, HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "application/json"))
+                    }
+                },
+            ),
+            InMemoryKeyValueStore(),
+            abis = listOf("arm64-v8a"),
+        )
+        assertEquals("0.3.0", redirecting("https://api.github.com/repositories/1/releases/latest").check("o/r", "0.2.0")?.version)
+        // Only to GitHub's API, and not round in circles.
+        assertNull(redirecting("https://example.com/repositories/1/releases/latest").check("o/r", "0.2.0"))
+        assertNull(redirecting("https://api.github.com/repos/o/r/releases/latest").check("o/r", "0.2.0"))
     }
 }

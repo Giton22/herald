@@ -108,6 +108,11 @@ class WatchStore(context: Context) {
         prefs.edit { putBoolean(SPEAK, on) }
     }
 
+    /** Notifications were asked for once, for the rings. */
+    var askedToRing: Boolean
+        get() = prefs.getBoolean(ASKED_TO_RING, false)
+        set(value) = prefs.edit { putBoolean(ASKED_TO_RING, value) }
+
     var lastReply: String?
         get() = prefs.getString(LAST_REPLY, null)
         set(value) = prefs.edit { putString(LAST_REPLY, value?.take(MAX_KEPT)) }
@@ -125,6 +130,7 @@ class WatchStore(context: Context) {
         const val SPEAK = "speak"
         const val LIVE = "live"
         const val LAST_REPLY = "last_reply"
+        const val ASKED_TO_RING = "asked_to_ring"
         const val MAX_KEPT = 400
     }
 }

@@ -99,6 +99,9 @@ class PushListener(
             PushMessage.PING -> notifications.postPushTest()
             // Only a nudge: the call itself is fetched over the authenticated socket.
             PushMessage.PHONE_REQUEST -> phoneTools.wake()
+            // The agent calls: it rings now, from the push, even with no way to the gateway. One that comes late (a
+            // backlog read after a restart) is past its time and doesn't ring.
+            PushMessage.PHONE_CALL -> phoneTools.ring(message)
             PushMessage.CRON_RUN -> showCronRun(message, gatewayUrl ?: return)
         }
     }

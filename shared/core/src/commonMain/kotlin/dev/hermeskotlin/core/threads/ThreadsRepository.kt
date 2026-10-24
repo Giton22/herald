@@ -35,6 +35,8 @@ class ThreadsRepository(
     private val profiles: ProfilesApi,
     /** Where the next launch reopens; a thread started fresh moves it from the filed-away chat to the new one. */
     private val lastChats: LastChatStore? = null,
+    /** What a thread's new chat tells the agent first, out of sight (the app's starting instruction). */
+    private val startInstruction: () -> String? = { null },
     /** The local date and time an archived thread chat is named with: `yyyy-MM-dd HH:mm`, or with seconds. */
     private val stamp: (withSeconds: Boolean) -> String = { localStamp(Clock.System.now().toEpochMilliseconds(), it) },
 ) {
@@ -250,7 +252,7 @@ class ThreadsRepository(
         val titles = listOf(thread.name) + (2..MAX_SUFFIX).map { "${thread.name} ($it)" }
         titles.forEach { title ->
             try {
-                val (runtime, stored) = api.startChat(scope.profile, title, thread.cwd)
+                val (runtime, stored) = api.startChat(scope.profile, title, thread.cwd, startInstruction())
                 return Made(FreshChat(stored, title), runtime)
             } catch (_: ThreadTitleTakenException) {
                 // Try the next name.

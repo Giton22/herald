@@ -107,6 +107,8 @@ UTF-8 JSON. Every message has:
 |---|---|
 | `bot_message` | `bot` (profile), `label`, `session` (stored id), `text` |
 | `approval` | `bot`, `label`, `session`, `request_id`, `command`, `description`, `choices` (subset of `once`, `session`, `deny`; never `always`), `expires` (unix) |
+| `phone_request` | `request_id`. A phone tool call waits on the gateway; the phone fetches it over the direct connection |
+| `phone_call` | `request_id`, `session` (or none, from a scheduled job), `expires` (gateway unix), `reason`, `details` (optional). `phone_call_me` rings: the phone rings from the push alone and sends the outcome back over the direct connection once it has one |
 | `ping` | none. Sent by the plugin's "Send a test" action |
 
 ### Where the gateway's messages come from
