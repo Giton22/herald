@@ -11,6 +11,11 @@ import io.ktor.client.plugins.timeout
 import io.ktor.client.request.delete
 import io.ktor.client.request.get
 import io.ktor.http.encodeURLPathPart
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -81,11 +86,19 @@ class ProfilesApi(private val client: HttpClient) {
  * the gateway uses the one it was launched as, exactly as before profiles were supported.
  */
 class ProfileStore(private val store: KeyValueStore) {
+    private val mutex = Mutex()
+    private val _changes = MutableSharedFlow<GatewayUrl>(extraBufferCapacity = 1, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    /** Completed selection changes; observers re-read the active context rather than replaying old picks. */
+    val changes = _changes.asSharedFlow()
 
     suspend fun get(gateway: GatewayUrl): String? = store.get(key(gateway))?.takeIf { it.isNotBlank() }
 
-    suspend fun set(gateway: GatewayUrl, profile: String?) {
-        if (profile == null) store.remove(key(gateway)) else store.put(key(gateway), profile)
+    suspend fun set(gateway: GatewayUrl, profile: String?) = mutex.withLock {
+        val next = profile?.takeIf { it.isNotBlank() }
+        if (get(gateway) == next) return@withLock
+        if (next == null) store.remove(key(gateway)) else store.put(key(gateway), next)
+        _changes.tryEmit(gateway)
+        Unit
     }
 
     private fun key(gateway: GatewayUrl) = "profile.v1.$gateway"

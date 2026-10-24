@@ -16,6 +16,75 @@ import kotlin.test.assertTrue
 class WearLinkTest {
 
     @Test
+    fun explicitLaunchScopeSurvivesRecordedMessagesAndLegacyCallsKeepNoScope() {
+        val scope = WatchScope("https://gateway.example", null)
+        val ask = WatchAsk("ask", chatId = "saved", scope = scope)
+        assertEquals(ask, RecordedAsk.read(RecordedAsk.write(ask, byteArrayOf(1)))!!.first)
+        assertEquals(scope, WearJson.decode<CallStart>(WearJson.encode(CallStart("call", "saved", "offer", scope = scope)))!!.scope)
+        assertNull(WearJson.decode<CallStart>("""{"id":"call","chatId":"saved","offerSdp":"offer"}""".encodeToByteArray())!!.scope)
+    }
+
+    @Test
+    fun contextChecksAndListsRetainTheirRequestAndScopeWithoutChangingOldPeers() {
+        val owner = WatchScope("https://gateway.example", "work")
+        val request = PhoneStatusRequest(requestId = "latest")
+        assertEquals(request, WearJson.decode<PhoneStatusRequest>(WearJson.encode(request)))
+        val status = PhoneStatus(true, true, requestId = "latest", activeScope = owner, profileSync = true)
+        assertEquals(status, WearJson.decode<PhoneStatus>(WearJson.encode(status)))
+        val list = ChatList(requestId = "list", scope = owner)
+        assertEquals(list, WearJson.decode<ChatList>(WearJson.encode(list)))
+        assertEquals(ChatListRequest("list"), WearJson.decode<ChatListRequest>(WearJson.encode(ChatListRequest("list"))))
+        assertFalse(WearJson.decode<PhoneStatus>("""{"signedIn":true,"connected":true}""".encodeToByteArray())!!.profileSync)
+        assertNull(WearJson.decode<ChatList>("""{"chats":[]}""".encodeToByteArray())!!.scope)
+    }
+
+    @Test
+    fun defaultCallsRemainDistinctAndPreserveBotContracts() {
+        val request = PhoneStatusRequest(botProfile = "assistant")
+        assertEquals(request, WearJson.decode<PhoneStatusRequest>(WearJson.encode(request)))
+        val call = CallStart("call", "tip", "offer", "assistant", "resolution")
+        assertEquals(call, WearJson.decode<CallStart>(WearJson.encode(call)))
+        assertFalse(WearPaths.DEFAULT_CALL_START == WearPaths.CALL_START)
+        assertFalse(WearPaths.DEFAULT_CALL_START == WearPaths.BOT_CALL_START)
+        assertFalse(WearJson.decode<PhoneStatus>("{\"signedIn\":true,\"connected\":true}".encodeToByteArray())!!.defaultCalls)
+    }
+
+    @Test
+    fun malformedDisplaySnapshotsAreRejectedAndValidOnesRoundTrip() {
+        val display = CallDisplay("a".repeat(64), "Assistant", hasPicture = true)
+        assertTrue(display.valid)
+        assertEquals(display, WearJson.decode<CallDisplay>(WearJson.encode(display)))
+        assertFalse(display.copy(revision = "wrong").valid)
+        assertFalse(display.copy(version = 2).valid)
+        assertFalse(display.copy(targetKey = "wrong").valid)
+        assertFalse(display.copy(title = "x".repeat(257)).valid)
+        assertEquals(DefaultCallTarget("request", error = "Not available"),
+            WearJson.decode<DefaultCallTarget>(WearJson.encode(DefaultCallTarget("request", error = "Not available"))))
+    }
+
+    @Test
+    fun botIdentitySurvivesBothAskAndCallMessagesWithoutChangingLegacyRequests() {
+        val ask = WearJson.decode<WatchAsk>("""{"id":"a","text":"hi","botProfile":"assistant"}""".encodeToByteArray())!!
+        val call = WearJson.decode<CallStart>("""{"id":"c","chatId":null,"offerSdp":"offer","botProfile":"assistant"}""".encodeToByteArray())!!
+        val askJson = WearJson.decode<kotlinx.serialization.json.JsonObject>(WearJson.encode(ask))!!
+        val callJson = WearJson.decode<kotlinx.serialization.json.JsonObject>(WearJson.encode(call))!!
+        assertEquals("\"assistant\"", askJson["botProfile"].toString())
+        assertEquals("\"assistant\"", callJson["botProfile"].toString())
+        assertEquals(WatchAsk("old", "hi"), WearJson.decode<WatchAsk>("""{"id":"old","text":"hi"}""".encodeToByteArray()))
+    }
+
+    @Test
+    fun botRecordingsUseADistinctPathThatLegacyPhonesCannotMistakeForRegularSpeech() {
+        val bot = WearPaths.recordingPath("ask/1", bot = true)
+        assertTrue(WearPaths.isRecording(bot))
+        assertTrue(WearPaths.isBotRecording(bot))
+        assertFalse(bot.startsWith("/herald/recording/"))
+        assertFalse(WearPaths.isBotRecording(WearPaths.recordingPath("ask/1")))
+        val ask = WatchAsk("a", botProfile = "assistant")
+        assertEquals(ask, RecordedAsk.read(RecordedAsk.write(ask, byteArrayOf(1, 2, 3)))?.first)
+    }
+
+    @Test
     fun phoneAccentSurvivesStatusSerialization() {
         val wire = """{"signedIn":true,"connected":true,"accent":{"revision":"dark:Violet:1","fill":-5796870,"text":-5796870,"onFill":-16119284,"dim":-5796870}}"""
         val status = WearJson.decode<PhoneStatus>(wire.encodeToByteArray())!!

@@ -16,14 +16,33 @@ import dev.hermeskotlin.core.bots.Bot
  * Opening one goes to `hermes://bot/<profile>`, the link Hermes Desktop uses for a bot.
  */
 object BotShortcuts {
+    private var callPicture: ByteArray? = null
+
+    /** Refresh the call action without replacing the bot list; pinned copies receive the same artwork. */
+    @Synchronized
+    internal fun publishCall(context: Context, picture: ByteArray? = null) {
+        callPicture = picture
+        val info = CallShortcut.info(context, picture)
+        runCatching {
+            ShortcutManagerCompat.updateShortcuts(context, listOf(info))
+            if (ShortcutManagerCompat.isRateLimitingActive(context) || callSlots(context) == 0) return
+            val bots = ShortcutManagerCompat.getDynamicShortcuts(context).filter { it.id.startsWith(ID_PREFIX) }.sortedBy { it.rank }
+            val extra = bots.drop(botSlots(context)).map { it.id }
+            if (extra.isNotEmpty()) ShortcutManagerCompat.removeDynamicShortcuts(context, extra)
+            ShortcutManagerCompat.addDynamicShortcuts(context, listOf(info))
+        }
+    }
+
 
     /**
      * Publishes [bot]'s shortcut (refreshing its name and face) and returns its id, or null when Android
      * would not take it; the bot's notification then goes out as a plain one.
      */
+    @Synchronized
     fun push(context: Context, bot: Bot, picture: ByteArray?): String? {
-        val info = info(context, bot, picture, rank = 0)
+        val info = info(context, bot, picture, rank = 1)
         return runCatching {
+            if (botSlots(context) == 0) return null
             // Android 11+ makes room itself, counting the fixed actions. Before that, ShortcutManagerCompat
             // counts only the dynamic shortcuts, so with the menu full the add throws: drop the bot shortcut
             // furthest down the list first.
@@ -31,7 +50,7 @@ object BotShortcuts {
                 // Rate-limited, the push is refused anyway: keep the shortcut that would make room for it.
                 if (ShortcutManagerCompat.isRateLimitingActive(context)) return null
                 val dynamic = ShortcutManagerCompat.getDynamicShortcuts(context)
-                if (dynamic.none { it.id == info.id } && dynamic.size >= botSlots(context)) {
+                if (dynamic.none { it.id == info.id } && dynamic.count { it.id.startsWith(ID_PREFIX) } >= botSlots(context)) {
                     dynamic.filter { it.id.startsWith(ID_PREFIX) }.maxByOrNull { it.rank }
                         ?.let { ShortcutManagerCompat.removeDynamicShortcuts(context, listOf(it.id)) }
                 }
@@ -45,10 +64,12 @@ object BotShortcuts {
      * longer in [bots] (removed, renamed or hidden): Android keeps a long-lived shortcut cached once a
      * notification used it, and the share sheet would go on offering it, under its old name.
      */
+    @Synchronized
     fun publish(context: Context, bots: List<Bot>, pictures: Map<String, ByteArray>) {
         val max = runCatching { botSlots(context) }.getOrDefault(0)
-        val infos = bots.take(max).mapIndexed { rank, bot -> info(context, bot, pictures[bot.name], rank) }
-        runCatching { ShortcutManagerCompat.setDynamicShortcuts(context, infos) }
+        val infos = bots.take(max).mapIndexed { rank, bot -> info(context, bot, pictures[bot.name], rank + 1) }
+        val calls = if (runCatching { callSlots(context) > 0 }.getOrDefault(false)) listOf(CallShortcut.info(context, callPicture)) else emptyList()
+        runCatching { ShortcutManagerCompat.setDynamicShortcuts(context, calls + infos) }
         val current = bots.mapTo(HashSet()) { ID_PREFIX + it.name }
         runCatching {
             val stale = ShortcutManagerCompat.getShortcuts(context, ShortcutManagerCompat.FLAG_MATCH_CACHED or ShortcutManagerCompat.FLAG_MATCH_DYNAMIC)
@@ -69,11 +90,15 @@ object BotShortcuts {
         .setIcon(BotIcons.icon(bot, picture))
         .build()
 
-    /** How many bot shortcuts fit: Android's per-activity limit, less the fixed actions from shortcuts.xml. */
+    /** How many bot shortcuts fit: Android's per-activity limit, less the fixed actions and the reserved call action. */
     private fun botSlots(context: Context): Int {
         val fixed = ShortcutManagerCompat.getShortcuts(context, ShortcutManagerCompat.FLAG_MATCH_MANIFEST).size
-        return (ShortcutManagerCompat.getMaxShortcutCountPerActivity(context) - fixed).coerceIn(0, MAX_SHORTCUTS)
+        return (ShortcutManagerCompat.getMaxShortcutCountPerActivity(context) - fixed - 1).coerceIn(0, MAX_SHORTCUTS)
     }
+
+    private fun callSlots(context: Context): Int =
+        (ShortcutManagerCompat.getMaxShortcutCountPerActivity(context) -
+            ShortcutManagerCompat.getShortcuts(context, ShortcutManagerCompat.FLAG_MATCH_MANIFEST).size).coerceAtLeast(0)
 
     private fun info(context: Context, bot: Bot, picture: ByteArray?, rank: Int): ShortcutInfoCompat =
         ShortcutInfoCompat.Builder(context, ID_PREFIX + bot.name)
