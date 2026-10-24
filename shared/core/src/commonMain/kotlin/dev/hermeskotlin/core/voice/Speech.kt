@@ -159,6 +159,9 @@ object NoDeviceDictation : DeviceDictation {
 
 /** Plays synthesized speech through the device speaker. */
 interface SpeechPlayer {
+    /** Plays the local connection cue once; cancelling stops it. Unsupported devices stay silent. */
+    suspend fun playRingback() = Unit
+
     /** Plays [audio] to the end; cancelling stops it. */
     suspend fun play(audio: SpokenAudio)
 

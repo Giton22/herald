@@ -116,9 +116,17 @@ class RingActivity : ComponentActivity() {
     /** Unlocked: the phone stops ringing, and the talk screen starts the call in the ringing chat. */
     private fun pickUp() {
         if (isFinishing || isDestroyed) return
-        val id = ring.value?.requestId
-        if (id != null && app.link.answerRing(id) != null) startActivity(MainActivity.callIntent(this))
-        finish()
+        val id = ring.value?.requestId ?: return
+        lifecycleScope.launch {
+            // Refresh before picking the ringing chat: the first profile check can clear the watch's old selection.
+            if (!app.link.synchronizeProfile()) {
+                notAnswered()
+                return@launch
+            }
+            if (isFinishing || isDestroyed) return@launch
+            if (app.link.answerRing(id) != null) startActivity(MainActivity.answerCallIntent(this@RingActivity))
+            finish()
+        }
     }
 
     companion object {

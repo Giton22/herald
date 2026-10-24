@@ -223,6 +223,11 @@ class AndroidVoiceRecorder : VoiceRecorder {
  * [AudioTrack] as it arrives, both as an assistant voice.
  */
 class AndroidSpeechPlayer(private val context: Context) : SpeechPlayer {
+    override suspend fun playRingback() {
+        val bytes = withContext(Dispatchers.IO) { context.assets.open("call_ringback.wav").use { it.readBytes() } }
+        play(SpokenAudio(bytes, "audio/wav"))
+    }
+
     private val lock = Any()
     /** Held ([hold]): what plays now is paused, and what's ready meanwhile waits to start. */
     private var holding = false

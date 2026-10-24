@@ -20,12 +20,15 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -85,6 +88,44 @@ class BotNotifier(
     }
 
     fun start() {
+        scope.launch {
+            var previousUrl: String? = null
+            var previousConnection: ConnectionState? = null
+            var pictureKey: Pair<String?, String?>? = null
+            var callPicture: ByteArray? = null
+            val watchDisplay = dev.hermeskotlin.android.wear.CallDisplayPublisher(context)
+            combine(settings.settings.filterNotNull(), gateways.list, connection.state) { prefs, gateways, state ->
+                Triple(gateways.current?.url, prefs.callTargets[gateways.current?.url], state)
+            }.distinctUntilChanged().collectLatest { (url, target, state) ->
+                val switching = previousUrl != null && url != previousUrl && state === previousConnection
+                previousUrl = url
+                previousConnection = state
+                val key = url to target?.profile
+                if (key != pictureKey) { pictureKey = key; callPicture = null }
+                withContext(Dispatchers.IO) {
+                    BotShortcuts.publishCall(context, callPicture)
+                    watchDisplay.publish(url, target, callPicture)
+                }
+                if (switching || state !is ConnectionState.Connected || target?.profile == null) return@collectLatest
+                var pictureKnown = callPicture != null
+                callPicture = try {
+                    val bot = api.roster().bots.firstOrNull { it.name == target.profile }
+                    if (bot?.hasAvatar == true) {
+                        api.avatar(bot.name)?.also { pictureKnown = true } ?: callPicture
+                    } else {
+                        pictureKnown = true
+                        null
+                    }
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) { callPicture }
+                withContext(Dispatchers.IO) {
+                    BotShortcuts.publishCall(context, callPicture)
+                    watchDisplay.publish(url, target, callPicture, pictureKnown)
+                }
+            }
+        }
+
         // A new socket: take stock without notifying, and ask the gateway to watch every bot's chats.
         scope.launch {
             connection.state.map { it is ConnectionState.Connected }.distinctUntilChanged().collectLatest { connected ->
@@ -149,7 +190,7 @@ class BotNotifier(
         val launcher = launcherEntry()
         if (watch || look != published || launcher != publishedUnder) {
             loadPictures(shown)
-            BotShortcuts.publish(context, shown, pictures)
+            withContext(Dispatchers.IO) { BotShortcuts.publish(context, shown, pictures) }
             published = look
             publishedUnder = launcher
         }
