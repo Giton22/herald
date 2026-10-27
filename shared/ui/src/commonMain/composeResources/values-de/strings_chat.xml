@@ -30,6 +30,8 @@
     <string name="chat_kind_text">Text</string>
     <string name="chat_kind_picture">Bild</string>
     <string name="chat_kind_pdf">PDF</string>
+    <string name="chat_kind_audio">Audio</string>
+    <string name="chat_kind_video">Video</string>
     <string name="chat_kind_file">Datei</string>
 
     <string name="chat_file_line">Zeile %1$d</string>

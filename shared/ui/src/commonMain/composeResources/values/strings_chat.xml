@@ -36,6 +36,8 @@
     <string name="chat_kind_text">Text</string>
     <string name="chat_kind_picture">Picture</string>
     <string name="chat_kind_pdf">PDF</string>
+    <string name="chat_kind_audio">Audio</string>
+    <string name="chat_kind_video">Video</string>
     <string name="chat_kind_file">File</string>
 
     <!-- The file viewer -->

@@ -30,6 +30,8 @@
     <string name="chat_kind_text">文本</string>
     <string name="chat_kind_picture">图片</string>
     <string name="chat_kind_pdf">PDF</string>
+    <string name="chat_kind_audio">音频</string>
+    <string name="chat_kind_video">视频</string>
     <string name="chat_kind_file">文件</string>
 
     <string name="chat_file_line">第 %1$d 行</string>

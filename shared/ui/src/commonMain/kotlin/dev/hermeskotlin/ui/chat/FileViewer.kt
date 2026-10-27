@@ -848,6 +848,8 @@ internal fun kindLabel(kind: GatewayFileKind): String = stringResource(
         GatewayFileKind.Text -> Res.string.chat_kind_text
         GatewayFileKind.Image -> Res.string.chat_kind_picture
         GatewayFileKind.Pdf -> Res.string.chat_kind_pdf
+        GatewayFileKind.Audio -> Res.string.chat_kind_audio
+        GatewayFileKind.Video -> Res.string.chat_kind_video
         GatewayFileKind.Other -> Res.string.chat_kind_file
     },
 )

@@ -30,6 +30,8 @@
     <string name="chat_kind_text">Szöveg</string>
     <string name="chat_kind_picture">Kép</string>
     <string name="chat_kind_pdf">PDF</string>
+    <string name="chat_kind_audio">Hang</string>
+    <string name="chat_kind_video">Videó</string>
     <string name="chat_kind_file">Fájl</string>
 
     <string name="chat_file_line">%1$d. sor</string>

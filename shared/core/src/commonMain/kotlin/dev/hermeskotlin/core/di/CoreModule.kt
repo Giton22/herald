@@ -34,6 +34,7 @@ import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.gateway.mtlsEngine
 import dev.hermeskotlin.core.media.LinkPreviews
 import dev.hermeskotlin.core.media.MediaApi
+import dev.hermeskotlin.core.media.MediaSources
 import dev.hermeskotlin.core.media.publicWebEngine
 import dev.hermeskotlin.core.models.ModelsApi
 import dev.hermeskotlin.core.network.createHttpClient
@@ -150,6 +151,10 @@ val coreModule = module {
     // Outside requests (pictures from the web, GitHub) get a client without the gateway's cookies.
     single(named(OUTSIDE_CLIENT)) { createHttpClient() }
     single { MediaApi(get(), get(named(OUTSIDE_CLIENT))) }
+    single {
+        val jar = get<WebCookieJar>()
+        MediaSources(get()) { url -> jar.sessionFor(url) }
+    }
     // Previews fetch without a tap, so their client also refuses addresses on the user's own networks.
     single { LinkPreviews(createHttpClient(publicWebEngine())) }
     single { UpdateChecker(get(named(OUTSIDE_CLIENT)), get()) }
