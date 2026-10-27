@@ -2,10 +2,11 @@ package dev.hermeskotlin.ui.chat
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.view.TextureView
+import android.view.View
 import android.view.ViewGroup
 import androidx.annotation.OptIn
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -50,26 +51,41 @@ internal actual fun rememberChatMediaPlayer(): ChatMediaPlayer {
     return remember(context) { AndroidChatMediaPlayer.get(context) }
 }
 
-/** A rebuilt screen (a turn of the phone, a fold) gets a new view on the same player, so the video plays on. */
+/**
+ * A rebuilt screen (a turn of the phone, a fold) gets a new view on the same player, so the video plays on. Full
+ * screen is Media3's own view with its controls; the window over the chat is a bare [TextureView], as a
+ * SurfaceView ignores the window's rounded corners. The player draws into one of them at a time (see [SurfaceOwners]).
+ */
 @OptIn(UnstableApi::class)
 @Composable
-internal actual fun VideoSurface(player: ChatMediaPlayer, modifier: Modifier) {
-    val exo = (player as? AndroidChatMediaPlayer)?.exo?.collectAsState()?.value
-    AndroidView(
-        factory = { context ->
-            PlayerView(context).apply {
-                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
-                setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
-                // Back closes the viewer; the player's own controls do the rest.
-                setShowNextButton(false)
-                setShowPreviousButton(false)
-                controllerAutoShow = true
-            }
-        },
-        update = { view -> view.player = exo },
-        onRelease = { view -> view.player = null },
-        modifier = modifier,
-    )
+internal actual fun VideoSurface(player: ChatMediaPlayer, modifier: Modifier, controls: Boolean) {
+    val android = player as? AndroidChatMediaPlayer
+    if (controls) {
+        AndroidView(
+            factory = { context ->
+                PlayerView(context).apply {
+                    layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
+                    setShowBuffering(PlayerView.SHOW_BUFFERING_WHEN_PLAYING)
+                    // Back and the bar over the video do the rest; the player's own controls seek.
+                    setShowNextButton(false)
+                    setShowPreviousButton(false)
+                    controllerAutoShow = true
+                    // Coming from the window, the last frame stays up until the next one, not a black flash.
+                    setKeepContentOnPlayerReset(true)
+                }
+            },
+            update = { view -> android?.showOn(view, VideoMode.Full) },
+            onRelease = { view -> android?.leave(view) },
+            modifier = modifier,
+        )
+    } else {
+        AndroidView(
+            factory = { context -> TextureView(context) },
+            update = { view -> android?.showOn(view, VideoMode.Popup) },
+            onRelease = { view -> android?.leave(view) },
+            modifier = modifier,
+        )
+    }
 }
 
 /**
@@ -92,8 +108,8 @@ internal class AndroidChatMediaPlayer private constructor(
     private val _state = MutableStateFlow(PlaybackState())
     override val state: StateFlow<PlaybackState> = _state.asStateFlow()
 
-    private val _video = MutableStateFlow<PlayableMedia?>(null)
-    override val video: StateFlow<PlayableMedia?> = _video.asStateFlow()
+    private val _video = MutableStateFlow<ShownVideo?>(null)
+    override val video: StateFlow<ShownVideo?> = _video.asStateFlow()
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val slot = PlayerSlot()
@@ -101,13 +117,19 @@ internal class AndroidChatMediaPlayer private constructor(
     private var ticking: Job? = null
     private var chat: Any? = null
 
-    /** The player while one is built; the video view follows it, as a clip that failed may get a new one. */
-    internal val exo = MutableStateFlow<ExoPlayer?>(null)
+    /** The clip held and how to fetch it, so [resume] can load it again after a failure or a pause mid-load. */
+    private var held: Pair<PlayableMedia, (suspend () -> PlaySource)?>? = null
 
-    private var exoPlayer: ExoPlayer?
-        get() = exo.value
+    /** The video views on screen (Media3's full-screen view, the window's texture); the newest draws the picture. */
+    private val surfaces = SurfaceOwners<View>()
+
+    /** The player while one is built; the video view follows it, as a clip that failed may get a new one. */
+    private var exoPlayer: ExoPlayer? = null
         set(value) {
-            exo.value = value
+            field = value
+            drawingOn = null
+            // A released player's views let go of it; a new one is drawn into the newest view at once.
+            if (value == null) surfaces.all().forEach { (it as? PlayerView)?.player = null } else attachSurface()
         }
 
     /**
@@ -154,7 +176,10 @@ internal class AndroidChatMediaPlayer private constructor(
     private fun claimSpeaker() = NowPlaying.app.started(this, NowPlaying.Group.Chat, ::pause)
 
     override fun play(media: PlayableMedia, resolve: (suspend () -> PlaySource)?) {
+        held = media to resolve
         claimSpeaker()
+        // One clip at a time: another one, audio or video, takes the video's place.
+        _video.update { it.afterPlay(media.key) }
         if (slot.claim(media.key) == PlayerSlot.Claim.Resume) {
             // Still being worked out: it starts once it's ready.
             if (loading?.isActive == true) return
@@ -168,7 +193,7 @@ internal class AndroidChatMediaPlayer private constructor(
         }
         loading?.cancel()
         exoPlayer?.stop()
-        _state.value = PlaybackState(key = media.key, phase = PlaybackPhase.Loading, speed = _state.value.speed.takeIf { media.type == MediaType.Audio } ?: 1f)
+        _state.value = PlaybackState(key = media.key, media = media, phase = PlaybackPhase.Loading, speed = _state.value.speed.takeIf { media.type == MediaType.Audio } ?: 1f)
         loading = scope.launch {
             val source = when {
                 media.bytes != null -> PlaySource.Bytes(media.bytes)
@@ -208,12 +233,18 @@ internal class AndroidChatMediaPlayer private constructor(
     override fun pause() {
         NowPlaying.app.stopped(this)
         loading?.takeIf { it.isActive }?.let {
-            // Still being worked out: it shouldn't start once it's ready.
+            // Still being worked out: it shouldn't start once it's ready. It stays the clip shown (paused, so the bar
+            // and the window keep it), and playing it again loads it afresh.
             it.cancel()
             slot.clear()
-            _state.value = PlaybackState(speed = _state.value.speed)
+            _state.update { PlaybackState(key = it.key, media = it.media, phase = PlaybackPhase.Paused, speed = it.speed) }
         }
         exoPlayer?.pause()
+    }
+
+    override fun resume() {
+        val (media, resolve) = held ?: return
+        play(media, resolve)
     }
 
     override fun seekTo(key: String, positionMs: Long) {
@@ -228,15 +259,21 @@ internal class AndroidChatMediaPlayer private constructor(
         _state.update { it.copy(speed = speed) }
     }
 
-    override fun openVideo(media: PlayableMedia, resolve: (suspend () -> PlaySource)?) {
-        _video.value = media
+    override fun openVideo(media: PlayableMedia, resolve: (suspend () -> PlaySource)?, mode: VideoMode) {
         play(media, resolve)
+        _video.value = ShownVideo(media, mode)
+        attachSurface()
+    }
+
+    override fun showVideo(mode: VideoMode) {
+        _video.update { it.movedTo(mode) }
+        attachSurface()
     }
 
     override fun closeVideo() {
         val shown = _video.value ?: return
         _video.value = null
-        if (slot.holds(shown.key)) stop()
+        if (slot.holds(shown.media.key)) stop()
     }
 
     override fun stop() {
@@ -245,12 +282,15 @@ internal class AndroidChatMediaPlayer private constructor(
         loading = null
         stopTicking()
         slot.clear()
+        held = null
         _video.value = null
-        exoPlayer?.let {
+        // The views let go of it before it goes.
+        val released = exoPlayer
+        exoPlayer = null
+        released?.let {
             it.removeListener(listener)
             it.release()
         }
-        exoPlayer = null
         _state.value = PlaybackState(speed = _state.value.speed)
     }
 
@@ -258,6 +298,51 @@ internal class AndroidChatMediaPlayer private constructor(
         if (chat == token) return
         chat = token
         stop()
+    }
+
+    /** [view] is on screen, for the video shown in [mode]. */
+    fun showOn(view: View, mode: VideoMode) {
+        surfaces.add(view, mode)
+        attachSurface()
+    }
+
+    /** [view] left the screen; another one, if any, takes the picture back. */
+    fun leave(view: View) {
+        surfaces.remove(view)
+        detach(view)
+        attachSurface()
+    }
+
+    /** The view the player draws into now, so a second call to attach it changes nothing. */
+    private var drawingOn: View? = null
+
+    /**
+     * The player draws into one surface at a time: every other view lets go of it before the newest takes it, so a
+     * move between the window and full screen never has two surfaces fighting over the decoder.
+     */
+    private fun attachSurface() {
+        val owner = surfaces.owner(_video.value?.mode)
+        // Let go first, so the new surface is the only one the decoder has.
+        surfaces.all().filter { it !== owner }.forEach(::detach)
+        val exo = exoPlayer
+        if (owner == null || exo == null) {
+            drawingOn = null
+            return
+        }
+        when (owner) {
+            is PlayerView -> if (owner.player !== exo) owner.player = exo
+            is TextureView -> if (drawingOn !== owner) exo.setVideoTextureView(owner)
+        }
+        drawingOn = owner
+    }
+
+    private fun detach(view: View) {
+        when (view) {
+            is PlayerView -> if (view.player != null) view.player = null
+            // Only clears the player's surface while it is this view's.
+            is TextureView -> exoPlayer?.clearVideoTextureView(view)
+        }
+        if (drawingOn === view) drawingOn = null
     }
 
     private fun build(): ExoPlayer = ExoPlayer.Builder(context)
@@ -291,6 +376,7 @@ internal class AndroidChatMediaPlayer private constructor(
                 positionMs = if (phase == PlaybackPhase.Ended) exo.duration.coerceAtLeast(0) else exo.currentPosition,
                 durationMs = exo.duration.takeIf { d -> d != C.TIME_UNSET && d > 0 },
                 error = null,
+                videoAspect = exo.videoSize.takeIf { v -> v.width > 0 && v.height > 0 }?.let { v -> v.width * v.pixelWidthHeightRatio / v.height },
             )
         }
         if (exo.isPlaying) startTicking() else stopTicking()

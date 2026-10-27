@@ -72,6 +72,7 @@ import dev.hermeskotlin.core.media.GatewayFile
 import dev.hermeskotlin.core.media.LinkPreview
 import dev.hermeskotlin.designsystem.components.LocalFileLinks
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.filterNotNull
 import kotlin.math.abs
 import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
 import androidx.compose.ui.input.nestedscroll.NestedScrollSource
@@ -85,7 +86,9 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.layout
 import kotlin.math.roundToInt
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.layout.FlowRow
@@ -171,7 +174,6 @@ import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInWindow
-import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.derivedStateOf
@@ -1072,6 +1074,9 @@ internal fun ChatView(
                         comments.filter { it.source.messageKey == messageKey }.flatMap { it.highlights }
                 }
             }
+            // Where the chat's audio rows are, so the bar over the composer shows only while the one playing is away.
+            val clipRows = remember { ClipRows() }
+            val mediaPlayer = rememberChatMediaPlayer()
             Box(Modifier.weight(1f).fillMaxWidth().onSizeChanged { paneHeight = it.height; paneWidth = it.width }) {
                 Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
                     if (wallpaper != null) ChatWallpaper(wallpaper, LocalAppSettings.current.wallpaperStrength, Modifier.fillMaxSize())
@@ -1079,7 +1084,8 @@ internal fun ChatView(
                         CompositionLocalProvider(
                             LocalMediaLoader provides actions::loadMedia,
                             LocalMediaSources provides actions.mediaSource,
-                            LocalChatMediaPlayer provides rememberChatMediaPlayer(),
+                            LocalChatMediaPlayer provides mediaPlayer,
+                            LocalClipRows provides clipRows,
                             LocalMediaStarting provides actions::mediaStarting,
                             LocalWidgetFiles provides widgetFiles,
                             LocalLinkPreviewLoader provides linkPreviewLoader,
@@ -1108,6 +1114,7 @@ internal fun ChatView(
                                     bottomInset = listInset,
                                     controlsInset = dockInset,
                                     fold = composerFold,
+                                    clipRows = clipRows,
                                     actions = actions,
                                     connected = connected,
                                     // A saved copy may lack what changed since; edits wait for the gateway's transcript.
@@ -1230,6 +1237,7 @@ internal fun ChatView(
                         voiceFull = voiceFull,
                         onExpandVoice = { voiceFolded = false },
                         onPasteFiles = { canAttach && keysEnabled && attachmentPicker?.pasteAttachments() == true },
+                        miniPlayer = { MiniPlayer(mediaPlayer, clipRows, actions::mediaStarting, onNotice) },
                     )
                 }
                 // The pet sits on the composer's top edge, over the conversation rather than in the dock's height.
@@ -1246,6 +1254,8 @@ internal fun ChatView(
                         ),
                     )
                 }
+                // A video plays in a window over all of it, clear of the composer, while the chat goes on beneath.
+                VideoPopup(mediaPlayer, bottomInset = dockInset, starting = actions::mediaStarting, onNotice = onNotice)
             }
         }
         AnimatedVisibility(visible = voiceFull, enter = fadeIn(), exit = fadeOut()) {
@@ -1348,6 +1358,8 @@ private fun ColumnScope.Dock(
     onExpandVoice: () -> Unit,
     /** A paste in the composer: true when it attached files, a picture or a long text (the desktop's). */
     onPasteFiles: () -> Boolean = { false },
+    /** The audio clip playing, while its row is out of sight; right over the composer. */
+    miniPlayer: @Composable () -> Unit = {},
 ) {
     (state.attachment as? Attachment.Failed)?.let {
         Banner(it.message, actionLabel = stringResource(Res.string.chat_retry), onAction = actions::retry)
@@ -1386,6 +1398,7 @@ private fun ColumnScope.Dock(
     if (!state.running) TodoPanel(state.todos, live = state.todosLive, hazeState = hazeState)
     // The chat's automation sits here whether or not a turn runs: the goal works on its own between turns.
     SessionControlStrip(state.control, hazeState, onOpen = onOpenControl)
+    miniPlayer()
 
     if (state.inputRequests.isNotEmpty()) {
         // The task's Stop is on the live task card above.
@@ -1876,6 +1889,8 @@ private fun Messages(
     controlsInset: Dp,
     /** Folds the composer by how near the reader is to the end. */
     fold: ComposerFold,
+    /** The chat's audio rows: told where the list can be read, and asked to bring one back. */
+    clipRows: ClipRows,
     actions: ChatActions,
     connected: Boolean,
     canChange: Boolean,
@@ -2025,9 +2040,30 @@ private fun Messages(
                 listState.layoutInfo.totalItemsCount == messageCount && !listState.canScrollForward
         }.collect { atEnd -> if (atEnd) readLatest?.invoke() }
     }
+    // The bar over the composer asked to go back to its clip: to the message, then the row to the middle. Collected
+    // rather than keyed on the request, so clearing it doesn't cancel the scroll it started.
+    val currentMessages by rememberUpdatedState(messages)
+    LaunchedEffect(clipRows, listState) {
+        snapshotFlow { clipRows.goTo }.filterNotNull().collectLatest { clip ->
+            clipRows.goTo = null
+            val index = currentMessages.indexOfFirst { it.key == clipRows.messageOf(clip) }
+            if (index < 0) return@collectLatest
+            pinned = false
+            listState.animateScrollToItem(index)
+            val row = clipRows.boundsOf(clip) ?: return@collectLatest
+            val viewport = clipRows.viewport ?: return@collectLatest
+            listState.animateScrollBy(row.center.y - viewport.center.y)
+        }
+    }
     val unservable = remember(messages) { unservableEchoes(messages) }
     val unreadLine = remember(messages, unreadFrom, readUpTo) { unreadLineKey(messages, unreadFrom, readUpTo) }
-    BoxWithConstraints(Modifier.fillMaxSize().pointerInput(readUpTo) {
+    val controlsPx = with(LocalDensity.current) { controlsInset.toPx() }
+    BoxWithConstraints(Modifier.fillMaxSize().onGloballyPositioned { coordinates ->
+        // What can be read of the list: not the part under the composer.
+        val top = coordinates.positionInWindow()
+        val size = coordinates.size
+        clipRows.viewport = Rect(top.x, top.y, top.x + size.width, (top.y + size.height - controlsPx).coerceAtLeast(top.y))
+    }.pointerInput(readUpTo) {
         awaitPointerEventScope {
             var down: Offset? = null
             while (true) {
@@ -2065,7 +2101,7 @@ private fun Messages(
                 val linkedBelow = partner != null && partners.getOrNull(index + 1) == partner &&
                     messages.getOrNull(index + 1)?.key != unreadLine
                 val rail = partner?.let { name -> faces.find(name)?.let { Color(0xFF000000 or botLook(it).color.toLong()) } }
-                Column {
+                CompositionLocalProvider(LocalMessageKey provides message.key) { Column {
                     // The line marking where the new messages start sits on top of the first of them.
                     if (divided) UnreadDivider(Modifier.padding(bottom = 20.dp))
                     // Drawn just outside the message, so marking it doesn't move a line of it.
@@ -2142,7 +2178,7 @@ private fun Messages(
                         is ChatMessage.Notice -> NoticeLine(message)
                     }
                     }
-                }
+                } }
             }
         }
         // Clear of the composer floating over the chat's end. Any press on it moves the list, even a click on its track.

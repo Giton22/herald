@@ -144,6 +144,7 @@ enum class PreviewScene(val label: String) {
     VaultSaveLogin("A login to save"),
     Undelivered("Messages that lost their reply"),
     Subagents("Subagents"),
+    Clips("Audio and video a reply delivered"),
     AgentScreen("A screen the agent drew, waiting for a tap"),
     Voice("Voice chat"),
     VoiceCutIn("A reply read in the voice chat, talking over it on"),
@@ -241,6 +242,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 PreviewScene.VaultSaveLogin -> SampleChat(ChatSamples.vaultSaveLogin)
                 PreviewScene.Undelivered -> SampleChat(ChatSamples.undelivered)
                 PreviewScene.Subagents -> SampleChat(ChatSamples.subagents)
+                PreviewScene.Clips -> SampleChat(ChatSamples.clips, clips = true)
                 PreviewScene.AgentScreen -> CompositionLocalProvider(
                     LocalAgentScreens provides AgentScreenContext(
                         live = listOf(AgentScreens.Live(null, setOf(ChatSamples.SCREEN_SURFACE))),
@@ -735,6 +737,8 @@ private fun SampleChat(
     /** An empty new chat's projects and profiles to pick from on its greeting. */
     places: GreetingPlaces? = null,
     cwd: String? = null,
+    /** Audio and video in the replies show as players. */
+    clips: Boolean = false,
 ) {
     ChatView(
         title = state.title ?: "New chat",
@@ -753,7 +757,7 @@ private fun SampleChat(
         sprite = null,
         placeholder = placeholder,
         notice = null,
-        actions = remember(composerText) { PreviewChatActions(composerText) },
+        actions = remember(composerText, clips) { PreviewChatActions(composerText, clips) },
         onOpenSidebar = {},
         onNewChat = {},
         onOpenMenu = {},

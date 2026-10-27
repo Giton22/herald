@@ -27,12 +27,16 @@ internal enum class PlaybackPhase { Idle, Loading, Playing, Paused, Ended, Faile
 /** What the player says about the clip it holds; [key] is null when it holds none. */
 internal data class PlaybackState(
     val key: String? = null,
+    /** The clip held, for what shows it away from its message (the bar over the composer). */
+    val media: PlayableMedia? = null,
     val phase: PlaybackPhase = PlaybackPhase.Idle,
     val positionMs: Long = 0,
     /** Null until the clip says how long it is (a live or unindexed stream may never). */
     val durationMs: Long? = null,
     val speed: Float = 1f,
     val error: String? = null,
+    /** Width over height of the picture, once a video says; the window over the chat letterboxes to it. */
+    val videoAspect: Float? = null,
 ) {
     /** The state as clip [key] shows it: idle unless the player holds that one. */
     fun of(key: String): PlaybackState = if (this.key == key) this else PlaybackState()
@@ -40,16 +44,16 @@ internal data class PlaybackState(
 
 /**
  * The one player the app plays chat audio and video with: starting a clip stops the one before, wherever it
- * showed, and the video open full screen is its own ([video]), so a turn of the phone keeps both. Where there's
- * none ([NoMediaPlayer]), messages keep the file card.
+ * showed, and the video on screen (in the window over the chat or full screen) is its own ([video]), so a turn
+ * of the phone keeps both. Where there's none ([NoMediaPlayer]), messages keep the file card.
  */
 internal interface ChatMediaPlayer {
     val available: Boolean
 
     val state: StateFlow<PlaybackState>
 
-    /** The video shown full screen, if any. */
-    val video: StateFlow<PlayableMedia?>
+    /** The video on screen, and where, if any. Another clip starting takes its place, so it goes. */
+    val video: StateFlow<ShownVideo?>
 
     /**
      * Plays [media]: from the start, or on from where it is when it's the clip held. [resolve] works out where its
@@ -59,14 +63,20 @@ internal interface ChatMediaPlayer {
 
     fun pause()
 
+    /** Plays on the clip held, from where it is (or again from the start once it ended). */
+    fun resume()
+
     fun seekTo(key: String, positionMs: Long)
 
     fun setSpeed(key: String, speed: Float)
 
-    /** Opens [media] full screen and plays it there. */
-    fun openVideo(media: PlayableMedia, resolve: (suspend () -> PlaySource)?)
+    /** Shows [media] in [mode] and plays it there. */
+    fun openVideo(media: PlayableMedia, resolve: (suspend () -> PlaySource)?, mode: VideoMode = VideoMode.Popup)
 
-    /** Closes the full-screen video and lets go of it. */
+    /** Moves the video on screen to [mode], playing on where it is. */
+    fun showVideo(mode: VideoMode)
+
+    /** Closes the video, wherever it shows, and lets go of it. */
     fun closeVideo()
 
     /** Lets go of the clip and the player's resources; the next [play] builds them again. */
@@ -82,12 +92,14 @@ internal interface ChatMediaPlayer {
 internal object NoMediaPlayer : ChatMediaPlayer {
     override val available = false
     override val state: StateFlow<PlaybackState> = MutableStateFlow(PlaybackState())
-    override val video: StateFlow<PlayableMedia?> = MutableStateFlow(null)
+    override val video: StateFlow<ShownVideo?> = MutableStateFlow(null)
     override fun play(media: PlayableMedia, resolve: (suspend () -> PlaySource)?) = Unit
     override fun pause() = Unit
+    override fun resume() = Unit
     override fun seekTo(key: String, positionMs: Long) = Unit
     override fun setSpeed(key: String, speed: Float) = Unit
-    override fun openVideo(media: PlayableMedia, resolve: (suspend () -> PlaySource)?) = Unit
+    override fun openVideo(media: PlayableMedia, resolve: (suspend () -> PlaySource)?, mode: VideoMode) = Unit
+    override fun showVideo(mode: VideoMode) = Unit
     override fun closeVideo() = Unit
     override fun stop() = Unit
     override fun bindChat(token: Any) = Unit
@@ -109,9 +121,12 @@ internal val LocalMediaStarting = staticCompositionLocalOf<() -> Boolean> { { tr
 @Composable
 internal expect fun rememberChatMediaPlayer(): ChatMediaPlayer
 
-/** The picture of the video [player] holds, with the platform's own controls. */
+/**
+ * The picture of the video [player] holds: with the platform's own controls full screen, bare in the window over
+ * the chat ([controls] false), whose own buttons sit on top. Only the newest surface shown has the picture.
+ */
 @Composable
-internal expect fun VideoSurface(player: ChatMediaPlayer, modifier: Modifier)
+internal expect fun VideoSurface(player: ChatMediaPlayer, modifier: Modifier, controls: Boolean = true)
 
 /** Speeds the audio row steps through. */
 internal val PLAYBACK_SPEEDS = listOf(1f, 1.5f, 2f)

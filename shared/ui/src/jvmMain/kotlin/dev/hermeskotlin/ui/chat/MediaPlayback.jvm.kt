@@ -12,4 +12,4 @@ internal actual fun rememberChatMediaPlayer(): ChatMediaPlayer = NoMediaPlayer
 
 /** Never shown: with [NoMediaPlayer] no video opens. */
 @Composable
-internal actual fun VideoSurface(player: ChatMediaPlayer, modifier: Modifier) = Unit
+internal actual fun VideoSurface(player: ChatMediaPlayer, modifier: Modifier, controls: Boolean) = Unit

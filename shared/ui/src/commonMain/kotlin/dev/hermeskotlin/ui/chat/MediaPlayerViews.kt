@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,9 +33,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.progressBarRangeInfo
@@ -43,12 +47,14 @@ import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.toSize
 import androidx.compose.ui.window.Dialog
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.CirclePlay
 import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pause
+import com.composables.icons.lucide.PictureInPicture2
 import com.composables.icons.lucide.Play
 import com.composables.icons.lucide.RotateCcw
 import com.composables.icons.lucide.Share2
@@ -83,7 +89,8 @@ import dev.hermeskotlin.ui.fullScreenDialogProperties
 import kotlinx.coroutines.launch
 
 /**
- * A clip in a message: audio as a compact player row, video as a card that opens full screen. Save and Share
+ * A clip in a message: audio as a compact player row, video as a card that plays it in a window over the chat
+ * (from where it goes full screen). Save and Share
  * stay on it, fetched the way the file card fetches them; [save] is null where there's nothing to fetch.
  */
 @Composable
@@ -96,6 +103,7 @@ internal fun MediaCard(
     val sources = LocalMediaSources.current
     val starting = LocalMediaStarting.current
     val state = player.state.collectAsStateWithLifecycle().value.of(media.key)
+    val shown = player.video.collectAsStateWithLifecycle().value?.takeIf { it.media.key == media.key }
     val resolve: (suspend () -> PlaySource)? = media.source?.let { source -> sources?.let { find -> suspend { find(source) } } }
     val canPlay = media.bytes != null || resolve != null
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
@@ -122,13 +130,25 @@ internal fun MediaCard(
             !canPlay -> Unit
             state.phase == PlaybackPhase.Playing || state.phase == PlaybackPhase.Loading -> player.pause()
             !starting() -> notify("It can play once the voice chat or dictation ends.")
-            media.type == MediaType.Video -> player.openVideo(media, resolve)
+            // Where it shows already (full screen is over the card, so that's the window), else in a window.
+            media.type == MediaType.Video -> player.openVideo(media, resolve, shown?.mode ?: VideoMode.Popup)
             else -> player.play(media, resolve)
         }
     }
 
+    // An audio row says where it is, so the bar over the composer stands in for it only once it's scrolled away.
+    val rows = LocalClipRows.current.takeIf { media.type == MediaType.Audio }
+    val message = LocalMessageKey.current
+    val row = remember { Any() }
+    if (rows != null) DisposableEffect(rows, row) { onDispose { rows.forget(row) } }
     Column(
         Modifier
+            .then(
+                if (rows == null) Modifier else Modifier.onGloballyPositioned { coordinates ->
+                    // Unclipped, so a row half under the composer reads as half seen.
+                    rows.report(row, media.key, message, Rect(coordinates.positionInWindow(), coordinates.size.toSize()))
+                },
+            )
             .widthIn(max = 420.dp)
             .fillMaxWidth()
             .clip(shape)
@@ -144,7 +164,7 @@ internal fun MediaCard(
                     SeekBar(state, onSeek = { player.seekTo(media.key, it) })
                 }
                 Text(
-                    statusLine(media, state, canPlay),
+                    statusLine(media, state, canPlay, shown?.mode),
                     style = Theme[typography][caption],
                     color = if (state.phase == PlaybackPhase.Failed) Theme[colors][danger] else Theme[colors][textTertiary],
                     maxLines = 2,
@@ -167,7 +187,7 @@ internal fun MediaCard(
 }
 
 /** What the row says under the name: the time, or why it can't play. */
-private fun statusLine(media: PlayableMedia, state: PlaybackState, canPlay: Boolean): String {
+private fun statusLine(media: PlayableMedia, state: PlaybackState, canPlay: Boolean, mode: VideoMode?): String {
     val kind = if (media.type == MediaType.Audio) "Audio" else "Video"
     val ext = media.name.substringAfterLast('.', "").uppercase()
     val idle = listOf(kind, ext).filter { it.isNotEmpty() }.distinct().joinToString(" · ")
@@ -176,7 +196,10 @@ private fun statusLine(media: PlayableMedia, state: PlaybackState, canPlay: Bool
         state.phase == PlaybackPhase.Failed -> state.error ?: "Couldn't play it."
         state.key == null -> idle
         state.phase == PlaybackPhase.Loading && state.durationMs == null -> "Loading…"
-        media.type == MediaType.Video -> "Playing full screen · ${playTimeLabel(state.positionMs, state.durationMs)}"
+        media.type == MediaType.Video -> {
+            val where = if (mode == VideoMode.Full) "Full screen" else "In a window"
+            "$where · ${playTimeLabel(state.positionMs, state.durationMs)}"
+        }
         else -> playTimeLabel(state.positionMs, state.durationMs)
     }
 }
@@ -272,15 +295,16 @@ private fun SpeedButton(speed: Float, onClick: () -> Unit) {
 
 /**
  * The video the player shows full screen, over whatever is open. Its state lives in the player, so a turn of the
- * phone or a fold rebuilds the screen around the same playback; Back or Close ends it.
+ * phone or a fold rebuilds the screen around the same playback. Back or the window button hands it back to the
+ * window over the chat, playing on; Close ends it.
  */
 @Composable
 internal fun VideoViewer() {
     val player = LocalChatMediaPlayer.current
-    val media = player.video.collectAsStateWithLifecycle().value ?: return
+    val media = player.video.collectAsStateWithLifecycle().value?.takeIf { it.mode == VideoMode.Full }?.media ?: return
     val state = player.state.collectAsStateWithLifecycle().value.of(media.key)
     KeepScreenOn(state.phase == PlaybackPhase.Playing)
-    Dialog(onDismissRequest = player::closeVideo, properties = fullScreenDialogProperties()) {
+    Dialog(onDismissRequest = { player.showVideo(VideoMode.Popup) }, properties = fullScreenDialogProperties()) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             VideoSurface(player, Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing))
             if (state.phase == PlaybackPhase.Failed) {
@@ -310,6 +334,7 @@ internal fun VideoViewer() {
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                 )
+                IconButton(Lucide.PictureInPicture2, contentDescription = "Play in a window", onClick = { player.showVideo(VideoMode.Popup) }, tint = Color.White)
             }
         }
     }
