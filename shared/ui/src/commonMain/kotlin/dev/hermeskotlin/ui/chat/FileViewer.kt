@@ -76,10 +76,12 @@ import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.Copy
 import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.File
+import com.composables.icons.lucide.FileAudio
 import com.composables.icons.lucide.FileCode
 import com.composables.icons.lucide.FileImage
 import com.composables.icons.lucide.FileSpreadsheet
 import com.composables.icons.lucide.FileText
+import com.composables.icons.lucide.FileVideo
 import com.composables.icons.lucide.FileWarning
 import com.composables.icons.lucide.Lucide
 import dev.hermeskotlin.ui.shareIcon
@@ -803,6 +805,8 @@ internal fun kindIcon(kind: GatewayFileKind): ImageVector = when (kind) {
     GatewayFileKind.Code -> Lucide.FileCode
     GatewayFileKind.Image -> Lucide.FileImage
     GatewayFileKind.Pdf -> Lucide.BookOpen
+    GatewayFileKind.Audio -> Lucide.FileAudio
+    GatewayFileKind.Video -> Lucide.FileVideo
     GatewayFileKind.Other -> Lucide.File
 }
 

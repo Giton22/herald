@@ -32,6 +32,8 @@ import dev.hermeskotlin.core.media.GatewayFile
 import dev.hermeskotlin.core.media.LinkPreview
 import dev.hermeskotlin.core.media.LinkPreviews
 import dev.hermeskotlin.core.media.MediaApi
+import dev.hermeskotlin.core.media.MediaSources
+import dev.hermeskotlin.core.media.PlaySource
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.models.ModelCatalog
 import dev.hermeskotlin.core.models.ModelOption
@@ -65,6 +67,7 @@ import dev.hermeskotlin.core.voice.VoiceRecorder
 import dev.hermeskotlin.core.voice.DeviceDictation
 import dev.hermeskotlin.core.voice.DeviceLock
 import dev.hermeskotlin.ui.voice.VoiceController
+import dev.hermeskotlin.ui.voice.VoicePhase
 import kotlinx.coroutines.CoroutineScope
 import dev.hermeskotlin.core.slash.SlashApi
 import dev.hermeskotlin.core.slash.SlashCatalog
@@ -221,6 +224,8 @@ class ChatViewModel(
     deviceLock: DeviceLock = DeviceLock.None,
     /** The Next Prompt plugin's suggestions; none without it. */
     nextPromptApi: NextPromptApi? = null,
+    /** Where the chat's audio and video play from; without it they keep their file card. */
+    private val mediaSources: MediaSources? = null,
 ) : ViewModel(), ChatActions {
 
     /** Dictation, voice chat and Read aloud for the open chat. */
@@ -871,6 +876,20 @@ class ChatViewModel(
         if (mediaCache.size >= MAX_CACHED_MEDIA) mediaCache.remove(mediaCache.keys.first())
         mediaCache[source] = result
         return result
+    }
+
+    /**
+     * How to play a clip the chat shows ([MediaSources.resolve]), through the chat's gateway and profile as they
+     * are now.
+     */
+    override val mediaSource: (suspend (String) -> PlaySource)? = mediaSources?.let { sources ->
+        { source -> target.let { owner -> sources.resolve(source, owner?.gateway?.gatewayUrl, owner?.profile) } }
+    }
+
+    override fun mediaStarting(): Boolean {
+        if (voice.chat.value.phase != VoicePhase.Off || voice.dictation.value.active) return false
+        voice.stopReading()
+        return true
     }
 
     /**

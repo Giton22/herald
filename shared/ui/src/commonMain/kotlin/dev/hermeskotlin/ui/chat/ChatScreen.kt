@@ -514,6 +514,18 @@ fun ChatScreen(
             if (!changingConfigurations()) viewModel.stopReading()
         }
     }
+    // The chat's audio and video: one clip at a time, app-wide. It pauses when Kyllene goes out of sight and lets go
+    // when the chat is left or another one opens; a turn of the phone or a fold keeps it playing.
+    val mediaPlayer = rememberChatMediaPlayer()
+    val playing = remember(target) { target.copy(readUpTo = null, draft = null) }
+    LaunchedEffect(mediaPlayer, viewModel, playing) { mediaPlayer.bindChat(viewModel to playing) }
+    LifecycleEventEffect(Lifecycle.Event.ON_STOP) { if (!changingConfigurations()) mediaPlayer.pause() }
+    DisposableEffect(mediaPlayer) { onDispose { if (!changingConfigurations()) mediaPlayer.stop() } }
+    // Kyllene's own voice has the speaker: a voice chat, dictation or a reply read aloud pauses the clip.
+    val voiceBusy = viewModel.voice.chat.collectAsStateWithLifecycle().value.phase != VoicePhase.Off ||
+        viewModel.voice.dictation.collectAsStateWithLifecycle().value.active ||
+        viewModel.voice.reading.collectAsStateWithLifecycle().value.key != null
+    LaunchedEffect(voiceBusy) { if (voiceBusy) mediaPlayer.pause() }
     LaunchedEffect(viewModel) {
         viewModel.requests.collect { request ->
             when (request) {
@@ -709,6 +721,7 @@ fun ChatScreen(
             ImageViewer(image, onDismiss = { viewing = null })
         }
     }
+    CompositionLocalProvider(LocalChatMediaPlayer provides mediaPlayer) { VideoViewer() }
     ModelSheet(
         visible = modelsOpen,
         onDismiss = { modelsOpen = false },
@@ -1065,6 +1078,9 @@ internal fun ChatView(
                     if (state.historyLoaded && state.messages.isNotEmpty()) {
                         CompositionLocalProvider(
                             LocalMediaLoader provides actions::loadMedia,
+                            LocalMediaSources provides actions.mediaSource,
+                            LocalChatMediaPlayer provides rememberChatMediaPlayer(),
+                            LocalMediaStarting provides actions::mediaStarting,
                             LocalWidgetFiles provides widgetFiles,
                             LocalLinkPreviewLoader provides linkPreviewLoader,
                             LocalOpenImage provides onViewImage,

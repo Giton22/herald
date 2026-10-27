@@ -65,6 +65,7 @@ import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.chat.ReplyMedia
+import dev.hermeskotlin.core.media.MediaType
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
 import dev.hermeskotlin.designsystem.colors
@@ -109,9 +110,12 @@ internal fun ReplyMediaList(media: List<ReplyMedia>) {
         media.forEach { item -> key(item.source) {
             val file = widgetFile(item)
             val files = LocalWidgetFiles.current
+            val type = item.mediaType
+            val playable = type != null && LocalChatMediaPlayer.current.available && LocalMediaSources.current != null
             when {
                 file != null && files != null -> InlineWidget(item, file, files)
                 item.isImage -> ReplyImage(item)
+                playable -> ReplyClip(item, type)
                 else -> ReplyFile(item)
             }
         } }
@@ -208,6 +212,14 @@ private fun ReplyImage(item: ReplyMedia) {
 internal fun webHost(source: String): String? {
     if (!source.startsWith("http://") && !source.startsWith("https://")) return null
     return source.substringAfter("://").substringBefore('/').substringBefore('?').substringBefore('#').substringAfterLast('@')
+}
+
+/** Audio or video a reply delivered, played in the chat; Save and Share fetch it as the file card does. */
+@Composable
+private fun ReplyClip(item: ReplyMedia, type: MediaType) {
+    val load = LocalMediaLoader.current
+    val media = remember(item.source, type) { PlayableMedia(key = "reply|${item.source}", source = item.source, name = item.name, type = type) }
+    MediaCard(media, save = { load(item.source) }, failure = "Couldn't get ${item.name} from the gateway.")
 }
 
 /** A delivered file: its name, with Save and Share. */

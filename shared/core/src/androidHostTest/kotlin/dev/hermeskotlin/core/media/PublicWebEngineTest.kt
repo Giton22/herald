@@ -56,4 +56,10 @@ class PublicWebEngineTest {
             assertFalse(received.get())
         }
     }
+
+    @Test fun aRefusalIsToldApartFromOtherErrors() {
+        // The chat's player wraps the refusal in its own errors, and says it differently from a dead link.
+        assertTrue(isNotPublicAddress(RuntimeException(java.io.IOException(NotPublicAddress("router.lan")))))
+        assertFalse(isNotPublicAddress(java.io.IOException("timeout")))
+    }
 }
