@@ -75,6 +75,9 @@ class PhoneToolsBridgeTest {
     private class Plugin(var installed: Boolean = true, var version: String = PushApi.PLUGIN_VERSION) {
         var botVersion: String? = null
         var botInstallFails = false
+
+        /** What every install answers with instead, when set: the gateway's own copy and each bot's. */
+        var installError: String? = null
         val reports = mutableListOf<List<String>>()
         val reportBodies = mutableListOf<JsonObject>()
         val keys = mutableSetOf<String>()
@@ -113,7 +116,10 @@ class PhoneToolsBridgeTest {
                     val reply = when ((request["method"] as JsonPrimitive).content) {
                         "profiles.list" -> if (botVersion == null) """{"profiles":[]}""" else """{"profiles":[{"name":"assistant"}]}"""
                         "plugins.manage" -> {
-                            if (params["profile"] != null) {
+                            val error = installError
+                            if (error != null && params["action"]?.jsonPrimitive?.content == "install") {
+                                "ERROR:$error"
+                            } else if (params["profile"] != null) {
                                 if (params["action"]?.jsonPrimitive?.content == "list") {
                                     """{"plugins":[{"name":"herald-push","version":"$botVersion","source":"git","status":"enabled"}]}"""
                                 } else if (botInstallFails) {
@@ -134,7 +140,7 @@ class PhoneToolsBridgeTest {
                     }
                     transport.push(
                         if (reply?.startsWith("ERROR:") == true) {
-                            """{"jsonrpc":"2.0","id":$id,"error":{"code":5026,"message":"${reply.removePrefix("ERROR:")}"}}"""
+                            """{"jsonrpc":"2.0","id":$id,"error":{"code":5026,"message":${JsonPrimitive(reply.removePrefix("ERROR:"))}}}"""
                         } else if (reply == null) {
                             """{"jsonrpc":"2.0","id":$id,"error":{"code":4018,"message":"not a command"}}"""
                         } else {
@@ -313,6 +319,42 @@ class PhoneToolsBridgeTest {
             assertEquals(listOf(PhoneTool.Battery), runner.runs)
             s.connection.stop()
         }
+    }
+
+    @Test
+    fun aFailedUpdateSaysWhyInOneShortLine() = runTest {
+        val s = setup(Runner(), on = listOf(PhoneTool.Battery))
+        // A resolver's log, as a gateway that can't set up a plugin's environment answers.
+        val log = "Plugin 'herald-push' was not published: venv: lock exited 1:\n  x No solution found\n" +
+            "  | because pkg-a needs tool==1 and pkg-b needs tool==2\n" + "  and so on. ".repeat(40)
+        val plugin = Plugin(version = "0.3.0").apply { botVersion = "0.1.1"; installError = log }
+        connect(s, plugin)
+        until { s.bridge.status.value.state == PhoneToolsStatus.State.On }
+        s.bridge.updatePlugin()
+        var detail: String? = null
+        until { s.bridge.status.value.detail?.takeIf { "assistant" in it }?.also { detail = it } != null }
+
+        // Both copies failed the same way: said once, short, and the switch isn't buried under the log.
+        assertEquals(
+            listOf(
+                "gateway, assistant: Plugin 'herald-push' was not published: venv: lock exited 1…",
+                "The gateway's herald-push plugin was not updated to ${PushApi.PLUGIN_VERSION}.",
+            ),
+            detail?.lines(),
+        )
+        s.connection.stop()
+    }
+
+    @Test
+    fun aGatewayErrorIsCutToItsFirstLine() {
+        assertEquals("Refused", PushApi.briefError("Refused"))
+        assertEquals("Refused…", PushApi.briefError("Refused:\n  because"))
+        assertEquals("no reason given", PushApi.briefError(null))
+        assertEquals(161, PushApi.briefError("a".repeat(400)).length)
+        assertEquals(
+            listOf("gateway, default: boom", "assistant: other", "A plain sentence."),
+            PushApi.mergeFailures(listOf("gateway: boom", "assistant: other", "default: boom", "A plain sentence.", "gateway: boom")),
+        )
     }
 
     @Test
