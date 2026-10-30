@@ -76,7 +76,7 @@ class PhoneToolsBridgeTest {
         var botVersion: String? = null
         var botInstallFails = false
 
-        /** What every install answers with instead, when set: the gateway's own copy and each bot's. */
+        /** What every install or switch-on answers with instead, when set: the gateway's own copy and each bot's. */
         var installError: String? = null
         val reports = mutableListOf<List<String>>()
         val reportBodies = mutableListOf<JsonObject>()
@@ -117,7 +117,7 @@ class PhoneToolsBridgeTest {
                         "profiles.list" -> if (botVersion == null) """{"profiles":[]}""" else """{"profiles":[{"name":"assistant"}]}"""
                         "plugins.manage" -> {
                             val error = installError
-                            if (error != null && params["action"]?.jsonPrimitive?.content == "install") {
+                            if (error != null && params["action"]?.jsonPrimitive?.content != "list") {
                                 "ERROR:$error"
                             } else if (params["profile"] != null) {
                                 if (params["action"]?.jsonPrimitive?.content == "list") {
@@ -326,18 +326,23 @@ class PhoneToolsBridgeTest {
         val s = setup(Runner(), on = listOf(PhoneTool.Battery))
         // A resolver's log, as a gateway that can't set up a plugin's environment answers.
         val log = "Plugin 'herald-push' was not published: venv: lock exited 1:\n  x No solution found\n" +
-            "  | because pkg-a needs tool==1 and pkg-b needs tool==2\n" + "  and so on. ".repeat(40)
+            "  | because pkg-a needs tool==1 and pkg-b needs tool==2\n" + "  and so on.\n".repeat(40) +
+            "  requirements are unsatisfiable. — retry, or run the doctor"
         val plugin = Plugin(version = "0.3.0").apply { botVersion = "0.1.1"; installError = log }
         connect(s, plugin)
         until { s.bridge.status.value.state == PhoneToolsStatus.State.On }
         s.bridge.updatePlugin()
         var detail: String? = null
-        until { s.bridge.status.value.detail?.takeIf { "assistant" in it }?.also { detail = it } != null }
+        until {
+            s.bridge.status.value.takeIf { it.state == PhoneToolsStatus.State.On }?.detail
+                ?.takeIf { "assistant" in it }?.also { detail = it } != null
+        }
 
         // Both copies failed the same way: said once, short, and the switch isn't buried under the log.
         assertEquals(
             listOf(
-                "gateway, assistant: Plugin 'herald-push' was not published: venv: lock exited 1…",
+                "gateway, assistant: Plugin 'herald-push' was not published: venv: lock exited 1 … " +
+                    "requirements are unsatisfiable. — retry, or run the doctor",
                 "The gateway's herald-push plugin was not updated to ${PushApi.PLUGIN_VERSION}.",
             ),
             detail?.lines(),
@@ -346,11 +351,25 @@ class PhoneToolsBridgeTest {
     }
 
     @Test
-    fun aGatewayErrorIsCutToItsFirstLine() {
+    fun aFailedFirstInstallSaysWhyInOneShortLine() = runTest {
+        val s = setup(Runner(), on = listOf(PhoneTool.Battery))
+        val plugin = Plugin(installed = false).apply { installError = "Not published: venv: lock exited 1:\n" + "  why\n".repeat(30) + "  run the doctor" }
+        connect(s, plugin)
+        s.bridge.setUp()
+        until { s.bridge.status.value.state == PhoneToolsStatus.State.Failed }
+        assertEquals("Not published: venv: lock exited 1 … run the doctor", s.bridge.status.value.detail)
+        s.connection.stop()
+    }
+
+    @Test
+    fun aGatewayErrorIsCutShort() {
         assertEquals("Refused", PushApi.briefError("Refused"))
-        assertEquals("Refused…", PushApi.briefError("Refused:\n  because"))
+        assertEquals("Refused … because", PushApi.briefError("Refused:\n  why\n  because"))
         assertEquals("no reason given", PushApi.briefError(null))
         assertEquals(161, PushApi.briefError("a".repeat(400)).length)
+        // Brief already: the same again, so a message cut twice on its way reads as once.
+        val brief = PushApi.briefError("x".repeat(200) + "\n" + "y".repeat(200))
+        assertEquals(brief, PushApi.briefError(brief))
         assertEquals(
             listOf("gateway, default: boom", "assistant: other", "A plain sentence."),
             PushApi.mergeFailures(listOf("gateway: boom", "assistant: other", "default: boom", "A plain sentence.", "gateway: boom")),

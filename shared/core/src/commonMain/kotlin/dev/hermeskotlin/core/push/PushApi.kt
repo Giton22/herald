@@ -153,6 +153,15 @@ class PushApi(private val connection: GatewayConnection) {
      * a restart). With [force] an existing copy is replaced, which is how an old version is brought up to date.
      */
     suspend fun install(force: Boolean = false, profile: String? = null, enabled: Boolean = true) {
+        // A gateway that can't set the plugin up may answer with a whole log; every row that shows it gets it short.
+        try {
+            doInstall(force, profile, enabled)
+        } catch (e: RpcException) {
+            throw RpcException(e.code, briefError(e.message), e.reason)
+        }
+    }
+
+    private suspend fun doInstall(force: Boolean, profile: String?, enabled: Boolean) {
         client().request(
             "plugins.manage",
             buildJsonObject {
@@ -466,16 +475,20 @@ class PushApi(private val connection: GatewayConnection) {
         private const val BRIEF_ERROR_CHARS = 160
 
         /**
-         * A gateway error as a settings row can show it: its first line, cut short. A failed install can carry a
-         * resolver's whole log, many lines long, which would bury the row's switch.
+         * A gateway error as a settings row can show it. A failed install can carry a resolver's whole log, many
+         * lines long, which would bury the row's switch: then it's the first line, what failed, and the last, which
+         * usually says why or what to do, each cut short. Brief already, it comes back as it is.
          */
         internal fun briefError(message: String?): String {
             val lines = message.orEmpty().lines().map { it.trim() }.filter { it.isNotEmpty() }
             val first = lines.firstOrNull() ?: return "no reason given"
-            val cut = first.length > BRIEF_ERROR_CHARS
-            val head = if (cut) first.take(BRIEF_ERROR_CHARS).trimEnd() else first
-            return if (cut || lines.size > 1) head.trimEnd(':', ' ') + "…" else head
+            if (lines.size == 1) return first.cut(BRIEF_ERROR_CHARS)
+            // Each half with its "…", and " … " between: within the limit, so cutting it again changes nothing.
+            val half = (BRIEF_ERROR_CHARS - 5) / 2
+            return "${first.trimEnd(':', ' ').cut(half)} … ${lines.last().cut(half)}"
         }
+
+        private fun String.cut(chars: Int) = if (length > chars) take(chars).trimEnd() + "…" else this
 
         /**
          * [lines] with copies that failed the same way said once ("gateway, default: …"), in the order first seen.
