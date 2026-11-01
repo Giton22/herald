@@ -3020,9 +3020,15 @@ internal fun ProfileSheet(
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         SheetHeader("Profiles", "Each profile is its own agent, with its own chats, memory and model.")
         // A long list scrolls under the header; a short one keeps the sheet sized to its content. It opens with the
-        // active profile in sight, wherever it is in the list.
+        // active profile in sight, wherever it is in the list: two frames on, as the desktop's panel is only laid out
+        // after the frame it opens on.
         val activeRow = remember { BringIntoViewRequester() }
-        LaunchedEffect(visible) { if (visible) runCatching { activeRow.bringIntoView() } }
+        LaunchedEffect(visible) {
+            if (!visible) return@LaunchedEffect
+            withFrameNanos {}
+            withFrameNanos {}
+            runCatching { activeRow.bringIntoView() }
+        }
         Column(Modifier.weight(1f, fill = false).verticalScrollWithBar()) {
             profiles.forEach { profile ->
                 val checked = profile.name == selected

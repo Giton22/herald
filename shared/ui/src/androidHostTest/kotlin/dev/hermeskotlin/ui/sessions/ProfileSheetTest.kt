@@ -74,6 +74,8 @@ class ProfileSheetTest {
         show(30, selected = "profile-25")
         composeRule.onNodeWithText("profile-25").assertIsDisplayed()
         composeRule.onNodeWithText("profile-1").assertIsNotDisplayed()
+        // Only the list moved: the sheet's header is still where it was.
+        composeRule.onNodeWithText("Profiles").assertIsDisplayed()
     }
 
     @Test
