@@ -83,6 +83,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -3004,11 +3006,11 @@ private fun AccountSheet(
 }
 
 /**
- * Desktop's profile picker: the gateway's profiles, default first, the active one checked. Each is its
+ * The gateway's profiles, default first, the active one checked. Each is its
  * own agent, so switching changes the chats listed and starts from where that profile left off.
  */
 @Composable
-private fun ProfileSheet(
+internal fun ProfileSheet(
     visible: Boolean,
     profiles: List<Profile>,
     selected: String?,
@@ -3017,11 +3019,25 @@ private fun ProfileSheet(
 ) {
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         SheetHeader("Profiles", "Each profile is its own agent, with its own chats, memory and model.")
-        // On the desktop a long list scrolls under the header rather than running past the window; a phone's
-        // sheet is as it was.
-        Column(if (isDesktop) Modifier.weight(1f, fill = false).verticalScrollWithBar() else Modifier) {
+        // A long list scrolls under the header; a short one keeps the sheet sized to its content. It opens with the
+        // active profile in sight, wherever it is in the list: two frames on, as the desktop's panel is only laid out
+        // after the frame it opens on.
+        val activeRow = remember { BringIntoViewRequester() }
+        LaunchedEffect(visible) {
+            if (!visible) return@LaunchedEffect
+            withFrameNanos {}
+            withFrameNanos {}
+            runCatching { activeRow.bringIntoView() }
+        }
+        Column(Modifier.weight(1f, fill = false).verticalScrollWithBar()) {
             profiles.forEach { profile ->
-                ProfileRow(profile, checked = profile.name == selected, onClick = { onSelect(profile) })
+                val checked = profile.name == selected
+                ProfileRow(
+                    profile,
+                    checked = checked,
+                    onClick = { onSelect(profile) },
+                    modifier = if (checked) Modifier.bringIntoViewRequester(activeRow) else Modifier,
+                )
             }
         }
         if (profiles.size < 2) {
@@ -3036,10 +3052,10 @@ private fun ProfileSheet(
 }
 
 @Composable
-private fun ProfileRow(profile: Profile, checked: Boolean, onClick: () -> Unit) {
+private fun ProfileRow(profile: Profile, checked: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val detail = profile.description?.trim()?.takeIf { it.isNotEmpty() } ?: profile.model?.let(::displayModelName)
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
             .handCursor()
