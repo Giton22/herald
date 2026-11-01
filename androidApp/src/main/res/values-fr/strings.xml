@@ -168,4 +168,9 @@
     <string name="phone_place_not_accepted">il n’a pas été accepté</string>
     <string name="phone_place_no_reach">Kyllene n’a pas pu joindre le Gateway</string>
     <string name="phone_place_refused">le Gateway l’a refusé</string>
+
+    <!-- The home screen widget -->
+    <string name="widget_description">Nouvelle conversation, Dicter et Appeler Hermes, et vos Gateways pour passer de l’un à l’autre</string>
+    <string name="widget_gateway_in_use">%1$s, en cours d’utilisation</string>
+    <string name="widget_gateway_switch">Passer à %1$s</string>
 </resources>

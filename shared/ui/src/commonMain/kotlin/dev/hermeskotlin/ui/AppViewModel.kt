@@ -196,6 +196,16 @@ class AppViewModel(
         viewModelScope.launch {
             _route.collect { cancelPendingCall() }
         }
+        // A gateway asked for from outside (the home-screen widget): switched to once the app knows where it is. One
+        // since removed is let go.
+        viewModelScope.launch {
+            combine(links.pendingGateway, _route) { url, route -> url?.takeIf { route !is Route.Loading } }
+                .filterNotNull()
+                .collect { url ->
+                    links.consumeGateway(url)
+                    gateways.all().find(url)?.let(::switchGateway)
+                }
+        }
         // A tapped notification names its chat; open it once signed in (it waits through Loading).
         viewModelScope.launch {
             combine(links.pending, _route) { link, route -> link?.takeIf { route is Route.Chat } }

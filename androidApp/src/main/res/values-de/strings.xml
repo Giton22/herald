@@ -166,4 +166,9 @@
     <string name="phone_place_not_accepted">es wurde nicht angenommen</string>
     <string name="phone_place_no_reach">Kyllene hat das Gateway nicht erreicht</string>
     <string name="phone_place_refused">das Gateway hat es abgelehnt</string>
+
+    <!-- The home screen widget -->
+    <string name="widget_description">Neuer Chat, Diktieren und Hermes anrufen, dazu deine Gateways zum Wechseln</string>
+    <string name="widget_gateway_in_use">%1$s, in Verwendung</string>
+    <string name="widget_gateway_switch">Zu %1$s wechseln</string>
 </resources>

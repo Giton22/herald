@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The home-screen widget (HomeWidget): the saved gateways to switch to, shown with more than one saved, over
+    New chat, Dictate and Call Hermes on the gateway in use. Plain views only, as RemoteViews allows: the launcher
+    draws them, never AppCompat, so its drawableTopCompat wouldn't show (hence the ignore), and the icons are in the
+    XML for the widget picker's preview to have them.
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/widget_root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@drawable/widget_background"
+    android:gravity="center_vertical"
+    android:orientation="vertical"
+    android:padding="10dp"
+    tools:ignore="UseCompatTextViewDrawableXml">
+
+    <LinearLayout
+        android:id="@+id/widget_gateways"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="6dp"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/widget_gateway_0"
+            style="@style/HomeWidgetGateway" />
+
+        <TextView
+            android:id="@+id/widget_gateway_1"
+            style="@style/HomeWidgetGateway"
+            android:layout_marginStart="6dp" />
+
+        <TextView
+            android:id="@+id/widget_gateway_2"
+            style="@style/HomeWidgetGateway"
+            android:layout_marginStart="6dp" />
+    </LinearLayout>
+
+    <!-- A second row, with more than three gateways saved. -->
+    <LinearLayout
+        android:id="@+id/widget_gateways_more"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp"
+        android:orientation="horizontal"
+        android:visibility="gone">
+
+        <TextView
+            android:id="@+id/widget_gateway_3"
+            style="@style/HomeWidgetGateway" />
+
+        <TextView
+            android:id="@+id/widget_gateway_4"
+            style="@style/HomeWidgetGateway"
+            android:layout_marginStart="6dp" />
+
+        <TextView
+            android:id="@+id/widget_gateway_5"
+            style="@style/HomeWidgetGateway"
+            android:layout_marginStart="6dp" />
+    </LinearLayout>
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal">
+
+        <TextView
+            android:id="@+id/widget_new_chat"
+            style="@style/HomeWidgetAction"
+            android:drawableTop="@drawable/widget_ic_new_chat"
+            android:contentDescription="@string/shortcut_new_chat"
+            android:text="@string/shortcut_new_chat" />
+
+        <TextView
+            android:id="@+id/widget_dictate"
+            style="@style/HomeWidgetAction"
+            android:drawableTop="@drawable/widget_ic_voice"
+            android:contentDescription="@string/shortcut_voice"
+            android:text="@string/shortcut_voice_short" />
+
+        <TextView
+            android:id="@+id/widget_call"
+            style="@style/HomeWidgetAction"
+            android:drawableTop="@drawable/widget_ic_call"
+            android:contentDescription="@string/shortcut_voice_chat"
+            android:text="@string/shortcut_voice_chat" />
+    </LinearLayout>
+</LinearLayout>

@@ -413,6 +413,36 @@ class AppViewModelTest {
     }
 
     @Test
+    fun aGatewayAskedForFromOutsideOpensWhereItWasLeft() = runTest {
+        gateways.save(home)
+        gateways.save(work)
+        signedIn(home)
+        signedIn(work)
+        lastChats.set(home.gatewayUrl, LastChat("h1"))
+        // Asked for before the app knows where it is: it waits through Loading.
+        links.openGateway(home.url)
+        val vm = viewModel()
+
+        assertEquals("h1", vm.awaitChat(home).target.storedSessionId)
+        assertEquals(home, gateways.current())
+        assertNull(links.pendingGateway.value)
+    }
+
+    @Test
+    fun aGatewayRemovedSinceIsLetGo() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        val vm = viewModel()
+        vm.awaitChat(home)
+
+        links.openGateway("https://gone.example")
+
+        assertNull(links.pendingGateway.first { it == null })
+        assertEquals(home, gateways.current())
+        assertEquals(home.url, (vm.route.value as Route.Chat).gateway.url)
+    }
+
+    @Test
     fun switchingToASignedOutGatewayAsksToSignIn() = runTest {
         gateways.save(home)
         gateways.save(work)

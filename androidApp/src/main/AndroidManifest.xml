@@ -351,6 +351,19 @@
             android:name=".notify.NotificationActionReceiver"
             android:exported="false" />
 
+        <!-- The home-screen widget: New chat, Dictate, Call Hermes and the gateways to switch to (HomeWidget). -->
+        <receiver
+            android:name=".widget.HomeWidget"
+            android:exported="false"
+            android:label="@string/app_name">
+            <intent-filter>
+                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />
+            </intent-filter>
+            <meta-data
+                android:name="android.appwidget.provider"
+                android:resource="@xml/home_widget_info" />
+        </receiver>
+
         <!-- Android's proximity alert for a place the agent watches (the Watched places phone tool). -->
         <receiver
             android:name=".phone.GeofenceReceiver"

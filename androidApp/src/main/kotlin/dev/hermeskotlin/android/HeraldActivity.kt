@@ -25,6 +25,7 @@ import androidx.core.content.pm.ShortcutManagerCompat
 import dev.hermeskotlin.android.notify.BotNotifier
 import dev.hermeskotlin.android.notify.BotShortcuts
 import dev.hermeskotlin.android.notify.ChatNotifications
+import dev.hermeskotlin.android.widget.HomeWidget
 import dev.hermeskotlin.android.phone.PhoneConfirmations
 import dev.hermeskotlin.ui.settings.AppIconRestart
 import dev.hermeskotlin.ui.settings.PhoneQuestion
@@ -165,9 +166,14 @@ class HeraldActivity : FragmentActivity() {
     /**
      * A tapped notification about a chat opens that chat, not just the last one; a bot's notification or
      * shortcut opens that bot's chat; a room's notification opens that room; a `hermes://` link opens what it
-     * names (a new chat, a stored one, a bot).
+     * names (a new chat, a stored one, a bot); a gateway on the home-screen widget switches to that gateway.
      */
     private fun openLinkedChat(intent: Intent) {
+        intent.getStringExtra(HomeWidget.EXTRA_OPEN_GATEWAY)?.let {
+            links.openGateway(it)
+            intent.removeExtra(HomeWidget.EXTRA_OPEN_GATEWAY)
+            return
+        }
         val bot = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_BOT)
         val room = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_ROOM)
         val sessionId = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_SESSION)

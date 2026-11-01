@@ -16,6 +16,7 @@ import dev.hermeskotlin.android.wear.WatchAccentSync
 import dev.hermeskotlin.android.wear.WatchRinger
 import dev.hermeskotlin.android.wear.WearRequests
 import dev.hermeskotlin.android.wear.wearModule
+import dev.hermeskotlin.android.widget.HomeWidgets
 import dev.hermeskotlin.core.phone.PhoneToolsBridge
 import dev.hermeskotlin.core.push.PushSetup
 import dev.hermeskotlin.core.settings.AppLockTimer
@@ -65,6 +66,7 @@ class HermesApplication : Application() {
         koin.get<PhoneToolsBridge>().start()
         // Android forgets proximity alerts on a restart; a restart or an update wakes Herald to arm them again.
         koin.get<Geofences>().start()
+        HomeWidgets(this, koin.get(), koin.get()).start()
         followLanguageSetting(koin.get(), koin.get())
     }
 
