@@ -192,6 +192,10 @@
     <string name="sessions_profiles">Profiles</string>
     <string name="sessions_profiles_detail">Each profile is its own agent, with its own chats, memory and model.</string>
     <string name="sessions_profiles_add_hint">Add profiles on the gateway host with “hermes profile create”.</string>
+    <string name="sessions_switch_profile">Switch profile</string>
+    <string name="sessions_profile_on_gateway">Profile: %1$s, on %2$s</string>
+    <string name="sessions_profile_gateway_default">Gateway default</string>
+    <string name="sessions_switch_gateway_named">Switch gateway · %1$s</string>
     <string name="sessions_profiles_load_failed">Couldn’t load the profiles.</string>
     <string name="sessions_profile_default">Default</string>
     <string name="sessions_profile_active">Active</string>

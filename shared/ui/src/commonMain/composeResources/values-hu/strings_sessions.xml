@@ -189,6 +189,10 @@
     <string name="sessions_profiles">Profilok</string>
     <string name="sessions_profiles_detail">Minden profil külön ügynök, saját csevegésekkel, memóriával és modellel.</string>
     <string name="sessions_profiles_add_hint">Profilt a gateway gépén a „hermes profile create” paranccsal adhatsz hozzá.</string>
+    <string name="sessions_switch_profile">Profil váltása</string>
+    <string name="sessions_profile_on_gateway">Profil: %1$s, itt: %2$s</string>
+    <string name="sessions_profile_gateway_default">Gateway alapértelmezett</string>
+    <string name="sessions_switch_gateway_named">Gateway váltása · %1$s</string>
     <string name="sessions_profiles_load_failed">Nem sikerült betölteni a profilokat.</string>
     <string name="sessions_profile_default">Alapértelmezett</string>
     <string name="sessions_profile_active">Aktív</string>

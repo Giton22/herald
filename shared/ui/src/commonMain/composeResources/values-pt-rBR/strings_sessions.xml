@@ -189,6 +189,10 @@
     <string name="sessions_profiles">Perfis</string>
     <string name="sessions_profiles_detail">Cada perfil é um agente próprio, com suas conversas, memória e modelo.</string>
     <string name="sessions_profiles_add_hint">Adicione perfis na máquina do gateway com “hermes profile create”.</string>
+    <string name="sessions_switch_profile">Trocar de perfil</string>
+    <string name="sessions_profile_on_gateway">Perfil: %1$s, em %2$s</string>
+    <string name="sessions_profile_gateway_default">Padrão do gateway</string>
+    <string name="sessions_switch_gateway_named">Trocar de gateway · %1$s</string>
     <string name="sessions_profiles_load_failed">Não foi possível carregar os perfis.</string>
     <string name="sessions_profile_default">Padrão</string>
     <string name="sessions_profile_active">Ativo</string>

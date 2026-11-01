@@ -198,6 +198,7 @@ enum class PreviewScene(val label: String) {
     ProjectOptions("A project's options"),
     NewProject("A new project"),
     Threads("Threads above the pinned chats"),
+    ProfileSwitch("The profile switch in the sidebar header, with a long profile name"),
     Models("Your starred and recent models in the model picker"),
     ModelsAll("Every model, one row per model, in the model picker"),
     ModelSearch("A search in the model picker"),
@@ -281,6 +282,18 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                         drafts = ChatSamples.sessionDrafts,
                         projects = ChatSamples.projects,
                         threads = ChatSamples.threads,
+                    )
+                }
+                PreviewScene.ProfileSwitch -> OpenSidebar {
+                    SessionsSidebarSample(
+                        ChatSamples.sessions(),
+                        selectedId = "s1",
+                        userLabel = ChatSamples.USER,
+                        statuses = ChatSamples.sessionStatuses,
+                        drafts = ChatSamples.sessionDrafts,
+                        projects = ChatSamples.projects,
+                        profile = ChatSamples.profileSwitch,
+                        profileBot = BotSamples.scribe,
                     )
                 }
                 PreviewScene.Bots -> OpenSidebar {

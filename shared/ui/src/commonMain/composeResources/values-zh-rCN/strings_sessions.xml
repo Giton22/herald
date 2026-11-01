@@ -182,6 +182,10 @@
     <string name="sessions_profiles">配置</string>
     <string name="sessions_profiles_detail">每个配置都是一个独立的智能体，有自己的对话、记忆和模型。</string>
     <string name="sessions_profiles_add_hint">在网关主机上用“hermes profile create”添加配置。</string>
+    <string name="sessions_switch_profile">切换配置文件</string>
+    <string name="sessions_profile_on_gateway">配置文件：%1$s，位于 %2$s</string>
+    <string name="sessions_profile_gateway_default">网关默认</string>
+    <string name="sessions_switch_gateway_named">切换网关 · %1$s</string>
     <string name="sessions_profiles_load_failed">无法加载配置文件。</string>
     <string name="sessions_profile_default">默认</string>
     <string name="sessions_profile_active">当前</string>

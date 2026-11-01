@@ -199,6 +199,7 @@ import dev.hermeskotlin.designsystem.rememberHoverIndication
 import androidx.compose.foundation.LocalIndication
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.bots.SidebarMode
+import dev.hermeskotlin.core.bots.showsPicture
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.designsystem.components.SegmentedControl
 import dev.hermeskotlin.ui.bots.BotActions
@@ -598,6 +599,33 @@ fun SessionsSidebar(
         accountOpen = true
         viewModel.refreshProfiles()
     }
+    // The profile switch's picker: the list is read again, as the account sheet does (one may have been added on the
+    // host). Before the list has come the picker shows that it's on its way; it opens only from a tap, and is put
+    // away with the drawer, the gateway and the Chats side, so it can't pop up later, unasked.
+    val profilesRead by viewModel.profilesRead.collectAsStateWithLifecycle()
+    val openProfiles = {
+        profilesOpen = true
+        // Waited on only while there's no list to show yet: a failed refresh leaves an open picker on the one it has.
+        viewModel.refreshProfiles(waiting = roster == null)
+    }
+    val closeProfiles = {
+        profilesOpen = false
+        viewModel.stopWaitingForProfiles()
+    }
+    // Also on first showing, as after a rotation: the view model may still be waiting for a picker that's gone.
+    LaunchedEffect(gateway.gatewayUrl) { closeProfiles() }
+    LaunchedEffect(visible) { if (!visible) closeProfiles() }
+    LaunchedEffect(mode) { if (mode != SidebarMode.Chats) closeProfiles() }
+    // Why it failed is the list's message, set by the view model.
+    LaunchedEffect(profilesRead) { if (profilesRead is ProfilesRead.Failed) closeProfiles() }
+    val unknownLaunch = stringResource(Res.string.sessions_profile_gateway_default)
+    val profileSwitch = remember(roster, profile, unknownLaunch) { profileSwitch(roster, profile, unknownLaunch) }
+    // The listed profile as the Bots side has it, for the header to wear its face: the roster is read once per
+    // connection even while the Chats side shows.
+    val profileBot = remember(botsState, roster, profile) {
+        val name = profile ?: roster?.launch ?: Bot.DEFAULT
+        botsState.all.firstOrNull { it.name == name }
+    }
     // A right-click on a chat, on the desktop: its actions in a menu at the pointer, as the long-press sheet has them.
     val rowMenu: ((SessionSummary) -> List<RowMenuItem>)? = if (!isDesktop) null else { s ->
         listOfNotNull(
@@ -728,6 +756,11 @@ fun SessionsSidebar(
                     },
                     onSettings = onOpenSettings,
                     onSearch = { searchOpen = true }.takeIf { mode == SidebarMode.Chats },
+                    // Whose chats these are, on the Chats side only: the bots are every profile's.
+                    profile = profileSwitch.takeIf { mode == SidebarMode.Chats },
+                    onProfiles = openProfiles,
+                    profileBot = profileBot,
+                    profilePicture = profileBot?.let { b -> avatars[b.name]?.takeIf { showsPicture(b, it) } },
                 )
             }
             if (!searchOpen && state.filter == SessionListFilter.Recent) {
@@ -1075,18 +1108,19 @@ fun SessionsSidebar(
             onDeleted(it)
         },
     )
-    // The picked profile, else the one the gateway runs as.
+    // The picked profile, else the one the gateway runs as. The picker ticks it even when the gateway didn't say
+    // which it runs as (then "default", a guess), as before the switch; its name is said as the switch says it.
     val activeProfile = roster?.let { r -> r.profiles.find { it.name == (profile ?: r.launch) } }
     AccountSheet(
         visible = accountOpen,
         anchor = accountAnchor.takeIf { isDesktop },
         gateway = gateway,
         userLabel = user?.label,
-        profileLabel = activeProfile?.label ?: profile,
+        profileLabel = remember(roster, profile, unknownLaunch) { profileLabel(roster, profile, unknownLaunch) },
         connection = connection,
         refreshing = state.refreshing,
         onDismiss = { accountOpen = false },
-        onOpenProfiles = { profilesOpen = true },
+        onOpenProfiles = openProfiles,
         onRefresh = viewModel::refresh,
         onRetry = viewModel::retryConnection,
         onSignOut = onSignOut,
@@ -1094,12 +1128,15 @@ fun SessionsSidebar(
         onOpenSettings = onOpenSettings,
     )
     ProfileSheet(
-        visible = profilesOpen && roster != null,
+        visible = profilesOpen && (roster != null || profilesRead == ProfilesRead.Loading),
         profiles = roster?.profiles.orEmpty(),
         selected = activeProfile?.name,
-        onDismiss = { profilesOpen = false },
+        loading = roster == null,
+        gatewayLabel = gateway.label,
+        onOpenGateways = onOpenGateways,
+        onDismiss = closeProfiles,
         onSelect = { picked ->
-            profilesOpen = false
+            closeProfiles()
             // The launch profile is stored as "none picked", so calls stay exactly as before profiles.
             onSwitchProfile(picked.name.takeIf { it != roster?.launch })
         },
@@ -1126,6 +1163,10 @@ internal fun SessionsSidebarSample(
     projectsAsDropdown: Boolean = false,
     /** The Threads section's threads, whose chats are among [sessions]. */
     threads: List<ChatThread> = emptyList(),
+    /** The profile the header shows; null, the gateway has one profile. */
+    profile: ProfileSwitch? = null,
+    /** That profile as a bot, for the header to wear its face. */
+    profileBot: Bot? = null,
 ) {
     // Folds for real in the gallery, kept only while the preview shows.
     var pinnedCollapsed by remember { mutableStateOf(false) }
@@ -1137,7 +1178,7 @@ internal fun SessionsSidebarSample(
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start)),
     ) {
         Column(Modifier.fillMaxSize()) {
-            MainHeader(gatewayLabel = "homelab", connection = null, onAccount = {}, onSettings = {}, onSearch = {})
+            MainHeader(gatewayLabel = "homelab", connection = null, onAccount = {}, onSettings = {}, onSearch = {}, profile = profile, profileBot = profileBot)
             RenameBanner(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp))
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 val index = remember(projects) { ProjectIndex(projects) }
@@ -1293,7 +1334,8 @@ private fun modeLabel(mode: SidebarMode, names: Map<SidebarMode, String>, needsY
 
 /**
  * The app's mark and name over the gateway in use, its dot showing the connection, and Settings; then the
- * search pill. The name and gateway open the account sheet.
+ * search pill. The name and gateway open the account sheet. With a [profile] to show, the active profile takes
+ * the mark's and the name's place, the connection dot on its disc, and opens the profile picker instead.
  */
 @Composable
 private fun MainHeader(
@@ -1303,6 +1345,12 @@ private fun MainHeader(
     onAccount: () -> Unit,
     onSettings: () -> Unit,
     onSearch: (() -> Unit)?,
+    /** The profile whose chats are listed; null where there's no other to switch to. */
+    profile: ProfileSwitch? = null,
+    onProfiles: () -> Unit = {},
+    /** The profile as a bot and its picture, for its face; null draws its initial. */
+    profileBot: Bot? = null,
+    profilePicture: ByteArray? = null,
 ) {
     val accountLabel = stringResource(Res.string.sessions_account_and_gateways)
     val connectionText = stringResource(connectionWord(connection))
@@ -1312,46 +1360,58 @@ private fun MainHeader(
             horizontalArrangement = Arrangement.spacedBy(if (isDesktop) 4.dp else 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppMark(30.dp, glow = false)
             // On the desktop this strip is the window's title bar: only the name and gateway are a button, as wide
             // as they are, and the rest of the strip drags the window (a double-click maximises it). The Box takes
-            // what Settings leaves, so a long gateway name can't push Settings off the strip.
-            Box(Modifier.weight(1f)) {
-                Column(
-                    Modifier
-                        .then(if (isDesktop) Modifier.widthIn(max = 200.dp) else Modifier.fillMaxWidth())
-                        .heightIn(min = MinTouchTarget)
-                        .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
-                        .handCursor()
-                        .clickable(
-                            onClickLabel = accountLabel,
-                            role = Role.Button,
-                            interactionSource = null,
-                            indication = if (isDesktop) rememberHoverIndication(Theme[colors][text]) else LocalIndication.current,
-                            onClick = onAccount,
-                        )
-                        .then(if (isDesktop) Modifier.padding(horizontal = 6.dp) else Modifier)
-                        .semantics(mergeDescendants = true) { stateDescription = connectionText },
-                    verticalArrangement = Arrangement.Center,
-                ) {
-                    Text(
-                        "Kyllene",
-                        style = Theme[typography][heading].copy(fontSize = 17.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.02).em),
-                        color = Theme[colors][text],
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Box(Modifier.size(6.dp).background(connectionDot(connection), CircleShape))
+            // what Settings leaves, so a long name can't push Settings off the strip.
+            if (profile != null) Box(Modifier.weight(1f)) {
+                ProfileSwitchHeader(
+                    profile,
+                    gatewayLabel = gatewayLabel,
+                    connection = connection,
+                    onClick = onProfiles,
+                    modifier = if (isDesktop) Modifier.widthIn(max = 200.dp) else Modifier.fillMaxWidth(),
+                    bot = profileBot,
+                    picture = profilePicture,
+                )
+            } else {
+                AppMark(30.dp, glow = false)
+                Box(Modifier.weight(1f)) {
+                    Column(
+                        Modifier
+                            .then(if (isDesktop) Modifier.widthIn(max = 200.dp) else Modifier.fillMaxWidth())
+                            .heightIn(min = MinTouchTarget)
+                            .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
+                            .handCursor()
+                            .clickable(
+                                onClickLabel = accountLabel,
+                                role = Role.Button,
+                                interactionSource = null,
+                                indication = if (isDesktop) rememberHoverIndication(Theme[colors][text]) else LocalIndication.current,
+                                onClick = onAccount,
+                            )
+                            .then(if (isDesktop) Modifier.padding(horizontal = 6.dp) else Modifier)
+                            .semantics(mergeDescendants = true) { stateDescription = connectionText },
+                        verticalArrangement = Arrangement.Center,
+                    ) {
                         Text(
-                            gatewayLabel,
-                            style = Theme[typography][caption].copy(fontSize = 12.sp),
-                            color = Theme[colors][textTertiary],
+                            "Kyllene",
+                            style = Theme[typography][heading].copy(fontSize = 17.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.02).em),
+                            color = Theme[colors][text],
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
                         )
-                        UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(12.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Box(Modifier.size(6.dp).background(connectionDot(connection), CircleShape))
+                            Text(
+                                gatewayLabel,
+                                style = Theme[typography][caption].copy(fontSize = 12.sp),
+                                color = Theme[colors][textTertiary],
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
+                            )
+                            UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(12.dp))
+                        }
                     }
                 }
             }
@@ -1370,7 +1430,7 @@ private fun MainHeader(
 }
 
 @Composable
-private fun connectionDot(connection: ConnectionState?): Color = when (connection) {
+internal fun connectionDot(connection: ConnectionState?): Color = when (connection) {
     null, is ConnectionState.Connected -> Theme[colors][success]
     is ConnectionState.Failed, is ConnectionState.SessionExpired -> Theme[colors][danger]
     else -> Theme[colors][warning]
@@ -3149,6 +3209,14 @@ internal fun ProfileSheet(
     selected: String?,
     onDismiss: () -> Unit,
     onSelect: (Profile) -> Unit,
+    /** The list is still on its way: a spinner in its place. */
+    loading: Boolean = false,
+    /**
+     * The gateway in use and the way to another: the header that opens this sheet is where the gateway was
+     * reached from before it showed the profile. Null leaves it out.
+     */
+    gatewayLabel: String? = null,
+    onOpenGateways: () -> Unit = {},
 ) {
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         SheetHeader(stringResource(Res.string.sessions_profiles), stringResource(Res.string.sessions_profiles_detail))
@@ -3162,7 +3230,9 @@ internal fun ProfileSheet(
             withFrameNanos {}
             runCatching { activeRow.bringIntoView() }
         }
-        Column(Modifier.weight(1f, fill = false).verticalScrollWithBar()) {
+        if (loading) {
+            Box(Modifier.fillMaxWidth().padding(vertical = 24.dp), contentAlignment = Alignment.Center) { Spinner() }
+        } else Column(Modifier.weight(1f, fill = false).verticalScrollWithBar()) {
             profiles.forEach { profile ->
                 val checked = profile.name == selected
                 ProfileRow(
@@ -3173,13 +3243,16 @@ internal fun ProfileSheet(
                 )
             }
         }
-        if (profiles.size < 2) {
+        if (!loading && profiles.size < 2) {
             Text(
                 stringResource(Res.string.sessions_profiles_add_hint),
                 style = Theme[typography][bodySmall],
                 color = Theme[colors][textTertiary],
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
             )
+        }
+        if (gatewayLabel != null) {
+            SheetAction(stringResource(Res.string.sessions_switch_gateway_named, gatewayLabel), Lucide.ArrowLeftRight, onClick = { onDismiss(); onOpenGateways() })
         }
     }
 }
@@ -3197,16 +3270,7 @@ private fun ProfileRow(profile: Profile, checked: Boolean, onClick: () -> Unit, 
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
-            Modifier.size(28.dp).clip(CircleShape).background(Theme[colors][if (checked) accent else surface]),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                profile.label.take(1).uppercase(),
-                style = Theme[typography][caption].copy(fontWeight = FontWeight.SemiBold),
-                color = Theme[colors][if (checked) onAccent else textSecondary],
-            )
-        }
+        ProfileInitial(profile.label, checked)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(profile.label, style = Theme[typography][body], color = Theme[colors][text], maxLines = 1, overflow = TextOverflow.Ellipsis)
             val sub = listOfNotNull(stringResource(Res.string.sessions_profile_default).takeIf { profile.isDefault }, detail).joinToString(" · ")

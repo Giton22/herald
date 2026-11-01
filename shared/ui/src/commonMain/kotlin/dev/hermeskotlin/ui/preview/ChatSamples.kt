@@ -30,6 +30,7 @@ import dev.hermeskotlin.ui.chat.LAST_REPLY
 import dev.hermeskotlin.ui.chat.PendingComment
 import dev.hermeskotlin.ui.chat.SelectionAnchor
 import dev.hermeskotlin.ui.chat.newComment
+import dev.hermeskotlin.ui.sessions.ProfileSwitch
 import dev.hermeskotlin.ui.sessions.RowStatus
 import dev.hermeskotlin.ui.voice.VoiceChatState
 import dev.hermeskotlin.ui.voice.VoicePhase
@@ -446,6 +447,9 @@ internal object ChatSamples {
     }
 
     const val USER = "Alex Morgan"
+
+    /** A profile with a name too long for a narrow sidebar, so the switch shows it cut short. */
+    val profileSwitch = ProfileSwitch("Research assistant for the garden club newsletter")
 }
 
 /** Does nothing: previews only draw. */
