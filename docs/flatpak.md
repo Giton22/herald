@@ -104,6 +104,22 @@ attacker replacing the entire profile. Run the Linux storage and migration tests
 with `./gradlew :shared:core:jvmTest --tests '*Linux*StoreTest' --tests '*LinuxStorage*Test'`
 and startup contracts with `./gradlew :desktopApp:jvmTest --tests '*StorageStartupTest'`.
 
+Linux Flatpak push registration uses a per-install UUID, two P-256 key pairs and
+independent random topics from the existing signed/encrypted push protocol. Its
+private keys, pinned gateway and identities awaiting unregistration share the
+encrypted settings store; an unavailable or corrupt identity is preserved and
+reported, never silently replaced. It is not available through plaintext desktop
+stores.
+
+One identity belongs to one gateway. Retirement clears its keys, topics and pin
+together, retaining the old device ID only for that gateway's later unregistration.
+A subsequent registration creates fresh material. Public gateway keys must be valid
+protocol-version-one P-256 points before they are pinned.
+
+This adds registration storage, not push reception or a background service. The
+desktop Notifications anywhere control remains hidden until receiving is supported.
+The existing authenticated registration coordinator and gateway protocol are reused.
+
 ### Microphone backend
 
 Linux has a recorder behind the existing `VoiceRecorder` contract, using the default
