@@ -17,6 +17,8 @@ import dev.hermeskotlin.core.voice.WebRtcSpeaker
 import dev.hermeskotlin.core.voice.LinuxVoiceRecorder
 import dev.hermeskotlin.core.voice.WebRtcMicrophone
 import dev.hermeskotlin.core.voice.LiveCalls
+import dev.hermeskotlin.core.voice.LinuxLiveCall
+import dev.hermeskotlin.core.voice.WebRtcLivePeer
 import dev.hermeskotlin.core.voice.NoDeviceDictation
 import dev.hermeskotlin.core.voice.NoSpeechPlayer
 import dev.hermeskotlin.core.voice.NoVoiceRecorder
@@ -45,7 +47,11 @@ actual val platformModule: Module = module {
         } else NoSpeechPlayer
     }
     single<DeviceDictation> { NoDeviceDictation }
-    single { LiveCalls { null } }
+    single { LiveCalls {
+        if (System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in setOf("amd64", "x86_64", "aarch64")) {
+            LinuxLiveCall { events -> WebRtcLivePeer(events, realAudio = true) }
+        } else null
+    } }
     single { offlineDatabase(appDataDir) }
     single<Sealer> { KeystoreSealer(get()) }
 }

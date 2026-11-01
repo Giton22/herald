@@ -19,3 +19,5 @@ internal actual val macKeys: Boolean = false
 
 @Composable
 internal actual fun PlatformTextContextMenu(content: @Composable () -> Unit) = content()
+
+internal actual val hasVoice: Boolean = true

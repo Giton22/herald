@@ -192,8 +192,8 @@ microphone and output devices; it is not a per-recording permission prompt.
 Recording begins only when requested, uses bounded PCM buffering, and releases its
 native device on completion, cancellation or failure. It changes no device defaults
 or system volume and writes no temporary recording files.
-The existing desktop voice UI remains disabled until capability and UI integration;
-this backend alone does not enable dictation, spoken replies or live calls.
+The supported Linux desktop exposes the existing voice controls; device dictation
+remains unavailable and uses the existing gateway fallback.
 Unit tests use synthetic PCM. Installed capture, audio quality and live-provider
 behavior require separate qualification; synthetic frames do not prove them.
 
@@ -210,8 +210,8 @@ Playback buffers are bounded. Hold emits silence without consuming queued audio;
 cancellation or failure retires the owned codec and output device. No system
 volume, mute or device defaults are changed. Unit tests cover lifecycle and codec
 failures. Installed output, physical audio quality and live-provider behavior
-require separate qualification. This backend does not enable the desktop voice
-UI or live calls; those need their own capability and lifecycle integration.
+require separate qualification. The live-call integration uses the same audio
+backend independently of ordinary spoken playback.
 
 ### Live transport backend
 
@@ -229,12 +229,19 @@ non-cancellable callback code can be forced to finish. Native callbacks schedule
 one owned cleanup operation; channel, peer, factory and device releases share the
 same completion path. Explicit owner close waits for that release.
 
-This stage uses dummy audio and no captured track, with recording and playout off.
-The desktop live-call binding and voice controls remain disabled. Real capture,
-rendering, echo cancellation and capability/UI integration are separate work.
-Local peer SDP/event exchange and cleanup do not qualify provider compatibility,
-physical audio quality or interruption. Unit tests cover the transport boundary;
-optimized installed-runtime and media/provider checks require separate validation.
+Transport-only checks can use dummy audio with recording and playout off. The
+Linux live-call binding instead owns a default microphone/output pair and a local
+track through the native audio engine, with echo cancellation, noise suppression,
+gain control and high-pass filtering requested. That configuration does not prove
+acoustic echo handling or interruption; both need a real device/provider session.
+
+The existing shared voice UI, signaling, captions and call lifecycle are reused.
+Mute disables the outgoing track and clears its displayed level. End/cancellation
+retires the connection and its audio resources. Level reports expire rather than
+leaving a stale microphone or speaking indicator; late reports cannot restore a
+retired call. No system mute, volume or device default is changed. Windows, macOS
+and unsupported Linux architectures retain their unavailable voice capability.
+Local peer exchange and unit tests do not qualify provider or physical audio behavior.
 
 ## Advisory CI
 
