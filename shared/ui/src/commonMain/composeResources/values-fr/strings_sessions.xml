@@ -189,6 +189,7 @@
     <string name="sessions_profiles">Profils</string>
     <string name="sessions_profiles_detail">Chaque profil est un agent à part, avec ses propres conversations, sa mémoire et son modèle.</string>
     <string name="sessions_profiles_add_hint">Ajoutez des profils sur la machine de la gateway avec « hermes profile create ».</string>
+    <string name="sessions_profiles_load_failed">Impossible de charger les profils.</string>
     <string name="sessions_profile_default">Par défaut</string>
     <string name="sessions_profile_active">Actif</string>
 

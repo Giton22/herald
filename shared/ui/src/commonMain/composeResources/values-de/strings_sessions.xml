@@ -189,6 +189,7 @@
     <string name="sessions_profiles">Profile</string>
     <string name="sessions_profiles_detail">Jedes Profil ist ein eigener Agent, mit eigenen Chats, eigenem Gedächtnis und Modell.</string>
     <string name="sessions_profiles_add_hint">Profile legst du auf dem Gateway-Rechner mit „hermes profile create“ an.</string>
+    <string name="sessions_profiles_load_failed">Die Profile konnten nicht geladen werden.</string>
     <string name="sessions_profile_default">Standard</string>
     <string name="sessions_profile_active">Aktiv</string>
 

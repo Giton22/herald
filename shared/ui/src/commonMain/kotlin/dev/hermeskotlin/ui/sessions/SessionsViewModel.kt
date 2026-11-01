@@ -136,6 +136,15 @@ data class RowStatus(val waiting: Waiting? = null, val unread: Boolean = false, 
 /** The gateway and profile a list is of; null [profile] is the gateway's launch profile. */
 data class ListBinding(val gateway: SavedGateway, val profile: String?)
 
+/** The read of the profile list a user waits on: none, on its way, or failed (why is the list's message). */
+sealed interface ProfilesRead {
+    data object Idle : ProfilesRead
+
+    data object Loading : ProfilesRead
+
+    data object Failed : ProfilesRead
+}
+
 /** A read of the list from the gateway, or the list no longer standing for the gateway's chats. */
 sealed interface ListRead {
     /** Asked of [gateway] for [profile]'s chats in [filter]. */
@@ -210,6 +219,10 @@ class SessionsViewModel(
     val roster: StateFlow<ProfileRoster?> = _roster.asStateFlow()
     private var profilesJob: Job? = null
     private var profilesFor: GatewayUrl? = null
+    private val _profilesRead = MutableStateFlow<ProfilesRead>(ProfilesRead.Idle)
+
+    /** The read of the profile list a user waits on, on the bound gateway ([refreshProfiles] with `waiting`). */
+    val profilesRead: StateFlow<ProfilesRead> = _profilesRead.asStateFlow()
 
     private val _state = MutableStateFlow(SessionsUiState())
     val state: StateFlow<SessionsUiState> = _state.asStateFlow()
@@ -310,6 +323,8 @@ class SessionsViewModel(
         if (newGateway) {
             _user.value = null
             _roster.value = null
+            // A read the user asked for on the last gateway is nothing to wait on here.
+            _profilesRead.value = ProfilesRead.Idle
             viewModelScope.launch {
                 (auth.me(gateway.gatewayUrl) as? ApiResult.Success)?.let { _user.value = it.value }
             }
@@ -317,17 +332,38 @@ class SessionsViewModel(
         }
     }
 
-    /** Refetches the profile list, e.g. when the account sheet opens (one may have been added on the host). */
-    fun refreshProfiles() {
+    /**
+     * Refetches the profile list, e.g. when the account sheet opens (one may have been added on the host).
+     * [waiting]: a user waits on the list (the profile picker, tapped before any list came), so [profilesRead] says
+     * it's on its way, and if this read, or the one already out, fails, says why, also as the list's message.
+     */
+    fun refreshProfiles(waiting: Boolean = false) {
         val url = gateway?.gatewayUrl ?: return
+        if (waiting) _profilesRead.value = ProfilesRead.Loading
         // One read at a time: the socket connecting while the first is out would only ask again.
         if (profilesJob?.isActive == true && profilesFor == url) return
         profilesFor = url
         profilesJob = viewModelScope.launch {
-            val roster = (profiles.roster(url) as? ApiResult.Success)?.value ?: return@launch
+            val result = profiles.roster(url)
             // Another gateway taken up meanwhile has its own profiles.
-            if (gateway?.gatewayUrl == url) _roster.value = roster
+            if (gateway?.gatewayUrl != url) return@launch
+            val waited = _profilesRead.value == ProfilesRead.Loading
+            when (result) {
+                is ApiResult.Success -> {
+                    _roster.value = result.value
+                    if (waited) _profilesRead.value = ProfilesRead.Idle
+                }
+                else -> if (waited) {
+                    _state.update { it.copy(message = said(Res.string.sessions_profiles_load_failed, detail = result.errorMessage)) }
+                    _profilesRead.value = ProfilesRead.Failed
+                }
+            }
         }
+    }
+
+    /** Nobody waits on the profile list any more (the picker was put away): a late failure goes unsaid. */
+    fun stopWaitingForProfiles() {
+        _profilesRead.value = ProfilesRead.Idle
     }
 
     fun refresh() = load(refresh = true)

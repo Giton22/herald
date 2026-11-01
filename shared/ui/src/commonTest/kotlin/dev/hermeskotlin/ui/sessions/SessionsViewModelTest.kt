@@ -36,6 +36,7 @@ import io.ktor.http.HttpMethod
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import io.ktor.http.isSuccess
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -62,6 +63,9 @@ import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 import dev.hermeskotlin.ui.resources.*
 
+/** The test gateway's host, as a request to it names it. */
+private const val HOST = "hermes.example.ts.net"
+
 @OptIn(ExperimentalCoroutinesApi::class)
 class SessionsViewModelTest {
 
@@ -85,6 +89,8 @@ class SessionsViewModelTest {
         listFails: () -> Boolean = { false },
         /** The profiles can't be read while this says so. */
         profilesFail: () -> Boolean = { false },
+        /** Holds a gateway's profile reads, by host, until it completes. */
+        profilesHeld: (host: String) -> CompletableDeferred<Unit>? = { null },
         /** Whether [socket] connects at once; when not, the test starts it through [onConnection]. */
         connectNow: Boolean = true,
         onConnection: (GatewayConnection) -> Unit = {},
@@ -105,9 +111,13 @@ class SessionsViewModelTest {
                     if (listFails()) HttpStatusCode.InternalServerError else listStatus, json,
                 )
                 request.url.encodedPath == "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
-                request.url.encodedPath.startsWith("/api/profiles") ->
+                request.url.encodedPath.startsWith("/api/profiles") -> {
+                    profilesHeld(request.url.host)?.await()
+                    // Each gateway runs as its own profile, so whose answer was taken shows.
+                    val launch = if (request.url.host == HOST) "default" else "other"
                     if (profilesFail()) respond("", HttpStatusCode.ServiceUnavailable)
-                    else respond("""{"profiles":[{"name":"default","is_default":true}],"current":"default"}""", HttpStatusCode.OK, json)
+                    else respond("""{"profiles":[{"name":"default","is_default":true}],"current":"$launch"}""", HttpStatusCode.OK, json)
+                }
                 // A gateway without snapshots, so writes go without an identity (SessionsApiTest covers that).
                 request.url.encodedPath.endsWith("/mutation-snapshot") -> respond("""{"detail":"Not Found"}""", HttpStatusCode.NotFound, json)
                 request.url.encodedPath == "/api/files/mkdir" -> {
@@ -304,6 +314,99 @@ class SessionsViewModelTest {
         connection!!.start(gateway.gatewayUrl)
 
         assertEquals("default", vm.roster.first { it != null }?.launch)
+    }
+
+    @Test
+    fun aProfileReadTheUserWaitsOnSaysWhyWhenItFails() = runTest(dispatcher) {
+        val vm = viewModel(profilesFail = { true })
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        // The read on binding is a quiet one: nobody is waiting on it.
+        assertEquals(null, vm.state.value.message)
+        assertEquals(ProfilesRead.Idle, vm.profilesRead.value)
+
+        // The profile switch tapped before any list came: the picker waits on this read, and is told it failed.
+        vm.refreshProfiles(waiting = true)
+
+        assertEquals(ProfilesRead.Failed, vm.profilesRead.value)
+        assertEquals(Res.string.sessions_profiles_load_failed, assertIs<Said.Line>(vm.state.value.message).res)
+        assertEquals(null, vm.roster.value)
+    }
+
+    @Test
+    fun aProfileReadThatComesBackIsntReportedAsFailed() = runTest(dispatcher) {
+        val vm = viewModel()
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        vm.refreshProfiles(waiting = true)
+        assertEquals("default", vm.roster.first { it != null }?.launch)
+        assertEquals(ProfilesRead.Idle, vm.profilesRead.value)
+        assertEquals(null, vm.state.value.message)
+    }
+
+    @Test
+    fun aTapTakingOverAReadAlreadyOutIsToldItFailed() = runTest(dispatcher) {
+        val held = CompletableDeferred<Unit>()
+        val vm = viewModel(profilesFail = { true }, profilesHeld = { held })
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        // The quiet read on binding is still out when the switch is tapped: no second read, but the tap waits on it.
+        vm.refreshProfiles(waiting = true)
+        assertEquals(ProfilesRead.Loading, vm.profilesRead.value)
+
+        held.complete(Unit)
+
+        assertEquals(ProfilesRead.Failed, vm.profilesRead.value)
+        assertEquals(Res.string.sessions_profiles_load_failed, assertIs<Said.Line>(vm.state.value.message).res)
+    }
+
+    @Test
+    fun anotherGatewayTakenUpMidReadLeavesNothingWaiting() = runTest(dispatcher) {
+        val held = CompletableDeferred<Unit>()
+        val vm = viewModel(profilesFail = { true }, profilesHeld = { held })
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        vm.refreshProfiles(waiting = true)
+        assertEquals(ProfilesRead.Loading, vm.profilesRead.value)
+
+        // Gateway B from the account sheet: the picker asked for on A mustn't open on B's list, nor A's failure show.
+        vm.bind(SavedGateway("https://other.example.ts.net"))
+        assertEquals(ProfilesRead.Idle, vm.profilesRead.value)
+        held.complete(Unit)
+
+        assertEquals(ProfilesRead.Idle, vm.profilesRead.value)
+        assertEquals(null, vm.state.value.message)
+    }
+
+    @Test
+    fun aLateProfileListFromTheLastGatewayIsDropped() = runTest(dispatcher) {
+        val first = CompletableDeferred<Unit>()
+        val other = SavedGateway("https://other.example.ts.net")
+        val vm = viewModel(profilesHeld = { host -> first.takeIf { host == HOST } })
+        vm.bind(gateway)
+        vm.bind(other)
+        assertEquals("other", vm.roster.first { it != null }?.launch)
+
+        // The first gateway's answer comes after the second's.
+        first.complete(Unit)
+
+        assertEquals("other", vm.roster.value?.launch)
+    }
+
+    @Test
+    fun aProfileReadNobodyWaitsOnAnyMoreFailsQuietly() = runTest(dispatcher) {
+        val held = CompletableDeferred<Unit>()
+        val vm = viewModel(profilesFail = { true }, profilesHeld = { held })
+        vm.bind(gateway)
+        vm.awaitLoaded()
+        vm.refreshProfiles(waiting = true)
+
+        // The drawer closed (or the screen went with a rotation) before the answer came.
+        vm.stopWaitingForProfiles()
+        held.complete(Unit)
+
+        assertEquals(ProfilesRead.Idle, vm.profilesRead.value)
+        assertEquals(null, vm.state.value.message)
     }
 
     @Test
