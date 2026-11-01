@@ -40,14 +40,14 @@ class ProfileSheetTest {
     private var picked: Profile? = null
     private var visible by mutableStateOf(true)
 
-    private fun show(count: Int, scheme: ColorScheme = ColorScheme.Light, fontScale: Float = 1f) {
+    private fun show(count: Int, scheme: ColorScheme = ColorScheme.Light, fontScale: Float = 1f, selected: String = "profile-1") {
         composeRule.setContent {
             HermesTheme(scheme) {
                 CompositionLocalProvider(LocalDensity provides Density(LocalDensity.current.density, fontScale)) {
                     ProfileSheet(
                         visible = visible,
                         profiles = (1..count).map { Profile(name = "profile-$it") },
-                        selected = "profile-1",
+                        selected = selected,
                         onDismiss = { visible = false },
                         onSelect = { picked = it; visible = false },
                     )
@@ -68,6 +68,13 @@ class ProfileSheetTest {
 
     @Test
     fun aLongListCanScrollToAndSelectItsLastProfile() = selectLastProfile()
+
+    @Test
+    fun aLongListOpensWithTheActiveProfileInSight() {
+        show(30, selected = "profile-25")
+        composeRule.onNodeWithText("profile-25").assertIsDisplayed()
+        composeRule.onNodeWithText("profile-1").assertIsNotDisplayed()
+    }
 
     @Test
     fun aLongListScrollsInDarkTheme() = selectLastProfile(scheme = ColorScheme.Dark)

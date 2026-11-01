@@ -83,6 +83,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -3017,10 +3019,19 @@ internal fun ProfileSheet(
 ) {
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         SheetHeader("Profiles", "Each profile is its own agent, with its own chats, memory and model.")
-        // A long list scrolls under the header; a short one keeps the sheet sized to its content.
+        // A long list scrolls under the header; a short one keeps the sheet sized to its content. It opens with the
+        // active profile in sight, wherever it is in the list.
+        val activeRow = remember { BringIntoViewRequester() }
+        LaunchedEffect(visible) { if (visible) runCatching { activeRow.bringIntoView() } }
         Column(Modifier.weight(1f, fill = false).verticalScrollWithBar()) {
             profiles.forEach { profile ->
-                ProfileRow(profile, checked = profile.name == selected, onClick = { onSelect(profile) })
+                val checked = profile.name == selected
+                ProfileRow(
+                    profile,
+                    checked = checked,
+                    onClick = { onSelect(profile) },
+                    modifier = if (checked) Modifier.bringIntoViewRequester(activeRow) else Modifier,
+                )
             }
         }
         if (profiles.size < 2) {
@@ -3035,10 +3046,10 @@ internal fun ProfileSheet(
 }
 
 @Composable
-private fun ProfileRow(profile: Profile, checked: Boolean, onClick: () -> Unit) {
+private fun ProfileRow(profile: Profile, checked: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val detail = profile.description?.trim()?.takeIf { it.isNotEmpty() } ?: profile.model?.let(::displayModelName)
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
             .handCursor()
