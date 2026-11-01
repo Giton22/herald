@@ -2,6 +2,8 @@ package dev.hermeskotlin.core.voice
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.media.AudioDeviceInfo
+import android.media.AudioManager
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioRecord
@@ -11,6 +13,7 @@ import android.media.MediaRecorder
 import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.AudioEffect
 import android.media.audiofx.NoiseSuppressor
+import android.os.Build
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
@@ -220,7 +223,7 @@ class AndroidVoiceRecorder : VoiceRecorder {
 
 /**
  * Plays each reply clip from a cache file with [MediaPlayer], and streamed speech straight into an
- * [AudioTrack] as it arrives, both as an assistant voice.
+ * [AudioTrack] as it arrives, as assistant audio outside a chained voice chat.
  */
 class AndroidSpeechPlayer(private val context: Context) : SpeechPlayer {
     override suspend fun playRingback() {
@@ -229,11 +232,58 @@ class AndroidSpeechPlayer(private val context: Context) : SpeechPlayer {
     }
 
     private val lock = Any()
+    private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
+    private var chatAudioOwner: Any? = null
+    private var restoreChatAudio: (() -> Unit)? = null
+
     /** Held ([hold]): what plays now is paused, and what's ready meanwhile waits to start. */
     private var holding = false
     private var track: AudioTrack? = null
     /** A clip once it's ready to play. */
     private var clip: MediaPlayer? = null
+
+    /** The chained chat uses call routing; the returned close action is safe to call again or after a newer chat. */
+    @Suppress("DEPRECATION")
+    override fun chainedChatAudio(): () -> Unit = synchronized(lock) {
+        val owner = Any()
+        if (restoreChatAudio == null) {
+            val mode = audioManager.mode
+            val device = if (Build.VERSION.SDK_INT >= 31) audioManager.communicationDevice else null
+            val speaker = audioManager.isSpeakerphoneOn
+            val restore = {
+                try {
+                    if (Build.VERSION.SDK_INT >= 31) {
+                        audioManager.clearCommunicationDevice()
+                        if (mode != AudioManager.MODE_NORMAL && device != null) audioManager.setCommunicationDevice(device)
+                    } else audioManager.isSpeakerphoneOn = speaker
+                } finally { audioManager.mode = mode }
+            }
+            try {
+                audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+                if (Build.VERSION.SDK_INT >= 31) {
+                    val devices = audioManager.availableCommunicationDevices
+                    val headset = devices.firstOrNull { it.type in setOf(AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_BLUETOOTH_SCO, AudioDeviceInfo.TYPE_BLE_HEADSET) }
+                    (headset ?: devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER })?.let(audioManager::setCommunicationDevice)
+                } else audioManager.isSpeakerphoneOn = !audioManager.isWiredHeadsetOn && !audioManager.isBluetoothScoOn
+            } catch (e: Exception) {
+                restore()
+                throw e
+            }
+            restoreChatAudio = restore
+        }
+        chatAudioOwner = owner
+        return@synchronized {
+            synchronized(lock) {
+                // An old chat's finally must not restore over the one that replaced it.
+                if (chatAudioOwner === owner) {
+                    chatAudioOwner = null
+                    val restore = restoreChatAudio
+                    restoreChatAudio = null
+                    restore?.invoke()
+                }
+            }
+        }
+    }
 
     override fun hold(on: Boolean): Boolean {
         synchronized(lock) {
@@ -255,7 +305,7 @@ class AndroidSpeechPlayer(private val context: Context) : SpeechPlayer {
         val track = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                    .setUsage(synchronized(lock) { if (chatAudioOwner != null) AudioAttributes.USAGE_VOICE_COMMUNICATION else AudioAttributes.USAGE_ASSISTANT })
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build(),
             )
@@ -359,7 +409,7 @@ class AndroidSpeechPlayer(private val context: Context) : SpeechPlayer {
             suspendCancellableCoroutine { continuation ->
                 player.setAudioAttributes(
                     AudioAttributes.Builder()
-                        .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                        .setUsage(synchronized(lock) { if (chatAudioOwner != null) AudioAttributes.USAGE_VOICE_COMMUNICATION else AudioAttributes.USAGE_ASSISTANT })
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .build(),
                 )

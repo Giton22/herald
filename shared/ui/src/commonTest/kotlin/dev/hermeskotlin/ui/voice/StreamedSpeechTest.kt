@@ -156,6 +156,11 @@ class StreamedSpeechTest {
 
     /** [canHold]: the voice holds when someone seems to cut in; [holds] is each hold and letting go. */
     private class Player(val fails: Boolean = false, val canHold: Boolean = false) : SpeechPlayer {
+        var audioOpen = false
+        override fun chainedChatAudio(): () -> Unit {
+            audioOpen = true
+            return { audioOpen = false }
+        }
         val holds = mutableListOf<Boolean>()
         override fun hold(on: Boolean): Boolean {
             holds += on
@@ -258,6 +263,17 @@ class StreamedSpeechTest {
         voice.startChat(session, gateway, "rin")
         socket.submits.first { it.isNotEmpty() }
         return Setup(socket, voice, player, spoken)
+    }
+
+    @Test
+    fun chainedAudioIsOpenBeforeTheReplyAndClosedOnEnd() = runTest {
+        val player = Player()
+        val setup = chat(Stream(), player)
+        assertTrue(player.audioOpen)
+        setup.voice.stopChat()
+        assertFalse(player.audioOpen)
+        yield()
+        assertFalse(player.audioOpen)
     }
 
     @Test
