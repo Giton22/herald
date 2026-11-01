@@ -2,6 +2,7 @@ package dev.hermeskotlin.core.chat
 
 import dev.hermeskotlin.core.network.HermesJson
 import dev.hermeskotlin.core.rpc.GatewayEvent
+import dev.hermeskotlin.core.sessions.SessionMessage
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -9,6 +10,77 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ChatReducerTest {
+
+    @Test
+    fun historyCombinesProjectedReasoningAndCommentaryAfterCacheRoundTrip() {
+        val row = HermesJson.decodeFromString<SessionMessage>("""{"role":"assistant","content":"Done.",
+            "reasoning":"Summary\n\nUnredacted old commentary.","display_reasoning":"Summary",
+            "display_commentary":["Public progress.","Public progress."," "]}""")
+        val cached = HermesJson.decodeFromString<SessionMessage>(HermesJson.encodeToString(row))
+        val reply = assertIs<ChatMessage.Assistant>(historyToMessages(listOf(cached)).single())
+        assertEquals("Done.", reply.text)
+        assertEquals("Summary\n\nPublic progress.", reply.reasoning)
+    }
+
+    @Test
+    fun emptyProjectedReasoningDoesNotRecoverSuppressedLegacyText() {
+        val row = HermesJson.decodeFromString<SessionMessage>("""{"role":"assistant","content":"Done.",
+            "reasoning":"Suppressed progress.","display_reasoning":"","display_commentary":[]}""")
+        val reply = assertIs<ChatMessage.Assistant>(historyToMessages(listOf(row)).single())
+        assertEquals("", reply.reasoning)
+    }
+
+    @Test
+    fun commentaryRepeatedWithOtherLineEndsOrEdgeSpacesShowsOnce() {
+        val row = HermesJson.decodeFromString<SessionMessage>("""{"role":"assistant","content":"Done.","display_reasoning":"",
+            "display_commentary":["Progress.\r\nDone with it.","Progress.\nDone with it. "]}""")
+        assertEquals("Progress.\r\nDone with it.", assertIs<ChatMessage.Assistant>(historyToMessages(listOf(row)).single()).reasoning)
+    }
+
+    @Test
+    fun historyRetainsACommentaryOnlyAssistantRow() {
+        val row = HermesJson.decodeFromString<SessionMessage>("""{"role":"assistant","content":"",
+            "reasoning":"Old progress.","display_reasoning":"","display_commentary":["Public progress."]}""")
+        val reply = assertIs<ChatMessage.Assistant>(historyToMessages(listOf(row)).single())
+        assertEquals("", reply.text)
+        assertEquals("Public progress.", reply.reasoning)
+        val legacy = HermesJson.decodeFromString<SessionMessage>("""{"role":"assistant","reasoning":"Summary"}""")
+        assertEquals("Summary", assertIs<ChatMessage.Assistant>(historyToMessages(listOf(legacy)).single()).reasoning)
+    }
+
+    @Test
+    fun olderHistoryKeepsReasoningAndDoesNotReadRawProviderSidecars() {
+        val row = HermesJson.decodeFromString<SessionMessage>("""{"role":"assistant","content":"Done.",
+            "reasoning":"Legacy summary.","display_reasoning":null,"display_commentary":null,
+            "codex_message_items":[{"type":"message","phase":"commentary","content":[{"text":"Not a display projection."}]}]}""")
+        assertEquals("Legacy summary.", assertIs<ChatMessage.Assistant>(historyToMessages(listOf(row)).single()).reasoning)
+    }
+
+    @Test
+    fun fallbackDoesNotRepeatWholeLineCommentaryButKeepsPartialMatches() {
+        val row = HermesJson.decodeFromString<SessionMessage>("""{"role":"assistant","content":"Done.",
+            "reasoning":"Summary\r\n\r\nProgress.\r\nStill working.",
+            "display_commentary":["Progress.\nStill working.","working."]}""")
+        val reply = assertIs<ChatMessage.Assistant>(historyToMessages(listOf(row)).single())
+        assertEquals("Summary\r\n\r\nProgress.\r\nStill working.\n\nworking.", reply.reasoning)
+    }
+
+    @Test
+    fun liveInterimRemainsReplyTextAndAlreadyStreamedIsNotRepeated() {
+        // Most providers' interim is the step's own text, which a loaded chat shows as reply text too.
+        val state = ChatState().reduce(event("message.interim", """{"text":"Public progress.","already_streamed":false}"""))
+            .reduce(event("message.interim", """{"text":"Public progress.","already_streamed":true}"""))
+        val reply = assertIs<ChatMessage.Assistant>(state.messages.single())
+        assertEquals("Public progress.\n\n", reply.text)
+        assertEquals("", reply.reasoning)
+    }
+
+    @Test
+    fun intentionalSilenceDoesNotBecomeAReasoningOnlyReply() {
+        val row = HermesJson.decodeFromString<SessionMessage>("""{"role":"assistant","content":"NO_REPLY",
+            "reasoning":"The agent chose silence."}""")
+        assertTrue(historyToMessages(listOf(row)).isEmpty())
+    }
 
     private fun event(type: String, payload: String = "{}") =
         GatewayEvent(type, HermesJson.parseToJsonElement(payload), sessionId = "rt", seq = null)

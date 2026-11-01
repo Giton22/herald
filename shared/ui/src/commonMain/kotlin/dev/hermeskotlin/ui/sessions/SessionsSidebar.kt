@@ -365,7 +365,6 @@ fun SessionsSidebar(
         viewModel.setVisible(visible)
         rooms.setVisible(visible)
     }
-    LaunchedEffect(selectedId) { bots.setOpenSession(selectedId) }
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
     val user by viewModel.user.collectAsStateWithLifecycle()
     val roster by viewModel.roster.collectAsStateWithLifecycle()
@@ -508,24 +507,19 @@ fun SessionsSidebar(
     // The thread rows as the section shows them; moving one goes past its neighbour here, not in the whole list.
     val shownThreads = sections.threads.filter { attentionFilter.keeps(statuses[it.session.id]) }
     val openHere: (SessionSummary) -> Unit = {
-        // Taken before the chat counts as read, so it can show where the new messages start.
+        // The viewport decides when the new messages have actually been read.
         val readUpTo = viewModel.readUpTo(it)
-        viewModel.markSeen(it)
         onOpenSession(it, readUpTo)
         if (searchOpen) closeSearch()
     }
-    // The open chat is being read, so whatever it has said is seen.
-    val openSession = state.sessions.firstOrNull { it.id == selectedId }
-    LaunchedEffect(openSession) { openSession?.let(viewModel::markSeen) }
     val rowActions: (SessionSummary) -> Unit = { actionTarget = it }
     // A click with keys held, on the desktop: pin, archive, or the chat in a window of its own.
     val windowInfo = LocalWindowInfo.current
     val shortcutBus = LocalShortcuts.current
     // The chat in a window of its own; where no window can open (a phone), it opens as a plain click does.
     val popOut: (SessionSummary) -> Unit = { s ->
-        // Taken before the chat counts as read, as for a plain click.
+        // Opening a window preserves the unread boundary too.
         val readUpTo = viewModel.readUpTo(s)
-        viewModel.markSeen(s)
         val popped = shortcutBus.fire(Shortcut.PopOut(ChatTarget(gateway, s.id, s.displayTitle, profile = profile, readUpTo = readUpTo)))
         if (!popped) openHere(s) else if (s.id == selectedId) onNewChat(null)
     }
