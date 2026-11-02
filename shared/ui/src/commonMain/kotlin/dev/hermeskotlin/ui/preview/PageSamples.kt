@@ -27,6 +27,7 @@ import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.ui.sessions.ScheduledUiState
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
+import dev.hermeskotlin.core.gateway.CheckNote
 import dev.hermeskotlin.core.gateway.CheckStage
 import dev.hermeskotlin.core.gateway.StageResult
 import dev.hermeskotlin.core.insights.ModelUsage
@@ -397,11 +398,11 @@ internal object PageSamples {
 
     /** Settings → Check connection, where the server and sign-in pass but the live link doesn't. */
     val connectionCheck = mapOf(
-        CheckStage.Server to StageResult.Passed("Hermes 0.9.0 answered at hermes.example.ts.net."),
-        CheckStage.SignIn to StageResult.Passed("Signed in as Alex Morgan."),
+        CheckStage.Server to StageResult.Passed(CheckNote(CheckNote.Kind.ServerAnswers, listOf("0.9.0", "hermes.example.ts.net"))),
+        CheckStage.SignIn to StageResult.Passed(CheckNote(CheckNote.Kind.SignedInAs, listOf("Alex Morgan"))),
         CheckStage.Live to StageResult.Failed(
-            problem = "The chat connection was refused at /api/ws.",
-            fix = "Your proxy must pass WebSocket upgrades: forward the Upgrade and Connection headers to the dashboard.",
+            problem = CheckNote(CheckNote.Kind.ChatRefused, listOf("400")),
+            fix = CheckNote(CheckNote.Kind.FixAllowUpgrades),
         ),
     )
 
