@@ -98,8 +98,11 @@ internal class LinuxSpeechPlayer(private val decoder: SpeechDecoder, private val
             watchdog?.cancel()
             chunks.cancel()
             var cleanupFailure: Throwable? = null
-            try { withContext(NonCancellable + Dispatchers.IO) { device?.close() } }
-            catch (caught: Throwable) { cleanupFailure = caught }
+            try {
+                withContext(NonCancellable + Dispatchers.IO) { device?.close() }
+                // The device thread has stopped, so the speech it still held can go.
+                session.wipe()
+            } catch (caught: Throwable) { cleanupFailure = caught }
             try { onSound(false) } catch (caught: Throwable) {
                 if (cleanupFailure == null) cleanupFailure = caught else cleanupFailure.addSuppressed(caught)
             }
@@ -227,6 +230,10 @@ internal class LinuxSpeechPlayer(private val decoder: SpeechDecoder, private val
             }
         }
         fun stop() { stopped.set(true); frames.cancel(); sound.cancel() }
+        fun wipe() {
+            playing?.fill(0); next?.fill(0)
+            playing = null; next = null
+        }
     }
 
     private companion object {
