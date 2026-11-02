@@ -62,7 +62,9 @@ import dev.hermeskotlin.ui.chat.dialogOwner
 import dev.hermeskotlin.ui.di.sharedModules
 import dev.hermeskotlin.ui.update.LocalUpdateInstaller
 import dev.hermeskotlin.ui.useAppTextContextMenu
+import dev.hermeskotlin.desktop.resources.*
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.jetbrains.compose.resources.stringResource
 import org.koin.core.context.startKoin
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
@@ -200,11 +202,13 @@ fun main(args: Array<String>) {
         // Chats opened in windows of their own, each with its own key so closing one keeps the others' state.
         val chatWindows = remember { mutableStateListOf<PoppedChat>() }
         var nextWindow by remember { mutableStateOf(0) }
+        val approveOnce = stringResource(Res.string.notice_approve_once)
+        val deny = stringResource(Res.string.notice_deny)
         val post: (DesktopNotice) -> Unit = { notice ->
             lastNotice = notice
             // Windows' own notification where it can be had (it has buttons and stays in the Action Center);
             // otherwise the tray's.
-            if (!WindowsToasts.show(notice)) tray.sendNotification(Notification(notice.title, notice.body, Notification.Type.None))
+            if (!WindowsToasts.show(notice, approveOnce, deny)) tray.sendNotification(Notification(notice.title, notice.body, Notification.Type.None))
             // The taskbar button flashes (the Dock icon bounces once) until the user comes back.
             if (!focused.value) runCatching {
                 if (Taskbar.isTaskbarSupported()) {
@@ -237,14 +241,14 @@ fun main(args: Array<String>) {
                 lastNotice = null
             },
             menu = {
-                Item("Open Kyllene", onClick = ::show)
-                Item("New chat") {
+                Item(stringResource(Res.string.tray_open), onClick = ::show)
+                Item(stringResource(Res.string.tray_new_chat)) {
                     show()
                     links.newChat()
                 }
-                Item("Quick entry", onClick = { quickOpen = true })
+                Item(stringResource(Res.string.tray_quick_entry), onClick = { quickOpen = true })
                 Separator()
-                Item("Quit Kyllene", onClick = ::exitApplication)
+                Item(stringResource(Res.string.tray_quit), onClick = ::exitApplication)
             },
         )
 
