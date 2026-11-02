@@ -962,10 +962,14 @@ private fun GroupNameDialog(naming: GroupNaming?, groups: InboxGroups, onDismiss
         snapshotFlow { name.text.length }.collect { if (it > InboxGroups.MAX_NAME) name.edit { replace(InboxGroups.MAX_NAME, length, "") } }
     }
     val text = InboxGroups.cleanName(name.text.toString())
+    // The no-group folder shows under its name in the app's language, so a group can't take that name either:
+    // the two folders would read as one. The gateway never sees this check.
+    val other = stringResource(Res.string.inbox_other)
     val refusal = groups.refusal(text, renaming = n.from)
+        ?: InboxGroups.NameRefusal.Reserved.takeIf { text.equals(other, ignoreCase = true) }
     val error = when (refusal) {
         InboxGroups.NameRefusal.Taken -> stringResource(Res.string.inbox_group_name_taken)
-        InboxGroups.NameRefusal.Reserved -> stringResource(Res.string.inbox_group_name_reserved, InboxGroups.OTHER)
+        InboxGroups.NameRefusal.Reserved -> stringResource(Res.string.inbox_group_name_reserved, other)
         InboxGroups.NameRefusal.TooMany -> stringResource(Res.string.inbox_group_too_many)
         InboxGroups.NameRefusal.Blank, null -> null
     }
