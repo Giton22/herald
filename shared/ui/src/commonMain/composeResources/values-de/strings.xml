@@ -94,6 +94,7 @@
     <string name="settings_link_previews_detail">Eine Karte für jeden Weblink in einer fertigen Antwort. Kyllene öffnet die verlinkten Seiten und ihre Bilder selbst, ohne die Cookies deines Gateways.</string>
     <string name="settings_suggested_replies">Antwortvorschläge</string>
     <string name="settings_suggestions_what">Nach einer Antwort die Nachricht, die du wahrscheinlich als Nächstes senden würdest, über dem Eingabefeld: antippen, dann bearbeiten und senden. Sie kommt vom Next-Prompt-Plugin des Gateways, das pro Zug einmal ein Modell fragt.</string>
+    <string name="settings_suggestions_what_desktop">Nach einer Antwort die Nachricht, die du wahrscheinlich als Nächstes senden würdest, über dem Eingabefeld: anklicken, dann bearbeiten und senden. Sie kommt vom Next-Prompt-Plugin des Gateways, das pro Zug einmal ein Modell fragt.</string>
     <string name="settings_suggestions_missing">Das Gateway hat das Next-Prompt-Plugin nicht, das die Vorschläge macht.</string>
     <string name="settings_suggestions_installing">Next Prompt wird auf dem Gateway installiert…</string>
     <string name="settings_suggestions_needs_restart">Next Prompt ist installiert. Starte das Gateway neu, damit die Vorschläge beginnen.</string>
@@ -178,7 +179,7 @@
     <string name="plugin_install_title">Auf dem Gateway installieren?</string>
     <string name="plugin_install_message">Diese Funktion braucht das herald-push-Plugin auf deinem Gateway: %1$s. Fehlt es noch, installiert Kyllene Version %2$s von %3$s, und zwar den Commit, mit dem dieses Kyllene geprüft wurde. %4$s Updates werden nur installiert, wenn du es wählst, und du kannst das Plugin jederzeit auf dem Gateway entfernen.</string>
     <string name="plugin_next_prompt_title">Next Prompt installieren?</string>
-    <string name="plugin_next_prompt_message">Kyllene installs Next Prompt %1$s, ein Community-Plugin, von %2$s, und zwar den Commit, mit dem dieses Kyllene geprüft wurde. Nach jedem Zug schickt es – in Kyllene, Hermes Desktop und im Terminal gleichermaßen – die letzten Nachrichten des Chats an dein Modell (oder das für seine Hilfsaufgabe gesetzte) und behält die vorgeschlagene Antwort. Das ist ein Modellaufruf mehr pro Zug. Du kannst es jederzeit auf dem Gateway entfernen.</string>
+    <string name="plugin_next_prompt_message">Kyllene installiert Next Prompt %1$s, ein Community-Plugin, von %2$s, und zwar den Commit, mit dem dieses Kyllene geprüft wurde. Nach jedem Zug schickt es – in Kyllene, Hermes Desktop und im Terminal gleichermaßen – die letzten Nachrichten des Chats an dein Modell (oder das für seine Hilfsaufgabe gesetzte) und behält die vorgeschlagene Antwort. Das ist ein Modellaufruf mehr pro Zug. Du kannst es jederzeit auf dem Gateway entfernen.</string>
     <string name="plugin_notifications_what">Es beobachtet die Chats deiner Bots und schickt jede neue Antwort Ende-zu-Ende verschlüsselt über ntfy.sh an dieses Telefon.</string>
     <string name="plugin_update_needed_row">Das Plugin des Gateways auf %1$s aktualisieren</string>
     <string name="plugin_update_row">Plugin-Update: %1$s → %2$s</string>
@@ -197,9 +198,9 @@
     <string name="settings_quick_entry_detail">%1$s öffnet aus jeder App ein kleines Feld, um Hermes zu fragen – in einem neuen Chat oder im offenen. Vorerst nur unter Windows.</string>
     <string name="settings_quick_entry_taken">Eine andere App hat diese Tasten inzwischen, deshalb öffnet es nicht.</string>
     <string name="settings_zoom">Zoom</string>
-    <string name="settings_zoom_detail">%1$d %%. %2$s und %3$s ändern ihn überall; %4$s setzt wieder auf 100 %%.</string>
+    <string name="settings_zoom_detail">%1$d %. %2$s und %3$s ändern ihn überall; %4$s setzt wieder auf 100 %.</string>
     <string name="settings_zoom_smaller">Kleiner</string>
-    <string name="settings_zoom_reset">100 %%</string>
+    <string name="settings_zoom_reset">100 %</string>
     <string name="settings_zoom_bigger">Größer</string>
     <string name="settings_notify_requests_desktop_detail">Wenn der Agent auf dich wartet und Kyllene nicht das aktive Fenster ist.</string>
     <string name="settings_notify_replies_desktop_detail">Wenn ein Zug endet oder scheitert, während Kyllene nicht das aktive Fenster ist. Anklicken öffnet den Chat.</string>

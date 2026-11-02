@@ -15,7 +15,7 @@ import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.ui.components.EmptyState
-import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.*
 import org.jetbrains.compose.resources.stringResource
 
 /** What the app shows instead of its screens while App lock is locked, until [onUnlock] succeeds. */

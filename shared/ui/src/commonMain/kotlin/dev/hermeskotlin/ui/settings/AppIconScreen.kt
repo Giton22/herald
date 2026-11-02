@@ -53,7 +53,7 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.PlatformBackHandler
 import dev.hermeskotlin.ui.sessions.SubpageHeader
-import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.*
 import org.jetbrains.compose.resources.stringResource
 
 /** Settings › App icon: every icon as the launcher draws it; the one tapped goes on the home screen with Apply. */
@@ -98,7 +98,7 @@ internal fun AppIconView(
                 verticalArrangement = Arrangement.spacedBy(22.dp),
             ) {
                 AppIconGroup.entries.forEach { group ->
-                    Section(group.title) {
+                    Section(stringResource(group.titleRes)) {
                         FlowRow(
                             Modifier.fillMaxWidth().padding(10.dp).selectableGroup(),
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -132,11 +132,12 @@ internal fun AppIconView(
 @Composable
 private fun IconChoice(icon: AppIcon, picture: ImageBitmap?, selected: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(22.dp)
+    val label = stringResource(icon.labelRes)
     Column(
         Modifier
             .width(TILE + 20.dp)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
-            .semantics { contentDescription = icon.label }
+            .semantics { contentDescription = label }
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -155,7 +156,7 @@ private fun IconChoice(icon: AppIcon, picture: ImageBitmap?, selected: Boolean, 
             }
         }
         Text(
-            icon.label,
+            label,
             style = Theme[typography][caption],
             color = if (selected) Theme[colors][accentText] else Theme[colors][textSecondary],
             textAlign = TextAlign.Center,

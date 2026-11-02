@@ -94,6 +94,7 @@
     <string name="settings_link_previews_detail">A card for each web link in a finished reply. Kyllene opens the linked pages and their pictures itself, without your gateway’s cookies.</string>
     <string name="settings_suggested_replies">Suggested replies</string>
     <string name="settings_suggestions_what">After a reply, the message you’d likely send next, over the composer: tap it to edit and send. It comes from the gateway’s Next Prompt plugin, which asks a model once per turn.</string>
+    <string name="settings_suggestions_what_desktop">After a reply, the message you’d likely send next, over the composer: click it to edit and send. It comes from the gateway’s Next Prompt plugin, which asks a model once per turn.</string>
     <string name="settings_suggestions_missing">The gateway doesn’t have the Next Prompt plugin, which makes the suggestions.</string>
     <string name="settings_suggestions_installing">Installing Next Prompt on the gateway…</string>
     <string name="settings_suggestions_needs_restart">Next Prompt is installed. Restart the gateway to start the suggestions.</string>
@@ -197,9 +198,9 @@
     <string name="settings_quick_entry_detail">%1$s from any app opens a small box to ask Hermes, in a new chat or the open one. Windows only for now.</string>
     <string name="settings_quick_entry_taken">Another app has these keys now, so it can’t open.</string>
     <string name="settings_zoom">Zoom</string>
-    <string name="settings_zoom_detail">%1$d%%. %2$s and %3$s change it anywhere; %4$s goes back to 100%%.</string>
+    <string name="settings_zoom_detail">%1$d%. %2$s and %3$s change it anywhere; %4$s goes back to 100%.</string>
     <string name="settings_zoom_smaller">Smaller</string>
-    <string name="settings_zoom_reset">100%%</string>
+    <string name="settings_zoom_reset">100%</string>
     <string name="settings_zoom_bigger">Bigger</string>
     <string name="settings_notify_requests_desktop_detail">When the agent waits on you and Kyllene isn’t the window in use.</string>
     <string name="settings_notify_replies_desktop_detail">When a turn ends or fails while Kyllene isn’t the window in use. Click it to open the chat.</string>

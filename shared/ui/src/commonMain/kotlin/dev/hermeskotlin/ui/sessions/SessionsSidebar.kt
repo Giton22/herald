@@ -297,7 +297,7 @@ import dev.hermeskotlin.ui.rooms.CreateRoomDialog
 import dev.hermeskotlin.ui.plugins.PluginsPage
 import dev.hermeskotlin.ui.rooms.RoomsViewModel
 import org.koin.compose.viewmodel.koinViewModel
-import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.*
 import org.jetbrains.compose.resources.stringResource
 
 /**

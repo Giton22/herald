@@ -38,7 +38,7 @@ import dev.hermeskotlin.designsystem.components.halo
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.PlatformBackHandler
-import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.*
 import dev.hermeskotlin.ui.sessions.SubpageHeader
 import org.jetbrains.compose.resources.stringResource
 

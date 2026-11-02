@@ -48,7 +48,7 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
-import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.*
 import org.jetbrains.compose.resources.stringResource
 
 /** A newer release, if one was found, and a way to stop offering it. */

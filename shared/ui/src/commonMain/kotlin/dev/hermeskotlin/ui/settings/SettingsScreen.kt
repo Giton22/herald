@@ -221,7 +221,7 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.input.ImeAction
 import com.composables.icons.lucide.Search
 import dev.hermeskotlin.designsystem.components.TextField
-import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.*
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -450,7 +450,7 @@ internal fun SettingsView(
                     }
                     Divider()
                     // The launcher's icon is the phone's; the desktop keeps Herald's own.
-                    if (!isDesktop) NavRow(title = stringResource(Res.string.settings_app_icon), detail = appIcon.label, icon = Lucide.LayoutGrid, onClick = onOpenAppIcon)
+                    if (!isDesktop) NavRow(title = stringResource(Res.string.settings_app_icon), detail = stringResource(appIcon.labelRes), icon = Lucide.LayoutGrid, onClick = onOpenAppIcon)
                     if (!isDesktop) Divider()
                     SwitchRow(
                         title = stringResource(Res.string.settings_pure_black),
@@ -526,6 +526,8 @@ internal fun SettingsView(
                             runningSendSummary(settings.runningSend),
                         ),
                     ) {
+                        // The control takes its labels as a plain lambda, so the words are resolved first.
+                        val sendLabels = RunningSend.entries.associateWith { runningSendLabel(it) }
                         SegmentedControl(
                             options = RunningSend.entries,
                             selected = settings.runningSend,
@@ -942,7 +944,9 @@ internal fun suggestionsLine(on: Boolean, plugin: SuggestionsPlugin): Suggestion
 @Composable
 private fun suggestionsDetail(on: Boolean, plugin: SuggestionsPlugin): String =
     when (val line = suggestionsLine(on, plugin)) {
-        SuggestionsLine.What -> stringResource(Res.string.settings_suggestions_what)
+        // A click on the desktop, a tap on the phone.
+        SuggestionsLine.What ->
+            stringResource(if (isDesktop) Res.string.settings_suggestions_what_desktop else Res.string.settings_suggestions_what)
         SuggestionsLine.Missing -> stringResource(Res.string.settings_suggestions_missing)
         SuggestionsLine.Installing -> stringResource(Res.string.settings_suggestions_installing)
         SuggestionsLine.NeedsRestart -> stringResource(Res.string.settings_suggestions_needs_restart)
@@ -1055,8 +1059,9 @@ private val LocalSectionsShown = staticCompositionLocalOf<SnapshotStateMap<Strin
 /** True when a row saying [texts] is one the settings search keeps. */
 @Composable
 internal fun settingShown(vararg texts: String?): Boolean {
-    val query = LocalSettingsQuery.current.trim()
-    return query.isEmpty() || texts.any { it?.contains(query, ignoreCase = true) == true }
+    // The catalogue writes ’ where a search box gets ', so both count as the same apostrophe.
+    val query = LocalSettingsQuery.current.trim().replace('’', '\'')
+    return query.isEmpty() || texts.any { it?.replace('’', '\'')?.contains(query, ignoreCase = true) == true }
 }
 
 @Composable
@@ -1464,13 +1469,14 @@ private fun runningSendSummary(mode: RunningSend): String = stringResource(
 /** An accent swatch's name for screen readers and tooltips; a palette the catalogue doesn't know keeps its name. */
 @Composable
 private fun accentName(palette: AccentPalette): String {
-    val key = when (palette.name) {
-        stringResource(Res.string.accent_blue) -> Res.string.accent_blue
-        stringResource(Res.string.accent_violet) -> Res.string.accent_violet
-        stringResource(Res.string.accent_green) -> Res.string.accent_green
-        stringResource(Res.string.accent_orange) -> Res.string.accent_orange
-        stringResource(Res.string.accent_pink) -> Res.string.accent_pink
-        stringResource(Res.string.accent_teal) -> Res.string.accent_teal
+    // The palette's own name is the stored setting and stays English, so it's matched on the palette.
+    val key = when (palette) {
+        AccentPalette.Blue -> Res.string.accent_blue
+        AccentPalette.Violet -> Res.string.accent_violet
+        AccentPalette.Green -> Res.string.accent_green
+        AccentPalette.Orange -> Res.string.accent_orange
+        AccentPalette.Pink -> Res.string.accent_pink
+        AccentPalette.Teal -> Res.string.accent_teal
         else -> null
     }
     return if (key != null) stringResource(key) else palette.name

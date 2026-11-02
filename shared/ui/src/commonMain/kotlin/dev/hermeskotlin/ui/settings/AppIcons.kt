@@ -2,7 +2,7 @@ package dev.hermeskotlin.ui.settings
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.ImageBitmap
-import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.*
 import org.jetbrains.compose.resources.StringResource
 
 /** The rows of the app icon picker. */
