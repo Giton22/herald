@@ -41,6 +41,8 @@ import com.composables.icons.lucide.MousePointerClick
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.RotateCcw
 import com.composables.icons.lucide.TriangleAlert
+import com.composables.icons.lucide.ZoomIn
+import com.composables.icons.lucide.ZoomOut
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.screen.DisplayLease
@@ -54,6 +56,7 @@ import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
+import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.components.TextField
 import dev.hermeskotlin.designsystem.components.plainTextClipEntry
 import dev.hermeskotlin.designsystem.danger
@@ -67,6 +70,7 @@ import dev.hermeskotlin.ui.sessions.ListSpinner
 import dev.hermeskotlin.ui.sessions.SubpageHeader
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
+import kotlin.math.roundToInt
 
 /**
  * A bot's screen: the live picture of what the bot is doing, and the user's own hand on it.
@@ -98,6 +102,7 @@ fun ScreenPane(
         onTakeOver = viewModel::takeOver,
         onHandBack = viewModel::handBack,
         onViewerEvent = viewModel::viewerEvent,
+        onZoom = viewModel::setZoom,
         modifier = modifier,
     )
 }
@@ -121,6 +126,8 @@ internal fun ScreenView(
     onHandBack: () -> Unit,
     /** What the viewer says about the screen. */
     onViewerEvent: (ScreenViewerEvent) -> Unit = {},
+    /** How much of the screen there is to look at: 1 is the whole screen. */
+    onZoom: (Float) -> Unit = {},
     modifier: Modifier = Modifier,
     /**
      * The screen itself. The app draws the live one; a preview draws a made-up picture instead, which is
@@ -140,6 +147,8 @@ internal fun ScreenView(
     val stage = screenStage(state)
     // What the app can ask of the viewer: the keys go through it to the bot's screen.
     var handle by remember { mutableStateOf<ScreenViewerHandle?>(null) }
+    // The zoom is the viewer's to carry out: the page is what looks at a part of the screen.
+    LaunchedEffect(handle, state.zoom) { handle?.setZoom(state.zoom) }
     Column(
         modifier
             .fillMaxSize()
@@ -162,6 +171,9 @@ internal fun ScreenView(
         // foot of the page, and a field under it cannot be tapped.
         if (stage == ScreenPaneStage.Watching) {
             ScreenKeys(handle = { keysym -> press(handle, keysym) }, onCharacter = { ch -> type(handle, ch) })
+            // How close the screen is looked at. The buttons are what a desktop has, where there is no
+            // pinch; on a phone the user pinches the screen itself and the pane is told how far it went.
+            ScreenZoom(state.zoom, onZoom)
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             // The viewer is there as soon as there is something to open: it is the one that says how the
@@ -243,6 +255,39 @@ private fun ScreenControl(state: ScreenUiState, onTakeOver: () -> Unit, onHandBa
         } else {
             Button("Take over", onClick = onTakeOver, size = ButtonSize.Small, leadingIcon = Lucide.MousePointerClick)
         }
+    }
+}
+
+/**
+ * How close the screen is looked at, and the buttons that change it.
+ *
+ * The buttons are what a desktop has, where there is no pinch to zoom with. On a phone the user
+ * pinches the screen itself, and the pane is told how far it went.
+ */
+@Composable
+private fun ScreenZoom(zoom: Float, onZoom: (Float) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        IconButton(
+            Lucide.ZoomOut,
+            "Zoom out",
+            onClick = { onZoom(screenZoomOut(zoom)) },
+            enabled = zoom > 1f,
+        )
+        Text(
+            "${(zoom * 100).roundToInt()}%",
+            style = Theme[typography][bodySmall],
+            color = Theme[colors][text],
+        )
+        IconButton(
+            Lucide.ZoomIn,
+            "Zoom in",
+            onClick = { onZoom(screenZoomIn(zoom)) },
+            enabled = zoom < SCREEN_ZOOM_STEPS.last(),
+        )
     }
 }
 

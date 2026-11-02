@@ -13,6 +13,12 @@ sealed interface ScreenViewerEvent {
 
     /** The viewer was let go, without the screen having failed. */
     data object Closed : ScreenViewerEvent
+
+    /**
+     * The view was zoomed: [factor] is how much bigger the screen is than the page, and 1 is the whole
+     * screen. The user says so with a pinch, which the viewer is the only one that sees.
+     */
+    data class Zoomed(val factor: Float) : ScreenViewerEvent
 }
 
 /** What the app can ask of the viewer it opened. */
@@ -22,6 +28,9 @@ interface ScreenViewerHandle {
 
     /** A key on the bot's screen: pressed or released. */
     fun key(keysym: Int, down: Boolean)
+
+    /** How much of the screen there is to look at: 1 is the whole screen, 8 is eight times closer. */
+    fun setZoom(factor: Float)
 }
 
 /**
@@ -57,10 +66,12 @@ fun screenEvent(url: String): ScreenViewerEvent? {
     val parts = query.split('&')
     val state = parts.firstOrNull { it.startsWith("state=") }?.removePrefix("state=") ?: return null
     val reason = parts.firstOrNull { it.startsWith("reason=") }?.removePrefix("reason=")
+    val zoom = parts.firstOrNull { it.startsWith("zoom=") }?.removePrefix("zoom=")?.toFloatOrNull()
     return when (state) {
         "connected" -> ScreenViewerEvent.Connected
         "closed" -> ScreenViewerEvent.Closed
         "failed" -> ScreenViewerEvent.Failed(screenFailure(reason))
+        "zoom" -> zoom?.let { ScreenViewerEvent.Zoomed(it) }
         else -> null
     }
 }

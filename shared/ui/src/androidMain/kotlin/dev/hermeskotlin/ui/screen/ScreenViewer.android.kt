@@ -1,7 +1,10 @@
 package dev.hermeskotlin.ui.screen
 
+import android.content.Context
 import android.net.Uri
 import android.util.Log
+import android.view.MotionEvent
+import android.view.View
 import android.view.ViewGroup
 import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
@@ -37,12 +40,15 @@ actual fun ScreenViewer(
     val event by rememberUpdatedState(onEvent)
     val handle by rememberUpdatedState(onHandle)
     val webView = remember {
-        WebView(context).apply {
+        ScreenWebView(context).apply {
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             settings.javaScriptEnabled = true
             // The screen is the picture; a scrollbar or a selection would only be in the way.
             isVerticalScrollBarEnabled = false
             isHorizontalScrollBarEnabled = false
+            // A drag across the screen moves the picture, and the browser may not take the swipe for
+            // itself: that is how it navigates back.
+            overScrollMode = View.OVER_SCROLL_NEVER
             // What the page says about itself: the screen's own log, in the app's log.
             webChromeClient = object : WebChromeClient() {
                 override fun onConsoleMessage(message: ConsoleMessage): Boolean {
@@ -57,6 +63,19 @@ actual fun ScreenViewer(
                     val answer = request.url.toString().let(::screenEvent) ?: return false
                     event(answer)
                     return true
+                }
+
+                override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
+                    // There is nowhere to go back to: the page is the app's own. A history would let the
+                    // browser take a swipe across the screen for a back gesture, and the user's finger
+                    // would never reach the picture.
+                    view.clearHistory()
+                }
+
+                override fun onPageFinished(view: WebView, url: String) {
+                    // The page that is there now is the only one: a swipe across it is the user's, not
+                    // the browser's way back.
+                    view.clearHistory()
                 }
             }
         }
@@ -82,6 +101,10 @@ actual fun ScreenViewer(
                 override fun key(keysym: Int, down: Boolean) {
                     webView.evaluateJavascript("window.kylleneScreen && window.kylleneScreen.sendKey($keysym, $down)", null)
                 }
+
+                override fun setZoom(factor: Float) {
+                    webView.evaluateJavascript("window.kylleneScreen && window.kylleneScreen.setZoom($factor)", null)
+                }
             },
         )
     }
@@ -94,3 +117,17 @@ actual fun ScreenViewer(
 
 /** The log the page's own words go to. */
 private const val TAG = "BotScreen"
+
+/**
+ * The page, in a browser that keeps its hands off the user's finger.
+ *
+ * A drag across the screen moves the picture, and neither the browser nor anything around it may
+ * take that gesture for itself: the browser would navigate back, and the picture would never move.
+ */
+private class ScreenWebView(context: Context) : WebView(context) {
+    override fun onTouchEvent(event: MotionEvent): Boolean {
+        // The gesture is the picture's, and no parent may take it away from it.
+        requestDisallowInterceptTouchEvent(true)
+        return super.onTouchEvent(event)
+    }
+}

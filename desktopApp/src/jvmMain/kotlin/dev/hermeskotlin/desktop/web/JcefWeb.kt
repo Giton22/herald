@@ -199,6 +199,14 @@ internal class JcefWeb(private val cookies: WebCookieJar, private val gateways: 
                             0,
                         )
                     }
+
+                    override fun setZoom(factor: Float) {
+                        page.browser.executeJavaScript(
+                            "window.kylleneScreen && window.kylleneScreen.setZoom($factor)",
+                            page.browser.url ?: "",
+                            0,
+                        )
+                    }
                 },
             )
         }

@@ -31,6 +31,17 @@ class ScreenViewerEventTest {
     }
 
     @Test
+    fun thePageSaysHowFarTheScreenIsZoomed() {
+        assertEquals(ScreenViewerEvent.Zoomed(2.5f), screenEvent("herald://screen?state=zoom&zoom=2.50"))
+    }
+
+    @Test
+    fun aZoomWithoutANumberIsNotAnAnswer() {
+        assertNull(screenEvent("herald://screen?state=zoom"))
+        assertNull(screenEvent("herald://screen?state=zoom&zoom=close"))
+    }
+
+    @Test
     fun aFailureWithoutAReasonIsStillAFailure() {
         assertEquals(
             ScreenViewerEvent.Failed("The screen could not be opened."),

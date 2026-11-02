@@ -31,6 +31,8 @@ data class ScreenUiState(
     val error: String? = null,
     /** Whether this app holds the screen, rather than the agent or another viewer. */
     val holding: Boolean = false,
+    /** How much bigger the screen is than the page: 1 is the whole screen. */
+    val zoom: Float = 1f,
 )
 
 /**
@@ -49,6 +51,7 @@ class ScreenViewModel(
     private var boundGateway: SavedGateway? = null
     private var boundProfile: String? = null
     private var core = ScreenState()
+    private var zoom = 1f
 
     private val _state = MutableStateFlow(ScreenUiState())
     val state: StateFlow<ScreenUiState> = _state.asStateFlow()
@@ -118,12 +121,21 @@ class ScreenViewModel(
 
     /** What the viewer says about the screen it was opened for. */
     fun viewerEvent(event: ScreenViewerEvent) {
-        val session = sessions.value ?: return
         when (event) {
-            ScreenViewerEvent.Connected -> session.viewerConnected()
-            is ScreenViewerEvent.Failed -> session.viewerFailed(event.reason)
-            ScreenViewerEvent.Closed -> session.viewerClosed()
+            ScreenViewerEvent.Connected -> sessions.value?.viewerConnected()
+            is ScreenViewerEvent.Failed -> sessions.value?.viewerFailed(event.reason)
+            ScreenViewerEvent.Closed -> sessions.value?.viewerClosed()
+            // A pinch is the user's own doing, and the viewer is the only one that sees it.
+            is ScreenViewerEvent.Zoomed -> setZoom(event.factor)
         }
+    }
+
+    /** Looks at a part of the screen: [factor] is how much bigger it is than the page. */
+    fun setZoom(factor: Float) {
+        val value = screenZoom(factor)
+        if (value == zoom) return
+        zoom = value
+        publish()
     }
 
     private fun newSession(gateway: SavedGateway, profile: String): ScreenSession? {
@@ -146,6 +158,7 @@ class ScreenViewModel(
             supported = core.supported,
             error = core.error,
             holding = core.holding,
+            zoom = zoom,
         )
     }
 
