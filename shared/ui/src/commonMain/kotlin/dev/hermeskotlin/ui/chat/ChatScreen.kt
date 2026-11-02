@@ -3418,10 +3418,10 @@ internal fun Disclosure(
     }
 }
 
-/** The reply's reasoning, folded; live progress is the dock's to show. */
+/** The reply's reasoning, folded; live progress is the dock's to show. Opened, it stays open when the activity is made again. */
 @Composable
 private fun Reasoning(text: String, streaming: Boolean) {
-    var expanded by remember { mutableStateOf(false) }
+    var expanded by rememberSaveable { mutableStateOf(false) }
     Disclosure(
         icon = { UnstyledIcon(Lucide.Brain, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp)) },
         label = stringResource(Res.string.chat_usage_reasoning),
@@ -3436,10 +3436,13 @@ private fun Reasoning(text: String, streaming: Boolean) {
     }
 }
 
-/** The tools the reply used, folded; the one running now is named above the composer instead. */
+/**
+ * The tools the reply used, folded; the one running now is named above the composer instead. Opened, it stays open
+ * when the activity is made again, as on unfolding a foldable.
+ */
 @Composable
-private fun Tools(tools: List<ToolActivity>, messageKey: String) {
-    var expanded by remember { mutableStateOf(false) }
+internal fun Tools(tools: List<ToolActivity>, messageKey: String) {
+    var expanded by rememberSaveable(messageKey) { mutableStateOf(false) }
     val icons = remember(tools) { tools.map { toolIcon(it.name) }.distinct().take(3) }
     val (ranWords, took) = workedLabel(tools)
     val ran = ranWords.text()
