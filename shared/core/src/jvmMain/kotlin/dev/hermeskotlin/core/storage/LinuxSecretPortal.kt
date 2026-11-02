@@ -116,7 +116,8 @@ internal class LinuxSecretPortal(
                         }
                         val token = result.results["token"]?.value
                         if (token != null && token !is String) throw SecretPortalFailure(SecretPortalFailure.Reason.Failed)
-                        received = pipe.read()
+                        // A backend that keeps its copy of the pipe open would never send end of file.
+                        received = pipe.read(timeoutMillis)
                         return PortalSecret(received!!, token)
                     }
                 }

@@ -37,6 +37,14 @@ class LinuxSecretPortalTest {
         result.bytes.fill(0)
     }
 
+    @Test fun aSecretWhoseSenderNeverClosesThePipeFails() {
+        assumeTrue(System.getProperty("os.name") == "Linux")
+        // Our own write end stays open: as a backend that kept its copy, no end of file ever arrives.
+        val reading = CompletableFuture.supplyAsync { runCatching { SecretPipe().use { it.read(300) } } }
+        val failure = reading.get(5, TimeUnit.SECONDS).exceptionOrNull()
+        assertEquals(SecretPortalFailure.Reason.Failed, (failure as? SecretPortalFailure)?.reason)
+    }
+
     @Test fun cancellationClosesThePendingRequest() = fixture { service, portal ->
         service.pending = true
         val request = async(Dispatchers.IO) { portal.retrieve() }

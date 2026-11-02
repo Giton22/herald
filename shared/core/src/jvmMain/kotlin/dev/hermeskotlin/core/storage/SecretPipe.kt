@@ -4,6 +4,7 @@ import com.sun.jna.Library
 import com.sun.jna.Memory
 import com.sun.jna.Native
 import com.sun.jna.Pointer
+import java.util.concurrent.TimeUnit
 
 /** A bounded anonymous pipe; neither endpoint may survive an exec. */
 internal class SecretPipe : AutoCloseable {
@@ -22,7 +23,8 @@ internal class SecretPipe : AutoCloseable {
         }
     }
 
-    fun read(): ByteArray {
+    fun read(timeoutMillis: Long): ByteArray {
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
         Memory(4097).use { bytes ->
             Memory(8).use { poll ->
                 poll.setInt(0, descriptors[0])
@@ -31,6 +33,7 @@ internal class SecretPipe : AutoCloseable {
                 try {
                     while (true) {
                         if (Thread.currentThread().isInterrupted) throw InterruptedException()
+                        if (System.nanoTime() - deadline > 0) throw SecretPortalFailure(SecretPortalFailure.Reason.Failed)
                         val ready = libc.poll(poll, 1, 100)
                         // A signal (the JVM's own, for one) can cut a wait short; the secret is still in the pipe.
                         if (ready == 0 || ready < 0 && Native.getLastError() == EINTR) continue
