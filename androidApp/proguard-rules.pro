@@ -24,3 +24,9 @@
 # Its JNI glue too: JNI_OnLoad finds these by name, and renamed they abort the app as a call starts.
 -keep class org.jni_zero.** { *; }
 -dontwarn org.jni_zero.**
+
+# TeX environments expand through NewCommandMacro, loaded and invoked by name in MacroInfo.
+-keep class org.scilab.forge.jlatexmath.NewCommandMacro {
+    public <init>();
+    public java.lang.String executeMacro(org.scilab.forge.jlatexmath.TeXParser, java.lang.String[]);
+}
