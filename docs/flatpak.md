@@ -21,8 +21,10 @@ its build sandbox. Source selection uses a pinned Git revision, excluding local
 untracked files. The installed package contains the upstream app image and JVM
 licenses. `gradle-sources.json` records the Maven input URLs and hashes; their
 POMs provide license declarations. Regenerate after dependency upgrades with
-`python3 packaging/flatpak/generate-sources.py`, using JBR 25. Review the generated
-diff and rebuild offline. Set `JAVA_HOME` to JBR 25 for generation and the Gradle fixture test. Run tests with
+`python3 packaging/flatpak/generate-sources.py`, using JBR 25 on Linux (the
+desktop dependencies differ per OS). Generate from the commit the manifest pins and
+move the pin with it; `test_catalog.py` fails when the version catalog has plugins
+the offline repository lacks. Review the generated diff and rebuild offline. Set `JAVA_HOME` to JBR 25 for generation and the Gradle fixture test. Run tests with
 `python3 -m unittest discover -s packaging/flatpak/tests -v`.
 
 JBR includes Chromium: security updates require updating its pinned archive and

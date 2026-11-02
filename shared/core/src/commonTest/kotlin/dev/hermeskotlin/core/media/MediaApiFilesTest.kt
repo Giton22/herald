@@ -59,14 +59,15 @@ class MediaApiFilesTest {
 
     @Test
     fun aGatewayWithoutMkdirSaysItCantMakeFolders() = runTest {
-        // An older dashboard's own 404, FastAPI's, and a proxy's non-JSON page.
+        // An older dashboard's own 404, FastAPI's, a proxy's non-JSON page, and the GET-only catch-all's 405.
         val replies = listOf(
-            """{"detail":"No such API endpoint: /api/files/mkdir"}""" to json,
-            """{"detail":"Not Found"}""" to json,
-            "<html>404</html>" to headersOf(HttpHeaders.ContentType, "text/html"),
+            Triple("""{"detail":"No such API endpoint: /api/files/mkdir"}""", HttpStatusCode.NotFound, json),
+            Triple("""{"detail":"Not Found"}""", HttpStatusCode.NotFound, json),
+            Triple("<html>404</html>", HttpStatusCode.NotFound, headersOf(HttpHeaders.ContentType, "text/html")),
+            Triple("""{"detail":"Method Not Allowed"}""", HttpStatusCode.MethodNotAllowed, json),
         )
-        for ((body, headers) in replies) {
-            val api = MediaApi(createHttpClient(MockEngine { respond(body, HttpStatusCode.NotFound, headers) }))
+        for ((body, status, headers) in replies) {
+            val api = MediaApi(createHttpClient(MockEngine { respond(body, status, headers) }))
             assertEquals(MediaApi.NO_MKDIR, assertIs<ApiResult.Failed>(api.makeFolder(url, "/srv/a")).message, body)
         }
     }
