@@ -1,6 +1,7 @@
 package dev.hermeskotlin.android.wear
 
 import android.content.Context
+import dev.hermeskotlin.android.R
 import android.graphics.Bitmap
 import android.net.Uri
 import com.google.android.gms.wearable.Asset
@@ -50,12 +51,13 @@ internal class CallDisplayPublisher(private val context: Context) {
                 return // Leave the retained snapshot intact until a later refresh can resolve it.
             }
         }
+        val label = target?.label ?: context.getString(R.string.call_new_session)
         val digest = MessageDigest.getInstance("SHA-256")
-        digest.update(WearJson.encode(listOf(gateway.orEmpty(), target?.profile.orEmpty(), target?.sessionId.orEmpty(), target?.label ?: "New session")))
+        digest.update(WearJson.encode(listOf(gateway.orEmpty(), target?.profile.orEmpty(), target?.sessionId.orEmpty(), label)))
         bytes?.let(digest::update)
         val revision = digest.digest().joinToString("") { "%02x".format(it) }
         if (revision == published) return
-        val display = CallDisplay(revision, (target?.label ?: "New session").take(256), bytes != null, targetKey = targetKey)
+        val display = CallDisplay(revision, label.take(256), bytes != null, targetKey = targetKey)
         val request = PutDataMapRequest.create(WearPaths.CALL_DISPLAY).apply {
             dataMap.putString("display", WearJson.encode(display).decodeToString())
             bytes?.let { dataMap.putAsset("image", Asset.createFromBytes(it)) }

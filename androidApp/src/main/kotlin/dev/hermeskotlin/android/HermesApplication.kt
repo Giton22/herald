@@ -2,7 +2,9 @@ package dev.hermeskotlin.android
 
 import android.app.Application
 import android.content.Intent
+import android.content.res.Configuration
 import dev.hermeskotlin.android.notify.BotNotifier
+import dev.hermeskotlin.android.notify.ChatNotifications
 import dev.hermeskotlin.android.notify.ChatNotifier
 import dev.hermeskotlin.android.notify.RoomNotifier
 import dev.hermeskotlin.android.notify.WatchNotifier
@@ -18,6 +20,7 @@ import dev.hermeskotlin.core.push.PushSetup
 import dev.hermeskotlin.core.settings.AppLockTimer
 import dev.hermeskotlin.ui.di.sharedModules
 import org.koin.android.ext.koin.androidContext
+import org.koin.core.context.GlobalContext
 import org.koin.core.context.startKoin
 
 class HermesApplication : Application() {
@@ -49,5 +52,11 @@ class HermesApplication : Application() {
         koin.get<PhoneToolsBridge>().start()
         // Android forgets proximity alerts on a restart; a restart or an update wakes Herald to arm them again.
         koin.get<Geofences>().start()
+    }
+
+    /** A new language: the notification channels take its names, as Settings › Notifications lists them. */
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        GlobalContext.getOrNull()?.run { get<ChatNotifications>().createChannels() }
     }
 }
