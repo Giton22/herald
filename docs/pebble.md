@@ -2,7 +2,7 @@
 
 **Goal:** talk to Hermes from a Pebble (first target: **Pebble Time 2**) through Kyllene on an Android phone. It should work the way the Wear OS companion does wherever the hardware allows, and do something sensible where it doesn't.
 
-**Status:** this is a plan. No code exists yet. Written 2026-10-27 against Kyllene `master` @ `687d80e3` and Pebble SDK 4.33.1.
+**Status:** built and tested on a Pebble Time 2, Phases 0 to 5, with each phase's results below. Planned on 2026-10-27 against `master` @ `687d80e3` and Pebble SDK 4.33.1.
 
 **Evidence labels.** ✅ means verified from source or docs (the link is given). ❓ means inferred or unverified, and the plan says which phase settles it.
 
@@ -272,7 +272,7 @@ Each phase ends in something testable on the user's phone and Time 2.
   - After that, `pebble install --phone`, `pebble logs --phone` and `pebble screenshot --phone` all work.
   - LAN mode has no sign-in, so turn it off off-network.
 - **PebbleKit 2 round trip** ✅
-  - Watch → phone: a button press reached `BasePebbleListenerService.onMessageReceived` as `{1=UInt32(2)}`, with `WatchIdentifier(C111131100QK)`.
+  - Watch → phone: a button press reached `BasePebbleListenerService.onMessageReceived` as `{1=UInt32(2)}`, with the watch's `WatchIdentifier` (its serial number).
   - Phone → watch: `startAppOnTheWatch` returned `Success`, followed by `onAppOpened`. `sendDataToPebble` with a text item returned `Success`, and the text showed on the watch, confirmed by screenshot.
   - `onAppClosed` fires when the app is left.
   - No permission prompt appeared for the sample (its `companionApp` entry was enough).
