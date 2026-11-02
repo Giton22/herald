@@ -96,7 +96,7 @@
     <string name="phone_alarm_every_day">todos os dias</string>
     <string name="phone_alarm_every_weekday">de segunda a sexta</string>
     <string name="phone_alarm_every_weekend">nos fins de semana</string>
-    <string name="phone_alarm_every_days">toda %1$s</string>
+    <string name="phone_alarm_every_days">nos dias: %1$s</string>
     <string name="phone_timer_question">Iniciar um timer de %1$s.</string>
     <string name="phone_timer_question_label">Iniciar um timer de %1$s: \"%2$s\".</string>
     <string name="phone_hours_short">%1$d h</string>
