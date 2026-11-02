@@ -53,7 +53,8 @@ jobs:
       - name: Install Flatpak tools and SDK
         run: |
           sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder fontconfig xvfb xauth xdotool python3-pil
+          sudo apt-get install -y flatpak flatpak-builder fontconfig xvfb xauth xdotool python3-pil \
+            xdg-desktop-portal gnome-keyring
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak install --user --noninteractive flathub org.freedesktop.Sdk//26.08 org.freedesktop.Platform//26.08
       - name: Packaging contracts
@@ -81,8 +82,15 @@ jobs:
         run: |
           flatpak-builder --user --repo=build/flatpak-repo build/flatpak packaging/flatpak/ci.json
           flatpak build-bundle build/flatpak-repo build/kyllene.flatpak io.github.Giton22.Kyllene.Devel devel
+      # The app reads its settings key from the Secret portal at startup, so the smoke runs in a session as a
+      # desktop has one: its own bus, and an unlocked keyring answering the portal.
       - name: Installed sandbox smoke
-        run: python3 packaging/flatpak/tests/installed_smoke.py build/kyllene.flatpak
+        run: |
+          mkdir -p ~/.config/xdg-desktop-portal
+          printf '[preferred]\ndefault=*\norg.freedesktop.impl.portal.Secret=gnome-keyring\n' \
+            > ~/.config/xdg-desktop-portal/portals.conf
+          dbus-run-session -- sh -c 'printf smoke | gnome-keyring-daemon --unlock --components=secrets >/dev/null &&
+            python3 packaging/flatpak/tests/installed_smoke.py build/kyllene.flatpak'
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: kyllene-flatpak-x86_64
