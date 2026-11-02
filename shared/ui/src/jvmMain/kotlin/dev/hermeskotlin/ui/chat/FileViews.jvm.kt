@@ -8,10 +8,10 @@ import androidx.compose.ui.Modifier
 import dev.hermeskotlin.ui.rememberDesktopWeb
 import kotlin.io.encoding.Base64
 
-/** No PDF pages drawn in the desktop app yet: the viewer says so, and Save opens it elsewhere. */
+/** PDF parsing and drawing live in a bounded child of the bundled Java runtime. */
 @Composable
 internal actual fun rememberPdfOpener(): suspend (ByteArray) -> PdfOpen =
-    { PdfOpen.Failed("PDFs don't open in the desktop app yet. Save gets the file.") }
+    { openDesktopPdf(it) }
 
 /** A widget in the app's own browser, where the runtime has one; elsewhere it says it can't show. */
 @Composable

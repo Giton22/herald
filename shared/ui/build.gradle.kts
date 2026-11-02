@@ -68,6 +68,7 @@ kotlin {
                     exclude(group = "com.github.hypfvieh", module = "dbus-java-transport-native-unixsocket")
                 }
             }
+            implementation(libs.pdfbox)
         }
         jvmTest.dependencies {
             implementation(compose.desktop.uiTestJUnit4)

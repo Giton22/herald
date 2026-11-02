@@ -133,7 +133,6 @@ import dev.hermeskotlin.designsystem.warningSoft
 import dev.hermeskotlin.designsystem.well
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -256,9 +255,9 @@ internal fun FileViewerPage(
     onOpenFile: (GatewayFile) -> Unit = {},
     onOpenPicture: (ViewerImage) -> Unit = {},
     pictures: LinkedPictures? = null,
+    openPdf: suspend (ByteArray) -> PdfOpen = rememberPdfOpener(),
 ) {
     val kind = file.kind
-    val openPdf = rememberPdfOpener()
     // A PDF's whole bytes once fetched for its pages, so Save and Share don't fetch them again.
     var fetched by remember(file) { mutableStateOf<ByteArray?>(null) }
     val result by produceState(preset ?: if (kind.previewable) FileLoad.Loading else null, file, preset) {
@@ -273,8 +272,8 @@ internal fun FileViewerPage(
             return@produceState
         }
         fetched = (got as FileDownload.Ready).bytes
-        // Opened past a Back tap, so an open document is never dropped unclosed; it closes with the page.
-        when (val opened = withContext(NonCancellable) { openPdf(got.bytes) }) {
+        // Platform openers own cancellation cleanup; an opened document closes with this page.
+        when (val opened = openPdf(got.bytes)) {
             is PdfOpen.Failed -> value = FileLoad.Failed(opened.message)
             is PdfOpen.Ready -> {
                 if (!isActive) {
