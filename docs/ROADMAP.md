@@ -22,7 +22,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Desktop on JetBrains Runtime 25 with its Chromium (JCEF): inline widgets in the chat, locked down as on the phone (no network, popups or dialogs), and plugin pages in the app signed in with its own session (Chromium reaches only the saved gateways, so a page's resources from other sites don't load); the quick entry rounded by Windows 11 and macOS themselves and moved by the window manager on Linux. Installers must be made with a JBR SDK with JCEF; with Chromium the MSI is 286 MB
 - [x] Experimental Linux Flatpak (x86_64, development identity `app.kyllene.Kyllene.Devel`): the desktop app built offline from a pinned commit with checksummed Gradle, Maven and JBR inputs, under XWayland; see `docs/flatpak.md`
 - [x] Flatpak release bundles: a tag attaches the stable `app.kyllene.Kyllene` as `kyllene-desktop-<version>_x86_64.flatpak` (it fetches its runtime from Flathub) for a manual install, smoke-tested in its sandbox first; the next release's bundle installs over it
-- [ ] Kyllene on Flathub as `app.kyllene.Kyllene`, verified through kyllene.app, so `flatpak update` and software centres deliver new versions (a Flatpak doesn't update itself)
+- [ ] A signed Flatpak repository of our own, so `flatpak update` and software centres deliver new versions (a Flatpak doesn't update itself)
 - [x] Compose Multiplatform UI built on **Compose Unstyled**, with our own design system (`HermesTheme` tokens + primitives), edge-to-edge
 - [x] Light/dark color schemes following the system, or forced from Settings, plus pure black
 - [x] Ktor client: OkHttp engine on Android, content negotiation, WebSockets plugin installed
