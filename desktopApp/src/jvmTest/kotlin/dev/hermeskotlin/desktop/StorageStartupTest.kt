@@ -14,7 +14,8 @@ class StorageStartupTest {
     @Test fun everyFailurePromptFitsA360PixelDisplay() {
         SwingUtilities.invokeAndWait {
             for (reason in SecureStorageException.Reason.entries) {
-                val pane = storageUnlockPane(reason, storageGuidance(reason, "/home/user/.var/app/io.example.App/data/herald"))
+                val folder = "/home/a-long-user-name/.var/app/io.github.Giton22.Kyllene.Devel/data/herald"
+                val pane = storageUnlockPane(reason, storageGuidance(reason), folder)
                 assertTrue(pane.preferredSize.width <= 360, "${reason.name}: ${pane.preferredSize.width}px")
             }
         }
@@ -59,14 +60,22 @@ class StorageStartupTest {
         var shown: String? = null
         assertTrue(unlockDesktopStorage(prepare = {
             if (!aside) throw SecureStorageException(SecureStorageException.Reason.Corrupt)
-        }, startFresh = { aside = true }, folder = "/fixture/herald", ask = { reason, guidance ->
+        }, startFresh = { aside = true }, ask = { reason, guidance ->
             assertEquals(SecureStorageException.Reason.Corrupt, reason)
             shown = guidance
             StorageChoice.StartFresh
         }))
         assertTrue(aside)
         assertContains(shown.orEmpty(), "Start fresh")
-        assertContains(shown.orEmpty(), "/fixture/herald")
+    }
+
+    @Test fun thePromptNamesTheSettingsFolder() {
+        SwingUtilities.invokeAndWait {
+            val pane = storageUnlockPane(SecureStorageException.Reason.Legacy, "guidance", "/fixture/herald")
+            val field = (pane.message as Array<*>).filterIsInstance<javax.swing.JTextField>().single()
+            assertEquals("/fixture/herald", field.text)
+            assertFalse(field.isEditable)
+        }
     }
 
     @Test fun retryIsOfferedOnlyWhereItCanSucceed() {
