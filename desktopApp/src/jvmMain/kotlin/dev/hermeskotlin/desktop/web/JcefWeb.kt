@@ -215,7 +215,10 @@ internal class JcefWeb(private val cookies: WebCookieJar, private val gateways: 
         event: (ScreenViewerEvent) -> Unit,
         modifier: Modifier,
     ) {
-        val client = remember(cef) {
+        // The stream in hand now: a viewer that was replaced says nothing about this one.
+        val current = rememberUpdatedState(streamUrl)
+        // A client per stream: what the page of one stream says is about that stream.
+        val client = remember(cef, streamUrl) {
             cef.createClient().apply {
                 // The page cannot talk to the app any other way: it asks for an address of its own and the
                 // app reads the answer out of it.
@@ -228,7 +231,8 @@ internal class JcefWeb(private val cookies: WebCookieJar, private val gateways: 
                         isRedirect: Boolean,
                     ): Boolean {
                         val answer = request.url?.let(::screenEvent) ?: return false
-                        event(answer)
+                        // What a viewer that was replaced says is about the screen it was watching.
+                        screenEventAbout(streamUrl, current.value, answer)?.let { event(it) }
                         return true
                     }
                 })
@@ -238,7 +242,7 @@ internal class JcefWeb(private val cookies: WebCookieJar, private val gateways: 
         val page = remember(client, streamUrl) {
             OffscreenBrowser(client, screenPageAddress(streamUrl, viewOnly), transparent = false)
         }
-        LaunchedEffect(page, viewOnly) {
+        LaunchedEffect(page) {
             handle(
                 object : ScreenViewerHandle {
                     override fun viewOnly(value: Boolean) {
