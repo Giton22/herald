@@ -38,6 +38,11 @@ import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatLinks
 import dev.hermeskotlin.core.chat.InputAnswers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
+import dev.hermeskotlin.ui.applyAppLanguage
 import dev.hermeskotlin.core.chat.ComposeDraft
 import dev.hermeskotlin.core.chat.DraftStart
 import dev.hermeskotlin.core.settings.AppSettings
@@ -106,8 +111,11 @@ fun main(args: Array<String>) {
                 folder = desktopStorageFolder(this.koin.get()),
             )) exitProcess(1) // Quit: the app didn't start, which a launcher or script can tell from the status.
     }.koin
-    useAppTextContextMenu()
     val settingsStore = koin.get<SettingsStore>()
+    // The language picked in Settings, before anything reads a string, so the first window is already in it.
+    // The read is a file's; were it ever stuck, the window opens in the system's language and switches once it's in.
+    applyAppLanguage(runBlocking { withTimeoutOrNull(2_000) { settingsStore.settings.filterNotNull().first() } }?.language)
+    useAppTextContextMenu()
     val links = koin.get<ChatLinks>()
     val saved = WindowMemory.read(koin.get())
     // The same mark as docs/logo.svg, for the title bar, the taskbar and the tray.
