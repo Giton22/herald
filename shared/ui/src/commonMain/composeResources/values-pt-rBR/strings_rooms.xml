@@ -36,6 +36,14 @@
     <string name="rooms_approve_once">Aprovar uma vez</string>
     <string name="rooms_turn_failed">A vez de %1$s não deu certo</string>
     <string name="rooms_member_turn_failed">A vez de um membro não deu certo</string>
+    <string name="rooms_note_member">Um membro</string>
+    <string name="rooms_note_turn_failed">%1$s não conseguiu fazer sua vez: %2$s</string>
+    <string name="rooms_note_unknown_error">algo deu errado</string>
+    <string name="rooms_note_turn_stopped">Vez interrompida.</string>
+    <string name="rooms_note_turn_stopped_reason">Vez interrompida: %1$s</string>
+    <string name="rooms_note_passed">%1$s não tinha nada a acrescentar.</string>
+    <string name="rooms_note_stop_requested">Foi pedido para parar a sala.</string>
+    <string name="rooms_note_renamed">Renomeada para “%1$s”.</string>
     <string name="rooms_retry">Tentar de novo</string>
     <string name="rooms_attachment_limits">Até %1$d arquivos, %2$d MB cada, %3$d MB por mensagem</string>
     <string name="rooms_send_again">Envie de novo para confirmar a mensagem anterior.</string>

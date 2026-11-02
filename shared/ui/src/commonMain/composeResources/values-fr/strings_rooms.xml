@@ -36,6 +36,14 @@
     <string name="rooms_approve_once">Approuver une fois</string>
     <string name="rooms_turn_failed">Le tour de %1$s n’a pas abouti</string>
     <string name="rooms_member_turn_failed">Le tour d’un membre n’a pas abouti</string>
+    <string name="rooms_note_member">Un membre</string>
+    <string name="rooms_note_turn_failed">%1$s n’a pas pu prendre son tour : %2$s</string>
+    <string name="rooms_note_unknown_error">une erreur s’est produite</string>
+    <string name="rooms_note_turn_stopped">Tour arrêté.</string>
+    <string name="rooms_note_turn_stopped_reason">Tour arrêté : %1$s</string>
+    <string name="rooms_note_passed">%1$s n’avait rien à ajouter.</string>
+    <string name="rooms_note_stop_requested">L’arrêt du salon a été demandé.</string>
+    <string name="rooms_note_renamed">Renommé en « %1$s ».</string>
     <string name="rooms_retry">Réessayer</string>
     <string name="rooms_attachment_limits">Jusqu’à %1$d fichiers, %2$d Mo chacun, %3$d Mo par message</string>
     <string name="rooms_send_again">Renvoyez pour confirmer le message précédent.</string>

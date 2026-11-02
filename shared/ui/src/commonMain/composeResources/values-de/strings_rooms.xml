@@ -36,6 +36,14 @@
     <string name="rooms_approve_once">Einmal freigeben</string>
     <string name="rooms_turn_failed">Die Runde von %1$s ist fehlgeschlagen</string>
     <string name="rooms_member_turn_failed">Die Runde eines Mitglieds ist fehlgeschlagen</string>
+    <string name="rooms_note_member">Ein Mitglied</string>
+    <string name="rooms_note_turn_failed">%1$s konnte die Runde nicht übernehmen: %2$s</string>
+    <string name="rooms_note_unknown_error">etwas ist schiefgelaufen</string>
+    <string name="rooms_note_turn_stopped">Runde gestoppt.</string>
+    <string name="rooms_note_turn_stopped_reason">Runde gestoppt: %1$s</string>
+    <string name="rooms_note_passed">%1$s hatte nichts hinzuzufügen.</string>
+    <string name="rooms_note_stop_requested">Das Stoppen des Raums wurde angefordert.</string>
+    <string name="rooms_note_renamed">Umbenannt in „%1$s“.</string>
     <string name="rooms_retry">Wiederholen</string>
     <string name="rooms_attachment_limits">Bis zu %1$d Dateien, je %2$d MB, %3$d MB pro Nachricht</string>
     <string name="rooms_send_again">Sende erneut, um die vorige Nachricht zu bestätigen.</string>

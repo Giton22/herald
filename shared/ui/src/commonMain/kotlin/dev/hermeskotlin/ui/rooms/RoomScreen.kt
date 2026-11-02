@@ -118,6 +118,7 @@ import dev.hermeskotlin.core.media.GatewayFile
 import dev.hermeskotlin.core.media.MediaApi
 import dev.hermeskotlin.core.rooms.Room
 import dev.hermeskotlin.core.rooms.RoomLine
+import dev.hermeskotlin.core.rooms.RoomNote
 import dev.hermeskotlin.core.rooms.RoomPendingAction
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.background
@@ -484,11 +485,30 @@ private fun waitingLine(waiting: List<RoomMember>): String? {
     }
 }
 
+/** [note] in the app's language; the gateway's own reasons and names stay as it wrote them. */
+@Composable
+internal fun roomNoteText(note: RoomNote): String {
+    val someone = stringResource(Res.string.rooms_note_member)
+    return when (note) {
+        is RoomNote.TurnFailed -> stringResource(
+            Res.string.rooms_note_turn_failed,
+            note.member ?: someone,
+            note.error ?: stringResource(Res.string.rooms_note_unknown_error),
+        )
+        is RoomNote.TurnStopped -> note.reason
+            ?.let { stringResource(Res.string.rooms_note_turn_stopped_reason, it) }
+            ?: stringResource(Res.string.rooms_note_turn_stopped)
+        is RoomNote.Passed -> stringResource(Res.string.rooms_note_passed, note.member ?: someone)
+        RoomNote.StopRequested -> stringResource(Res.string.rooms_note_stop_requested)
+        is RoomNote.Renamed -> stringResource(Res.string.rooms_note_renamed, note.name)
+    }
+}
+
 /** A line the gateway wrote: centred and quiet between the messages. */
 @Composable
 private fun SystemLine(line: RoomLine.System) {
     Text(
-        line.text,
+        roomNoteText(line.note),
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         style = Theme[typography][caption],
         color = Theme[colors][textTertiary],

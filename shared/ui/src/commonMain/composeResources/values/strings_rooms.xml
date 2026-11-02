@@ -39,6 +39,14 @@
     <string name="rooms_approve_once">Approve once</string>
     <string name="rooms_turn_failed">%1$s’s turn didn’t go through</string>
     <string name="rooms_member_turn_failed">A member’s turn didn’t go through</string>
+    <string name="rooms_note_member">A member</string>
+    <string name="rooms_note_turn_failed">%1$s couldn’t take their turn: %2$s</string>
+    <string name="rooms_note_unknown_error">something went wrong</string>
+    <string name="rooms_note_turn_stopped">Turn stopped.</string>
+    <string name="rooms_note_turn_stopped_reason">Turn stopped: %1$s</string>
+    <string name="rooms_note_passed">%1$s had nothing to add.</string>
+    <string name="rooms_note_stop_requested">Stopping the room was asked for.</string>
+    <string name="rooms_note_renamed">Renamed to “%1$s”.</string>
     <string name="rooms_retry">Retry</string>
     <string name="rooms_attachment_limits">Up to %1$d files, %2$d MB each, %3$d MB per message</string>
     <string name="rooms_send_again">Send again to confirm the previous message.</string>

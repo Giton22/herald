@@ -36,6 +36,14 @@
     <string name="rooms_approve_once">Aprobar una vez</string>
     <string name="rooms_turn_failed">El turno de %1$s falló</string>
     <string name="rooms_member_turn_failed">El turno de un miembro falló</string>
+    <string name="rooms_note_member">Un miembro</string>
+    <string name="rooms_note_turn_failed">%1$s no pudo tomar su turno: %2$s</string>
+    <string name="rooms_note_unknown_error">algo salió mal</string>
+    <string name="rooms_note_turn_stopped">Turno detenido.</string>
+    <string name="rooms_note_turn_stopped_reason">Turno detenido: %1$s</string>
+    <string name="rooms_note_passed">%1$s no tenía nada que añadir.</string>
+    <string name="rooms_note_stop_requested">Se pidió detener la sala.</string>
+    <string name="rooms_note_renamed">Renombrada a “%1$s”.</string>
     <string name="rooms_retry">Reintentar</string>
     <string name="rooms_attachment_limits">Hasta %1$d archivos, %2$d MB cada uno, %3$d MB por mensaje</string>
     <string name="rooms_send_again">Envía de nuevo para confirmar el mensaje anterior.</string>

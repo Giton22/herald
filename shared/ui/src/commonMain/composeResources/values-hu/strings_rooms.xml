@@ -36,6 +36,14 @@
     <string name="rooms_approve_once">Jóváhagyás egyszer</string>
     <string name="rooms_turn_failed">%1$s köre nem sikerült</string>
     <string name="rooms_member_turn_failed">Egy tag köre nem sikerült</string>
+    <string name="rooms_note_member">Egy tag</string>
+    <string name="rooms_note_turn_failed">%1$s nem tudta megtenni a körét: %2$s</string>
+    <string name="rooms_note_unknown_error">valami hiba történt</string>
+    <string name="rooms_note_turn_stopped">A kör leállt.</string>
+    <string name="rooms_note_turn_stopped_reason">A kör leállt: %1$s</string>
+    <string name="rooms_note_passed">%1$s nem tett hozzá semmit.</string>
+    <string name="rooms_note_stop_requested">A szoba leállítását kérték.</string>
+    <string name="rooms_note_renamed">Átnevezve erre: „%1$s”.</string>
     <string name="rooms_retry">Újra</string>
     <string name="rooms_attachment_limits">Legfeljebb %1$d fájl, egyenként %2$d MB, üzenetenként %3$d MB</string>
     <string name="rooms_send_again">Küldd el újra az előző üzenet megerősítéséhez.</string>
