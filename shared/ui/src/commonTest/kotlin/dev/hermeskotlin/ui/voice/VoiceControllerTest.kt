@@ -41,6 +41,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.voice_error_nothing_heard
+import org.jetbrains.compose.resources.getString
 
 class VoiceControllerTest {
 
@@ -226,7 +229,7 @@ class VoiceControllerTest {
         voice.startDictation(gateway, null) { error("Nothing was said") }
         voice.finishDictation()
 
-        assertEquals("Didn't catch anything.", voice.dictation.first { !it.active }.error)
+        assertEquals(getString(Res.string.voice_error_nothing_heard), voice.dictation.first { !it.active }.error)
         assertEquals(0, recorder.recordings)
     }
 
@@ -238,7 +241,7 @@ class VoiceControllerTest {
 
         voice.startDictation(gateway, null) { error("Nothing was said") }
 
-        assertEquals("Didn't catch anything.", voice.dictation.first { !it.active }.error)
+        assertEquals(getString(Res.string.voice_error_nothing_heard), voice.dictation.first { !it.active }.error)
         assertTrue(recorder.finished)
     }
 
@@ -264,7 +267,7 @@ class VoiceControllerTest {
         voice.finishDictation()
         giveUp.complete(Unit)
 
-        assertEquals("Didn't catch anything.", voice.dictation.first { it.error != null }.error)
+        assertEquals(getString(Res.string.voice_error_nothing_heard), voice.dictation.first { it.error != null }.error)
         assertEquals(0, recorder.recordings)
         assertTrue(!called)
     }
@@ -321,7 +324,7 @@ class VoiceControllerTest {
 
         voice.startDictation(gateway, null, DictationEngine.Device) { called = true }
 
-        assertEquals("Didn't catch anything.", voice.dictation.first { it.error != null }.error)
+        assertEquals(getString(Res.string.voice_error_nothing_heard), voice.dictation.first { it.error != null }.error)
         assertTrue(!called)
     }
 
@@ -394,7 +397,7 @@ class VoiceControllerTest {
         assertTrue(!canSendNow(VoiceChatState(VoicePhase.Listening)))
         assertTrue(!canSendNow(VoiceChatState(VoicePhase.Listening, hearing = true, live = true)))
         assertTrue(!canSendNow(VoiceChatState(VoicePhase.Transcribing, hearing = true)))
-        assertEquals("Pause when you're done, or tap send", hint(VoiceChatState(VoicePhase.Listening, hearing = true)))
+        assertEquals(VoiceHint.SendNow, hint(VoiceChatState(VoicePhase.Listening, hearing = true)))
     }
 
     /** Hears speech or nothing, listen by listen as [heard] says, then waits for good. */

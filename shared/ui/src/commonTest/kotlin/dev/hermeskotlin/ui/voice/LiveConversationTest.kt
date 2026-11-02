@@ -53,6 +53,9 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.voice_error_live_vendor
+import org.jetbrains.compose.resources.getString
 
 class LiveConversationTest {
 
@@ -834,7 +837,9 @@ class LiveConversationTest {
         voice.chat.first { it.live && it.phase == VoicePhase.Listening }
         call.receive("""{"type":"session.closed","reason":"idle_timeout","usage":{"seconds":61}}""")
 
-        assertEquals("The live call ended: idle_timeout", voice.chat.first { it.phase == VoicePhase.Off }.error)
+        // The gateway's reason is passed on, in whatever words the app's language wraps it.
+        val ended = voice.chat.first { it.phase == VoicePhase.Off }.error.orEmpty()
+        assertTrue("idle_timeout" in ended, ended)
     }
 
     @Test
@@ -858,7 +863,10 @@ class LiveConversationTest {
 
         voice.startChat(session, gateway, null)
 
-        assertEquals("GPT-Live couldn't start: You have no credits remaining.", voice.chat.first { it.phase == VoicePhase.Off && it.error != null }.error)
+        assertEquals(
+            getString(Res.string.voice_error_live_vendor, "You have no credits remaining."),
+            voice.chat.first { it.phase == VoicePhase.Off && it.error != null }.error,
+        )
         assertTrue(call.closed)
     }
 

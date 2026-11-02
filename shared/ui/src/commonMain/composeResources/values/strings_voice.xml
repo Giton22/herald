@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Voice chat, live calls and the call screens: voice_ for the voice chat (its panel, its full screen and the
+    errors it shows), call_ for a call that rings this phone.
+-->
+<resources>
+    <string name="voice_chat">Voice chat</string>
+    <string name="voice_connecting">Connecting…</string>
+    <string name="voice_muted">Muted</string>
+    <string name="voice_hearing">Hearing you…</string>
+    <string name="voice_listening">Listening…</string>
+    <string name="voice_transcribing">Catching that…</string>
+    <string name="voice_thinking">Thinking…</string>
+    <string name="voice_speaking">Speaking…</string>
+    <string name="voice_hint_unmute">Tap the microphone to talk again</string>
+    <string name="voice_hint_connecting">Setting up the call</string>
+    <string name="voice_hint_working">Hermes is on it</string>
+    <string name="voice_hint_talk_over">Talk over it to cut in</string>
+    <string name="voice_hint_skip">Tap skip to talk again</string>
+    <string name="voice_hint_send_now">Pause when you’re done, or tap send</string>
+    <!-- Keep “stop” in English: it’s the word the voice chat listens for, in every language. -->
+    <string name="voice_hint_just_talk">Just talk · say “stop” to end</string>
+    <string name="voice_expand">Show voice chat full screen</string>
+    <string name="voice_quoted">“%1$s”</string>
+    <string name="voice_mute">Mute</string>
+    <string name="voice_unmute">Unmute</string>
+    <string name="voice_end">End</string>
+    <string name="voice_end_chat">End voice chat</string>
+    <string name="voice_skip_reply">Skip the reply</string>
+    <string name="voice_send_now">Send now</string>
+    <string name="voice_type_instead">Type instead</string>
+    <string name="voice_show_chat">Show the chat</string>
+    <string name="voice_show_captions">Show captions</string>
+    <string name="voice_hide_captions">Hide captions</string>
+    <string name="voice_you">You</string>
+    <string name="voice_said_unlock_for_approval">Hermes needs your approval. Unlock the phone, and I’ll ask you for it.</string>
+    <string name="voice_said_type_in_chat">Hermes needs something typed in the chat to go on.</string>
+    <string name="voice_said_again">Sorry, I didn’t get that. %1$s</string>
+    <string name="voice_said_waiting_in_chat">I couldn’t get that, so it’s waiting in the chat.</string>
+    <string name="voice_error_send">Couldn’t send that.</string>
+    <string name="voice_error_send_answer">Couldn’t send the answer.</string>
+    <string name="voice_error_send_to_hermes">Couldn’t send that to Hermes.</string>
+    <string name="voice_error_microphone">Couldn’t use the microphone.</string>
+    <string name="voice_error_transcribe">Couldn’t transcribe that.</string>
+    <string name="voice_error_nothing_heard">Didn’t catch anything.</string>
+    <string name="voice_error_voice_reply">Couldn’t voice the reply.</string>
+    <string name="voice_error_play_reply">Couldn’t play the reply.</string>
+    <string name="voice_error_live_start">Couldn’t start the live call.</string>
+    <string name="voice_error_live_vendor">GPT-Live couldn’t start: %1$s</string>
+    <string name="voice_error_live_no_answer">GPT-Live sent no answer.</string>
+    <string name="voice_error_live_ended">The live call ended.</string>
+    <string name="voice_error_live_ended_because">The live call ended: %1$s</string>
+    <string name="voice_error_live_dropped">The live call dropped.</string>
+    <string name="call_title">Kyllene call</string>
+    <string name="call_answer">Answer</string>
+    <string name="call_decline">Decline</string>
+    <string name="call_ended">Call ended</string>
+    <string name="call_status">%1$s · %2$s</string>
+    <string name="call_listening">Listening</string>
+    <string name="call_thinking">Thinking</string>
+    <string name="call_working">Working: %1$s</string>
+    <string name="call_speaking">Speaking</string>
+</resources>
