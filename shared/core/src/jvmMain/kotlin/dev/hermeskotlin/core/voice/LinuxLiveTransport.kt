@@ -15,7 +15,8 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.channels.ChannelIterator
+import kotlinx.coroutines.channels.ChannelResult
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
@@ -37,7 +38,6 @@ internal interface LivePeer : AutoCloseable {
 }
 
 /** Signaling and events only; a LiveCall supplies real media separately. One connection per instance. */
-@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 internal class LinuxLiveTransport(private val makePeer: (LivePeerEvents) -> LivePeer) : AutoCloseable {
     private val owner = Any()
     private var peer: LivePeer? = null
@@ -45,10 +45,25 @@ internal class LinuxLiveTransport(private val makePeer: (LivePeerEvents) -> Live
     private val terminal = AtomicReference<Throwable?>()
     private val ended = CompletableDeferred<Throwable>()
     private val releaseReported = AtomicBoolean()
-    private val queuedBytes = AtomicLong()
+    private val queuedChars = AtomicLong()
     // A reply streams one event per transcript fragment: a short pause in the consumer mustn't end the call.
     private val incoming = Channel<String>(MAX_QUEUED_EVENTS)
-    val events: ReceiveChannel<String> = incoming
+
+    /** The call's events in order; closed when the call ends, with its failure if it failed. */
+    inner class Events internal constructor() {
+        suspend fun receive(): String = incoming.receive().also(::taken)
+        suspend fun receiveCatching(): ChannelResult<String> = incoming.receiveCatching().also { it.getOrNull()?.let(::taken) }
+        fun tryReceive(): ChannelResult<String> = incoming.tryReceive().also { it.getOrNull()?.let(::taken) }
+        operator fun iterator(): ChannelIterator<String> {
+            val events = incoming.iterator()
+            return object : ChannelIterator<String> {
+                override suspend fun hasNext() = events.hasNext()
+                override fun next() = events.next().also(::taken)
+            }
+        }
+        private fun taken(event: String) { queuedChars.addAndGet(-event.length.toLong()) }
+    }
+    val events = Events()
     private val listener = object : LivePeerEvents {
         override fun message(bytes: ByteArray, binary: Boolean): Boolean {
             if (terminal.get() != null) return false
@@ -59,10 +74,8 @@ internal class LinuxLiveTransport(private val makePeer: (LivePeerEvents) -> Live
             catch (_: CharacterCodingException) {
                 ended(IllegalStateException("The call received an invalid text event.")); return false
             }
-            // Bound the bytes as well as the count. Only this callback adds, so a queue seen empty holds nothing
-            // older: the tally restarts there, and otherwise only overcounts what the consumer has taken.
-            if (incoming.isEmpty) queuedBytes.set(0)
-            if (queuedBytes.addAndGet(bytes.size.toLong()) > MAX_QUEUED_BYTES) {
+            // Bound what waits for the consumer by size as well as by count.
+            if (queuedChars.addAndGet(text.length.toLong()) > MAX_QUEUED_CHARS) {
                 ended(IllegalStateException("The call's event queue is full.")); return false
             }
             val sent = incoming.trySend(text)
@@ -181,7 +194,7 @@ internal class LinuxLiveTransport(private val makePeer: (LivePeerEvents) -> Live
     companion object {
         const val MAX_EVENT_BYTES = 1024 * 1024
         const val MAX_QUEUED_EVENTS = 1024
-        const val MAX_QUEUED_BYTES = 16L * 1024 * 1024
+        const val MAX_QUEUED_CHARS = 16L * 1024 * 1024
         private const val MAX_SDP_CHARS = 1024 * 1024
     }
 }

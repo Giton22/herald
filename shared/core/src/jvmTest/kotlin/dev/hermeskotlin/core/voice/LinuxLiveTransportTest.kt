@@ -116,11 +116,13 @@ class LinuxLiveTransportTest {
         try {
             transport.connect { "answer" }
             val large = ByteArray(1024 * 1024) { 'x'.code.toByte() }
-            // A consumer that keeps up never reaches the bound.
+            // A consumer that keeps up, even one that's always an event behind, never reaches the bound.
+            assertTrue(peer.events.message(large, false))
             repeat(32) {
                 assertTrue(peer.events.message(large, false))
                 transport.events.receive()
             }
+            transport.events.receive()
             repeat(16) { assertTrue(peer.events.message(large, false)) }
             assertFalse(peer.events.message(large, false))
             assertFalse(transport.send("retired"))
