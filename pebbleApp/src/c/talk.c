@@ -32,7 +32,7 @@ static char s_prompts_rev[16];
 // Persisted; a prompt each from KEY_PROMPT.
 enum {
   KEY_CHAT_ID = 1, KEY_CHAT_TITLE = 2, KEY_ACCENT_REV = 3, KEY_ACCENT_FILL = 4, KEY_ACCENT_ON_FILL = 5,
-  KEY_PROMPTS_REV = 6, KEY_PROMPT_COUNT = 7, KEY_PROMPT = 10,
+  KEY_PROMPTS_REV = 6, KEY_PROMPT_COUNT = 7, KEY_CHAT_SCOPE = 8, KEY_PROMPT = 10,
 };
 
 typedef enum {
@@ -61,6 +61,8 @@ static AppTimer *s_status_timer;
 
 static PhoneState s_phone = PHONE_UNKNOWN;
 static char s_chat_id[64];
+// The gateway and profile s_chat_id is in, as the phone said: it goes back with each ask. PebbleLink.MAX_SCOPE_BYTES.
+static char s_chat_scope[208];
 static char s_chat_title[64];
 static char s_accent_rev[48];
 static GColor s_fill;
@@ -234,7 +236,7 @@ void talk_on_status(const LinkStatus *status) {
   static bool s_asked_history;
   if (!s_asked_history && !s_has_turn && s_chat_id[0] && s_phone == PHONE_READY) {
     s_asked_history = true;
-    s_loading_chat = link_history_request(s_chat_id);
+    s_loading_chat = link_history_request(s_chat_id, s_chat_scope);
   }
   if (s_phone == PHONE_OFF && s_has_turn && s_phase == PHASE_SENDING) {
     // What was just said went nowhere.
@@ -273,7 +275,7 @@ static void prv_ask(const char *text) {
   s_activity[0] = '\0';
   s_error[0] = '\0';
   s_phase = PHASE_SENDING;
-  if (!link_ask(s_ask_id, text, s_chat_id)) {
+  if (!link_ask(s_ask_id, text, s_chat_id, s_chat_scope)) {
     s_phase = PHASE_FAILED;
     prv_copy(s_error, sizeof(s_error), "Couldn't send that. Try again.");
   }
@@ -325,6 +327,10 @@ void talk_on_reply(const LinkReply *reply) {
     prv_copy(s_chat_id, sizeof(s_chat_id), reply->chat_id);
     persist_write_string(KEY_CHAT_ID, s_chat_id);
   }
+  if (reply->scope && s_chat_id[0] && strcmp(reply->scope, s_chat_scope) != 0) {
+    prv_copy(s_chat_scope, sizeof(s_chat_scope), reply->scope);
+    persist_write_string(KEY_CHAT_SCOPE, s_chat_scope);
+  }
   if (reply->title && reply->title[0] && strcmp(reply->title, s_chat_title) != 0) {
     prv_copy(s_chat_title, sizeof(s_chat_title), reply->title);
     persist_write_string(KEY_CHAT_TITLE, s_chat_title);
@@ -368,22 +374,25 @@ void talk_on_ring(const LinkRing *ring) {
   ring_show(ring, s_fill, s_on_fill);
 }
 
-// Talks in [chat_id] from the next ask on; an empty id is a new chat.
-static void prv_use_chat(const char *chat_id, const char *title) {
+// Talks in [chat_id], in [scope]'s gateway and profile, from the next ask on; an empty id is a new chat.
+static void prv_use_chat(const char *chat_id, const char *title, const char *scope) {
   prv_copy(s_chat_id, sizeof(s_chat_id), chat_id);
   prv_copy(s_chat_title, sizeof(s_chat_title), title);
+  prv_copy(s_chat_scope, sizeof(s_chat_scope), s_chat_id[0] ? scope : "");
   if (s_chat_id[0]) {
     persist_write_string(KEY_CHAT_ID, s_chat_id);
     persist_write_string(KEY_CHAT_TITLE, s_chat_title);
+    persist_write_string(KEY_CHAT_SCOPE, s_chat_scope);
   } else {
     persist_delete(KEY_CHAT_ID);
     persist_delete(KEY_CHAT_TITLE);
+    persist_delete(KEY_CHAT_SCOPE);
   }
   s_has_turn = false;
   s_said[0] = '\0';
   s_ask_id[0] = '\0';
   // An old chat opens on its last exchange.
-  s_loading_chat = s_chat_id[0] && link_history_request(s_chat_id);
+  s_loading_chat = s_chat_id[0] && link_history_request(s_chat_id, s_chat_scope);
   scroll_layer_set_content_offset(s_scroll_layer, GPointZero, false);
   prv_redraw();
 }
@@ -405,7 +414,7 @@ static void prv_select(ClickRecognizerRef recognizer, void *context) {
 }
 
 static void prv_menu_new_chat(ActionMenu *menu, const ActionMenuItem *item, void *context) {
-  prv_use_chat("", "");
+  prv_use_chat("", "", "");
 }
 
 static void prv_menu_chats(ActionMenu *menu, const ActionMenuItem *item, void *context) {
@@ -587,6 +596,7 @@ void talk_init(void) {
   s_on_fill = GColorWhite;
   if (persist_exists(KEY_CHAT_ID)) persist_read_string(KEY_CHAT_ID, s_chat_id, sizeof(s_chat_id));
   if (persist_exists(KEY_CHAT_TITLE)) persist_read_string(KEY_CHAT_TITLE, s_chat_title, sizeof(s_chat_title));
+  if (persist_exists(KEY_CHAT_SCOPE)) persist_read_string(KEY_CHAT_SCOPE, s_chat_scope, sizeof(s_chat_scope));
   if (persist_exists(KEY_ACCENT_REV)) {
     persist_read_string(KEY_ACCENT_REV, s_accent_rev, sizeof(s_accent_rev));
     s_fill = PBL_IF_COLOR_ELSE(GColorFromHEX(persist_read_int(KEY_ACCENT_FILL)), GColorBlack);

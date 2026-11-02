@@ -2,7 +2,8 @@
 
 // PebbleLink.WATCH_INBOX_BYTES: every message the phone sends fits.
 #define INBOX_SIZE 2048
-#define OUTBOX_SIZE 512
+// The longest this sends: an ask with its dictation, chat and scope.
+#define OUTBOX_SIZE 1024
 
 enum { TYPE_REPLY = 64, TYPE_CHAT_ITEM = 65, TYPE_STATUS = 66, TYPE_RING = 67, TYPE_RING_END = 68, TYPE_REQUEST = 69, TYPE_REQUEST_END = 70, TYPE_PROMPTS = 71 };
 
@@ -35,6 +36,7 @@ static void prv_on_reply(DictionaryIterator *in) {
     .activity = prv_text(in, MESSAGE_KEY_ACTIVITY),
     .error = prv_text(in, MESSAGE_KEY_ERROR),
     .said = prv_text(in, MESSAGE_KEY_SAID),
+    .scope = prv_text(in, MESSAGE_KEY_SCOPE),
     .text = text ? text : "",
     .text_offset = prv_int(dict_find(in, MESSAGE_KEY_TEXT_OFFSET)),
     .text_total = prv_int(dict_find(in, MESSAGE_KEY_TEXT_TOTAL)),
@@ -61,6 +63,7 @@ static void prv_on_chat_item(DictionaryIterator *in) {
     .chat_id = prv_text(in, MESSAGE_KEY_CHAT_ID),
     .title = prv_text(in, MESSAGE_KEY_TITLE),
     .ago = prv_text(in, MESSAGE_KEY_AGO),
+    .scope = prv_text(in, MESSAGE_KEY_SCOPE),
     .error = prv_text(in, MESSAGE_KEY_ERROR),
   };
   if (s_handlers.on_chat_item) s_handlers.on_chat_item(&item);
@@ -163,12 +166,15 @@ static bool prv_send(void) {
   return app_message_outbox_send() == APP_MSG_OK;
 }
 
-bool link_ask(const char *ask_id, const char *text, const char *chat_id) {
+bool link_ask(const char *ask_id, const char *text, const char *chat_id, const char *scope) {
   DictionaryIterator *out;
   if (!prv_begin(&out, LINK_ASK)) return false;
   dict_write_cstring(out, MESSAGE_KEY_ASK_ID, ask_id);
   dict_write_cstring(out, MESSAGE_KEY_TEXT, text);
-  if (chat_id && chat_id[0]) dict_write_cstring(out, MESSAGE_KEY_CHAT_ID, chat_id);
+  if (chat_id && chat_id[0]) {
+    dict_write_cstring(out, MESSAGE_KEY_CHAT_ID, chat_id);
+    if (scope && scope[0]) dict_write_cstring(out, MESSAGE_KEY_SCOPE, scope);
+  }
   return prv_send();
 }
 
@@ -193,10 +199,11 @@ bool link_chats_request(void) {
   return prv_send();
 }
 
-bool link_history_request(const char *chat_id) {
+bool link_history_request(const char *chat_id, const char *scope) {
   DictionaryIterator *out;
   if (!prv_begin(&out, LINK_HISTORY_REQ)) return false;
   dict_write_cstring(out, MESSAGE_KEY_CHAT_ID, chat_id);
+  if (scope && scope[0]) dict_write_cstring(out, MESSAGE_KEY_SCOPE, scope);
   return prv_send();
 }
 

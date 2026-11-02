@@ -56,6 +56,11 @@ object PebbleKeys {
     const val PROMPTS_REV = 30
     /** The prompts the watch's hold-Select menu offers, one per line. */
     const val PROMPTS = 31
+    /**
+     * The gateway and profile a chat belongs to ([PebbleLink.scopeText]): the watch keeps it with the chat it talks
+     * in and sends it back with each ask, so one from another gateway or profile is refused, not sent there.
+     */
+    const val SCOPE = 32
 
     /** Every key by its name in package.json. */
     val byName: Map<String, Int> = mapOf(
@@ -66,7 +71,7 @@ object PebbleKeys {
         "ACCENT_ON_FILL" to ACCENT_ON_FILL, "ACCENT_DIM" to ACCENT_DIM, "REQUEST_ID" to REQUEST_ID,
         "APPROVAL" to APPROVAL, "AGENT" to AGENT, "ANSWERED" to ANSWERED, "VERSION" to VERSION, "SAID" to SAID,
         "DETAIL" to DETAIL, "CHOICES" to CHOICES, "ANSWERING" to ANSWERING, "PROMPTS_REV" to PROMPTS_REV,
-        "PROMPTS" to PROMPTS,
+        "PROMPTS" to PROMPTS, "SCOPE" to SCOPE,
     )
 }
 
@@ -109,14 +114,14 @@ object PebbleTypes {
 
 /** What the watch sent, read from its dictionary. */
 sealed interface PebbleIncoming {
-    data class Ask(val id: String, val text: String, val chatId: String?) : PebbleIncoming
+    data class Ask(val id: String, val text: String, val chatId: String?, val scope: WatchScope? = null) : PebbleIncoming
     data class Stop(val askId: String) : PebbleIncoming
     data object ChatsRequest : PebbleIncoming
     data class StatusRequest(val accentRevision: String?, val promptsRevision: String? = null) : PebbleIncoming
     data class RingOn(val requestId: String) : PebbleIncoming
     data class RingEnd(val requestId: String, val answered: Boolean) : PebbleIncoming
     data class Resync(val askId: String) : PebbleIncoming
-    data class HistoryRequest(val chatId: String) : PebbleIncoming
+    data class HistoryRequest(val chatId: String, val scope: WatchScope? = null) : PebbleIncoming
     /** [index] of the choices shown, or null with the [text] dictated. */
     data class Answer(val requestId: String, val index: Int?, val text: String?) : PebbleIncoming
 }
@@ -146,6 +151,8 @@ object PebbleLink {
     private const val MAX_SAID_BYTES = 200
     private const val MAX_DETAIL_BYTES = 700
     private const val MAX_CHOICE_BYTES = 60
+    /** As much of a scope as the watch keeps with its chat (its persistent storage takes 256 bytes a value). */
+    private const val MAX_SCOPE_BYTES = 200
     /** Hermes offers up to 4 choices to a question; an approval 3. */
     const val MAX_CHOICES = 6
     /** As many prompts as the watch keeps. */
@@ -168,6 +175,7 @@ object PebbleLink {
                 id = text(PebbleKeys.ASK_ID)?.takeIf { it.isNotEmpty() } ?: return null,
                 text = text(PebbleKeys.TEXT).orEmpty(),
                 chatId = text(PebbleKeys.CHAT_ID)?.takeIf { it.isNotEmpty() },
+                scope = text(PebbleKeys.SCOPE)?.let(::scopeOf),
             )
             PebbleTypes.STOP -> PebbleIncoming.Stop(text(PebbleKeys.ASK_ID) ?: return null)
             PebbleTypes.CHATS_REQ -> PebbleIncoming.ChatsRequest
@@ -183,13 +191,30 @@ object PebbleLink {
                 index = num(PebbleKeys.INDEX)?.takeIf { it >= 0 },
                 text = text(PebbleKeys.TEXT)?.takeIf { it.isNotBlank() },
             )
-            PebbleTypes.HISTORY_REQ -> PebbleIncoming.HistoryRequest(text(PebbleKeys.CHAT_ID)?.takeIf { it.isNotEmpty() } ?: return null)
+            PebbleTypes.HISTORY_REQ -> PebbleIncoming.HistoryRequest(
+                text(PebbleKeys.CHAT_ID)?.takeIf { it.isNotEmpty() } ?: return null,
+                text(PebbleKeys.SCOPE)?.let(::scopeOf),
+            )
             else -> null
         }
     }
 
     /** The watch's ask, for the relay: never read aloud, since a Pebble has no voice to play it in. */
-    fun PebbleIncoming.Ask.toWatchAsk(): WatchAsk = WatchAsk(id = id, text = text, chatId = chatId, speak = false)
+    fun PebbleIncoming.Ask.toWatchAsk(): WatchAsk = WatchAsk(id = id, text = text, chatId = chatId, speak = false, scope = scope)
+
+    /**
+     * [scope] as the watch keeps it: the gateway, then the profile on a line of its own when there is one. Null when
+     * it's longer than the watch keeps; the watch then asks without one, in whatever the phone is on.
+     */
+    fun scopeText(scope: WatchScope): String? =
+        (scope.gateway + (scope.profile?.let { "\n$it" } ?: "")).takeIf { utf8Size(it) <= MAX_SCOPE_BYTES }
+
+    /** What [scopeText] wrote; null for nothing. */
+    fun scopeOf(text: String): WatchScope? {
+        if (text.isEmpty()) return null
+        val gateway = text.substringBefore('\n')
+        return WatchScope(gateway, if ('\n' in text) text.substringAfter('\n') else null)
+    }
 
     /**
      * One message of [update]'s turn: its state, and [chunk] of its plain text placed at byte [offset] of the
@@ -208,14 +233,15 @@ object PebbleLink {
         update.activity?.takeIf { it.isNotBlank() }?.let { put(PebbleKeys.ACTIVITY, text(clipUtf8(it, MAX_ACTIVITY_BYTES))) }
         update.error?.takeIf { it.isNotBlank() }?.let { put(PebbleKeys.ERROR, text(clipUtf8(it, MAX_ERROR_BYTES))) }
         update.heard?.takeIf { it.isNotBlank() }?.let { put(PebbleKeys.SAID, text(clipUtf8(plainText(it), MAX_SAID_BYTES))) }
+        update.scope?.let(::scopeText)?.let { put(PebbleKeys.SCOPE, text(it)) }
     }
 
     /** The ask a chat's last exchange comes as: never one the watch made, so it's never taken for a running turn. */
     fun historyAskId(chatId: String): String = "h:$chatId"
 
     /** [chatId]'s last exchange as a finished turn: what was [said], and the [reply]. */
-    fun history(chatId: String, title: String?, said: String?, reply: String): ReplyUpdate =
-        ReplyUpdate(historyAskId(chatId), ReplyPhase.Done, chatId = chatId, title = title, heard = said, text = reply)
+    fun history(chatId: String, title: String?, said: String?, reply: String, scope: WatchScope? = null): ReplyUpdate =
+        ReplyUpdate(historyAskId(chatId), ReplyPhase.Done, chatId = chatId, title = title, heard = said, text = reply, scope = scope)
 
     /** How the phone stands, and its accent when the watch's is out of date. */
     fun status(status: PhoneStatus): PebbleDict = buildMap {
@@ -255,6 +281,7 @@ object PebbleLink {
                 put(PebbleKeys.CHAT_ID, text(chat.id))
                 put(PebbleKeys.TITLE, text(clipUtf8(chat.title, MAX_TITLE_BYTES)))
                 ago(chat.activityAt, nowSeconds)?.let { put(PebbleKeys.AGO, text(it)) }
+                list.scope?.let(::scopeText)?.let { put(PebbleKeys.SCOPE, text(it)) }
             }
         }
     }

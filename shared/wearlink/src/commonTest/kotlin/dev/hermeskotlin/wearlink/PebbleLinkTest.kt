@@ -82,10 +82,13 @@ class PebbleLinkTest {
             activity = long,
             error = long,
             heard = long,
+            // As long a scope as the watch keeps.
+            scope = WatchScope("https://" + "g".repeat(168) + ".example", "p".repeat(15)),
         )
         // A chunk of four-byte characters, as many as fit.
         val chunk = takeUtf8("🙂".repeat(1_000), PebbleLink.CHUNK_BYTES)
         val dict = PebbleLink.reply(update, offset = 0, chunk = chunk, total = 5_000)
+        assertTrue(dict.containsKey(PebbleKeys.SCOPE))
         assertTrue(PebbleLink.size(dict) <= PebbleLink.WATCH_INBOX_BYTES, "size ${PebbleLink.size(dict)}")
     }
 
@@ -156,6 +159,29 @@ class PebbleLinkTest {
             PebbleIncoming.StatusRequest("rev", "p1"),
             PebbleLink.decode(mapOf(PebbleKeys.TYPE to num(PebbleTypes.STATUS_REQ), PebbleKeys.ACCENT_REV to text("rev"), PebbleKeys.PROMPTS_REV to text("p1"))),
         )
+    }
+
+    @Test
+    fun aChatsScopeGoesWithItAndComesBackWithEachAsk() {
+        val scope = WatchScope("https://gateway.example", "work")
+        val launch = WatchScope("https://gateway.example")
+        assertEquals(scope, PebbleLink.scopeOf(PebbleLink.scopeText(scope)!!))
+        // The launch profile is no profile, not an empty one.
+        assertEquals(launch, PebbleLink.scopeOf(PebbleLink.scopeText(launch)!!))
+        assertNull(PebbleLink.scopeText(WatchScope("https://" + "g".repeat(300))))
+
+        val item = PebbleLink.chats(ChatList(listOf(WatchChat("a", "First")), scope = scope), 0.0).single()
+        assertEquals(text("https://gateway.example\nwork"), item[PebbleKeys.SCOPE])
+        val ask = PebbleLink.decode(
+            mapOf(PebbleKeys.TYPE to num(PebbleTypes.ASK), PebbleKeys.ASK_ID to text("p1"), PebbleKeys.CHAT_ID to text("a"), PebbleKeys.SCOPE to text("https://gateway.example\nwork")),
+        ) as PebbleIncoming.Ask
+        assertEquals(scope, ask.toWatchAsk().scope)
+        assertEquals(
+            PebbleIncoming.HistoryRequest("a", launch),
+            PebbleLink.decode(mapOf(PebbleKeys.TYPE to num(PebbleTypes.HISTORY_REQ), PebbleKeys.CHAT_ID to text("a"), PebbleKeys.SCOPE to text("https://gateway.example"))),
+        )
+        // A watchapp from before scopes asks in whatever the phone is on.
+        assertNull((PebbleLink.decode(mapOf(PebbleKeys.TYPE to num(PebbleTypes.ASK), PebbleKeys.ASK_ID to text("p2"))) as PebbleIncoming.Ask).scope)
     }
 
     @Test

@@ -202,6 +202,10 @@ The Wear JSON protocol stays untouched. `PebbleOutbox` **decodes the JSON for ea
 - **Speech:** the watch always sends `speak=false` for now, so the relay never voices. `PebbleOutbox.stream()` returns `false`.
 - **Replay:** `PebbleWatch` keeps the newest `REPLY` for its watch. `onAppOpened` sends it again from 0, so reopening the app mid-turn (or after it) shows where things stand. Verified on the device (Phase 1 results).
 - **Who may send:** the bridge is exported for the Pebble app to bind. PebbleKit's `BasePebbleListenerService` drops any call whose caller (by binder uid) isn't the Pebble app picked in `DefaultPebbleAndroidAppPicker`; Kyllene turns auto-select off and picks only `coredevices.coreapp` (`PebbleApps`). Without that, any app could start Hermes turns through it.
+- **Gateway and profile:** a chat belongs to one gateway and profile, as on Wear OS (`WatchScope`).
+  - Each `REPLY` and `CHAT_ITEM` carries its scope (`SCOPE`: the gateway, then the profile on its own line). The watch keeps it with the chat it talks in, and sends it back with each `ASK` and `HISTORY_REQ`.
+  - The relay refuses an ask whose scope isn't the gateway the phone is on now ("Conversation changed. Choose it again on your watch."), and the phone refuses a history request the same way.
+  - A scope longer than 200 bytes, which the watch couldn't keep, isn't sent; the watch then asks without one, in whatever the phone is on.
 
 ### 4.3 Node identity
 

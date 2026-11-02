@@ -42,7 +42,8 @@
       "CHOICES": 28,
       "ANSWERING": 29,
       "PROMPTS_REV": 30,
-      "PROMPTS": 31
+      "PROMPTS": 31,
+      "SCOPE": 32
     },
     "companionApp": {
       "android": {

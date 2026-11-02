@@ -31,6 +31,7 @@ typedef struct {
   const char *activity;  // NULL for none
   const char *error;     // NULL for none
   const char *said;      // what was said, when the phone tells it (a chat's last exchange); else NULL
+  const char *scope;     // the chat's gateway and profile, when the phone says; else NULL
   const char *text;
   int text_offset;
   int text_total;
@@ -50,6 +51,7 @@ typedef struct {
   const char *chat_id;
   const char *title;
   const char *ago;    // NULL when the chat has no activity time
+  const char *scope;  // the list's gateway and profile, NULL when the phone doesn't say
   const char *error;  // NULL for none
 } LinkChatItem;
 
@@ -112,13 +114,14 @@ enum {
 void link_open(LinkHandlers handlers);
 
 // Each is false when the outbox was busy and nothing went.
-bool link_ask(const char *ask_id, const char *text, const char *chat_id);
+// [scope] is the gateway and profile [chat_id] belongs to, as the phone said: one from elsewhere is refused there.
+bool link_ask(const char *ask_id, const char *text, const char *chat_id, const char *scope);
 bool link_stop(const char *ask_id);
 // With the accent and the prompts this has, so the phone sends either only when they changed.
 bool link_status_request(const char *accent_rev, const char *prompts_rev);
 bool link_chats_request(void);
 // [chat_id]'s last exchange, which comes as a finished reply.
-bool link_history_request(const char *chat_id);
+bool link_history_request(const char *chat_id, const char *scope);
 bool link_resync(const char *ask_id);
 // Choice [index] of those shown, or (index -1) [text] dictated.
 bool link_answer(const char *request_id, int index, const char *text);

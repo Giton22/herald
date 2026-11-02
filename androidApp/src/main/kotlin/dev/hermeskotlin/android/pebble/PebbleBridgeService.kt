@@ -18,6 +18,7 @@ import dev.hermeskotlin.wearlink.PebbleLink
 import dev.hermeskotlin.wearlink.PebbleLink.toWatchAsk
 import dev.hermeskotlin.wearlink.ReplyPhase
 import dev.hermeskotlin.wearlink.ReplyUpdate
+import dev.hermeskotlin.wearlink.WatchScope
 import io.rebble.pebblekit2.client.BasePebbleListenerService
 import io.rebble.pebblekit2.common.model.PebbleDictionary
 import io.rebble.pebblekit2.common.model.ReceiveResult
@@ -86,7 +87,7 @@ class PebbleBridgeService : BasePebbleListenerService() {
                 }
             }
             is PebbleIncoming.Resync -> outbox.watch(node).resync(incoming.askId)
-            is PebbleIncoming.HistoryRequest -> scope.launch { sendHistory(node, incoming.chatId) }
+            is PebbleIncoming.HistoryRequest -> scope.launch { sendHistory(node, incoming.chatId, incoming.scope) }
             is PebbleIncoming.Answer -> requests.answer(node, incoming)
             is PebbleIncoming.RingOn -> ringer.ringsOn(node, incoming)
             is PebbleIncoming.RingEnd -> ringer.endedOnWatch(node, incoming)
@@ -94,16 +95,23 @@ class PebbleBridgeService : BasePebbleListenerService() {
         return ReceiveResult.Ack
     }
 
-    /** [chatId]'s last exchange, for the watch opening it, as a finished turn; why not, when it can't be read. */
-    private suspend fun sendHistory(node: String, chatId: String) {
+    /**
+     * [chatId]'s last exchange, for the watch opening it, as a finished turn; why not, when it can't be read. Read in
+     * the gateway and profile the watch has it in ([owner]), and only when that's the gateway this phone is on.
+     */
+    private suspend fun sendHistory(node: String, chatId: String, owner: WatchScope?) {
         val saved = gateways.current()
         val update = if (saved == null || !auth.hasStoredSession(saved.gatewayUrl)) {
             failedHistory(chatId, WatchRelay.SIGNED_OUT)
+        } else if (owner != null && owner.gateway != saved.gatewayUrl.value) {
+            failedHistory(chatId, CHAT_ELSEWHERE)
         } else {
-            when (val result = sessions.messages(saved.gatewayUrl, chatId, limit = HISTORY_ROWS, profile = profiles.get(saved.gatewayUrl))) {
+            val profile = if (owner != null) owner.profile else profiles.get(saved.gatewayUrl)
+            val scope = WatchScope(saved.gatewayUrl.value, profile)
+            when (val result = sessions.messages(saved.gatewayUrl, chatId, limit = HISTORY_ROWS, profile = profile)) {
                 is ApiResult.Success -> lastExchange(result.value.messages)
-                    ?.let { PebbleLink.history(chatId, null, it.said, it.reply) }
-                    ?: PebbleLink.history(chatId, null, null, "Nothing here yet. Press Select to ask.")
+                    ?.let { PebbleLink.history(chatId, null, it.said, it.reply, scope) }
+                    ?: PebbleLink.history(chatId, null, null, "Nothing here yet. Press Select to ask.", scope)
                 else -> failedHistory(chatId, result.errorMessage ?: "Couldn't read this chat.")
             }
         }
@@ -127,6 +135,9 @@ class PebbleBridgeService : BasePebbleListenerService() {
 
     private companion object {
         const val TAG = "HeraldPebble"
+
+        /** The relay's words for an ask in a chat from another gateway: the watch picks one again. */
+        const val CHAT_ELSEWHERE = "Conversation changed. Choose it again on your watch."
 
         /** Enough of a chat's newest rows to reach back past a long turn's tool steps to its prompt. */
         const val HISTORY_ROWS = 40

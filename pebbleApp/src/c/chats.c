@@ -21,6 +21,8 @@ static int s_count;
 // Until the phone's list has all come: shown as one row saying so.
 static bool s_loading;
 static char s_error[128];
+// The gateway and profile the listed chats are in: PebbleLink.MAX_SCOPE_BYTES.
+static char s_scope[208];
 
 static void prv_copy(char *to, size_t size, const char *from) {
   strncpy(to, from ? from : "", size - 1);
@@ -61,9 +63,9 @@ static int16_t prv_row_height(MenuLayer *menu, MenuIndex *index, void *data) {
 
 static void prv_select(MenuLayer *menu, MenuIndex *index, void *data) {
   if (index->row == 0) {
-    s_picked("", "");
+    s_picked("", "", "");
   } else if (!s_loading && !s_error[0] && index->row - 1 < s_count) {
-    s_picked(s_chats[index->row - 1].id, s_chats[index->row - 1].title);
+    s_picked(s_chats[index->row - 1].id, s_chats[index->row - 1].title, s_scope);
   } else {
     return;
   }
@@ -81,6 +83,7 @@ void chats_on_item(const LinkChatItem *item) {
     prv_copy(chat->id, sizeof(chat->id), item->chat_id);
     prv_copy(chat->title, sizeof(chat->title), item->title);
     prv_copy(chat->ago, sizeof(chat->ago), item->ago);
+    prv_copy(s_scope, sizeof(s_scope), item->scope);
     s_count = item->count < MAX_CHATS ? item->count : MAX_CHATS;
     // They come in order: the last one ends the list.
     if (item->index >= s_count - 1) s_loading = false;

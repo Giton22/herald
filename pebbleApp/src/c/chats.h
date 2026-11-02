@@ -4,8 +4,9 @@
 
 #include "link.h"
 
-// Called with the picked chat; an empty id is a new chat.
-typedef void (*ChatPicked)(const char *chat_id, const char *title);
+// Called with the picked chat and the gateway and profile it's in (empty when the phone doesn't say); an empty id is
+// a new chat.
+typedef void (*ChatPicked)(const char *chat_id, const char *title, const char *scope);
 
 // Opens the list, marking [current], and asks the phone for the chats; [fill] and [on_fill] are the accent.
 void chats_open(const char *current, GColor fill, GColor on_fill, ChatPicked picked);
