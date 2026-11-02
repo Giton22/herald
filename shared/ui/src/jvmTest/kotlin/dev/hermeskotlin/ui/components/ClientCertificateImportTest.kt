@@ -8,6 +8,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.assertTextContains
 import androidx.compose.ui.test.assertIsNotEnabled
+import androidx.compose.ui.test.assertHeightIsAtLeast
+import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.runSkikoComposeUiTest
+import androidx.compose.ui.test.performScrollTo
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.test.hasSetTextAction
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -15,6 +20,8 @@ import androidx.compose.ui.test.performTextInput
 import androidx.compose.ui.test.runComposeUiTest
 import com.composeunstyled.theme.ColorScheme
 import dev.hermeskotlin.designsystem.AccentPalette
+import dev.hermeskotlin.designsystem.components.ButtonSize
+import dev.hermeskotlin.core.gateway.ClientCertificateException
 import dev.hermeskotlin.designsystem.LocalDesktopLayout
 import dev.hermeskotlin.designsystem.hermesTheme
 import kotlin.test.Test
@@ -22,6 +29,27 @@ import kotlin.test.assertEquals
 
 @OptIn(ExperimentalTestApi::class)
 class ClientCertificateImportTest {
+    @Test fun importErrorsKeepFullActionButtonsInNarrowAndShortWindows() {
+        for (size in listOf(Size(640f, 360f), Size(360f, 640f))) {
+            for (scheme in listOf(ColorScheme.Light, ColorScheme.Dark)) runSkikoComposeUiTest(size = size) {
+                setContent {
+                    hermesTheme(AccentPalette.Blue)(scheme) {
+                        CompositionLocalProvider(LocalDesktopLayout provides true) {
+                            ClientCertificateImportDialog(TextFieldState(), false, ClientCertificateException().message, {}, {})
+                        }
+                    }
+                }
+                onNodeWithText("Cancel").assertHeightIsAtLeast(ButtonSize.Medium.desktopHeight)
+                onNodeWithText("Import").assertHeightIsAtLeast(ButtonSize.Medium.desktopHeight)
+                if (size.width > size.height) {
+                    onNode(hasSetTextAction()).performScrollTo().assertIsDisplayed()
+                    onNodeWithText(ClientCertificateException().message!!).performScrollTo().assertIsDisplayed()
+                    onNodeWithText("Import").assertHeightIsAtLeast(ButtonSize.Medium.desktopHeight)
+                }
+            }
+        }
+    }
+
     @Test fun thePasswordIsMaskedAndRepeatedSubmissionIsDisabledWhileImporting() = runComposeUiTest {
         val password = TextFieldState()
         var busy by mutableStateOf(false)

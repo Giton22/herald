@@ -137,8 +137,9 @@ it must never be used for a real gateway. UI tests run with
 set `JAVA_TOOL_OPTIONS=-Djava.awt.headless=true`. Imports accept regular files, not
 symlinks/devices/pipes, and use interruptible channel reads. The named-pipe rejection
 test requires Linux and `mkfifo` from coreutils; it is explicitly skipped elsewhere.
-Installed qualification must also
-exercise the real file chooser, password/cancellation, restart and both TLS transports.
+The password and error area scrolls in short windows while Cancel and Import remain visible.
+Installed qualification must also exercise the real file chooser, password/cancellation,
+restart and both TLS transports.
 
 ### Microphone backend
 

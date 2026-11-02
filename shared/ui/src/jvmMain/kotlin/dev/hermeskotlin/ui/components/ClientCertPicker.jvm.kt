@@ -1,5 +1,9 @@
 package dev.hermeskotlin.ui.components
 
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.runtime.Composable
@@ -11,6 +15,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.composeunstyled.Text
+import com.composeunstyled.theme.Theme
+import dev.hermeskotlin.designsystem.body
+import dev.hermeskotlin.designsystem.colors
+import dev.hermeskotlin.designsystem.textSecondary
+import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.core.gateway.ClientCertificateException
 import dev.hermeskotlin.core.gateway.LinuxClientCertificates
 import dev.hermeskotlin.core.gateway.linuxClientCertificates
@@ -157,12 +169,20 @@ internal fun ClientCertificateImportDialog(
         visible = true,
         onDismissRequest = onDismiss,
         title = "Import client certificate",
-        message = "Enter the password for the PKCS#12 file you selected. Its key will be stored encrypted for this TLS hostname. Gateways sharing the hostname also share certificate selection, regardless of port or path.",
         actions = {
             Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost)
             Button(if (busy) "Importing…" else "Import", onClick = onImport, enabled = !busy)
         },
     ) {
-        TextField(password, label = "PKCS#12 password", password = true, error = error, enabled = !busy, autofocus = true)
+        Column(
+            Modifier.weight(1f, fill = false).verticalScroll(rememberScrollState()),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Text(
+                "Enter the password for the PKCS#12 file you selected. Its key will be stored encrypted for this TLS hostname. Gateways sharing the hostname also share certificate selection, regardless of port or path.",
+                style = Theme[typography][body], color = Theme[colors][textSecondary],
+            )
+            TextField(password, label = "PKCS#12 password", password = true, error = error, enabled = !busy, autofocus = true)
+        }
     }
 }
