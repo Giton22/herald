@@ -1219,7 +1219,10 @@ class ChatSession(
         val index = messages.indexOfFirst { it.key == key }
         if (index < 0) return null
         // Up to the row the next message starts at; the last message keeps every row.
-        val next = messages.drop(index + 1).firstNotNullOfOrNull { message -> storedRowId(message.key) }
+        val next = messages.drop(index + 1).firstNotNullOfOrNull { message ->
+            // A folded group is keyed by its newest row; it starts at its first.
+            storedRowId(((message as? ChatMessage.Event)?.event as? TranscriptEvent.SystemMessages)?.firstKey ?: message.key)
+        }
         val end = next?.let { id -> rows.indexOfFirst { it.id == id } }?.takeIf { it >= 0 } ?: rows.size
         return branchKeeping(rows.take(end).count { it.countsInBranch })
     }

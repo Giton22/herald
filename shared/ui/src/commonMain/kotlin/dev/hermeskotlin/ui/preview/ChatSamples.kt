@@ -3,6 +3,7 @@ package dev.hermeskotlin.ui.preview
 import androidx.compose.foundation.text.input.TextFieldState
 import dev.hermeskotlin.core.chat.ApprovalChoice
 import dev.hermeskotlin.core.chat.Attachment
+import dev.hermeskotlin.core.chat.TranscriptEvent
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.GatewayNotice
 import dev.hermeskotlin.core.projects.Project
@@ -133,6 +134,15 @@ internal object ChatSamples {
 
     /** The finished turn with the gateway's notices: credits, and the agent still starting. */
     val notices: ChatState = reply.copy(
+        messages = listOf(
+            ask,
+            ChatMessage.Event("system-1", TranscriptEvent.SystemMessages(listOf(
+                TranscriptEvent.Routine("Backup monitor", "The nightly scan found one failed backup."),
+                TranscriptEvent.Compaction("Earlier checks found the NAS full.\n\n```text\nbackup: no space left\n```"),
+                TranscriptEvent.Process("Background process finished: check backup", "1 failed backup", failed = false),
+            ), firstKey = "system-0")),
+            answer,
+        ),
         notices = listOf(
             GatewayNotice("credits.depleted", "Credit access paused · run /topup to top up", GatewayNotice.Level.Error, GatewayNotice.Kind.Sticky),
             GatewayNotice("credits.usage", "80% of this month's credit used", GatewayNotice.Level.Warning, GatewayNotice.Kind.Sticky),

@@ -115,7 +115,7 @@ class SessionsApi(private val client: HttpClient) {
         }
     }.map { it.body<SessionMessagesPage>() }
 
-    /** `GET /api/sessions/{id}` — the stored row, read for its token and cost totals. */
+    /** `GET /api/sessions/{id}` — the stored row, including token/cost totals and the shared read watermark. */
     suspend fun totals(url: GatewayUrl, sessionId: String, profile: String? = null): ApiResult<SessionTotals> = apiCall {
         client.get(url.resolve("api/sessions/${sessionId.encodeURLPathPart()}")) {
             profile?.let { parameter("profile", it) }

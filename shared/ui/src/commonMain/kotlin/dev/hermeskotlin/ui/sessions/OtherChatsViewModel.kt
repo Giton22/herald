@@ -206,7 +206,6 @@ class OtherChatsViewModel(
         // The recent rows too: the sidebar may show the archive, and the chat is in the recent list.
         val session = (state.sessions + state.projectSessions.orEmpty() + recentRows.value).firstOrNull { it.id == id } ?: return null
         val readUpTo = sessions.readUpTo(session)
-        sessions.markSeen(session)
         return readUpTo
     }
 
