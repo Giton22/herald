@@ -43,6 +43,9 @@ import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.DesktopWeb
+import dev.hermeskotlin.ui.screen.ScreenViewerEvent
+import dev.hermeskotlin.ui.screen.ScreenViewerHandle
+import dev.hermeskotlin.ui.screen.screenEvent
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.currentCoroutineContext
@@ -81,7 +84,9 @@ import org.cef.network.CefCookieManager
 import org.cef.network.CefRequest
 import org.cef.network.CefResponse
 import java.awt.Desktop
+import java.io.File
 import java.net.URI
+import java.net.URLEncoder
 import java.util.Date
 import java.util.Vector
 
@@ -127,6 +132,77 @@ internal class JcefWeb(private val cookies: WebCookieJar, private val gateways: 
             }
         }
         BrowserSurface(page, modifier) { down -> keepsWheel(page.title, down) }
+    }
+
+    /**
+     * The bot's screen, in the app's own browser.
+     *
+     * The page is the app's own (see `vendor/screen-viewer`), written to a file because the gateway accepts
+     * a display stream only to a page without an origin of its own: a `file:` address is the one a browser
+     * gives it. The page opens the stream itself, so nothing of the gateway's reaches it but the ticket the
+     * app hands over.
+     */
+    @Composable
+    override fun ScreenPage(
+        streamUrl: String,
+        viewOnly: Boolean,
+        onHandle: (ScreenViewerHandle) -> Unit,
+        onEvent: (ScreenViewerEvent) -> Unit,
+        modifier: Modifier,
+    ) {
+        val app by produceState<CefApp?>(null) { value = app() }
+        val cef = app
+        if (cef == null) {
+            LaunchedEffect(Unit) { onEvent(ScreenViewerEvent.Failed("The browser didn't start.")) }
+            return
+        }
+        val event by rememberUpdatedState(onEvent)
+        val handle by rememberUpdatedState(onHandle)
+        val client = remember(cef) {
+            cef.createClient().apply {
+                // The page cannot talk to the app any other way: it asks for an address of its own and the
+                // app reads the answer out of it.
+                addRequestHandler(object : CefRequestHandlerAdapter() {
+                    override fun onBeforeBrowse(
+                        browser: CefBrowser,
+                        frame: CefFrame,
+                        request: CefRequest,
+                        userGesture: Boolean,
+                        isRedirect: Boolean,
+                    ): Boolean {
+                        val answer = request.url?.let(::screenEvent) ?: return false
+                        event(answer)
+                        return true
+                    }
+                })
+            }
+        }
+        DisposableEffect(client) { onDispose { client.dispose() } }
+        val page = remember(client, streamUrl) {
+            OffscreenBrowser(client, screenPageAddress(streamUrl, viewOnly), transparent = false)
+        }
+        LaunchedEffect(page, viewOnly) {
+            handle(
+                object : ScreenViewerHandle {
+                    override fun viewOnly(value: Boolean) {
+                        page.browser.executeJavaScript(
+                            "window.kylleneScreen && window.kylleneScreen.setViewOnly($value)",
+                            page.browser.url ?: "",
+                            0,
+                        )
+                    }
+
+                    override fun key(keysym: Int, down: Boolean) {
+                        page.browser.executeJavaScript(
+                            "window.kylleneScreen && window.kylleneScreen.sendKey($keysym, $down)",
+                            page.browser.url ?: "",
+                            0,
+                        )
+                    }
+                },
+            )
+        }
+        BrowserSurface(page, modifier)
     }
 
     @Composable
@@ -337,6 +413,24 @@ internal class JcefWeb(private val cookies: WebCookieJar, private val gateways: 
 
 /** Where a widget's document is served from: a name no network has, which the client answers itself. */
 private const val WIDGET_URL = "https://herald-widget.invalid/"
+
+/**
+ * The address of the app's own screen page, with the stream to open and whether the user may drive it.
+ *
+ * The page is written to a file first: a browser will not load a module script from a `file:` address, so
+ * the page is one file with everything in it, and a `file:` address is the one the gateway accepts for a
+ * display stream.
+ */
+private fun screenPageAddress(streamUrl: String, viewOnly: Boolean): String {
+    val text = JcefWeb::class.java.getResourceAsStream("/screen-viewer.html")?.use { it.readBytes().decodeToString() }
+        ?: error("The screen viewer page is missing from the app.")
+    val file = File.createTempFile("kyllene-screen", ".html")
+    file.deleteOnExit()
+    file.writeText(text)
+    return "file://" + file.absolutePath +
+        "#ws=" + URLEncoder.encode(streamUrl, "UTF-8") +
+        "&viewOnly=" + if (viewOnly) "1" else "0"
+}
 
 /**
  * A plugin's page is a route inside the whole dashboard. This keeps only the page: no sidebar (the dashboard's

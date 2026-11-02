@@ -116,8 +116,10 @@ hand-writing ~1 MB of contract. Regenerate when bumping supported Hermes version
 - The stream: `GET /api/display/ws?display_ticket=<ticket>` upgrades to a WebSocket that carries the
   **raw RFB bytes** of the desktop as binary frames, both ways. The gateway splices the screen's own RFB
   socket into it; the ticket rides in the query because a viewer cannot add a header to the socket.
-  The client speaks ordinary RFB (3.8, no password, 32-bit true colour) and asks for the encodings it
-  can read (raw, copy-rect, hextile, tight, desktop-size).
+  The client speaks ordinary RFB (3.8, no password, 32-bit true colour): the app's viewer page is
+  [noVNC](https://novnc.com/), which asks for the encodings it can read (raw, copy-rect, hextile, tight,
+  desktop-size) and draws them. The stream is a plain RFB server on the other side — TigerVNC's Xvnc —
+  so any RFB client can read it.
 - Control: `display.lease.acquire {viewer_id}` and `display.lease.release {viewer_id?, force?}`. The lease
   is the gate — the gateway **drops the keyboard, pointer and clipboard messages of a viewer that does not
   hold it**, so a client sends what the user does and lets the gateway answer. A dropped link keeps the

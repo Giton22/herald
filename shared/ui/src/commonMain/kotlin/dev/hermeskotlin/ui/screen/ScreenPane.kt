@@ -1,6 +1,5 @@
 package dev.hermeskotlin.ui.screen
 
-import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,12 +26,7 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.input.pointer.PointerEventType
-import androidx.compose.ui.input.pointer.pointerInput
-import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalClipboard
-import androidx.compose.ui.unit.IntOffset
-import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composeunstyled.Text
@@ -51,6 +45,7 @@ import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.screen.DisplayLease
 import dev.hermeskotlin.core.screen.ScreenKey
+import dev.hermeskotlin.core.screen.ScreenStage
 import dev.hermeskotlin.core.screen.keysymForKey
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
@@ -66,22 +61,18 @@ import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
-import dev.hermeskotlin.designsystem.well
 import dev.hermeskotlin.ui.KeepScreenOn
 import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.sessions.ListSpinner
 import dev.hermeskotlin.ui.sessions.SubpageHeader
 import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
-import kotlin.math.min
-import kotlin.math.roundToInt
 
 /**
  * A bot's screen: the live picture of what the bot is doing, and the user's own hand on it.
  *
- * The gateway decides what reaches the screen, so the app sends what the user does and lets the gateway
- * drop it while the agent holds the screen; the pane says who holds it rather than holding the user's hand
- * back.
+ * The gateway decides what reaches the screen, so the viewer is told whether the user may drive it and the
+ * gateway has the last word; the pane says who holds it rather than holding the user's hand back.
  */
 @Composable
 fun ScreenPane(
@@ -93,7 +84,7 @@ fun ScreenPane(
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(gateway, bot.name) { viewModel.bind(gateway, bot.name) }
-    // The stream goes away with the pane, so the gateway isn't left sending pictures nobody watches.
+    // The screen goes away with the pane, so the gateway isn't left sending pictures nobody watches.
     DisposableEffect(viewModel) { onDispose { viewModel.close() } }
     // The screen going dark stops the app, so the phone keeps its own awake while the bot's is watched.
     KeepScreenOn(true)
@@ -106,18 +97,16 @@ fun ScreenPane(
         onRefresh = viewModel::refresh,
         onTakeOver = viewModel::takeOver,
         onHandBack = viewModel::handBack,
-        onPointer = viewModel::pointer,
-        onKey = viewModel::key,
-        onCharacter = viewModel::character,
+        onViewerEvent = viewModel::viewerEvent,
         modifier = modifier,
     )
 }
 
 /**
- * The screen, drawn: who holds it, the picture or the reason there is none, and the keys.
+ * The screen: who holds it, the picture or the reason there is none, and the keys.
  *
- * The picture is the bot's own desktop, so it is drawn as it is and scaled to fit; the user's taps and keys
- * go to the bot's screen whatever this shows.
+ * The picture is the bot's own desktop, drawn by the viewer; the user's taps go to the bot's screen
+ * whatever this shows, because the viewer is the one that sends them.
  */
 @Composable
 internal fun ScreenView(
@@ -130,12 +119,27 @@ internal fun ScreenView(
     onRefresh: () -> Unit = {},
     onTakeOver: () -> Unit,
     onHandBack: () -> Unit,
-    onPointer: (x: Int, y: Int, mask: Int) -> Unit,
-    onKey: (keysym: Int) -> Unit,
-    onCharacter: (ch: Char) -> Unit,
+    /** What the viewer says about the screen. */
+    onViewerEvent: (ScreenViewerEvent) -> Unit = {},
     modifier: Modifier = Modifier,
+    /**
+     * The screen itself. The app draws the live one; a preview draws a made-up picture instead, which is
+     * what the screenshots show.
+     */
+    screen: @Composable (onHandle: (ScreenViewerHandle) -> Unit, area: Modifier) -> Unit =
+        { onHandle, area ->
+            ScreenViewer(
+                streamUrl = state.streamUrl.orEmpty(),
+                viewOnly = !state.holding,
+                onHandle = onHandle,
+                onEvent = onViewerEvent,
+                modifier = area,
+            )
+        },
 ) {
     val stage = screenStage(state)
+    // What the app can ask of the viewer: the keys go through it to the bot's screen.
+    var handle by remember { mutableStateOf<ScreenViewerHandle?>(null) }
     Column(
         modifier
             .fillMaxSize()
@@ -143,7 +147,7 @@ internal fun ScreenView(
             .onPreviewKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 val keysym = screenKey(event.key)?.let { keysymForKey(it) } ?: return@onPreviewKeyEvent false
-                onKey(keysym)
+                press(handle, keysym)
                 true
             },
     ) {
@@ -156,40 +160,58 @@ internal fun ScreenView(
         // The keys are worth having only when there is a screen to type into. They sit above the picture, not
         // below it: on a phone this page opens in the sidebar's drawer, whose floating bottom bar covers the
         // foot of the page, and a field under it cannot be tapped.
-        if (stage == ScreenStage.Watching) {
-            ScreenKeys(onKey = onKey, onCharacter = onCharacter)
+        if (stage == ScreenPaneStage.Watching) {
+            ScreenKeys(handle = { keysym -> press(handle, keysym) }, onCharacter = { ch -> type(handle, ch) })
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
+            // The viewer is there as soon as there is something to open: it is the one that says how the
+            // screen is doing, so it cannot wait for the app to know that it is showing.
+            state.streamUrl?.let {
+                screen({ handle = it }, Modifier.fillMaxSize())
+            }
             when (stage) {
-                ScreenStage.Unsupported -> EmptyState(
+                ScreenPaneStage.Unsupported -> EmptyState(
                     Lucide.MonitorX,
                     "This gateway has no Bot Screen",
                     "The gateway is too old to have one. Update Hermes on the gateway host and it will show up here.",
                 )
-                ScreenStage.Looking -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { ListSpinner() }
-                ScreenStage.NotInstalled -> ScreenNotInstalled(state, onRefresh)
-                ScreenStage.Blocked -> EmptyState(
+                ScreenPaneStage.Looking -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { ListSpinner() }
+                ScreenPaneStage.NotInstalled -> ScreenNotInstalled(state, onRefresh)
+                ScreenPaneStage.Blocked -> EmptyState(
                     Lucide.TriangleAlert,
                     "The screen can't start",
                     state.status?.blocker ?: "The gateway would not say why.",
                     error = true,
                 )
-                ScreenStage.Stopped -> EmptyState(
+                ScreenPaneStage.Stopped -> EmptyState(
                     Lucide.MonitorOff,
                     "The screen is stopped",
                     "Start it to watch what the bot is doing.",
                     action = { Button("Start the screen", onClick = onStart, leadingIcon = Lucide.MonitorPlay) },
                 )
-                ScreenStage.Dropped -> EmptyState(
+                ScreenPaneStage.Opening -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { ListSpinner() }
+                ScreenPaneStage.Failed -> EmptyState(
                     Lucide.MonitorOff,
-                    "The screen stream dropped",
-                    "The gateway is still running the screen. Open it again to watch it.",
+                    "The screen didn't open",
+                    state.error ?: "The gateway is still running the screen. Open it again to watch it.",
                     action = { Button("Open it again", onClick = onReopen, leadingIcon = Lucide.MonitorPlay) },
                 )
-                ScreenStage.Watching -> ScreenPicture(state, onPointer)
+                ScreenPaneStage.Watching -> Unit
             }
         }
     }
+}
+
+/** A key on the bot's screen: pressed and released, which is what a keystroke is. */
+private fun press(handle: ScreenViewerHandle?, keysym: Int) {
+    handle?.key(keysym, true)
+    handle?.key(keysym, false)
+}
+
+/** A character typed on the bot's screen. */
+private fun type(handle: ScreenViewerHandle?, ch: Char) {
+    val keysym = dev.hermeskotlin.core.screen.keysymForCharacter(ch)
+    if (keysym != 0) press(handle, keysym)
 }
 
 /** Who holds the screen, and the button that changes it. */
@@ -277,73 +299,13 @@ private fun CopyCommand(command: String) {
 }
 
 /**
- * The bot's screen, drawn to fit the space it has and centred in it.
- *
- * The picture is scaled to fit, so the space around it is the letterbox: a tap outside the picture is
- * nowhere on the bot's screen and is dropped.
- */
-@Composable
-private fun ScreenPicture(state: ScreenUiState, onPointer: (x: Int, y: Int, mask: Int) -> Unit) {
-    val frame = state.frame
-    val image = rememberScreenImage(frame)
-    var box by remember { mutableStateOf(IntSize.Zero) }
-    val fit = remember(frame?.width, frame?.height, box) {
-        fitFrame(frame?.width ?: 0, frame?.height ?: 0, box.width, box.height)
-    }
-    Box(
-        Modifier
-            .fillMaxSize()
-            .background(Theme[colors][well])
-            .onSizeChanged { box = it }
-            .pointerInput(fit, frame?.width, frame?.height) {
-                if (fit == null || frame == null) return@pointerInput
-                awaitPointerEventScope {
-                    var pressed = false
-                    while (true) {
-                        val event = awaitPointerEvent()
-                        val change = event.changes.firstOrNull() ?: continue
-                        val point = screenPoint(change.position.x, change.position.y, fit, frame.width, frame.height) ?: continue
-                        when (event.type) {
-                            // A press and a release make the click; the drag between them is the motion.
-                            PointerEventType.Press -> {
-                                pressed = true
-                                onPointer(point.first, point.second, 1)
-                            }
-                            PointerEventType.Move -> onPointer(point.first, point.second, if (pressed) 1 else 0)
-                            PointerEventType.Release -> {
-                                onPointer(point.first, point.second, 0)
-                                pressed = false
-                            }
-                            else -> Unit
-                        }
-                    }
-                }
-            },
-        contentAlignment = Alignment.Center,
-    ) {
-        if (image == null) {
-            ListSpinner()
-        } else {
-            Canvas(Modifier.fillMaxSize()) {
-                val fit = fit ?: return@Canvas
-                drawImage(
-                    image = image,
-                    dstOffset = IntOffset(fit.offsetX, fit.offsetY),
-                    dstSize = IntSize(fit.width, fit.height),
-                )
-            }
-        }
-    }
-}
-
-/**
  * The keys, as one field.
  *
  * The phone's software keyboard and the desktop's own keys both type into it, so a character is a character
  * on the bot's screen; the keys with no character are the pane's own.
  */
 @Composable
-private fun ScreenKeys(onKey: (keysym: Int) -> Unit, onCharacter: (ch: Char) -> Unit) {
+private fun ScreenKeys(handle: (keysym: Int) -> Unit, onCharacter: (ch: Char) -> Unit) {
     val state = remember { TextFieldState() }
     LaunchedEffect(state) {
         snapshotFlow { state.text.toString() }.collect { typed ->
@@ -364,7 +326,7 @@ private fun ScreenKeys(onKey: (keysym: Int) -> Unit, onCharacter: (ch: Char) -> 
 }
 
 /** What the pane shows for the screen's state. */
-internal enum class ScreenStage {
+internal enum class ScreenPaneStage {
     /** The gateway has no Bot Screen at all. */
     Unsupported,
 
@@ -380,24 +342,27 @@ internal enum class ScreenStage {
     /** The screen is stopped. */
     Stopped,
 
-    /** The screen runs, but the stream to it isn't open. */
-    Dropped,
+    /** The viewer is opening the screen. */
+    Opening,
+
+    /** The screen could not be opened, or it closed again. */
+    Failed,
 
     /** The screen is being watched. */
     Watching,
 }
 
 /** What the pane shows, given what the gateway last said. */
-internal fun screenStage(state: ScreenUiState): ScreenStage = when {
-    !state.supported -> ScreenStage.Unsupported
-    state.status == null -> ScreenStage.Looking
-    !state.status.installed -> ScreenStage.NotInstalled
-    state.status.blocker != null -> ScreenStage.Blocked
-    !state.status.running -> ScreenStage.Stopped
-    state.connected -> ScreenStage.Watching
-    // A stream that was never open is still on its way, not dropped.
-    state.everConnected -> ScreenStage.Dropped
-    else -> ScreenStage.Looking
+internal fun screenStage(state: ScreenUiState): ScreenPaneStage = when {
+    !state.supported -> ScreenPaneStage.Unsupported
+    state.status == null -> ScreenPaneStage.Looking
+    !state.status.installed -> ScreenPaneStage.NotInstalled
+    state.status.blocker != null -> ScreenPaneStage.Blocked
+    !state.status.running -> ScreenPaneStage.Stopped
+    state.stage == ScreenStage.Failed -> ScreenPaneStage.Failed
+    state.stage == ScreenStage.Connected -> ScreenPaneStage.Watching
+    state.stage == ScreenStage.Opening -> ScreenPaneStage.Opening
+    else -> ScreenPaneStage.Looking
 }
 
 /** Who holds the screen, in the user's words. */
@@ -405,45 +370,6 @@ internal fun controlLabel(lease: DisplayLease?, holding: Boolean): String = when
     holding -> "You are in control"
     lease?.heldByHuman == true -> "Someone else is in control"
     else -> "The bot is in control"
-}
-
-/** Where the picture sits in the space it is drawn in: the size it is drawn at and where it starts. */
-internal data class ScreenFit(
-    val offsetX: Int,
-    val offsetY: Int,
-    val width: Int,
-    val height: Int,
-)
-
-/**
- * How the picture is drawn in a box [boxWidth] by [boxHeight]: scaled to fit, centred, and never bigger
- * than the box. Null when there is nothing to draw yet.
- */
-internal fun fitFrame(frameWidth: Int, frameHeight: Int, boxWidth: Int, boxHeight: Int): ScreenFit? {
-    if (frameWidth <= 0 || frameHeight <= 0 || boxWidth <= 0 || boxHeight <= 0) return null
-    val scale = min(boxWidth.toFloat() / frameWidth, boxHeight.toFloat() / frameHeight)
-    val width = (frameWidth * scale).roundToInt().coerceAtLeast(1)
-    val height = (frameHeight * scale).roundToInt().coerceAtLeast(1)
-    return ScreenFit(
-        offsetX = (boxWidth - width) / 2,
-        offsetY = (boxHeight - height) / 2,
-        width = width,
-        height = height,
-    )
-}
-
-/**
- * The point on the bot's screen that a tap at [x], [y] in the picture's box means, or null when the tap is
- * in the letterbox and so nowhere on the screen.
- */
-internal fun screenPoint(x: Float, y: Float, fit: ScreenFit, frameWidth: Int, frameHeight: Int): Pair<Int, Int>? {
-    val sx = (x - fit.offsetX) * frameWidth / fit.width
-    val sy = (y - fit.offsetY) * frameHeight / fit.height
-    if (sx < 0 || sy < 0) return null
-    val px = sx.toInt()
-    val py = sy.toInt()
-    if (px >= frameWidth || py >= frameHeight) return null
-    return px to py
 }
 
 /** The named key a key event means, or null for a key that is only a character. */

@@ -360,9 +360,8 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                             onReopen = {},
                             onTakeOver = {},
                             onHandBack = {},
-                            onPointer = { _, _, _ -> },
-                            onKey = {},
-                            onCharacter = {},
+                            // A preview cannot run the viewer, so the picture is a made-up one.
+                            screen = { _, area -> SampleScreen(area) },
                         )
                     }
                 }
