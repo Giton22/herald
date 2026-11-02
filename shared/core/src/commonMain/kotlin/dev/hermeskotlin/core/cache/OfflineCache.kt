@@ -76,7 +76,10 @@ class OfflineCache(
         val sealed = newest.map { row ->
             seal(row, SessionMessage.serializer()).takeIf { it.size <= MAX_ROW_BYTES }
                 // Too big to read back (a huge tool output): kept without its text, which says so.
-                ?: seal(row.copy(content = JsonPrimitive(TOO_BIG_NOTE), displayContent = null, reasoning = null), SessionMessage.serializer())
+                ?: seal(row.copy(
+                    content = JsonPrimitive(TOO_BIG_NOTE), displayContent = null, reasoning = null,
+                    displayReasoning = null, displayCommentary = null,
+                ), SessionMessage.serializer())
         }
         // Still too big (huge tool-call arguments): only the turns after it are kept.
         val tooBig = sealed.indexOfLast { it.size > MAX_ROW_BYTES }
