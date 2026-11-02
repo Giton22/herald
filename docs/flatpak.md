@@ -103,3 +103,48 @@ or backups. Encryption does not protect an unlocked process or prevent a same-us
 attacker replacing the entire profile. Run the Linux storage and migration tests
 with `./gradlew :shared:core:jvmTest --tests '*Linux*StoreTest' --tests '*LinuxStorage*Test'`
 and startup contracts with `./gradlew :desktopApp:jvmTest --tests '*StorageStartupTest'`.
+
+### Microphone backend
+
+Linux has a recorder behind the existing `VoiceRecorder` contract, using the default
+microphone through webrtc-java 0.20.0 and PulseAudio compatibility on PipeWire.
+The package grants the PulseAudio socket for this feature. This socket can access
+microphone and output devices; it is not a per-recording permission prompt.
+Recording begins only when requested, uses bounded PCM buffering, and releases its
+native device on completion, cancellation or failure. It changes no device defaults
+or system volume and writes no temporary recording files.
+The existing desktop voice UI remains disabled until capability and UI integration;
+this backend alone does not enable dictation, spoken replies or live calls.
+Unit tests use synthetic PCM. Installed capture, audio quality and live-provider
+behavior require separate qualification; synthetic frames do not prove them.
+
+### Spoken playback backend
+
+Linux playback implements the existing `SpeechPlayer` contract through the same
+native audio backend and default output device. Freedesktop 26.08 supplies
+`/usr/bin/ffmpeg`; encoded replies and raw PCM are decoded through pipes to
+48 kHz mono PCM. Only pipe input and selected audio formats are allowed. The
+codec inherits no environment, opens no temporary media files and needs no new
+sandbox permission. Other Linux distributions need that executable separately.
+
+Playback buffers are bounded. Hold emits silence without consuming queued audio;
+cancellation or failure retires the owned codec and output device. No system
+volume, mute or device defaults are changed. Unit tests cover lifecycle and codec
+failures. Installed output, physical audio quality and live-provider behavior
+require separate qualification. This backend does not enable the desktop voice
+UI or live calls; those need their own capability and lifecycle integration.
+
+## Advisory CI
+
+The separate Linux workflow runs JVM/packaging tests and exports an x86_64 bundle.
+It runs only when the desktop app's sources, the build or this packaging change.
+It builds the exact commit tested by the workflow (a pull request's merge commit)
+from a Git clone of the checkout, with the same locked build inputs, so committed
+files only: never untracked files in the runner workspace. Only the bundle is uploaded. The
+font-filter contract uses the selected SDK's fontconfig, independent of the
+runner host's fontconfig version. CI uses the native `flatpak-builder` package;
+the Builder application needs a desktop host-command service unavailable there.
+
+Keep these Linux checks non-required in branch rules. Failures stay visibly
+failed; Android checks and release publication remain independent. A built CI
+bundle still needs installed-sandbox and Bazzite acceptance before publication.

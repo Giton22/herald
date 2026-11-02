@@ -118,6 +118,13 @@ class LinuxSecretPortalTest {
         assertEquals(SecretPortalFailure.Reason.Unavailable, assertFailsWith<SecretPortalFailure> { portal.retrieve() }.reason)
     }
 
+    @Test fun anUnresolvableBusIsExplicitlyUnavailable() {
+        assumeTrue(System.getProperty("os.name") == "Linux")
+        // As a session with no bus address: the address can't be resolved, which the startup prompt must hear about.
+        val failure = runCatching { runBlocking { LinuxSecretPortal("not-a-bus-address", 500, 500).retrieve() } }
+        assertEquals(SecretPortalFailure.Reason.Unavailable, (failure.exceptionOrNull() as? SecretPortalFailure)?.reason, "$failure")
+    }
+
     @Test fun anotherSenderCannotDenyThisRequest() = fixture { service, portal ->
         service.spoofResponse = true
         assertContentEquals(service.bytes, portal.retrieve().bytes)
