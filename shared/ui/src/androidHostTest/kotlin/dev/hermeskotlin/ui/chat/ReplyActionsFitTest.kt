@@ -14,7 +14,9 @@ import androidx.compose.ui.unit.dp
 import com.composeunstyled.theme.ColorScheme
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.TurnUsage
+import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.designsystem.HermesTheme
+import dev.hermeskotlin.ui.LocalAppSettings
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.RuleChain
@@ -50,7 +52,11 @@ class ReplyActionsFitTest {
         composeRule.setContent {
             HermesTheme(ColorScheme.Light) {
                 val density = LocalDensity.current
-                CompositionLocalProvider(LocalDensity provides Density(density.density, 2.6f)) {
+                CompositionLocalProvider(
+                    LocalDensity provides Density(density.density, 2.6f),
+                    // The count is what squeezed the actions, so it's shown whatever the default.
+                    LocalAppSettings provides AppSettings(showUsage = true),
+                ) {
                     Box(Modifier.width(300.dp)) {
                         AssistantReply(
                             ChatMessage.Assistant(
