@@ -11,6 +11,8 @@ import dev.hermeskotlin.core.storage.desktopKeyValueStore
 import dev.hermeskotlin.core.storage.KeyValueStore
 import dev.hermeskotlin.core.storage.appDataDir
 import dev.hermeskotlin.core.voice.DeviceDictation
+import dev.hermeskotlin.core.voice.LinuxVoiceRecorder
+import dev.hermeskotlin.core.voice.WebRtcMicrophone
 import dev.hermeskotlin.core.voice.LiveCalls
 import dev.hermeskotlin.core.voice.NoDeviceDictation
 import dev.hermeskotlin.core.voice.NoSpeechPlayer
@@ -26,8 +28,12 @@ actual val platformModule: Module = module {
     // No app link to send the browser back to: its tab says it's done.
     single<LoopbackReceiver> { LoopbackHttpReceiver(returnUri = null) }
     single { WallpaperStore(FileBlobFile(File(appDataDir, "wallpaper.jpg")), get()) }
-    // No voice on the desktop yet; a voice chat has no live mode to fall back from.
-    single<VoiceRecorder> { NoVoiceRecorder }
+    // Recording is available on Linux; playback and live calls remain separate.
+    single<VoiceRecorder> {
+        if (System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in setOf("amd64", "x86_64", "aarch64")) {
+            LinuxVoiceRecorder(::WebRtcMicrophone)
+        } else NoVoiceRecorder
+    }
     single<SpeechPlayer> { NoSpeechPlayer }
     single<DeviceDictation> { NoDeviceDictation }
     single { LiveCalls { null } }
