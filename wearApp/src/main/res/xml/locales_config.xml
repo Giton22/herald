@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The languages the watch app ships, as the phone app's locales_config.xml lists them. Android 13 and later offer
+    exactly these as the app's language; any key a translation is missing falls back to values/ (English).
+-->
+<locale-config xmlns:android="http://schemas.android.com/apk/res/android">
+    <locale android:name="en" />
+    <locale android:name="de" />
+    <locale android:name="fr" />
+    <locale android:name="es" />
+    <locale android:name="pt-BR" />
+    <locale android:name="zh-CN" />
+    <locale android:name="hu" />
+</locale-config>

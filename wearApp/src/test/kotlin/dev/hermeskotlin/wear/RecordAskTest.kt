@@ -59,8 +59,15 @@ class RecordAskTest {
 
     @Test
     fun aMicrophoneFailureIsShown() {
-        run { error("The microphone isn't available.") }
-        assertEquals("The microphone isn't available.", listening.value.error)
+        run { error("busy") }
+        assertEquals(WatchLine.Raw("busy"), listening.value.error)
+        assertTrue(asked.isEmpty())
+    }
+
+    @Test
+    fun aMicrophoneThatWontOpenIsSaidInTheWatchsLanguage() {
+        run { throw MicrophoneUnavailableException() }
+        assertEquals(WatchLine.Res(R.string.wear_microphone_unavailable), listening.value.error)
         assertTrue(asked.isEmpty())
     }
 
