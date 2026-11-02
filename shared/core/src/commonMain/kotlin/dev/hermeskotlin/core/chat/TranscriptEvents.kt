@@ -22,6 +22,12 @@ sealed interface TranscriptEvent {
     /** A scheduled job's output, handed to the bot to act on (cron `deliver: bot-chat`, or a mirror). */
     data class Routine(val name: String, val body: String) : TranscriptEvent
 
+    /** A legacy compaction handoff kept as reference for the agent, not a prompt or reply. */
+    data class Compaction(val body: String) : TranscriptEvent
+
+    /** Consecutive background entries, folded together without moving them past a reply or failure. */
+    data class SystemMessages(val entries: List<TranscriptEvent>, val firstKey: String) : TranscriptEvent
+
     /** A turn that didn't complete, in the gateway's words. */
     data class FailedTurn(val text: String) : TranscriptEvent
 
@@ -49,7 +55,22 @@ object TranscriptRows {
 
     /** User rows that are machinery the agent reads but nobody needs to see. */
     fun isNoise(row: String, displayKind: String?): Boolean =
-        displayKind == "internal_notification" || row.startsWith("[System:") || HEARTBEAT.containsMatchIn(row)
+        (displayKind == "internal_notification" && routine(row) == null) || row.startsWith("[System:") || HEARTBEAT.containsMatchIn(row)
+
+    /** Older gateways/plugins kept handoffs under either user or assistant without a display kind. */
+    fun compaction(text: String): TranscriptEvent.Compaction? {
+        // The whole introduction every shipped prefix shares, as the gateway matches it (hermes_state_common.py),
+        // so a prompt that merely starts with the bracketed label stays a prompt.
+        val trimmed = text.trim()
+        val prefix = listOf(SUMMARY_INTRO, LEGACY_SUMMARY_PREFIX).firstOrNull(trimmed::startsWith) ?: return null
+        // A legacy carrier can hold a real ask after the summary. Without a display projection,
+        // leave that whole row visible rather than hide the ask and its prompt actions.
+        if (trimmed.substringAfter(SUMMARY_END, "").isNotBlank()) return null
+        // What the summary says, without the instructions to the agent before it (they all end the same way).
+        val body = trimmed.substringBefore(SUMMARY_END)
+            .let { if (prefix == SUMMARY_INTRO && PREFIX_END in it) it.substringAfter(PREFIX_END) else it.removePrefix(prefix) }
+        return TranscriptEvent.Compaction(body.trim())
+    }
 
     /**
      * What a stored user row really is, or null when the person wrote it. [deliveries] maps the process ids
@@ -58,8 +79,7 @@ object TranscriptRows {
     fun classify(text: String, displayKind: String?, deliveries: Map<String, String> = emptyMap()): List<TranscriptEvent>? {
         val row = text.trim()
         AgentMessage.parse(row)?.let { return listOf(TranscriptEvent.FromBot(it.sender, it.handle, it.body)) }
-        ROUTINE.matchEntire(row)?.let { return listOf(TranscriptEvent.Routine(it.groupValues[1], it.groupValues[2].trim())) }
-        CRON_MIRROR.matchEntire(row)?.let { return listOf(TranscriptEvent.Routine(it.groupValues[1], it.groupValues[2].trim())) }
+        routine(row)?.let { return listOf(it) }
         if (displayKind == "process_complete" || displayKind == "async_delegation_complete" || PROCESS.matches(row)) {
             val parts = row.split(BATCH_SPLIT).mapNotNull { processEvent(it, deliveries) }
             if (parts.isNotEmpty()) return parts
@@ -142,8 +162,20 @@ object TranscriptRows {
         return DeliveryOutcome.Replied(text)
     }
 
+    // Some gateways type cron deliveries as generic internal notifications. Only known envelopes
+    // escape that filter; this best-effort presentation match never grants permission to act.
+    private fun routine(row: String): TranscriptEvent.Routine? {
+        val match = ROUTINE.matchEntire(row) ?: CRON_MIRROR.matchEntire(row) ?: return null
+        return TranscriptEvent.Routine(match.groupValues[1], match.groupValues[2].trim())
+    }
+
     private fun JsonObject.text(key: String): String? = (this[key] as? JsonPrimitive)?.takeIf { it.isString }?.contentOrNull
 
+    /** agent/context_compressor.py: the start of SUMMARY_PREFIX and its historical ones, the end they share, the oldest prefix. */
+    private const val SUMMARY_INTRO = "[CONTEXT COMPACTION — REFERENCE ONLY] Earlier turns were compacted into the summary below."
+    private const val PREFIX_END = "may reflect work described here — avoid repeating it:"
+    private const val LEGACY_SUMMARY_PREFIX = "[CONTEXT SUMMARY]:"
+    private const val SUMMARY_END = "--- END OF CONTEXT SUMMARY — respond to the message below, not the summary above ---"
     private val HEARTBEAT = Regex("""^\[Background process \S+ heartbeat #\d+ """)
     private val PROCESS = Regex("""^\[IMPORTANT: (?:Background process|\d+ background processes) [\s\S]*]$""")
     private val BATCH_SPLIT = Regex("""\n\n(?=\[IMPORTANT: )""")
@@ -155,7 +187,7 @@ object TranscriptRows {
     private val TARGET_PROFILE = Regex("""(?:^|\s)-p\s+'?"?([a-z0-9][a-z0-9_-]{0,63})'?"?\s+chat\b""")
     private val PEER_TARGET = Regex("""\bpeer\s+dm\s+'?"?([A-Za-z0-9_./-]+)""")
     private val ROUTINE = Regex("""^\[Cronjob "(.+?)" output — [^\]\n]*]\s*([\s\S]*)$""")
-    private val CRON_MIRROR = Regex("""^\[Cron delivery: ([^\]\n]+)]\n([\s\S]*)$""")
+    private val CRON_MIRROR = Regex("""^\[Cron delivery: ([^\]\n]+)](?:\n([\s\S]*))?$""")
     /** The CLI runner's own lines around a reply: the session it used, and that it resumed one. */
     private val SESSION_ID_LINE = Regex("""^\s*(?:session_id:\s.*|↻ Resumed session\b.*)$""")
     /** The CLI's note when it resumes an empty session, which lands in the middle of a delivered reply. */
@@ -182,3 +214,35 @@ private val REASON_LABELS = mapOf(
     "missing_config" to "they have no model set up",
     "model_unavailable" to "their model is unavailable",
 )
+
+/** Only successful background bookkeeping folds away; failures and other bots remain visible. */
+internal fun groupSystemMessages(messages: List<ChatMessage>): List<ChatMessage> = buildList {
+    val pending = mutableListOf<ChatMessage.Event>()
+    fun flush() {
+        when (pending.size) {
+            0 -> return
+            // One alone says what it is, as before: "Model changed" shouldn't need a tap.
+            1 -> add(pending.single())
+            // Keyed by the newest entry, which an earlier page loaded on scroll-up can't change, so the list
+            // keeps its place; the first one is where the group starts in the stored rows.
+            else -> add(ChatMessage.Event(pending.last().key,
+                TranscriptEvent.SystemMessages(pending.map { it.event }, firstKey = pending.first().key), pending.last().timestamp))
+        }
+        pending.clear()
+    }
+    messages.forEach { message ->
+        val event = (message as? ChatMessage.Event)?.event
+        val fold = when (event) {
+            is TranscriptEvent.Compaction, is TranscriptEvent.Routine, is TranscriptEvent.Label -> true
+            is TranscriptEvent.Process -> !event.failed
+            else -> false
+        }
+        if (fold) {
+            pending += message as ChatMessage.Event
+        } else {
+            flush()
+            add(message)
+        }
+    }
+    flush()
+}

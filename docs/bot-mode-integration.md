@@ -140,11 +140,19 @@ Classify a row **before** picking a bubble, in this order:
 | process / delivery result | `display_kind` `process_complete` or `async_delegation_complete`; or an untyped user row matching `^\[IMPORTANT: Background process [\s\S]*\]$` | **Delivery outcome** when the Command has `bot_mode_dm.py --run-delivery` or `--wait-reply`, or the `proc_…` id matches an earlier `message_agent` ack's `process_id`. Otherwise one collapsed line with `display_metadata.display_text`, output in monospace on tap. Batches are split on `\n\n(?=\[IMPORTANT: )`. |
 | message from another bot | user row matching AGENT_MESSAGE_RE (`AgentMessage.kt`) | a small centred note: the sender's face (from the handle; `hermes` means default) and "Message from X", body collapsed, no edit. *(Done as a card; make it collapsed and add the face.)* |
 | reply to that message | the next settled assistant row after an agent note | collapse to "↗ Replied to X · show reply", except while streaming and except when this bot itself messaged X earlier in the same exchange (`agent-delivery.tsx:48-83`) |
-| routine output | user row starting `[Cronjob "<name>" output — scheduled job, not the user…]\n\n` | "⏰ <name> ran", content collapsed (Desktop has no renderer for this) |
+| compaction handoff | user or assistant row starting `[CONTEXT COMPACTION — REFERENCE ONLY]`, unless a real prompt follows the summary end marker | reference text inside System messages |
+| routine output | user row starting `[Cronjob "<name>" output — scheduled job, not the user…]\n\n` | routine name and content inside System messages |
 | cron mirror | `[Cron delivery: <name>]\n…` | same treatment |
 | silence | a settled assistant reply that is exactly `[SILENT]`, `SILENT`, `NO_REPLY`, `NO REPLY`, `[静默]`, `静默`, `[沉默]` or `沉默`, after normalising (port `is_intentional_silence_response`, `gateway/response_filters.py:40-75`) | nothing; while streaming, hold back a prefix of a marker |
 | sender's `message_agent` call | tool call `message_agent{target,message}`; the ack is `{status:"queued", delivery_id, process_id, reply_delivery}` or `{error, reason}` | "Messaging @x…", then "Messaged @x"; "Couldn't message @x: …" on an error; hide the ack JSON |
 | other kinds | `model_switch`, `auto_continue`, `steer`, … | a centred one-line label |
+
+Adjacent routine outputs, compaction handoffs, successful process completions and session labels share a
+collapsed **System messages · N** disclosure with a gear icon, styled like Reasoning. Expanding it shows
+those entries in order. Replies, other bots' messages, delivery outcomes and failures remain outside the
+group. Gateway-hidden rows remain hidden; `display_content` takes precedence over raw stored content.
+User rows typed `internal_notification` are also shown when they match either known cron envelope above.
+This is best-effort format recognition; other internal notifications remain hidden.
 
 **Delivery outcome** (parse the process `Output:`):
 - plain text, `{"reply",…,"status":"settled"}` or `Reply from X:` → "💬 Reply from @x", collapsed. Strip

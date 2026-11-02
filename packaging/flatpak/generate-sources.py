@@ -18,8 +18,11 @@ def merge_sources(groups):
                 raise ValueError(f'Unsafe dependency destination: {path}')
             url = urlsplit(row['url'])
             row = {**row, 'url': url._replace(path=posixpath.normpath(url.path)).geturl()}
-            if path in files and files[path] != row:
-                raise ValueError(f'Conflicting downloads for {path}')
+            # The same file may resolve from two repositories; only its content must agree.
+            if path in files:
+                if {k: v for k, v in files[path].items() if k != 'url'} != {k: v for k, v in row.items() if k != 'url'}:
+                    raise ValueError(f'Conflicting downloads for {path}')
+                continue
             files[path] = row
     return [files[key] for key in sorted(files)]
 

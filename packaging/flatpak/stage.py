@@ -15,6 +15,10 @@ def stage(image, prefix, java):
     for key in ('app.mainclass', 'app.classpath'):
         if not values.get(key):
             raise ValueError(f'Missing {key} in Compose launcher configuration')
+    # The launcher only knows the classpath form; fail rather than drop a main jar or module.
+    unknown = sorted(k for k in values if k.startswith('app.') and k not in ('app.mainclass', 'app.classpath'))
+    if unknown:
+        raise ValueError('Unsupported Compose launcher configuration: ' + ', '.join(unknown))
     native = image / 'lib/runtime/lib'
     for name in ('libcef.so', 'libjcef.so', 'jcef_helper', 'icudtl.dat',
                  'resources.pak', 'chrome_100_percent.pak', 'chrome_200_percent.pak',
@@ -30,7 +34,7 @@ def stage(image, prefix, java):
     shutil.copytree(image, target)
     (target / 'lib/runtime/bin').mkdir(exist_ok=True)
     shutil.copy2(java, target / 'lib/runtime/bin/java')
-    # Upstream restores JCEF's bin payload with copyTo, which loses executable mode.
+    # jcef_helper is a native-lib entry of jcef.jmod, and jlink writes those without the executable bit.
     (target / 'lib/runtime/lib/jcef_helper').chmod(0o755)
     launcher = prefix / 'bin/kyllene'
     launcher.parent.mkdir(parents=True, exist_ok=True)
@@ -42,17 +46,19 @@ def stage(image, prefix, java):
             value = value.replace('$' + token, str(path))
         return shlex.quote(value)
 
+    # No jpackage.app-path: the app reads it as "installed from a DEB/MSI" and would
+    # download and open an installer inside the sandbox. Flatpak updates itself.
     args = [str(target / 'lib/runtime/bin/java'), '-classpath',
             ':'.join(values['app.classpath']), *values.get('java-options', []),
-            '-Djpackage.app-path=' + str(target / 'bin/Kyllene'),
             values['app.mainclass'][0]]
     defaults = ' '.join(quote(x) for x in values.get('arguments', []))
     # jpackage's Linux fork/pipe launcher can consume a partial configuration read.
     # Derive arguments from Compose's configuration; keep its image unchanged.
+    # An empty LD_LIBRARY_PATH entry means the current directory, so add the
+    # separator only when the variable already has a value.
     launcher.write_text('#!/bin/sh\n' +
                         'export XDG_SESSION_TYPE=x11\nunset WAYLAND_DISPLAY\n' +
-                        'export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:-}":' + quote(str(app)) + '\n' +
-                        'export _JPACKAGE_LAUNCHER=0\n' +
+                        'export LD_LIBRARY_PATH="${LD_LIBRARY_PATH:+$LD_LIBRARY_PATH:}"' + quote(str(app)) + '\n' +
                         'if [ "$#" -eq 0 ]; then set -- ' + defaults + '; fi\n' +
                         'exec ' + ' '.join(quote(x) for x in args) + ' "$@"\n')
     launcher.chmod(0o755)
