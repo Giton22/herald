@@ -210,6 +210,7 @@ enum class PreviewScene(val label: String) {
     ConnectFailed("A gateway that didn't answer"),
     SignIn("Signing in"),
     BotScreen("A bot's screen"),
+    BotScreenZoomed("A bot's screen, looked at closer"),
 }
 
 /**
@@ -362,6 +363,22 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                             onHandBack = {},
                             // A preview cannot run the viewer, so the picture is a made-up one.
                             screen = { _, area -> SampleScreen(area) },
+                        )
+                    }
+                }
+                PreviewScene.BotScreenZoomed -> OpenSidebar {
+                    SidebarPage {
+                        ScreenView(
+                            state = ScreenSamples.zoomed,
+                            title = "Scribe",
+                            onBack = {},
+                            onStart = {},
+                            onReopen = {},
+                            onTakeOver = {},
+                            onHandBack = {},
+                            // A preview cannot run the viewer, so the picture is a made-up one, drawn
+                            // larger the way the viewer draws a part of the screen.
+                            screen = { _, area -> SampleScreen(area, zoom = 2f) },
                         )
                     }
                 }

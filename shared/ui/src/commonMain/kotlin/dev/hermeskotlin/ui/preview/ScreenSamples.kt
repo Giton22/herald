@@ -12,7 +12,9 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.unit.dp
 import dev.hermeskotlin.core.screen.DisplayLease
 import dev.hermeskotlin.core.screen.DisplayStatus
@@ -45,6 +47,9 @@ object ScreenSamples {
         holding = true,
     )
 
+    /** The screen, looked at closer than the whole of it. */
+    val zoomed = watching.copy(zoom = 2f)
+
     /** The screen is stopped, so there is nothing to watch. */
     val stopped = ScreenUiState(
         status = status(DisplayLease.AGENT).copy(running = false),
@@ -70,12 +75,23 @@ object ScreenSamples {
  * human looks. The live screen is drawn by the viewer itself, which a preview cannot run.
  *
  * The desktop is wider than the pane, so it sits in a band in the middle of it, the way the viewer shows it.
+ * [zoom] draws it larger and cuts off what does not fit, the way the viewer looks at a part of the screen.
  */
 @Composable
-fun SampleScreen(modifier: Modifier = Modifier) {
-    Box(modifier.background(Color(0xFF0B0B0D)), contentAlignment = Alignment.Center) {
+fun SampleScreen(modifier: Modifier = Modifier, zoom: Float = 1f) {
+    Box(
+        modifier.background(Color(0xFF0B0B0D)).clipToBounds(),
+        contentAlignment = Alignment.Center,
+    ) {
         Column(
-            Modifier.fillMaxWidth().aspectRatio(1.6f).background(Color(0xFF1B1E24)),
+            Modifier
+                .fillMaxWidth()
+                .aspectRatio(1.6f)
+                .background(Color(0xFF1B1E24))
+                .graphicsLayer {
+                    scaleX = zoom
+                    scaleY = zoom
+                },
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center,
         ) {
