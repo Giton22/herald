@@ -51,7 +51,8 @@ internal class CallDisplayPublisher(private val context: Context) {
                 return // Leave the retained snapshot intact until a later refresh can resolve it.
             }
         }
-        val label = target?.label ?: context.getString(R.string.call_new_session)
+        // A fresh session's saved label is the English default: it's named in the phone's language instead.
+        val label = target?.takeIf { it.profile != null || it.sessionId != null }?.label ?: context.getString(R.string.call_new_session)
         val digest = MessageDigest.getInstance("SHA-256")
         digest.update(WearJson.encode(listOf(gateway.orEmpty(), target?.profile.orEmpty(), target?.sessionId.orEmpty(), label)))
         bytes?.let(digest::update)
