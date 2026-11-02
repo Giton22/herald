@@ -66,6 +66,13 @@
 -keep class org.freedesktop.dbus.** { *; }
 -keep class io.github.vinceglb.filekit.dialogs.platform.xdg.** { *; }
 
+# TeX environments and defined commands (matrices, cases, \dfrac, \newcommand) expand through NewCommandMacro,
+# loaded and invoked by name in JLaTeXMath's MacroInfo. Shrunk, they fall back to raw TeX.
+-keep class org.scilab.forge.jlatexmath.NewCommandMacro {
+    public <init>();
+    public java.lang.String executeMacro(org.scilab.forge.jlatexmath.TeXParser, java.lang.String[]);
+}
+
 # Optional dependencies the app never loads: OkHttp's GraalVM support, jsoup's RE2/J regexes.
 -dontwarn org.graalvm.nativeimage.**
 -dontwarn com.oracle.svm.core.**

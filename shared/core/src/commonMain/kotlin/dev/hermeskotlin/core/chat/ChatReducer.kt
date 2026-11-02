@@ -315,6 +315,13 @@ fun historyToMessages(rows: List<SessionMessage>, liveSessionId: String? = null,
     rows.forEachIndexed { index, row ->
         if (row.isHidden) return@forEachIndexed
         val key = row.id?.let { "row-$it" } ?: "h$index"
+        if ((row.role == "user" || row.role == "assistant") && row.displayKind != "failed_turn") {
+            TranscriptRows.compaction(row.text)?.let { checkpoint ->
+                messages += ChatMessage.Event(key, checkpoint, timestamp = row.timestamp)
+                replyingTo = null
+                return@forEachIndexed
+            }
+        }
         when (row.role) {
             "user" -> {
                 // Background subagents reporting back: written for the agent, so a line here, and their results go to their card.
@@ -408,7 +415,7 @@ fun historyToMessages(rows: List<SessionMessage>, liveSessionId: String? = null,
             }
         }
     }
-    return messages
+    return groupSystemMessages(messages)
 }
 
 /** Bot Mode's tool for messaging another bot. */

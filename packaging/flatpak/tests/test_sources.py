@@ -19,6 +19,8 @@ class SourcesTest(unittest.TestCase):
         mirror = {**row, 'url': 'https://example.org/old/../a.jar'}
         self.assertEqual(module.merge_sources([[row], [mirror]]), [row])
         self.assertEqual(module.merge_sources([[row], [row]]), [row])
+        other_repository = {**row, 'url': 'https://plugins.example.org/a.jar'}
+        self.assertEqual(module.merge_sources([[row], [other_repository]]), [row])
         with self.assertRaisesRegex(ValueError, 'Conflicting'):
             module.merge_sources([[row], [{**row, 'sha512': 'b' * 128}]])
         with self.assertRaisesRegex(ValueError, 'Unsafe'):

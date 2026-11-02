@@ -40,6 +40,8 @@ data class SessionSummary(
      * marked the chat unread, or it had activity after a client last marked it read. False from a gateway without it.
      */
     @Serializable(with = LenientBooleanSerializer::class) val unread: Boolean = false,
+    /** Shared read watermark; null on untracked chats/older gateways, zero for explicit mark-unread. */
+    @SerialName("last_read_at") val lastReadAt: Double? = null,
 ) {
     /** What a list shows as the name: the title, else the first prompt, else a placeholder. */
     val displayTitle: String
@@ -71,6 +73,8 @@ data class SessionTotals(
     /** e.g. `estimated`, `actual`, `included` (a subscription), `unknown` (no price for the model). */
     @SerialName("cost_status") val costStatus: String? = null,
     val model: String? = null,
+    /** Also returned by this stored-row endpoint: the shared read watermark, not a message cursor. */
+    @SerialName("last_read_at") val lastReadAt: Double? = null,
 ) {
     /** The billed amount when there is one, else the estimate. */
     val costUsd: Double? get() = actualCostUsd?.takeIf { it > 0 } ?: estimatedCostUsd

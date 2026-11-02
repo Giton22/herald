@@ -116,14 +116,15 @@ class MediaApi(
      * Makes the folder [path] on the gateway's machine, and any folders above it that are missing
      * (`POST /api/files/mkdir`, Desktop's New folder). One already there is fine. `~/` paths are the
      * gateway's home; like the managed downloads, this is the host's disk, not a sandboxed profile's.
-     * The route makes missing folders rather than answering 404, so any 404 is a gateway without it.
+     * The route makes missing folders rather than answering 404, so any 404 is a gateway without it. So is a
+     * 405: the dashboard's catch-all only takes GET, so a POST to a route it lacks is "Method Not Allowed".
      */
     suspend fun makeFolder(url: GatewayUrl, path: String): ApiResult<Unit> = apiCall {
         client.post(url.resolve("api/files/mkdir")) {
             contentType(ContentType.Application.Json)
             setBody(buildJsonObject { put("path", path) })
         }
-    }.map { }.let { if (it is ApiResult.Failed && it.status == 404) ApiResult.Failed(404, NO_MKDIR) else it }
+    }.map { }.let { if (it is ApiResult.Failed && (it.status == 404 || it.status == 405)) ApiResult.Failed(404, NO_MKDIR) else it }
 
     /** A reply's picture from the web (`![alt](https://...)`). */
     suspend fun remote(url: String): ApiResult<ByteArray> = apiCall { web.get(url) }.map { response ->

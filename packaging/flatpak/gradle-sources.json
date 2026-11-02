@@ -521,40 +521,40 @@
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/databinding/databinding-common/9.4.1/databinding-common-9.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/databinding/databinding-common/9.5.0/databinding-common-9.5.0.jar",
     "sha512": "3cf384bb55c5d545c736dd4a5526295cd119db0c0c08320190dbe52a32d37acdf41ca2675cf2674322d60e9bf0e798bb3ced08c6f4cd3ec0fb54d4357dc38a9f",
-    "dest": "offline-repository/androidx/databinding/databinding-common/9.4.1",
-    "dest-filename": "databinding-common-9.4.1.jar",
+    "dest": "offline-repository/androidx/databinding/databinding-common/9.5.0",
+    "dest-filename": "databinding-common-9.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/databinding/databinding-common/9.4.1/databinding-common-9.4.1.pom",
-    "sha512": "c5516bb65dcc76179a48bfbda07024dfdaf7b0d32d1b8a0738a7cf07c8ff869ad2ac8efca299cc552abe74a4e8f96497b110e19f31b4df4ae260a10c5aaefaa6",
-    "dest": "offline-repository/androidx/databinding/databinding-common/9.4.1",
-    "dest-filename": "databinding-common-9.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/databinding/databinding-common/9.5.0/databinding-common-9.5.0.pom",
+    "sha512": "b7dae2b0c8bbd0bb73116db4db3fa29f916c635d8b127a051704792af100deec9aec44bc100f40639f436d6f7984f34d1db2ef47deeeab47118695b88e5a02b6",
+    "dest": "offline-repository/androidx/databinding/databinding-common/9.5.0",
+    "dest-filename": "databinding-common-9.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/databinding/databinding-compiler-common/9.4.1/databinding-compiler-common-9.4.1.jar",
-    "sha512": "4f93b6e48759a4496f0a268f227478c71b495def67901b728dcb5666e4fc0c5d6d089719678748cc7c6c3df224ad2dd27d5e583eb9c1aa08586f33cd58659295",
-    "dest": "offline-repository/androidx/databinding/databinding-compiler-common/9.4.1",
-    "dest-filename": "databinding-compiler-common-9.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/databinding/databinding-compiler-common/9.5.0/databinding-compiler-common-9.5.0.jar",
+    "sha512": "85087f5b33866205780c046390e5820763283aeb6f10b20efddd75844e2bcae2a018e84dd716960d828c1e3dccb0c8b8f7752515811eae6b89e75e7fcee70a13",
+    "dest": "offline-repository/androidx/databinding/databinding-compiler-common/9.5.0",
+    "dest-filename": "databinding-compiler-common-9.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/androidx/databinding/databinding-compiler-common/9.4.1/databinding-compiler-common-9.4.1.pom",
-    "sha512": "2c0ddc66bed736f95fd60b55304ab2c380dedd5d4e4f745b1c98058556c668a6c4a555a2488d73c9cc3d377480633c8d1f58ac6a74ff3947596ec62e33d7d29a",
-    "dest": "offline-repository/androidx/databinding/databinding-compiler-common/9.4.1",
-    "dest-filename": "databinding-compiler-common-9.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/androidx/databinding/databinding-compiler-common/9.5.0/databinding-compiler-common-9.5.0.pom",
+    "sha512": "c37ab7c3d2235ffdb2617bf526d677849fe6ee8d20df0d4346abd1886f76024c2de863dadf56e6d9beb621437b2ef6bbaf3f1d0962859218be23891f0d9b85ad",
+    "dest": "offline-repository/androidx/databinding/databinding-compiler-common/9.5.0",
+    "dest-filename": "databinding-compiler-common-9.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
@@ -2221,350 +2221,350 @@
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/application/com.android.application.gradle.plugin/9.4.1/com.android.application.gradle.plugin-9.4.1.pom",
-    "sha512": "fc35e19d6d4ff5f24c560e3cb63a229d42c7bfd12649649ae221674e48b38d161a2b904646c2095701c33b2f7fac399020006773450bfe258dd23f84ddc986fa",
-    "dest": "offline-repository/com/android/application/com.android.application.gradle.plugin/9.4.1",
-    "dest-filename": "com.android.application.gradle.plugin-9.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/application/com.android.application.gradle.plugin/9.5.0/com.android.application.gradle.plugin-9.5.0.pom",
+    "sha512": "4c6830c97f3f126170a8b07e9954cd8b50b197408d43d44682f68cadf1a57124e68a889de19196df8ff2082d77a0a446656a559c5f6de880ccca3572fff8922d",
+    "dest": "offline-repository/com/android/application/com.android.application.gradle.plugin/9.5.0",
+    "dest-filename": "com.android.application.gradle.plugin-9.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/databinding/baseLibrary/9.4.1/baseLibrary-9.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/databinding/baseLibrary/9.5.0/baseLibrary-9.5.0.jar",
     "sha512": "ee15334d9ebbbc41926adf558018270fee26795d9509215629b0aba97503e0cb48f2db9ce8b79a9117b3ab385e635409b659831bb4c5cda09e2f57c5290726b0",
-    "dest": "offline-repository/com/android/databinding/baseLibrary/9.4.1",
-    "dest-filename": "baseLibrary-9.4.1.jar",
+    "dest": "offline-repository/com/android/databinding/baseLibrary/9.5.0",
+    "dest-filename": "baseLibrary-9.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/databinding/baseLibrary/9.4.1/baseLibrary-9.4.1.pom",
-    "sha512": "b2b6a81feb3349fe70f58796f2e2c4ca9fcd901c7d66937e4d20b3a56b5d93b60d7f833b8a51aad84f1cdff65b415589684c680e5a6fc8614cb899e62ccf9844",
-    "dest": "offline-repository/com/android/databinding/baseLibrary/9.4.1",
-    "dest-filename": "baseLibrary-9.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/databinding/baseLibrary/9.5.0/baseLibrary-9.5.0.pom",
+    "sha512": "f0cc89ca856b3c554c7b42fdd1e7d69372abf7407e9105c13eaf29a436d64107e8c72b492ac45cff443a7d28a47772b567f8f43458b40abbd0fc7a9142f6474a",
+    "dest": "offline-repository/com/android/databinding/baseLibrary/9.5.0",
+    "dest-filename": "baseLibrary-9.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/kotlin/multiplatform/library/com.android.kotlin.multiplatform.library.gradle.plugin/9.4.1/com.android.kotlin.multiplatform.library.gradle.plugin-9.4.1.pom",
-    "sha512": "8004d8b052599764e8cb94369ff935a08724585bd222d4e19a3964e2aa1441557c81b8b1e0844441265daccad129d48f9a4af03a7bfc117f1dc0142994e95a48",
-    "dest": "offline-repository/com/android/kotlin/multiplatform/library/com.android.kotlin.multiplatform.library.gradle.plugin/9.4.1",
-    "dest-filename": "com.android.kotlin.multiplatform.library.gradle.plugin-9.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/kotlin/multiplatform/library/com.android.kotlin.multiplatform.library.gradle.plugin/9.5.0/com.android.kotlin.multiplatform.library.gradle.plugin-9.5.0.pom",
+    "sha512": "bb10017f8cc5e8e774f00d1e62bf296aee26a03fa9b2130124863b58dbe33390d4ab248a2192d74850cafc93aaedcbc05f2c49912950cf8cbc3f687f7c17ee0a",
+    "dest": "offline-repository/com/android/kotlin/multiplatform/library/com.android.kotlin.multiplatform.library.gradle.plugin/9.5.0",
+    "dest-filename": "com.android.kotlin.multiplatform.library.gradle.plugin-9.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/signflinger/9.4.1/signflinger-9.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/signflinger/9.5.0/signflinger-9.5.0.jar",
     "sha512": "593c91a5c742c3b5ce2e44835eefaa6ab6aed81a6ce3457ca4106bcae47f952cce19587e3bf37bc4355da5a063ef1aed7af906d2e93e052ca70f89f0f3af7a78",
-    "dest": "offline-repository/com/android/signflinger/9.4.1",
-    "dest-filename": "signflinger-9.4.1.jar",
+    "dest": "offline-repository/com/android/signflinger/9.5.0",
+    "dest-filename": "signflinger-9.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/signflinger/9.4.1/signflinger-9.4.1.pom",
-    "sha512": "47c6b03d11fc220dd3710079637f553147690a94d5413db13a8b2338f75c8088abf0f8b4c6d8500b2ccbf8a7f5d73bd83ebe3fc6b4d617d5a533d7a44209e859",
-    "dest": "offline-repository/com/android/signflinger/9.4.1",
-    "dest-filename": "signflinger-9.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/signflinger/9.5.0/signflinger-9.5.0.pom",
+    "sha512": "085af1dd99e55be564dee7c7937c9c290bd66683fb0cdb4463e388235b9edda03c33751671c346836fab5d5d738dca7d03520f1b136c0cc58dd94ae9d9ec8599",
+    "dest": "offline-repository/com/android/signflinger/9.5.0",
+    "dest-filename": "signflinger-9.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/crash/32.4.1/crash-32.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/crash/32.5.0/crash-32.5.0.jar",
     "sha512": "7533c65dc0d27d8a8f38dec91b417aaf48c5a68b2d860e4ebfc6c65709986cc98728ef2fc3b683d367ce943c725ad6b5ed4e30eedb957860e87317773b18b602",
-    "dest": "offline-repository/com/android/tools/analytics-library/crash/32.4.1",
-    "dest-filename": "crash-32.4.1.jar",
+    "dest": "offline-repository/com/android/tools/analytics-library/crash/32.5.0",
+    "dest-filename": "crash-32.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/crash/32.4.1/crash-32.4.1.pom",
-    "sha512": "568d0863479dc69d35e0a1956f148833febe86e9707d304d1d3552b722d649d0ceafe06d898a400faebd6cb375ba6a31c610899df1a2f9d4e06941a47c02e76c",
-    "dest": "offline-repository/com/android/tools/analytics-library/crash/32.4.1",
-    "dest-filename": "crash-32.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/crash/32.5.0/crash-32.5.0.pom",
+    "sha512": "0c7936183dfbd1045405c3400e6a6013842346b50a338b1bee30b035ef6cd79239665e13695153ff1bd296f05fa54e8b3e6e1bbb09b5139d6e7a0c08f9d1fe50",
+    "dest": "offline-repository/com/android/tools/analytics-library/crash/32.5.0",
+    "dest-filename": "crash-32.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/protos/32.4.1/protos-32.4.1.jar",
-    "sha512": "2f5ee4e0ceaf2af2e1c8a5746e3e6255401308c0148bb4c0a138df0cbb3e6609e191419263034c7ce8158efa6b18adb2775de0bfb6b8c1c9b8abe60fca136dd4",
-    "dest": "offline-repository/com/android/tools/analytics-library/protos/32.4.1",
-    "dest-filename": "protos-32.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/protos/32.5.0/protos-32.5.0.jar",
+    "sha512": "fa142e49f39f1ed515bba8914d94f928b2eaa3f1b7712eb318e5f3c44164dd14a334245b464b27410ff5ae970a38b2e6a20bdbc2dadfbbca2e85c8e2b45f1a43",
+    "dest": "offline-repository/com/android/tools/analytics-library/protos/32.5.0",
+    "dest-filename": "protos-32.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/protos/32.4.1/protos-32.4.1.pom",
-    "sha512": "a56b8f72b41f5a107bbf3446a4b4f162276f66a4fc9734eb6fdcffefeeff66574caf0165ba2e02b93ee959d3f43620b91c9b0cf9bb856a77e74885f028386c0a",
-    "dest": "offline-repository/com/android/tools/analytics-library/protos/32.4.1",
-    "dest-filename": "protos-32.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/protos/32.5.0/protos-32.5.0.pom",
+    "sha512": "a56c29016cade13780f22a8f02217e53862008e76c3bbb176864d054a06d06ea632f438252cb7b864ba1cdf76a38955253be28b1b00b4cbe9226b1d2bcf1b8d0",
+    "dest": "offline-repository/com/android/tools/analytics-library/protos/32.5.0",
+    "dest-filename": "protos-32.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/shared/32.4.1/shared-32.4.1.jar",
-    "sha512": "ebc3fc2e23de38561245064418ddd1f50099091e6ef619d0866b14fb354ae270e259ce9d16ca9c50a10a003a3fad650d9fe8a7b28316a3eabaa6d18b70419c20",
-    "dest": "offline-repository/com/android/tools/analytics-library/shared/32.4.1",
-    "dest-filename": "shared-32.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/shared/32.5.0/shared-32.5.0.jar",
+    "sha512": "ebaee01e8e320746b8ed25964a4c4a4fbd67039f03aa797842f3cdd49ac9cd91c9ed3459c32a275bb7aba93316354caf0d5fe3003744ffd4d6d5760c5c571a40",
+    "dest": "offline-repository/com/android/tools/analytics-library/shared/32.5.0",
+    "dest-filename": "shared-32.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/shared/32.4.1/shared-32.4.1.pom",
-    "sha512": "a6758ac3e45a194f65e6ea2caad9a2e2f9f18d100b3b1cecdfd624fbef3ade7a67731436b7f26deed7f43a7eb6425b9ba615f9ee0655baf7a38824f6f53b523c",
-    "dest": "offline-repository/com/android/tools/analytics-library/shared/32.4.1",
-    "dest-filename": "shared-32.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/shared/32.5.0/shared-32.5.0.pom",
+    "sha512": "89a8991debfa297fd43309e7b5d075780f6260f172329cdb2344f2ea8c96efd8ed049b40e4ba23d710fb07528a19b8648d97472d30e6ef8dfb57cb8c02a0a13f",
+    "dest": "offline-repository/com/android/tools/analytics-library/shared/32.5.0",
+    "dest-filename": "shared-32.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/tracker/32.4.1/tracker-32.4.1.jar",
-    "sha512": "46fa2e28939041f9131c2c508e055b9a82c834cdc39e838e96403b117d3a26f5c05f62f1e9edf068d9e4ecbe94450a65e6990630e8b9a0eb0df3c66941f18657",
-    "dest": "offline-repository/com/android/tools/analytics-library/tracker/32.4.1",
-    "dest-filename": "tracker-32.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/tracker/32.5.0/tracker-32.5.0.jar",
+    "sha512": "1a04cd2490d993376808e5933fc7c279feb05fafb193f26098b4319f8789a39b226450c93e1bf188a90b2c8aa018251e09382268cc57048cdcd31e450ee0ab5f",
+    "dest": "offline-repository/com/android/tools/analytics-library/tracker/32.5.0",
+    "dest-filename": "tracker-32.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/tracker/32.4.1/tracker-32.4.1.pom",
-    "sha512": "73d8df9172aaea6b4b84996fb88bdf54c612da59888409b270734bd5b128b8ae2a6b0676ac90feb19c59ae0d3267228f4e56918134bf80b0365f9eeaa1192791",
-    "dest": "offline-repository/com/android/tools/analytics-library/tracker/32.4.1",
-    "dest-filename": "tracker-32.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/analytics-library/tracker/32.5.0/tracker-32.5.0.pom",
+    "sha512": "8c9e1abd3593e683be089edcc578fba457c140a72442b5adfb8197c04e60f53f6b7c092622b0bc462aec472814806197449c70b21921523af75db675daf2004a",
+    "dest": "offline-repository/com/android/tools/analytics-library/tracker/32.5.0",
+    "dest-filename": "tracker-32.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/annotations/32.4.1/annotations-32.4.1.jar",
-    "sha512": "4694dbc31e5b8c7ed4b941a252cb828b789f5dd90b1cc38526ccabf42005a8ce0600dfc951e3fb08c3f60b905002cf5ecb26e46a4e77e3f9e730a74a87e22788",
-    "dest": "offline-repository/com/android/tools/annotations/32.4.1",
-    "dest-filename": "annotations-32.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/annotations/32.5.0/annotations-32.5.0.jar",
+    "sha512": "986a675150556b1c0c49dba99bdcdb4cb73d6be15b570805f4cd01fafc67285caf106e6efd3432af7825310979dfde48296478992d0aba1de4e62638c133e077",
+    "dest": "offline-repository/com/android/tools/annotations/32.5.0",
+    "dest-filename": "annotations-32.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/annotations/32.4.1/annotations-32.4.1.pom",
-    "sha512": "202cf244a9c7da020efff5ff2525aa934cdb47ee1d4d338073b5fbfbd9567eaef45926d6daeee410bdab1abb7fc25143b84fdfe3113f0cadf157e92379f589d4",
-    "dest": "offline-repository/com/android/tools/annotations/32.4.1",
-    "dest-filename": "annotations-32.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/annotations/32.5.0/annotations-32.5.0.pom",
+    "sha512": "e95f8cb344a73603ef8e9a2b259b59ef85b6dfef1fbc4072a02530eed64d7b840454f6129083a8d70c22607ab7a1003cd826667b7341b24eaa4ea55f1021194e",
+    "dest": "offline-repository/com/android/tools/annotations/32.5.0",
+    "dest-filename": "annotations-32.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/aapt2-proto/9.4.1-15978811/aapt2-proto-9.4.1-15978811.jar",
-    "sha512": "b3fdcf5e77dcc81dd7025b3e8cc81c74d12b0d8e2775c8e6dd2cc382299535bb14affc99f3b9480dbe7e18758ec4d03bd82b310d4f8f43f819a057ee777fe9d8",
-    "dest": "offline-repository/com/android/tools/build/aapt2-proto/9.4.1-15978811",
-    "dest-filename": "aapt2-proto-9.4.1-15978811.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/aapt2-proto/9.5.0-16666295/aapt2-proto-9.5.0-16666295.jar",
+    "sha512": "bd67b4d5b93e1cf63b6918ae5e6186ebbea8e78936f2badd405a6c63ac0a6ac10fdcdab5091b188b664bea20726d83618c2a986c536a67ff16af48a97e8345d7",
+    "dest": "offline-repository/com/android/tools/build/aapt2-proto/9.5.0-16666295",
+    "dest-filename": "aapt2-proto-9.5.0-16666295.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/aapt2-proto/9.4.1-15978811/aapt2-proto-9.4.1-15978811.module",
-    "sha512": "806089a97c185a927199b485bc57503a859664fcd7292e065afa212102e0fa1490546df50a769816b2ab61c3a6b6a14a5ac8b1493f5b010904328aaf30de12d0",
-    "dest": "offline-repository/com/android/tools/build/aapt2-proto/9.4.1-15978811",
-    "dest-filename": "aapt2-proto-9.4.1-15978811.module",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/aapt2-proto/9.5.0-16666295/aapt2-proto-9.5.0-16666295.module",
+    "sha512": "45c6f937faa39528f4642cc70fb9a1f7bf8f9bd4946c925a5517f44373f798507852951b34730f47727ef4a25a1a028ca5fd73214f2c6e05509198f6ee5c6296",
+    "dest": "offline-repository/com/android/tools/build/aapt2-proto/9.5.0-16666295",
+    "dest-filename": "aapt2-proto-9.5.0-16666295.module",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/aapt2-proto/9.4.1-15978811/aapt2-proto-9.4.1-15978811.pom",
-    "sha512": "a32a968bac3b8bd834652e3668b0f15e7747be14eba5898915a9dc1586651c4c5c215d47a4f2f5a05c6165d556770409fb97acf16b1f5fc67919b9ecadd20265",
-    "dest": "offline-repository/com/android/tools/build/aapt2-proto/9.4.1-15978811",
-    "dest-filename": "aapt2-proto-9.4.1-15978811.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/aapt2-proto/9.5.0-16666295/aapt2-proto-9.5.0-16666295.pom",
+    "sha512": "d2e95e335006999a9f4002baff8c24d7b487ec4c8ccea4f7686f7ba6a7995ac391af69842cfb6061f225d8b0b0614a04c71482f41bffce585e6481b864522688",
+    "dest": "offline-repository/com/android/tools/build/aapt2-proto/9.5.0-16666295",
+    "dest-filename": "aapt2-proto-9.5.0-16666295.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/aaptcompiler/9.4.1/aaptcompiler-9.4.1.jar",
-    "sha512": "2bb9bf01d29022315f67bf3820ff32563f87022feedc1b8fef84434ee1123eca62d78243ce3ce11cac7539b1f698957c60aa36a2e4fc47c0d024bf9a149ac859",
-    "dest": "offline-repository/com/android/tools/build/aaptcompiler/9.4.1",
-    "dest-filename": "aaptcompiler-9.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/aaptcompiler/9.5.0/aaptcompiler-9.5.0.jar",
+    "sha512": "425aca205f0da66a45cb9e02954974631c21fdbbd11448b83c088059f072b5340b233fd805e9cef58e9de0b9c73b72f232c84690306362a41be03caff90b2333",
+    "dest": "offline-repository/com/android/tools/build/aaptcompiler/9.5.0",
+    "dest-filename": "aaptcompiler-9.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/aaptcompiler/9.4.1/aaptcompiler-9.4.1.module",
-    "sha512": "3f892e288cae2b7816dbdb8937a17e0c9a7e6744cbda2ac7fb5b229b1fddc64dacd721f3a5f53345d72b09a4a9709644f64e34320a3124752d24a1741c025da7",
-    "dest": "offline-repository/com/android/tools/build/aaptcompiler/9.4.1",
-    "dest-filename": "aaptcompiler-9.4.1.module",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/aaptcompiler/9.5.0/aaptcompiler-9.5.0.module",
+    "sha512": "7b4e0d37e8a04cb3570bd237779040e799cbfea7f941c6f2864b12323e75c13b08ee43ab1ce260a0548a1953ec459049c1bdb04d3f9e4664a589bfecbd5211ec",
+    "dest": "offline-repository/com/android/tools/build/aaptcompiler/9.5.0",
+    "dest-filename": "aaptcompiler-9.5.0.module",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/aaptcompiler/9.4.1/aaptcompiler-9.4.1.pom",
-    "sha512": "02646d8ae026cac529c543edb83174ad304de1aa41d4d871b537f9123a9904d64b2ca7a0e146b7e86016b1e3689dd9ce741552350566d8c6265f402b4552ef8a",
-    "dest": "offline-repository/com/android/tools/build/aaptcompiler/9.4.1",
-    "dest-filename": "aaptcompiler-9.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/aaptcompiler/9.5.0/aaptcompiler-9.5.0.pom",
+    "sha512": "d6b7ce0a2741035158734840085e3e8fbe159e273618d325d81face79c047d49d584e9880f458bb00207c37e19c0e85dd9abf3af247d7fbaae6b190fac88fb7b",
+    "dest": "offline-repository/com/android/tools/build/aaptcompiler/9.5.0",
+    "dest-filename": "aaptcompiler-9.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/apksig/9.4.1/apksig-9.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/apksig/9.5.0/apksig-9.5.0.jar",
     "sha512": "e685175c347914156ea8edd2c1eb47acf74c4f689600aaa91c54c022f37fe8e0bc8ac2acf05e9eeda47db8029d52874a123d8466cb4d46259ec1f7109203e90e",
-    "dest": "offline-repository/com/android/tools/build/apksig/9.4.1",
-    "dest-filename": "apksig-9.4.1.jar",
+    "dest": "offline-repository/com/android/tools/build/apksig/9.5.0",
+    "dest-filename": "apksig-9.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/apksig/9.4.1/apksig-9.4.1.pom",
-    "sha512": "000c7d3a1d8fab1f9b4a906f45eb8b0aeecf7d08186b34933566a529d10eb53dc4ae67d141f295e5541d934bcba098bc3104d5401608464d1761cb17399440de",
-    "dest": "offline-repository/com/android/tools/build/apksig/9.4.1",
-    "dest-filename": "apksig-9.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/apksig/9.5.0/apksig-9.5.0.pom",
+    "sha512": "3ad5db72b76471aae69e516f78dfcb291eddf1b462e1812fa8ac9938d4d0604f22e098d53e6da0038169a78d99130dffae9284d1da6955c5bd9612d85fa8a3a6",
+    "dest": "offline-repository/com/android/tools/build/apksig/9.5.0",
+    "dest-filename": "apksig-9.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/apkzlib/9.4.1/apkzlib-9.4.1.jar",
-    "sha512": "3c7fcc4810d3048fd5e393d6d5e7fde6df01f13238c1b53ffc22ee939535402b02a2bae8b58af3275c7d95c541390263d87d6e7e1e11a52f77eb8c9045022a00",
-    "dest": "offline-repository/com/android/tools/build/apkzlib/9.4.1",
-    "dest-filename": "apkzlib-9.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/apkzlib/9.5.0/apkzlib-9.5.0.jar",
+    "sha512": "2a55c66f9e95f3efda6e9ddcd29171a2493d34bbddb1c70f20ce4830e6010426106588d37fb07cc1b07e28e3203aad4dff8e9ec6e283420e6ab1e7f413f01796",
+    "dest": "offline-repository/com/android/tools/build/apkzlib/9.5.0",
+    "dest-filename": "apkzlib-9.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/apkzlib/9.4.1/apkzlib-9.4.1.pom",
-    "sha512": "43f7ac34722546fce95c7c9711769a7ee84f0a18702edbd307ee2745cc0789be4b88b95c7985f450b92af5953746c2156294b4e5ecc758c6fd54bebda46f2f9c",
-    "dest": "offline-repository/com/android/tools/build/apkzlib/9.4.1",
-    "dest-filename": "apkzlib-9.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/apkzlib/9.5.0/apkzlib-9.5.0.pom",
+    "sha512": "ecd21d4d147fe9d4379104e9f55860571bffbe5759b988cb39feec82cbabf51709444e38026c23b9ae456ad13b06f485b78664ce3dda9498e749f960ddcdf270",
+    "dest": "offline-repository/com/android/tools/build/apkzlib/9.5.0",
+    "dest-filename": "apkzlib-9.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/builder/9.4.1/builder-9.4.1.jar",
-    "sha512": "b509c361165d91a528bcc491df46a6adb0c21fd8ad621ec3aea42ece97ac9aa480007aa27d33b0c46f2127b9c7cdf20ffdc30572973138970dc6394bafc9786b",
-    "dest": "offline-repository/com/android/tools/build/builder/9.4.1",
-    "dest-filename": "builder-9.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/builder/9.5.0/builder-9.5.0.jar",
+    "sha512": "5ce4e271189ab0df13f591ed569ab871d1a37ba1eb062125104afd4dfd8b8848a85e740322af033c929a0d6d40e0dfa31a68ee17357d3d42e645ab4b0e1b50a0",
+    "dest": "offline-repository/com/android/tools/build/builder/9.5.0",
+    "dest-filename": "builder-9.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/builder/9.4.1/builder-9.4.1.module",
-    "sha512": "42aec8d064ef9fb881ea3bc5e61423cb377acbba4f12d32037d79bd48effe0939cf11938294280ba1ff8bd30cd6269d80ddc5da2f14c008975773238adfd12c4",
-    "dest": "offline-repository/com/android/tools/build/builder/9.4.1",
-    "dest-filename": "builder-9.4.1.module",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/builder/9.5.0/builder-9.5.0.module",
+    "sha512": "e751f363d975bcfc308ff199cc037dd83ccc83519ced116d339d0bf2a88eeeb19c2770426ee9f3a7ca70a2b960aeffe87768d3179a1fce9c23575fcc3faace99",
+    "dest": "offline-repository/com/android/tools/build/builder/9.5.0",
+    "dest-filename": "builder-9.5.0.module",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/builder/9.4.1/builder-9.4.1.pom",
-    "sha512": "ab0a9c779269492315f9680746d398fb1a52b03a0b1b216bf3694928d09f06201b436199af3248e203fe500cfa566222f78c21e9b26fbd1750b4d9361d8275e4",
-    "dest": "offline-repository/com/android/tools/build/builder/9.4.1",
-    "dest-filename": "builder-9.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/builder/9.5.0/builder-9.5.0.pom",
+    "sha512": "7b9dd2ee096dc538abba544b9c090dad9581b429012020d57650fbf2de0805bc4612999688889308a4be419ce12f4a3454b63a52bc138cb3928dae9163096f5a",
+    "dest": "offline-repository/com/android/tools/build/builder/9.5.0",
+    "dest-filename": "builder-9.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/builder-model/9.4.1/builder-model-9.4.1.jar",
-    "sha512": "a2189969b7548a5b439cfe890481e25975bbcebaadcba68c44122037579194f9e84f8f5b9d6bb626a881e30996b21c290d09421fe5fc4b37b46d594a46da42b4",
-    "dest": "offline-repository/com/android/tools/build/builder-model/9.4.1",
-    "dest-filename": "builder-model-9.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/builder-model/9.5.0/builder-model-9.5.0.jar",
+    "sha512": "94e9613774ad113953a9431f89e51bc9fec712620ae8b121a47feabe5c702ddbf4a7850e6b5ddf975726ace0054ab1d7893c56f39276d781442532d82b7af52c",
+    "dest": "offline-repository/com/android/tools/build/builder-model/9.5.0",
+    "dest-filename": "builder-model-9.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/builder-model/9.4.1/builder-model-9.4.1.module",
-    "sha512": "1a61e7dbab8abdb3b25f2c0a85a7dc3c4086e8ed242a328afe20ec466c1bbf7eb0513c08a6cefbf3e59d9a3bc5641bda832c786f1b8e4f6bf3d404a2b91c89bf",
-    "dest": "offline-repository/com/android/tools/build/builder-model/9.4.1",
-    "dest-filename": "builder-model-9.4.1.module",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/builder-model/9.5.0/builder-model-9.5.0.module",
+    "sha512": "fe3839fd0a9ec3ebc97e7aaff710f1ac9dac1af72a059b71f5fdb9830fc3005cc9ea9f86f8d1b076b79896deff7c75401aa41c922adf65ff705ae80ce524ca64",
+    "dest": "offline-repository/com/android/tools/build/builder-model/9.5.0",
+    "dest-filename": "builder-model-9.5.0.module",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/builder-model/9.4.1/builder-model-9.4.1.pom",
-    "sha512": "4bc30e8df07c92631516986c144dbf77b6ba31c2d39b3341644408941450bc47cf8ac8d065ef22112dcfd9e4a0017779dae23b9b35da78c1697bad4107ad7338",
-    "dest": "offline-repository/com/android/tools/build/builder-model/9.4.1",
-    "dest-filename": "builder-model-9.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/builder-model/9.5.0/builder-model-9.5.0.pom",
+    "sha512": "44815efaf91119f0a232c04ec40b33b3079e4d04b396775803708846057f2dcfa5b903b162e4536b3205e755eded74da3c0bbccd2f773357f3be2573b3d101a8",
+    "dest": "offline-repository/com/android/tools/build/builder-model/9.5.0",
+    "dest-filename": "builder-model-9.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/builder-test-api/9.4.1/builder-test-api-9.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/builder-test-api/9.5.0/builder-test-api-9.5.0.jar",
     "sha512": "72e7b7fe0795e5c9f003698c0fe03c837258c93e0029a569d25dadfdbce9aee25a7863ed5bef74dcf854ca8b9f7f895aceb85b51abaaa4659227ee20706b7866",
-    "dest": "offline-repository/com/android/tools/build/builder-test-api/9.4.1",
-    "dest-filename": "builder-test-api-9.4.1.jar",
+    "dest": "offline-repository/com/android/tools/build/builder-test-api/9.5.0",
+    "dest-filename": "builder-test-api-9.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/builder-test-api/9.4.1/builder-test-api-9.4.1.module",
-    "sha512": "1ab98a35d022ee1770c7b3381b54cc0e9aed9e6d6be69267c1091fd78ceaf357c9ae5db3c9914c726a6b46280c2f36b053ae7bd35586e9889857b71c6a54d8e7",
-    "dest": "offline-repository/com/android/tools/build/builder-test-api/9.4.1",
-    "dest-filename": "builder-test-api-9.4.1.module",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/builder-test-api/9.5.0/builder-test-api-9.5.0.module",
+    "sha512": "6e3ed17d7853a12b456556edf3150accf059c07ef9238cd59b206d3529022bb947b73ec7c7a5728c6fa1e91ec3ca572631ff9c71d45f45ee6ed75d9aba3b6544",
+    "dest": "offline-repository/com/android/tools/build/builder-test-api/9.5.0",
+    "dest-filename": "builder-test-api-9.5.0.module",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/builder-test-api/9.4.1/builder-test-api-9.4.1.pom",
-    "sha512": "c22dd1d204cd96ba78db5f4f677af46aa7aa207e72ccd763a374c5417439e03c149250daf96cf2fd0a0d04bc88cf04d8a2a4df53391418a5a48503f268c30388",
-    "dest": "offline-repository/com/android/tools/build/builder-test-api/9.4.1",
-    "dest-filename": "builder-test-api-9.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/builder-test-api/9.5.0/builder-test-api-9.5.0.pom",
+    "sha512": "ca2986a71b636db0d41143b273bd0314578b83b5deae8f64bc3371e7b1a2b1c58ccb76a9d934e4623f4253a961bc127f0b5e3147f3d8b2432a390484fffe316d",
+    "dest": "offline-repository/com/android/tools/build/builder-test-api/9.5.0",
+    "dest-filename": "builder-test-api-9.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
@@ -2591,120 +2591,120 @@
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/9.4.1/gradle-9.4.1.jar",
-    "sha512": "5f5cfe3bc2e9286b16ca392991f05245f0767c22153da4cc89b3ec02049bf8341a778511dbed44c44bafa9fa4082f9de846fbeace6062a3c420ff2682a2844f0",
-    "dest": "offline-repository/com/android/tools/build/gradle/9.4.1",
-    "dest-filename": "gradle-9.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/9.5.0/gradle-9.5.0.jar",
+    "sha512": "891d6c54ac4ec95773e96b185b9b6cc3a0ceb73177a6463c4aca9251a2da3475e2813ec60baa7a8574736232ee5f9cabced5404251cc39a8adfa84f81603968d",
+    "dest": "offline-repository/com/android/tools/build/gradle/9.5.0",
+    "dest-filename": "gradle-9.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/9.4.1/gradle-9.4.1.module",
-    "sha512": "41fa030f3d78acc680e1de238bb1397681cf6583628bcf583aba76d4bfc81ff09b7965131b1aa774b1952423301f4070e385a01ea0808c583f12e595e56152f1",
-    "dest": "offline-repository/com/android/tools/build/gradle/9.4.1",
-    "dest-filename": "gradle-9.4.1.module",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/9.5.0/gradle-9.5.0.module",
+    "sha512": "17fb9c62c318b9d8a8c331917e7ecb1e1bfd7c3213bf10a70c815cf34ce6e81f3869dd2a98fa1f1fb4b5392f169c257f908898108e2e9f6faf099aba0cadfb40",
+    "dest": "offline-repository/com/android/tools/build/gradle/9.5.0",
+    "dest-filename": "gradle-9.5.0.module",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/9.4.1/gradle-9.4.1.pom",
-    "sha512": "a2eb812861f1c27448415de164ff207353765d5b16cf0e35407f8cc5edd6a010af6580cb23e0a10b56741bf55941bd8e2f236230845b71cd98ae7fc227c155e1",
-    "dest": "offline-repository/com/android/tools/build/gradle/9.4.1",
-    "dest-filename": "gradle-9.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle/9.5.0/gradle-9.5.0.pom",
+    "sha512": "0dacd5f2ab957583b4868ff065506ae7d26bc47cdf1242eeef995fce5128f734c9a0d1e15eb69dfc169725c4688017d2768230b2b0a556850ea5fbfae55659cc",
+    "dest": "offline-repository/com/android/tools/build/gradle/9.5.0",
+    "dest-filename": "gradle-9.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-api/9.4.1/gradle-api-9.4.1.jar",
-    "sha512": "b229508744b881444f9544c7c4b56ca380667df26670a52d73387b170c90c1c64d5a14639fa7ef8223fea1f72abd3dfae716f4b9d6f8607911a3b5b2e60b5d66",
-    "dest": "offline-repository/com/android/tools/build/gradle-api/9.4.1",
-    "dest-filename": "gradle-api-9.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-api/9.5.0/gradle-api-9.5.0.jar",
+    "sha512": "f0434ce0112466f45f5c3d2ee3fef4b5cf03387f7aed9acc853ada14a66ee9336745c03879b9e46d4983e69b819283238d0f753e8bafac13b1be80b61f6a1f5f",
+    "dest": "offline-repository/com/android/tools/build/gradle-api/9.5.0",
+    "dest-filename": "gradle-api-9.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-api/9.4.1/gradle-api-9.4.1.module",
-    "sha512": "6c77f6bd5b51991422ca6341d38265586e2c1ccb1ca7ca391ef5c12618b3d77967a07599d19d1ba9c501f7f328a62d021f7d3dccffad777fec1602e84dc0a315",
-    "dest": "offline-repository/com/android/tools/build/gradle-api/9.4.1",
-    "dest-filename": "gradle-api-9.4.1.module",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-api/9.5.0/gradle-api-9.5.0.module",
+    "sha512": "159cbf20e1aac059fdde845a58c1890add70add5c5dbdb37da974c8e54384532a7626209c2e43e2c81fe31483baf2c8c67c63eef617faf5b54bd8b11985d76c4",
+    "dest": "offline-repository/com/android/tools/build/gradle-api/9.5.0",
+    "dest-filename": "gradle-api-9.5.0.module",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-api/9.4.1/gradle-api-9.4.1.pom",
-    "sha512": "fcc1169831ffb5f4aca3a9bb3def4fa478dcc41b5a6d8bec934a1cb2fac18d00ca5de001361442b5213aa8d244b463eea55696ed330b1fc32492b6c1074a596d",
-    "dest": "offline-repository/com/android/tools/build/gradle-api/9.4.1",
-    "dest-filename": "gradle-api-9.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-api/9.5.0/gradle-api-9.5.0.pom",
+    "sha512": "964ddfce3fc6fd3aa680d879e35f618cc3195bad255dc38f3e551f596bb2bc27411694edff129757f83f15ad21161062b437deb6df18d1eef2558894b27b404f",
+    "dest": "offline-repository/com/android/tools/build/gradle-api/9.5.0",
+    "dest-filename": "gradle-api-9.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-common-api/9.4.1/gradle-common-api-9.4.1.jar",
-    "sha512": "dd6a44c7946544932d5474a90b32fa595862179138308ba3c90dc675d168ce5c6422bda6e7cc167090a5a94878027230ceab1391e6d7a6d887b4cef233452130",
-    "dest": "offline-repository/com/android/tools/build/gradle-common-api/9.4.1",
-    "dest-filename": "gradle-common-api-9.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-common-api/9.5.0/gradle-common-api-9.5.0.jar",
+    "sha512": "32b84791db704de49f4f79fa737342b01b23f4d72fab276f9860e8d4d8e364ca0c2fa6cc388d8371f95cd0ef7416ed75e92859b4791d3b08c2f6391641990f44",
+    "dest": "offline-repository/com/android/tools/build/gradle-common-api/9.5.0",
+    "dest-filename": "gradle-common-api-9.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-common-api/9.4.1/gradle-common-api-9.4.1.module",
-    "sha512": "be6c4ac0600a89ca9dfa4c6bab8b17fe2949642c579b8c131b5d28af23d6079ebf408c21efae1de2e69a068a8b9934e84bf524ce6335702b103494fe5eeee9f5",
-    "dest": "offline-repository/com/android/tools/build/gradle-common-api/9.4.1",
-    "dest-filename": "gradle-common-api-9.4.1.module",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-common-api/9.5.0/gradle-common-api-9.5.0.module",
+    "sha512": "23670d1f68903097c63864ee5d5b4b1d731fe501f8f4fc634a1b89a330a534beb261dad3d81ca3ba6081c623dd4c21eeb5986e7a57576f2bb38e75f4f69db158",
+    "dest": "offline-repository/com/android/tools/build/gradle-common-api/9.5.0",
+    "dest-filename": "gradle-common-api-9.5.0.module",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-common-api/9.4.1/gradle-common-api-9.4.1.pom",
-    "sha512": "fa722d4152f9959903043c3aa28955c2224a23538f84e07451580f790ec32fd94fe4c92754eff7702018a42fdc2fd27b42e7488bd9960c77c2b3c25954a051f2",
-    "dest": "offline-repository/com/android/tools/build/gradle-common-api/9.4.1",
-    "dest-filename": "gradle-common-api-9.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-common-api/9.5.0/gradle-common-api-9.5.0.pom",
+    "sha512": "96ba1a23e23367f530dd12e6b2b569bc27b81713880e86c48bb83b2e1146660ef29ba7b2856ae3ee6b5783527adf0da016352ec5d6c054a8f83d4917d2d1d421",
+    "dest": "offline-repository/com/android/tools/build/gradle-common-api/9.5.0",
+    "dest-filename": "gradle-common-api-9.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-settings-api/9.4.1/gradle-settings-api-9.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-settings-api/9.5.0/gradle-settings-api-9.5.0.jar",
     "sha512": "b0ad64bd1f97d0e5c3af6ea5177f17335026f4dd899fdb707d1682a3517897f66e91786e32a9f4e47907a671cb42ab09e9764afc35d29bc979178674303f42ac",
-    "dest": "offline-repository/com/android/tools/build/gradle-settings-api/9.4.1",
-    "dest-filename": "gradle-settings-api-9.4.1.jar",
+    "dest": "offline-repository/com/android/tools/build/gradle-settings-api/9.5.0",
+    "dest-filename": "gradle-settings-api-9.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-settings-api/9.4.1/gradle-settings-api-9.4.1.module",
-    "sha512": "9e52c48697a68ddb17c4f29af1e51324d54dc9b2704643ebaf2219604d84dd637193839aa8a968bd503b674a3873661b7ab3a8e8ff2de9d0aefde033a5c0df89",
-    "dest": "offline-repository/com/android/tools/build/gradle-settings-api/9.4.1",
-    "dest-filename": "gradle-settings-api-9.4.1.module",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-settings-api/9.5.0/gradle-settings-api-9.5.0.module",
+    "sha512": "7b55cfd89442207f396f38751207f6e3ecc45a66cadd4b26736fd999b05238798e2dc6703453d84568cf2deac91f41e7e107180f4c8caf43754deb32f4c93072",
+    "dest": "offline-repository/com/android/tools/build/gradle-settings-api/9.5.0",
+    "dest-filename": "gradle-settings-api-9.5.0.module",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-settings-api/9.4.1/gradle-settings-api-9.4.1.pom",
-    "sha512": "d300126a905faec002ee743ac09cbcce3bed0f8188674e2ba09638790da8f4623eb6ebae8d509a656c9975953d52ae34e8b28ec44c3e2b3f0899b9a84f60c5b5",
-    "dest": "offline-repository/com/android/tools/build/gradle-settings-api/9.4.1",
-    "dest-filename": "gradle-settings-api-9.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/gradle-settings-api/9.5.0/gradle-settings-api-9.5.0.pom",
+    "sha512": "110221f45dd0e12d907d64f57a6704a2a74fdf5d68d55894cca32e47b52454d3fb9f97fa2cdb7cc1e1a89ef8d5cbaf427c4c3b660ac9dd5f41e61f5851581de7",
+    "dest": "offline-repository/com/android/tools/build/gradle-settings-api/9.5.0",
+    "dest-filename": "gradle-settings-api-9.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
@@ -2771,260 +2771,260 @@
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/manifest-merger/32.4.1/manifest-merger-32.4.1.jar",
-    "sha512": "471b33d52c2d3a4979e553f7dc5fc41e1e5eb23313040979a6548165382925915a0ed07d49c557860da23deca726ab60e0fdbbebaf7116ce299dfd193f827eb6",
-    "dest": "offline-repository/com/android/tools/build/manifest-merger/32.4.1",
-    "dest-filename": "manifest-merger-32.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/manifest-merger/32.5.0/manifest-merger-32.5.0.jar",
+    "sha512": "2336901d28703502a06215e51455f5fa411184ed9865d9bb610f2ac58673a2c3fe0fbd7d3180505fbe070c4f9c98c085b37cd9e7ec445b9461a49d292e175ba7",
+    "dest": "offline-repository/com/android/tools/build/manifest-merger/32.5.0",
+    "dest-filename": "manifest-merger-32.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/manifest-merger/32.4.1/manifest-merger-32.4.1.module",
-    "sha512": "444593b185f63cb9f8c807eb9a91516d38171f74f18fc6505a525e86d0c971e88793219cc884ed2d19dd3756ebc34ed031a37ccfda3f62933ec58071bcfd3df7",
-    "dest": "offline-repository/com/android/tools/build/manifest-merger/32.4.1",
-    "dest-filename": "manifest-merger-32.4.1.module",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/manifest-merger/32.5.0/manifest-merger-32.5.0.module",
+    "sha512": "69176c1117700f8d712b05d2042f7d9dc63f01469a918e090818de4ffb1324d150599f14cee5a8eac085f474341bfb2c15819c31fc2b91aa63299b3238074ff7",
+    "dest": "offline-repository/com/android/tools/build/manifest-merger/32.5.0",
+    "dest-filename": "manifest-merger-32.5.0.module",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/manifest-merger/32.4.1/manifest-merger-32.4.1.pom",
-    "sha512": "3dadac4e83677d010cdac3193cd6f09f668f6860c1aa86ed8892704db6f208e766a1b2c9f89d921e3e670aaef2fc942e4c232aa621a19864fc67a1354a1a6c83",
-    "dest": "offline-repository/com/android/tools/build/manifest-merger/32.4.1",
-    "dest-filename": "manifest-merger-32.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/build/manifest-merger/32.5.0/manifest-merger-32.5.0.pom",
+    "sha512": "4fb76296935b0027f27bb0264c6901553042d4488ebc7861860dcb75b133eceebd75804dbb1c4f1058f1f94b7cab7ffed0b89d934a4d7de77ac25b88113e3937",
+    "dest": "offline-repository/com/android/tools/build/manifest-merger/32.5.0",
+    "dest-filename": "manifest-merger-32.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/common/32.4.1/common-32.4.1.jar",
-    "sha512": "e50b040e864ae424b6dc2b2244cad861fc233522a2020ff6a072475f536b763e169f49c09957d4131a1bb42e196ccea903deda14c832e17bebde1c2d8743a7eb",
-    "dest": "offline-repository/com/android/tools/common/32.4.1",
-    "dest-filename": "common-32.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/common/32.5.0/common-32.5.0.jar",
+    "sha512": "4964569e980ceee9aac2a698aa4c272f860482b54e7f9f6526163c2169884910e59afb57d6d90df4fbf31e15439e041dc662e31f658ce30ea33576b2c7a91678",
+    "dest": "offline-repository/com/android/tools/common/32.5.0",
+    "dest-filename": "common-32.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/common/32.4.1/common-32.4.1.pom",
-    "sha512": "a5c4b61ff9e29540fffa533b7c429b9b6d32a6f3d4714e4ec896fce0be052d8b14367a87b070d9fb9cf766759d190fbe520b9c6c2ff4abffc87a750226f37178",
-    "dest": "offline-repository/com/android/tools/common/32.4.1",
-    "dest-filename": "common-32.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/common/32.5.0/common-32.5.0.pom",
+    "sha512": "512decfe4a1ff763bee01aabf6865b0c93af464f7772852f4b56a209e5d0e388e61d7ed95bc98291ee04ef012f5faab28efe5dfbf6fcb894d50a962179ae964e",
+    "dest": "offline-repository/com/android/tools/common/32.5.0",
+    "dest-filename": "common-32.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/ddms/ddmlib/32.4.1/ddmlib-32.4.1.jar",
-    "sha512": "1b70fb54df9742b78d1007166d76a9b277a1fbfa187a068aabb5b8ff857a80efdf433d6be224c3f2400d36379667f97df2e4abcf3a3f8b23dc8a988248a32fb5",
-    "dest": "offline-repository/com/android/tools/ddms/ddmlib/32.4.1",
-    "dest-filename": "ddmlib-32.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/ddms/ddmlib/32.5.0/ddmlib-32.5.0.jar",
+    "sha512": "4ba8b30fe16bd87363d646a5b7b7b97cb69e2de75ae0f743366f2da85a8850564c3d387100bd5bd84b8cad4c7703c112b122e5e06152e259d9c3ea6bcf04addc",
+    "dest": "offline-repository/com/android/tools/ddms/ddmlib/32.5.0",
+    "dest-filename": "ddmlib-32.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/ddms/ddmlib/32.4.1/ddmlib-32.4.1.pom",
-    "sha512": "69d5daf9c6ff60b7029b6174524ef11cee201644154e5301c0245706a1ae4f2199ff7b5f6db98e344d4eb0d677e5bcac31a10d7f7c82f5542345ad20cf6e88c1",
-    "dest": "offline-repository/com/android/tools/ddms/ddmlib/32.4.1",
-    "dest-filename": "ddmlib-32.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/ddms/ddmlib/32.5.0/ddmlib-32.5.0.pom",
+    "sha512": "39814baa42a6a6e94eb02a7f4fe7f279f3b18b05e6b034b5e8968f81da8e34370254b27e03ac23551eb3a6640a5c598e821b7275e4ffbbd3dd34c47af80f2aeb",
+    "dest": "offline-repository/com/android/tools/ddms/ddmlib/32.5.0",
+    "dest-filename": "ddmlib-32.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/dvlib/32.4.1/dvlib-32.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/dvlib/32.5.0/dvlib-32.5.0.jar",
     "sha512": "bb31f8085017817ba65819bced3e7bdcf2e24d592a6ab6b4b018a41ef28747c60607cb661d3c2885277709ff852b40e8e6d875c93e538cc1489ed91c13003415",
-    "dest": "offline-repository/com/android/tools/dvlib/32.4.1",
-    "dest-filename": "dvlib-32.4.1.jar",
+    "dest": "offline-repository/com/android/tools/dvlib/32.5.0",
+    "dest-filename": "dvlib-32.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/dvlib/32.4.1/dvlib-32.4.1.pom",
-    "sha512": "58ccd1e1c01cc1a4037a7fdd7b4b70b68ed8dd17d8588cbf9ed170bc17694052bf04d3a3cc70acdb4813c8a8d3dfee2747513e8cb28190e14eb35ad245719d18",
-    "dest": "offline-repository/com/android/tools/dvlib/32.4.1",
-    "dest-filename": "dvlib-32.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/dvlib/32.5.0/dvlib-32.5.0.pom",
+    "sha512": "f3340ed26ac77899c81e6d748b354380790e03860dfe5878aa4e7f4fcce04f9cae3f22aef89bfd2b5b5faaad60a5d60038382e1c25932e6fb39fc3de2ac1121d",
+    "dest": "offline-repository/com/android/tools/dvlib/32.5.0",
+    "dest-filename": "dvlib-32.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/layoutlib/layoutlib-api/32.4.1/layoutlib-api-32.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/layoutlib/layoutlib-api/32.5.0/layoutlib-api-32.5.0.jar",
     "sha512": "05027fde6f351651a20316505e1b32284796b9986eaa3f99bb94802b13ab0d75cd85cf97397f03203215330698228be6d03ae27d3ac96fd4bc146733ff3f01e5",
-    "dest": "offline-repository/com/android/tools/layoutlib/layoutlib-api/32.4.1",
-    "dest-filename": "layoutlib-api-32.4.1.jar",
+    "dest": "offline-repository/com/android/tools/layoutlib/layoutlib-api/32.5.0",
+    "dest-filename": "layoutlib-api-32.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/layoutlib/layoutlib-api/32.4.1/layoutlib-api-32.4.1.pom",
-    "sha512": "eded466fa1b8ce8f056c0e599033548073f2a4ef7974df6ab22701348f709bf6695e9094ba2447c4a6646d801effefe0f90a884690647dfe09954c8e0479eca3",
-    "dest": "offline-repository/com/android/tools/layoutlib/layoutlib-api/32.4.1",
-    "dest-filename": "layoutlib-api-32.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/layoutlib/layoutlib-api/32.5.0/layoutlib-api-32.5.0.pom",
+    "sha512": "0191c57c53f6d823b1aad1c9b2f54635cd60527c3d382a3a82bfc867cbdaf3f66db9f5dad46f4daf0b9567da62af8c3e3508a297b90c52c7bfaf5c85eb8dc3ec",
+    "dest": "offline-repository/com/android/tools/layoutlib/layoutlib-api/32.5.0",
+    "dest-filename": "layoutlib-api-32.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/lint/lint-model/32.4.1/lint-model-32.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/lint/lint-model/32.5.0/lint-model-32.5.0.jar",
     "sha512": "3400fdc298be31608b8efe6501697c3e7807aa5df986816e47ad6457dd4fb5438a073556ce90881ca4f1051ef4cc1b9109eff3b5fa70d3acf2d5439f0a8cbf10",
-    "dest": "offline-repository/com/android/tools/lint/lint-model/32.4.1",
-    "dest-filename": "lint-model-32.4.1.jar",
+    "dest": "offline-repository/com/android/tools/lint/lint-model/32.5.0",
+    "dest-filename": "lint-model-32.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/lint/lint-model/32.4.1/lint-model-32.4.1.pom",
-    "sha512": "b823d15157f1d0f78380e74d40d8048cd090fcc5d060477f099bd2b235ef873008dca149fb1d709b2c1704391392c0b684c24ff7bcce02e577723be44da6c935",
-    "dest": "offline-repository/com/android/tools/lint/lint-model/32.4.1",
-    "dest-filename": "lint-model-32.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/lint/lint-model/32.5.0/lint-model-32.5.0.pom",
+    "sha512": "6d27c6e8b83cddde444f77a53ff239383fd26de7fc53c0c091d21060837970b32f9ed1f9d8a9e34265324bce70e711c4a5a87e6e9d94943f03261f8065d87863",
+    "dest": "offline-repository/com/android/tools/lint/lint-model/32.5.0",
+    "dest-filename": "lint-model-32.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/lint/lint-typedef-remover/32.4.1/lint-typedef-remover-32.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/lint/lint-typedef-remover/32.5.0/lint-typedef-remover-32.5.0.jar",
     "sha512": "64bff95763f13bd351038f570b5f6e1905386a0fcb63901f6c887b13a129f250387c2c7c325067e1b8b05f3ea569ce1e0cc8009a03b90e9a680228a10d54d866",
-    "dest": "offline-repository/com/android/tools/lint/lint-typedef-remover/32.4.1",
-    "dest-filename": "lint-typedef-remover-32.4.1.jar",
+    "dest": "offline-repository/com/android/tools/lint/lint-typedef-remover/32.5.0",
+    "dest-filename": "lint-typedef-remover-32.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/lint/lint-typedef-remover/32.4.1/lint-typedef-remover-32.4.1.pom",
-    "sha512": "e8fd61193d19a08b64421538ef752624aa3c45e042f380e4b7f2133c52d7ea97a4ff26e920c782b3b3d7b0a35345cd62f698dac64127501e7f2ae333afacbdf6",
-    "dest": "offline-repository/com/android/tools/lint/lint-typedef-remover/32.4.1",
-    "dest-filename": "lint-typedef-remover-32.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/lint/lint-typedef-remover/32.5.0/lint-typedef-remover-32.5.0.pom",
+    "sha512": "2a1a6a3e2c687e61acdd44338d5f75f265b1c515996957042c06da076dbf9f35049f30ef2fb31f03d6db91a18b8ab5b3e02cf4166152f0c047312c7b46bac82b",
+    "dest": "offline-repository/com/android/tools/lint/lint-typedef-remover/32.5.0",
+    "dest-filename": "lint-typedef-remover-32.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/repository/32.4.1/repository-32.4.1.jar",
-    "sha512": "b303894a1d647c944418a192b8e4389a57b411d53875d357d503a77e99f7d0701b8b453d3f20f4fee0c536438aaca6f45ef2e4592ebe8c7e5695fb97a7ddc186",
-    "dest": "offline-repository/com/android/tools/repository/32.4.1",
-    "dest-filename": "repository-32.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/repository/32.5.0/repository-32.5.0.jar",
+    "sha512": "e3d07a6d0e8e4b657950bd065e6944ac5768b6da34719cd1bc3c2e40294574e548d56fc7fd09eeaa8e5c29e95c2772019759919a109f8bb169cd3bd001bab5bc",
+    "dest": "offline-repository/com/android/tools/repository/32.5.0",
+    "dest-filename": "repository-32.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/repository/32.4.1/repository-32.4.1.pom",
-    "sha512": "978f1dcd9e0db9248abff10415d12662525e1c982a7b51770cf87dcaa871d9b4782daf94161a5da1d93976fba6188c33812f2fbaa3e070e18c03a3bd8f8f8bc5",
-    "dest": "offline-repository/com/android/tools/repository/32.4.1",
-    "dest-filename": "repository-32.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/repository/32.5.0/repository-32.5.0.pom",
+    "sha512": "816ed5b503b351331d68ed9b9d484177916ab0c0fc313a8263bf1a5fb2db65d9e05a9c6820df8b7afc97a4bac5f2df6d8e42cf7d0e123322f167755a6b141176",
+    "dest": "offline-repository/com/android/tools/repository/32.5.0",
+    "dest-filename": "repository-32.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/sdk-common/32.4.1/sdk-common-32.4.1.jar",
-    "sha512": "aa85675fba79eb04270d202730f276678971aa56e8eaed62be771d5035ea8e83caf2486985e4c95b68d3b60c1658ee7452447b9601e2401371ae6e44bc8a998d",
-    "dest": "offline-repository/com/android/tools/sdk-common/32.4.1",
-    "dest-filename": "sdk-common-32.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/sdk-common/32.5.0/sdk-common-32.5.0.jar",
+    "sha512": "7fd89598b24aa71e5eed7f3c64a20b50e04c418b52eb2b7472ebe0f6ac70f561270d361c900fb14efdcebac5f949f9a765724945a0671b3578876a3a0aebb727",
+    "dest": "offline-repository/com/android/tools/sdk-common/32.5.0",
+    "dest-filename": "sdk-common-32.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/sdk-common/32.4.1/sdk-common-32.4.1.pom",
-    "sha512": "4895daf8aba8c0b587d46a9948c877dcaf35df345c24329cde2a6628c618a44c2622b587b42de560a26ecdf374479af05f9bd946e222a7f745365b4e3e5fa1dd",
-    "dest": "offline-repository/com/android/tools/sdk-common/32.4.1",
-    "dest-filename": "sdk-common-32.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/sdk-common/32.5.0/sdk-common-32.5.0.pom",
+    "sha512": "e894d689a705dab5cf7bbbfd17c7f8f8013541c1beca9be962a539b89651dea552e7a58b2cd08721c2874d230c14bef3c291fdda3a2175622349dca873422dba",
+    "dest": "offline-repository/com/android/tools/sdk-common/32.5.0",
+    "dest-filename": "sdk-common-32.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/sdklib/32.4.1/sdklib-32.4.1.jar",
-    "sha512": "dd099b2f63f4c5c33106b5b51419b80d9a719a01326bc0fea64f8e9abd576feaf5371b8c020948af818165af152fb8d052d3846895cd4f2bfa468285fef41d02",
-    "dest": "offline-repository/com/android/tools/sdklib/32.4.1",
-    "dest-filename": "sdklib-32.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/sdklib/32.5.0/sdklib-32.5.0.jar",
+    "sha512": "7e419c128608afde596a0e92b7d7b03bc70a385069fc9b5fffc87bb8848d39a2abface78405a7a337a4bbcb3c16dffac4d1335c3022e0c33da74bf0497faff93",
+    "dest": "offline-repository/com/android/tools/sdklib/32.5.0",
+    "dest-filename": "sdklib-32.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/sdklib/32.4.1/sdklib-32.4.1.pom",
-    "sha512": "287b13792fd1cdff0ff3574efe909d2833c430805c8d7ea2103c9db4d300ce434ea1344d0e69ed962098f6cea530530ce5de8d8c64cf31968a3bf65d6f2eecc4",
-    "dest": "offline-repository/com/android/tools/sdklib/32.4.1",
-    "dest-filename": "sdklib-32.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/sdklib/32.5.0/sdklib-32.5.0.pom",
+    "sha512": "83aaa37658387b40279c2200eb00be2ee632ba78dc3893fb678316782164afe99ff9ac15da7de175b41649aefbaebec63efd76dc1f2f42d6dd131b6c8a0a51e6",
+    "dest": "offline-repository/com/android/tools/sdklib/32.5.0",
+    "dest-filename": "sdklib-32.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/utp/gradle-work-action-api/32.4.1/gradle-work-action-api-32.4.1.jar",
-    "sha512": "3657ce610fa6f999e986f02670e8914106be423e424a6f3a1059ce6a13b49257a70be7e4f43b87b593ae8a5a83c4edf3a397c678200de06fe3ba12680a3a106f",
-    "dest": "offline-repository/com/android/tools/utp/gradle-work-action-api/32.4.1",
-    "dest-filename": "gradle-work-action-api-32.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/utp/gradle-work-action-api/32.5.0/gradle-work-action-api-32.5.0.jar",
+    "sha512": "1d7c300431631766c3373dc3d2735c352fb2b1064aae0a6166cb5bb4cea60931457e0618554dca12155750a9db65f9967954f10c37fc8e7127f9ee4f1709e7a4",
+    "dest": "offline-repository/com/android/tools/utp/gradle-work-action-api/32.5.0",
+    "dest-filename": "gradle-work-action-api-32.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/utp/gradle-work-action-api/32.4.1/gradle-work-action-api-32.4.1.module",
-    "sha512": "0dd8f06cb1e9c66cf74f191cad229f8d707d66edbbf1015304d346a4b7107d69d14beb0b5f56732810455efaede4f363470f82e4d10b23cfbf008ca665c61fa3",
-    "dest": "offline-repository/com/android/tools/utp/gradle-work-action-api/32.4.1",
-    "dest-filename": "gradle-work-action-api-32.4.1.module",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/utp/gradle-work-action-api/32.5.0/gradle-work-action-api-32.5.0.module",
+    "sha512": "c8571a47bb1f4839e043c860ebc9357d22360e2e5c4d52c9c4f8c69fc77e517b134f68e042a0f930e321891e8056a9124a647d25a010a38359f8761a7953be33",
+    "dest": "offline-repository/com/android/tools/utp/gradle-work-action-api/32.5.0",
+    "dest-filename": "gradle-work-action-api-32.5.0.module",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/utp/gradle-work-action-api/32.4.1/gradle-work-action-api-32.4.1.pom",
-    "sha512": "0cd178679a368f0b6700bcf8ccec23d81e282734f5ab1656b1391ef4f3c6a7769619914c67cbeb0ca6f51884319d1cba9466e4f0dcd8cc9e55b2f15460c45f4b",
-    "dest": "offline-repository/com/android/tools/utp/gradle-work-action-api/32.4.1",
-    "dest-filename": "gradle-work-action-api-32.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/tools/utp/gradle-work-action-api/32.5.0/gradle-work-action-api-32.5.0.pom",
+    "sha512": "4502b0a8a5bd66823f315d7678cafcd2e9d7a79ddc185354e6d860bed98d8c68eb17c6fc373e693b46a2dc02dd9e58575a3068985a852d9cd31b27ea9aebcf02",
+    "dest": "offline-repository/com/android/tools/utp/gradle-work-action-api/32.5.0",
+    "dest-filename": "gradle-work-action-api-32.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/zipflinger/9.4.1/zipflinger-9.4.1.jar",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/zipflinger/9.5.0/zipflinger-9.5.0.jar",
     "sha512": "9214cb07a9836e07ba0a9abc1954aff797b1c796e3aeebb8a86277beab4f5ccba5934b43c1050afcbd617ce4296b30d861542b212b80fa9806a7a2b4019bd200",
-    "dest": "offline-repository/com/android/zipflinger/9.4.1",
-    "dest-filename": "zipflinger-9.4.1.jar",
+    "dest": "offline-repository/com/android/zipflinger/9.5.0",
+    "dest-filename": "zipflinger-9.5.0.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://dl.google.com/dl/android/maven2/com/android/zipflinger/9.4.1/zipflinger-9.4.1.pom",
-    "sha512": "c089c2dfed3818bcf3a7833e4628e72e880b4db84fd63287a5e0fdd8275437c1aa5efa2a24271fef14e9db6fb213105b64266021603ae22f96ecd0fde020dce8",
-    "dest": "offline-repository/com/android/zipflinger/9.4.1",
-    "dest-filename": "zipflinger-9.4.1.pom",
+    "url": "https://dl.google.com/dl/android/maven2/com/android/zipflinger/9.5.0/zipflinger-9.5.0.pom",
+    "sha512": "1e63aa02b8c6d3037482fc804e54e8485ac1b7a138212e643f55aed5ded07a563c5e7b83d6360a810729fc0a6ab74ec1fb11233f3e0f2d14ce3984d0fc0f6aa2",
+    "dest": "offline-repository/com/android/zipflinger/9.5.0",
+    "dest-filename": "zipflinger-9.5.0.pom",
     "only-arches": [
       "x86_64"
     ]
