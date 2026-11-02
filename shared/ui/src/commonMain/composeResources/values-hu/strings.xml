@@ -48,6 +48,10 @@
     <string name="accent_pink">Rózsaszín</string>
     <string name="accent_teal">Türkiz</string>
     <string name="settings_app_icon">Alkalmazásikon</string>
+    <string name="settings_language">Nyelv</string>
+    <string name="settings_language_system">Rendszer alapértelmezése</string>
+    <string name="settings_language_system_detail">A rendszert követi: %1$s</string>
+    <string name="settings_language_hint">Az alkalmazás még le nem fordított részei angolul maradnak.</string>
     <string name="settings_pure_black">Tiszta fekete</string>
     <string name="settings_pure_black_detail">Valódi fekete háttér sötét módban, kíméli az OLED kijelzőt.</string>
     <string name="settings_glow">Ragyogás</string>
