@@ -35,24 +35,27 @@ internal class FfmpegSpeechDecoder(private val start: (ProcessBuilder) -> Proces
                 suspendCancellableCoroutine<Unit> { completion ->
                     // Kill before structured concurrency joins pipe IO: interrupts alone cannot unblock every Process stream.
                     completion.invokeOnCancellation { child.destroyForcibly() }
+                    // ffmpeg exits as soon as it rejects the input, which breaks the pipe under a write or close:
+                    // that is the reply failing to decode, not a pipe error.
+                    suspend fun toCodec(action: () -> Unit) {
+                        try { runInterruptible(Dispatchers.IO, action) } catch (broken: Exception) {
+                            if (broken !is CancellationException &&
+                                runInterruptible(Dispatchers.IO) { child.waitFor(2, TimeUnit.SECONDS) } && child.exitValue() != 0) {
+                                throw IllegalStateException("The spoken reply couldn't be decoded.", broken)
+                            }
+                            throw broken
+                        }
+                    }
                     val writer = launch {
                         var remainder = 0
                         for (bytes in chunks) {
                             // The process's stdin is buffered (8 KB): without a flush a sentence's last chunk waits in
                             // it while the agent works on the next, and the reply goes quiet mid-word.
-                            try {
-                                runInterruptible(Dispatchers.IO) { child.outputStream.write(bytes); child.outputStream.flush() }
-                            } catch (broken: java.io.IOException) {
-                                // ffmpeg exits as soon as it rejects the input, which breaks the pipe under this write.
-                                if (runInterruptible(Dispatchers.IO) { child.waitFor(2, TimeUnit.SECONDS) } && child.exitValue() != 0) {
-                                    throw IllegalStateException("The spoken reply couldn't be decoded.", broken)
-                                }
-                                throw broken
-                            }
+                            toCodec { child.outputStream.write(bytes); child.outputStream.flush() }
                             if (format != null) remainder = (remainder + bytes.size % (2 * format.channels)) % (2 * format.channels)
                         }
                         check(remainder == 0) { "The speech stream ended inside a PCM sample." }
-                        runInterruptible(Dispatchers.IO) { child.outputStream.close() }
+                        toCodec { child.outputStream.close() }
                     }
                     val reader = launch {
                         while (true) {
