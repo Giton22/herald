@@ -198,9 +198,9 @@
     <string name="settings_quick_entry_detail">%1$s depuis n’importe quelle app ouvre une petite zone pour poser une question à Hermes, dans une nouvelle conversation ou celle ouverte. Windows uniquement pour l’instant.</string>
     <string name="settings_quick_entry_taken">Une autre app utilise maintenant ces touches, la saisie rapide ne peut donc pas s’ouvrir.</string>
     <string name="settings_zoom">Zoom</string>
-    <string name="settings_zoom_detail">%1$d %. %2$s et %3$s le modifient partout ; %4$s revient à 100 %.</string>
+    <string name="settings_zoom_detail">%1$d %. %2$s et %3$s le modifient partout ; %4$s revient à 100 %.</string>
     <string name="settings_zoom_smaller">Plus petit</string>
-    <string name="settings_zoom_reset">100 %</string>
+    <string name="settings_zoom_reset">100 %</string>
     <string name="settings_zoom_bigger">Plus grand</string>
     <string name="settings_notify_requests_desktop_detail">Quand l’agent vous attend et que Kyllene n’est pas la fenêtre active.</string>
     <string name="settings_notify_replies_desktop_detail">Quand un tour se termine ou échoue alors que Kyllene n’est pas la fenêtre active. Cliquez pour ouvrir la conversation.</string>
