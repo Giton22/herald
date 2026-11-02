@@ -182,7 +182,9 @@ the installation for inspection instead of deleting an unverified ref.
 
 Run `python3 packaging/flatpak/tests/installed_smoke.py build/kyllene.flatpak`
 on Linux with Flatpak, its matching runtime, Xvfb, xauth, xdotool and Pillow
-installed. Direct invocation on Windows/macOS exits before optional imports or
+installed, in a session whose Secret portal can answer: the app reads its settings
+key from it at startup. A desktop session has one; CI starts its own bus with an
+unlocked gnome-keyring as the portal's backend. Direct invocation on Windows/macOS exits before optional imports or
 external actions; use a suitable Linux environment or open/update a PR to trigger
 the Ubuntu GitHub Actions job. Portable fixture/platform contracts still run in
 normal test discovery; Linux-only integration coverage is explicitly skipped
