@@ -16,13 +16,13 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.displayCutout
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.requiredWidth
 import androidx.compose.foundation.layout.systemBars
 import androidx.compose.foundation.layout.union
@@ -154,59 +154,13 @@ fun SidebarLayout(
         val p = state.fraction
         val hidden = Modifier.clearAndSetSemantics { }.takeIf { !state.isOpen && p == 0f } ?: Modifier
 
-        if (docked) {
-            // The docked sidebar takes the start inset on top of its width, as it pads itself by it, and the content
-            // beside it doesn't pad by it again.
-            val outer = width + startInset
-            Row(Modifier.fillMaxSize()) {
-                Box(
-                    Modifier
-                        .width(outer * p)
-                        .fillMaxHeight()
-                        .clipToBounds()
-                        .background(Theme[colors][sidebarColor])
-                        .then(hidden),
-                ) {
-                    Box(Modifier.requiredWidth(outer).fillMaxHeight().align(Alignment.CenterEnd)) { sidebar() }
-                }
-                if (p > 0f) Box(Modifier.width(DIVIDER_WIDTH).fillMaxHeight().background(Theme[colors][stroke]))
-                // Only as much as the sidebar covers right now, so the content doesn't jump as it slides open or shut.
-                val covered = if (p > 0f) min(startInset, outer * p + DIVIDER_WIDTH) else 0.dp
-                val consumed = if (layoutDirection == LayoutDirection.Ltr) WindowInsets(left = covered) else WindowInsets(right = covered)
-                Box(Modifier.weight(1f).fillMaxHeight().consumeWindowInsets(consumed)) { content() }
-            }
-            if (onDockedWidthChange != null && p == 1f) {
-                val density = LocalDensity.current
-                // The hairline is the edge to grab, with a few pixels either side of it to aim at.
-                Box(
-                    Modifier
-                        .offset(x = outer - EDGE_GRIP / 2)
-                        .width(EDGE_GRIP)
-                        .fillMaxHeight()
-                        .pointerHoverIcon(ResizeHorizontalPointer)
-                        .pointerInput(onDockedWidthChange) {
-                            detectTapGestures(onDoubleTap = { onDockedWidthChange(DOCKED_WIDTH) })
-                        }
-                        .draggable(
-                            state = rememberDraggableState { delta ->
-                                dragged = ((dragged ?: width) + with(density) { delta.toDp() }).coerceIn(MIN_DOCKED_WIDTH, most)
-                            },
-                            orientation = Orientation.Horizontal,
-                            onDragStarted = { dragged = width },
-                            onDragStopped = {
-                                dragged?.let(onDockedWidthChange)
-                                dragged = null
-                            },
-                        )
-                        .clearAndSetSemantics { },
-                )
-            }
-            return@BoxWithConstraints
-        }
-
-        val widthPx = with(LocalDensity.current) { width.toPx() }
+        // Docked, the sidebar takes the start inset on top of its width, as it pads itself by it.
+        val outer = if (docked) width + startInset else width
+        val widthPx = with(density) { width.toPx() }
         val scope = rememberCoroutineScope()
         val dragState = rememberDraggableState { delta -> state.dragBy(delta / widthPx) }
+        // One layout for both, the content first in it: crossing the docking point (unfolding, a window resized) then
+        // keeps the content where it was, and with it all it remembers, as a tool group the reader opened.
         Box(
             Modifier
                 .fillMaxSize()
@@ -214,7 +168,7 @@ fun SidebarLayout(
                     state = dragState,
                     orientation = Orientation.Horizontal,
                     // A phone's swipe; a mouse drag over the chat selects text instead of sliding the list in.
-                    enabled = !LocalDesktopLayout.current,
+                    enabled = !docked && !LocalDesktopLayout.current,
                     onDragStarted = { state.stopAnimation() },
                     onDragStopped = { velocity ->
                         val open = when {
@@ -226,46 +180,98 @@ fun SidebarLayout(
                     },
                 ),
         ) {
-            // The content slides along with the drawer, like a push.
-            Box(Modifier.fillMaxSize().offset { IntOffset((widthPx * p).roundToInt(), 0) }) { content() }
-            // The dim covers the whole screen behind the drawer, so its rounded corners show dimmed ground too.
-            if (p > 0f) {
+            val place = if (docked) {
+                // Beside the sidebar, by as much as it covers right now, so the content doesn't jump as it slides open
+                // or shut; and the start inset it covers isn't padded by again.
+                val beside = if (p > 0f) outer * p + DIVIDER_WIDTH else 0.dp
+                val covered = min(startInset, beside)
+                val consumed = if (layoutDirection == LayoutDirection.Ltr) WindowInsets(left = covered) else WindowInsets(right = covered)
+                Modifier.padding(start = beside).consumeWindowInsets(consumed)
+            } else {
+                // Under the drawer, the content slides along with it, like a push.
+                Modifier.offset { IntOffset((widthPx * p).roundToInt(), 0) }
+            }
+            Box(Modifier.fillMaxSize().then(place)) { content() }
+
+            if (docked) {
                 Box(
                     Modifier
-                        .fillMaxSize()
-                        .background(Color.Black.copy(alpha = 0.4f * p))
-                        .pointerInput(Unit) { detectTapGestures { scope.launch { state.close() } } },
-                )
-            }
-            val edge = Theme[colors][stroke]
-            Box(
-                Modifier
-                    .requiredWidth(width)
-                    .fillMaxHeight()
-                    .align(Alignment.CenterStart)
-                    .offset { IntOffset((-widthPx * (1f - p)).roundToInt(), 0) }
-                    // A sheet over the chat, its outer corners rounded.
-                    .clip(DrawerShape)
-                    .background(Theme[colors][sidebarColor], DrawerShape)
-                    // The dim alone doesn't show the edge when both are black (pure black theme): a hairline
-                    // along the end and its corners only, none along the screen's own edges.
-                    .drawWithContent {
-                        drawContent()
-                        val r = DRAWER_RADIUS.toPx()
-                        val s = 1.dp.toPx()
-                        val w = size.width - s / 2
-                        val h = size.height
-                        val path = Path().apply {
-                            moveTo(w - r, s / 2)
-                            arcTo(Rect(w - 2 * r, s / 2, w, 2 * r), -90f, 90f, false)
-                            lineTo(w, h - r)
-                            arcTo(Rect(w - 2 * r, h - 2 * r, w, h - s / 2), 0f, 90f, false)
+                        .width(outer * p)
+                        .fillMaxHeight()
+                        .clipToBounds()
+                        .background(Theme[colors][sidebarColor])
+                        .then(hidden),
+                ) {
+                    Box(Modifier.requiredWidth(outer).fillMaxHeight().align(Alignment.CenterEnd)) { sidebar() }
+                }
+                if (p > 0f) {
+                    Box(Modifier.offset(x = outer * p).width(DIVIDER_WIDTH).fillMaxHeight().background(Theme[colors][stroke]))
+                }
+                if (onDockedWidthChange != null && p == 1f) {
+                    // The hairline is the edge to grab, with a few pixels either side of it to aim at.
+                    Box(
+                        Modifier
+                            .offset(x = outer - EDGE_GRIP / 2)
+                            .width(EDGE_GRIP)
+                            .fillMaxHeight()
+                            .pointerHoverIcon(ResizeHorizontalPointer)
+                            .pointerInput(onDockedWidthChange) {
+                                detectTapGestures(onDoubleTap = { onDockedWidthChange(DOCKED_WIDTH) })
+                            }
+                            .draggable(
+                                state = rememberDraggableState { delta ->
+                                    dragged = ((dragged ?: width) + with(density) { delta.toDp() }).coerceIn(MIN_DOCKED_WIDTH, most)
+                                },
+                                orientation = Orientation.Horizontal,
+                                onDragStarted = { dragged = width },
+                                onDragStopped = {
+                                    dragged?.let(onDockedWidthChange)
+                                    dragged = null
+                                },
+                            )
+                            .clearAndSetSemantics { },
+                    )
+                }
+            } else {
+                // The dim covers the whole screen behind the drawer, so its rounded corners show dimmed ground too.
+                if (p > 0f) {
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = 0.4f * p))
+                            .pointerInput(Unit) { detectTapGestures { scope.launch { state.close() } } },
+                    )
+                }
+                val edge = Theme[colors][stroke]
+                Box(
+                    Modifier
+                        .requiredWidth(width)
+                        .fillMaxHeight()
+                        .align(Alignment.CenterStart)
+                        .offset { IntOffset((-widthPx * (1f - p)).roundToInt(), 0) }
+                        // A sheet over the chat, its outer corners rounded.
+                        .clip(DrawerShape)
+                        .background(Theme[colors][sidebarColor], DrawerShape)
+                        // The dim alone doesn't show the edge when both are black (pure black theme): a hairline
+                        // along the end and its corners only, none along the screen's own edges.
+                        .drawWithContent {
+                            drawContent()
+                            val r = DRAWER_RADIUS.toPx()
+                            val s = 1.dp.toPx()
+                            val w = size.width - s / 2
+                            val h = size.height
+                            val path = Path().apply {
+                                moveTo(w - r, s / 2)
+                                arcTo(Rect(w - 2 * r, s / 2, w, 2 * r), -90f, 90f, false)
+                                lineTo(w, h - r)
+                                arcTo(Rect(w - 2 * r, h - 2 * r, w, h - s / 2), 0f, 90f, false)
+                            }
+                            drawPath(path, edge, style = Stroke(s))
                         }
-                        drawPath(path, edge, style = Stroke(s))
-                    }
-                    .then(hidden),
-            ) {
-                sidebar()
+                        .then(hidden),
+                ) {
+                    sidebar()
+                }
             }
         }
     }
