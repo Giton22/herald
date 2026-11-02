@@ -36,6 +36,11 @@ cp -R package/core novnc/core
 cp -R package/vendor novnc/vendor
 cp "$HERE/src/entry.js" novnc/entry.js
 
+# Kyllene's own patch: a zoom of the view, which noVNC has no public way of asking for. It has to
+# apply to this exact release, so the build stops here when it does not.
+echo "Applying Kyllene's patch to noVNC"
+(cd novnc && git apply -p1 --verbose "$HERE/patches/novnc-viewport-zoom.patch")
+
 echo "Patching noVNC's browser checks"
 node - <<'NODE'
 const fs = require('fs');
@@ -74,7 +79,9 @@ const page = `<!DOCTYPE html>
 <title>Bot screen</title>
 <style>
   html, body { margin: 0; padding: 0; height: 100%; background: #0b0b0d; overflow: hidden; }
-  #screen { width: 100%; height: 100%; overflow: hidden; }
+  /* The page is the screen: the browser may not scroll it, and may not zoom it either. The viewer
+     has a zoom of its own, which looks at a part of the screen and draws it larger. */
+  #screen { width: 100%; height: 100%; overflow: hidden; touch-action: none; overscroll-behavior: none; }
 </style>
 </head>
 <body>
