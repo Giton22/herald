@@ -50,6 +50,26 @@ fragment excludes WOFF/WOFF2 entries, which stalled Skia enumeration in installe
 tests; ordinary host fonts remain available. Remove this exclusion once those
 formats pass startup and rendering checks with the selected Skia/runtime versions.
 
+### Secret portal adapter
+
+The JVM core includes a Linux `org.freedesktop.portal.Secret` adapter for a later
+storage integration. This alone does not encrypt existing desktop settings or
+migrate credentials. It uses FileKit's dbus-java binding with the FD-capable
+junixsocket transport, replacing its native Unix transport at the FileKit edge.
+Requests subscribe before dispatch, accept only the portal owner's matching
+response, and send `Request.Close` on cancellation or timeout. Missing services,
+denial, transport errors and empty/oversized material fail without creating a key.
+The opaque secret is bounded to 4 KiB; callers must derive suitable encryption keys,
+retain any returned portal token for the next retrieval, and clear owned bytes.
+Linux integration tests start a disposable `dbus-daemon`; other hosts skip them
+explicitly. Run `./gradlew :shared:core:jvmTest --tests '*LinuxSecretPortalTest'`.
+
+The Linux Secret transport pins matching junixsocket Java/native libraries. Release
+builds analyze those two JARs as ProGuard libraries and package their original bytes,
+preserving multi-release classes and JNI resources while optimizing the application.
+The Linux runtime includes `jdk.security.auth` for D-Bus EXTERNAL authentication.
+Other desktop platforms retain FileKit's existing transport provider.
+
 ## Advisory CI
 
 The separate Linux workflow runs JVM/packaging tests and exports an x86_64 bundle.
