@@ -17,6 +17,8 @@ from smoke_gateway import server
 
 APP = 'io.github.Giton22.Kyllene.Devel'
 BUTTON = (18, 69, 171)
+# The widget's background: before any click, after the first, after the second.
+LOADED, CLICKED, CLICKED_TWICE = (25, 195, 125), (195, 25, 224), (224, 160, 25)
 
 
 def run(*args):
@@ -56,7 +58,8 @@ def verify_resize(window, app, before):
     painted = until(relocated, 'resized widget layout', app)
     run('xdotool', 'mousemove', '--window', window, str((min(x for x, y in painted) + max(x for x, y in painted)) // 2),
         str((min(y for x, y in painted) + max(y for x, y in painted)) // 2), 'click', '1')
-    until(lambda: pixels((25, 195, 125)), 'post-resize widget click', app)
+    # A reloaded page would turn magenta again; only the kept page reaches the third colour.
+    until(lambda: pixels(CLICKED_TWICE), 'post-resize widget click', app)
 
 
 def main(bundle):
@@ -102,28 +105,44 @@ def main(bundle):
             xdo('windowmove', window, '0', '0')
             xdo('windowsize', window, '1280', '840')
             xdo('windowfocus', '--sync', window)
+            # Each screen may still be drawing when the fixed pause ends on a slow runner, so a step that
+            # landed on nothing is tried again; the fields are selected before typing, so retries don't add text.
+            def attempt(step, done, description, tries=3):
+                for _ in range(tries - 1):
+                    step()
+                    try:
+                        return until(done, description, app, seconds=10)
+                    except TimeoutError:
+                        pass
+                step()
+                return until(done, description, app)
             time.sleep(2)
-            click(550, 264)
-            xdo('key', 'ctrl+a')
-            xdo('type', '--clearmodifiers', f'http://127.0.0.1:{service.server_port}')
-            xdo('key', 'Tab', 'Return')
-            until(lambda: ('GET', '/api/status') in service.calls, 'gateway address input', app)
+            def enter_address():
+                click(550, 264)
+                xdo('key', 'ctrl+a')
+                xdo('type', '--clearmodifiers', f'http://127.0.0.1:{service.server_port}')
+                xdo('key', 'Tab', 'Return')
+            attempt(enter_address, lambda: ('GET', '/api/status') in service.calls, 'gateway address input')
+            def sign_in():
+                time.sleep(1)
+                click(640, 632)
+                time.sleep(1)
+                xdo('key', 'ctrl+a')
+                xdo('type', 'fixture')
+                xdo('key', 'Tab', 'ctrl+a')
+                xdo('type', 'fixture')
+                click(640, 454)
+            attempt(sign_in, lambda: service.authenticated, 'synthetic sign-in')
+            # Served, not just asked for: the sandbox sent back the cookie the login set.
+            until(lambda: ('GET', '/api/sessions') in service.served, 'session list', app)
+            # The fixture opens /api/ws only with the ticket subprotocol, so any call proves the handshake.
+            until(lambda: any(kind == 'RPC' for kind, _ in service.calls), 'ticketed WebSocket', app)
             time.sleep(1)
-            click(640, 632)
-            time.sleep(1)
-            xdo('type', 'fixture')
-            xdo('key', 'Tab')
-            xdo('type', 'fixture')
-            click(640, 454)
-            until(lambda: service.authenticated, 'synthetic sign-in', app)
-            until(lambda: ('GET', '/api/sessions') in service.calls, 'session list', app)
-            time.sleep(1)
-            click(140, 424)
-            until(lambda: pixels((25, 195, 125)), 'local HTML widget rendering', app)
+            attempt(lambda: click(140, 424), lambda: pixels(LOADED), 'local HTML widget rendering')
             button = until(lambda: pixels(BUTTON), 'painted widget button', app)
             click((min(x for x, y in button) + max(x for x, y in button)) // 2,
                   (min(y for x, y in button) + max(y for x, y in button)) // 2)
-            until(lambda: pixels((195, 25, 224)), 'widget JavaScript click', app)
+            until(lambda: pixels(CLICKED), 'widget JavaScript click', app)
             verify_resize(window, app, button)
             print('Installed sandbox: address input, synthetic login, HTML/JavaScript and resize passed')
         except Exception:
@@ -141,7 +160,12 @@ def stop(app):
     finally:
         if app.poll() is None:
             app.terminate()
-        app.wait(timeout=15)
+        try:
+            app.wait(timeout=15)
+        except subprocess.TimeoutExpired:
+            # A JVM stuck in shutdown must not outlive the test, or uninstalling runs under it.
+            app.kill()
+            app.wait(timeout=15)
 
 
 def uninstall(commit):

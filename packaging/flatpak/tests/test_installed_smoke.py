@@ -4,12 +4,16 @@ from pathlib import Path
 import unittest
 from unittest.mock import Mock, patch
 
-if sys.platform == 'linux':
+try:
     from PIL import Image
     import installed_smoke as smoke
+    PILLOW = True
+except ImportError:
+    PILLOW = False
 
 
 @unittest.skipUnless(sys.platform == 'linux', 'Installed Flatpak integration requires Linux')
+@unittest.skipUnless(PILLOW, 'Installed Flatpak integration requires Pillow (python3-pil)')
 class InstalledSmokeTest(unittest.TestCase):
     def test_failed_private_capture_never_falls_back_to_desktop_screenshot(self):
         with patch.dict(os.environ, DISPLAY=':9876'), \
@@ -92,6 +96,27 @@ class InstalledSmokeTest(unittest.TestCase):
              patch.object(smoke.time, 'sleep'):
             with self.assertRaisesRegex(TimeoutError, 'post-resize widget click'):
                 smoke.verify_resize('owned-window', app, [(430, 400)])
+
+    def test_page_reloaded_by_the_resize_cannot_pass_the_second_click(self):
+        app = Mock()
+        app.poll.return_value = None
+        # Moved button, and the first click's colour again: what a reloaded page shows after one more click.
+        shown = {smoke.BUTTON: [(390, 360)], smoke.CLICKED: [(0, 0)] * 2000}
+        with patch.object(smoke, 'run', return_value='WIDTH=1200\nHEIGHT=800'), \
+             patch.object(smoke, 'pixels', side_effect=shown.get), \
+             patch.object(smoke.time, 'monotonic', side_effect=[0, 0, 0, 0, 0, 0, 31]), \
+             patch.object(smoke.time, 'sleep'):
+            with self.assertRaisesRegex(TimeoutError, 'post-resize widget click'):
+                smoke.verify_resize('owned-window', app, [(430, 400)])
+
+    def test_an_app_that_ignores_terminate_is_killed(self):
+        app = Mock(pid=12345)
+        app.poll.return_value = None
+        app.wait.side_effect = [smoke.subprocess.TimeoutExpired('kyllene', 15), 0]
+        with patch.object(smoke, 'run', return_value=''):
+            smoke.stop(app)
+        app.terminate.assert_called_once()
+        app.kill.assert_called_once()
 
     def test_post_install_lookup_failure_reports_retained_or_unknown_state_without_deletion(self):
         for reconciliation_fails in (False, True):
