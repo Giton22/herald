@@ -33,6 +33,7 @@ import dev.hermeskotlin.core.models.ModelOption
 import dev.hermeskotlin.core.models.ModelsApi
 import dev.hermeskotlin.ui.chat.ModelPickerState
 import dev.hermeskotlin.ui.chat.PendingSwitch
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.rpc.RpcException
@@ -269,7 +270,7 @@ class BotsViewModel(
             } catch (e: BotChatUnavailableException) {
                 _state.update { it.copy(notice = e.message) }
             } catch (e: Exception) {
-                _state.update { it.copy(notice = "Couldn't open ${bot.label}'s chat. ${e.message.orEmpty()}".trim()) }
+                _state.update { it.copy(notice = Strings.t("Couldn't open {0}'s chat. {1}", bot.label, e.message.orEmpty()).trim()) }
             } finally {
                 _state.update { it.copy(opening = null) }
             }
@@ -298,7 +299,7 @@ class BotsViewModel(
             val ids = listOfNotNull(chat.id, chat.resolvedId).distinct()
             val failed = ids.map { sessions.setArchived(url, it, archived = true, profile = bot.name) }.firstOrNull { it !is ApiResult.Success }
             if (failed != null) {
-                _state.update { it.copy(opening = null, notice = "Couldn't start ${bot.label}'s chat over. ${failed.errorMessage.orEmpty()}".trim()) }
+                _state.update { it.copy(opening = null, notice = Strings.t("Couldn't start {0}'s chat over. {1}", bot.label, failed.errorMessage.orEmpty()).trim()) }
                 return@launch
             }
             chats.forget(bot.name)
@@ -318,7 +319,7 @@ class BotsViewModel(
      */
     fun create(draft: BotDraft, onDone: () -> Unit, onOpened: (Bot, String) -> Unit) {
         if (_busy.value != null) return
-        _busy.value = "Making ${displayNameFor(draft.profile, draft.title)}…"
+        _busy.value = Strings.t("Making {0}…", displayNameFor(draft.profile, draft.title))
         viewModelScope.launch {
             try {
                 val made = api.createBot(draft)
@@ -326,7 +327,7 @@ class BotsViewModel(
                 onDone()
                 val bot = _state.value.all.firstOrNull { it.name == made.profile } ?: Bot(name = made.profile)
                 if (!made.readyToChat) {
-                    _state.update { it.copy(notice = "Made ${bot.label}, but it has no model it can use yet. ${made.problem.orEmpty()}".trim()) }
+                    _state.update { it.copy(notice = Strings.t("Made {0}, but it has no model it can use yet. {1}", bot.label, made.problem.orEmpty()).trim()) }
                     return@launch
                 }
                 val stored = api.startWithIntro(made.profile)
@@ -336,7 +337,7 @@ class BotsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(notice = "Couldn't make the bot. ${e.message.orEmpty()}".trim()) }
+                _state.update { it.copy(notice = Strings.t("Couldn't make the bot. {0}", e.message.orEmpty()).trim()) }
                 onDone()
             } finally {
                 _busy.value = null
@@ -371,7 +372,7 @@ class BotsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                if (modelsOf == bot.name) _modelPicker.update { it.copy(loading = false, error = e.message ?: "Couldn't load the models.") }
+                if (modelsOf == bot.name) _modelPicker.update { it.copy(loading = false, error = e.message ?: Strings.t("Couldn't load the models.")) }
             }
         }
     }
@@ -408,7 +409,7 @@ class BotsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _modelPicker.update { it.copy(saving = false, saveError = "Couldn't change ${bot.label}'s model. ${e.message.orEmpty()}".trim()) }
+                _modelPicker.update { it.copy(saving = false, saveError = Strings.t("Couldn't change {0}'s model. {1}", bot.label, e.message.orEmpty()).trim()) }
             }
         }
     }
@@ -421,7 +422,7 @@ class BotsViewModel(
     /** Saves an edit; only what changed is sent, so an edit made on Desktop meanwhile isn't undone. */
     fun save(bot: Bot, description: String?, soul: String?, look: Map<String, JsonElement?>, onDone: () -> Unit) {
         if (_busy.value != null) return
-        _busy.value = "Saving…"
+        _busy.value = Strings.t("Saving…")
         viewModelScope.launch {
             try {
                 api.editBot(bot.name, description, soul, look)
@@ -430,7 +431,7 @@ class BotsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(notice = "Couldn't save ${bot.label}. ${e.message.orEmpty()}".trim()) }
+                _state.update { it.copy(notice = Strings.t("Couldn't save {0}. {1}", bot.label, e.message.orEmpty()).trim()) }
                 onDone()
             } finally {
                 _busy.value = null
@@ -442,17 +443,17 @@ class BotsViewModel(
     /** Copies [bot] (configuration, skills, SOUL and memory) as a new bot with the same look. */
     fun duplicate(bot: Bot) {
         if (_busy.value != null) return
-        _busy.value = "Copying ${bot.label}…"
+        _busy.value = Strings.t("Copying {0}…", bot.label)
         _state.update { it.copy(notice = _busy.value) }
         viewModelScope.launch {
             try {
                 val name = api.duplicate(bot, _state.value.all.map { it.name }.toSet())
                 refreshNow()
-                _state.update { it.copy(notice = "Made $name, a full copy of ${bot.label}.") }
+                _state.update { it.copy(notice = Strings.t("Made {0}, a full copy of {1}.", name, bot.label)) }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(notice = "Couldn't copy ${bot.label}. ${e.message.orEmpty()}".trim()) }
+                _state.update { it.copy(notice = Strings.t("Couldn't copy {0}. {1}", bot.label, e.message.orEmpty()).trim()) }
             } finally {
                 _busy.value = null
             }
@@ -463,17 +464,17 @@ class BotsViewModel(
     fun delete(bot: Bot, onDeleted: () -> Unit) {
         val url = gateway.value ?: return
         if (_busy.value != null) return
-        _busy.value = "Deleting ${bot.label}…"
+        _busy.value = Strings.t("Deleting {0}…", bot.label)
         _state.update { it.copy(notice = _busy.value) }
         viewModelScope.launch {
             when (val result = profiles.delete(url, bot.name)) {
                 is ApiResult.Success -> {
                     chats.forget(bot.name)
                     cache?.forgetProfile(url, bot.name)
-                    _state.update { it.regroup(it.all.filterNot { b -> b.name == bot.name }).copy(notice = "Deleted ${bot.label}.") }
+                    _state.update { it.regroup(it.all.filterNot { b -> b.name == bot.name }).copy(notice = Strings.t("Deleted {0}.", bot.label)) }
                     onDeleted()
                 }
-                else -> _state.update { it.copy(notice = "Couldn't delete ${bot.label}. ${result.errorMessage.orEmpty()}".trim()) }
+                else -> _state.update { it.copy(notice = Strings.t("Couldn't delete {0}. {1}", bot.label, result.errorMessage.orEmpty()).trim()) }
             }
             _busy.value = null
             refreshNow()
@@ -489,7 +490,7 @@ class BotsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(notice = "Couldn't change ${bot.label}. ${e.message.orEmpty()}".trim()) }
+                _state.update { it.copy(notice = Strings.t("Couldn't change {0}. {1}", bot.label, e.message.orEmpty()).trim()) }
             }
             refreshNow()
         }
@@ -516,7 +517,7 @@ class BotsViewModel(
             val unsupported = UNKNOWN_METHOD.containsMatchIn(e.message)
             _state.update { it.copy(loading = false, unsupported = unsupported, error = e.message.takeUnless { unsupported }) }
         } catch (e: Exception) {
-            _state.update { it.copy(loading = false, error = e.message ?: "Couldn't load the bots.") }
+            _state.update { it.copy(loading = false, error = e.message ?: Strings.t("Couldn't load the bots.")) }
         }
     }
 

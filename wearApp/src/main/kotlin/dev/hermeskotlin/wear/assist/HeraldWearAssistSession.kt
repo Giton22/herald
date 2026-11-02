@@ -24,6 +24,7 @@ import androidx.savedstate.SavedStateRegistry
 import androidx.savedstate.SavedStateRegistryController
 import androidx.savedstate.SavedStateRegistryOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.wear.AssistPanel
 import dev.hermeskotlin.wear.HeraldWatch
 import dev.hermeskotlin.wear.Listening
@@ -190,6 +191,6 @@ class HeraldWearAssistSession(context: Context) :
     }
 
     private companion object {
-        const val NEEDS_MICROPHONE = "Tap to allow the microphone."
+        val NEEDS_MICROPHONE: String get() = Strings.t("Tap to allow the microphone.")
     }
 }

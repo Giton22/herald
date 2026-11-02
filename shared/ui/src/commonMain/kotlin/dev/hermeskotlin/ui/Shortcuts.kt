@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui
 
+import dev.hermeskotlin.ui.i18n.Strings
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.MutableState
@@ -167,7 +169,7 @@ sealed interface Shortcut {
 }
 
 /** The pages the sidebar opens in its place. */
-enum class SidebarPage(val label: String) {
+enum class SidebarPage(private val englishLabel: String) {
     Chats("Chats"),
     Bots("Bots"),
     Inbox("Inbox"),
@@ -176,7 +178,9 @@ enum class SidebarPage(val label: String) {
     Capabilities("Capabilities"),
     Config("Config"),
     Plugins("Plugins"),
-    Insights("Insights"),
+    Insights("Insights");
+
+    val label: String get() = Strings.t(englishLabel)
 }
 
 /** The keys of the shortcuts listed in the palette and on the shortcuts page, as the platform writes them. */

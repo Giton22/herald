@@ -80,6 +80,7 @@ import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.math.sqrt
@@ -128,8 +129,8 @@ internal fun VoicePanel(
             Modifier
                 .size(112.dp)
                 .clip(CircleShape)
-                .clickable(role = Role.Button, onClickLabel = "Show voice chat full screen", onClick = onExpand)
-                .semantics { contentDescription = "Voice chat" },
+                .clickable(role = Role.Button, onClickLabel = Strings.t("Show voice chat full screen"), onClick = onExpand)
+                .semantics { contentDescription = Strings.t("Voice chat") },
         )
         Text(
             label(state),
@@ -160,7 +161,7 @@ internal fun VoicePanel(
             if (state.phase != VoicePhase.Connecting) {
                 RoundButton(
                     if (state.muted) Lucide.MicOff else Lucide.Mic,
-                    contentDescription = if (state.muted) "Unmute" else "Mute",
+                    contentDescription = Strings.t(if (state.muted) "Unmute" else "Mute"),
                     fill = if (state.muted) Theme[colors][textColor] else Theme[colors][textColor].copy(alpha = 0.08f),
                     tint = if (state.muted) Theme[colors][background] else Theme[colors][textColor],
                     onClick = onMute,
@@ -168,18 +169,18 @@ internal fun VoicePanel(
             } else {
                 Spacer(Modifier.size(60.dp))
             }
-            RoundButton(Lucide.PhoneOff, contentDescription = "End voice chat", fill = Theme[colors][danger], tint = Color.White, onClick = onEnd)
+            RoundButton(Lucide.PhoneOff, contentDescription = Strings.t("End voice chat"), fill = Theme[colors][danger], tint = Color.White, onClick = onEnd)
             when {
                 !state.live && state.phase == VoicePhase.Speaking -> RoundButton(
                     Lucide.SkipForward,
-                    contentDescription = "Skip the reply",
+                    contentDescription = Strings.t("Skip the reply"),
                     fill = Theme[colors][textColor].copy(alpha = 0.08f),
                     tint = Theme[colors][textColor],
                     onClick = onSkip,
                 )
                 canSendNow(state) -> RoundButton(
                     Lucide.ArrowUp,
-                    contentDescription = "Send now",
+                    contentDescription = Strings.t("Send now"),
                     fill = Theme[colors][textColor].copy(alpha = 0.08f),
                     tint = Theme[colors][textColor],
                     onClick = onSendNow,
@@ -191,11 +192,11 @@ internal fun VoicePanel(
 }
 
 internal fun label(state: VoiceChatState) = when (state.phase) {
-    VoicePhase.Connecting -> "Connecting…"
-    VoicePhase.Listening -> if (state.muted) "Muted" else if (state.hearing) "Hearing you…" else "Listening…"
-    VoicePhase.Transcribing -> "Catching that…"
-    VoicePhase.Thinking -> "Thinking…"
-    VoicePhase.Speaking -> "Speaking…"
+    VoicePhase.Connecting -> Strings.t("Connecting…")
+    VoicePhase.Listening -> Strings.t(if (state.muted) "Muted" else if (state.hearing) "Hearing you…" else "Listening…")
+    VoicePhase.Transcribing -> Strings.t("Catching that…")
+    VoicePhase.Thinking -> Strings.t("Thinking…")
+    VoicePhase.Speaking -> Strings.t("Speaking…")
     VoicePhase.Off -> ""
 }
 
@@ -204,13 +205,13 @@ internal fun canSendNow(state: VoiceChatState) = !state.live && state.phase == V
 
 /** What to do now, while there are no words to show. */
 internal fun hint(state: VoiceChatState) = when {
-    state.muted -> "Tap the microphone to talk again"
-    state.phase == VoicePhase.Connecting -> "Setting up the call"
-    state.phase == VoicePhase.Thinking -> "Hermes is on it"
-    (state.live || state.bargeIn) && state.phase == VoicePhase.Speaking -> "Talk over it to cut in"
-    state.phase == VoicePhase.Speaking -> "Tap skip to talk again"
-    canSendNow(state) -> "Pause when you're done, or tap send"
-    else -> "Just talk · say “stop” to end"
+    state.muted -> Strings.t("Tap the microphone to talk again")
+    state.phase == VoicePhase.Connecting -> Strings.t("Setting up the call")
+    state.phase == VoicePhase.Thinking -> Strings.t("Hermes is on it")
+    (state.live || state.bargeIn) && state.phase == VoicePhase.Speaking -> Strings.t("Talk over it to cut in")
+    state.phase == VoicePhase.Speaking -> Strings.t("Tap skip to talk again")
+    canSendNow(state) -> Strings.t("Pause when you're done, or tap send")
+    else -> Strings.t("Just talk · say “stop” to end")
 }
 
 /** The tool Hermes is running for the request. */

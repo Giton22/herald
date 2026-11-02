@@ -18,6 +18,7 @@ import dev.hermeskotlin.core.config.without
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
@@ -127,7 +128,7 @@ class ConfigViewModel(private val api: ConfigApi) : ViewModel(), ConfigActions {
                         loading = false,
                         error = failed.errorMessage,
                         // With the page already showing, the error page doesn't: say so in the banner.
-                        message = if (state.schema != null && state.values != null) listOfNotNull("Couldn't refresh", failed.errorMessage).joinToString(": ") else state.message,
+                        message = if (state.schema != null && state.values != null) listOfNotNull(Strings.t("Couldn't refresh"), failed.errorMessage).joinToString(": ") else state.message,
                         sessionExpired = failed == ApiResult.SessionExpired,
                     )
                 }
@@ -202,7 +203,7 @@ class ConfigViewModel(private val api: ConfigApi) : ViewModel(), ConfigActions {
                         values = state.values?.takeIf { it.at(entry.key) != value }
                             ?: state.values?.let { if (before == null) it.without(entry.key) else it.with(entry.key, before) },
                         saving = state.saving - entry.key,
-                        message = listOfNotNull("Couldn't save ${entry.label}", result.errorMessage).joinToString(": "),
+                        message = listOfNotNull(Strings.t("Couldn't save {0}", entry.label), result.errorMessage).joinToString(": "),
                         sessionExpired = result == ApiResult.SessionExpired,
                     )
                 }
@@ -256,7 +257,7 @@ class ConfigViewModel(private val api: ConfigApi) : ViewModel(), ConfigActions {
             _state.update { state ->
                 val editor = state.yaml ?: return@update state
                 if (result is ApiResult.Success) {
-                    state.copy(yaml = editor.copy(saving = false, loaded = text), message = "Saved config.yaml")
+                    state.copy(yaml = editor.copy(saving = false, loaded = text), message = Strings.t("Saved config.yaml"))
                 } else {
                     state.copy(yaml = editor.copy(saving = false, error = result.errorMessage), sessionExpired = result == ApiResult.SessionExpired)
                 }

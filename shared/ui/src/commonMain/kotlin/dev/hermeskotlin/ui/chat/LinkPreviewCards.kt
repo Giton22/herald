@@ -54,6 +54,7 @@ import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -87,8 +88,8 @@ private fun LinkPreviewCard(card: LinkPreview) {
     // A right-click offers the link itself, as a browser's does.
     RowContextMenu(menuOpen, onDismiss = { menuOpen = false }) {
         listOf(
-            RowMenuItem("Open link", Lucide.ExternalLink, run = open),
-            RowMenuItem("Copy link", Lucide.Link) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(card.url)) } },
+            RowMenuItem(Strings.t("Open link"), Lucide.ExternalLink, run = open),
+            RowMenuItem(Strings.t("Copy link"), Lucide.Link) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(card.url)) } },
         )
     }
     Row(

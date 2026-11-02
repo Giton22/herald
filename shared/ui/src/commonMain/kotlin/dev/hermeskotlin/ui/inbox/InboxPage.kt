@@ -122,6 +122,7 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.PlatformBackHandler
 import dev.hermeskotlin.ui.deviceNoun
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.ui.isDesktop
 import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.ListSkeleton
@@ -262,26 +263,30 @@ internal fun InboxView(
     val inFolder = folders && state.shownFilter != InboxFilter.All
     val folderName = when (val f = state.shownFilter) {
         is InboxFilter.Job -> state.chips.firstOrNull { it.filter == f }?.label
-        is InboxFilter.Group -> f.name ?: "Other"
-        InboxFilter.Failed -> "Failed"
+        is InboxFilter.Group -> f.name ?: Strings.t("Other")
+        InboxFilter.Failed -> Strings.t("Failed")
         InboxFilter.All -> null
     }
     SubpageHeader(
-        if (inFolder) folderName ?: "Inbox" else "Inbox",
+        if (inFolder) folderName ?: Strings.t("Inbox") else Strings.t("Inbox"),
         onBack = if (inFolder) ({ viewModel.setFilter(InboxFilter.All) }) else onBack,
         subtitle = when {
             state.runs.isEmpty() -> null
-            state.shownFilter is InboxFilter.Job -> state.shown.size.let { "$it ${if (it == 1) "report" else "reports"} from ${state.nameOf(state.shown.first())}" }
-            state.shownFilter is InboxFilter.Group -> state.shown.size.let { n ->
-                "$n ${if (n == 1) "report" else "reports"} in ${(state.shownFilter as InboxFilter.Group).name ?: "no group"}"
+            state.shownFilter is InboxFilter.Job -> state.shown.size.let {
+                if (it == 1) Strings.t("{0} report from {1}", it, state.nameOf(state.shown.first()))
+                else Strings.t("{0} reports from {1}", it, state.nameOf(state.shown.first()))
             }
-            unread > 0 -> "$unread unread · from the jobs you follow"
-            else -> "From the jobs you follow"
+            state.shownFilter is InboxFilter.Group -> state.shown.size.let { n ->
+                if (n == 1) Strings.t("{0} report in {1}", n, (state.shownFilter as InboxFilter.Group).name ?: Strings.t("no group"))
+                else Strings.t("{0} reports in {1}", n, (state.shownFilter as InboxFilter.Group).name ?: Strings.t("no group"))
+            }
+            unread > 0 -> Strings.t("{0} unread · from the jobs you follow", unread)
+            else -> Strings.t("From the jobs you follow")
         },
     ) {
-        if (unread > 0) IconButton(Lucide.CheckCheck, contentDescription = "Mark all read", onClick = viewModel::markAllRead)
-        IconButton(Lucide.FolderTree, contentDescription = "Folders and groups", onClick = viewModel::openGroups)
-        IconButton(Lucide.Settings2, contentDescription = "Choose jobs", onClick = viewModel::chooseJobs)
+        if (unread > 0) IconButton(Lucide.CheckCheck, contentDescription = Strings.t("Mark all read"), onClick = viewModel::markAllRead)
+        IconButton(Lucide.FolderTree, contentDescription = Strings.t("Folders and groups"), onClick = viewModel::openGroups)
+        IconButton(Lucide.Settings2, contentDescription = Strings.t("Choose jobs"), onClick = viewModel::chooseJobs)
     }
     state.block?.let { BlockNotice(it, onOpenSettings) }
     var renaming by remember { mutableStateOf<JobChip?>(null) }
@@ -296,12 +301,12 @@ internal fun InboxView(
     val shown = state.shown
     when {
         state.loading && shown.isEmpty() -> ListSkeleton()
-        state.error != null && shown.isEmpty() -> EmptyState(Lucide.TriangleAlert, "Couldn't load the Inbox", state.error)
-        shown.isEmpty() && state.shownFilter == InboxFilter.Failed -> EmptyState(Lucide.Inbox, "No failed runs", "Every run in the Inbox went fine.")
+        state.error != null && shown.isEmpty() -> EmptyState(Lucide.TriangleAlert, Strings.t("Couldn't load the Inbox"), state.error)
+        shown.isEmpty() && state.shownFilter == InboxFilter.Failed -> EmptyState(Lucide.Inbox, Strings.t("No failed runs"), Strings.t("Every run in the Inbox went fine."))
         shown.isEmpty() && state.block == null -> EmptyState(
             Lucide.Inbox,
-            "Nothing here yet",
-            "Pick the jobs whose reports you want here, like a morning briefing. Each one can notify you, or arrive quietly.",
+            Strings.t("Nothing here yet"),
+            Strings.t("Pick the jobs whose reports you want here, like a morning briefing. Each one can notify you, or arrive quietly."),
         )
         state.atFolders -> LazyColumn(
             Modifier.fillMaxSize(),
@@ -340,8 +345,8 @@ internal fun InboxView(
                     val unread = state.isUnread(run)
                     // Either way across, the row's read state flips: there is only the one thing to do to a report.
                     val swipe = when {
-                        unread -> SwipeAction("Mark read", Lucide.Check, SwipeKind.Pin) { viewModel.setRead(run, read = true) }
-                        state.canMarkUnread(run) -> SwipeAction("Mark unread", Lucide.CircleDot, SwipeKind.Pin) { viewModel.setRead(run, read = false) }
+                        unread -> SwipeAction(Strings.t("Mark read"), Lucide.Check, SwipeKind.Pin) { viewModel.setRead(run, read = true) }
+                        state.canMarkUnread(run) -> SwipeAction(Strings.t("Mark unread"), Lucide.CircleDot, SwipeKind.Pin) { viewModel.setRead(run, read = false) }
                         else -> null
                     }
                     SwipeRow(start = swipe, end = swipe, shape = RoundedCornerShape(Theme[radii][radiusLarge])) { swipeActions ->
@@ -405,9 +410,9 @@ private fun FolderMenu(
     if (folder != null) shown = folder
     BottomSheet(visible = folder != null, onDismiss = onDismiss) {
         val f = shown ?: return@BottomSheet
-        SheetHeader(f.label, if (f.unread > 0) "${f.unread} unread" else "Folder")
-        if (f.unread > 0) SheetAction("Mark folder read", Lucide.CheckCheck, onClick = { onMarkRead(f) })
-        if (canRename) SheetAction("Rename", Lucide.Pencil, onClick = { onRename(f) })
+        SheetHeader(f.label, if (f.unread > 0) Strings.t("{0} unread", f.unread) else Strings.t("Folder"))
+        if (f.unread > 0) SheetAction(Strings.t("Mark folder read"), Lucide.CheckCheck, onClick = { onMarkRead(f) })
+        if (canRename) SheetAction(Strings.t("Rename"), Lucide.Pencil, onClick = { onRename(f) })
     }
 }
 
@@ -432,14 +437,14 @@ private fun RunMenu(
     }
     BottomSheet(visible = run != null, onDismiss = onDismiss) {
         val r = shown ?: return@BottomSheet
-        SheetHeader(shownName, (if (r.failed) "Failed · " else "") + timeLabel(r.at))
-        SheetAction("Ask about this", Lucide.MessageSquarePlus, onClick = { onAsk(r) })
+        SheetHeader(shownName, if (r.failed) Strings.t("Failed · {0}", timeLabel(r.at)) else timeLabel(r.at))
+        SheetAction(Strings.t("Ask about this"), Lucide.MessageSquarePlus, onClick = { onAsk(r) })
         if (r.session != null) SheetAction(runChatLabel(r), Lucide.MessageSquareReply, onClick = { onContinue(r) })
         when {
-            unread -> SheetAction("Mark read", Lucide.Check, onClick = { onSetRead(r, true) })
-            canMarkUnread -> SheetAction("Mark unread", Lucide.CircleDot, onClick = { onSetRead(r, false) })
+            unread -> SheetAction(Strings.t("Mark read"), Lucide.Check, onClick = { onSetRead(r, true) })
+            canMarkUnread -> SheetAction(Strings.t("Mark unread"), Lucide.CircleDot, onClick = { onSetRead(r, false) })
         }
-        SheetAction("Copy", Lucide.Copy, onClick = { onCopy(r) })
+        SheetAction(Strings.t("Copy"), Lucide.Copy, onClick = { onCopy(r) })
     }
 }
 
@@ -463,7 +468,7 @@ private fun FilterChips(state: InboxUiState, onSelect: (InboxFilter) -> Unit, on
         Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = 12.dp, vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Chip("All", selected = selected == InboxFilter.All, onClick = { onSelect(InboxFilter.All) }, count = state.unread.takeIf { it > 0 })
+        Chip(Strings.t("All"), selected = selected == InboxFilter.All, onClick = { onSelect(InboxFilter.All) }, count = state.unread.takeIf { it > 0 })
         chips.forEach { (filter, label, unread) ->
             // A job's chip renames on a long press; a group's is renamed on the groups page.
             val job = (filter as? InboxFilter.Job)?.let { f -> state.chips.firstOrNull { it.filter == f } }
@@ -474,12 +479,12 @@ private fun FilterChips(state: InboxUiState, onSelect: (InboxFilter) -> Unit, on
                 count = unread.takeIf { it > 0 },
                 countColor = Theme[colors][accentText],
                 onLongClick = job?.let { { onRename(it) } },
-                onLongClickLabel = job?.let { "Rename" },
+                onLongClickLabel = job?.let { Strings.t("Rename") },
             )
         }
         if (failed > 0) {
             Chip(
-                "Failed",
+                Strings.t("Failed"),
                 selected = selected == InboxFilter.Failed,
                 onClick = { onSelect(InboxFilter.Failed) },
                 count = failed,
@@ -503,9 +508,9 @@ private fun FolderCard(folder: InboxFolder, newestName: String, recent: Boolean,
             .border(1.dp, Theme[colors][stroke], shape)
             .then(if (isDesktop && onLongClick != null) Modifier.onSecondaryPress(onPress = onLongClick) else Modifier)
             .combinedClickable(
-                onClickLabel = "Open ${folder.label}",
+                onClickLabel = Strings.t("Open {0}", folder.label),
                 onClick = onClick,
-                onLongClickLabel = onLongClick?.let { "More for ${folder.label}" },
+                onLongClickLabel = onLongClick?.let { Strings.t("More for {0}", folder.label) },
                 onLongClick = onLongClick,
             )
             .padding(14.dp),
@@ -532,18 +537,22 @@ private fun FolderCard(folder: InboxFolder, newestName: String, recent: Boolean,
                         modifier = Modifier
                             .background(Theme[colors][accent], CircleShape)
                             .padding(horizontal = 6.dp, vertical = 1.dp)
-                            .semantics { contentDescription = "${folder.unread} unread" },
+                            .semantics { contentDescription = Strings.t("{0} unread", folder.unread) },
                     )
                 }
             }
             Text(
                 buildString {
                     // Only the newest runs are on the phone while the gateway has more: the count says so.
-                    val reports = if (folder.runs == 1) "report" else "reports"
-                    append(if (recent) "${folder.runs} recent $reports" else "${folder.runs} $reports")
+                    append(when {
+                        recent && folder.runs == 1 -> Strings.t("{0} recent report", folder.runs)
+                        recent -> Strings.t("{0} recent reports", folder.runs)
+                        folder.runs == 1 -> Strings.t("{0} report", folder.runs)
+                        else -> Strings.t("{0} reports", folder.runs)
+                    })
                     append(" · ")
                     append(timeLabel(folder.newest.at))
-                    if (folder.failed > 0) append(" · ${folder.failed} failed")
+                    if (folder.failed > 0) append(Strings.t(" · {0} failed", folder.failed))
                 },
                 style = Theme[typography][code].copy(fontSize = 11.5.sp),
                 color = if (folder.failed > 0) Theme[colors][danger] else Theme[colors][textMuted],
@@ -569,7 +578,7 @@ private fun FailedFolder(count: Int, onClick: () -> Unit) {
             .clip(shape)
             .background(Theme[colors][surface])
             .border(1.dp, Theme[colors][stroke], shape)
-            .clickable(onClickLabel = "Open failed runs", onClick = onClick)
+            .clickable(onClickLabel = Strings.t("Open failed runs"), onClick = onClick)
             .padding(14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -577,7 +586,7 @@ private fun FailedFolder(count: Int, onClick: () -> Unit) {
         Box(Modifier.size(40.dp).background(Theme[colors][dangerSoft], RoundedCornerShape(Theme[radii][radiusSmall])), contentAlignment = Alignment.Center) {
             UnstyledIcon(Lucide.TriangleAlert, contentDescription = null, tint = Theme[colors][danger], modifier = Modifier.size(18.dp))
         }
-        Text("Failed runs", style = Theme[typography][body].copy(fontWeight = FontWeight.Medium), color = Theme[colors][text], modifier = Modifier.weight(1f))
+        Text(Strings.t("Failed runs"), style = Theme[typography][body].copy(fontWeight = FontWeight.Medium), color = Theme[colors][text], modifier = Modifier.weight(1f))
         Text(count.toString(), style = Theme[typography][code].copy(fontSize = 12.sp), color = Theme[colors][danger])
     }
 }
@@ -585,8 +594,8 @@ private fun FailedFolder(count: Int, onClick: () -> Unit) {
 @Composable
 private fun BlockNotice(block: InboxBlock, onOpenSettings: () -> Unit) {
     val (text, action) = when (block) {
-        InboxBlock.PushOff -> "The Inbox needs Notifications anywhere, which tells the gateway which phone this is." to "Open Settings"
-        InboxBlock.PluginOld -> "The gateway's herald-push plugin needs ${InboxViewModel.NEEDS_PLUGIN} for the Inbox. Update it in Settings." to "Open Settings"
+        InboxBlock.PushOff -> Strings.t("The Inbox needs Notifications anywhere, which tells the gateway which phone this is.") to Strings.t("Open Settings")
+        InboxBlock.PluginOld -> Strings.t("The gateway's herald-push plugin needs {0} for the Inbox. Update it in Settings.", InboxViewModel.NEEDS_PLUGIN) to Strings.t("Open Settings")
     }
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     Column(
@@ -640,7 +649,7 @@ private fun RunCard(
             .border(1.dp, Theme[colors][stroke], shape)
             // A right-click is a desktop's long press, as on the session rows.
             .then(if (isDesktop) Modifier.onSecondaryPress(onPress = onLongClick) else Modifier)
-            .combinedClickable(onClickLabel = "Read $name", onClick = onClick, onLongClickLabel = "More for this report", onLongClick = onLongClick)
+            .combinedClickable(onClickLabel = Strings.t("Read {0}", name), onClick = onClick, onLongClickLabel = Strings.t("More for this report"), onLongClick = onLongClick)
             .padding(14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -659,11 +668,11 @@ private fun RunCard(
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 if (unread) {
-                    Box(Modifier.size(8.dp).background(Theme[colors][accentText], CircleShape).clearAndSetSemantics { contentDescription = "Unread" })
+                    Box(Modifier.size(8.dp).background(Theme[colors][accentText], CircleShape).clearAndSetSemantics { contentDescription = Strings.t("Unread") })
                 }
             }
             Text(
-                (if (run.failed) "Failed · " else "") + timeLabel(run.at),
+                if (run.failed) Strings.t("Failed · {0}", timeLabel(run.at)) else timeLabel(run.at),
                 style = Theme[typography][code].copy(fontSize = 11.5.sp),
                 color = if (run.failed) Theme[colors][danger] else Theme[colors][textMuted],
             )
@@ -684,7 +693,7 @@ private fun MoreRow(loading: Boolean, error: String?, onClick: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(6.dp)) {
         if (error != null) Text(error, style = Theme[typography][bodySmall], color = Theme[colors][danger])
         Button(
-            if (loading) "Loading…" else if (error != null) "Try again" else "Older reports",
+            if (loading) Strings.t("Loading…") else if (error != null) Strings.t("Try again") else Strings.t("Older reports"),
             onClick = onClick,
             variant = ButtonVariant.Ghost,
             size = ButtonSize.Small,
@@ -713,8 +722,8 @@ internal fun RunView(
 ) {
     // One fetch at a time: while one runs, a tap here would do nothing.
     val busy = fetching != null
-    SubpageHeader(name, onBack = onBack, subtitle = (if (run.failed) "Failed · " else "") + messageTime(run.at.toDouble(), uses24HourClock())) {
-        IconButton(Lucide.Copy, contentDescription = "Copy report", onClick = onCopy, enabled = !busy)
+    SubpageHeader(name, onBack = onBack, subtitle = if (run.failed) Strings.t("Failed · {0}", messageTime(run.at.toDouble(), uses24HourClock())) else messageTime(run.at.toDouble(), uses24HourClock())) {
+        IconButton(Lucide.Copy, contentDescription = Strings.t("Copy report"), onClick = onCopy, enabled = !busy)
     }
     Column(
         Modifier
@@ -726,7 +735,7 @@ internal fun RunView(
         // On a narrow sidebar Continue goes under Ask, rather than its label breaking over two lines.
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Button(
-                "Ask about this",
+                Strings.t("Ask about this"),
                 onClick = onAsk,
                 size = ButtonSize.Small,
                 variant = ButtonVariant.Secondary,
@@ -749,9 +758,9 @@ internal fun RunView(
         if (note != null) {
             Text(
                 when (note) {
-                    RunNote.Offline -> "Only the start of this report is on the $deviceNoun. Connect to the gateway to read the rest."
-                    RunNote.Gone -> "Only the start of this report is on the $deviceNoun: the gateway no longer has it."
-                    RunNote.Failed -> "Only the start of this report is on the $deviceNoun: the gateway couldn't send the rest."
+                    RunNote.Offline -> Strings.t("Only the start of this report is on the {0}. Connect to the gateway to read the rest.", Strings.t(deviceNoun))
+                    RunNote.Gone -> Strings.t("Only the start of this report is on the {0}: the gateway no longer has it.", Strings.t(deviceNoun))
+                    RunNote.Failed -> Strings.t("Only the start of this report is on the {0}: the gateway couldn't send the rest.", Strings.t(deviceNoun))
                 },
                 style = Theme[typography][bodySmall],
                 color = Theme[colors][textTertiary],
@@ -771,8 +780,8 @@ internal fun GroupsView(state: InboxUiState, viewModel: InboxActions) {
     var naming by remember { mutableStateOf<GroupNaming?>(null) }
     var picking by remember { mutableStateOf<InboxFilter.Job?>(null) }
     var renamingJob by remember { mutableStateOf<JobChip?>(null) }
-    SubpageHeader("Folders and groups", onBack = viewModel::closeGroups, subtitle = "Kept on this $deviceNoun") {
-        IconButton(Lucide.FolderPlus, contentDescription = "New group", onClick = { naming = GroupNaming(null) })
+    SubpageHeader(Strings.t("Folders and groups"), onBack = viewModel::closeGroups, subtitle = Strings.t("Kept on this {0}", Strings.t(deviceNoun))) {
+        IconButton(Lucide.FolderPlus, contentDescription = Strings.t("New group"), onClick = { naming = GroupNaming(null) })
     }
     LazyColumn(
         Modifier.fillMaxSize(),
@@ -781,27 +790,27 @@ internal fun GroupsView(state: InboxUiState, viewModel: InboxActions) {
     ) {
         item(key = "layout") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                DayLabel("The Inbox opens on")
+                DayLabel(Strings.t("The Inbox opens on"))
                 SegmentedControl(
                     options = InboxLayout.entries,
                     selected = groups.layout,
                     onSelect = viewModel::setLayout,
-                    optionLabel = { if (it == InboxLayout.Folders) "Folders" else "One list" },
+                    optionLabel = { if (it == InboxLayout.Folders) Strings.t("Folders") else Strings.t("One list") },
                 )
             }
         }
         item(key = "mode") {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                DayLabel(if (groups.layout == InboxLayout.Folders) "Folders are" else "Chips show")
+                DayLabel(if (groups.layout == InboxLayout.Folders) Strings.t("Folders are") else Strings.t("Chips show"))
                 SegmentedControl(
                     options = ChipMode.entries,
                     selected = groups.mode,
                     onSelect = viewModel::setChipMode,
-                    optionLabel = { if (it == ChipMode.Jobs) "Each job" else "My groups" },
+                    optionLabel = { if (it == ChipMode.Jobs) Strings.t("Each job") else Strings.t("My groups") },
                 )
                 if (groups.mode == ChipMode.Groups && groups.names.isEmpty()) {
                     Text(
-                        "Make a group with the folder button above, then put jobs in it. Until then the chips show each job.",
+                        Strings.t("Make a group with the folder button above, then put jobs in it. Until then the chips show each job."),
                         style = Theme[typography][bodySmall],
                         color = Theme[colors][textTertiary],
                     )
@@ -809,7 +818,7 @@ internal fun GroupsView(state: InboxUiState, viewModel: InboxActions) {
             }
         }
         if (groups.names.isNotEmpty()) {
-            item(key = "groups-label") { DayLabel("Groups") }
+            item(key = "groups-label") { DayLabel(Strings.t("Groups")) }
             items(groups.names, key = { "g-$it" }) { name ->
                 val count = state.groupableJobs.count { it.second == name }
                 GroupRow(
@@ -822,10 +831,10 @@ internal fun GroupsView(state: InboxUiState, viewModel: InboxActions) {
         }
         item(key = "jobs-label") {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                DayLabel("Jobs")
+                DayLabel(Strings.t("Jobs"))
                 Text(
-                    "The pencil renames a job on this $deviceNoun, for its chip and cards. " +
-                        "${if (isDesktop) "A right-click" else "A long press"} on its chip does too.",
+                    Strings.t("The pencil renames a job on this {0}, for its chip and cards. {1} on its chip does too.",
+                        Strings.t(deviceNoun), if (isDesktop) Strings.t("A right-click") else Strings.t("A long press")),
                     style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp),
                     color = Theme[colors][textTertiary],
                     modifier = Modifier.padding(start = 6.dp, bottom = 4.dp),
@@ -834,7 +843,7 @@ internal fun GroupsView(state: InboxUiState, viewModel: InboxActions) {
         }
         if (state.groupableJobs.isEmpty()) {
             item(key = "no-jobs") {
-                Text("Jobs show here once they have reports in the Inbox.", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+                Text(Strings.t("Jobs show here once they have reports in the Inbox."), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
             }
         }
         items(state.groupableJobs, key = { "j-${it.first.filter.bot}/${it.first.filter.job}" }) { (chip, group) ->
@@ -866,7 +875,7 @@ internal fun GroupsView(state: InboxUiState, viewModel: InboxActions) {
         title = state.chips.firstOrNull { it.filter == job }?.label ?: "",
         options = listOf<String?>(null) + groups.names,
         selected = job?.let { groups.of(it.bot, it.job) },
-        label = { it ?: "No group" },
+        label = { it ?: Strings.t("No group") },
         onPick = { group -> job?.let { viewModel.assignGroup(it, group) }; picking = null },
         onDismiss = { picking = null },
     )
@@ -883,12 +892,12 @@ private fun RenameJobDialog(chip: JobChip?, onDismiss: () -> Unit, onSave: (JobC
     Dialog(
         visible = chip != null,
         onDismissRequest = onDismiss,
-        title = "Rename job",
-        message = "Only on this $deviceNoun: on the gateway it stays ${c.own}.",
+        title = Strings.t("Rename job"),
+        message = Strings.t("Only on this {0}: on the gateway it stays {1}.", Strings.t(deviceNoun), c.own),
         actions = {
-            if (c.renamed) Button("Reset", onClick = { onSave(c, "") }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Save", onClick = { onSave(c, name.text.toString()) }, size = ButtonSize.Small)
+            if (c.renamed) Button(Strings.t("Reset"), onClick = { onSave(c, "") }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Save"), onClick = { onSave(c, name.text.toString()) }, size = ButtonSize.Small)
         },
     ) {
         TextField(name, placeholder = c.own)
@@ -912,27 +921,27 @@ private fun GroupNameDialog(naming: GroupNaming?, groups: InboxGroups, onDismiss
     val text = InboxGroups.cleanName(name.text.toString())
     val refusal = groups.refusal(text, renaming = n.from)
     val error = when (refusal) {
-        InboxGroups.NameRefusal.Taken -> "There's a group with that name."
-        InboxGroups.NameRefusal.Reserved -> "\"${InboxGroups.OTHER}\" is the folder for jobs in no group: pick another name."
-        InboxGroups.NameRefusal.TooMany -> "That's the most groups there can be."
+        InboxGroups.NameRefusal.Taken -> Strings.t("There's a group with that name.")
+        InboxGroups.NameRefusal.Reserved -> Strings.t("\"{0}\" is the folder for jobs in no group: pick another name.", Strings.t(InboxGroups.OTHER))
+        InboxGroups.NameRefusal.TooMany -> Strings.t("That's the most groups there can be.")
         InboxGroups.NameRefusal.Blank, null -> null
     }
     Dialog(
         visible = naming != null,
         onDismissRequest = onDismiss,
-        title = if (n.from == null) "New group" else "Rename group",
-        message = if (n.from == null) "Such as RUBIX or Personal. Put jobs in it from the list below." else null,
+        title = if (n.from == null) Strings.t("New group") else Strings.t("Rename group"),
+        message = if (n.from == null) Strings.t("Such as RUBIX or Personal. Put jobs in it from the list below.") else null,
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             Button(
-                if (n.from == null) "Create" else "Save",
+                if (n.from == null) Strings.t("Create") else Strings.t("Save"),
                 onClick = { onSave(n.from, text) },
                 size = ButtonSize.Small,
                 enabled = refusal == null,
             )
         },
     ) {
-        TextField(name, placeholder = "Group name", error = error)
+        TextField(name, placeholder = Strings.t("Group name"), error = error)
     }
 }
 
@@ -952,13 +961,13 @@ private fun GroupRow(name: String, jobs: Int, onRename: () -> Unit, onRemove: ()
         Column(Modifier.weight(1f)) {
             Text(name, style = Theme[typography][body].copy(fontWeight = FontWeight.Medium), color = Theme[colors][text], maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(
-                if (jobs == 1) "1 job" else "$jobs jobs",
+                if (jobs == 1) Strings.t("1 job") else Strings.t("{0} jobs", jobs),
                 style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp),
                 color = Theme[colors][textTertiary],
             )
         }
-        IconButton(Lucide.Pencil, contentDescription = "Rename $name", onClick = onRename)
-        IconButton(Lucide.Trash2, contentDescription = "Remove $name", onClick = onRemove)
+        IconButton(Lucide.Pencil, contentDescription = Strings.t("Rename {0}", name), onClick = onRename)
+        IconButton(Lucide.Trash2, contentDescription = Strings.t("Remove {0}", name), onClick = onRemove)
     }
 }
 
@@ -972,12 +981,12 @@ private fun JobGroupRow(chip: JobChip, group: String?, enabled: Boolean, onClick
             .clip(shape)
             .background(Theme[colors][surface])
             .border(1.dp, Theme[colors][stroke], shape)
-            .clickable(enabled = enabled, onClickLabel = "Choose $label's group", onClick = onClick)
+            .clickable(enabled = enabled, onClickLabel = Strings.t("Choose {0}'s group", label), onClick = onClick)
             .padding(start = 4.dp, end = 14.dp, top = 6.dp, bottom = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        IconButton(Lucide.Pencil, contentDescription = "Rename $label", onClick = onRename)
+        IconButton(Lucide.Pencil, contentDescription = Strings.t("Rename {0}", label), onClick = onRename)
         Column(Modifier.weight(1f)) {
             Text(label, style = Theme[typography][body], color = Theme[colors][text], maxLines = 1, overflow = TextOverflow.Ellipsis)
             // A renamed job still says what it's called on the gateway.
@@ -986,7 +995,7 @@ private fun JobGroupRow(chip: JobChip, group: String?, enabled: Boolean, onClick
             }
         }
         Text(
-            group ?: if (enabled) "No group" else "",
+            group ?: if (enabled) Strings.t("No group") else "",
             style = Theme[typography][bodySmall].copy(fontWeight = FontWeight.Medium),
             color = if (group != null) Theme[colors][accentText] else Theme[colors][textTertiary],
             maxLines = 1,
@@ -1007,7 +1016,7 @@ private fun <T> DropdownSheet(
     onDismiss: () -> Unit,
 ) {
     BottomSheet(visible = visible, onDismiss = onDismiss) {
-        SheetHeader(title, "Group")
+        SheetHeader(title, Strings.t("Group"))
         options.forEach { option ->
             SheetAction(
                 label(option),
@@ -1021,7 +1030,7 @@ private fun <T> DropdownSheet(
 /** Every job, each set to not follow, follow quietly, or notify; and one switch for failures. */
 @Composable
 internal fun FollowView(state: InboxUiState, viewModel: InboxActions) {
-    SubpageHeader("Jobs in the Inbox", onBack = viewModel::closeJobs, subtitle = "What each job's reports do on this $deviceNoun")
+    SubpageHeader(Strings.t("Jobs in the Inbox"), onBack = viewModel::closeJobs, subtitle = Strings.t("What each job's reports do on this {0}", Strings.t(deviceNoun)))
     if (state.jobsLoading && state.jobs.isEmpty()) {
         ListSkeleton()
         return
@@ -1040,7 +1049,7 @@ internal fun FollowView(state: InboxUiState, viewModel: InboxActions) {
         item(key = "failures") {
             FailuresRow(state.following.failures, enabled = enabled, onChange = viewModel::setFailures)
         }
-        item(key = "label") { DayLabel("Jobs") }
+        item(key = "label") { DayLabel(Strings.t("Jobs")) }
         // A job id is only unique in its profile's cron store.
         items(state.jobs, key = { "${it.profile ?: "default"}/${it.id}" }) { job ->
             FollowRow(job, state.following.of(job.id), enabled = enabled) { viewModel.setFollow(job, it) }
@@ -1057,12 +1066,12 @@ private fun FollowingNotice(text: String, onRetry: () -> Unit) {
             .fillMaxWidth()
             .background(Theme[colors][surface], shape)
             .border(1.dp, Theme[colors][stroke], shape)
-            .clickable(onClickLabel = "Try again", onClick = onRetry)
+            .clickable(onClickLabel = Strings.t("Try again"), onClick = onRetry)
             .padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text(text, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
-        Text("Try again", style = Theme[typography][bodySmall].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][accentText])
+        Text(Strings.t("Try again"), style = Theme[typography][bodySmall].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][accentText])
     }
 }
 
@@ -1082,9 +1091,9 @@ private fun AllJobsRow(default: Follow, enabled: Boolean, onSet: (Follow) -> Uni
         verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("All jobs", style = Theme[typography][body].copy(fontWeight = FontWeight.Medium), color = Theme[colors][text])
+            Text(Strings.t("All jobs"), style = Theme[typography][body].copy(fontWeight = FontWeight.Medium), color = Theme[colors][text])
             Text(
-                "Sets every job at once, and jobs made later. Jobs that stay silent never show up. Switch single jobs off below.",
+                Strings.t("Sets every job at once, and jobs made later. Jobs that stay silent never show up. Switch single jobs off below."),
                 style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp),
                 color = Theme[colors][textTertiary],
             )
@@ -1096,9 +1105,9 @@ private fun AllJobsRow(default: Follow, enabled: Boolean, onSet: (Follow) -> Uni
             enabled = enabled,
             optionLabel = {
                 when (it) {
-                    Follow.Off -> "All off"
-                    Follow.Quiet -> "All in Inbox"
-                    Follow.Notify -> "All notify"
+                    Follow.Off -> Strings.t("All off")
+                    Follow.Quiet -> Strings.t("All in Inbox")
+                    Follow.Notify -> Strings.t("All notify")
                 }
             },
         )
@@ -1121,9 +1130,9 @@ private fun FailuresRow(on: Boolean, enabled: Boolean, onChange: (Boolean) -> Un
     ) {
         UnstyledIcon(Lucide.BellRing, contentDescription = null, tint = Theme[colors][danger], modifier = Modifier.size(18.dp))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("Tell me when any job fails", style = Theme[typography][body].copy(fontWeight = FontWeight.Medium), color = Theme[colors][text])
+            Text(Strings.t("Tell me when any job fails"), style = Theme[typography][body].copy(fontWeight = FontWeight.Medium), color = Theme[colors][text])
             Text(
-                "A notification for every failed run, including jobs you don't follow.",
+                Strings.t("A notification for every failed run, including jobs you don't follow."),
                 style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp),
                 color = Theme[colors][textTertiary],
             )
@@ -1157,9 +1166,9 @@ private fun FollowRow(job: CronJob, follow: Follow, enabled: Boolean, onChange: 
                 enabled = enabled,
                 optionLabel = {
                     when (it) {
-                        Follow.Off -> "Off"
-                        Follow.Quiet -> "Inbox"
-                        Follow.Notify -> "Notify"
+                        Follow.Off -> Strings.t("Off")
+                        Follow.Quiet -> Strings.t("Inbox")
+                        Follow.Notify -> Strings.t("Notify")
                     }
                 },
             )

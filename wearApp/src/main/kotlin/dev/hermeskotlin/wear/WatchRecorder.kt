@@ -5,6 +5,7 @@ import android.media.AudioFormat
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import androidx.annotation.RequiresPermission
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
@@ -37,7 +38,7 @@ class WatchRecorder {
         )
         if (record.state != AudioRecord.STATE_INITIALIZED) {
             record.release()
-            error("The microphone isn't available.")
+            error(Strings.t("The microphone isn't available."))
         }
         val pcm = ByteArrayOutputStream()
         val frame = ShortArray(FRAME)

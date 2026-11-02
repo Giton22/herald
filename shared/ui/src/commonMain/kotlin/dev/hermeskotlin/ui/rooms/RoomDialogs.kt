@@ -21,14 +21,15 @@ import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.Dialog
 import dev.hermeskotlin.designsystem.components.MenuAction
 import dev.hermeskotlin.designsystem.components.TextField
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.ui.isDesktop
 import dev.hermeskotlin.ui.sessions.resetTo
 
 /** A room's actions, the same wherever its menu opens: its row in the sidebar or its own top bar. */
 @Composable
 internal fun DropdownMenuPanelScope.RoomMenuActions(onRename: () -> Unit, onDelete: () -> Unit) {
-    MenuAction("Rename", Lucide.Pencil, onRename)
-    MenuAction("Delete room", Lucide.Trash2, onDelete)
+    MenuAction(Strings.t("Rename"), Lucide.Pencil, onRename)
+    MenuAction(Strings.t("Delete room"), Lucide.Trash2, onDelete)
 }
 
 /** What a room's menu has open: nothing, its rename, or the delete to confirm. */
@@ -69,15 +70,15 @@ private fun RenameRoomDialog(room: Room, visible: Boolean, onDismiss: () -> Unit
     Dialog(
         visible = visible,
         onDismissRequest = onDismiss,
-        title = "Rename room",
+        title = Strings.t("Rename room"),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Rename", onClick = submit, variant = ButtonVariant.Primary, size = ButtonSize.Small, enabled = ready)
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Rename"), onClick = submit, variant = ButtonVariant.Primary, size = ButtonSize.Small, enabled = ready)
         },
     ) {
         TextField(
             state = name,
-            label = "Room name",
+            label = Strings.t("Room name"),
             autofocus = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             // Enter renames on the desktop; a phone's Done only closes the keyboard, as it always has.
@@ -91,12 +92,12 @@ private fun DeleteRoomDialog(room: Room, visible: Boolean, onDismiss: () -> Unit
     Dialog(
         visible = visible,
         onDismissRequest = onDismiss,
-        title = "Delete “${room.name}”?",
-        message = "The room stops and is deleted from the gateway with its conversation, for every app. " +
-            "The bots in it stay. This can't be undone.",
+        title = Strings.t("Delete “{0}”?", room.name),
+        message = Strings.t("The room stops and is deleted from the gateway with its conversation, for every app. " +
+            "The bots in it stay. This can't be undone."),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Delete", onClick = { onDismiss(); onDelete(room) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Delete"), onClick = { onDismiss(); onDelete(room) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
         },
     )
 }

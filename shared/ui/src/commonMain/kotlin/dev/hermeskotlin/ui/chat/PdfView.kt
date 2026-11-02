@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.stroke
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
@@ -69,9 +70,9 @@ internal sealed interface PdfOpen {
 @Composable
 internal expect fun rememberPdfOpener(): suspend (ByteArray) -> PdfOpen
 
-internal const val PDF_LOCKED = "It's protected with a password. Save it, or share it to an app that asks for one."
-internal const val PDF_BROKEN = "It doesn't read as a PDF: it may be damaged or cut short. Save gets the file as it is."
-internal const val PDF_NO_ROOM = "The phone has no room to open it right now. Save or share it instead."
+internal val PDF_LOCKED get() = Strings.t("It's protected with a password. Save it, or share it to an app that asks for one.")
+internal val PDF_BROKEN get() = Strings.t("It doesn't read as a PDF: it may be damaged or cut short. Save gets the file as it is.")
+internal val PDF_NO_ROOM get() = Strings.t("The phone has no room to open it right now. Save or share it instead.")
 
 /**
  * A PDF's pages one under another, each as wide as the screen and drawn only once it scrolls near.
@@ -152,7 +153,7 @@ private fun PdfPage(pages: PdfPages, index: Int, count: Int) {
             .aspectRatio(aspect)
             .background(Color.White)
             .border(1.dp, Theme[colors][stroke])
-            .semantics { contentDescription = "Page ${index + 1} of $count" },
+            .semantics { contentDescription = Strings.t("Page {0} of {1}", index + 1, count) },
     ) {
         val target = renderWidth(constraints.maxWidth, aspect)
         var bitmap by remember(pages, index) { mutableStateOf<ImageBitmap?>(null) }

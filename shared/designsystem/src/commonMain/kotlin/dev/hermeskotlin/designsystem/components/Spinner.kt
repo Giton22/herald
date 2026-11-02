@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.colors
+import dev.hermeskotlin.ui.i18n.Strings
 
 /** The one loader. */
 @Composable
@@ -34,7 +35,7 @@ fun Spinner(
         animationSpec = infiniteRepeatable(tween(900, easing = LinearEasing), RepeatMode.Restart),
         label = "rotation",
     )
-    Canvas(modifier.semantics { contentDescription = "Loading" }) {
+    Canvas(modifier.semantics { contentDescription = Strings.t("Loading") }) {
         val strokeWidth = size.minDimension * 0.12f
         drawArc(
             color = color.copy(alpha = 0.2f),

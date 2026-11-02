@@ -90,6 +90,7 @@ import dev.hermeskotlin.designsystem.components.TextField
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.stroke
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
@@ -185,7 +186,7 @@ fun BotEditor(
         contentAlignment = Alignment.TopCenter,
     ) {
         Column(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
-            SubpageHeader(if (bot == null) "New bot" else "Edit ${bot.label}", onBack = { if (busy == null) onBack() })
+            SubpageHeader(if (bot == null) Strings.t("New bot") else Strings.t("Edit {0}", bot.label), onBack = { if (busy == null) onBack() })
             Column(
                 Modifier.fillMaxSize().verticalScroll(scroll).padding(start = 16.dp, end = 16.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
@@ -194,14 +195,14 @@ fun BotEditor(
                     BotAvatar(preview, picture = null, size = 72.dp)
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SectionLabel("Face")
+                    SectionLabel(Strings.t("Face"))
                     ChoiceRow {
                         BotShape.entries.forEach { option ->
                             val look = Bot(name = profile.ifEmpty { "agent" }, uiMeta = JsonObject(mapOf(BotMeta.KEY to JsonObject(mapOf(
                                 "shape" to JsonPrimitive(option.name.lowercase()),
                                 "custom" to JsonPrimitive(true),
                             ) + (color?.let { mapOf("color" to JsonPrimitive(cssHex(it))) } ?: emptyMap())))))
-                            Choice(selected = option == (shape ?: botLook(preview).shape), label = option.name, onClick = { shape = option }) {
+                            Choice(selected = option == (shape ?: botLook(preview).shape), label = Strings.t(option.name), onClick = { shape = option }) {
                                 BotAvatar(look, picture = null, size = 32.dp)
                             }
                         }
@@ -221,29 +222,29 @@ fun BotEditor(
                     TextField(
                         name,
                         focusRequester = nameFocus,
-                        label = "Name",
-                        placeholder = "e.g. Researcher",
+                        label = Strings.t("Name"),
+                        placeholder = Strings.t("e.g. Researcher"),
                         supportingText = when {
-                            typedName.isBlank() -> "Becomes the bot's profile on the gateway."
-                            problem == null -> "Profile: $slug"
+                            typedName.isBlank() -> Strings.t("Becomes the bot's profile on the gateway.")
+                            problem == null -> Strings.t("Profile: {0}", slug)
                             else -> null
                         },
                         error = problem,
                     )
                 }
-                TextField(title, label = "Title", placeholder = autoTitle.ifEmpty { "What it is, e.g. Research analyst" })
+                TextField(title, label = Strings.t("Title"), placeholder = autoTitle.ifEmpty { Strings.t("What it is, e.g. Research analyst") })
                 TextField(
                     description,
-                    label = "Description",
-                    placeholder = "What should this bot help with?",
+                    label = Strings.t("Description"),
+                    placeholder = Strings.t("What should this bot help with?"),
                     singleLine = false,
                     maxLines = 5,
                 )
                 TextField(
                     soul,
-                    label = "Persona (SOUL.md)",
-                    placeholder = if (bot == null) "Optional. Left empty, one is written from the name, title and description." else null,
-                    supportingText = "How the bot thinks of itself and works, read at the start of every chat.",
+                    label = Strings.t("Persona (SOUL.md)"),
+                    placeholder = if (bot == null) Strings.t("Optional. Left empty, one is written from the name, title and description.") else null,
+                    supportingText = Strings.t("How the bot thinks of itself and works, read at the start of every chat."),
                     singleLine = false,
                     maxLines = 12,
                 )
@@ -251,7 +252,7 @@ fun BotEditor(
                 if (bot != null) {
                     val now = live ?: bot
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        SectionLabel("How it works")
+                        SectionLabel(Strings.t("How it works"))
                         // The two settings on one ringed card, split by a hairline.
                         val card = RoundedCornerShape(Theme[radii][radiusLarge])
                         Column(
@@ -263,24 +264,24 @@ fun BotEditor(
                         ) {
                             SettingRow(
                                 Lucide.Cpu,
-                                "Model",
+                                Strings.t("Model"),
                                 now.model?.takeIf { it.isNotBlank() }?.let { model ->
                                     listOfNotNull(displayModelName(model), now.provider?.takeIf { it.isNotBlank() }?.let { displayProviderName(it) })
                                         .joinToString(" · ")
-                                } ?: "The gateway's default",
+                                } ?: Strings.t("The gateway's default"),
                                 onClick = onPickModel,
                             )
                             Box(Modifier.fillMaxWidth().height(1.dp).background(Theme[colors][stroke]))
-                            SettingRow(Lucide.Blocks, "Skills, tools and connectors", "What ${bot.label} can use in its chats", onClick = onCapabilities)
+                            SettingRow(Lucide.Blocks, Strings.t("Skills, tools and connectors"), Strings.t("What {0} can use in its chats", bot.label), onClick = onCapabilities)
                             Box(Modifier.fillMaxWidth().height(1.dp).background(Theme[colors][stroke]))
-                            SettingRow(Lucide.SlidersHorizontal, "Config", "${bot.label}'s voice, memory, approvals and the rest", onClick = onConfig)
+                            SettingRow(Lucide.SlidersHorizontal, Strings.t("Config"), Strings.t("{0}'s voice, memory, approvals and the rest", bot.label), onClick = onConfig)
                         }
                     }
                 }
                 busy?.let { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary]) }
                 if (bot == null) {
                     Button(
-                        "Make bot",
+                        Strings.t("Make bot"),
                         onClick = {
                             onCreate(
                                 BotDraft(
@@ -299,7 +300,7 @@ fun BotEditor(
                     )
                 } else {
                     Button(
-                        "Save",
+                        Strings.t("Save"),
                         onClick = {
                             val look = buildMap<String, JsonElement?> {
                                 val newTitle = title.text.toString().trim()
@@ -324,7 +325,7 @@ fun BotEditor(
                     )
                 }
                 if (bot != null && details == null) {
-                    Text("Reading ${bot.label}'s description and persona…", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                    Text(Strings.t("Reading {0}'s description and persona…", bot.label), style = Theme[typography][caption], color = Theme[colors][textTertiary])
                 }
             }
         }

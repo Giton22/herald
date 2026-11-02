@@ -37,6 +37,7 @@ import dev.hermeskotlin.core.threads.movedPast
 import dev.hermeskotlin.core.threads.ordered
 import dev.hermeskotlin.core.threads.renamed
 import dev.hermeskotlin.core.threads.withoutThread
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -115,10 +116,10 @@ data class ArchiveUndo(
     val query: String = "",
     val atMillis: Long = 0,
 ) {
-    val message: String get() = if (session.archived) "Unarchived" else "Archived"
+    val message: String get() = if (session.archived) Strings.t("Unarchived") else Strings.t("Archived")
 
     /** What a screen reader says: which chat, too. */
-    val spoken: String get() = "$message: ${session.displayTitle}"
+    val spoken: String get() = Strings.t("{0}: {1}", message, session.displayTitle)
 }
 
 /** The recent list narrowed to what's running, or to chats waiting on the user or with a reply not yet read. */
@@ -416,8 +417,8 @@ class SessionsViewModel(
 
     /** Makes the folder [name] in [dir] on the gateway's machine; answers why not, or null once it's there. */
     suspend fun makeProjectFolder(dir: String, name: String): String? {
-        val url = bound.value?.first ?: return "Not connected."
-        val api = files ?: return "This build can't make folders."
+        val url = bound.value?.first ?: return Strings.t("Not connected.")
+        val api = files ?: return Strings.t("This build can't make folders.")
         return api.makeFolder(url, FolderPath.picked(FolderPath.child(dir, name))).errorMessage
     }
 
@@ -438,12 +439,12 @@ class SessionsViewModel(
             // The tree answers but changes don't: stop offering them.
             projectChangesMissing = true
             _state.update { it.copy(canMakeProjects = false) }
-            "This gateway can't change projects."
+            Strings.t("This gateway can't change projects.")
         } else {
-            e.message?.takeIf { it.isNotBlank() } ?: "Couldn't change the project."
+            e.message?.takeIf { it.isNotBlank() } ?: Strings.t("Couldn't change the project.")
         }
     } catch (e: Exception) {
-        e.message?.takeIf { it.isNotBlank() } ?: "Couldn't change the project."
+        e.message?.takeIf { it.isNotBlank() } ?: Strings.t("Couldn't change the project.")
     }
 
     /** A project just made, to pick once the tree shows it. */
@@ -679,7 +680,7 @@ class SessionsViewModel(
     )
 
     /** Makes [session] a thread at the end of the Threads section; its chat is pinned so the gateway keeps it. */
-    fun makeThread(session: SessionSummary) = threadAction("Couldn't make a thread.") {
+    fun makeThread(session: SessionSummary) = threadAction(Strings.t("Couldn't make a thread.")) {
         threadsRepo.makeThread(session)
         _state.update { state ->
             fun List<SessionSummary>.pinnedRow() = map { if (it.id == session.id) it.copy(pinned = true) else it }
@@ -688,23 +689,23 @@ class SessionsViewModel(
     }
 
     /** Takes [thread] out of the Threads section; its chat stays, as a pinned chat. */
-    fun removeThread(thread: ChatThread) = threadAction("Couldn't remove the thread.") {
+    fun removeThread(thread: ChatThread) = threadAction(Strings.t("Couldn't remove the thread.")) {
         threadsRepo.change { it.withoutThread(thread.id) }
     }
 
     /** Names [thread] [name]; its chat is retitled to match. */
-    fun renameThread(thread: ChatThread, name: String) = threadAction("Couldn't rename the thread.") {
+    fun renameThread(thread: ChatThread, name: String) = threadAction(Strings.t("Couldn't rename the thread.")) {
         threadsRepo.rename(thread, name.trim())
         load(refresh = false)
     }
 
     /** Moves [thread] one place up or down, past [neighbour]: the thread next to it in the section as shown. */
-    fun moveThread(thread: ChatThread, neighbour: ChatThread) = threadAction("Couldn't move the thread.") {
+    fun moveThread(thread: ChatThread, neighbour: ChatThread) = threadAction(Strings.t("Couldn't move the thread.")) {
         threadsRepo.change { it.movedPast(thread.id, neighbour.id) }
     }
 
     /** Saves the threads in the order of [ids], as a drag left them. */
-    fun reorderThreads(ids: List<String>) = threadAction("Couldn't save the order.") {
+    fun reorderThreads(ids: List<String>) = threadAction(Strings.t("Couldn't save the order.")) {
         threadsRepo.change { it.ordered(ids) }
     }
 
@@ -712,7 +713,7 @@ class SessionsViewModel(
      * Starts [thread] fresh: its chat is filed away in the archive under the thread's name and the time, and a new
      * one takes its place, which [onOpened] opens.
      */
-    fun startFresh(thread: ChatThread, onOpened: (FreshChat) -> Unit) = threadAction("Couldn't start the thread fresh.") {
+    fun startFresh(thread: ChatThread, onOpened: (FreshChat) -> Unit) = threadAction(Strings.t("Couldn't start the thread fresh.")) {
         val fresh = threadsRepo.startFresh(thread)
         onOpened(fresh)
         load(refresh = false)

@@ -12,6 +12,7 @@ import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -156,7 +157,10 @@ class CapabilitiesViewModel(private val api: CapabilitiesApi) : ViewModel(), Cap
             if (result !is ApiResult.Success) {
                 _state.update {
                     apply(it, !enabled).copy(
-                        message = listOfNotNull("Couldn't ${if (enabled) "turn on" else "turn off"} $label", result.errorMessage).joinToString(": "),
+                        message = listOfNotNull(
+                            Strings.t(if (enabled) "Couldn't turn on {0}" else "Couldn't turn off {0}", label),
+                            result.errorMessage,
+                        ).joinToString(": "),
                         sessionExpired = result == ApiResult.SessionExpired,
                     )
                 }

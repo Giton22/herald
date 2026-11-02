@@ -1,5 +1,6 @@
 package dev.hermeskotlin.wear
 
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.wearlink.ChatListRequest
 import dev.hermeskotlin.wearlink.WatchScope
 import dev.hermeskotlin.wearlink.ChatList
@@ -49,14 +50,14 @@ class FakePhone(private val scope: CoroutineScope, private val deliver: (String,
             var seq = 0
             val chatId = ask.chatId ?: "sample-chat"
             fun tell(update: ReplyUpdate) = deliver(WearPaths.REPLY, WearJson.encode(update.copy(seq = ++seq)))
-            val base = ReplyUpdate(ask.id, ReplyPhase.Sending, chatId = chatId, title = "Weekend plans", heard = heard, model = "Sample model", contextPercent = 34, scope = ask.scope ?: SAMPLE_SCOPE)
+            val base = ReplyUpdate(ask.id, ReplyPhase.Sending, chatId = chatId, title = Strings.t("Weekend plans"), heard = heard, model = Strings.t("Sample model"), contextPercent = 34, scope = ask.scope ?: SAMPLE_SCOPE)
             if (heard != null) {
                 tell(base.copy(phase = ReplyPhase.Transcribing))
                 delay(700)
             }
             tell(base)
             delay(500)
-            tell(base.copy(phase = ReplyPhase.Working, activity = "Searching the web"))
+            tell(base.copy(phase = ReplyPhase.Working, activity = Strings.t("Searching the web")))
             delay(1_200)
             val words = SAMPLE_REPLY.split(' ')
             for (n in 4..words.size step 4) {
@@ -69,16 +70,16 @@ class FakePhone(private val scope: CoroutineScope, private val deliver: (String,
 
     private companion object {
         val SAMPLE_SCOPE = WatchScope("https://sample.example")
-        const val SAMPLE_HEARD = "What's the weather like this weekend?"
-        const val SAMPLE_REPLY = "Saturday looks sunny with a high of 22°C, so it's a good day to be outside. " +
+        val SAMPLE_HEARD: String get() = Strings.t("What's the weather like this weekend?")
+        val SAMPLE_REPLY: String get() = Strings.t("Saturday looks sunny with a high of 22°C, so it's a good day to be outside. " +
             "Sunday turns cloudy in the afternoon, with a chance of light rain after 4 pm. " +
-            "If you're planning the hike, Saturday morning is the best window."
-        val SAMPLE_CHATS = listOf(
-            WatchChat("sample-chat", "Weekend plans"),
-            WatchChat("sample-2", "Grocery list"),
-            WatchChat("sample-3", "Fix the build script"),
-            WatchChat("sample-4", "Book recommendations"),
+            "If you're planning the hike, Saturday morning is the best window.")
+        val SAMPLE_CHATS: List<WatchChat> get() = listOf(
+            WatchChat("sample-chat", Strings.t("Weekend plans")),
+            WatchChat("sample-2", Strings.t("Grocery list")),
+            WatchChat("sample-3", Strings.t("Fix the build script")),
+            WatchChat("sample-4", Strings.t("Book recommendations")),
         )
-        val SAMPLE_BOTS = listOf(WatchBot("assistant", "Assistant"), WatchBot("research", "Research"))
+        val SAMPLE_BOTS: List<WatchBot> get() = listOf(WatchBot("assistant", Strings.t("Assistant")), WatchBot("research", Strings.t("Research")))
     }
 }

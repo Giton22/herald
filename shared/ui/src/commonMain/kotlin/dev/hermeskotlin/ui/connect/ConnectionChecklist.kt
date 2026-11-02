@@ -60,6 +60,7 @@ import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.i18n.Strings
 
 /**
  * The connection stages in order, each with its outcome: passed, failed with what to do, skipped, or
@@ -70,7 +71,7 @@ internal fun ConnectionChecklist(
     results: Map<CheckStage, StageResult>,
     running: Boolean,
     modifier: Modifier = Modifier,
-    pendingNote: (CheckStage) -> String = { "Not checked yet." },
+    pendingNote: (CheckStage) -> String = { Strings.t("Not checked yet.") },
 ) {
     val current = if (running) CheckStage.entries.firstOrNull { it !in results } else null
     val stages = CheckStage.entries
@@ -81,7 +82,7 @@ internal fun ConnectionChecklist(
                 results[stage],
                 checking = stage == current,
                 pendingNote(stage),
-                step = "Step ${index + 1} of ${stages.size}",
+                step = Strings.t("Step {0} of {1}", index + 1, stages.size),
                 first = index == 0,
                 last = index == stages.lastIndex,
             )
@@ -115,7 +116,7 @@ private fun StageRow(title: String, result: StageResult?, checking: Boolean, pen
         Column(Modifier.weight(1f).padding(vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = Theme[typography][body].copy(fontWeight = FontWeight.Medium), color = Theme[colors][text])
             val detail = when {
-                checking -> "Checking…"
+                checking -> Strings.t("Checking…")
                 result is StageResult.Passed -> result.detail
                 result is StageResult.Failed -> result.problem
                 result is StageResult.Skipped -> result.reason
@@ -131,15 +132,15 @@ private fun StageRow(title: String, result: StageResult?, checking: Boolean, pen
 @Composable
 private fun StageDisc(result: StageResult?, checking: Boolean, step: String, modifier: Modifier) {
     val (fill, tint, icon, spoken) = when {
-        checking -> Quad(Theme[colors][surface2], Theme[colors][accentText], null, "Checking")
-        result is StageResult.Passed -> Quad(Theme[colors][successSoft], Theme[colors][success], Lucide.Check, "Passed")
-        result is StageResult.Failed -> Quad(Theme[colors][dangerSoft], Theme[colors][danger], Lucide.X, "Failed")
-        result is StageResult.Skipped -> Quad(Theme[colors][surface2], Theme[colors][textTertiary], Lucide.Minus, "Skipped")
-        else -> Quad(Theme[colors][surface2], Theme[colors][textTertiary], null, "Not checked")
+        checking -> Quad(Theme[colors][surface2], Theme[colors][accentText], null, Strings.t("Checking"))
+        result is StageResult.Passed -> Quad(Theme[colors][successSoft], Theme[colors][success], Lucide.Check, Strings.t("Passed"))
+        result is StageResult.Failed -> Quad(Theme[colors][dangerSoft], Theme[colors][danger], Lucide.X, Strings.t("Failed"))
+        result is StageResult.Skipped -> Quad(Theme[colors][surface2], Theme[colors][textTertiary], Lucide.Minus, Strings.t("Skipped"))
+        else -> Quad(Theme[colors][surface2], Theme[colors][textTertiary], null, Strings.t("Not checked"))
     }
     Box(
         // One description for the disc, the spinner's own "Loading" folded in.
-        modifier.size(28.dp).background(fill, CircleShape).clearAndSetSemantics { contentDescription = "$step, $spoken" },
+        modifier.size(28.dp).background(fill, CircleShape).clearAndSetSemantics { contentDescription = Strings.t("{0}, {1}", step, spoken) },
         contentAlignment = Alignment.Center,
     ) {
         when {
@@ -168,7 +169,7 @@ private fun FixHint(fix: String) {
             .semantics(mergeDescendants = true) { },
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        UnstyledIcon(Lucide.Lightbulb, contentDescription = "What to do", tint = Theme[colors][warning], modifier = Modifier.padding(top = 2.dp).size(14.dp))
+        UnstyledIcon(Lucide.Lightbulb, contentDescription = Strings.t("What to do"), tint = Theme[colors][warning], modifier = Modifier.padding(top = 2.dp).size(14.dp))
         CopyableOnDesktop { Text(fix, style = Theme[typography][bodySmall].copy(fontSize = 13.sp), color = Theme[colors][textSecondary]) }
     }
 }
@@ -180,16 +181,16 @@ private val DISC_TOP = 6.dp
 internal fun AddressGuide(modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         GuideItem(
-            "Same Wi-Fi or local network",
-            "Use the server's local address and port, like 192.168.1.20:9119. Start the dashboard with --host 0.0.0.0 so other devices can reach it.",
+            Strings.t("Same Wi-Fi or local network"),
+            Strings.t("Use the server's local address and port, like 192.168.1.20:9119. Start the dashboard with --host 0.0.0.0 so other devices can reach it."),
         )
         GuideItem(
-            "Tailscale",
-            "Turn on Tailscale on this ${if (isDesktop) "computer" else "phone"} and use the server's Tailscale address, like 100.64.0.1:9119 or its .ts.net name. Works away from home too.",
+            Strings.t("Tailscale"),
+            Strings.t("Turn on Tailscale on this {0} and use the server's Tailscale address, like 100.64.0.1:9119 or its .ts.net name. Works away from home too.", Strings.t(if (isDesktop) "computer" else "phone")),
         )
         GuideItem(
-            "HTTPS",
-            "Use your https:// address when the dashboard sits behind a proxy with a certificate. The proxy must also pass WebSocket upgrades on /api/ws.",
+            Strings.t("HTTPS"),
+            Strings.t("Use your https:// address when the dashboard sits behind a proxy with a certificate. The proxy must also pass WebSocket upgrades on /api/ws."),
         )
     }
 }

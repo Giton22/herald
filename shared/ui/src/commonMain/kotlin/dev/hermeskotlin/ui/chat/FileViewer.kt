@@ -131,6 +131,7 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
 import dev.hermeskotlin.designsystem.warningSoft
 import dev.hermeskotlin.designsystem.well
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -309,7 +310,7 @@ internal fun FileViewerPage(
         scope.launch {
             when (val result = download(file)) {
                 is FileDownload.Ready -> action(result.bytes)
-                is FileDownload.Failed -> notice = Notice("Couldn't get ${file.name}: ${result.message.replaceFirstChar { it.lowercase() }}", error = true)
+                is FileDownload.Failed -> notice = Notice(Strings.t("Couldn't get {0}: {1}", file.name, result.message.replaceFirstChar { it.lowercase() }), error = true)
             }
             busy = false
         }
@@ -323,7 +324,7 @@ internal fun FileViewerPage(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            IconButton(Lucide.ArrowLeft, contentDescription = if (canGoBack) "Back" else "Close", onClick = onDismiss, tint = Theme[colors][textColor])
+            IconButton(Lucide.ArrowLeft, contentDescription = if (canGoBack) Strings.t("Back") else Strings.t("Close"), onClick = onDismiss, tint = Theme[colors][textColor])
             KindTile(kind)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
@@ -338,8 +339,8 @@ internal fun FileViewerPage(
                     listOfNotNull(
                         file.folder.ifEmpty { "/" },
                         (ready?.byteSize ?: fetched?.size?.toLong())?.let(::formatBytes),
-                        pdf?.pages?.aspects?.size?.let { if (it == 1) "1 page" else "$it pages" },
-                        file.line?.let { "line $it" },
+                        pdf?.pages?.aspects?.size?.let { if (it == 1) Strings.t("1 page") else Strings.t("{0} pages", it) },
+                        file.line?.let { Strings.t("line {0}", it) },
                     ).joinToString(" · "),
                     style = Theme[typography][caption],
                     color = Theme[colors][textTertiary],
@@ -350,10 +351,10 @@ internal fun FileViewerPage(
             if (busy || fetching) {
                 Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
             } else {
-                IconButton(Lucide.Download, contentDescription = "Save ${file.name}", onClick = {
+                IconButton(Lucide.Download, contentDescription = Strings.t("Save {0}", file.name), onClick = {
                     withBytes { notice = Notice(actions.save(it, file.name)) }
                 })
-                IconButton(shareIcon, contentDescription = "$shareLabel: ${file.name}", onClick = { withBytes { actions.share(it, file.name) } })
+                IconButton(shareIcon, contentDescription = Strings.t("{0}: {1}", shareLabel, file.name), onClick = { withBytes { actions.share(it, file.name) } })
             }
         }
 
@@ -370,7 +371,7 @@ internal fun FileViewerPage(
                         options = listOf(false, true),
                         selected = raw,
                         onSelect = { raw = it },
-                        optionLabel = { if (it) "Source" else if (kind == GatewayFileKind.Json) "Formatted" else "Preview" },
+                        optionLabel = { if (it) Strings.t("Source") else if (kind == GatewayFileKind.Json) Strings.t("Formatted") else Strings.t("Preview") },
                         modifier = Modifier.weight(1f),
                         optionIcon = { if (it) Lucide.FileCode else kindIcon(kind) },
                     )
@@ -380,7 +381,7 @@ internal fun FileViewerPage(
                 if (textual) {
                     IconButton(
                         Lucide.WrapText,
-                        contentDescription = if (wrap) "Don't wrap lines" else "Wrap lines",
+                        contentDescription = if (wrap) Strings.t("Don't wrap lines") else Strings.t("Wrap lines"),
                         onClick = { wrap = !wrap },
                         tint = if (wrap) Theme[colors][accentText] else Theme[colors][textSecondary],
                         containerColor = if (wrap) Theme[colors][accentSoft] else Color.Transparent,
@@ -388,7 +389,7 @@ internal fun FileViewerPage(
                 }
                 IconButton(
                     if (copied) Lucide.Check else Lucide.Copy,
-                    contentDescription = "Copy the text",
+                    contentDescription = Strings.t("Copy the text"),
                     onClick = {
                         scope.launch {
                             val clip = clipFor(ready)
@@ -398,7 +399,7 @@ internal fun FileViewerPage(
                             } catch (e: CancellationException) {
                                 throw e
                             } catch (e: Exception) {
-                                notice = Notice("Couldn't copy it to the clipboard. Save gets the whole file.", error = true)
+                                notice = Notice(Strings.t("Couldn't copy it to the clipboard. Save gets the whole file."), error = true)
                                 return@launch
                             }
                             clip.note?.let { notice = Notice(it) }
@@ -416,7 +417,7 @@ internal fun FileViewerPage(
         if (ready?.truncated == true) {
             val shownBytes = remember(ready) { ready.text.encodeToByteArray().size.toLong() }
             Banner(
-                "Showing the first ${formatBytes(shownBytes)} of ${formatBytes(ready.byteSize)}. Save gets the whole file.",
+                Strings.t("Showing the first {0} of {1}. Save gets the whole file.", formatBytes(shownBytes), formatBytes(ready.byteSize)),
                 tint = Theme[colors][warning],
                 background = Theme[colors][warningSoft],
             )
@@ -566,7 +567,7 @@ private fun FileBody(file: GatewayFile, kind: GatewayFileKind, text: FileText, r
 private fun DataTable(table: DelimitedTable, modifier: Modifier) {
     if (table.rows.isEmpty()) {
         Box(modifier, contentAlignment = Alignment.Center) {
-            Text("The file is empty.", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+            Text(Strings.t("The file is empty."), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
         }
         return
     }
@@ -629,8 +630,8 @@ private fun DataTable(table: DelimitedTable, modifier: Modifier) {
         }
         Text(
             buildString {
-                append("${table.rows.size - 1} rows · ${table.columns} columns")
-                if (table.more) append(" · more in the full file")
+                append(Strings.t("{0} rows · {1} columns", table.rows.size - 1, table.columns))
+                if (table.more) append(Strings.t(" · more in the full file"))
             },
             style = Theme[typography][caption],
             color = Theme[colors][textTertiary],
@@ -656,13 +657,13 @@ private fun Unavailable(file: GatewayFile, kind: GatewayFileKind, error: String?
         }
         Spacer(Modifier.height(16.dp))
         Text(
-            if (error != null) "Couldn't open ${file.name}" else "No preview for ${file.extension.uppercase().ifEmpty { "this" }} files",
+            if (error != null) Strings.t("Couldn't open {0}", file.name) else Strings.t("No preview for {0} files", file.extension.uppercase().ifEmpty { Strings.t("this") }),
             style = Theme[typography][label],
             color = Theme[colors][textColor],
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            error ?: if (isDesktop) "Save it, then open it with an app that can." else "Save it to the phone, or share it to an app that opens it.",
+            error ?: if (isDesktop) Strings.t("Save it, then open it with an app that can.") else Strings.t("Save it to the phone, or share it to an app that opens it."),
             style = Theme[typography][bodySmall],
             color = Theme[colors][textTertiary],
             textAlign = TextAlign.Center,
@@ -670,7 +671,7 @@ private fun Unavailable(file: GatewayFile, kind: GatewayFileKind, error: String?
         if (onShare != null) {
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button("Save", onClick = onSave, leadingIcon = Lucide.Download, size = ButtonSize.Small)
+                Button(Strings.t("Save"), onClick = onSave, leadingIcon = Lucide.Download, size = ButtonSize.Small)
                 Button(shareLabel, onClick = onShare, leadingIcon = shareIcon, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
             }
         }
@@ -738,10 +739,10 @@ internal class Clip(val text: String, val note: String?)
  */
 internal fun clipFor(file: FileText, max: Int = MAX_CLIP_CHARS): Clip {
     if (file.text.length <= max) {
-        return Clip(file.text, if (file.truncated) "Copied the part shown. Save gets the whole file." else null)
+        return Clip(file.text, if (file.truncated) Strings.t("Copied the part shown. Save gets the whole file.") else null)
     }
     val end = if (file.text[max - 1].isHighSurrogate()) max - 1 else max
-    return Clip(file.text.substring(0, end), "Copied the first ${groupThousands(end)} characters. Save gets the whole file.")
+    return Clip(file.text.substring(0, end), Strings.t("Copied the first {0} characters. Save gets the whole file.", groupThousands(end)))
 }
 
 /** 100000 as 100,000. */

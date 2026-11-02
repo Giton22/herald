@@ -93,6 +93,7 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.title
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.well
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -191,18 +192,18 @@ internal fun ProcessesSheetView(
         val finished = processes?.filterNot { it.running }.orEmpty()
         Header(
             when {
-                processes == null -> "Started by the agent in this chat"
-                running.isEmpty() -> "None running"
-                else -> "${running.size} running"
+                processes == null -> Strings.t("Started by the agent in this chat")
+                running.isEmpty() -> Strings.t("None running")
+                else -> Strings.t("{0} running", running.size)
             },
             live = running.isNotEmpty(),
         )
         when {
             processes == null && state.unavailable ->
-                Note("Available once this chat is connected and has had its first reply.")
+                Note(Strings.t("Available once this chat is connected and has had its first reply."))
             processes == null -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Spinner() }
             processes.isEmpty() ->
-                Note("Nothing running. Dev servers, builds and watchers the agent starts in the background show up here.")
+                Note(Strings.t("Nothing running. Dev servers, builds and watchers the agent starts in the background show up here."))
             else -> ScrollbarBox { listState -> LazyColumn(
                 Modifier.fillMaxWidth().heightIn(max = 560.dp),
                 state = listState,
@@ -221,14 +222,14 @@ internal fun ProcessesSheetView(
                 if (finished.isNotEmpty()) {
                     item(key = "finished") {
                         Text(
-                            "FINISHED",
+                            Strings.t("FINISHED"),
                             style = Theme[typography][eyebrow],
                             color = Theme[colors][textTertiary],
                             modifier = Modifier
                                 .padding(start = 4.dp, top = 4.dp)
                                 .semantics {
                                     heading()
-                                    contentDescription = "Finished"
+                                    contentDescription = Strings.t("Finished")
                                 },
                         )
                     }
@@ -250,7 +251,7 @@ internal fun ProcessesSheetView(
 @Composable
 private fun Header(status: String, live: Boolean) {
     Column(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text("Background processes", style = Theme[typography][title], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
+        Text(Strings.t("Background processes"), style = Theme[typography][title], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             if (live) {
                 Box(
@@ -284,7 +285,7 @@ private fun RunningCard(process: BackgroundProcess, expanded: Boolean, stopping:
             Modifier
                 .fillMaxWidth()
                 .handCursor()
-                .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide output" else "Show output", onClick = onToggle)
+                .clickable(role = Role.Button, onClickLabel = if (expanded) Strings.t("Hide output") else Strings.t("Show output"), onClick = onToggle)
                 .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -327,7 +328,7 @@ private fun StopButton(stopping: Boolean, onClick: () -> Unit) {
             if (stopping) Spinner(Modifier.size(10.dp), color = tint)
             else UnstyledIcon(Lucide.Square, contentDescription = null, tint = tint, modifier = Modifier.size(10.dp))
             Text(
-                if (stopping) "Stopping" else "Stop",
+                if (stopping) Strings.t("Stopping") else Strings.t("Stop"),
                 style = Theme[typography][label].copy(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold),
                 color = tint,
                 maxLines = 1,
@@ -354,7 +355,7 @@ private fun FinishedRow(process: BackgroundProcess, expanded: Boolean, onToggle:
                 .heightIn(min = 48.dp)
                 .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
                 .handCursor()
-                .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide output" else "Show output", onClick = onToggle)
+                .clickable(role = Role.Button, onClickLabel = if (expanded) Strings.t("Hide output") else Strings.t("Show output"), onClick = onToggle)
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -450,7 +451,7 @@ private fun Output(process: BackgroundProcess) {
     val log = @Composable {
     Text(
         if (lines == null) {
-            AnnotatedString("No output yet.")
+            AnnotatedString(Strings.t("No output yet."))
         } else {
             buildAnnotatedString {
                 lines.forEachIndexed { index, text ->
@@ -490,20 +491,20 @@ internal fun Note(text: String, error: Boolean = false) {
 /** "12m · pid 48211 · /opt/backup" while it runs; "Exited with code 0 · pid 47990" once it ends. */
 private fun BackgroundProcess.statusLine(): String = listOfNotNull(
     when {
-        running -> uptimeSeconds?.let { duration(it) } ?: "Running"
-        stopped -> "Stopped"
-        exitCode != null -> "Exited with code $exitCode"
-        else -> "Ended"
+        running -> uptimeSeconds?.let { duration(it) } ?: Strings.t("Running")
+        stopped -> Strings.t("Stopped")
+        exitCode != null -> Strings.t("Exited with code {0}", exitCode)
+        else -> Strings.t("Ended")
     },
-    pid?.let { "pid $it" },
+    pid?.let { Strings.t("pid {0}", it) },
     cwd?.takeIf { it.isNotBlank() },
 ).joinToString(" · ")
 
 /** "45s", "12m", "3h 5m". */
 internal fun duration(seconds: Long): String = when {
-    seconds < 60 -> "${seconds}s"
-    seconds < 3600 -> "${seconds / 60}m"
-    else -> "${seconds / 3600}h ${(seconds % 3600) / 60}m"
+    seconds < 60 -> Strings.t("{0}s", seconds)
+    seconds < 3600 -> Strings.t("{0}m", seconds / 60)
+    else -> Strings.t("{0}h {1}m", seconds / 3600, (seconds % 3600) / 60)
 }
 
 private const val OUTPUT_LINES = 40

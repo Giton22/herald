@@ -1,6 +1,7 @@
 package dev.hermeskotlin.android.phone
 
 import dev.hermeskotlin.core.phone.PhoneToolException
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -9,7 +10,7 @@ import kotlinx.serialization.json.JsonPrimitive
 internal fun JsonObject.string(name: String): String? {
     val value = get(name)
     if (value == null || value == JsonNull) return null
-    if (value !is JsonPrimitive || !value.isString) throw PhoneToolException("$name must be a string.")
+    if (value !is JsonPrimitive || !value.isString) throw PhoneToolException(Strings.t("{0} must be a string.", name))
     return value.content
 }
 
@@ -17,22 +18,22 @@ internal fun JsonObject.string(name: String): String? {
 internal fun JsonObject.int(name: String): Int? {
     val value = get(name)
     if (value == null || value == JsonNull) return null
-    if (value !is JsonPrimitive || value.isString) throw PhoneToolException("$name must be a whole number.")
-    return value.content.toIntOrNull() ?: throw PhoneToolException("$name must be a whole number.")
+    if (value !is JsonPrimitive || value.isString) throw PhoneToolException(Strings.t("{0} must be a whole number.", name))
+    return value.content.toIntOrNull() ?: throw PhoneToolException(Strings.t("{0} must be a whole number.", name))
 }
 
 /** The agent's [name] argument as a number; null when left out. */
 internal fun JsonObject.double(name: String): Double? {
     val value = get(name)
     if (value == null || value == JsonNull) return null
-    if (value !is JsonPrimitive || value.isString) throw PhoneToolException("$name must be a number.")
-    return value.content.toDoubleOrNull()?.takeIf { it.isFinite() } ?: throw PhoneToolException("$name must be a number.")
+    if (value !is JsonPrimitive || value.isString) throw PhoneToolException(Strings.t("{0} must be a number.", name))
+    return value.content.toDoubleOrNull()?.takeIf { it.isFinite() } ?: throw PhoneToolException(Strings.t("{0} must be a number.", name))
 }
 
 /** The agent's [name] argument as true or false; null when left out. */
 internal fun JsonObject.boolean(name: String): Boolean? {
     val value = get(name)
     if (value == null || value == JsonNull) return null
-    if (value !is JsonPrimitive || value.isString) throw PhoneToolException("$name must be true or false.")
-    return value.content.toBooleanStrictOrNull() ?: throw PhoneToolException("$name must be true or false.")
+    if (value !is JsonPrimitive || value.isString) throw PhoneToolException(Strings.t("{0} must be true or false.", name))
+    return value.content.toBooleanStrictOrNull() ?: throw PhoneToolException(Strings.t("{0} must be true or false.", name))
 }

@@ -2,6 +2,8 @@ package dev.hermeskotlin.wear
 
 import android.app.Application
 import android.content.Context
+import dev.hermeskotlin.core.settings.AppLanguage
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -16,6 +18,7 @@ class HeraldWatch : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        Strings.setLanguage(AppLanguage.System)
         callDisplay.refresh()
     }
 

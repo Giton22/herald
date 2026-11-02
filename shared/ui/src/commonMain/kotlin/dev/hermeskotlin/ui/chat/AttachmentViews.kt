@@ -60,6 +60,7 @@ import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.i18n.Strings
 
 /** The files waiting in the composer, each with a remove button. */
 @Composable
@@ -72,7 +73,7 @@ internal fun ComposerTray(attachments: List<OutgoingAttachment>, onRemove: (Stri
             Box {
                 AttachmentTile(attachment.name, attachment.kind, attachment.thumbnail, size = 64.dp)
                 // Named on hover on the desktop, as an icon button is.
-                Tooltip("Remove", Modifier.align(Alignment.TopEnd)) { UnstyledButton(
+                Tooltip(Strings.t("Remove"), Modifier.align(Alignment.TopEnd)) { UnstyledButton(
                     onClick = { onRemove(attachment.id) },
                     modifier = Modifier
                         .padding(4.dp)
@@ -81,7 +82,7 @@ internal fun ComposerTray(attachments: List<OutgoingAttachment>, onRemove: (Stri
                         .background(Color.Black.copy(alpha = 0.6f)),
                     indication = rememberHoverIndication(Color.White),
                 ) {
-                    UnstyledIcon(Lucide.X, contentDescription = "Remove ${attachment.name}", tint = Color.White, modifier = Modifier.size(14.dp))
+                    UnstyledIcon(Lucide.X, contentDescription = Strings.t("Remove {0}", attachment.name), tint = Color.White, modifier = Modifier.size(14.dp))
                 } }
             }
         }
@@ -163,22 +164,22 @@ private val AttachmentKind.icon: ImageVector
 
 private val AttachmentKind.label: String
     get() = when (this) {
-        AttachmentKind.Image -> "Image"
-        AttachmentKind.Pdf -> "PDF"
-        AttachmentKind.File -> "File"
+        AttachmentKind.Image -> Strings.t("Image")
+        AttachmentKind.Pdf -> Strings.t("PDF")
+        AttachmentKind.File -> Strings.t("File")
     }
 
 /** The + button's choices. */
 @Composable
-internal fun AttachSheet(visible: Boolean, onDismiss: () -> Unit, picker: AttachmentPicker, subtitle: String = "Up to ${OutgoingAttachment.MAX_COUNT} photos or files, ${OutgoingAttachment.MAX_BYTES / (1024 * 1024)} MB each") {
+internal fun AttachSheet(visible: Boolean, onDismiss: () -> Unit, picker: AttachmentPicker, subtitle: String = Strings.t("Up to {0} photos or files, {1} MB each", OutgoingAttachment.MAX_COUNT, OutgoingAttachment.MAX_BYTES / (1024 * 1024))) {
     fun pick(action: () -> Unit) {
         onDismiss()
         action()
     }
     BottomSheet(visible = visible, onDismiss = onDismiss) {
-        SheetHeader("Add to message", subtitle)
-        SheetAction("Photos", Lucide.ImageIcon, onClick = { pick(picker::pickPhotos) })
-        SheetAction("Camera", Lucide.Camera, onClick = { pick(picker::takePhoto) })
-        SheetAction("Files", Lucide.Paperclip, onClick = { pick(picker::pickFiles) })
+        SheetHeader(Strings.t("Add to message"), subtitle)
+        SheetAction(Strings.t("Photos"), Lucide.ImageIcon, onClick = { pick(picker::pickPhotos) })
+        SheetAction(Strings.t("Camera"), Lucide.Camera, onClick = { pick(picker::takePhoto) })
+        SheetAction(Strings.t("Files"), Lucide.Paperclip, onClick = { pick(picker::pickFiles) })
     }
 }

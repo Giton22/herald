@@ -16,6 +16,7 @@ import dev.hermeskotlin.designsystem.components.StatusDot
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.CopyableOnDesktop
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlin.time.Clock
 import kotlinx.coroutines.delay
 
@@ -29,9 +30,9 @@ fun ConnectionLine(state: ConnectionState, detailed: Boolean = false) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         when (state) {
-            ConnectionState.Idle -> StatusDot(Status.Neutral, "Not connected")
-            is ConnectionState.Connecting -> StatusDot(Status.Warning, if (state.attempt > 1) "Reconnecting…" else "Connecting…")
-            is ConnectionState.Connected -> StatusDot(Status.Ok, "Connected")
+            ConnectionState.Idle -> StatusDot(Status.Neutral, Strings.t("Not connected"))
+            is ConnectionState.Connecting -> StatusDot(Status.Warning, if (state.attempt > 1) Strings.t("Reconnecting…") else Strings.t("Connecting…"))
+            is ConnectionState.Connected -> StatusDot(Status.Ok, Strings.t("Connected"))
             is ConnectionState.Reconnecting -> {
                 val seconds by produceState(secondsUntil(state.retryAtMillis), state.retryAtMillis) {
                     while (true) {
@@ -39,10 +40,10 @@ fun ConnectionLine(state: ConnectionState, detailed: Boolean = false) {
                         delay(500)
                     }
                 }
-                StatusDot(Status.Warning, "Offline · retrying in ${seconds}s")
+                StatusDot(Status.Warning, Strings.t("Offline · retrying in {0}s", seconds))
             }
-            ConnectionState.SessionExpired -> StatusDot(Status.Error, "Session expired")
-            is ConnectionState.Failed -> StatusDot(Status.Error, "Connection refused")
+            ConnectionState.SessionExpired -> StatusDot(Status.Error, Strings.t("Session expired"))
+            is ConnectionState.Failed -> StatusDot(Status.Error, Strings.t("Connection refused"))
         }
         if (detailed && reason != null) {
             CopyableOnDesktop { Text(reason, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary]) }

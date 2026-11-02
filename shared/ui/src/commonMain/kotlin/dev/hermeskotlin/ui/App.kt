@@ -91,6 +91,7 @@ import dev.hermeskotlin.ui.settings.PhoneQuestionDialog
 import dev.hermeskotlin.ui.settings.SettingsScreen
 import dev.hermeskotlin.ui.plugins.PluginWebView
 import dev.hermeskotlin.ui.signin.SignInScreen
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.ui.update.LocalRenameOffer
 import dev.hermeskotlin.ui.update.LocalUpdateOffer
 import dev.hermeskotlin.ui.update.rememberRenameOffer
@@ -148,6 +149,7 @@ fun App(
     // Nothing is drawn until the stored settings are read, so the first frame has the right theme.
     val settingsStore = koinInject<SettingsStore>()
     val settings = settingsStore.settings.collectAsStateWithLifecycle().value ?: return
+    LaunchedEffect(settings.language) { Strings.setLanguage(settings.language) }
     val dark = isDark(settings)
     LaunchedEffect(dark) { onDarkTheme(dark) }
     val density = LocalDensity.current
@@ -339,9 +341,9 @@ private fun Routes() {
     val dismissCall = if (openingCall) app::cancelPendingCall else app::dismissCallError
     Dialog(
         visible = openingCall || callError != null, onDismissRequest = dismissCall,
-        title = if (openingCall) "Opening call…" else "Couldn't start call",
+        title = Strings.t(if (openingCall) "Opening call…" else "Couldn't start call"),
         message = if (openingCall) null else callError,
-        actions = { Button(if (openingCall) "Cancel" else "OK", onClick = dismissCall) },
+        actions = { Button(Strings.t(if (openingCall) "Cancel" else "OK"), onClick = dismissCall) },
         content = {
             PlatformBackHandler(enabled = openingCall) { app.cancelPendingCall() }
             if (openingCall) Spinner()
@@ -723,7 +725,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                                 menuOpen = true
                             }
                         },
-                        onOpenChat = { id, title -> app.openSession(id, title ?: "Untitled session") },
+                        onOpenChat = { id, title -> app.openSession(id, title ?: Strings.t("Untitled session")) },
                         onSwitchProfile = app::switchProfile,
                         viewModel = chat,
                         // Not while a page or the chat's menu covers it: typing there mustn't land in the composer.
@@ -814,7 +816,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
         visible = menuOpen && openSessionId != null,
         anchor = menuAnchor.takeIf { isDesktop },
         sessionId = openSessionId,
-        title = route.target.bot?.label ?: chatState.title?.takeIf { it.isNotBlank() } ?: route.target.title ?: "Untitled session",
+        title = route.target.bot?.label ?: chatState.title?.takeIf { it.isNotBlank() } ?: route.target.title ?: Strings.t("Untitled session"),
         messages = chatState.messages,
         onDismiss = { menuOpen = false },
         onRenamed = chat::showTitle,
@@ -870,7 +872,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                 onSelectEffort = {},
                 onFast = {},
                 modelOnly = true,
-                note = "${bot.label} runs this in all its chats, its Bot Chat and routines included.",
+                note = Strings.t("{0} runs this in all its chats, its Bot Chat and routines included.", bot.label),
             )
             ModelConfirmDialog(
                 modelPicker.confirm,
@@ -889,9 +891,9 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                             profileLabel = bot.label,
                             onBack = { capabilitiesOpen = false },
                             onSessionExpired = app::onSessionExpired,
-                            title = "${bot.label}'s capabilities",
+                            title = Strings.t("{0}'s capabilities", bot.label),
                             // Hermes fixes a chat's tools when it starts (#124211).
-                            note = "Changes apply to ${bot.label}'s new chats. If its Bot Chat doesn't pick one up, Start fresh gives it a new chat with everything set here.",
+                            note = Strings.t("Changes apply to {0}'s new chats. If its Bot Chat doesn't pick one up, Start fresh gives it a new chat with everything set here.", bot.label),
                             viewModel = koinViewModel(key = "capabilities-${bot.name}"),
                         )
                     }
@@ -906,8 +908,8 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                             profile = bot.name,
                             onBack = { configOpen = false },
                             onSessionExpired = app::onSessionExpired,
-                            title = "${bot.label}'s config",
-                            note = "${bot.label}'s own settings, saved to its profile's config.yaml. Most apply from its next chat.",
+                            title = Strings.t("{0}'s config", bot.label),
+                            note = Strings.t("{0}'s own settings, saved to its profile's config.yaml. Most apply from its next chat.", bot.label),
                             viewModel = koinViewModel(key = "config-${bot.name}"),
                         )
                     }

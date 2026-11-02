@@ -96,6 +96,7 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.chat.usd
 import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.ReportSkeleton
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.ui.tapVerb
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.time.Clock
@@ -146,26 +147,26 @@ internal fun InsightsView(
     Column(Modifier.fillMaxSize()) {
         // The period sits in the back row, as in the design; the title says which days it covers and where.
         SubpageHeader(
-            "Insights",
+            Strings.t("Insights"),
             onBack = onBack,
-            subtitle = listOfNotNull("${shortDate(range.first)} – ${shortDate(range.second)}", place).joinToString(" · "),
+            subtitle = listOfNotNull(Strings.t("{0} – {1}", shortDate(range.first), shortDate(range.second)), place).joinToString(" · "),
         ) {
             SegmentedControl(
                 options = InsightsPeriod.entries,
                 selected = state.period,
                 onSelect = onSelectPeriod,
-                optionLabel = { it.label },
+                optionLabel = { Strings.t(it.label) },
                 modifier = Modifier.widthIn(max = 228.dp).weight(1f, fill = false),
             )
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
-                report == null && state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load insights", state.error, error = true) {
-                    Button("Try again", onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+                report == null && state.error != null -> EmptyState(Lucide.CloudOff, Strings.t("Couldn't load insights"), state.error, error = true) {
+                    Button(Strings.t("Try again"), onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                 }
                 report == null -> ReportSkeleton()
                 report.totals.sessions == 0 && report.totals.apiCalls == 0 ->
-                    EmptyState(Lucide.ChartColumn, "Nothing used yet", "Chats from this period, and what they cost, show up here.")
+                    EmptyState(Lucide.ChartColumn, Strings.t("Nothing used yet"), Strings.t("Chats from this period, and what they cost, show up here."))
                 else -> Report(report, days.orEmpty())
             }
         }
@@ -205,7 +206,7 @@ private val TWO_COLUMNS_FROM = 720.dp
 private fun Summary(report: UsageReport, days: List<UsageDay>) {
     val totals = report.totals
     val cost = usd(totals.cost)
-    val costCaption = if (totals.actualCost > 0) "billed" else "estimated cost"
+    val costCaption = if (totals.actualCost > 0) Strings.t("billed") else Strings.t("estimated cost")
     Column(Modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         // Shrinks to fit rather than wrapping mid-number.
         BasicText(
@@ -217,9 +218,9 @@ private fun Summary(report: UsageReport, days: List<UsageDay>) {
         Text(costCaption, style = Theme[typography][bodySmall].copy(fontSize = 13.sp), color = Theme[colors][textTertiary])
     }
     val tiles = listOf(
-        compactCount(totals.sessions.toLong()) to if (totals.sessions == 1) "chat" else "chats",
-        compactCount(totals.input + totals.output) to "tokens in and out",
-        (totals.cachePercent?.let { "$it%" } ?: "—") to "prompt from cache",
+        compactCount(totals.sessions.toLong()) to if (totals.sessions == 1) Strings.t("chat") else Strings.t("chats"),
+        compactCount(totals.input + totals.output) to Strings.t("tokens in and out"),
+        (totals.cachePercent?.let { "$it%" } ?: "—") to Strings.t("prompt from cache"),
     )
     // Three across, or one a row once a large font or a narrow page would crush them.
     BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -241,13 +242,13 @@ private fun Summary(report: UsageReport, days: List<UsageDay>) {
 @Composable
 private fun Breakdown(report: UsageReport) {
     Ranked(
-        "Models",
+        Strings.t("Models"),
         report.byModel.sortedByDescending { it.tokens }.map { displayModelName(it.model) to it.tokens },
-        format = { "${compactCount(it)} tokens" },
+        format = { Strings.t("{0} tokens", compactCount(it)) },
     )
     // The title says what the chips count.
-    Chips("Tool calls", report.tools.sortedByDescending { it.count }.map { it.tool to it.count.toLong() }, unit = "calls")
-    Chips("Skill uses", report.topSkills.sortedByDescending { it.count }.map { it.skill to it.count.toLong() }, unit = "uses")
+    Chips(Strings.t("Tool calls"), report.tools.sortedByDescending { it.count }.map { it.tool to it.count.toLong() }, unit = Strings.t("calls"))
+    Chips(Strings.t("Skill uses"), report.topSkills.sortedByDescending { it.count }.map { it.skill to it.count.toLong() }, unit = Strings.t("uses"))
 }
 
 /** A headline number with its caption, on a ringed surface. */
@@ -295,9 +296,9 @@ private fun DailyChart(report: UsageReport, days: List<UsageDay>) {
             horizontalArrangement = Arrangement.SpaceBetween,
             itemVerticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Tokens by day", style = Theme[typography][headingStyle], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
+            Text(Strings.t("Tokens by day"), style = Theme[typography][headingStyle], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
             Text(
-                "Peak ${compactCount(peakDay.tokens)} · ${shortDate(peakDay.day)}",
+                Strings.t("Peak {0} · {1}", compactCount(peakDay.tokens), shortDate(peakDay.day)),
                 style = Theme[typography][caption].copy(fontSize = 12.sp),
                 color = Theme[colors][textTertiary],
             )
@@ -307,11 +308,11 @@ private fun DailyChart(report: UsageReport, days: List<UsageDay>) {
             shown?.let { day ->
                 listOf(
                     shortDate(day.day),
-                    "${compactCount(day.tokens)} tokens",
+                    Strings.t("{0} tokens", compactCount(day.tokens)),
                     usd(day.cost),
-                    "${day.sessions} ${if (day.sessions == 1) "chat" else "chats"}",
+                    Strings.t(if (day.sessions == 1) "{0} chat" else "{0} chats", day.sessions),
                 ).joinToString(" · ")
-            } ?: if (isDesktop) "Point at a day for its numbers." else "$tapVerb a day for its numbers.",
+            } ?: if (isDesktop) Strings.t("Point at a day for its numbers.") else Strings.t("{0} a day for its numbers.", tapVerb),
             style = Theme[typography][bodySmall],
             color = Theme[colors][if (shown != null) text else textTertiary],
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
@@ -344,12 +345,12 @@ private fun DailyChart(report: UsageReport, days: List<UsageDay>) {
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            onClickLabel = "Show its numbers",
+                            onClickLabel = Strings.t("Show its numbers"),
                         ) {
                             picked = if (picked == day) null else day
                         }
                         .semantics {
-                            contentDescription = "${shortDate(day.day)}: ${compactCount(day.tokens)} tokens"
+                            contentDescription = Strings.t("{0}: {1} tokens", shortDate(day.day), compactCount(day.tokens))
                             selected = picked == day
                         },
                     contentAlignment = Alignment.BottomCenter,
@@ -413,7 +414,7 @@ private fun Chips(title: String, rows: List<Pair<String, Long>>, unit: String) {
                         .background(Theme[colors][surface2], CircleShape)
                         .border(1.dp, Theme[colors][stroke], CircleShape)
                         .padding(horizontal = 12.dp, vertical = 4.dp)
-                        .clearAndSetSemantics { contentDescription = "$name, ${compactCount(value)} $unit" },
+                        .clearAndSetSemantics { contentDescription = Strings.t("{0}, {1} {2}", name, compactCount(value), unit) },
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -442,9 +443,9 @@ private fun SectionTitle(text: String) {
 /** "2026-10-03" → "Oct 3". */
 internal fun shortDate(iso: String): String {
     val parts = iso.split('-')
-    val month = parts.getOrNull(1)?.toIntOrNull()?.let { MONTHS.getOrNull(it - 1) } ?: return iso
+    val month = parts.getOrNull(1)?.toIntOrNull()?.let { MONTHS.getOrNull(it - 1) }?.let { Strings.t(it) } ?: return iso
     val day = parts.getOrNull(2)?.toIntOrNull() ?: return iso
-    return "$month $day"
+    return Strings.t("{0} {1}", month, day)
 }
 
 private val MONTHS = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")

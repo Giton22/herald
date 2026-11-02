@@ -11,6 +11,7 @@ import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.phone.WatchedPlace
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
@@ -52,34 +53,34 @@ class GeofenceReceiver : BroadcastReceiver(), KoinComponent {
     }
 
     private suspend fun fire(place: WatchedPlace) {
-        val event = if (place.arriving) "Arrived at ${place.name}" else "Left ${place.name}"
+        val event = if (place.arriving) Strings.t("Arrived at {0}", place.name) else Strings.t("Left {0}", place.name)
         val text = place.sent
-        val chat = place.chatTitle?.takeIf { it.isNotBlank() } ?: "the chat"
-        val sent = withTimeoutOrNull(BUDGET_MS) { send(place, text) } ?: "the gateway didn't answer in time"
+        val chat = place.chatTitle?.takeIf { it.isNotBlank() } ?: Strings.t("the chat")
+        val sent = withTimeoutOrNull(BUDGET_MS) { send(place, text) } ?: Strings.t("the gateway didn't answer in time")
         if (sent == SENT) {
-            confirmations.tell(place.id, event, "Sent to $chat: ${place.message}")
+            confirmations.tell(place.id, event, Strings.t("Sent to {0}: {1}", chat, place.message))
         } else {
-            confirmations.tell(place.id, event, "Couldn't send it to $chat: $sent. Open Kyllene to send it yourself.")
+            confirmations.tell(place.id, event, Strings.t("Couldn't send it to {0}: {1}. Open Kyllene to send it yourself.", chat, sent))
         }
     }
 
     /** [SENT], or why it couldn't go. */
     private suspend fun send(place: WatchedPlace, text: String): String {
         val gateway = gateways.current()?.gatewayUrl
-        if (gateway?.value != place.gateway) return "Kyllene is signed in to another gateway now"
+        if (gateway?.value != place.gateway) return Strings.t("Kyllene is signed in to another gateway now")
         val open = host.session.value
         if (open != null && open.state.value.storedSessionId == place.storedSessionId && open.profile == place.profile) {
             awaitConnection(gateway)
-            return if (open.send(text)) SENT else open.state.value.error ?: "it wasn't accepted"
+            return if (open.send(text)) SENT else open.state.value.error ?: Strings.t("it wasn't accepted")
         }
-        if (awaitConnection(gateway) !is ConnectionState.Connected) return "Kyllene couldn't reach the gateway"
+        if (awaitConnection(gateway) !is ConnectionState.Connected) return Strings.t("Kyllene couldn't reach the gateway")
         return try {
             chats.sendToChat(place.profile, place.storedSessionId, text)
             SENT
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            e.message?.takeIf { it.isNotBlank() } ?: "the gateway refused it"
+            e.message?.takeIf { it.isNotBlank() } ?: Strings.t("the gateway refused it")
         }
     }
 

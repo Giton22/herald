@@ -10,6 +10,7 @@ import dev.hermeskotlin.core.gateway.GatewayProbe
 import dev.hermeskotlin.core.gateway.ProbeResult
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.ApiResult
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -73,7 +74,7 @@ class SignInViewModel(
         val user = username.text.toString().trim()
         val pass = password.text.toString()
         if (user.isEmpty() || pass.isEmpty()) {
-            _state.update { it.copy(error = "Enter your username and password.") }
+            _state.update { it.copy(error = Strings.t("Enter your username and password.")) }
             return
         }
         if (_state.value.signingIn) return
@@ -82,7 +83,7 @@ class SignInViewModel(
         viewModelScope.launch {
             val result = auth.signIn(gateway.gatewayUrl, gateway.provider, user, pass)
             if (result is ApiResult.Success) password.clearText()
-            finish(gateway, result, wrongCredentials = "Wrong username or password.")
+            finish(gateway, result, wrongCredentials = Strings.t("Wrong username or password."))
         }
     }
 
@@ -92,7 +93,7 @@ class SignInViewModel(
         _state.update { it.copy(signingIn = true, waitingForBrowser = true, error = null) }
         browserJob = viewModelScope.launch {
             // The gateway picks the provider, or asks in the page when it has several.
-            finish(gateway, browserSignIn.signIn(gateway.gatewayUrl, provider = null, openBrowser), wrongCredentials = "Sign-in was rejected.")
+            finish(gateway, browserSignIn.signIn(gateway.gatewayUrl, provider = null, openBrowser), wrongCredentials = Strings.t("Sign-in was rejected."))
         }
     }
 
@@ -111,10 +112,10 @@ class SignInViewModel(
             when (result) {
                 is ApiResult.Success -> done.copy(signedInUrl = gateway.url)
                 ApiResult.InvalidCredentials -> done.copy(error = wrongCredentials)
-                ApiResult.RateLimited -> done.copy(error = "Too many attempts. Wait a moment and try again.")
-                is ApiResult.Unavailable -> done.copy(error = "Couldn't reach the gateway: ${result.message}")
+                ApiResult.RateLimited -> done.copy(error = Strings.t("Too many attempts. Wait a moment and try again."))
+                is ApiResult.Unavailable -> done.copy(error = Strings.t("Couldn't reach the gateway: {0}", result.message))
                 is ApiResult.Failed -> done.copy(error = result.message)
-                ApiResult.SessionExpired -> done.copy(error = "Sign-in was rejected.")
+                ApiResult.SessionExpired -> done.copy(error = Strings.t("Sign-in was rejected."))
             }
         }
     }

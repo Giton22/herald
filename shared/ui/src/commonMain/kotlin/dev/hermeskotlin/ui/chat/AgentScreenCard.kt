@@ -39,6 +39,7 @@ import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
@@ -192,9 +193,9 @@ internal fun AgentScreenCard(view: ScreenView, newest: Boolean) {
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         )
         val note = when {
-            live -> "Waiting for your answer"
-            waits && !wasLive -> "Opening…"
-            replies -> "A tap answers in the chat"
+            live -> Strings.t("Waiting for your answer")
+            waits && !wasLive -> Strings.t("Opening…")
+            replies -> Strings.t("A tap answers in the chat")
             else -> null
         }
         if (note != null) {
@@ -213,13 +214,13 @@ internal fun AgentScreenCard(view: ScreenView, newest: Boolean) {
  * the screen's form carried, so the agent reads the same as a waiting call would have returned.
  */
 internal fun screenTapMessage(result: JsonElement): String {
-    val tap = result as? JsonObject ?: return "Tapped a button on the screen you showed."
-    val event = (tap["event"] as? JsonPrimitive)?.contentOrNull ?: "a button"
+    val tap = result as? JsonObject ?: return Strings.t("Tapped a button on the screen you showed.")
+    val event = (tap["event"] as? JsonPrimitive)?.contentOrNull ?: Strings.t("a button")
     val more = buildJsonObject {
         (tap["context"] as? JsonObject)?.takeIf { it.isNotEmpty() }?.let { put("context", it) }
         (tap["data"] as? JsonObject)?.takeIf { it.isNotEmpty() }?.let { put("data", it) }
     }
-    val said = "Tapped “$event” on the screen you showed"
+    val said = Strings.t("Tapped “{0}” on the screen you showed", event)
     return if (more.isEmpty()) "$said." else "$said: $more"
 }
 

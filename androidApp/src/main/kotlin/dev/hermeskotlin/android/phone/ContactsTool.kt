@@ -9,6 +9,7 @@ import android.provider.ContactsContract.CommonDataKinds.Email
 import android.provider.ContactsContract.CommonDataKinds.Phone
 import androidx.core.content.ContextCompat
 import dev.hermeskotlin.core.phone.PhoneToolException
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -26,13 +27,13 @@ internal class ContactsTool(private val context: Context) {
 
     fun run(args: JsonObject): JsonObject {
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) {
-            throw PhoneToolException("Kyllene isn't allowed to read the contacts. The user can allow it in Kyllene: Settings → Phone tools.")
+            throw PhoneToolException(Strings.t("Kyllene isn't allowed to read the contacts. The user can allow it in Kyllene: Settings → Phone tools."))
         }
         val query = args.string("query")?.trim()?.takeIf { it.length >= MIN_QUERY }
-            ?: throw PhoneToolException("query is needed: at least $MIN_QUERY characters of a name, number or email.")
-        if (query.length > MAX_QUERY) throw PhoneToolException("query is at most $MAX_QUERY characters.")
+            ?: throw PhoneToolException(Strings.t("query is needed: at least {0} characters of a name, number or email.", MIN_QUERY))
+        if (query.length > MAX_QUERY) throw PhoneToolException(Strings.t("query is at most {0} characters.", MAX_QUERY))
         val limit = (args.int("limit") ?: DEFAULT_LIMIT).also {
-            if (it !in 1..MAX_LIMIT) throw PhoneToolException("limit is 1 to $MAX_LIMIT.")
+            if (it !in 1..MAX_LIMIT) throw PhoneToolException(Strings.t("limit is 1 to {0}.", MAX_LIMIT))
         }
         // One more than asked, to tell whether there are more.
         val found = when {
@@ -52,7 +53,7 @@ internal class ContactsTool(private val context: Context) {
                     }
                 }
             }
-            if (found.size > limit) put("note", "There are more; ask with a narrower query.")
+            if (found.size > limit) put("note", Strings.t("There are more; ask with a narrower query."))
         }
     }
 
@@ -77,7 +78,7 @@ internal class ContactsTool(private val context: Context) {
     private fun byNumber(query: String, limit: Int): Map<Long, Person> {
         // Without a leading 0, so "0151 234…" finds "+49151234…".
         val digits = query.filter { it in '0'..'9' }.trimStart('0')
-        if (digits.length < MIN_DIGITS) throw PhoneToolException("A number to look up needs at least $MIN_DIGITS digits.")
+        if (digits.length < MIN_DIGITS) throw PhoneToolException(Strings.t("A number to look up needs at least {0} digits.", MIN_DIGITS))
         // A number as saved, without its separators: not every number has a normalized form.
         val where = "${ContactsContract.Data.MIMETYPE} = ? AND (${Phone.NORMALIZED_NUMBER} LIKE ? OR ${bare(Phone.NUMBER)} LIKE ?)"
         return collect(ContactsContract.Data.CONTENT_URI, ContactsContract.Data.CONTACT_ID, ContactsContract.Data.DISPLAY_NAME_PRIMARY, where, arrayOf(Phone.CONTENT_ITEM_TYPE, "%$digits%", "%$digits%"), limit)
@@ -96,7 +97,7 @@ internal class ContactsTool(private val context: Context) {
         )?.use { c ->
             while (c.moveToNext() && people.size < limit) {
                 val id = c.getLong(0)
-                if (id !in people) people[id] = Person(c.getString(1)?.takeIf { it.isNotBlank() } ?: "(no name)")
+                if (id !in people) people[id] = Person(c.getString(1)?.takeIf { it.isNotBlank() } ?: Strings.t("(no name)"))
             }
         }
         return people

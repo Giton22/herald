@@ -17,6 +17,7 @@ import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.sessions.SessionSummary
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -148,14 +149,14 @@ class ScheduledViewModel(
 
     override fun togglePaused() {
         val job = _state.value.openJob ?: return
-        act(if (job.paused) "Couldn't resume the job" else "Couldn't pause the job") { url ->
+        act(Strings.t(if (job.paused) "Couldn't resume the job" else "Couldn't pause the job")) { url ->
             if (job.paused) api.resume(url, job.id, job.profile) else api.pause(url, job.id, job.profile)
         }
     }
 
     override fun runNow() {
         val job = _state.value.openJob ?: return
-        act("Couldn't start a run", success = "Run started") { url -> api.trigger(url, job.id, job.profile) }
+        act(Strings.t("Couldn't start a run"), success = Strings.t("Run started")) { url -> api.trigger(url, job.id, job.profile) }
     }
 
     fun dismissMessage() = _state.update { it.copy(message = null) }
@@ -220,10 +221,10 @@ class ScheduledViewModel(
         )
         val problem = when {
             // Removed elsewhere while the form was open; saving would quietly create it again.
-            editor.jobId != null && existing == null -> "This job was deleted on the gateway, so there's nothing to save."
-            routineOf != null && title.isEmpty() -> "Give the routine a name."
-            draft.prompt.isEmpty() -> "Say what the agent should do on each run."
-            draft.schedule.isEmpty() && (existing == null || existing.editableSchedule.isNotEmpty()) -> "Say when it should run."
+            editor.jobId != null && existing == null -> Strings.t("This job was deleted on the gateway, so there's nothing to save.")
+            routineOf != null && title.isEmpty() -> Strings.t("Give the routine a name.")
+            draft.prompt.isEmpty() -> Strings.t("Say what the agent should do on each run.")
+            draft.schedule.isEmpty() && (existing == null || existing.editableSchedule.isNotEmpty()) -> Strings.t("Say when it should run.")
             else -> null
         }
         if (problem != null) {
@@ -257,7 +258,10 @@ class ScheduledViewModel(
                         val saved = result.value
                         val known = state.jobs.any { it.id == saved.id }
                         val jobs = if (known) state.jobs.map { if (it.id == saved.id) saved else it } else listOf(saved) + state.jobs
-                        val message = "${noun(owner)} ${if (existing == null) "scheduled" else "saved"}"
+                        val message = Strings.t(
+                            if (existing == null) "{0} scheduled" else "{0} saved",
+                            Strings.t(noun(owner)),
+                        )
                         if (formOpen) {
                             state.copy(
                                 editor = null,
@@ -277,7 +281,7 @@ class ScheduledViewModel(
                         )
                     } else {
                         state.copy(
-                            message = listOfNotNull("Couldn't save the job", result.errorMessage).joinToString(": "),
+                            message = listOfNotNull(Strings.t("Couldn't save the job"), result.errorMessage).joinToString(": "),
                             sessionExpired = result == ApiResult.SessionExpired,
                         )
                     }
@@ -304,11 +308,11 @@ class ScheduledViewModel(
                         jobs = state.jobs.filterNot { it.id == job.id },
                         openJobId = null,
                         runs = emptyList(),
-                        message = "${noun(owner)} deleted",
+                        message = Strings.t("{0} deleted", Strings.t(noun(owner))),
                     )
                     else -> state.copy(
                         busy = false,
-                        message = listOfNotNull("Couldn't delete the job", result.errorMessage).joinToString(": "),
+                        message = listOfNotNull(Strings.t("Couldn't delete the job"), result.errorMessage).joinToString(": "),
                         sessionExpired = result == ApiResult.SessionExpired,
                     )
                 }
@@ -323,7 +327,7 @@ class ScheduledViewModel(
     private fun loadDeliveryTargets() {
         val url = gateway?.gatewayUrl ?: return
         val owner = owner
-        val botChat = owner?.let { DeliveryTarget(id = Routines.BOT_CHAT_DELIVERY, name = "${it.label}'s chat") }
+        val botChat = owner?.let { DeliveryTarget(id = Routines.BOT_CHAT_DELIVERY, name = Strings.t("{0}'s chat", it.label)) }
         _state.update { it.copy(deliveryTargets = listOfNotNull(botChat) + it.deliveryTargets.filterNot { t -> t.id == Routines.BOT_CHAT_DELIVERY }) }
         viewModelScope.launch {
             val result = api.deliveryTargets(url, owner?.profile)

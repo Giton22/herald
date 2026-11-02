@@ -77,6 +77,7 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
@@ -119,7 +120,7 @@ class UsageController(private val sessions: SessionsApi, private val scope: Coro
                 totals = (totals as? ApiResult.Success)?.value,
                 limits = limits.await(),
                 breakdown = breakdown.await(),
-                error = totals?.takeIf { it !is ApiResult.Success }?.let { it.errorMessage ?: "Couldn't load this chat's usage." },
+                error = totals?.takeIf { it !is ApiResult.Success }?.let { it.errorMessage ?: Strings.t("Couldn't load this chat's usage.") },
             )
         }
     }
@@ -172,7 +173,7 @@ internal fun UsageSheetView(visible: Boolean, state: UsageSheetState, live: Sess
                     }
                     if (state.limits.isNotEmpty()) Limits(state.limits)
                     if (state.totals == null && state.error == null && live == null && state.limits.isEmpty()) {
-                        Text("Nothing used yet.", style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
+                        Text(Strings.t("Nothing used yet."), style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
                     }
                 }
             }
@@ -183,10 +184,10 @@ internal fun UsageSheetView(visible: Boolean, state: UsageSheetState, live: Sess
 /** Whose usage this is: the sheet's heading, with the model in mono when it's known. It's read as "Usage, …". */
 @Composable
 private fun WhoseUsage(model: String?) {
-    val spoken = "Usage, this chat" + (model?.let { ", $it" } ?: "")
+    val spoken = Strings.t("Usage, this chat") + (model?.let { Strings.t(", {0}", it) } ?: "")
     Text(
         buildAnnotatedString {
-            append("This chat")
+            append(Strings.t("This chat"))
             if (model != null) {
                 append(" · ")
                 withStyle(Theme[typography][code].copy(fontSize = 12.sp).toSpanStyle()) { append(model) }
@@ -211,8 +212,8 @@ private fun Totals(totals: SessionTotals) {
                 WhoseUsage(totals.model?.takeIf { it.isNotBlank() })
                 val unpriced = cost == null || totals.costStatus == "unknown"
                 val amount = when {
-                    totals.costStatus == "included" -> "Included"
-                    unpriced -> "Not priced"
+                    totals.costStatus == "included" -> Strings.t("Included")
+                    unpriced -> Strings.t("Not priced")
                     else -> usd(cost)
                 }
                 // One line, however large the text: it shrinks to fit rather than breaking inside the number. Words
@@ -228,14 +229,14 @@ private fun Totals(totals: SessionTotals) {
                     ),
                     maxLines = 1,
                     autoSize = TextAutoSize.StepBased(minFontSize = 20.sp, maxFontSize = top),
-                    modifier = Modifier.semantics { contentDescription = "Cost, $amount" },
+                    modifier = Modifier.semantics { contentDescription = Strings.t("Cost, {0}", amount) },
                 )
                 Text(
                     when {
-                        totals.costStatus == "included" -> "Covered by your plan with the provider"
-                        unpriced -> "The gateway has no price for this model, so its cost isn't counted"
-                        totals.costIsEstimate -> "Estimated from the model's list prices"
-                        else -> "As billed by the provider"
+                        totals.costStatus == "included" -> Strings.t("Covered by your plan with the provider")
+                        unpriced -> Strings.t("The gateway has no price for this model, so its cost isn't counted")
+                        totals.costIsEstimate -> Strings.t("Estimated from the model's list prices")
+                        else -> Strings.t("As billed by the provider")
                     },
                     style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp),
                     color = Theme[colors][textTertiary],
@@ -245,18 +246,18 @@ private fun Totals(totals: SessionTotals) {
                 // At most a third of the row, so the cost keeps the rest.
                 Column(Modifier.widthIn(max = 120.dp).semantics(mergeDescendants = true) { }, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(compactCount(calls), style = Theme[typography][code].copy(fontSize = 20.sp, fontWeight = FontWeight.Medium), color = Theme[colors][text])
-                    Text(if (calls == 1L) "model call" else "model calls", style = Theme[typography][caption].copy(fontSize = 12.sp), color = Theme[colors][textTertiary])
+                    Text(if (calls == 1L) Strings.t("model call") else Strings.t("model calls"), style = Theme[typography][caption].copy(fontSize = 12.sp), color = Theme[colors][textTertiary])
                 }
             }
         }
         // Name on the tile, then what a screen reader says.
         val stats = buildList {
-            add(Triple("Input", "Input", totals.inputTokens ?: 0))
-            add(Triple("Output", "Output", totals.outputTokens ?: 0))
+            add(Triple(Strings.t("Input"), Strings.t("Input"), totals.inputTokens ?: 0))
+            add(Triple(Strings.t("Output"), Strings.t("Output"), totals.outputTokens ?: 0))
             // The rest only when the model used them.
-            totals.reasoningTokens?.takeIf { it > 0 }?.let { add(Triple("Reasoning", "Reasoning", it)) }
-            totals.cacheReadTokens?.takeIf { it > 0 }?.let { add(Triple("From cache", "Read from cache", it)) }
-            totals.cacheWriteTokens?.takeIf { it > 0 }?.let { add(Triple("To cache", "Written to cache", it)) }
+            totals.reasoningTokens?.takeIf { it > 0 }?.let { add(Triple(Strings.t("Reasoning"), Strings.t("Reasoning"), it)) }
+            totals.cacheReadTokens?.takeIf { it > 0 }?.let { add(Triple(Strings.t("From cache"), Strings.t("Read from cache"), it)) }
+            totals.cacheWriteTokens?.takeIf { it > 0 }?.let { add(Triple(Strings.t("To cache"), Strings.t("Written to cache"), it)) }
         }
         // Four across, or two when large text would leave a tile too narrow for its number.
         val perRow = if (LocalDensity.current.fontScale > 1.3f) 2 else 4
@@ -279,7 +280,7 @@ private fun StatTile(name: String, spoken: String, value: Long, modifier: Modifi
         modifier
             .background(Theme[colors][surface2], RoundedCornerShape(Theme[radii][radiusMedium]))
             .padding(10.dp)
-            .clearAndSetSemantics { contentDescription = "$spoken, ${compactCount(value)} tokens" },
+            .clearAndSetSemantics { contentDescription = Strings.t("{0}, {1} tokens", spoken, compactCount(value)) },
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         // Shrinks to fit the tile rather than losing its last letter: "184k" must never read as "184".
@@ -306,7 +307,7 @@ private fun ContextHeader(amount: String, spoken: String) {
         verticalArrangement = Arrangement.spacedBy(2.dp),
         itemVerticalAlignment = Alignment.Bottom,
     ) {
-        Text("Context window", style = Theme[typography][headingStyle], color = Theme[colors][text], modifier = Modifier.padding(end = 12.dp).semantics { heading() })
+        Text(Strings.t("Context window"), style = Theme[typography][headingStyle], color = Theme[colors][text], modifier = Modifier.padding(end = 12.dp).semantics { heading() })
         Text(
             amount,
             style = Theme[typography][code].copy(fontSize = 12.sp),
@@ -325,8 +326,8 @@ private fun Context(live: SessionUsage) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         val percent = live.contextPercent ?: (fraction * 100).toInt()
         ContextHeader(
-            "${compactCount(used)} / ${compactCount(max)} · $percent%",
-            "${compactCount(used)} of ${compactCount(max)} tokens, $percent percent",
+            Strings.t("{0} / {1} · {2}%", compactCount(used), compactCount(max), percent),
+            Strings.t("{0} of {1} tokens, {2} percent", compactCount(used), compactCount(max), percent),
         )
         Box(Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).background(Theme[colors][surface3])) {
             Box(
@@ -335,7 +336,7 @@ private fun Context(live: SessionUsage) {
             )
         }
         live.cacheHitPercent?.let {
-            Text("$it% of the prompt came from cache", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+            Text(Strings.t("{0}% of the prompt came from cache", it), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
         }
     }
 }
@@ -354,8 +355,10 @@ private fun ContextSplit(breakdown: ContextBreakdown) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         val percent = (usedFraction * 100).toInt()
         ContextHeader(
-            "${if (breakdown.estimated) "~" else ""}${compactCount(breakdown.used)} / ${compactCount(max)} · $percent%",
-            "${if (breakdown.estimated) "About " else ""}${compactCount(breakdown.used)} of ${compactCount(max)} tokens, $percent percent",
+            if (breakdown.estimated) Strings.t("~{0} / {1} · {2}%", compactCount(breakdown.used), compactCount(max), percent)
+            else Strings.t("{0} / {1} · {2}%", compactCount(breakdown.used), compactCount(max), percent),
+            if (breakdown.estimated) Strings.t("About {0} of {1} tokens, {2} percent", compactCount(breakdown.used), compactCount(max), percent)
+            else Strings.t("{0} of {1} tokens, {2} percent", compactCount(breakdown.used), compactCount(max), percent),
         )
         Row(Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).background(Theme[colors][surface3]), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             shown.forEach { category ->
@@ -403,14 +406,14 @@ private fun FilesReadIn(files: List<ContextFile>) {
             .padding(horizontal = 12.dp, vertical = 4.dp),
     ) {
         Text(
-            "FILES READ IN",
+            Strings.t("FILES READ IN"),
             style = Theme[typography][eyebrow],
             color = Theme[colors][textTertiary],
             modifier = Modifier
                 .padding(top = 8.dp, bottom = 4.dp)
                 .semantics {
                     heading()
-                    contentDescription = "Files read in"
+                    contentDescription = Strings.t("Files read in")
                 },
         )
         files.forEach { file ->
@@ -429,7 +432,7 @@ private fun FilesReadIn(files: List<ContextFile>) {
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    if (file.loaded) compactCount(file.tokens) else "skipped",
+                    if (file.loaded) compactCount(file.tokens) else Strings.t("skipped"),
                     style = Theme[typography][code].copy(fontSize = 12.sp),
                     color = Theme[colors][textTertiary],
                 )
@@ -459,7 +462,7 @@ private val CONTEXT_DARK = listOf(0xFF3987E5, 0xFFD95926, 0xFF199E70, 0xFFC98500
 @Composable
 private fun Limits(lines: List<String>) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Account", style = Theme[typography][label], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
+        Text(Strings.t("Account"), style = Theme[typography][label], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
         lines.forEach { Text(it, style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary]) }
     }
 }

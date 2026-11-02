@@ -49,6 +49,7 @@ import dev.hermeskotlin.ui.chat.BarButton
 import dev.hermeskotlin.ui.chat.BarStatus
 import dev.hermeskotlin.ui.chat.StatusTone
 import dev.hermeskotlin.ui.chat.TopBar
+import dev.hermeskotlin.ui.i18n.Strings
 
 /**
  * One Desktop room, open: read-only. Desktop runs the room — its rounds, its log, its watermarks — so
@@ -71,15 +72,15 @@ fun DesktopRoomScreen(room: DesktopRoom, onOpenSidebar: () -> Unit, onBack: () -
             TopBar(
                 title = room.name,
                 titleFace = members.takeIf { it.isNotEmpty() }?.let { { RoomFaces(it, faces, size = 20.dp, max = 3) } },
-                status = BarStatus("On Hermes Desktop", StatusTone.Neutral),
+                status = BarStatus(Strings.t("On Hermes Desktop"), StatusTone.Neutral),
                 onOpenSidebar = onOpenSidebar,
                 onNewChat = null,
                 onOpenMenu = null,
-                trailing = { BarButton(Lucide.X, "Close the room", onClick = onBack) },
+                trailing = { BarButton(Lucide.X, Strings.t("Close the room"), onClick = onBack) },
             )
             // Why there is no composer: the room keeps running on Desktop; this is its newest lines.
             Text(
-                "Continue on Hermes Desktop — the room runs there. New lines show here as it syncs.",
+                Strings.t("Continue on Hermes Desktop — the room runs there. New lines show here as it syncs."),
                 modifier = Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp),
                 style = Theme[typography][caption],
                 color = Theme[colors][textTertiary],
@@ -87,7 +88,7 @@ fun DesktopRoomScreen(room: DesktopRoom, onOpenSidebar: () -> Unit, onBack: () -
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 if (lines.isEmpty()) {
                     Text(
-                        "Nothing from the room yet.",
+                        Strings.t("Nothing from the room yet."),
                         modifier = Modifier.fillMaxWidth().padding(24.dp),
                         style = Theme[typography][caption],
                         color = Theme[colors][textTertiary],
@@ -126,7 +127,7 @@ private fun Transcript(room: DesktopRoom, lines: List<RoomLine.Message>, faces: 
         if (room.omitted > 0) {
             item(key = "omitted") {
                 Text(
-                    "${room.omitted} earlier messages",
+                    Strings.t("{0} earlier messages", room.omitted),
                     modifier = Modifier.fillMaxWidth(),
                     style = Theme[typography][caption],
                     color = Theme[colors][textTertiary],

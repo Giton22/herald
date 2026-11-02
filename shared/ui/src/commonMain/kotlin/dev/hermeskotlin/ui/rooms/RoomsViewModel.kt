@@ -26,6 +26,7 @@ import dev.hermeskotlin.core.rooms.mergeRoomEvents
 import dev.hermeskotlin.core.rooms.messageText
 import dev.hermeskotlin.core.rooms.roomLines
 import dev.hermeskotlin.core.rpc.RpcException
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -199,7 +200,7 @@ class RoomsViewModel(
      * by its id and [name] alone, the first read filling in the rest.
      */
     fun openById(roomId: String, name: String?) {
-        open(_state.value.rooms.firstOrNull { it.roomId == roomId } ?: Room(roomId = roomId, name = name ?: "Room"))
+        open(_state.value.rooms.firstOrNull { it.roomId == roomId } ?: Room(roomId = roomId, name = name ?: Strings.t("Room")))
     }
 
     fun bind(url: GatewayUrl) {
@@ -341,7 +342,7 @@ class RoomsViewModel(
                 } catch (e: Exception) {
                     // Paused until the next poll, so a reader parked at the top doesn't retry in a loop.
                     updateOpen {
-                        it.copy(notice = "Couldn't read older messages. ${e.message.orEmpty()}".trim(), canLoadEarlier = false)
+                        it.copy(notice = Strings.t("Couldn't read older messages. {0}", e.message.orEmpty()).trim(), canLoadEarlier = false)
                     }
                 } finally {
                     updateOpen { it.copy(loadingEarlier = false) }
@@ -358,12 +359,12 @@ class RoomsViewModel(
         val receipts = (unansweredFiles[open.room.roomId] ?: unansweredSend)?.takeIf { it.roomId == open.room.roomId }?.uploaded.orEmpty()
         fun size(file: OutgoingAttachment) = if (file.bytes.isEmpty()) receipts[file.id]?.size ?: 0 else file.bytes.size
         val error = when {
-            !open.attachmentsSupported -> "This gateway doesn't support room attachments. Update Hermes to use them."
-            files.size > RoomAttachment.MAX_COUNT -> "Up to ${RoomAttachment.MAX_COUNT} attachments per room message."
+            !open.attachmentsSupported -> Strings.t("This gateway doesn't support room attachments. Update Hermes to use them.")
+            files.size > RoomAttachment.MAX_COUNT -> Strings.t("Up to {0} attachments per room message.", RoomAttachment.MAX_COUNT)
             picked.any { it.bytes.isEmpty() || it.bytes.size > RoomAttachment.MAX_BYTES } ->
-                "Room files must be between 1 byte and ${RoomAttachment.MAX_BYTES / 1_000_000} MB."
+                Strings.t("Room files must be between 1 byte and {0} MB.", RoomAttachment.MAX_BYTES / 1_000_000)
             files.sumOf { size(it).toLong() } > RoomAttachment.MAX_TOTAL_BYTES ->
-                "Up to ${RoomAttachment.MAX_TOTAL_BYTES / 1_000_000} MB of room attachments per message."
+                Strings.t("Up to {0} MB of room attachments per message.", RoomAttachment.MAX_TOTAL_BYTES / 1_000_000)
             else -> null
         }
         _opened.update { it?.copy(attachments = if (error == null) files else open.attachments, notice = error) }
@@ -404,7 +405,7 @@ class RoomsViewModel(
         val lost = attempt.files.filter { it.bytes.isEmpty() && it.id !in attempt.uploaded }
         if (lost.isNotEmpty()) {
             _opened.update { it?.copy(attachments = it.attachments.filterNot { file -> file in lost },
-                notice = "Add ${lost.joinToString { it.name }} again to send it in a new message.") }
+                notice = Strings.t("Add {0} again to send it in a new message.", lost.joinToString { it.name })) }
             return
         }
         unansweredSend = attempt
@@ -413,7 +414,7 @@ class RoomsViewModel(
         _opened.update { it?.copy(sending = true, notice = null) }
         // The socket changed under the uploads: nothing was posted, so the selection stays to send again.
         fun interrupted() {
-            if (stillOpen()) _opened.update { it?.copy(notice = "The connection changed before the message went out. Send again.") }
+            if (stillOpen()) _opened.update { it?.copy(notice = Strings.t("The connection changed before the message went out. Send again.")) }
         }
         val job = viewModelScope.launch {
             try {
@@ -451,7 +452,7 @@ class RoomsViewModel(
                     unansweredFiles[roomId] = attempt
                 }
                 if (stillOpen()) _opened.update { it?.copy(attachments = attempt.files, attachmentRetry = attempt.files.isNotEmpty() && attempt.submitted,
-                    retryText = attempt.text, notice = "Couldn't send. ${e.message.orEmpty()}".trim()) }
+                    retryText = attempt.text, notice = Strings.t("Couldn't send. {0}", e.message.orEmpty()).trim()) }
             } finally {
                 if (stillOpen()) _opened.update { it?.copy(sending = false) }
             }
@@ -469,7 +470,7 @@ class RoomsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _opened.update { it?.copy(notice = "Couldn't stop the room. ${e.message.orEmpty()}".trim()) }
+                _opened.update { it?.copy(notice = Strings.t("Couldn't stop the room. {0}", e.message.orEmpty()).trim()) }
             }
         }
     }
@@ -482,7 +483,7 @@ class RoomsViewModel(
         val generation = action.executionGeneration
         val requestId = action.requestId
         if (memberId == null || taskId == null || generation == null || requestId == null) {
-            _opened.update { it?.copy(notice = "The gateway didn't say enough to answer that approval.") }
+            _opened.update { it?.copy(notice = Strings.t("The gateway didn't say enough to answer that approval.")) }
             return
         }
         viewModelScope.launch {
@@ -492,7 +493,7 @@ class RoomsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _opened.update { it?.copy(notice = "Couldn't answer the approval. ${e.message.orEmpty()}".trim()) }
+                _opened.update { it?.copy(notice = Strings.t("Couldn't answer the approval. {0}", e.message.orEmpty()).trim()) }
             }
         }
     }
@@ -502,7 +503,7 @@ class RoomsViewModel(
         val open = _opened.value ?: return
         val taskId = action.taskId
         if (taskId == null) {
-            _opened.update { it?.copy(notice = "The gateway didn't say which turn to retry.") }
+            _opened.update { it?.copy(notice = Strings.t("The gateway didn't say which turn to retry.")) }
             return
         }
         viewModelScope.launch {
@@ -512,7 +513,7 @@ class RoomsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _opened.update { it?.copy(notice = "Couldn't retry. ${e.message.orEmpty()}".trim()) }
+                _opened.update { it?.copy(notice = Strings.t("Couldn't retry. {0}", e.message.orEmpty()).trim()) }
             }
         }
     }
@@ -535,7 +536,7 @@ class RoomsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                say(room.roomId, "Couldn't delete “${room.name}”. ${e.message.orEmpty()}".trim())
+                say(room.roomId, Strings.t("Couldn't delete “{0}”. {1}", room.name, e.message.orEmpty()).trim())
             }
         }
     }
@@ -554,7 +555,7 @@ class RoomsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                say(room.roomId, "Couldn't rename “${room.name}”. ${e.message.orEmpty()}".trim())
+                say(room.roomId, Strings.t("Couldn't rename “{0}”. {1}", room.name, e.message.orEmpty()).trim())
             }
         }
     }
@@ -583,7 +584,7 @@ class RoomsViewModel(
         val ask = name.trim() to roster
         val roomId = unansweredCreate?.takeIf { it.first == ask }?.second ?: newId("room")
         unansweredCreate = ask to roomId
-        _state.update { it.copy(busy = "Making the room…", notice = null) }
+        _state.update { it.copy(busy = Strings.t("Making the room…"), notice = null) }
         viewModelScope.launch {
             try {
                 val room = api.create(roomId = roomId, name = ask.first, members = roster)
@@ -593,7 +594,7 @@ class RoomsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.update { it.copy(notice = "Couldn't make the room. ${e.message.orEmpty()}".trim()) }
+                _state.update { it.copy(notice = Strings.t("Couldn't make the room. {0}", e.message.orEmpty()).trim()) }
             } finally {
                 _state.update { it.copy(busy = null) }
             }
@@ -637,7 +638,7 @@ class RoomsViewModel(
             }
         } catch (e: Exception) {
             if (gateway.value != url) return
-            _state.update { it.copy(loading = false, error = e.message ?: "Couldn't load the rooms.") }
+            _state.update { it.copy(loading = false, error = e.message ?: Strings.t("Couldn't load the rooms.")) }
         }
     }
 
@@ -736,7 +737,7 @@ class RoomsViewModel(
         } catch (e: Exception) {
             // A late failure for a room that's no longer open leaves the one on screen alone.
             _opened.update { open ->
-                open?.takeIf { it.room.roomId == roomId }?.copy(loading = false, error = e.message ?: "Couldn't read the room.") ?: open
+                open?.takeIf { it.room.roomId == roomId }?.copy(loading = false, error = e.message ?: Strings.t("Couldn't read the room.")) ?: open
             }
         }
     }

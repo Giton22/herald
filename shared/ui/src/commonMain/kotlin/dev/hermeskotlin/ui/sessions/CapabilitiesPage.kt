@@ -99,6 +99,7 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.ListSkeleton
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -198,10 +199,10 @@ private fun UninstallSheet(skill: Skill?, profile: String?, onResult: (Boolean) 
     if (skill != null) kept = skill
     BottomSheet(visible = skill != null, onDismiss = { onResult(false) }) {
         val s = kept ?: return@BottomSheet
-        SheetHeader(s.name, "Remove ${s.name} from ${profile ?: "the main profile"}? Turning it off keeps it installed.")
+        SheetHeader(s.name, Strings.t("Remove {0} from {1}? Turning it off keeps it installed.", s.name, profile ?: Strings.t("the main profile")))
         Row(Modifier.padding(horizontal = 18.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            Button("Uninstall", onClick = { onResult(true) }, variant = ButtonVariant.Danger)
-            Button("Cancel", onClick = { onResult(false) }, variant = ButtonVariant.Secondary)
+            Button(Strings.t("Uninstall"), onClick = { onResult(true) }, variant = ButtonVariant.Danger)
+            Button(Strings.t("Cancel"), onClick = { onResult(false) }, variant = ButtonVariant.Secondary)
         }
     }
 }
@@ -241,12 +242,12 @@ internal fun CapabilitiesView(
     hubOpen: Boolean = false,
 ) {
     Column(Modifier.fillMaxSize().then(if (hubOpen) Modifier.alpha(0f).clearAndSetSemantics { } else Modifier)) {
-        SubpageHeader(title, onBack = onBack, subtitle = note ?: "What the agent can use in new chats")
+        SubpageHeader(Strings.t(title), onBack = onBack, subtitle = note ?: Strings.t("What the agent can use in new chats"))
         SegmentedControl(
             options = CapabilityTab.entries,
             selected = state.tab,
             onSelect = actions::selectTab,
-            optionLabel = { it.label },
+            optionLabel = { Strings.t(it.label) },
             // How many each tab holds, once loaded.
             optionBadge = { tab ->
                 when (tab) {
@@ -260,18 +261,18 @@ internal fun CapabilitiesView(
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when (state.tab) {
                 CapabilityTab.Skills -> SkillsTab(state, skillQuery, actions, removing)
-                CapabilityTab.Tools -> TabList(state.toolsets, empty = "No toolsets configured.", onRetry = actions::refresh) { toolsets ->
-                    item(key = "note") { Hint("Toolsets the agent gets in new chats.") }
+                CapabilityTab.Tools -> TabList(state.toolsets, empty = Strings.t("No toolsets configured."), onRetry = actions::refresh) { toolsets ->
+                    item(key = "note") { Hint(Strings.t("Toolsets the agent gets in new chats.")) }
                     item(key = "toolsets") {
                         RowCard(toolsets, key = { it.name }) { ToolsetRow(it, onToggle = { on -> actions.setToolsetEnabled(it, on) }) }
                     }
                 }
                 CapabilityTab.Mcp -> TabList(
                     state.servers,
-                    empty = "No MCP servers. Add one on the gateway with `hermes mcp add`, or from Hermes Desktop.",
+                    empty = Strings.t("No MCP servers. Add one on the gateway with `hermes mcp add`, or from Hermes Desktop."),
                     onRetry = actions::refresh,
                 ) { servers ->
-                    item(key = "note") { Hint("Changes apply from the next chat.") }
+                    item(key = "note") { Hint(Strings.t("Changes apply from the next chat.")) }
                     item(key = "servers") {
                         RowCard(servers, key = { it.name }) { server ->
                             ServerRow(
@@ -296,11 +297,11 @@ private fun SkillsTab(state: CapabilitiesUiState, skillQuery: TextFieldState, ac
     val query = skillQuery.text.toString().trim()
     val all = state.skills.items
     val groups = remember(all, query) { skillGroups(all.orEmpty(), query) }
-    TabList(state.skills, empty = "No skills yet. The agent writes them as it learns, or install them with `hermes skills`.", onRetry = actions::refresh) { skills ->
+    TabList(state.skills, empty = Strings.t("No skills yet. The agent writes them as it learns, or install them with `hermes skills`."), onRetry = actions::refresh) { skills ->
         item(key = "search") {
             TextField(
                 state = skillQuery,
-                placeholder = "Search ${skills.size} skills",
+                placeholder = Strings.t("Search {0} skills", skills.size),
                 leadingIcon = Lucide.Search,
                 clearable = true,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -308,13 +309,13 @@ private fun SkillsTab(state: CapabilitiesUiState, skillQuery: TextFieldState, ac
             )
         }
         item(key = "hub") {
-            Button("Browse hub", onClick = actions::openHub, variant = ButtonVariant.Secondary, size = ButtonSize.Small, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
+            Button(Strings.t("Browse hub"), onClick = actions::openHub, variant = ButtonVariant.Secondary, size = ButtonSize.Small, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
         }
-        if (groups.isEmpty()) item(key = "none") { Hint("No skills match “$query”.") }
+        if (groups.isEmpty()) item(key = "none") { Hint(Strings.t("No skills match “{0}”.", query)) }
         groups.forEach { (category, inGroup) ->
             item(key = "c-$category") {
                 Text(
-                    category.uppercase(),
+                    if (category == "other") Strings.t("Other") else category.uppercase(),
                     style = Theme[typography][eyebrow],
                     color = Theme[colors][textTertiary],
                     modifier = Modifier.padding(start = 6.dp, top = 12.dp, bottom = 6.dp).semantics {
@@ -346,8 +347,8 @@ internal fun skillGroups(skills: List<Skill>, query: String): Map<String, List<S
 internal fun <T> TabList(loadable: Loadable<T>, empty: String, onRetry: () -> Unit, content: LazyListScope.(List<T>) -> Unit) {
     val items = loadable.items
     when {
-        items == null && loadable.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load", loadable.error, error = true) {
-            Button("Try again", onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+        items == null && loadable.error != null -> EmptyState(Lucide.CloudOff, Strings.t("Couldn't load"), loadable.error, error = true) {
+            Button(Strings.t("Try again"), onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
         }
         items == null -> ListSkeleton()
         items.isEmpty() -> Box(Modifier.fillMaxSize().padding(12.dp)) { ListNotice(empty) }
@@ -369,9 +370,9 @@ private fun SkillRow(skill: Skill, removing: Boolean, onToggle: (Boolean) -> Uni
         title = skill.name,
         detail = skill.description.ifBlank { null },
         tag = when (skill.provenance) {
-            "hub" -> "hub"
-            "agent" -> "learned"
-            "external" -> "external"
+            "hub" -> Strings.t("hub")
+            "agent" -> Strings.t("learned")
+            "external" -> Strings.t("external")
             else -> null
         },
         checked = skill.enabled,
@@ -387,8 +388,8 @@ private fun ToolsetRow(toolset: Toolset, onToggle: (Boolean) -> Unit) {
         title = toolset.label,
         detail = toolset.description.ifBlank { null },
         tag = when {
-            !toolset.configured -> "needs setup"
-            toolset.tools.isNotEmpty() -> "${toolset.tools.size} tools"
+            !toolset.configured -> Strings.t("needs setup")
+            toolset.tools.isNotEmpty() -> Strings.t("{0} tools", toolset.tools.size)
             else -> null
         },
         checked = toolset.enabled,
@@ -402,29 +403,29 @@ private fun ServerRow(server: McpServer, test: McpTestResult?, testing: Boolean,
         SwitchRow(
             title = server.name,
             detail = server.target.ifBlank { null },
-            tag = server.plugin?.let { "from $it" } ?: server.transport,
+            tag = server.plugin?.let { Strings.t("from {0}", it) } ?: server.transport,
             checked = server.enabled,
             // A plugin's server is the plugin's to switch.
             onToggle = onToggle.takeIf { server.plugin == null },
-            lockedNote = "set by ${server.plugin}",
+            lockedNote = Strings.t("set by {0}", server.plugin),
         )
         Row(
             Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Button("Test", onClick = onTest, variant = ButtonVariant.Outline, size = ButtonSize.Small, loading = testing)
+            Button(Strings.t("Test"), onClick = onTest, variant = ButtonVariant.Outline, size = ButtonSize.Small, loading = testing)
             when {
                 test == null -> Unit
                 test.ok -> Text(
-                    "Connected · ${test.tools.size} tools",
+                    Strings.t("Connected · {0} tools", test.tools.size),
                     style = Theme[typography][bodySmall],
                     color = Theme[colors][success],
                 )
                 else -> Box(Modifier.weight(1f)) {
                     CopyableOnDesktop {
                         Text(
-                            test.error ?: "Couldn't connect.",
+                            test.error ?: Strings.t("Couldn't connect."),
                             style = Theme[typography][bodySmall],
                             color = Theme[colors][danger],
                             maxLines = 3,
@@ -483,7 +484,13 @@ private fun SwitchRow(
                 if (onToggle != null) {
                     Modifier.handCursor().toggleable(value = checked, role = Role.Switch, onValueChange = onToggle)
                 } else {
-                    Modifier.semantics(mergeDescendants = true) { stateDescription = "${if (checked) "On" else "Off"}, $lockedNote" }
+                    Modifier.semantics(mergeDescendants = true) {
+                        stateDescription = Strings.t(
+                            "{0}, {1}",
+                            Strings.t(if (checked) "On" else "Off"),
+                            Strings.t(lockedNote),
+                        )
+                    }
                 },
             )
             .padding(horizontal = 14.dp, vertical = 12.dp),
@@ -500,7 +507,7 @@ private fun SwitchRow(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                tag?.let { Tag(it, accent = it == "learned") }
+                tag?.let { Tag(it, accent = it == Strings.t("learned")) }
             }
             detail?.let {
                 Text(it, style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp, lineHeight = 17.5.sp), color = Theme[colors][textTertiary], maxLines = 2, overflow = TextOverflow.Ellipsis)
@@ -509,7 +516,7 @@ private fun SwitchRow(
         Switch(checked)
         onMore?.let {
             if (moreBusy) Box(Modifier.size(MinTouchTarget), contentAlignment = Alignment.Center) { Spinner(Modifier.size(16.dp)) }
-            else IconButton(Lucide.Ellipsis, contentDescription = "More for $title", onClick = it)
+            else IconButton(Lucide.Ellipsis, contentDescription = Strings.t("More for {0}", title), onClick = it)
         }
     }
 }

@@ -14,6 +14,7 @@ import androidx.wear.tiles.RequestBuilders
 import androidx.wear.tiles.TileBuilders
 import androidx.wear.tiles.TileService
 import com.google.common.util.concurrent.ListenableFuture
+import dev.hermeskotlin.ui.i18n.Strings
 
 /**
  * The "Call Hermes" tile: a call action using the phone’s default target, and the first lines of the last reply. Updated when
@@ -73,7 +74,7 @@ class AskTileService : TileService() {
                             .setCorner(ModifiersBuilders.Corner.Builder().setRadius(dp(MIC_BUTTON / 2)).build())
                             .build(),
                     )
-                    .setSemantics(ModifiersBuilders.Semantics.Builder().setContentDescription("Call Hermes").build())
+                    .setSemantics(ModifiersBuilders.Semantics.Builder().setContentDescription(Strings.t("Call Hermes")).build())
                     .build(),
             )
             .addContent(
@@ -108,7 +109,7 @@ class AskTileService : TileService() {
             .addContent(ring)
             .addContent(spacer(8f))
             // Two lines: a third would run into the round edge.
-            .addContent(text(last ?: "Start a call", BODY_SIZE, if (last != null) TEXT else MUTED, maxLines = 2))
+            .addContent(text(last ?: Strings.t("Start a call"), BODY_SIZE, if (last != null) TEXT else MUTED, maxLines = 2))
             .build()
         return LayoutElementBuilders.Box.Builder()
             .setWidth(expand())

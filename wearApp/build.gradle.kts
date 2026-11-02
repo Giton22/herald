@@ -81,6 +81,7 @@ android {
 
 dependencies {
     implementation(projects.shared.wearlink)
+    implementation(projects.shared.core)
     implementation(libs.androidx.activity.compose)
     // A library pulls in an old Fragment, which breaks activity results (lint's InvalidFragmentVersionForActivityResult).
     implementation(libs.androidx.fragment)

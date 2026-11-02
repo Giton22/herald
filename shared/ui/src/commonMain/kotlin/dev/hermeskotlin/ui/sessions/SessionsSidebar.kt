@@ -273,6 +273,7 @@ import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.ListSkeleton
 import dev.hermeskotlin.ui.components.relativeTime
 import dev.hermeskotlin.ui.components.savedCopyLabel
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.ui.update.RenameBanner
 import dev.hermeskotlin.ui.update.UpdateBanner
 import kotlinx.coroutines.delay
@@ -421,14 +422,14 @@ fun SessionsSidebar(
     // Row swipes: Recent and search pin (right) and archive (left); Archived unarchives (right) and deletes
     // (left), which asks first, as the actions sheet's Delete does.
     val pinSwipe = { s: SessionSummary ->
-        if (s.pinned) SwipeAction("Unpin", Lucide.PinOff, SwipeKind.Pin) { viewModel.togglePinned(s) }
-        else SwipeAction("Pin", Lucide.Pin, SwipeKind.Pin) { viewModel.togglePinned(s) }
+        if (s.pinned) SwipeAction(Strings.t("Unpin"), Lucide.PinOff, SwipeKind.Pin) { viewModel.togglePinned(s) }
+        else SwipeAction(Strings.t("Pin"), Lucide.Pin, SwipeKind.Pin) { viewModel.togglePinned(s) }
     }
     val archiveSwipe = { s: SessionSummary ->
-        if (s.archived) SwipeAction("Unarchive", Lucide.ArchiveRestore, SwipeKind.Archive) { viewModel.toggleArchived(s) }
-        else SwipeAction("Archive", Lucide.Archive, SwipeKind.Archive) { viewModel.toggleArchived(s) }
+        if (s.archived) SwipeAction(Strings.t("Unarchive"), Lucide.ArchiveRestore, SwipeKind.Archive) { viewModel.toggleArchived(s) }
+        else SwipeAction(Strings.t("Archive"), Lucide.Archive, SwipeKind.Archive) { viewModel.toggleArchived(s) }
     }
-    val deleteSwipe = { s: SessionSummary -> SwipeAction("Delete", Lucide.Trash2, SwipeKind.Delete) { deleteTarget = s } }
+    val deleteSwipe = { s: SessionSummary -> SwipeAction(Strings.t("Delete"), Lucide.Trash2, SwipeKind.Delete) { deleteTarget = s } }
     var projectActions by remember { mutableStateOf<Project?>(null) }
     // The button a desktop menu was opened from, for it to hang from; null for a right-click, which opens it at the pointer.
     var projectAnchor by remember { mutableStateOf<Rect?>(null) }
@@ -591,16 +592,16 @@ fun SessionsSidebar(
     // A right-click on a chat, on the desktop: its actions in a menu at the pointer, as the long-press sheet has them.
     val rowMenu: ((SessionSummary) -> List<RowMenuItem>)? = if (!isDesktop) null else { s ->
         listOfNotNull(
-            RowMenuItem("Open in new window", Lucide.AppWindow) { popOut(s) }.takeIf { !s.archived },
-            RowMenuItem(if (s.pinned) "Unpin" else "Pin", if (s.pinned) Lucide.PinOff else Lucide.Pin) { viewModel.togglePinned(s) }
+            RowMenuItem(Strings.t("Open in new window"), Lucide.AppWindow) { popOut(s) }.takeIf { !s.archived },
+            RowMenuItem(if (s.pinned) Strings.t("Unpin") else Strings.t("Pin"), if (s.pinned) Lucide.PinOff else Lucide.Pin) { viewModel.togglePinned(s) }
                 .takeIf { !s.archived },
-            RowMenuItem("Rename", Lucide.Pencil, key = Key.F2) { renameTarget = s },
-            RowMenuItem("Make a thread", Lucide.Hash) { viewModel.makeThread(s) }
+            RowMenuItem(Strings.t("Rename"), Lucide.Pencil, key = Key.F2) { renameTarget = s },
+            RowMenuItem(Strings.t("Make a thread"), Lucide.Hash) { viewModel.makeThread(s) }
                 .takeIf { !s.archived && threads.none { t -> t.holds(s) } },
-            RowMenuItem(if (s.archived) "Unarchive" else "Archive", if (s.archived) Lucide.ArchiveRestore else Lucide.Archive) {
+            RowMenuItem(if (s.archived) Strings.t("Unarchive") else Strings.t("Archive"), if (s.archived) Lucide.ArchiveRestore else Lucide.Archive) {
                 viewModel.toggleArchived(s)
             },
-            RowMenuItem("Delete", Lucide.Trash2, destructive = true, key = Key.Delete) { deleteTarget = s },
+            RowMenuItem(Strings.t("Delete"), Lucide.Trash2, destructive = true, key = Key.Delete) { deleteTarget = s },
         )
     }
 
@@ -726,7 +727,10 @@ fun SessionsSidebar(
                     selected = mode,
                     onSelect = bots::setMode,
                     // How many bots need the user, readable from the Chats side too.
-                    optionLabel = { if (it == SidebarMode.Bots && needsYou.isNotEmpty()) "${it.name} · ${needsYou.size}" else it.name },
+                    optionLabel = {
+                        val name = Strings.t(it.name)
+                        if (it == SidebarMode.Bots && needsYou.isNotEmpty()) "$name · ${needsYou.size}" else name
+                    },
                     modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
                 )
                 RenameBanner(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp))
@@ -735,7 +739,7 @@ fun SessionsSidebar(
                 // keeps the account. A phone keeps the pill under the thumb.
                 if (isDesktop) {
                     NavTile(
-                        NavLink(Lucide.SquarePen, "New chat", keys = "Ctrl+N") { onNewChat(state.project?.path) },
+                        NavLink(Lucide.SquarePen, Strings.t("New chat"), keys = "Ctrl+N") { onNewChat(state.project?.path) },
                         // In line with the pages listed under it, which sit in the list's own 8dp margin.
                         Modifier.fillMaxWidth().padding(horizontal = 14.dp),
                     )
@@ -823,7 +827,7 @@ fun SessionsSidebar(
                     )
                     searchResults != null -> when {
                         state.searching && searchResults.isEmpty() -> CenteredSpinner()
-                        searchResults.isEmpty() -> EmptyState(Lucide.SearchX, "No matches", "Search looks at titles, session ids and message text.")
+                        searchResults.isEmpty() -> EmptyState(Lucide.SearchX, Strings.t("No matches"), Strings.t("Search looks at titles, session ids and message text."))
                         else -> SessionList(
                             searchResults, selectedId, click, rowActions,
                             menu = rowMenu,
@@ -894,23 +898,23 @@ fun SessionsSidebar(
                             }
                             state.savedCopyAt?.takeIf { state.project == null }?.let { savedAt ->
                                 item(key = "saved-copy") {
-                                    ListNotice("${savedCopyLabel(savedAt)}. Hermes can't be reached right now.", action = "Try again", onAction = viewModel::refresh)
+                                    ListNotice(Strings.t("{0}. Hermes can't be reached right now.", savedCopyLabel(savedAt)), action = Strings.t("Try again"), onAction = viewModel::refresh)
                                 }
                             }
                             when {
                                 state.loading -> item(key = "loading") { ListSpinner() }
                                 state.error != null -> item(key = "error") {
-                                    ListNotice("Couldn't load sessions. ${state.error}", action = "Try again", onAction = viewModel::refresh)
+                                    ListNotice(Strings.t("Couldn't load sessions. {0}", state.error), action = Strings.t("Try again"), onAction = viewModel::refresh)
                                 }
                                 state.project != null && state.projectSessions == null -> item(key = "project-loading") { ListSpinner() }
                                 state.listed.isEmpty() -> item(key = "empty") {
-                                    ListNotice(if (state.project != null) "No chats in this project." else "Your conversations will show up here.")
+                                    ListNotice(if (state.project != null) Strings.t("No chats in this project.") else Strings.t("Your conversations will show up here."))
                                 }
                                 attentionFilter == AttentionFilter.Running && state.listed.none { statuses[it.id]?.running == true } -> item(key = "none-running") {
-                                    ListNotice("Nothing is running right now.")
+                                    ListNotice(Strings.t("Nothing is running right now."))
                                 }
                                 attentionFilter == AttentionFilter.NeedsAttention && state.listed.none { statuses[it.id]?.needsAttention == true } ->
-                                    item(key = "none-waiting") { ListNotice("Nothing needs you right now.") }
+                                    item(key = "none-waiting") { ListNotice(Strings.t("Nothing needs you right now.")) }
                             }
                         },
                     ) {
@@ -919,13 +923,13 @@ fun SessionsSidebar(
                                 // The Inbox goes by a phone's push registration (Notifications anywhere), which
                                 // a desktop has none of, so it would only ever say it can't load.
                                 listOfNotNull(
-                                    NavLink(Lucide.Inbox, "Inbox", badge = inboxUnread) { inboxOpen = true }.takeIf { !isDesktop },
-                                    NavLink(Lucide.CalendarClock, "Scheduled", selected = pageInMain && scheduledOpen) { closePages(); scheduledOpen = true },
-                                    NavLink(Lucide.ChartColumn, "Insights", selected = pageInMain && insightsOpen) { closePages(); insightsOpen = true },
-                                    NavLink(Lucide.Blocks, "Capabilities", selected = pageInMain && capabilitiesOpen) { closePages(); capabilitiesOpen = true },
-                                    NavLink(Lucide.Puzzle, "Plugins", selected = pageInMain && pluginsOpen) { closePages(); pluginsOpen = true },
-                                    NavLink(Lucide.SlidersHorizontal, "Config", selected = pageInMain && configOpen) { closePages(); configOpen = true },
-                                    NavLink(Lucide.Archive, "Archived", selected = isDesktop && state.filter == SessionListFilter.Archived) {
+                                    NavLink(Lucide.Inbox, Strings.t("Inbox"), badge = inboxUnread) { inboxOpen = true }.takeIf { !isDesktop },
+                                    NavLink(Lucide.CalendarClock, Strings.t("Scheduled"), selected = pageInMain && scheduledOpen) { closePages(); scheduledOpen = true },
+                                    NavLink(Lucide.ChartColumn, Strings.t("Insights"), selected = pageInMain && insightsOpen) { closePages(); insightsOpen = true },
+                                    NavLink(Lucide.Blocks, Strings.t("Capabilities"), selected = pageInMain && capabilitiesOpen) { closePages(); capabilitiesOpen = true },
+                                    NavLink(Lucide.Puzzle, Strings.t("Plugins"), selected = pageInMain && pluginsOpen) { closePages(); pluginsOpen = true },
+                                    NavLink(Lucide.SlidersHorizontal, Strings.t("Config"), selected = pageInMain && configOpen) { closePages(); configOpen = true },
+                                    NavLink(Lucide.Archive, Strings.t("Archived"), selected = isDesktop && state.filter == SessionListFilter.Archived) {
                                         viewModel.setFilter(SessionListFilter.Archived)
                                     },
                                 ),
@@ -933,11 +937,11 @@ fun SessionsSidebar(
                         }
                     }
                     state.loading -> ListSkeleton()
-                    state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load sessions", state.error, error = true) {
-                        Button("Try again", onClick = viewModel::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+                    state.error != null -> EmptyState(Lucide.CloudOff, Strings.t("Couldn't load sessions"), state.error, error = true) {
+                        Button(Strings.t("Try again"), onClick = viewModel::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                     }
                     state.sessions.isEmpty() ->
-                        EmptyState(Lucide.Archive, "Nothing archived", "Archived sessions are hidden from Recent but stay resumable.")
+                        EmptyState(Lucide.Archive, Strings.t("Nothing archived"), Strings.t("Archived sessions are hidden from Recent but stay resumable."))
                     else -> SessionList(
                         sessions = state.sessions,
                         selectedId = selectedId,
@@ -1241,8 +1245,8 @@ private object PreviewBotActions : BotActions {
 
 private val SessionListFilter.label: String
     get() = when (this) {
-        SessionListFilter.Recent -> "Chats"
-        SessionListFilter.Archived -> "Archived"
+        SessionListFilter.Recent -> Strings.t("Chats")
+        SessionListFilter.Archived -> Strings.t("Archived")
     }
 
 /**
@@ -1276,7 +1280,7 @@ private fun MainHeader(
                         .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
                         .handCursor()
                         .clickable(
-                            onClickLabel = "Account and gateways",
+                            onClickLabel = Strings.t("Account and gateways"),
                             role = Role.Button,
                             interactionSource = null,
                             indication = if (isDesktop) rememberHoverIndication(Theme[colors][text]) else LocalIndication.current,
@@ -1307,7 +1311,7 @@ private fun MainHeader(
                     }
                 }
             }
-            IconButton(Lucide.Settings, contentDescription = if (isDesktop) "Settings (${keysLabel("Ctrl+,")})" else "Settings", onClick = onSettings, tint = Theme[colors][textSecondary])
+            IconButton(Lucide.Settings, contentDescription = if (isDesktop) Strings.t("Settings ({0})", keysLabel("Ctrl+,")) else Strings.t("Settings"), onClick = onSettings, tint = Theme[colors][textSecondary])
         }
         // Search looks through chats; the bot roster is short enough to read. The header keeps its height
         // without the pill, so switching sides doesn't move the switch under the finger.
@@ -1324,11 +1328,11 @@ private fun connectionDot(connection: ConnectionState?): Color = when (connectio
 
 /** The dot's colour in words, for screen readers. */
 internal fun connectionWord(connection: ConnectionState?): String = when (connection) {
-    null, is ConnectionState.Connected -> "Connected"
-    is ConnectionState.Failed -> "Not connected"
-    is ConnectionState.SessionExpired -> "Signed out"
-    is ConnectionState.Reconnecting -> "Reconnecting"
-    is ConnectionState.Connecting, ConnectionState.Idle -> "Connecting"
+    null, is ConnectionState.Connected -> Strings.t("Connected")
+    is ConnectionState.Failed -> Strings.t("Not connected")
+    is ConnectionState.SessionExpired -> Strings.t("Signed out")
+    is ConnectionState.Reconnecting -> Strings.t("Reconnecting")
+    is ConnectionState.Connecting, ConnectionState.Idle -> Strings.t("Connecting")
 }
 
 /** How tall the search pill is drawn; the touch target around it can be taller. */
@@ -1361,7 +1365,7 @@ private fun SearchPill(onClick: () -> Unit) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             UnstyledIcon(Lucide.Search, contentDescription = null, tint = Theme[colors][textMuted], modifier = Modifier.size(15.dp))
-            Text("Search chats", style = Theme[typography][body].copy(fontSize = 14.sp), color = Theme[colors][textMuted], maxLines = 1, modifier = Modifier.weight(1f))
+            Text(Strings.t("Search chats"), style = Theme[typography][body].copy(fontSize = 14.sp), color = Theme[colors][textMuted], maxLines = 1, modifier = Modifier.weight(1f))
             // Its keys, as New chat names Ctrl+N.
             if (isDesktop) Text(keysLabel("Ctrl+Shift+F"), style = Theme[typography][caption], color = Theme[colors][textMuted], maxLines = 1)
         }
@@ -1383,7 +1387,7 @@ internal fun SubpageHeader(title: String, onBack: () -> Unit, subtitle: String? 
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
-                    IconButton(Lucide.ArrowLeft, contentDescription = "Back", onClick = onBack, tint = Theme[colors][textSecondary])
+                    IconButton(Lucide.ArrowLeft, contentDescription = Strings.t("Back"), onClick = onBack, tint = Theme[colors][textSecondary])
                     Text(
                         title,
                         style = Theme[typography][titleStyle],
@@ -1416,7 +1420,7 @@ internal fun SubpageHeader(title: String, onBack: () -> Unit, subtitle: String? 
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(Lucide.ArrowLeft, contentDescription = "Back", onClick = onBack, tint = Theme[colors][textSecondary])
+                IconButton(Lucide.ArrowLeft, contentDescription = Strings.t("Back"), onClick = onBack, tint = Theme[colors][textSecondary])
                 // The actions get all the room past Back, pushed to the end; a weighted one can take it all.
                 Row(
                     Modifier.weight(1f),
@@ -1459,7 +1463,7 @@ private fun SearchHeader(viewModel: SessionsViewModel, focusAsks: Int, list: Lis
     ) {
         TextField(
             state = viewModel.query,
-            placeholder = "Search chats",
+            placeholder = Strings.t("Search chats"),
             leadingIcon = Lucide.Search,
             clearable = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -1473,7 +1477,7 @@ private fun SearchHeader(viewModel: SessionsViewModel, focusAsks: Int, list: Lis
                 }
             },
         )
-        IconButton(Lucide.X, contentDescription = "Close search", onClick = onClose, tint = Theme[colors][text])
+        IconButton(Lucide.X, contentDescription = Strings.t("Close search"), onClick = onClose, tint = Theme[colors][text])
     }
 }
 
@@ -1568,7 +1572,7 @@ private fun NavTile(link: NavLink, modifier: Modifier = Modifier) {
                     modifier = Modifier
                         .background(Theme[colors][accent], CircleShape)
                         .padding(horizontal = 6.dp, vertical = 1.dp)
-                        .semantics { contentDescription = "${link.badge} unread" },
+                        .semantics { contentDescription = Strings.t("{0} unread", link.badge) },
                 )
             }
         }
@@ -1641,7 +1645,7 @@ private fun NewChatPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
         ) {
             UnstyledIcon(Lucide.SquarePen, contentDescription = null, tint = Theme[colors][onAccent], modifier = Modifier.size(16.dp))
             Text(
-                "New chat",
+                Strings.t("New chat"),
                 style = Theme[typography][body].copy(fontSize = 14.5.sp, fontWeight = FontWeight.SemiBold),
                 color = Theme[colors][onAccent],
                 maxLines = 1,
@@ -1666,7 +1670,7 @@ private fun NewChatPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
 @Composable
 private fun Avatar(userLabel: String?, connection: ConnectionState?, onClick: () -> Unit) = Tooltip(
     // Who's signed in, and the link when it's down, named on hover as the icon buttons beside it are.
-    listOfNotNull(userLabel?.takeIf { it.isNotBlank() } ?: "Account", connection?.takeIf { it !is ConnectionState.Connected }?.let(::connectionWord))
+    listOfNotNull(userLabel?.takeIf { it.isNotBlank() } ?: Strings.t("Account"), connection?.takeIf { it !is ConnectionState.Connected }?.let(::connectionWord))
         .joinToString(" · "),
 ) {
     val initials = userLabel?.initials()
@@ -1675,9 +1679,9 @@ private fun Avatar(userLabel: String?, connection: ConnectionState?, onClick: ()
         Modifier
             .size(MinTouchTarget)
             .handCursor()
-            .clickable(interaction, indication = null, role = Role.Button, onClickLabel = "Account", onClick = onClick)
+            .clickable(interaction, indication = null, role = Role.Button, onClickLabel = Strings.t("Account"), onClick = onClick)
             .semantics {
-                contentDescription = "Account"
+                contentDescription = Strings.t("Account")
                 if (connection != null && connection !is ConnectionState.Connected) stateDescription = connectionWord(connection)
             },
         contentAlignment = Alignment.Center,
@@ -1719,7 +1723,7 @@ private fun Avatar(userLabel: String?, connection: ConnectionState?, onClick: ()
 private fun AccountRow(userLabel: String?, connection: ConnectionState?, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
     val shape = RoundedCornerShape(Theme[radii][radiusSmall])
-    val name = userLabel?.takeIf { it.isNotBlank() } ?: "Account"
+    val name = userLabel?.takeIf { it.isNotBlank() } ?: Strings.t("Account")
     Row(
         Modifier
             .fillMaxWidth()
@@ -1727,7 +1731,7 @@ private fun AccountRow(userLabel: String?, connection: ConnectionState?, onClick
             .then(modifier)
             .clip(shape)
             .handCursor()
-            .clickable(interaction, indication = rememberHoverIndication(Theme[colors][text]), role = Role.Button, onClickLabel = "Account", onClick = onClick)
+            .clickable(interaction, indication = rememberHoverIndication(Theme[colors][text]), role = Role.Button, onClickLabel = Strings.t("Account"), onClick = onClick)
             .padding(horizontal = 8.dp, vertical = 6.dp)
             .semantics(mergeDescendants = true) { stateDescription = connectionWord(connection) },
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1895,9 +1899,9 @@ private fun SessionList(
                 } else {
                     item(key = "label-threads", contentType = SectionLabelType) {
                         if (onToggleThreads != null) {
-                            SectionToggle("Threads", threads.size, threadsCollapsed, "threads", onToggleThreads)
+                            SectionToggle(Strings.t("Threads"), threads.size, threadsCollapsed, Strings.t("threads"), onToggleThreads)
                         } else {
-                            ListLabel("Threads")
+                            ListLabel(Strings.t("Threads"))
                         }
                     }
                     items(
@@ -1924,9 +1928,9 @@ private fun SessionList(
             if (pinned.isNotEmpty()) {
                 item(key = "label-pinned", contentType = SectionLabelType) {
                     if (onTogglePinned != null) {
-                        SectionToggle("Pinned", pinned.size, pinnedCollapsed, "pinned chats", onTogglePinned)
+                        SectionToggle(Strings.t("Pinned"), pinned.size, pinnedCollapsed, Strings.t("pinned chats"), onTogglePinned)
                     } else {
-                        ListLabel("Pinned")
+                        ListLabel(Strings.t("Pinned"))
                     }
                 }
                 items(
@@ -2053,8 +2057,8 @@ private fun ThreadReorder(rows: List<ThreadRow>, projectLabel: (ThreadRow) -> St
             Modifier.fillMaxWidth().padding(start = 10.dp, top = 6.dp).semantics(mergeDescendants = true) { heading() },
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("THREADS · DRAG TO REORDER", style = Theme[typography][eyebrow], color = Theme[colors][textTertiary], maxLines = 1, modifier = Modifier.weight(1f))
-            Button("Done", onClick = { onDone(order.toList()) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Text(Strings.t("THREADS · DRAG TO REORDER"), style = Theme[typography][eyebrow], color = Theme[colors][textTertiary], maxLines = 1, modifier = Modifier.weight(1f))
+            Button(Strings.t("Done"), onClick = { onDone(order.toList()) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
         }
         order.forEach { id ->
             val row = byId[id] ?: return@forEach
@@ -2112,7 +2116,7 @@ private fun ThreadReorder(rows: List<ThreadRow>, projectLabel: (ThreadRow) -> St
                                     }
                                 }
                             }
-                            .semantics { contentDescription = "Drag ${row.thread.name}" },
+                            .semantics { contentDescription = Strings.t("Drag {0}", row.thread.name) },
                         contentAlignment = Alignment.Center,
                     ) {
                         UnstyledIcon(Lucide.GripVertical, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(18.dp))
@@ -2151,15 +2155,15 @@ internal fun ThreadActionsSheet(
         val at = order.indexOfFirst { it.id == r.thread.id }
         val above = order.getOrNull(at - 1)?.takeIf { at >= 0 }
         val below = order.getOrNull(at + 1)?.takeIf { at >= 0 }
-        SheetHeader(r.thread.name, "Thread")
+        SheetHeader(r.thread.name, Strings.t("Thread"))
         fun act(block: (ThreadRow) -> Unit) = { onDismiss(); block(r) }
-        onNewWindow?.let { SheetAction("Open in new window", Lucide.AppWindow, act(it)) }
-        SheetAction("Start fresh", Lucide.RotateCcw, act(onStartFresh))
-        SheetAction("Rename thread", Lucide.Pencil, act(onRename))
-        above?.let { other -> SheetAction("Move up", Lucide.ArrowUp, act { onMove(it.thread, other) }) }
-        below?.let { other -> SheetAction("Move down", Lucide.ArrowDown, act { onMove(it.thread, other) }) }
-        if (above != null || below != null) SheetAction("Reorder", Lucide.GripVertical, { onDismiss(); onReorder() })
-        SheetAction("Remove thread", Lucide.X, act(onRemove))
+        onNewWindow?.let { SheetAction(Strings.t("Open in new window"), Lucide.AppWindow, act(it)) }
+        SheetAction(Strings.t("Start fresh"), Lucide.RotateCcw, act(onStartFresh))
+        SheetAction(Strings.t("Rename thread"), Lucide.Pencil, act(onRename))
+        above?.let { other -> SheetAction(Strings.t("Move up"), Lucide.ArrowUp, act { onMove(it.thread, other) }) }
+        below?.let { other -> SheetAction(Strings.t("Move down"), Lucide.ArrowDown, act { onMove(it.thread, other) }) }
+        if (above != null || below != null) SheetAction(Strings.t("Reorder"), Lucide.GripVertical, { onDismiss(); onReorder() })
+        SheetAction(Strings.t("Remove thread"), Lucide.X, act(onRemove))
     }
 }
 
@@ -2183,11 +2187,11 @@ internal fun RenameThreadDialog(thread: ChatThread?, onDismiss: () -> Unit, onRe
     Dialog(
         visible = thread != null,
         onDismissRequest = onDismiss,
-        title = "Rename thread",
-        message = "Its chat is renamed too, and each fresh chat takes this name.",
+        title = Strings.t("Rename thread"),
+        message = Strings.t("Its chat is renamed too, and each fresh chat takes this name."),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Save", onClick = submit, size = ButtonSize.Small, enabled = !blank)
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Save"), onClick = submit, size = ButtonSize.Small, enabled = !blank)
         },
     ) {
         TextField(
@@ -2209,12 +2213,11 @@ internal fun StartThreadFreshDialog(thread: ChatThread?, onDismiss: () -> Unit, 
     Dialog(
         visible = thread != null,
         onDismissRequest = onDismiss,
-        title = "Start ${t.name} fresh?",
-        message = "Its chat is archived as “${t.name} · date and time” and a new, empty one takes its place. " +
-            "Archived chats are kept for 30 days.",
+        title = Strings.t("Start {0} fresh?", t.name),
+        message = Strings.t("Its chat is archived as “{0} · date and time” and a new, empty one takes its place. Archived chats are kept for 30 days.", t.name),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Start fresh", onClick = { onDismiss(); onConfirm(t) }, size = ButtonSize.Small)
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Start fresh"), onClick = { onDismiss(); onConfirm(t) }, size = ButtonSize.Small)
         },
     )
 }
@@ -2242,17 +2245,17 @@ private fun SectionToggle(title: String, count: Int, collapsed: Boolean, rows: S
             .heightIn(min = MinTouchTarget)
             .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
             .handCursor()
-            .clickable(onClickLabel = if (collapsed) "Show $rows" else "Hide $rows", role = Role.Button, onClick = onToggle)
+            .clickable(onClickLabel = if (collapsed) Strings.t("Show {0}", rows) else Strings.t("Hide {0}", rows), role = Role.Button, onClick = onToggle)
             .semantics(mergeDescendants = true) {
                 heading()
-                stateDescription = if (collapsed) "Collapsed" else "Expanded"
+                stateDescription = if (collapsed) Strings.t("Collapsed") else Strings.t("Expanded")
             }
             .padding(start = 10.dp, end = 10.dp, top = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "${title.uppercase()} · $count",
+            Strings.t("{0} · {1}", title.uppercase(), count),
             style = Theme[typography][eyebrow],
             color = Theme[colors][textTertiary],
             maxLines = 1,
@@ -2317,10 +2320,10 @@ internal fun rowTone(status: RowStatus?, draft: Boolean): RowTone = when {
 
 /** The row's second line: everything [status] and [draft] say, in words, or null for an idle chat. */
 internal fun rowStatusLine(status: RowStatus?, draft: Boolean): String? = listOfNotNull(
-    status?.waiting?.label,
-    "Running".takeIf { status?.running == true },
-    "New reply".takeIf { status?.unread == true },
-    "Draft".takeIf { draft },
+    status?.waiting?.label?.let(Strings::t),
+    Strings.t("Running").takeIf { status?.running == true },
+    Strings.t("New reply").takeIf { status?.unread == true },
+    Strings.t("Draft").takeIf { draft },
 ).joinToString(" · ").ifEmpty { null }
 
 /**
@@ -2454,7 +2457,7 @@ private fun SessionRowContent(
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onActions,
-                onLongClickLabel = "Session actions",
+                onLongClickLabel = Strings.t("Session actions"),
                 interactionSource = null,
                 indication = rememberHoverIndication(Theme[colors][text]),
             )
@@ -2464,7 +2467,7 @@ private fun SessionRowContent(
     ) {
         val marked = thread || session.pinned
         val mark = if (thread) Lucide.Hash else Lucide.Pin
-        val markLabel = if (thread) "Thread" else "Pinned"
+        val markLabel = if (thread) Strings.t("Thread") else Strings.t("Pinned")
         val pinOnly = marked && tone == RowTone.Idle
         if (pinOnly) {
             Box(Modifier.size(if (isDesktop) DESKTOP_DISC else 28.dp), contentAlignment = Alignment.Center) {
@@ -2523,13 +2526,13 @@ private fun SessionRowContent(
 @Composable
 private fun ProjectTag(label: String) {
     Text(
-        "· $label",
+        Strings.t("· {0}", label),
         style = Theme[typography][caption].copy(fontSize = 12.sp),
         color = Theme[colors][textMuted],
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         // Read as words in place of the "·" text, not as well as it.
-        modifier = Modifier.widthIn(max = PROJECT_TAG_MAX_WIDTH).clearAndSetSemantics { contentDescription = "In project $label" },
+        modifier = Modifier.widthIn(max = PROJECT_TAG_MAX_WIDTH).clearAndSetSemantics { contentDescription = Strings.t("In project {0}", label) },
     )
 }
 
@@ -2614,7 +2617,7 @@ private fun AttentionFilters(selected: AttentionFilter, running: Int, needsAtten
                 AttentionFilter.NeedsAttention -> needsAttention to Theme[colors][warning]
             }
             Chip(
-                text = filter.label,
+                text = Strings.t(filter.label),
                 selected = filter == selected,
                 onClick = { onSelect(filter) },
                 count = count?.takeIf { it > 0 },
@@ -2672,7 +2675,7 @@ private fun ProjectChips(
             Modifier.weight(1f).horizontalScroll(scroll).padding(start = 6.dp, end = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
         ) {
-            if (projects.isNotEmpty()) Chip(text = "All projects", selected = selected == null, onClick = { onSelect(null) })
+            if (projects.isNotEmpty()) Chip(text = Strings.t("All projects"), selected = selected == null, onClick = { onSelect(null) })
             projects.forEach { project ->
                 val isPicked = project.id == selected?.id
                 Chip(
@@ -2682,7 +2685,7 @@ private fun ProjectChips(
                     onClick = { onSelect(project) },
                     // On the desktop its options come straight from the chip too, with a right-click.
                     onLongClick = { onOptions(project, null) }.takeIf { isDesktop && project.hasOptions(onNew != null) },
-                    onLongClickLabel = "${project.label} options",
+                    onLongClickLabel = Strings.t("{0} options", project.label),
                     modifier = if (isPicked) {
                         Modifier.onPlaced { picked = it.positionInParent().x.let { x -> x..(x + it.size.width) } }
                     } else {
@@ -2690,7 +2693,7 @@ private fun ProjectChips(
                     },
                 )
             }
-            if (projects.isEmpty() && onNew != null) Chip(text = "New project", selected = false, onClick = onNew)
+            if (projects.isEmpty() && onNew != null) Chip(text = Strings.t("New project"), selected = false, onClick = onNew)
         }
         // Outside the scrolling chips, so they stay in reach.
         ProjectActions(selected, onNew, onOptions, showNew = projects.isNotEmpty())
@@ -2708,12 +2711,12 @@ private fun ProjectActions(selected: Project?, onNew: (() -> Unit)?, onOptions: 
         val bounds = remember { arrayOfNulls<Rect>(1) }
         IconButton(
             Lucide.Ellipsis,
-            contentDescription = "${selected.label} options",
+            contentDescription = Strings.t("{0} options", selected.label),
             onClick = { onOptions(selected, bounds[0]) },
             modifier = Modifier.onGloballyPositioned { bounds[0] = it.boundsInWindow() },
         )
     }
-    if (onNew != null && showNew) IconButton(Lucide.FolderPlus, contentDescription = "New project", onClick = onNew)
+    if (onNew != null && showNew) IconButton(Lucide.FolderPlus, contentDescription = Strings.t("New project"), onClick = onNew)
 }
 
 /** Whether a project has options to show: one the user made, or a folder that can be saved as one when [canMake]. */
@@ -2742,7 +2745,7 @@ private fun ProjectDropdown(
 ) {
     Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 4.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         if (projects.isEmpty()) {
-            if (onNew != null) Chip(text = "New project", selected = false, onClick = onNew)
+            if (onNew != null) Chip(text = Strings.t("New project"), selected = false, onClick = onNew)
         } else {
             ProjectMenuButton(projects, selected, onSelect)
             // Beside the button, so they stay in reach.
@@ -2756,7 +2759,7 @@ private fun ProjectDropdown(
 private fun RowScope.ProjectMenuButton(projects: List<Project>, selected: Project?, onSelect: (Project?) -> Unit) {
     var open by remember { mutableStateOf(false) }
     val shape = CircleShape
-    val shown = selected?.label ?: "All projects"
+    val shown = selected?.label ?: Strings.t("All projects")
     // Takes all the room the buttons beside it leave, with the pill hugging the start: a long name gets that
     // room before it is cut short, and the buttons stay at the end.
     Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
@@ -2766,7 +2769,7 @@ private fun RowScope.ProjectMenuButton(projects: List<Project>, selected: Projec
             alignment = AnchorAlignment.Start,
             maxHeight = PROJECT_MENU_MAX_HEIGHT,
             items = {
-                MenuChoice("All projects", projectIcon(null), selected = selected == null, onClick = { onSelect(null) })
+                MenuChoice(Strings.t("All projects"), projectIcon(null), selected = selected == null, onClick = { onSelect(null) })
                 projects.forEach { project ->
                     MenuChoice(
                         project.label,
@@ -2785,9 +2788,9 @@ private fun RowScope.ProjectMenuButton(projects: List<Project>, selected: Projec
                 Modifier
                     .heightIn(min = MinTouchTarget)
                     .handCursor()
-                    .clickable(interaction, indication = null, role = Role.DropdownList, onClickLabel = "Choose a project") { open = !open }
+                    .clickable(interaction, indication = null, role = Role.DropdownList, onClickLabel = Strings.t("Choose a project")) { open = !open }
                     // The name and count are read from the pill's text; the state says whether the menu shows.
-                    .semantics { stateDescription = if (open) "Expanded" else "Collapsed" },
+                    .semantics { stateDescription = if (open) Strings.t("Expanded") else Strings.t("Collapsed") },
                 contentAlignment = Alignment.CenterStart,
             ) {
                 Row(
@@ -2877,25 +2880,25 @@ internal fun SessionActionsSheet(
         val s = shown ?: return@ActionSheet
         val age = when (val ago = relativeTime(s.activityAt)) {
             "" -> null
-            "now" -> "Active just now"
-            else -> "Active $ago ago"
+            "now" -> Strings.t("Active just now")
+            else -> Strings.t("Active {0} ago", ago)
         }
         SheetHeader(s.displayTitle, age)
         fun act(block: (SessionSummary) -> Unit) = { onDismiss(); block(s) }
-        onStartFresh?.let { SheetAction("Start fresh", Lucide.RotateCcw, act(it)) }
-        onRename?.let { SheetAction("Rename", Lucide.Pencil, act(it)) }
-        onMakeThread?.let { SheetAction("Make thread", Lucide.Hash, act(it)) }
-        onTogglePinned?.let { SheetAction(if (s.pinned) "Unpin" else "Pin", if (s.pinned) Lucide.PinOff else Lucide.Pin, act(it)) }
-        onUsage?.let { SheetAction("Usage and cost", Lucide.Gauge, act(it)) }
-        onProcesses?.let { SheetAction("Background processes", Lucide.SquareTerminal, act(it)) }
-        onCheckpoints?.let { SheetAction("Checkpoints", Lucide.History, act(it)) }
-        onControl?.let { SheetAction("Goal and loops", Lucide.Target, act(it)) }
-        onExport?.let { SheetAction("Export as Markdown", Lucide.Download, act(it)) }
-        onCopyId?.let { SheetAction("Copy session ID", Lucide.Copy, act(it)) }
+        onStartFresh?.let { SheetAction(Strings.t("Start fresh"), Lucide.RotateCcw, act(it)) }
+        onRename?.let { SheetAction(Strings.t("Rename"), Lucide.Pencil, act(it)) }
+        onMakeThread?.let { SheetAction(Strings.t("Make thread"), Lucide.Hash, act(it)) }
+        onTogglePinned?.let { SheetAction(if (s.pinned) Strings.t("Unpin") else Strings.t("Pin"), if (s.pinned) Lucide.PinOff else Lucide.Pin, act(it)) }
+        onUsage?.let { SheetAction(Strings.t("Usage and cost"), Lucide.Gauge, act(it)) }
+        onProcesses?.let { SheetAction(Strings.t("Background processes"), Lucide.SquareTerminal, act(it)) }
+        onCheckpoints?.let { SheetAction(Strings.t("Checkpoints"), Lucide.History, act(it)) }
+        onControl?.let { SheetAction(Strings.t("Goal and loops"), Lucide.Target, act(it)) }
+        onExport?.let { SheetAction(Strings.t("Export as Markdown"), Lucide.Download, act(it)) }
+        onCopyId?.let { SheetAction(Strings.t("Copy session ID"), Lucide.Copy, act(it)) }
         onToggleArchived?.let {
-            SheetAction(if (s.archived) "Unarchive" else "Archive", if (s.archived) Lucide.ArchiveRestore else Lucide.Archive, act(it))
+            SheetAction(if (s.archived) Strings.t("Unarchive") else Strings.t("Archive"), if (s.archived) Lucide.ArchiveRestore else Lucide.Archive, act(it))
         }
-        onDelete?.let { SheetAction("Delete", Lucide.Trash2, act(it), destructive = true) }
+        onDelete?.let { SheetAction(Strings.t("Delete"), Lucide.Trash2, act(it), destructive = true) }
     }
 }
 
@@ -2916,11 +2919,11 @@ internal fun RenameDialog(session: SessionSummary?, onDismiss: () -> Unit, onRen
     Dialog(
         visible = session != null,
         onDismissRequest = onDismiss,
-        title = "Rename chat",
-        message = "Leave empty to clear the title.",
+        title = Strings.t("Rename chat"),
+        message = Strings.t("Leave empty to clear the title."),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Save", onClick = submit, size = ButtonSize.Small)
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Save"), onClick = submit, size = ButtonSize.Small)
         },
     ) {
         TextField(
@@ -2954,12 +2957,12 @@ internal fun DeleteDialog(session: SessionSummary?, onDismiss: () -> Unit, onDel
     Dialog(
         visible = session != null,
         onDismissRequest = onDismiss,
-        title = "Delete chat?",
-        message = "“${s.displayTitle}” and its messages are removed from the gateway. This can't be undone.",
+        title = Strings.t("Delete chat?"),
+        message = Strings.t("“{0}” and its messages are removed from the gateway. This can't be undone.", s.displayTitle),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             Button(
-                "Delete",
+                Strings.t("Delete"),
                 onClick = { onDismiss(); onDelete(s) },
                 variant = ButtonVariant.Danger,
                 size = ButtonSize.Small,
@@ -2987,21 +2990,21 @@ private fun AccountSheet(
     anchor: Rect? = null,
 ) {
     ActionSheet(visible = visible, onDismiss = onDismiss, anchor = anchor) {
-        SheetHeader(userLabel ?: "Signed in", gateway.url)
+        SheetHeader(userLabel ?: Strings.t("Signed in"), gateway.url)
         // In line with the rows: a desktop's menu is narrower than a phone's sheet.
         Box(Modifier.padding(horizontal = if (isDesktop) 12.dp else 20.dp, vertical = if (isDesktop) 6.dp else 8.dp)) {
             ConnectionLine(connection, detailed = true)
         }
         if (profileLabel != null) {
-            SheetAction("Profile: $profileLabel", Lucide.Bot, onClick = { onDismiss(); onOpenProfiles() })
+            SheetAction(Strings.t("Profile: {0}", profileLabel), Lucide.Bot, onClick = { onDismiss(); onOpenProfiles() })
         }
-        SheetAction("Settings", Lucide.Settings, onClick = { onDismiss(); onOpenSettings() })
-        SheetAction(if (refreshing) "Refreshing chats…" else "Refresh chats", Lucide.RefreshCw, onClick = { onDismiss(); onRefresh() })
+        SheetAction(Strings.t("Settings"), Lucide.Settings, onClick = { onDismiss(); onOpenSettings() })
+        SheetAction(if (refreshing) Strings.t("Refreshing chats…") else Strings.t("Refresh chats"), Lucide.RefreshCw, onClick = { onDismiss(); onRefresh() })
         if (connection is ConnectionState.Reconnecting || connection is ConnectionState.Failed) {
-            SheetAction("Retry connection now", Lucide.RefreshCw, onClick = onRetry)
+            SheetAction(Strings.t("Retry connection now"), Lucide.RefreshCw, onClick = onRetry)
         }
-        SheetAction("Sign out", Lucide.LogOut, onClick = { onDismiss(); onSignOut() })
-        SheetAction("Switch or add a gateway", Lucide.ArrowLeftRight, onClick = { onDismiss(); onOpenGateways() })
+        SheetAction(Strings.t("Sign out"), Lucide.LogOut, onClick = { onDismiss(); onSignOut() })
+        SheetAction(Strings.t("Switch or add a gateway"), Lucide.ArrowLeftRight, onClick = { onDismiss(); onOpenGateways() })
     }
 }
 
@@ -3018,7 +3021,7 @@ internal fun ProfileSheet(
     onSelect: (Profile) -> Unit,
 ) {
     BottomSheet(visible = visible, onDismiss = onDismiss) {
-        SheetHeader("Profiles", "Each profile is its own agent, with its own chats, memory and model.")
+        SheetHeader(Strings.t("Profiles"), Strings.t("Each profile is its own agent, with its own chats, memory and model."))
         // A long list scrolls under the header; a short one keeps the sheet sized to its content. It opens with the
         // active profile in sight, wherever it is in the list: two frames on, as the desktop's panel is only laid out
         // after the frame it opens on.
@@ -3042,7 +3045,7 @@ internal fun ProfileSheet(
         }
         if (profiles.size < 2) {
             Text(
-                "Add profiles on the gateway host with “hermes profile create”.",
+                Strings.t("Add profiles on the gateway host with “hermes profile create”."),
                 style = Theme[typography][bodySmall],
                 color = Theme[colors][textTertiary],
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 12.dp),
@@ -3076,12 +3079,12 @@ private fun ProfileRow(profile: Profile, checked: Boolean, onClick: () -> Unit, 
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(profile.label, style = Theme[typography][body], color = Theme[colors][text], maxLines = 1, overflow = TextOverflow.Ellipsis)
-            val sub = listOfNotNull("Default".takeIf { profile.isDefault }, detail).joinToString(" · ")
+            val sub = listOfNotNull(Strings.t("Default").takeIf { profile.isDefault }, detail).joinToString(" · ")
             if (sub.isNotEmpty()) {
                 Text(sub, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        if (checked) UnstyledIcon(Lucide.Check, contentDescription = "Active", tint = Theme[colors][accentText], modifier = Modifier.size(20.dp))
+        if (checked) UnstyledIcon(Lucide.Check, contentDescription = Strings.t("Active"), tint = Theme[colors][accentText], modifier = Modifier.size(20.dp))
     }
 }
 
@@ -3095,7 +3098,7 @@ internal fun MessageBanner(message: String, onDismiss: () -> Unit, modifier: Mod
     Surface(modifier.padding(horizontal = 16.dp).fillMaxWidth(), elevated = true) {
         Row(Modifier.padding(start = 16.dp, end = 4.dp, top = 4.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
             Text(message, style = Theme[typography][bodySmall], color = Theme[colors][text], modifier = Modifier.weight(1f))
-            IconButton(Lucide.X, contentDescription = "Dismiss", onClick = onDismiss, tint = Theme[colors][accentText])
+            IconButton(Lucide.X, contentDescription = Strings.t("Dismiss"), onClick = onDismiss, tint = Theme[colors][accentText])
         }
     }
 }

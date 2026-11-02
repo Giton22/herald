@@ -126,6 +126,7 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.LocalAppSettings
 import dev.hermeskotlin.ui.arrowFocus
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.ui.isDesktop
 import org.koin.compose.koinInject
 
@@ -211,7 +212,7 @@ internal fun ModelSheet(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                "Model",
+                Strings.t("Model"),
                 style = Theme[typography][title],
                 color = Theme[colors][textColor],
                 modifier = Modifier.weight(1f).semantics { heading() },
@@ -219,7 +220,7 @@ internal fun ModelSheet(
             // A note says what a pick changes (a bot's model is for all its chats), so it doesn't also say this.
             if (!modelOnly && note == null) {
                 Text(
-                    "For this chat",
+                    Strings.t("For this chat"),
                     style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp),
                     color = Theme[colors][textTertiary],
                     modifier = Modifier.padding(bottom = 3.dp),
@@ -234,7 +235,7 @@ internal fun ModelSheet(
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
             )
         }
-        val saveLine = if (picker.saving) "Saving…" else picker.saveError
+        val saveLine = if (picker.saving) Strings.t("Saving…") else picker.saveError
         saveLine?.let {
             Text(
                 it,
@@ -247,7 +248,7 @@ internal fun ModelSheet(
         val efforts = if (modelOnly) emptyList() else ReasoningEffort.choicesFor(option)
         if (efforts.isNotEmpty()) {
             Text(
-                "Thinking",
+                Strings.t("Thinking"),
                 style = Theme[typography][label],
                 color = Theme[colors][textSecondary],
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 8.dp).semantics { heading() },
@@ -281,8 +282,8 @@ internal fun ModelSheet(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 UnstyledIcon(Lucide.CloudOff, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(24.dp))
-                Text(picker.error ?: "Couldn't load the models.", style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
-                Button("Try again", onClick = onRefresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+                Text(picker.error ?: Strings.t("Couldn't load the models."), style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
+                Button(Strings.t("Try again"), onClick = onRefresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
             }
             else -> ModelList(
                 catalog = catalog,
@@ -336,7 +337,7 @@ private fun ColumnScope.ModelList(
         if (isDesktop) LaunchedEffect(Unit) { focus.requestFocus() }
         TextField(
             state = query,
-            placeholder = "Search models or providers",
+            placeholder = Strings.t("Search models or providers"),
             leadingIcon = Lucide.Search,
             clearable = true,
             focusRequester = focus,
@@ -355,8 +356,8 @@ private fun ColumnScope.ModelList(
         )
     }
     val scopes = buildList {
-        if (hasYours) add(PickerScope.Yours to "Your models")
-        add(PickerScope.All to "All")
+        if (hasYours) add(PickerScope.Yours to Strings.t("Your models"))
+        add(PickerScope.All to Strings.t("All"))
         if (catalog.providers.size > 1) catalog.providers.forEach { add(PickerScope.Provider(it.slug) to providerNames.getValue(it.slug)) }
     }
     if (scopes.size > 1) {
@@ -411,7 +412,7 @@ private fun ColumnScope.ModelList(
             if (sections.isEmpty()) {
                 item(key = "empty") {
                     Text(
-                        if (needle.isEmpty()) "The gateway offers no models." else "No models match \"$needle\".",
+                        if (needle.isEmpty()) Strings.t("The gateway offers no models.") else Strings.t("No models match \"{0}\".", needle),
                         style = Theme[typography][bodySmall],
                         color = Theme[colors][textTertiary],
                         modifier = Modifier.padding(20.dp),
@@ -497,8 +498,8 @@ private fun FastModeCard(on: Boolean, onFast: (Boolean) -> Unit, modifier: Modif
             UnstyledIcon(Lucide.Zap, contentDescription = null, tint = Theme[colors][warning], modifier = Modifier.size(15.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("Fast mode", style = Theme[typography][body].copy(fontSize = 15.sp), color = Theme[colors][textColor])
-            Text("Priority processing. Costs more.", style = Theme[typography][caption].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary])
+            Text(Strings.t("Fast mode"), style = Theme[typography][body].copy(fontSize = 15.sp), color = Theme[colors][textColor])
+            Text(Strings.t("Priority processing. Costs more."), style = Theme[typography][caption].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary])
         }
         Switch(on)
     }
@@ -535,7 +536,7 @@ private fun ModelRow(
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     onToggleStar()
                 },
-                onLongClickLabel = if (starred) "Unstar" else "Star",
+                onLongClickLabel = if (starred) Strings.t("Unstar") else Strings.t("Star"),
             )
             .semantics { this.selected = selected }
             .padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
@@ -605,7 +606,7 @@ private fun ModelRow(
         if (selected) UnstyledIcon(Lucide.Check, contentDescription = null, tint = Theme[colors][accentText], modifier = Modifier.size(18.dp))
         IconButton(
             icon = if (starred) StarFilled else Lucide.Star,
-            contentDescription = if (starred) "Unstar ${row.name}" else "Star ${row.name}",
+            contentDescription = if (starred) Strings.t("Unstar {0}", row.name) else Strings.t("Star {0}", row.name),
             onClick = onToggleStar,
             tint = if (starred) Theme[colors][accentText] else Theme[colors][textTertiary],
             iconSize = 18.dp,
@@ -667,7 +668,7 @@ private fun BrowseAllRow(count: Int, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "All models",
+            Strings.t("All models"),
             style = Theme[typography][body].copy(fontSize = 14.5.sp, fontWeight = FontWeight.Medium),
             color = Theme[colors][accentText],
             modifier = Modifier.weight(1f),
@@ -683,11 +684,11 @@ internal fun ModelConfirmDialog(pending: PendingSwitch?, onConfirm: (ModelOption
     Dialog(
         visible = pending != null,
         onDismissRequest = onDismiss,
-        title = "Switch to ${pending?.model?.id?.let(::displayModelName).orEmpty()}?",
+        title = Strings.t("Switch to {0}?", pending?.model?.id?.let(::displayModelName).orEmpty()),
         message = pending?.message,
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost)
-            Button("Switch", onClick = { pending?.let { onConfirm(it.model) } })
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost)
+            Button(Strings.t("Switch"), onClick = { pending?.let { onConfirm(it.model) } })
         },
     )
 }

@@ -43,6 +43,7 @@ import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.ui.tapVerb
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
@@ -64,17 +65,17 @@ internal suspend fun downloadWidget(files: WidgetFiles, file: GatewayFile): File
 } catch (e: CancellationException) {
     throw e
 } catch (_: Exception) {
-    FileDownload.Failed("Couldn't get this widget from the gateway.")
+    FileDownload.Failed(Strings.t("Couldn't get this widget from the gateway."))
 }
 
 internal suspend fun loadWidget(files: WidgetFiles, file: GatewayFile): FileLoad = try {
-    val loaded = withTimeoutOrNull(20_000) { files.load(file) } ?: FileLoad.Failed("The widget took too long to load.")
+    val loaded = withTimeoutOrNull(20_000) { files.load(file) } ?: FileLoad.Failed(Strings.t("The widget took too long to load."))
     if (loaded is FileLoad.Ready) widgetProblem(loaded.text)?.let { FileLoad.Failed(it) } ?: loaded
-    else if (loaded is FileLoad.Failed) loaded else FileLoad.Failed("Couldn't read this widget.")
+    else if (loaded is FileLoad.Failed) loaded else FileLoad.Failed(Strings.t("Couldn't read this widget."))
 } catch (e: CancellationException) {
     throw e
 } catch (_: Exception) {
-    FileLoad.Failed("Couldn't load this widget from the gateway.")
+    FileLoad.Failed(Strings.t("Couldn't load this widget from the gateway."))
 }
 
 @Composable
@@ -100,7 +101,7 @@ internal fun InlineWidget(item: ReplyMedia, file: GatewayFile, files: WidgetFile
         }
         val problem = (loaded as? FileLoad.Failed)?.message ?: failed
         if (problem != null) {
-            Text("$problem $tapVerb to retry.", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary],
+            Text(Strings.t("{0} {1} to retry.", problem, tapVerb), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary],
                 modifier = Modifier.fillMaxWidth().handCursor().clickable { attempt++ }.padding(12.dp))
         }
     }

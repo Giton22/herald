@@ -6,6 +6,7 @@ import com.composables.icons.lucide.CornerDownRight
 import com.composables.icons.lucide.ListEnd
 import com.composables.icons.lucide.Lucide
 import dev.hermeskotlin.core.settings.RunningSend
+import dev.hermeskotlin.ui.i18n.Strings
 
 /**
  * How a send goes: null when no reply is [running] (a plain prompt), else the mode [picked] for this message
@@ -20,17 +21,17 @@ internal fun sendModeFor(running: Boolean, picked: RunningSend?, setting: Runnin
 /** The name a send mode goes by in the Send menu and Settings. */
 internal val RunningSend.label: String
     get() = when (this) {
-        RunningSend.Steer -> "Steer"
-        RunningSend.Queue -> "Queue"
-        RunningSend.StopAndSend -> "Stop & send"
+        RunningSend.Steer -> Strings.t("Steer")
+        RunningSend.Queue -> Strings.t("Queue")
+        RunningSend.StopAndSend -> Strings.t("Stop & send")
     }
 
 /** What the mode does to the running reply, in a few words. */
 internal val RunningSend.summary: String
     get() = when (this) {
-        RunningSend.Steer -> "Adds it to the running reply"
-        RunningSend.Queue -> "Sends it once the reply ends"
-        RunningSend.StopAndSend -> "Stops the reply, then sends it"
+        RunningSend.Steer -> Strings.t("Adds it to the running reply")
+        RunningSend.Queue -> Strings.t("Sends it once the reply ends")
+        RunningSend.StopAndSend -> Strings.t("Stops the reply, then sends it")
     }
 
 internal val RunningSend.icon: ImageVector

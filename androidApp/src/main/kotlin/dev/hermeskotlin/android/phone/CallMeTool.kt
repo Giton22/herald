@@ -5,6 +5,7 @@ import dev.hermeskotlin.core.phone.CallOutcome
 import dev.hermeskotlin.core.phone.CallReason
 import dev.hermeskotlin.core.phone.clockTime
 import dev.hermeskotlin.core.phone.PhoneToolException
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
@@ -17,14 +18,14 @@ import kotlinx.serialization.json.put
 internal class CallMeTool(private val notifications: ChatNotifications, private val chats: ChatTargets) {
 
     suspend fun run(args: JsonObject, session: String): JsonObject {
-        val reason = args.string("reason")?.trim()?.takeIf { it.isNotEmpty() } ?: throw PhoneToolException("reason is needed.")
+        val reason = args.string("reason")?.trim()?.takeIf { it.isNotEmpty() } ?: throw PhoneToolException(Strings.t("reason is needed."))
         val details = args.string("details")?.trim()?.takeIf { it.isNotEmpty() }
         // The chat on this phone it came from; else the gateway's own id for it (a scheduled job's), which the call
         // resumes.
         val target = chats.of(session)
         val chat = target?.storedSessionId ?: session.takeIf { it.isNotBlank() }
         val outcome = notifications.ringForAgent(chat, target?.title, CallReason(reason, details))
-            ?: throw PhoneToolException("Kyllene may not post notifications on this phone, so it can't ring.")
+            ?: throw PhoneToolException(Strings.t("Kyllene may not post notifications on this phone, so it can't ring."))
         return buildJsonObject {
             put("status", outcome.status)
             // When it may ring again, for the agent to send a reminder for then.

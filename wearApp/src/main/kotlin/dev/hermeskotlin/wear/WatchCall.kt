@@ -8,6 +8,7 @@ import android.net.Network
 import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.os.Build
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
@@ -76,7 +77,7 @@ class WatchCall(context: Context) {
         peer.applySdp { observer -> whileOpen(observer::onSetFailure) { peer.setLocalDescription(observer, offer) } }
         // The model answers with whatever candidates are in the offer, so a slow gathering only waits so long.
         withTimeoutOrNull(ICE_GATHER_MS) { gathered.await() }
-        return synchronized(lock) { peer.takeUnless { closed }?.localDescription?.description } ?: error("Couldn't make the call offer.")
+        return synchronized(lock) { peer.takeUnless { closed }?.localDescription?.description } ?: error(Strings.t("Couldn't make the call offer."))
     }
 
     /** Runs [block] on the call's objects unless it's been closed (they're freed then), else [ended]. */
@@ -122,7 +123,7 @@ class WatchCall(context: Context) {
                 override fun onRenegotiationNeeded() = Unit
                 override fun onAddTrack(receiver: RtpReceiver, streams: Array<out MediaStream>) = Unit
             },
-        ) ?: error("Couldn't set up the call.")
+        ) ?: error(Strings.t("Couldn't set up the call."))
         this.peer = peer
 
         val source = factory.createAudioSource(
@@ -138,7 +139,7 @@ class WatchCall(context: Context) {
         peer.addTrack(track, listOf("mic"))
 
         // Before the offer, so the offer carries the channel.
-        val channel = peer.createDataChannel("oai-events", DataChannel.Init()) ?: error("Couldn't open the call's event channel.")
+        val channel = peer.createDataChannel("oai-events", DataChannel.Init()) ?: error(Strings.t("Couldn't open the call's event channel."))
         this.channel = channel
         channel.registerObserver(object : DataChannel.Observer {
             override fun onMessage(buffer: DataChannel.Buffer) {
@@ -312,7 +313,7 @@ class WatchCall(context: Context) {
         const val FAST_NETWORK_MS = 4_000L
         const val SPEAKING_LEVEL = 0.02
         const val SPEAKING_HANGOVER_MS = 400L
-        const val ENDED = "The call ended."
+        val ENDED: String get() = Strings.t("The call ended.")
 
         @Volatile private var initialized = false
 
@@ -344,7 +345,7 @@ class WatchCall(context: Context) {
 private suspend fun PeerConnection.createSdp(start: (SdpObserver) -> Unit): SessionDescription = suspendCoroutine { continuation ->
     start(object : SdpObserver {
         override fun onCreateSuccess(description: SessionDescription) = continuation.resume(description)
-        override fun onCreateFailure(error: String?) = continuation.resumeWithException(IllegalStateException(error ?: "Couldn't make the call offer."))
+        override fun onCreateFailure(error: String?) = continuation.resumeWithException(IllegalStateException(error ?: Strings.t("Couldn't make the call offer.")))
         override fun onSetSuccess() = Unit
         override fun onSetFailure(error: String?) = Unit
     })
@@ -354,7 +355,7 @@ private suspend fun PeerConnection.createSdp(start: (SdpObserver) -> Unit): Sess
 private suspend fun PeerConnection.applySdp(start: (SdpObserver) -> Unit): Unit = suspendCoroutine { continuation ->
     start(object : SdpObserver {
         override fun onSetSuccess() = continuation.resume(Unit)
-        override fun onSetFailure(error: String?) = continuation.resumeWithException(IllegalStateException(error ?: "The call was refused."))
+        override fun onSetFailure(error: String?) = continuation.resumeWithException(IllegalStateException(error ?: Strings.t("The call was refused.")))
         override fun onCreateSuccess(description: SessionDescription) = Unit
         override fun onCreateFailure(error: String?) = Unit
     })

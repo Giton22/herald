@@ -24,6 +24,7 @@ import com.mikepenz.markdown.compose.elements.MarkdownOrderedList
 import dev.hermeskotlin.designsystem.radiusSmall
 import dev.hermeskotlin.designsystem.surface3
 import dev.hermeskotlin.designsystem.textMuted
+import dev.hermeskotlin.ui.i18n.Strings
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.selection.DisableSelection
@@ -362,12 +363,12 @@ private object PictureTransformer : ImageTransformer {
             null, MarkdownPicture.Loading -> null
             is MarkdownPicture.Ready -> ImageData(
                 BitmapPainter(picture.bitmap),
-                modifier = picture.onOpen?.let { Modifier.handCursor().clickable(onClickLabel = "Open the picture", onClick = it) } ?: Modifier,
+                modifier = picture.onOpen?.let { Modifier.handCursor().clickable(onClickLabel = Strings.t("Open the picture"), onClick = it) } ?: Modifier,
                 contentDescription = null,
             )
             MarkdownPicture.Failed -> ImageData(
                 rememberVectorPainter(Lucide.ImageOff),
-                contentDescription = "Picture couldn't load",
+                contentDescription = Strings.t("Picture couldn't load"),
                 colorFilter = ColorFilter.tint(Theme[colors][textTertiary]),
             )
         }
@@ -497,7 +498,7 @@ private fun CodeBlock(code: String, language: String?, style: TextStyle) {
         ) {
             UnstyledIcon(Lucide.SquareTerminal, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(13.dp))
             Text(
-                language?.takeIf { it.isNotBlank() } ?: "code",
+                Strings.t(language?.takeIf { it.isNotBlank() } ?: "code"),
                 style = Theme[typography][caption],
                 color = Theme[colors][textTertiary],
                 modifier = Modifier.weight(1f),
@@ -591,7 +592,7 @@ private fun CopyPill(text: String) {
             verticalAlignment = Alignment.CenterVertically,
         ) {
             UnstyledIcon(if (copied) Lucide.Check else Lucide.Copy, contentDescription = null, tint = tint, modifier = Modifier.size(11.dp))
-            Text(if (copied) "Copied" else "Copy", style = Theme[typography][caption], color = tint)
+            Text(Strings.t(if (copied) "Copied" else "Copy"), style = Theme[typography][caption], color = tint)
         }
     }
 }
@@ -605,7 +606,7 @@ fun CopyButton(text: String, modifier: Modifier = Modifier, label: String = "Cop
     val (copied, copy) = rememberCopy(text)
     IconButton(
         icon = if (copied) Lucide.Check else Lucide.Copy,
-        contentDescription = if (copied) "Copied" else label,
+        contentDescription = Strings.t(if (copied) "Copied" else label),
         onClick = copy,
         // Smaller than MinTouchTarget so it sits close to the text; it stands alone, so Compose still stretches its taps to 48dp.
         modifier = modifier.size(32.dp),

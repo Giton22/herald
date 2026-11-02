@@ -86,6 +86,7 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.PlatformBackHandler
 import dev.hermeskotlin.ui.components.relativeTime
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.ui.sessions.SubpageHeader
 import kotlin.time.Clock
 import org.koin.compose.viewmodel.koinViewModel
@@ -143,14 +144,17 @@ fun PhoneToolsScreen(onBack: () -> Unit, viewModel: PhoneToolsViewModel = koinVi
 /** Under the switch: what quiet hours stop, and what Do Not Disturb does to the calls without them. */
 internal fun quietHoursDetail(settings: AppSettings): String {
     val window = if (settings.quietHours && settings.quietFrom == settings.quietUntil) {
-        "They start and end at ${clockTime(settings.quietFrom)}, so nothing is quiet yet: pick another time."
+        Strings.t("They start and end at {0}, so nothing is quiet yet: pick another time.", clockTime(settings.quietFrom))
     } else if (settings.quietHours) {
-        "Nothing rings from ${clockTime(settings.quietFrom)} to ${clockTime(settings.quietUntil)}."
+        Strings.t("Nothing rings from {0} to {1}.", clockTime(settings.quietFrom), clockTime(settings.quietUntil))
     } else {
-        "Nothing rings between the times you pick."
+        Strings.t("Nothing rings between the times you pick.")
     }
-    return "$window The agent is told to reach you another way; approvals and questions come as notifications. " +
-        DND_DETAIL
+    return Strings.t(
+        "{0} The agent is told to reach you another way; approvals and questions come as notifications. {1}",
+        window,
+        Strings.t(DND_DETAIL),
+    )
 }
 
 /**
@@ -222,8 +226,8 @@ internal fun PhoneToolsView(
     var installAsked by remember { mutableStateOf(false) }
     PluginInstallDialog(
         visible = installAsked,
-        feature = "Phone tools",
-        what = "It offers the agent the tools you turn on here, and passes their calls to this phone.",
+        feature = Strings.t("Phone tools"),
+        what = Strings.t("It offers the agent the tools you turn on here, and passes their calls to this phone."),
         onDismiss = { installAsked = false },
     ) {
         installAsked = false
@@ -242,23 +246,25 @@ internal fun PhoneToolsView(
         contentAlignment = Alignment.TopCenter,
     ) {
         Column(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
-            SubpageHeader("Phone tools", onBack = onBack)
+            SubpageHeader(Strings.t("Phone tools"), onBack = onBack)
             Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(22.dp),
             ) {
                 Text(
-                    "Let the agent use this phone: read how it is, or do something on it. Every tool is off until you " +
-                        "turn it on, and anything that changes the phone asks you first: in Kyllene while it's open, else " +
-                        "in a notification. A tool you " +
-                        "turn off is taken away from the agent at once.",
+                    Strings.t(
+                        "Let the agent use this phone: read how it is, or do something on it. Every tool is off until you " +
+                            "turn it on, and anything that changes the phone asks you first: in Kyllene while it's open, else " +
+                            "in a notification. A tool you " +
+                            "turn off is taken away from the agent at once.",
+                    ),
                     style = Theme[typography][bodySmall],
                     color = Theme[colors][textTertiary],
                     modifier = Modifier.padding(horizontal = 6.dp),
                 )
-                Section("Phone tools") {
+                Section(Strings.t("Phone tools")) {
                     SwitchRow(
-                        title = "Let the agent use this phone",
+                        title = Strings.t("Let the agent use this phone"),
                         detail = statusLine(settings, status),
                         checked = settings.phoneTools,
                         // On installs code on the gateway: said first, done only once the user agrees.
@@ -267,7 +273,7 @@ internal fun PhoneToolsView(
                     )
                     if (settings.phoneTools && status.state in setOf(State.NotInstalled, State.Failed)) {
                         Divider()
-                        ActionRow("Set up on the gateway", Lucide.Wrench, onSetUp)
+                        ActionRow(Strings.t("Set up on the gateway"), Lucide.Wrench, onSetUp)
                     }
                     val update = status.update
                     if (settings.phoneTools && update != null) {
@@ -276,64 +282,64 @@ internal fun PhoneToolsView(
                     }
                 }
                 if (settings.phoneTools) {
-                    Section("Tools") {
+                    Section(Strings.t("Tools")) {
                         // The agent's calls ring: they're under Calls.
                         PhoneTool.entries.filter { it != PhoneTool.CallMe }.forEachIndexed { i, tool ->
                             if (i > 0) Divider()
                             val on = tool.id in settings.phoneToolsOn
                             // Only once it's on: a tool that's off needs nothing, and asking early would nag.
-                            val needs = if (on) missing(tool) else null
+                            val needs = if (on) missing(tool)?.let(Strings::t) else null
                             SwitchRow(
-                                title = tool.title,
-                                detail = needs ?: tool.detail,
+                                title = Strings.t(tool.title),
+                                detail = needs ?: Strings.t(tool.detail),
                                 checked = on,
                                 onCheckedChange = { onTool(tool, it) },
                                 icon = tool.icon,
                             )
                             if (needs != null) {
                                 Divider()
-                                ActionRow("Allow on this phone", Lucide.ShieldCheck) { onAllow(tool) }
+                                ActionRow(Strings.t("Allow on this phone"), Lucide.ShieldCheck) { onAllow(tool) }
                             }
                             // Offered, never asked: only a tap on this row asks Android for it.
-                            val more = if (on && needs == null) optional(tool) else null
+                            val more = if (on && needs == null) optional(tool)?.let(Strings::t) else null
                             if (more != null) {
                                 Divider()
                                 ActionRow(more, Lucide.ShieldCheck) { onAllowOptional(tool) }
                             }
                         }
                     }
-                    Section("Calls") {
+                    Section(Strings.t("Calls")) {
                         val callsMe = PhoneTool.CallMe.id in settings.phoneToolsOn
-                        val callNeeds = if (callsMe) ringsMissing() else null
+                        val callNeeds = if (callsMe) ringsMissing()?.let(Strings::t) else null
                         SwitchRow(
-                            title = PhoneTool.CallMe.title,
-                            detail = callNeeds ?: PhoneTool.CallMe.detail,
+                            title = Strings.t(PhoneTool.CallMe.title),
+                            detail = callNeeds ?: Strings.t(PhoneTool.CallMe.detail),
                             checked = callsMe,
                             onCheckedChange = { onTool(PhoneTool.CallMe, it) },
                             icon = PhoneTool.CallMe.icon,
                         )
                         if (callNeeds != null) {
                             Divider()
-                            ActionRow("Allow on this phone", Lucide.ShieldCheck, onAllowRings)
+                            ActionRow(Strings.t("Allow on this phone"), Lucide.ShieldCheck, onAllowRings)
                         }
                         Divider()
-                        val needs = if (settings.phoneRings) ringsMissing() else null
+                        val needs = if (settings.phoneRings) ringsMissing()?.let(Strings::t) else null
                         SwitchRow(
-                            title = "Ring me for an answer",
-                            detail = needs ?: RINGS_DETAIL,
+                            title = Strings.t("Ring me for an answer"),
+                            detail = needs ?: Strings.t(RINGS_DETAIL),
                             checked = settings.phoneRings,
                             onCheckedChange = onRings,
                             icon = Lucide.PhoneIncoming,
                         )
                         if (needs != null) {
                             Divider()
-                            ActionRow("Allow on this phone", Lucide.ShieldCheck, onAllowRings)
+                            ActionRow(Strings.t("Allow on this phone"), Lucide.ShieldCheck, onAllowRings)
                         }
                         if (settings.phoneRings) {
                             Divider()
                             SwitchRow(
-                                title = "Talk when I answer",
-                                detail = RINGS_TALK_DETAIL,
+                                title = Strings.t("Talk when I answer"),
+                                detail = Strings.t(RINGS_TALK_DETAIL),
                                 checked = settings.phoneRingsTalk,
                                 onCheckedChange = onRingsTalk,
                                 icon = Lucide.AudioLines,
@@ -342,15 +348,15 @@ internal fun PhoneToolsView(
                         if (settings.phoneRings || callsMe) {
                             Divider()
                             SwitchRow(
-                                title = "Ring my watch too",
-                                detail = WATCH_RINGS_DETAIL,
+                                title = Strings.t("Ring my watch too"),
+                                detail = Strings.t(WATCH_RINGS_DETAIL),
                                 checked = settings.watchRings,
                                 onCheckedChange = onWatchRings,
                                 icon = Lucide.Watch,
                             )
                             Divider()
                             SwitchRow(
-                                title = "Quiet hours",
+                                title = Strings.t("Quiet hours"),
                                 detail = quietHoursDetail(settings),
                                 checked = settings.quietHours,
                                 onCheckedChange = onQuietHours,
@@ -358,16 +364,16 @@ internal fun PhoneToolsView(
                             )
                             if (settings.quietHours) {
                                 Divider()
-                                TimeRow("Starts", settings.quietFrom) { picking = true }
+                                TimeRow(Strings.t("Starts"), settings.quietFrom) { picking = true }
                                 Divider()
-                                TimeRow("Ends", settings.quietUntil) { picking = false }
+                                TimeRow(Strings.t("Ends"), settings.quietUntil) { picking = false }
                             }
                         }
                     }
                     // Only once the gateway knows this phone: the list is the gateway's.
                     if (status.state == State.On && phones.isNotEmpty()) {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Section("Phones") {
+                            Section(Strings.t("Phones")) {
                                 phones.forEachIndexed { i, phone ->
                                     if (i > 0) Divider()
                                     PhoneRow(
@@ -381,9 +387,11 @@ internal fun PhoneToolsView(
                                 }
                             }
                             Text(
-                                "A chat you send from a phone uses that phone. Scheduled jobs and chats from Hermes Desktop or the " +
-                                    "dashboard use the first phone in this list with the tool on. A phone you remove comes " +
-                                    "back if Kyllene on it is still signed in with phone tools on.",
+                                Strings.t(
+                                    "A chat you send from a phone uses that phone. Scheduled jobs and chats from Hermes Desktop or the " +
+                                        "dashboard use the first phone in this list with the tool on. A phone you remove comes " +
+                                        "back if Kyllene on it is still signed in with phone tools on.",
+                                ),
                                 style = Theme[typography][bodySmall],
                                 color = Theme[colors][textTertiary],
                                 modifier = Modifier.padding(horizontal = 6.dp),
@@ -394,7 +402,7 @@ internal fun PhoneToolsView(
                 // Listed even with the tool off, so the user sees what would fire if it went back on.
                 if (places.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Section("Watched places") {
+                        Section(Strings.t("Watched places")) {
                             places.forEachIndexed { i, place ->
                                 if (i > 0) Divider()
                                 PlaceRow(place, onRemove = { onRemovePlace(place.id) })
@@ -402,10 +410,12 @@ internal fun PhoneToolsView(
                         }
                         Text(
                             if (PhoneTool.Geofences in settings.enabledPhoneTools()) {
-                                "Android checks every few minutes, so a message can come a little late. It's sent as you, " +
-                                    "marked as coming from the place."
+                                Strings.t(
+                                    "Android checks every few minutes, so a message can come a little late. It's sent as you, " +
+                                        "marked as coming from the place.",
+                                )
                             } else {
-                                "Watched places is off, so none of these fire."
+                                Strings.t("Watched places is off, so none of these fire.")
                             },
                             style = Theme[typography][bodySmall],
                             color = Theme[colors][textTertiary],
@@ -414,7 +424,7 @@ internal fun PhoneToolsView(
                     }
                 }
                 if (recent.isNotEmpty()) {
-                    Section("Used lately") {
+                    Section(Strings.t("Used lately")) {
                         recent.forEachIndexed { i, use ->
                             if (i > 0) Divider()
                             UseRow(use, nowMillis)
@@ -428,21 +438,21 @@ internal fun PhoneToolsView(
 
 /** What the switch for all of them does now, or where the gateway's side stands. */
 internal fun statusLine(settings: AppSettings, status: PhoneToolsStatus): String {
-    if (!settings.phoneTools) return "Off. The agent can't use this phone."
+    if (!settings.phoneTools) return Strings.t("Off. The agent can't use this phone.")
     val count = settings.enabledPhoneTools().size
     return when (status.state) {
-        State.Off, State.On -> status.detail ?: when (count) {
-            0 -> "On. Turn on below each tool the agent may use."
-            1 -> "On. New chats can use 1 tool."
-            else -> "On. New chats can use $count tools."
+        State.Off, State.On -> status.detail?.let(Strings::t) ?: when (count) {
+            0 -> Strings.t("On. Turn on below each tool the agent may use.")
+            1 -> Strings.t("On. New chats can use 1 tool.")
+            else -> Strings.t("On. New chats can use {0} tools.", count)
         }
-        State.Offline -> "Waiting to connect to the gateway."
-        State.Working -> status.detail ?: "Setting up with the gateway…"
-        State.NotInstalled -> "Needs the herald-push plugin on the gateway."
+        State.Offline -> Strings.t("Waiting to connect to the gateway.")
+        State.Working -> status.detail?.let(Strings::t) ?: Strings.t("Setting up with the gateway…")
+        State.NotInstalled -> Strings.t("Needs the herald-push plugin on the gateway.")
         State.Outdated -> status.update?.let {
-            "The gateway's herald-push plugin is ${it.installed}; phone tools need ${it.available}. Update it below."
-        } ?: "The gateway's herald-push plugin is too old."
-        State.Failed -> status.detail ?: "The gateway refused."
+            Strings.t("The gateway's herald-push plugin is {0}; phone tools need {1}. Update it below.", it.installed, it.available)
+        } ?: Strings.t("The gateway's herald-push plugin is too old.")
+        State.Failed -> status.detail?.let(Strings::t) ?: Strings.t("The gateway refused.")
     }
 }
 
@@ -464,17 +474,17 @@ private fun PhoneRow(
         IconTile(Lucide.Smartphone)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text(
-                if (phone.me) "${phone.name} · This phone" else phone.name,
+                if (phone.me) Strings.t("{0} · This phone", phone.name) else phone.name,
                 style = Theme[typography][body],
                 color = Theme[colors][text],
             )
             Text(phoneDetail(phone, nowMillis), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
         }
         Row {
-            IconButton(Lucide.ChevronUp, "Move ${phone.name} up", onClick = { onMove(-1) }, enabled = canUp, iconSize = 18.dp)
-            IconButton(Lucide.ChevronDown, "Move ${phone.name} down", onClick = { onMove(1) }, enabled = canDown, iconSize = 18.dp)
+            IconButton(Lucide.ChevronUp, Strings.t("Move {0} up", phone.name), onClick = { onMove(-1) }, enabled = canUp, iconSize = 18.dp)
+            IconButton(Lucide.ChevronDown, Strings.t("Move {0} down", phone.name), onClick = { onMove(1) }, enabled = canDown, iconSize = 18.dp)
             // This phone goes away by turning phone tools off; removing it here would only last until its next report.
-            if (!phone.me) IconButton(Lucide.Trash2, "Remove ${phone.name}", onClick = onRemove, iconSize = 18.dp)
+            if (!phone.me) IconButton(Lucide.Trash2, Strings.t("Remove {0}", phone.name), onClick = onRemove, iconSize = 18.dp)
         }
     }
 }
@@ -489,32 +499,42 @@ private fun PlaceRow(place: WatchedPlace, onRemove: () -> Unit) {
     ) {
         IconTile(Lucide.MapPinned)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            val event = if (place.arriving) "Arriving at" else "Leaving"
-            Text("$event ${place.name} · ${place.radiusMeters} m", style = Theme[typography][body], color = Theme[colors][text])
-            val chat = place.chatTitle?.takeIf { it.isNotBlank() }?.let { " to $it" }.orEmpty()
+            val event = if (place.arriving) {
+                Strings.t("Arriving at {0} · {1} m", place.name, place.radiusMeters)
+            } else {
+                Strings.t("Leaving {0} · {1} m", place.name, place.radiusMeters)
+            }
+            Text(event, style = Theme[typography][body], color = Theme[colors][text])
+            val message = place.chatTitle?.takeIf { it.isNotBlank() }
+                ?.let { Strings.t("Sends to {0}: {1}", it, place.message) }
+                ?: Strings.t("Sends: {0}", place.message)
             Text(
-                "Sends$chat: ${place.message}",
+                message,
                 style = Theme[typography][bodySmall],
                 color = Theme[colors][textTertiary],
                 maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        IconButton(Lucide.Trash2, "Stop watching ${place.name}", onClick = onRemove, iconSize = 18.dp)
+        IconButton(Lucide.Trash2, Strings.t("Stop watching {0}", place.name), onClick = onRemove, iconSize = 18.dp)
     }
 }
 
 /** "3 tools on · used 2h ago". */
 private fun phoneDetail(phone: KnownPhone, nowMillis: Long): String {
     val tools = when (phone.tools.size) {
-        0 -> "No tools on"
-        1 -> "1 tool on"
-        else -> "${phone.tools.size} tools on"
+        0 -> Strings.t("No tools on")
+        1 -> Strings.t("1 tool on")
+        else -> Strings.t("{0} tools on", phone.tools.size)
     }
-    val (what, at) = if (phone.used > 0) "used" to phone.used else "seen" to phone.seen
+    val (what, at) = if (phone.used > 0) Strings.t("used") to phone.used else Strings.t("seen") to phone.seen
     if (at <= 0) return tools
-    val ago = relativeTime(at.toDouble(), nowMillis).let { if (it == "now") "just now" else "$it ago" }
-    return "$tools · $what $ago"
+    val ago = relativeTime(at.toDouble(), nowMillis)
+    return if (ago == "now") {
+        Strings.t("{0} · {1} just now", tools, what)
+    } else {
+        Strings.t("{0} · {1} {2} ago", tools, what, ago)
+    }
 }
 
 /** Asks before forgetting [phone] on the gateway. */
@@ -527,12 +547,14 @@ private fun RemovePhoneDialog(phone: KnownPhone?, onDismiss: () -> Unit, onRemov
     Dialog(
         visible = phone != null,
         onDismissRequest = onDismiss,
-        title = "Remove ${p.name}?",
-        message = "The agent stops using its phone tools, and calls waiting for it are refused. If Kyllene on that " +
-            "phone is still signed in with phone tools on, it comes back the next time it connects.",
+        title = Strings.t("Remove {0}?", p.name),
+        message = Strings.t(
+            "The agent stops using its phone tools, and calls waiting for it are refused. If Kyllene on that " +
+                "phone is still signed in with phone tools on, it comes back the next time it connects.",
+        ),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Remove", onClick = { onRemove(p) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Remove"), onClick = { onRemove(p) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
         },
     )
 }
@@ -567,17 +589,17 @@ private fun QuietTimeDialog(start: Boolean?, from: Int, until: Int, onDismiss: (
     Dialog(
         visible = start != null,
         onDismissRequest = onDismiss,
-        title = if (s) "Quiet hours start" else "Quiet hours end",
+        title = if (s) Strings.t("Quiet hours start") else Strings.t("Quiet hours end"),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             // A second tap while it fades out sets nothing.
-            Button("Set", onClick = { if (start != null) onSet(s, minute) }, size = ButtonSize.Small)
+            Button(Strings.t("Set"), onClick = { if (start != null) onSet(s, minute) }, size = ButtonSize.Small)
         },
     ) {
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
-            TimeStepper(minute / 60, "hour") { by -> minute = (minute + by * 60).mod(MINUTES_A_DAY) }
+            TimeStepper(minute / 60, Strings.t("hour")) { by -> minute = (minute + by * 60).mod(MINUTES_A_DAY) }
             Text(":", style = Theme[typography][display], color = Theme[colors][textTertiary], modifier = Modifier.padding(horizontal = 8.dp))
-            TimeStepper(minute % 60, "minutes") { by -> minute = minute / 60 * 60 + (minute % 60 + by * 5).mod(60) }
+            TimeStepper(minute % 60, Strings.t("minutes")) { by -> minute = minute / 60 * 60 + (minute % 60 + by * 5).mod(60) }
         }
     }
 }
@@ -585,9 +607,9 @@ private fun QuietTimeDialog(start: Boolean?, from: Int, until: Int, onDismiss: (
 @Composable
 private fun TimeStepper(value: Int, what: String, onStep: (Int) -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        IconButton(Lucide.ChevronUp, "Later $what", onClick = { onStep(1) })
+        IconButton(Lucide.ChevronUp, Strings.t("Later {0}", what), onClick = { onStep(1) })
         Text(value.toString().padStart(2, '0'), style = Theme[typography][display], color = Theme[colors][text])
-        IconButton(Lucide.ChevronDown, "Earlier $what", onClick = { onStep(-1) })
+        IconButton(Lucide.ChevronDown, Strings.t("Earlier {0}", what), onClick = { onStep(-1) })
     }
 }
 
@@ -600,9 +622,11 @@ private fun UseRow(use: PhoneToolUse, nowMillis: Long) {
     ) {
         IconTile(use.tool.icon)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(use.tool.title, style = Theme[typography][body], color = Theme[colors][text])
+            Text(Strings.t(use.tool.title), style = Theme[typography][body], color = Theme[colors][text])
             Text(
-                use.error ?: relativeTime(use.atMillis / 1000.0, nowMillis).let { if (it == "now") "Just now" else "$it ago" },
+                use.error?.let(Strings::t) ?: relativeTime(use.atMillis / 1000.0, nowMillis).let {
+                    if (it == "now") Strings.t("Just now") else Strings.t("{0} ago", it)
+                },
                 style = Theme[typography][bodySmall],
                 color = if (use.error != null) Theme[colors][danger] else Theme[colors][textTertiary],
             )

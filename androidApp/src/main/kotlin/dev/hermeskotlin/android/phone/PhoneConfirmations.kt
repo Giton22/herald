@@ -15,6 +15,7 @@ import androidx.core.content.ContextCompat
 import dev.hermeskotlin.android.HeraldActivity
 import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.phone.PhoneToolException
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
@@ -62,8 +63,8 @@ class PhoneConfirmations(private val context: Context) {
      */
     private fun createChannel() {
         system?.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Phone tools", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "When the agent wants to change something on this phone"
+            NotificationChannel(CHANNEL, Strings.t("Phone tools"), NotificationManager.IMPORTANCE_HIGH).apply {
+                description = Strings.t("When the agent wants to change something on this phone")
                 if (system.isNotificationPolicyAccessGranted) setBypassDnd(true)
             },
         )
@@ -74,12 +75,12 @@ class PhoneConfirmations(private val context: Context) {
         val channel = system?.getNotificationChannel(CHANNEL)
         return when {
             !manager.areNotificationsEnabled() || channel?.importance == NotificationManager.IMPORTANCE_NONE ->
-                "Kyllene's notifications for phone tools are off, so the phone couldn't ask the user."
+                Strings.t("Kyllene's notifications for phone tools are off, so the phone couldn't ask the user.")
             system?.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_NONE ||
                 system?.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_ALARMS ->
-                "Do Not Disturb hides every notification right now, so the phone couldn't ask the user."
+                Strings.t("Do Not Disturb hides every notification right now, so the phone couldn't ask the user.")
             system?.currentInterruptionFilter == NotificationManager.INTERRUPTION_FILTER_PRIORITY && channel?.canBypassDnd() != true ->
-                "Do Not Disturb hides Kyllene's questions right now, so the phone couldn't ask the user."
+                Strings.t("Do Not Disturb hides Kyllene's questions right now, so the phone couldn't ask the user.")
             else -> null
         }
     }
@@ -90,7 +91,7 @@ class PhoneConfirmations(private val context: Context) {
      * or can't be asked. Asked in Herald while it's open ([inApp]), else in a notification; one that's answered
      * either way, and the notification comes and goes as the user leaves Herald and comes back.
      */
-    suspend fun confirm(what: String, title: String = CHANGE, action: (Activity) -> Unit) {
+    suspend fun confirm(what: String, title: String = Strings.t(CHANGE), action: (Activity) -> Unit) {
         val key = "c" + ids.incrementAndGet()
         val pending = Pending(action, CompletableDeferred())
         waiting[key] = pending
@@ -107,7 +108,7 @@ class PhoneConfirmations(private val context: Context) {
                             manager.cancel(TAG, id)
                         } else if (!pending.done.isCompleted) {
                             val cant = cantAsk()
-                                ?: if (post(id, key, title, what)) null else "Android didn't show the question, so the phone couldn't ask the user."
+                                ?: if (post(id, key, title, what)) null else Strings.t("Android didn't show the question, so the phone couldn't ask the user.")
                             // Seen in Herald already: it's there again when the user comes back.
                             if (cant != null && !askedInApp) throw PhoneToolException(cant)
                         }
@@ -123,7 +124,7 @@ class PhoneConfirmations(private val context: Context) {
                 }
             }
         } catch (e: TimeoutCancellationException) {
-            throw PhoneToolException("The user didn't answer on the phone in time.")
+            throw PhoneToolException(Strings.t("The user didn't answer on the phone in time."))
         } finally {
             waiting.remove(key)
             asking.update { it - question }
@@ -180,8 +181,8 @@ class PhoneConfirmations(private val context: Context) {
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setDeleteIntent(deny)
             .setTimeoutAfter(ANSWER_MS)
-            .addAction(0, "Deny", deny)
-            .addAction(0, "Allow", allow)
+            .addAction(0, Strings.t("Deny"), deny)
+            .addAction(0, Strings.t("Allow"), allow)
             .build()
         return runCatching { manager.notify(TAG, id, notification) }.isSuccess
     }
@@ -216,7 +217,7 @@ class PhoneConfirmations(private val context: Context) {
                 pending.action(activity)
                 pending.done.complete(Unit)
             } catch (e: Exception) {
-                pending.done.completeExceptionally(PhoneToolException(e.message ?: "The phone couldn't do it."))
+                pending.done.completeExceptionally(PhoneToolException(e.message ?: Strings.t("The phone couldn't do it.")))
             }
             return true
         }
@@ -225,7 +226,7 @@ class PhoneConfirmations(private val context: Context) {
         fun deny(key: String): Boolean {
             val pending = waiting.remove(key) ?: return false
             asking.update { list -> list.filterNot { it.key == key } }
-            pending.done.completeExceptionally(PhoneToolException("The user said no on the phone."))
+            pending.done.completeExceptionally(PhoneToolException(Strings.t("The user said no on the phone.")))
             return true
         }
 

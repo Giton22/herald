@@ -62,6 +62,7 @@ import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.ui.isDesktop
 
 /**
@@ -127,12 +128,12 @@ private fun PendingCommentCard(number: Int, comment: PendingComment, focus: Bool
                 TextInput(
                     placeholder = {
                         // Short enough for the card's one line: a longer one wrapped and was cut off.
-                        Text("Add a note (optional)", maxLines = 1, overflow = TextOverflow.Ellipsis, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+                        Text(Strings.t("Add a note (optional)"), maxLines = 1, overflow = TextOverflow.Ellipsis, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
                     },
                 )
             }
         }
-        IconButton(Lucide.X, contentDescription = "Remove comment $number", onClick = onRemove, tint = Theme[colors][textTertiary], iconSize = 14.dp)
+        IconButton(Lucide.X, contentDescription = Strings.t("Remove comment {0}", number), onClick = onRemove, tint = Theme[colors][textTertiary], iconSize = 14.dp)
     }
 }
 

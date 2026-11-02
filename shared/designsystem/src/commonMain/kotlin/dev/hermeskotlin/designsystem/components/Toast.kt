@@ -44,6 +44,7 @@ import dev.hermeskotlin.designsystem.label
 import dev.hermeskotlin.designsystem.onAccent
 import dev.hermeskotlin.designsystem.onInverse
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.i18n.Strings
 
 /**
  * A short confirmation that floats over the screen: a dark pill (light in dark mode) with an optional [icon] and
@@ -111,6 +112,6 @@ fun Toast(
                 }
             }
         }
-        if (onDismiss != null) IconButton(Lucide.X, contentDescription = "Dismiss", onClick = onDismiss, tint = on.copy(alpha = 0.7f), iconSize = 16.dp)
+        if (onDismiss != null) IconButton(Lucide.X, contentDescription = Strings.t("Dismiss"), onClick = onDismiss, tint = on.copy(alpha = 0.7f), iconSize = 16.dp)
     }
 }

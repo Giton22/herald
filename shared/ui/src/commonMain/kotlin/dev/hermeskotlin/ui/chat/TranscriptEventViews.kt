@@ -81,6 +81,7 @@ import dev.hermeskotlin.ui.CopyableOnDesktop
 import dev.hermeskotlin.ui.isDesktop
 import dev.hermeskotlin.ui.bots.BotAvatar
 import dev.hermeskotlin.ui.bots.LocalBotFaces
+import dev.hermeskotlin.ui.i18n.Strings
 
 /**
  * A row the machinery wrote into the chat: a single quiet line saying what happened, which opens to show
@@ -93,7 +94,7 @@ internal fun TranscriptEventRow(event: TranscriptEvent) {
         is TranscriptEvent.SystemMessages -> SystemMessages(event.entries)
         is TranscriptEvent.Compaction -> FoldedLine(
             icon = Lucide.History,
-            title = "Earlier messages summarized",
+            title = Strings.t("Earlier messages summarized"),
             body = event.body.takeIf { it.isNotBlank() }?.let { { MarkdownText(it) } },
         )
         is TranscriptEvent.FromBot -> FromBotNote(event)
@@ -106,12 +107,12 @@ internal fun TranscriptEventRow(event: TranscriptEvent) {
         )
         is TranscriptEvent.Routine -> FoldedLine(
             icon = Lucide.AlarmClock,
-            title = "Routine “${event.name}” ran",
+            title = Strings.t("Routine “{0}” ran", event.name),
             body = event.body.takeIf { it.isNotBlank() }?.let { { MarkdownText(it) } },
         )
         is TranscriptEvent.FailedTurn -> FoldedLine(
             icon = Lucide.CircleAlert,
-            title = event.text.ifBlank { "This turn did not complete." },
+            title = event.text.ifBlank { Strings.t("This turn did not complete.") },
             tint = Theme[colors][danger],
             body = null,
         )
@@ -127,7 +128,7 @@ private fun SystemMessages(entries: List<TranscriptEvent>) {
     var expanded by remember { mutableStateOf(false) }
     Disclosure(
         icon = { UnstyledIcon(Lucide.Settings, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp)) },
-        label = "System messages · ${entries.size}",
+        label = Strings.t("System messages · {0}", entries.size),
         expanded = expanded,
         onToggle = { expanded = !expanded },
     ) {
@@ -149,30 +150,30 @@ private fun FromBotNote(event: TranscriptEvent.FromBot) {
 private fun DeliveryLine(event: TranscriptEvent.Delivery) {
     val faces = LocalBotFaces.current
     val bot = remember(faces, event.target) { faces.find(event.target) }
-    val who = bot?.label ?: event.target?.let { "@$it" } ?: "the other bot"
+    val who = bot?.label ?: event.target?.let { "@$it" } ?: Strings.t("the other bot")
     when (val outcome = event.outcome) {
         // A receipt, not a reply. Its text is what the other bot wrote in its own turn after reading the
         // message, usually a note for its human (often quoting us); a real answer comes as its own message.
         is DeliveryOutcome.Replied -> FoldedLine(
             Lucide.CheckCheck,
-            "Delivered to $who",
+            Strings.t("Delivered to {0}", who),
             body = {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text("What $who noted after reading it", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                    Text(Strings.t("What {0} noted after reading it", who), style = Theme[typography][caption], color = Theme[colors][textTertiary])
                     MarkdownText(outcome.text)
                 }
             },
         )
-        DeliveryOutcome.NoReply -> FoldedLine(Lucide.MessageCircleOff, "$who read it and chose not to reply", body = null)
+        DeliveryOutcome.NoReply -> FoldedLine(Lucide.MessageCircleOff, Strings.t("{0} read it and chose not to reply", who), body = null)
         is DeliveryOutcome.Waiting -> FoldedLine(
             Lucide.Hourglass,
-            "Still waiting on $who · don't send it again",
+            Strings.t("Still waiting on {0} · don't send it again", who),
             tint = Theme[colors][warning],
             body = outcome.detail?.let { { Monospace(it) } },
         )
         is DeliveryOutcome.Failed -> FoldedLine(
             Lucide.CircleAlert,
-            "Couldn't reach $who · ${outcome.label}",
+            Strings.t("Couldn't reach {0} · {1}", who, outcome.label),
             tint = Theme[colors][danger],
             body = outcome.detail?.let { { Monospace(it) } },
         )
@@ -187,7 +188,7 @@ private fun DeliveryLine(event: TranscriptEvent.Delivery) {
 internal fun RepliedToFold(to: String, preview: String, content: @Composable () -> Unit) {
     val faces = LocalBotFaces.current
     val bot = remember(faces, to) { faces.find(to) }
-    ToBot(bot, fallbackName = to, note = "reply", words = preview, sending = false, failed = false, full = content)
+    ToBot(bot, fallbackName = to, note = Strings.t("reply"), words = preview, sending = false, failed = false, full = content)
 }
 
 /** This bot's `message_agent` call, as a note addressed to the other bot: "To X" and the message. */
@@ -199,11 +200,11 @@ internal fun MessagedLine(tool: ToolActivity) {
     val bot = remember(faces, target) { faces.find(target) }
     ToBot(
         bot,
-        fallbackName = target?.let { "@$it" } ?: "another bot",
+        fallbackName = target?.let { "@$it" } ?: Strings.t("another bot"),
         note = when {
-            tool.running -> "sending…"
-            tool.failed -> "not sent"
-            else -> "message"
+            tool.running -> Strings.t("sending…")
+            tool.failed -> Strings.t("not sent")
+            else -> Strings.t("message")
         },
         words = if (tool.failed) tool.output.orEmpty() else message.orEmpty(),
         sending = tool.running,
@@ -252,12 +253,12 @@ private fun BotSays(bot: Bot?, fallbackName: String, note: String?, words: Strin
                 .background(tint.copy(alpha = 0.12f), shape)
                 .border(1.dp, tint.copy(alpha = 0.28f), shape)
                 // Opened on the desktop, the text is for selecting: only its name line folds it again.
-                .then(if (isDesktop && open) Modifier else Modifier.handCursor(words.isNotBlank()).clickable(enabled = words.isNotBlank(), onClickLabel = if (open) "Show less" else "Show all") { open = !open })
+                .then(if (isDesktop && open) Modifier else Modifier.handCursor(words.isNotBlank()).clickable(enabled = words.isNotBlank(), onClickLabel = if (open) Strings.t("Show less") else Strings.t("Show all")) { open = !open })
                 .padding(horizontal = 12.dp, vertical = 9.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(
-                if (isDesktop && open) Modifier.handCursor().clickable(onClickLabel = "Show less") { open = false } else Modifier,
+                if (isDesktop && open) Modifier.handCursor().clickable(onClickLabel = Strings.t("Show less")) { open = false } else Modifier,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -307,18 +308,18 @@ private fun ToBot(
                 // As a bot's own message: opened on the desktop, only the "To" line folds it again.
                 .then(
                     if (isDesktop && open) Modifier
-                    else Modifier.handCursor(words.isNotBlank() || full != null).clickable(enabled = words.isNotBlank() || full != null, onClickLabel = if (open) "Show less" else "Show all") { open = !open },
+                    else Modifier.handCursor(words.isNotBlank() || full != null).clickable(enabled = words.isNotBlank() || full != null, onClickLabel = if (open) Strings.t("Show less") else Strings.t("Show all")) { open = !open },
                 )
                 .padding(horizontal = 12.dp, vertical = 9.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
             Row(
-                if (isDesktop && open) Modifier.handCursor().clickable(onClickLabel = "Show less") { open = false } else Modifier,
+                if (isDesktop && open) Modifier.handCursor().clickable(onClickLabel = Strings.t("Show less")) { open = false } else Modifier,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 UnstyledIcon(Lucide.Send, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(12.dp))
-                Text("To", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                Text(Strings.t("To"), style = Theme[typography][caption], color = Theme[colors][textTertiary])
                 if (bot != null) BotAvatar(bot, faces.picture(bot), size = 16.dp)
                 Text(
                     bot?.label ?: fallbackName,
@@ -356,7 +357,7 @@ private fun FoldedLine(icon: ImageVector, title: String, tint: Color = Theme[col
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
-                .then(if (body != null) Modifier.handCursor().clickable(onClickLabel = if (open) "Hide details" else "Show details") { open = !open } else Modifier)
+                .then(if (body != null) Modifier.handCursor().clickable(onClickLabel = if (open) Strings.t("Hide details") else Strings.t("Show details")) { open = !open } else Modifier)
                 .heightIn(min = 36.dp)
                 .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),

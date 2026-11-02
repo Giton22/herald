@@ -13,6 +13,7 @@ import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.gateway.InvalidGatewayUrlException
 import dev.hermeskotlin.core.gateway.ProbeResult
 import dev.hermeskotlin.core.gateway.clientCertAliasFor
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -105,7 +106,7 @@ class ConnectViewModel(
         val clientId = accessClientId.text.trim().toString()
         val clientSecret = accessClientSecret.text.trim().toString()
         if (clientId.isEmpty() != clientSecret.isEmpty()) {
-            _state.value = ConnectUiState(accessError = "Enter both the Client ID and the Client Secret, or neither.")
+            _state.value = ConnectUiState(accessError = Strings.t("Enter both the Client ID and the Client Secret, or neither."))
             return
         }
 

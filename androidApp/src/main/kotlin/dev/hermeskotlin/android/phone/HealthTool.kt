@@ -14,6 +14,7 @@ import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import dev.hermeskotlin.core.phone.PhoneToolException
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonObjectBuilder
@@ -38,21 +39,21 @@ import java.util.Locale
 internal class HealthTool(private val context: Context) {
 
     suspend fun run(args: JsonObject): JsonObject {
-        val metric = args.string("metric") ?: throw PhoneToolException("metric is steps, sleep or heart_rate.")
+        val metric = args.string("metric") ?: throw PhoneToolException(Strings.t("metric is steps, sleep or heart_rate."))
         val permission = when (metric) {
             "steps" -> HealthPermission.getReadPermission(StepsRecord::class)
             "sleep" -> HealthPermission.getReadPermission(SleepSessionRecord::class)
             "heart_rate" -> HealthPermission.getReadPermission(HeartRateRecord::class)
-            else -> throw PhoneToolException("metric is steps, sleep or heart_rate.")
+            else -> throw PhoneToolException(Strings.t("metric is steps, sleep or heart_rate."))
         }
         val client = client()
         val granted = guarded { client.permissionController.getGrantedPermissions() }
         if (permission !in granted) {
-            throw PhoneToolException("Kyllene isn't allowed to read $metric in Health Connect. The user can allow it in Kyllene: Settings → Phone tools, or in the Health Connect app.")
+            throw PhoneToolException(Strings.t("Kyllene isn't allowed to read {0} in Health Connect. The user can allow it in Kyllene: Settings → Phone tools, or in the Health Connect app.", metric))
         }
         // Health Connect itself refuses reads from an app out of sight, unless the user allowed that too.
         if (!visible() && HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND !in granted) {
-            throw PhoneToolException("Health data is only read while Kyllene is open on the phone; the user can also allow it while closed in Kyllene: Settings → Phone tools.")
+            throw PhoneToolException(Strings.t("Health data is only read while Kyllene is open on the phone; the user can also allow it while closed in Kyllene: Settings → Phone tools."))
         }
         val now = LocalDateTime.now()
         val from = args.string("from")?.let { time(it, "from") }
@@ -61,15 +62,15 @@ internal class HealthTool(private val context: Context) {
         // A date alone as the end means through that day, as people say "the 1st to the 7th".
         val to = (args.string("to")?.let { time(it, "to").let { end -> if (it.length <= DATE_LENGTH) end.plusDays(1) else end } } ?: now)
             .coerceAtMost(now)
-        if (!to.isAfter(from)) throw PhoneToolException("to must be after from, and from not in the future.")
-        if (Duration.between(from, to) > Duration.ofDays(MAX_DAYS)) throw PhoneToolException("A range covers at most $MAX_DAYS days.")
+        if (!to.isAfter(from)) throw PhoneToolException(Strings.t("to must be after from, and from not in the future."))
+        if (Duration.between(from, to) > Duration.ofDays(MAX_DAYS)) throw PhoneToolException(Strings.t("A range covers at most {0} days.", MAX_DAYS))
         return guarded {
             buildJsonObject {
                 put("from", from.format(LOCAL))
                 put("to", to.format(LOCAL))
                 // Health Connect gives an app only what's newer than 30 days before it was first allowed.
                 if (from < now.minusDays(HISTORY_DAYS)) {
-                    put("history_note", "Health Connect may hold back data from more than 30 days before Kyllene was first allowed to read it; missing data there isn't proof of none.")
+                    put("history_note", Strings.t("Health Connect may hold back data from more than 30 days before Kyllene was first allowed to read it; missing data there isn't proof of none."))
                 }
                 when (metric) {
                     "steps" -> steps(client, from, to)
@@ -85,7 +86,7 @@ internal class HealthTool(private val context: Context) {
         put("steps", total[StepsRecord.COUNT_TOTAL] ?: 0L)
         if (total.dataOrigins.isEmpty()) {
             // Health Connect only totals the apps in its source list; one left out isn't "no steps".
-            put("note", "No steps were recorded here, or the app that records them isn't in Health Connect's \"Data sources and priority\" list, which is all it counts.")
+            put("note", Strings.t("No steps were recorded here, or the app that records them isn't in Health Connect's \"Data sources and priority\" list, which is all it counts."))
             return
         }
         if (from.toLocalDate() != to.minusNanos(1).toLocalDate()) {
@@ -140,7 +141,7 @@ internal class HealthTool(private val context: Context) {
             ),
         )
         val records = page.records.sortedBy { it.startTime }
-        if (page.pageToken != null) put("note", "Only the newest $MAX_SESSIONS sessions; ask for a shorter range for older ones.")
+        if (page.pageToken != null) put("note", Strings.t("Only the newest {0} sessions; ask for a shorter range for older ones.", MAX_SESSIONS))
         putJsonArray("sessions") {
             for (session in records) {
                 addJsonObject {
@@ -173,8 +174,8 @@ internal class HealthTool(private val context: Context) {
     private fun client(): HealthConnectClient = when (HealthConnectClient.getSdkStatus(context)) {
         HealthConnectClient.SDK_AVAILABLE -> HealthConnectClient.getOrCreate(context)
         HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED ->
-            throw PhoneToolException("Health Connect needs an update on the phone before Kyllene can read from it.")
-        else -> throw PhoneToolException("This phone has no Health Connect.")
+            throw PhoneToolException(Strings.t("Health Connect needs an update on the phone before Kyllene can read from it."))
+        else -> throw PhoneToolException(Strings.t("This phone has no Health Connect."))
     }
 
     /** Health Connect's own refusals (a permission taken back, too many reads) as answers the agent can pass on. */
@@ -185,9 +186,9 @@ internal class HealthTool(private val context: Context) {
     } catch (e: PhoneToolException) {
         throw e
     } catch (e: SecurityException) {
-        throw PhoneToolException("Health Connect refused the read: the user can allow it in Kyllene: Settings → Phone tools.")
+        throw PhoneToolException(Strings.t("Health Connect refused the read: the user can allow it in Kyllene: Settings → Phone tools."))
     } catch (e: Exception) {
-        throw PhoneToolException("Health Connect didn't answer (${e.javaClass.simpleName}); try again later.")
+        throw PhoneToolException(Strings.t("Health Connect didn't answer ({0}); try again later.", e.javaClass.simpleName))
     }
 
     private fun visible(): Boolean {
@@ -200,7 +201,7 @@ internal class HealthTool(private val context: Context) {
     private fun time(text: String, name: String): LocalDateTime = try {
         if (text.length <= DATE_LENGTH) LocalDate.parse(text).atStartOfDay() else LocalDateTime.parse(text)
     } catch (e: DateTimeParseException) {
-        throw PhoneToolException("$name is a local date and time like 2026-10-14T09:30, or a date like 2026-10-14.")
+        throw PhoneToolException(Strings.t("{0} is a local date and time like 2026-10-14T09:30, or a date like 2026-10-14.", name))
     }
 
     private companion object {

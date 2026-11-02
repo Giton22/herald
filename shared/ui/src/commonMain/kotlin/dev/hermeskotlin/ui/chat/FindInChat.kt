@@ -47,6 +47,7 @@ import dev.hermeskotlin.designsystem.surfaceElevated
 import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.i18n.Strings
 
 /** The words of [message] that Find in chat looks through; none for what isn't said (tool rows, events). */
 internal fun findableText(message: ChatMessage): String = when (message) {
@@ -110,18 +111,18 @@ internal fun FindBar(
                     }
                 },
         ) {
-            TextInput(placeholder = { Text("Find in this chat", style = Theme[typography][body], color = Theme[colors][textTertiary]) })
+            TextInput(placeholder = { Text(Strings.t("Find in this chat"), style = Theme[typography][body], color = Theme[colors][textTertiary]) })
         }
         if (query.text.isNotBlank()) {
             Text(
-                if (total == 0) "No matches" else "${current + 1} of $total",
+                if (total == 0) Strings.t("No matches") else Strings.t("{0} of {1}", current + 1, total),
                 style = Theme[typography][caption],
                 color = Theme[colors][textTertiary],
                 modifier = Modifier.padding(end = 4.dp),
             )
         }
-        IconButton(Lucide.ChevronUp, "Previous match", onClick = { onStep(true) }, enabled = total > 0, iconSize = 18.dp)
-        IconButton(Lucide.ChevronDown, "Next match", onClick = { onStep(false) }, enabled = total > 0, iconSize = 18.dp)
-        IconButton(Lucide.X, "Close find", onClick = onClose, iconSize = 18.dp)
+        IconButton(Lucide.ChevronUp, Strings.t("Previous match"), onClick = { onStep(true) }, enabled = total > 0, iconSize = 18.dp)
+        IconButton(Lucide.ChevronDown, Strings.t("Next match"), onClick = { onStep(false) }, enabled = total > 0, iconSize = 18.dp)
+        IconButton(Lucide.X, Strings.t("Close find"), onClick = onClose, iconSize = 18.dp)
     }
 }

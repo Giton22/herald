@@ -3,6 +3,7 @@ package dev.hermeskotlin.ui.chat
 import androidx.compose.foundation.text.input.TextFieldState
 import dev.hermeskotlin.designsystem.components.TextHighlight
 import dev.hermeskotlin.designsystem.components.stripBidiIsolates
+import dev.hermeskotlin.ui.i18n.Strings
 
 /** Something in the chat a comment can be about, named the way the message to the agent names it. */
 data class CommentSource(
@@ -155,12 +156,12 @@ private fun whereOf(source: CommentSource, anchor: SelectionAnchor): String? {
     val fences = codeFences(source.markdown)
     fences.withIndex().firstOrNull { it.value.code == block.trimEnd('\n') }?.let { (index, fence) ->
         val lines = lines(lineAt(block, anchor.start), lineAt(block, (anchor.end - 1).coerceAtLeast(anchor.start)))
-        val which = if (fences.size == 1) "the" else "the ${ordinal(index + 1)}"
-        return "$lines of $which ${fence.language ?: "code"} block"
+        val which = if (fences.size == 1) Strings.t("the") else Strings.t("the {0}", ordinal(index + 1))
+        return Strings.t("{0} of {1} {2} block", lines, which, fence.language ?: Strings.t("code"))
     }
     // A numbered list draws each number as its own text just before the item.
     val previous = anchor.blocks.getOrNull(anchor.startBlock - 1)?.trim()
-    NUMBER.matchEntire(previous.orEmpty())?.let { return "item ${it.groupValues[1]}" }
+    NUMBER.matchEntire(previous.orEmpty())?.let { return Strings.t("item {0}", it.groupValues[1]) }
     return null
 }
 
@@ -188,7 +189,7 @@ private fun contextOf(source: CommentSource, anchor: SelectionAnchor): String? {
 
 private fun lineAt(text: String, offset: Int): Int = text.take(offset).count { it == '\n' } + 1
 
-private fun lines(first: Int, last: Int) = if (first == last) "line $first" else "lines $first–$last"
+private fun lines(first: Int, last: Int) = if (first == last) Strings.t("line {0}", first) else Strings.t("lines {0}–{1}", first, last)
 
 private fun lineBounds(text: String, start: Int, end: Int): Pair<Int, Int> {
     val from = text.lastIndexOf('\n', (start - 1).coerceAtLeast(0)).let { if (it < 0 || start == 0) 0 else it + 1 }
@@ -222,12 +223,12 @@ private fun codeFences(markdown: String?): List<Fence> {
 }
 
 private fun ordinal(n: Int) = when (n) {
-    1 -> "first"
-    2 -> "second"
-    3 -> "third"
-    4 -> "fourth"
-    5 -> "fifth"
-    else -> "${n}th"
+    1 -> Strings.t("first")
+    2 -> Strings.t("second")
+    3 -> Strings.t("third")
+    4 -> Strings.t("fourth")
+    5 -> Strings.t("fifth")
+    else -> Strings.t("{0}th", n)
 }
 
 private fun attribute(value: String) = value.replace("&", "&amp;").replace("\"", "&quot;").replace('\n', ' ')
@@ -245,7 +246,7 @@ internal fun openingWords(text: String, words: Int = 8): String {
 }
 
 /** How a comment names the newest reply. */
-internal const val LAST_REPLY = "your last reply"
+internal val LAST_REPLY get() = Strings.t("your last reply")
 
 private const val OPEN = "<comments>"
 private const val CLOSE = "</comments>"

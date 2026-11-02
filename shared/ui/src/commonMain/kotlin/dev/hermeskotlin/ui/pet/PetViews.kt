@@ -33,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalWindowInfo
 import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.i18n.Strings
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
@@ -163,11 +164,11 @@ fun PetSheet(visible: Boolean, controller: PetController, onDismiss: () -> Unit,
     val scope = rememberCoroutineScope()
     LaunchedEffect(visible) { if (visible) controller.loadGallery() }
     BottomSheet(visible = visible, onDismiss = onDismiss) {
-        SheetHeader("Pets", "A pet belongs to the profile, so Hermes Desktop shows the same one.")
+        SheetHeader(Strings.t("Pets"), Strings.t("A pet belongs to the profile, so Hermes Desktop shows the same one."))
         val gallery = state.gallery
         when {
             gallery == null && state.loading -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Spinner() }
-            gallery != null && gallery.pets.isEmpty() -> Note("The gateway has no pets to offer.")
+            gallery != null && gallery.pets.isEmpty() -> Note(Strings.t("The gateway has no pets to offer."))
             gallery != null -> LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 96.dp),
                 modifier = Modifier.fillMaxWidth().heightIn(max = 440.dp).padding(horizontal = 14.dp),
@@ -189,7 +190,7 @@ fun PetSheet(visible: Boolean, controller: PetController, onDismiss: () -> Unit,
         }
         state.error?.let { Note(it, error = true) }
         if (gallery?.enabled == true) {
-            SheetAction("Put the pet away", Lucide.EyeOff, onClick = { scope.launch { runCatching { controller.hide() } } })
+            SheetAction(Strings.t("Put the pet away"), Lucide.EyeOff, onClick = { scope.launch { runCatching { controller.hide() } } })
         }
     }
 }

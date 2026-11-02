@@ -23,6 +23,7 @@ import dev.hermeskotlin.core.voice.liveHistory
 import dev.hermeskotlin.core.voice.parseLiveEvent
 import dev.hermeskotlin.core.voice.speakableCut
 import dev.hermeskotlin.core.voice.speakableText
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -114,7 +115,7 @@ internal class LiveConversation(
             throw e
         } catch (e: Exception) {
             call.close()
-            return@coroutineScope e.message ?: "Couldn't start the live call."
+            return@coroutineScope e.message ?: Strings.t("Couldn't start the live call.")
         }
         state.update { it.copy(phase = VoicePhase.Listening) }
         val poll = launch {
@@ -208,7 +209,7 @@ internal class LiveConversation(
                         state.update { it.copy(error = event.message) }
                     }
                     is LiveEvent.Closed -> {
-                        ended.complete(if (event.reason == "closed") "The live call ended." else "The live call ended: ${event.reason}")
+                        ended.complete(if (event.reason == "closed") Strings.t("The live call ended.") else Strings.t("The live call ended: {0}", event.reason))
                         break
                     }
                     LiveEvent.Started -> {
@@ -218,7 +219,7 @@ internal class LiveConversation(
                     null -> Unit
                 }
             }
-            ended.complete("The live call dropped.")
+            ended.complete(Strings.t("The live call dropped."))
         }
         // A call the agent placed: the voice says why first, once it's up (it drops what comes earlier).
         if (opener != null) {
@@ -294,8 +295,8 @@ internal class LiveConversation(
     private suspend fun answer(id: String, prompt: String, context: String) {
         val sent = session.stopAndSubmit(prompt, voiceLive = VoiceLiveTurn(context)).outcome
         if (sent != SendOutcome.Sent) {
-            speak(id, "Sorry, I couldn't reach Hermes for that request.")
-            state.update { it.copy(error = session.state.value.error ?: "Couldn't send that to Hermes.") }
+            speak(id, Strings.t("Sorry, I couldn't reach Hermes for that request."))
+            state.update { it.copy(error = session.state.value.error ?: Strings.t("Couldn't send that to Hermes.")) }
             return
         }
         // The prompt just sent. A history reload swaps its key for its stored row's; then it's the last prompt.
@@ -336,7 +337,7 @@ internal class LiveConversation(
             if (running != tool) {
                 tool = running
                 state.update { it.copy(working = running) }
-                if (running != null) send(LiveCommands.thinking(nextId("think"), id, "Hermes is working: $running. Not done yet."))
+                if (running != null) send(LiveCommands.thinking(nextId("think"), id, Strings.t("Hermes is working: {0}. Not done yet.", running)))
             }
             replies.forEachIndexed { i, reply ->
                 val before = spoken.getOrNull(i).orEmpty()
@@ -346,7 +347,7 @@ internal class LiveConversation(
                 if (end > from) spokeAny = speak(id, reply.text.substring(from, end)) || spokeAny
                 if (i < spoken.size) spoken[i] = reply.text.substring(0, end) else spoken += reply.text.substring(0, end)
             }
-            if (!chat.running && !spokeAny) send(LiveCommands.thinking(nextId("think"), id, "Hermes finished that request without a spoken result."))
+            if (!chat.running && !spokeAny) send(LiveCommands.thinking(nextId("think"), id, Strings.t("Hermes finished that request without a spoken result.")))
             !chat.running
         }
     }
@@ -356,18 +357,18 @@ internal class LiveConversation(
         val request = chat.inputRequests.firstOrNull { VoiceAnswers.canAsk(it) && it.id !in announced } ?: return
         // From a locked phone an approval isn't taken; it's asked once the phone is unlocked.
         if (request is InputRequest.Approval && lock.locked()) {
-            if (request.id !in heldBack) speakAside("Hermes needs your approval. Unlock the phone, and I'll ask you for it.")
+            if (request.id !in heldBack) speakAside(Strings.t("Hermes needs your approval. Unlock the phone, and I'll ask you for it."))
             heldBack += request.id
             return
         }
         announced += request.id
         // Several questions at once are too many to take by ear.
-        val prompt = askPrompt(request) ?: return speakAside("Hermes has a few questions for you. They're waiting in the chat.")
+        val prompt = askPrompt(request) ?: return speakAside(Strings.t("Hermes has a few questions for you. They're waiting in the chat."))
         if (!steered) send(LiveCommands.instructions(nextId("steer"), ASKING_INSTRUCTIONS))
         steered = true
         heard.clear()
         asking = request
-        speakAside("Hermes needs an answer before it goes on. $prompt")
+        speakAside(Strings.t("Hermes needs an answer before it goes on. {0}", prompt))
     }
 
     /**
@@ -446,7 +447,7 @@ internal class LiveConversation(
         }
         if (asking?.id != request.id || !waiting(request) || answering == request.id) return alreadyAnswered()
         if (request is InputRequest.Approval && lock.locked()) {
-            return send(LiveCommands.commentary(nextId("say"), id, "The phone locked. Ask the user to unlock it, then to say it again."))
+            return send(LiveCommands.commentary(nextId("say"), id, Strings.t("The phone locked. Ask the user to unlock it, then to say it again.")))
         }
         // Taken without a handover only once the voice asked: else it's the voice's to hand over.
         val words = lastWordsSaid(putToThem = id == null)
@@ -461,7 +462,7 @@ internal class LiveConversation(
                 ?.let { InputAnswers.clarify(request, listOf(it)) }
             else -> null
         }
-        if (answer == null) return send(LiveCommands.commentary(nextId("say"), id, "That wasn't clear. ${askPrompt(request)}"))
+        if (answer == null) return send(LiveCommands.commentary(nextId("say"), id, Strings.t("That wasn't clear. {0}", askPrompt(request))))
         // Before the answer goes: the turn's replies so far were there before it, and aren't said again.
         val askedKey = session.state.value.messages.lastOrNull { it is ChatMessage.User }?.key
         val before = session.state.value.messages.let { messages ->
@@ -484,11 +485,11 @@ internal class LiveConversation(
         sent()
         if (!answered) {
             // Still asking: what's said next is another go at the answer, not a request that stops the turn.
-            send(LiveCommands.commentary(nextId("say"), id, "The answer couldn't reach Hermes. Ask the user to say it again."))
-            state.update { it.copy(error = session.state.value.error ?: "Couldn't send the answer.") }
+            send(LiveCommands.commentary(nextId("say"), id, Strings.t("The answer couldn't reach Hermes. Ask the user to say it again.")))
+            state.update { it.copy(error = session.state.value.error ?: Strings.t("Couldn't send the answer.")) }
             return
         }
-        send(LiveCommands.thinking(nextId("think"), id, "Hermes has the answer and carries on."))
+        send(LiveCommands.thinking(nextId("think"), id, Strings.t("Hermes has the answer and carries on.")))
         // A turn no request of this call started (the one that rang): what it says next goes to the voice too.
         if (delegation?.isActive == true) return
         delegationId = id
@@ -546,9 +547,11 @@ internal class LiveConversation(
         /** Words a voice asking for an approval offers as its answers. */
         val APPROVAL_CUES = setOf("yes", "no", "approve", "allow", "deny")
         val NOT_A_WORD = Regex("[^\\p{L}]+")
-        const val ALREADY_ANSWERED = "Hermes already has that answer."
-        const val WAITING_ELSEWHERE = "Hermes is waiting on an answer in the chat, so it can't take a new request until then."
-        const val ASKING_INSTRUCTIONS = "When Hermes needs an answer from the user (an approval or a question), ask it in your own " +
-            "words with every option it offers, then hand the user's reply over to Hermes as it is, without answering for them."
+        val ALREADY_ANSWERED: String get() = Strings.t("Hermes already has that answer.")
+        val WAITING_ELSEWHERE: String get() = Strings.t("Hermes is waiting on an answer in the chat, so it can't take a new request until then.")
+        val ASKING_INSTRUCTIONS: String get() = Strings.t(
+            "When Hermes needs an answer from the user (an approval or a question), ask it in your own " +
+                "words with every option it offers, then hand the user's reply over to Hermes as it is, without answering for them.",
+        )
     }
 }

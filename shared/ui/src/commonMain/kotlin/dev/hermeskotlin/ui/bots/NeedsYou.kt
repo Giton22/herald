@@ -4,6 +4,7 @@ import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.bots.BotTrouble
 import dev.hermeskotlin.core.chat.Waiting
 import dev.hermeskotlin.core.cron.CronJob
+import dev.hermeskotlin.ui.i18n.Strings
 
 /**
  * What a bot needs from the user, for the roster's Needs-you section: the phone's natural job, since the
@@ -27,7 +28,7 @@ sealed interface NeedsYou {
 
     /** One of the bot's routines went wrong. */
     data class Routine(override val bot: Bot, val job: CronJob) : NeedsYou {
-        override val reason: String get() = "Routine “${job.displayName}” didn't go through"
+        override val reason: String get() = Strings.t("Routine “{0}” didn't go through", job.displayName)
     }
 }
 

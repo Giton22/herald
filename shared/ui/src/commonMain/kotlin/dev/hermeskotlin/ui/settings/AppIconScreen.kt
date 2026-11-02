@@ -52,6 +52,7 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.PlatformBackHandler
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.ui.sessions.SubpageHeader
 
 /** Settings › App icon: every icon as the launcher draws it; the one tapped goes on the home screen with Apply. */
@@ -90,13 +91,13 @@ internal fun AppIconView(
         contentAlignment = Alignment.TopCenter,
     ) {
         Column(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
-            SubpageHeader("App icon", onBack = onBack)
+            SubpageHeader(Strings.t("App icon"), onBack = onBack)
             Column(
                 Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(22.dp),
             ) {
                 AppIconGroup.entries.forEach { group ->
-                    Section(group.title) {
+                    Section(Strings.t(group.title)) {
                         FlowRow(
                             Modifier.fillMaxWidth().padding(10.dp).selectableGroup(),
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -115,13 +116,15 @@ internal fun AppIconView(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    "Kyllene restarts to switch its icon. Some launchers take it off the home screen; add it again " +
-                        "from the app list.",
+                    Strings.t(
+                        "Kyllene restarts to switch its icon. Some launchers take it off the home screen; add it again " +
+                            "from the app list.",
+                    ),
                     style = Theme[typography][bodySmall],
                     color = Theme[colors][textTertiary],
                     textAlign = TextAlign.Center,
                 )
-                Button("Apply", onClick = { onApply(picked) }, enabled = picked != current, modifier = Modifier.fillMaxWidth())
+                Button(Strings.t("Apply"), onClick = { onApply(picked) }, enabled = picked != current, modifier = Modifier.fillMaxWidth())
             }
         }
     }
@@ -135,7 +138,7 @@ private fun IconChoice(icon: AppIcon, picture: ImageBitmap?, selected: Boolean, 
         Modifier
             .width(TILE + 20.dp)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
-            .semantics { contentDescription = icon.label }
+            .semantics { contentDescription = Strings.t(icon.label) }
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -154,7 +157,7 @@ private fun IconChoice(icon: AppIcon, picture: ImageBitmap?, selected: Boolean, 
             }
         }
         Text(
-            icon.label,
+            Strings.t(icon.label),
             style = Theme[typography][caption],
             color = if (selected) Theme[colors][accentText] else Theme[colors][textSecondary],
             textAlign = TextAlign.Center,

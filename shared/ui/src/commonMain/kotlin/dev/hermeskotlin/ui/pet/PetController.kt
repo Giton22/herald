@@ -4,6 +4,7 @@ import dev.hermeskotlin.core.pet.PetApi
 import dev.hermeskotlin.core.pet.PetChoice
 import dev.hermeskotlin.core.pet.PetGallery
 import dev.hermeskotlin.core.pet.PetSprite
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -70,7 +71,7 @@ class PetController(private val api: PetApi, private val scope: CoroutineScope) 
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _gallery.update { it.copy(loading = false, error = e.message ?: "Couldn't load the pets.") }
+                _gallery.update { it.copy(loading = false, error = e.message ?: Strings.t("Couldn't load the pets.")) }
             }
         }
     }
@@ -99,7 +100,7 @@ class PetController(private val api: PetApi, private val scope: CoroutineScope) 
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            _gallery.update { it.copy(adopting = null, error = e.message ?: "Couldn't adopt ${pet.displayName}.") }
+            _gallery.update { it.copy(adopting = null, error = e.message ?: Strings.t("Couldn't adopt {0}.", pet.displayName)) }
             throw e
         }
     }

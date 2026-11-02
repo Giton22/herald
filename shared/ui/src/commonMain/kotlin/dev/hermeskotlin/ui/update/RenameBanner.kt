@@ -41,6 +41,7 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.chat.AppMark
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -80,15 +81,15 @@ fun RenameBanner(modifier: Modifier = Modifier) {
     ) {
         AppMark(28.dp, glow = false)
         Column(Modifier.weight(1f).padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("Herald is now Kyllene", style = Theme[typography][bodySmall], color = Theme[colors][text])
+            Text(Strings.t("Herald is now Kyllene"), style = Theme[typography][bodySmall], color = Theme[colors][text])
             Text(
-                "Same app with a new name and icon. Your sign-in, chats and settings stay.",
+                Strings.t("Same app with a new name and icon. Your sign-in, chats and settings stay."),
                 style = Theme[typography][caption],
                 color = Theme[colors][textSecondary],
             )
         }
         UnstyledButton(onClick = offer.onDismiss, modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusSmall]))) {
-            UnstyledIcon(Lucide.X, contentDescription = "Got it", tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
+            UnstyledIcon(Lucide.X, contentDescription = Strings.t("Got it"), tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
         }
     }
 }

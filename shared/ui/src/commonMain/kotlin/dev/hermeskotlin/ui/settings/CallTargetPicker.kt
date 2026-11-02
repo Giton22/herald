@@ -27,6 +27,7 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.components.Surface
 import dev.hermeskotlin.ui.bots.BotAvatar
 import dev.hermeskotlin.ui.bots.BotFaces
+import dev.hermeskotlin.ui.i18n.Strings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -97,28 +98,28 @@ internal fun CallTargetPicker(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Text("Default Call Target", modifier = Modifier.weight(1f), style = Theme[typography][title], color = Theme[colors][text])
-                if (mode != 0) Button("Back", variant = ButtonVariant.Ghost, onClick = { mode = 0; offset = 0 })
+                Text(Strings.t("Default Call Target"), modifier = Modifier.weight(1f), style = Theme[typography][title], color = Theme[colors][text])
+                if (mode != 0) Button(Strings.t("Back"), variant = ButtonVariant.Ghost, onClick = { mode = 0; offset = 0 })
             }
             when {
                 mode == 0 -> {
-                    CallTargetCard("New session", "Start a fresh Hermes conversation", selected != null && selected.profile == null && selected.sessionId == null, { onSelect(CallTarget()) }) {
+                    CallTargetCard(Strings.t("New session"), Strings.t("Start a fresh Hermes conversation"), selected != null && selected.profile == null && selected.sessionId == null, { onSelect(CallTarget()) }) {
                         UnstyledIcon(Lucide.MessageSquarePlus, contentDescription = null, tint = Theme[colors][accentText], modifier = Modifier.size(32.dp))
                     }
-                    CallTargetCard("Existing session", "Continue a saved conversation", selected?.sessionId != null, { mode = 1 }) {
+                    CallTargetCard(Strings.t("Existing session"), Strings.t("Continue a saved conversation"), selected?.sessionId != null, { mode = 1 }) {
                         UnstyledIcon(Lucide.MessagesSquare, contentDescription = null, tint = Theme[colors][accentText], modifier = Modifier.size(32.dp))
                     }
-                    CallTargetCard("Call a bot", "Choose a bot to call", selected?.profile != null, { mode = 2 }) {
+                    CallTargetCard(Strings.t("Call a bot"), Strings.t("Choose a bot to call"), selected?.profile != null, { mode = 2 }) {
                         BotAvatar(Bot(name = Bot.DEFAULT), null, size = 40.dp)
                     }
                 }
                 loading -> Spinner()
                 error != null -> {
-                    Text(error.orEmpty(), color = Theme[colors][text])
-                    Button("Try again", onClick = { retry++ })
+                    Text(Strings.t(error.orEmpty()), color = Theme[colors][text])
+                    Button(Strings.t("Try again"), onClick = { retry++ })
                 }
                 mode == 2 -> {
-                    if (profiles.isEmpty()) Text("No bots available.", color = Theme[colors][text])
+                    if (profiles.isEmpty()) Text(Strings.t("No bots available."), color = Theme[colors][text])
                     profiles.forEach { profile ->
                         val bot = faces.bots.firstOrNull { it.name == profile.name } ?: Bot(name = profile.name, displayName = profile.label)
                         CallTargetCard(bot.label, null, selected?.profile == bot.name, {
@@ -127,14 +128,14 @@ internal fun CallTargetPicker(
                     }
                 }
                 else -> {
-                    if (page.sessions.isEmpty()) Text("No sessions available.", color = Theme[colors][text])
+                    if (page.sessions.isEmpty()) Text(Strings.t("No sessions available."), color = Theme[colors][text])
                     Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        if (offset > 0) Button("Previous", variant = ButtonVariant.Ghost, onClick = { offset = (offset - 50).coerceAtLeast(0) })
+                        if (offset > 0) Button(Strings.t("Previous"), variant = ButtonVariant.Ghost, onClick = { offset = (offset - 50).coerceAtLeast(0) })
                         // Pinned rows can be backfilled outside the requested 50-session window.
-                        if (offset + 50 < page.total) Button("Next", variant = ButtonVariant.Ghost, onClick = { offset += 50 })
+                        if (offset + 50 < page.total) Button(Strings.t("Next"), variant = ButtonVariant.Ghost, onClick = { offset += 50 })
                     }
                     page.sessions.forEach { session ->
-                        CallTargetCard(session.displayTitle, session.preview?.takeIf { it.isNotBlank() } ?: "Continue this session", selected?.sessionId == session.id, {
+                        CallTargetCard(session.displayTitle, session.preview?.takeIf { it.isNotBlank() } ?: Strings.t("Continue this session"), selected?.sessionId == session.id, {
                             onSelect(CallTarget(sessionId = session.id, label = session.displayTitle))
                         }) { UnstyledIcon(Lucide.MessagesSquare, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(32.dp)) }
                     }
@@ -159,7 +160,7 @@ private fun CallTargetCard(title: String, detail: String?, selected: Boolean, on
                 Text(title, style = Theme[typography][body], fontWeight = FontWeight.SemiBold, color = Theme[colors][text], maxLines = 2, overflow = TextOverflow.Ellipsis)
                 if (detail != null) Text(detail, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
-            if (selected) UnstyledIcon(Lucide.Check, contentDescription = "Selected", tint = Theme[colors][accentText], modifier = Modifier.size(20.dp))
+            if (selected) UnstyledIcon(Lucide.Check, contentDescription = Strings.t("Selected"), tint = Theme[colors][accentText], modifier = Modifier.size(20.dp))
         }
     }
 }

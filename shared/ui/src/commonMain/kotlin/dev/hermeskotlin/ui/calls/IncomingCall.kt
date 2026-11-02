@@ -60,6 +60,7 @@ import dev.hermeskotlin.designsystem.onAccent
 import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.i18n.Strings
 import org.koin.compose.koinInject
 
 /**
@@ -89,7 +90,7 @@ internal fun IncomingCallView(caller: String, why: String, onAnswer: () -> Unit,
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("Kyllene call", style = Theme[typography][label], color = Theme[colors][textSecondary])
+            Text(Strings.t("Kyllene call"), style = Theme[typography][label], color = Theme[colors][textSecondary])
             Text(
                 caller,
                 style = Theme[typography][display],
@@ -104,8 +105,8 @@ internal fun IncomingCallView(caller: String, why: String, onAnswer: () -> Unit,
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 48.dp, end = 48.dp, bottom = 72.dp),
             horizontalArrangement = Arrangement.SpaceBetween,
         ) {
-            CallButton("Decline", Lucide.PhoneOff, Theme[colors][danger], onDecline)
-            CallButton("Answer", Lucide.Phone, Theme[colors][accent], onAnswer)
+            CallButton(Strings.t("Decline"), Lucide.PhoneOff, Theme[colors][danger], onDecline)
+            CallButton(Strings.t("Answer"), Lucide.Phone, Theme[colors][accent], onAnswer)
         }
     }
 }
@@ -180,7 +181,7 @@ internal fun InCallView(state: PhoneCallState, seconds: Long, onMute: () -> Unit
             ) {
                 if (state.error == null) {
                     Text(
-                        if (voice.captionIsVoice) "Hermes" else "You",
+                        if (voice.captionIsVoice) "Hermes" else Strings.t("You"),
                         style = Theme[typography][label],
                         color = Theme[colors][textSecondary],
                     )
@@ -203,13 +204,13 @@ internal fun InCallView(state: PhoneCallState, seconds: Long, onMute: () -> Unit
         ) {
             if (mutable) {
                 CallButton(
-                    if (voice.muted) "Unmute" else "Mute",
+                    if (voice.muted) Strings.t("Unmute") else Strings.t("Mute"),
                     if (voice.muted) Lucide.MicOff else Lucide.Mic,
                     if (voice.muted) Theme[colors][accent] else Theme[colors][surface3],
                     onMute,
                 )
             }
-            CallButton("End", Lucide.PhoneOff, Theme[colors][danger], onEnd)
+            CallButton(Strings.t("End"), Lucide.PhoneOff, Theme[colors][danger], onEnd)
         }
     }
 }
@@ -217,20 +218,20 @@ internal fun InCallView(state: PhoneCallState, seconds: Long, onMute: () -> Unit
 /** Under the caller: the call's state, or its length with what Hermes is doing now. */
 internal fun callStatus(state: PhoneCallState, seconds: Long): String {
     val voice = state.voice
-    if (state.ended) return "Call ended"
+    if (state.ended) return Strings.t("Call ended")
     val length = "${seconds / 60}:${(seconds % 60).toString().padStart(2, '0')}"
     val doing = when (voice.phase) {
-        VoicePhase.Off, VoicePhase.Connecting -> return "Connecting…"
-        VoicePhase.Listening -> if (voice.muted) "Muted" else "Listening"
-        VoicePhase.Transcribing -> "Listening"
-        VoicePhase.Thinking -> voice.working?.let { "Working: $it" } ?: "Thinking"
-        VoicePhase.Speaking -> "Speaking"
+        VoicePhase.Off, VoicePhase.Connecting -> return Strings.t("Connecting…")
+        VoicePhase.Listening -> if (voice.muted) Strings.t("Muted") else Strings.t("Listening")
+        VoicePhase.Transcribing -> Strings.t("Listening")
+        VoicePhase.Thinking -> voice.working?.let { Strings.t("Working: {0}", it) } ?: Strings.t("Thinking")
+        VoicePhase.Speaking -> Strings.t("Speaking")
     }
-    return "$length · $doing"
+    return Strings.t("{0} · {1}", length, doing)
 }
 
 /** Why it rings, in a few words: what the agent waits for, never the command or the question itself. */
-fun callReason(approval: Boolean): String = if (approval) "Needs your approval" else "Has a question for you"
+fun callReason(approval: Boolean): String = if (approval) Strings.t("Needs your approval") else Strings.t("Has a question for you")
 
 /** Why a call the agent placed rings, over the lock screen: not what it's about, which Hermes says on the line. */
-fun agentCallReason(): String = "Calling you"
+fun agentCallReason(): String = Strings.t("Calling you")

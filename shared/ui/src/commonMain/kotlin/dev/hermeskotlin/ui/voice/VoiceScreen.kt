@@ -107,6 +107,7 @@ import dev.hermeskotlin.designsystem.textMuted
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.ui.PlatformBackHandler
 import dev.hermeskotlin.ui.chat.LocalReplySpeaker
 import kotlin.math.PI
@@ -164,12 +165,12 @@ internal fun VoiceScreen(
                 Modifier.widthIn(max = 640.dp).fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                RingButton(Lucide.ChevronDown, "Show the chat", onMinimize)
+                RingButton(Lucide.ChevronDown, Strings.t("Show the chat"), onMinimize)
                 Column(Modifier.weight(1f).semantics(mergeDescendants = true) { heading() }, horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Voice chat", style = Theme[typography][body].copy(fontSize = 14.sp, lineHeight = 18.sp), fontWeight = FontWeight.SemiBold, color = Theme[colors][textColor], maxLines = 1)
+                    Text(Strings.t("Voice chat"), style = Theme[typography][body].copy(fontSize = 14.sp, lineHeight = 18.sp), fontWeight = FontWeight.SemiBold, color = Theme[colors][textColor], maxLines = 1)
                     Text(chatTitle, style = Theme[typography][caption].copy(fontSize = 12.sp, lineHeight = 16.sp), color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
-                RingButton(if (captions) Lucide.Captions else Lucide.CaptionsOff, if (captions) "Hide captions" else "Show captions", onToggleCaptions)
+                RingButton(if (captions) Lucide.Captions else Lucide.CaptionsOff, Strings.t(if (captions) "Hide captions" else "Show captions"), onToggleCaptions)
             }
             Transcript(
                 state,
@@ -198,16 +199,16 @@ internal fun VoiceScreen(
                 Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
                     // Mute on the left in a call and a chained chat alike; an empty slot keeps End in the middle.
                     if (state.phase != VoicePhase.Connecting) {
-                        SideButton(Lucide.Mic.takeUnless { state.muted } ?: Lucide.MicOff, "Mute", onMute, on = state.muted, toggle = true)
+                        SideButton(Lucide.Mic.takeUnless { state.muted } ?: Lucide.MicOff, Strings.t("Mute"), onMute, on = state.muted, toggle = true)
                     } else {
                         Spacer(Modifier.size(52.dp))
                     }
                     EndButton(onEnd)
                     // Skip and Send now are only there for a moment, so they stand in for Type instead meanwhile.
                     when {
-                        !state.live && state.phase == VoicePhase.Speaking -> SideButton(Lucide.SkipForward, "Skip the reply", onSkip)
-                        canSendNow(state) -> SideButton(Lucide.ArrowUp, "Send now", onSendNow)
-                        else -> SideButton(Lucide.Keyboard, "Type instead", onType)
+                        !state.live && state.phase == VoicePhase.Speaking -> SideButton(Lucide.SkipForward, Strings.t("Skip the reply"), onSkip)
+                        canSendNow(state) -> SideButton(Lucide.ArrowUp, Strings.t("Send now"), onSendNow)
+                        else -> SideButton(Lucide.Keyboard, Strings.t("Type instead"), onType)
                     }
                 }
             }
@@ -228,7 +229,7 @@ private fun Transcript(state: VoiceChatState, lastReply: String?, captions: Bool
         if (lastReply != null && (said == null || mine)) {
             Line(bot, lastReply, Modifier.alpha(0.55f), big = false, you = false, lines = if (said == null) 8 else 4)
         }
-        if (said != null) Line(if (mine) "You" else bot, said, Modifier, big = mine, you = mine, lines = 8)
+        if (said != null) Line(if (mine) Strings.t("You") else bot, said, Modifier, big = mine, you = mine, lines = 8)
     }
 }
 
@@ -305,13 +306,13 @@ private fun EndButton(onClick: () -> Unit) {
             .heightIn(min = 52.dp)
             .clip(CircleShape)
             .background(Theme[colors][danger])
-            .clickable(role = Role.Button, onClickLabel = "End voice chat", onClick = onClick)
+            .clickable(role = Role.Button, onClickLabel = Strings.t("End voice chat"), onClick = onClick)
             .padding(horizontal = 22.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         UnstyledIcon(Lucide.X, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
-        Text("End", style = Theme[typography][body].copy(fontSize = 15.sp), fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
+        Text(Strings.t("End"), style = Theme[typography][body].copy(fontSize = 15.sp), fontWeight = FontWeight.SemiBold, color = Color.White, maxLines = 1)
     }
 }
 

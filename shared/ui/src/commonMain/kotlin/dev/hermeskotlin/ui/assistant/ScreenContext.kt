@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui.assistant
 
+import dev.hermeskotlin.ui.i18n.Strings
+
 import dev.hermeskotlin.core.chat.OutgoingAttachment
 
 /**
@@ -35,21 +37,21 @@ class ScreenContext(
         val kept = keptLines()
         if (kept.isEmpty()) return null
         return buildString {
-            append(if (circled) "Text inside the part of the user's phone screen they circled" else "Text on the user's phone screen")
-            app?.let { append(" in ").append(it) }
-            append(" when they asked. ")
+            append(if (circled) Strings.t("Text inside the part of the user's phone screen they circled") else Strings.t("Text on the user's phone screen"))
+            app?.let { append(Strings.t(" in {0}", it)) }
+            append(Strings.t(" when they asked. "))
             append(
                 when {
-                    screenshot == null -> "There is no screenshot."
-                    circled -> "An image of the circled part is attached."
-                    else -> "A screenshot of the same screen is attached."
+                    screenshot == null -> Strings.t("There is no screenshot.")
+                    circled -> Strings.t("An image of the circled part is attached.")
+                    else -> Strings.t("A screenshot of the same screen is attached.")
                 },
             )
             append("\n\n")
             var size = length
             for ((index, line) in kept.withIndex()) {
                 if (size + line.length + 1 > MAX_TEXT_CHARS) {
-                    append("[… ${kept.size - index} more lines cut]\n")
+                    append(Strings.t("[… {0} more lines cut]", kept.size - index)).append('\n')
                     break
                 }
                 append(line).append('\n')

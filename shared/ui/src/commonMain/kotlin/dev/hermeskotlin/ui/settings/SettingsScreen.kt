@@ -141,6 +141,7 @@ import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.phone.enabledPhoneTools
 import dev.hermeskotlin.core.plugins.NextPromptApi
 import dev.hermeskotlin.core.push.PushStatus
+import dev.hermeskotlin.core.settings.AppLanguage
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.CallTarget
 import dev.hermeskotlin.core.settings.RunningSend
@@ -195,6 +196,7 @@ import dev.hermeskotlin.ui.hasVoice
 import dev.hermeskotlin.ui.windowControlsHeight
 import dev.hermeskotlin.ui.CopyableOnDesktop
 import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.ui.PageRowHeight
 import dev.hermeskotlin.ui.tapVerb
 import dev.hermeskotlin.ui.keysLabel
@@ -260,7 +262,8 @@ fun SettingsScreen(
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
     PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen, onBack = onBack)
     // The desktop lists the sections beside the page; they say here where they start.
-    val anchors = remember { mutableStateMapOf<String, Int>() }
+    // Section titles are translated, so a language change starts the desktop index afresh.
+    val anchors = remember(settings.language) { mutableStateMapOf<String, Int>() }
     CompositionLocalProvider(LocalSectionAnchors provides anchors.takeIf { isDesktop }) { SettingsView(
         settings, info, gateway.url, viewModel::update, onBack, onSignOut, onOpenGateways,
         gatewayName = gateway.label,
@@ -325,11 +328,11 @@ internal fun ConnectionCheckSheet(
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         Column(Modifier.padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Check connection", style = Theme[typography][title], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
-                Text("Each stage is tested on its own.", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+                Text(Strings.t("Check connection"), style = Theme[typography][title], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
+                Text(Strings.t("Each stage is tested on its own."), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
             }
             ConnectionChecklist(results, running = running)
-            InversePillButton(if (running) "Checking…" else "Check again", Lucide.RefreshCw, onCheckAgain, loading = running)
+            InversePillButton(if (running) Strings.t("Checking…") else Strings.t("Check again"), Lucide.RefreshCw, onCheckAgain, loading = running)
         }
     }
 }
@@ -404,11 +407,11 @@ internal fun SettingsView(
         val search = rememberTextFieldState()
         val query = if (isDesktop) search.text.toString() else ""
         Column(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
-            SubpageHeader("Settings", onBack = onBack)
+            SubpageHeader(Strings.t("Settings"), onBack = onBack)
             if (isDesktop) {
                 TextField(
                     state = search,
-                    placeholder = "Search settings",
+                    placeholder = Strings.t("Search settings"),
                     leadingIcon = Lucide.Search,
                     clearable = true,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -421,13 +424,28 @@ internal fun SettingsView(
             ) { SearchableSettings(query) {
                 if (query.isBlank()) AccountCard(gatewayName, gatewayUrl, info.userLabel, onCheckConnection)
 
-                Section("Appearance") {
-                    Field("Theme") {
+                Section(Strings.t("Appearance")) {
+                    Field(Strings.t("Language"), detail = Strings.t("Kyllene's own words. System follows your phone.")) {
+                        SegmentedControl(
+                            options = AppLanguage.entries,
+                            selected = settings.language,
+                            onSelect = { language -> onUpdate { it.copy(language = language) } },
+                            optionLabel = { language ->
+                                when (language) {
+                                    AppLanguage.System -> Strings.t("System")
+                                    AppLanguage.English -> "English"
+                                    AppLanguage.Chinese -> "简体中文"
+                                }
+                            },
+                        )
+                    }
+                    Divider()
+                    Field(Strings.t("Theme")) {
                         SegmentedControl(
                             options = ThemeMode.entries,
                             selected = settings.theme,
                             onSelect = { mode -> onUpdate { it.copy(theme = mode) } },
-                            optionLabel = { it.name },
+                            optionLabel = { Strings.t(it.name) },
                             optionIcon = {
                                 when (it) {
                                     ThemeMode.System -> if (isDesktop) Lucide.Monitor else Lucide.Smartphone
@@ -438,7 +456,7 @@ internal fun SettingsView(
                         )
                     }
                     Divider()
-                    Field("Accent", detail = "Buttons, links and your own messages.") {
+                    Field(Strings.t("Accent"), detail = Strings.t("Buttons, links and your own messages.")) {
                         AccentPicker(
                             selected = AccentPalette.named(settings.accent),
                             onSelect = { palette -> onUpdate { it.copy(accent = palette.name) } },
@@ -446,46 +464,46 @@ internal fun SettingsView(
                     }
                     Divider()
                     // The launcher's icon is the phone's; the desktop keeps Herald's own.
-                    if (!isDesktop) NavRow(title = "App icon", detail = appIcon.label, icon = Lucide.LayoutGrid, onClick = onOpenAppIcon)
+                    if (!isDesktop) NavRow(title = Strings.t("App icon"), detail = Strings.t(appIcon.label), icon = Lucide.LayoutGrid, onClick = onOpenAppIcon)
                     if (!isDesktop) Divider()
                     SwitchRow(
-                        title = "Pure black",
-                        detail = "True black backgrounds in dark mode, easier on OLED screens.",
+                        title = Strings.t("Pure black"),
+                        detail = Strings.t("True black backgrounds in dark mode, easier on OLED screens."),
                         checked = settings.pureBlack,
                         onCheckedChange = { on -> onUpdate { it.copy(pureBlack = on) } },
                     )
                     Divider()
                     SwitchRow(
-                        title = "Glow",
-                        detail = "Soft colored light behind the top of each screen and under your messages and buttons. Off, everything sits flat.",
+                        title = Strings.t("Glow"),
+                        detail = Strings.t("Soft colored light behind the top of each screen and under your messages and buttons. Off, everything sits flat."),
                         checked = settings.glow,
                         onCheckedChange = { on -> onUpdate { it.copy(glow = on) } },
                     )
                     Divider()
-                    Field("Text size", detail = if (isDesktop) "The text alone, on top of the zoom." else "On top of your phone's own font size.") {
+                    Field(Strings.t("Text size"), detail = if (isDesktop) Strings.t("The text alone, on top of the zoom.") else Strings.t("On top of your phone's own font size.")) {
                         TextSizeSlider(settings.textSize, onSelect = { size -> onUpdate { it.copy(textSize = size) } })
                     }
                     Divider()
-                    Field("Chat background", detail = "A photo behind your conversations.") {
+                    Field(Strings.t("Chat background"), detail = Strings.t("A photo behind your conversations.")) {
                         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                             if (wallpaper != null) {
                                 val shape = RoundedCornerShape(Theme[radii][radiusMedium])
                                 Image(
                                     wallpaper,
-                                    contentDescription = "Current chat background",
+                                    contentDescription = Strings.t("Current chat background"),
                                     contentScale = ContentScale.Crop,
                                     modifier = Modifier.size(width = 40.dp, height = 64.dp).clip(shape).border(1.dp, Theme[colors][stroke], shape),
                                 )
                             }
                             Button(
-                                if (hasWallpaper) "Change" else "Choose photo",
+                                if (hasWallpaper) Strings.t("Change") else Strings.t("Choose photo"),
                                 onClick = onChooseWallpaper,
                                 variant = ButtonVariant.Secondary,
                                 size = ButtonSize.Small,
                                 leadingIcon = Lucide.Image,
                             )
                             if (hasWallpaper) {
-                                Button("Remove", onClick = onRemoveWallpaper, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+                                Button(Strings.t("Remove"), onClick = onRemoveWallpaper, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
                             }
                         }
                         if (wallpaperError != null) {
@@ -494,103 +512,103 @@ internal fun SettingsView(
                     }
                     if (hasWallpaper) {
                         Divider()
-                        Field("Background strength", detail = "How much of the photo shows through.") {
+                        Field(Strings.t("Background strength"), detail = Strings.t("How much of the photo shows through.")) {
                             SegmentedControl(
                                 options = WallpaperStrength.entries,
                                 selected = settings.wallpaperStrength,
                                 onSelect = { strength -> onUpdate { it.copy(wallpaperStrength = strength) } },
-                                optionLabel = { it.name },
+                                optionLabel = { Strings.t(it.name) },
                             )
                         }
                     }
                     Divider()
                     SwitchRow(
-                        title = "Projects as a list",
-                        detail = "Show the chat list's projects as one button that opens a list, instead of a row of chips that scrolls sideways.",
+                        title = Strings.t("Projects as a list"),
+                        detail = Strings.t("Show the chat list's projects as one button that opens a list, instead of a row of chips that scrolls sideways."),
                         checked = settings.projectsAsDropdown,
                         onCheckedChange = { on -> onUpdate { it.copy(projectsAsDropdown = on) } },
                     )
                 }
 
-                Section("Chat") {
+                Section(Strings.t("Chat")) {
                     Field(
-                        "While a reply is running, Send…",
-                        detail = "${settings.runningSend.summary}. Hold Send to pick another way for one message.",
+                        Strings.t("While a reply is running, Send…"),
+                        detail = Strings.t("{0}. Hold Send to pick another way for one message.", Strings.t(settings.runningSend.summary)),
                     ) {
                         SegmentedControl(
                             options = RunningSend.entries,
                             selected = settings.runningSend,
                             onSelect = { mode -> onUpdate { it.copy(runningSend = mode) } },
-                            optionLabel = { it.label },
+                            optionLabel = { Strings.t(it.label) },
                         )
                     }
                     Divider()
                     NavRow(
-                        title = "Starting instruction",
-                        detail = settings.startInstruction.trim().ifEmpty { "None. Tell each new chat something first, like to keep replies short." },
+                        title = Strings.t("Starting instruction"),
+                        detail = settings.startInstruction.trim().ifEmpty { Strings.t("None. Tell each new chat something first, like to keep replies short.") },
                         icon = Lucide.MessageSquarePlus,
                         onClick = onOpenStartInstruction,
                         detailLines = 2,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Show reasoning",
-                        detail = "The model's thinking, collapsed above each reply.",
+                        title = Strings.t("Show reasoning"),
+                        detail = Strings.t("The model's thinking, collapsed above each reply."),
                         checked = settings.showReasoning,
                         onCheckedChange = { on -> onUpdate { it.copy(showReasoning = on) } },
                         icon = Lucide.Brain,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Show tool activity",
-                        detail = "The tools each reply used, such as the terminal or web search.",
+                        title = Strings.t("Show tool activity"),
+                        detail = Strings.t("The tools each reply used, such as the terminal or web search."),
                         checked = settings.showToolActivity,
                         onCheckedChange = { on -> onUpdate { it.copy(showToolActivity = on) } },
                         icon = Lucide.Wrench,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Show token usage",
-                        detail = "What each reply took, under it. The chat menu has the totals and cost.",
+                        title = Strings.t("Show token usage"),
+                        detail = Strings.t("What each reply took, under it. The chat menu has the totals and cost."),
                         checked = settings.showUsage,
                         onCheckedChange = { on -> onUpdate { it.copy(showUsage = on) } },
                         icon = Lucide.Gauge,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Message timestamps",
-                        detail = "The time under each prompt and finished reply.",
+                        title = Strings.t("Message timestamps"),
+                        detail = Strings.t("The time under each prompt and finished reply."),
                         checked = settings.showTimestamps,
                         onCheckedChange = { on -> onUpdate { it.copy(showTimestamps = on) } },
                         icon = Lucide.Clock,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Wrap code lines",
-                        detail = "Long lines in code blocks wrap instead of scrolling sideways.",
+                        title = Strings.t("Wrap code lines"),
+                        detail = Strings.t("Long lines in code blocks wrap instead of scrolling sideways."),
                         checked = settings.wrapCode,
                         onCheckedChange = { on -> onUpdate { it.copy(wrapCode = on) } },
                         icon = Lucide.WrapText,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Show the pet",
-                        detail = "The profile's pet sits on the composer and acts out what the agent is doing. Adopt one with /pet.",
+                        title = Strings.t("Show the pet"),
+                        detail = Strings.t("The profile's pet sits on the composer and acts out what the agent is doing. Adopt one with /pet."),
                         checked = settings.showPet,
                         onCheckedChange = { on -> onUpdate { it.copy(showPet = on) } },
                         icon = Lucide.Cat,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Show link previews",
-                        detail = "A card for each web link in a finished reply. Kyllene opens the linked pages and their pictures itself, without your gateway's cookies.",
+                        title = Strings.t("Show link previews"),
+                        detail = Strings.t("A card for each web link in a finished reply. Kyllene opens the linked pages and their pictures itself, without your gateway's cookies."),
                         checked = settings.showLinkPreviews,
                         onCheckedChange = { on -> onUpdate { it.copy(showLinkPreviews = on) } },
                         icon = Lucide.Globe,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Suggested replies",
+                        title = Strings.t("Suggested replies"),
                         detail = suggestionsDetail(settings.suggestedReplies, suggestions),
                         checked = settings.suggestedReplies,
                         onCheckedChange = { on -> onUpdate { it.copy(suggestedReplies = on) } },
@@ -599,7 +617,7 @@ internal fun SettingsView(
                     if (settings.suggestedReplies && (suggestions == SuggestionsPlugin.Missing || suggestions is SuggestionsPlugin.Failed)) {
                         var asked by remember { mutableStateOf(false) }
                         Divider()
-                        ActionRow("Install Next Prompt on the gateway", Lucide.Download) { asked = true }
+                        ActionRow(Strings.t("Install Next Prompt on the gateway"), Lucide.Download) { asked = true }
                         SuggestionsInstallDialog(asked, onDismiss = { asked = false }) {
                             asked = false
                             onInstallSuggestions()
@@ -607,117 +625,119 @@ internal fun SettingsView(
                     }
                     if (settings.suggestedReplies && (suggestions == SuggestionsPlugin.NeedsRestart || suggestions == SuggestionsPlugin.Unknown)) {
                         Divider()
-                        ActionRow("Check again", Lucide.RefreshCw, onClick = onCheckSuggestions)
+                        ActionRow(Strings.t("Check again"), Lucide.RefreshCw, onClick = onCheckSuggestions)
                     }
                 }
 
-                if (hasVoice) Section("Voice") {
+                if (hasVoice) Section(Strings.t("Voice")) {
                     CallTargetRow(settings.callTargets[gatewayUrl] ?: CallTarget(), botFaces, onChooseCallTarget)
                     Divider()
                     SwitchRow(
-                        title = "Dictation",
-                        detail = "A mic in the composer to talk instead of type. Off, the model name gets its room.",
+                        title = Strings.t("Dictation"),
+                        detail = Strings.t("A mic in the composer to talk instead of type. Off, the model name gets its room."),
                         checked = settings.dictation,
                         onCheckedChange = { on -> onUpdate { it.copy(dictation = on) } },
                     )
                     Divider()
                     if (settings.dictation) {
                         Field(
-                            "Dictate with",
+                            Strings.t("Dictate with"),
                             detail = when (settings.dictationEngine) {
-                                DictationEngine.Device -> "The phone's speech recognizer writes as you talk. Falls back to the gateway on a phone without one."
-                                DictationEngine.Gateway -> "The profile's speech-to-text on the gateway, once you stop talking."
+                                DictationEngine.Device -> Strings.t("The phone's speech recognizer writes as you talk. Falls back to the gateway on a phone without one.")
+                                DictationEngine.Gateway -> Strings.t("The profile's speech-to-text on the gateway, once you stop talking.")
                             },
                         ) {
                             SegmentedControl(
                                 options = DictationEngine.entries,
                                 selected = settings.dictationEngine,
                                 onSelect = { engine -> onUpdate { it.copy(dictationEngine = engine) } },
-                                optionLabel = { it.name },
+                                optionLabel = { Strings.t(it.name) },
                             )
                         }
                         Divider()
                     }
-                    Field("Pause before sending", detail = "How long a voice chat waits after you stop talking. Short is Hermes Desktop's timing.") {
+                    Field(Strings.t("Pause before sending"), detail = Strings.t("How long a voice chat waits after you stop talking. Short is Hermes Desktop's timing.")) {
                         SegmentedControl(
                             options = VoicePause.entries,
                             selected = settings.voicePause,
                             onSelect = { pause -> onUpdate { it.copy(voicePause = pause) } },
-                            optionLabel = { it.name },
+                            optionLabel = { Strings.t(it.name) },
                         )
                     }
                 }
 
-                if (isDesktop) Section("Desktop") {
+                if (isDesktop) Section(Strings.t("Desktop")) {
                     SwitchRow(
-                        title = "Keep running in the tray",
-                        detail = "Closing the window leaves Kyllene in the tray, still telling you of replies and questions. Quit from the tray's menu.",
+                        title = Strings.t("Keep running in the tray"),
+                        detail = Strings.t("Closing the window leaves Kyllene in the tray, still telling you of replies and questions. Quit from the tray's menu."),
                         checked = settings.closeToTray,
                         onCheckedChange = { on -> onUpdate { it.copy(closeToTray = on) } },
                         icon = Lucide.AppWindow,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Quick entry",
-                        detail = "${keysLabel("Ctrl+Shift+Space")} from any app opens a small box to ask Hermes, in a new chat or the open one. Windows only for now." +
+                        title = Strings.t("Quick entry"),
+                        detail = Strings.t("{0} from any app opens a small box to ask Hermes, in a new chat or the open one. Windows only for now.", keysLabel("Ctrl+Shift+Space")) +
                             // Windows gives a hotkey to one app at a time: say so rather than leave it on and silent.
-                            if (settings.quickEntry && QuickEntryHotkey.taken) " Another app has these keys now, so it can't open." else "",
+                            if (settings.quickEntry && QuickEntryHotkey.taken) Strings.t(" Another app has these keys now, so it can't open.") else "",
                         checked = settings.quickEntry,
                         onCheckedChange = { on -> onUpdate { it.copy(quickEntry = on) } },
                         icon = Lucide.Keyboard,
                     )
                     Divider()
-                    Field("Zoom", detail = "${settings.zoom}%. ${keysLabel("Ctrl+=")} and ${keysLabel("Ctrl+-")} change it anywhere; ${keysLabel("Ctrl+0")} goes back to 100%.") {
+                    Field(Strings.t("Zoom"), detail = Strings.t("{0}%. {1} and {2} change it anywhere; {3} goes back to 100%.", settings.zoom, keysLabel("Ctrl+="), keysLabel("Ctrl+-"), keysLabel("Ctrl+0"))) {
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             // The same steps as the keys take.
                             // Each greys out at its end of the range, and 100% at 100%, rather than doing nothing.
-                            Button("Smaller", onClick = { onUpdate { it.copy(zoom = zoomAfter(Shortcut.ZoomOut, it.zoom) ?: it.zoom) } }, variant = ButtonVariant.Secondary, size = ButtonSize.Small, enabled = zoomAfter(Shortcut.ZoomOut, settings.zoom) != null)
+                            Button(Strings.t("Smaller"), onClick = { onUpdate { it.copy(zoom = zoomAfter(Shortcut.ZoomOut, it.zoom) ?: it.zoom) } }, variant = ButtonVariant.Secondary, size = ButtonSize.Small, enabled = zoomAfter(Shortcut.ZoomOut, settings.zoom) != null)
                             Button("100%", onClick = { onUpdate { it.copy(zoom = 100) } }, variant = ButtonVariant.Secondary, size = ButtonSize.Small, enabled = settings.zoom != 100)
-                            Button("Bigger", onClick = { onUpdate { it.copy(zoom = zoomAfter(Shortcut.ZoomIn, it.zoom) ?: it.zoom) } }, variant = ButtonVariant.Secondary, size = ButtonSize.Small, enabled = zoomAfter(Shortcut.ZoomIn, settings.zoom) != null)
+                            Button(Strings.t("Bigger"), onClick = { onUpdate { it.copy(zoom = zoomAfter(Shortcut.ZoomIn, it.zoom) ?: it.zoom) } }, variant = ButtonVariant.Secondary, size = ButtonSize.Small, enabled = zoomAfter(Shortcut.ZoomIn, settings.zoom) != null)
                         }
                     }
                 }
 
-                Section("Notifications") {
+                Section(Strings.t("Notifications")) {
                     var installAsked by remember { mutableStateOf(false) }
                     PluginInstallDialog(
                         visible = installAsked,
-                        feature = "Notifications anywhere",
-                        what = "It watches your bots' chats and sends each new reply to this phone, end-to-end " +
-                            "encrypted through ntfy.sh.",
+                        feature = Strings.t("Notifications anywhere"),
+                        what = Strings.t("It watches your bots' chats and sends each new reply to this phone, end-to-end encrypted through ntfy.sh."),
                         onDismiss = { installAsked = false },
                     ) {
                         installAsked = false
                         onPushAnywhere(true)
                     }
                     SwitchRow(
-                        title = "Approvals and questions",
-                        detail = if (isDesktop) "When the agent waits on you and Kyllene isn't the window in use." else "When the agent waits on you. Answer right from the notification.",
+                        title = Strings.t("Approvals and questions"),
+                        detail = if (isDesktop) Strings.t("When the agent waits on you and Kyllene isn't the window in use.") else Strings.t("When the agent waits on you. Answer right from the notification."),
                         checked = settings.notifyRequests,
                         onCheckedChange = { on -> onUpdate { it.copy(notifyRequests = on) } },
                         icon = Lucide.ShieldAlert,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Finished replies",
-                        detail = if (isDesktop) "When a turn ends or fails while Kyllene isn't the window in use. Click it to open the chat." else "When a turn ends while Kyllene is in the background. Reply from the notification.",
+                        title = Strings.t("Finished replies"),
+                        detail = if (isDesktop) Strings.t("When a turn ends or fails while Kyllene isn't the window in use. Click it to open the chat.") else Strings.t("When a turn ends while Kyllene is in the background. Reply from the notification."),
                         checked = settings.notifyReplies,
                         onCheckedChange = { on -> onUpdate { it.copy(notifyReplies = on) } },
                         icon = Lucide.MessageCircle,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Notify for other chats while Kyllene is open",
-                        detail = "Replies and requests in chats other than the one on screen notify even while you're in Kyllene.",
+                        title = Strings.t("Notify for other chats while Kyllene is open"),
+                        detail = Strings.t("Replies and requests in chats other than the one on screen notify even while you're in Kyllene."),
                         checked = settings.notifyOtherChatsInApp,
                         onCheckedChange = { on -> onUpdate { it.copy(notifyOtherChatsInApp = on) } },
                         icon = Lucide.BellRing,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Alerts for other chats",
-                        detail = "While you're in a chat, a dot on Sessions when another chat replies or waits on you. " +
-                            if (isDesktop) "${keysLabel("Ctrl+Tab")} goes to the next one." else "Long-press Sessions for the next one.",
+                        title = Strings.t("Alerts for other chats"),
+                        detail = if (isDesktop) {
+                            Strings.t("While you're in a chat, a dot on Sessions when another chat replies or waits on you. {0} goes to the next one.", keysLabel("Ctrl+Tab"))
+                        } else {
+                            Strings.t("While you're in a chat, a dot on Sessions when another chat replies or waits on you. Long-press Sessions for the next one.")
+                        },
                         checked = settings.otherChatsAlerts,
                         onCheckedChange = { on -> onUpdate { it.copy(otherChatsAlerts = on) } },
                         icon = Lucide.PanelLeft,
@@ -726,8 +746,8 @@ internal fun SettingsView(
                     if (settings.otherChatsAlerts) {
                         Divider()
                         SwitchRow(
-                            title = "Banner for other chats",
-                            detail = "A card over the chat when another chat replies or waits on you, to open it from there.",
+                            title = Strings.t("Banner for other chats"),
+                            detail = Strings.t("A card over the chat when another chat replies or waits on you, to open it from there."),
                             checked = settings.otherChatsBanner,
                             onCheckedChange = { on -> onUpdate { it.copy(otherChatsBanner = on) } },
                             icon = Lucide.PanelTop,
@@ -735,8 +755,8 @@ internal fun SettingsView(
                         // A computer doesn't buzz.
                         if (!isDesktop) Divider()
                         if (!isDesktop) SwitchRow(
-                            title = "Vibrate when another chat waits",
-                            detail = "A short buzz when another chat starts waiting on your approval or answer.",
+                            title = Strings.t("Vibrate when another chat waits"),
+                            detail = Strings.t("A short buzz when another chat starts waiting on your approval or answer."),
                             checked = settings.otherChatsVibrate,
                             onCheckedChange = { on -> onUpdate { it.copy(otherChatsVibrate = on) } },
                             icon = Lucide.Vibrate,
@@ -745,7 +765,7 @@ internal fun SettingsView(
                     // The phone's push through ntfy; the desktop has no way to receive it yet.
                     if (!isDesktop) Divider()
                     if (!isDesktop) SwitchRow(
-                        title = "Notifications anywhere",
+                        title = Strings.t("Notifications anywhere"),
                         detail = pushDetail(settings.pushAnywhere, push),
                         checked = settings.pushAnywhere,
                         // On installs code on the gateway: said first, done only once the user agrees.
@@ -761,9 +781,9 @@ internal fun SettingsView(
                         Divider()
                         ActionRow(
                             when (pushTest) {
-                                true -> "Test sent: it should arrive in a moment"
-                                false -> "The gateway couldn't send the test"
-                                null -> "Send a test notification"
+                                true -> Strings.t("Test sent: it should arrive in a moment")
+                                false -> Strings.t("The gateway couldn't send the test")
+                                null -> Strings.t("Send a test notification")
                             },
                             Lucide.Send,
                             onPushTest,
@@ -772,24 +792,23 @@ internal fun SettingsView(
                 }
 
                 // Both are the phone's own: its tools and its lock.
-                if (!isDesktop) Section("Phone") {
+                if (!isDesktop) Section(Strings.t("Phone")) {
                     NavRow(
-                        title = "Phone tools",
+                        title = Strings.t("Phone tools"),
                         detail = phoneToolsSummary(settings),
                         icon = Lucide.Smartphone,
                         onClick = onOpenPhoneTools,
                     )
                 }
 
-                if (!isDesktop) Section("Privacy") {
+                if (!isDesktop) Section(Strings.t("Privacy")) {
                     val canLock = deviceHasScreenLock()
                     SwitchRow(
-                        title = "App lock",
+                        title = Strings.t("App lock"),
                         detail = if (canLock || settings.appLock) {
-                            "Ask for your fingerprint, face or screen lock when Kyllene opens and after a minute away. " +
-                                "Hides Kyllene in Recents and blocks screenshots of it. Notification actions keep working."
+                            Strings.t("Ask for your fingerprint, face or screen lock when Kyllene opens and after a minute away. Hides Kyllene in Recents and blocks screenshots of it. Notification actions keep working.")
                         } else {
-                            "Set a screen lock in Android's settings first."
+                            Strings.t("Set a screen lock in Android's settings first.")
                         },
                         checked = settings.appLock,
                         onCheckedChange = { on -> if (canLock || !on) onUpdate { it.copy(appLock = on) } },
@@ -797,32 +816,32 @@ internal fun SettingsView(
                     )
                 }
 
-                Section("Account") {
-                    ActionRow("Check connection", Lucide.Activity, onCheckConnection)
+                Section(Strings.t("Account")) {
+                    ActionRow(Strings.t("Check connection"), Lucide.Activity, onCheckConnection)
                     Divider()
-                    ActionRow("Switch or add a gateway", Lucide.ArrowLeftRight, onOpenGateways)
+                    ActionRow(Strings.t("Switch or add a gateway"), Lucide.ArrowLeftRight, onOpenGateways)
                     Divider()
-                    ActionRow("Sign out", Lucide.LogOut, onSignOut)
+                    ActionRow(Strings.t("Sign out"), Lucide.LogOut, onSignOut)
                 }
 
-                Section("About") {
-                    InfoRow("App version", LocalAppVersion.current ?: "Unknown")
+                Section(Strings.t("About")) {
+                    InfoRow(Strings.t("App version"), LocalAppVersion.current ?: Strings.t("Unknown"))
                     Divider()
                     SwitchRow(
-                        title = "Check for updates",
-                        detail = "Asks GitHub, where the app is released, whether there's a newer version. Nothing else is sent.",
+                        title = Strings.t("Check for updates"),
+                        detail = Strings.t("Asks GitHub, where the app is released, whether there's a newer version. Nothing else is sent."),
                         checked = settings.checkForUpdates,
                         onCheckedChange = { on -> onUpdate { it.copy(checkForUpdates = on) } },
                         icon = Lucide.RefreshCw,
                     )
-                    if (settingShown("Check for updates")) UpdateBanner(Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                    if (settingShown(Strings.t("Check for updates"))) UpdateBanner(Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                     Divider()
-                    InfoRow("Gateway", info.version?.let { "Hermes $it" } ?: "Checking…")
+                    InfoRow(Strings.t("Gateway"), info.version?.let { "Hermes $it" } ?: Strings.t("Checking…"))
                     Divider()
                     val uriHandler = LocalUriHandler.current
                     NavRow(
-                        title = "Join the Discord",
-                        detail = "Get help, report bugs, suggest features and hear about new releases.",
+                        title = Strings.t("Join the Discord"),
+                        detail = Strings.t("Get help, report bugs, suggest features and hear about new releases."),
                         icon = Lucide.MessagesSquare,
                         onClick = { uriHandler.openUri(DISCORD_INVITE) },
                     )
@@ -859,26 +878,31 @@ private const val DISCORD_INVITE = "https://discord.gg/wCtyvQ3KcM"
 private fun phoneToolsSummary(settings: AppSettings): String {
     val count = settings.enabledPhoneTools().size
     return when {
-        !settings.phoneTools -> "Off. Let the agent use this phone, each tool only once you turn it on."
-        count == 0 -> "On, but no tool is turned on yet."
-        count == 1 -> "1 tool on."
-        else -> "$count tools on."
+        !settings.phoneTools -> Strings.t("Off. Let the agent use this phone, each tool only once you turn it on.")
+        count == 0 -> Strings.t("On, but no tool is turned on yet.")
+        count == 1 -> Strings.t("1 tool on.")
+        else -> Strings.t("{0} tools on.", count)
     }
 }
 
 /** What Suggested replies does, or where the plugin it needs stands on the gateway. */
 internal fun suggestionsDetail(on: Boolean, plugin: SuggestionsPlugin): String {
-    val what = "After a reply, the message you'd likely send next, over the composer: ${tapVerb.lowercase()} it to edit and send. " +
-        "It comes from the gateway's Next Prompt plugin, which asks a model once per turn."
+    val what = Strings.t(
+        "After a reply, the message you'd likely send next, over the composer: {0} it to edit and send. It comes from the gateway's Next Prompt plugin, which asks a model once per turn.",
+        Strings.t(tapVerb.lowercase()),
+    )
     if (!on) return what
     return when (plugin) {
-        SuggestionsPlugin.Missing -> "The gateway doesn't have the Next Prompt plugin, which makes the suggestions."
-        SuggestionsPlugin.Installing -> "Installing Next Prompt on the gateway…"
-        SuggestionsPlugin.NeedsRestart -> "Next Prompt is installed. Restart the gateway to start the suggestions."
-        is SuggestionsPlugin.Failed -> "Next Prompt wasn't installed: ${plugin.message}"
+        SuggestionsPlugin.Missing -> Strings.t("The gateway doesn't have the Next Prompt plugin, which makes the suggestions.")
+        SuggestionsPlugin.Installing -> Strings.t("Installing Next Prompt on the gateway…")
+        SuggestionsPlugin.NeedsRestart -> Strings.t("Next Prompt is installed. Restart the gateway to start the suggestions.")
+        is SuggestionsPlugin.Failed -> Strings.t("Next Prompt wasn't installed: {0}", plugin.message)
         is SuggestionsPlugin.Installed -> if (plugin.outdated) {
-            "The gateway has Next Prompt ${plugin.version}. A gateway with several profiles needs " +
-                "${NextPromptApi.PLUGIN_VERSION} or later; update it in the dashboard's Plugins."
+            Strings.t(
+                "The gateway has Next Prompt {0}. A gateway with several profiles needs {1} or later; update it in the dashboard's Plugins.",
+                plugin.version,
+                NextPromptApi.PLUGIN_VERSION,
+            )
         } else what
         SuggestionsPlugin.Checking, SuggestionsPlugin.Unknown -> what
     }
@@ -887,18 +911,19 @@ internal fun suggestionsDetail(on: Boolean, plugin: SuggestionsPlugin): String {
 /** What Notifications anywhere does, or where its setup on the gateway stands. */
 private fun pushDetail(on: Boolean, push: PushStatus): String {
     if (!on) {
-        return "Hear from your bots even off your gateway's network, end-to-end encrypted through ntfy.sh. " +
-            "Installs the herald-push plugin on the gateway. Keeps a quiet notification."
+        return Strings.t(
+            "Hear from your bots even off your gateway's network, end-to-end encrypted through ntfy.sh. Installs the herald-push plugin on the gateway. Keeps a quiet notification.",
+        )
     }
     return when (push.state) {
-        PushStatus.State.On -> push.detail ?: "On. Bot messages come end-to-end encrypted through ntfy.sh; it only sees scrambled data."
-        PushStatus.State.Working -> push.detail ?: "Setting up with the gateway…"
-        PushStatus.State.NotInstalled -> "The gateway doesn't have the herald-push plugin. Turn this off and on to install it."
+        PushStatus.State.On -> push.detail ?: Strings.t("On. Bot messages come end-to-end encrypted through ntfy.sh; it only sees scrambled data.")
+        PushStatus.State.Working -> push.detail ?: Strings.t("Setting up with the gateway…")
+        PushStatus.State.NotInstalled -> Strings.t("The gateway doesn't have the herald-push plugin. Turn this off and on to install it.")
         PushStatus.State.Outdated -> push.update?.let {
-            "The gateway's herald-push plugin is ${it.installed}; this needs ${it.available}. Update it below."
-        } ?: "The gateway's herald-push plugin is too old."
-        PushStatus.State.Failed -> "Couldn't set up: ${push.detail ?: "unknown error"}"
-        PushStatus.State.Unknown, PushStatus.State.Off -> "On. Checks with the gateway the next time Kyllene reaches it."
+            Strings.t("The gateway's herald-push plugin is {0}; this needs {1}. Update it below.", it.installed, it.available)
+        } ?: Strings.t("The gateway's herald-push plugin is too old.")
+        PushStatus.State.Failed -> Strings.t("Couldn't set up: {0}", push.detail ?: Strings.t("unknown error"))
+        PushStatus.State.Unknown, PushStatus.State.Off -> Strings.t("On. Checks with the gateway the next time Kyllene reaches it.")
     }
 }
 
@@ -928,7 +953,7 @@ private fun AccountCard(gatewayName: String, gatewayUrl: String, userLabel: Stri
             Text(
                 // Who is signed in first, so a long address is what gets cut; the address only when the name
                 // above isn't already it.
-                listOfNotNull(userLabel ?: "Signed in", gatewayUrl.substringAfter("://").trimEnd('/').takeIf { it != gatewayName.trimEnd('/') })
+                listOfNotNull(userLabel ?: Strings.t("Signed in"), gatewayUrl.substringAfter("://").trimEnd('/').takeIf { it != gatewayName.trimEnd('/') })
                     .joinToString(" · "),
                 style = Theme[typography][code].copy(fontSize = 11.5.sp),
                 color = Theme[colors][textTertiary],
@@ -936,7 +961,7 @@ private fun AccountCard(gatewayName: String, gatewayUrl: String, userLabel: Stri
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        PillButton("Check", Lucide.Activity, onCheck, description = "Check connection")
+        PillButton(Strings.t("Check"), Lucide.Activity, onCheck, description = Strings.t("Check connection"))
     }
 }
 
@@ -1041,7 +1066,7 @@ private fun SearchableSettings(query: String, content: @Composable () -> Unit) {
     CompositionLocalProvider(LocalSettingsQuery provides query, LocalSectionsShown provides shown) { content() }
     if (query.isNotBlank() && shown.values.none { it }) {
         Text(
-            "No settings match “${query.trim()}”.",
+            Strings.t("No settings match “{0}”.", query.trim()),
             style = Theme[typography][bodySmall],
             color = Theme[colors][textTertiary],
             modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
@@ -1124,9 +1149,9 @@ private fun CallTargetRow(target: CallTarget, faces: BotFaces, onClick: () -> Un
             UnstyledIcon(Lucide.Phone, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("Default Call target", style = Theme[typography][body], color = Theme[colors][text], maxLines = 2, overflow = TextOverflow.Ellipsis)
-            Text(bot?.label ?: target.label, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text("Where your call is routed, when you use call Hermes. Hold the app icon from your app drawer to use it", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+            Text(Strings.t("Default Call target"), style = Theme[typography][body], color = Theme[colors][text], maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(bot?.label ?: Strings.t(target.label), style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(Strings.t("Where your call is routed, when you use call Hermes. Hold the app icon from your app drawer to use it"), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
         }
         UnstyledIcon(Lucide.ChevronRight, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp))
     }
@@ -1190,14 +1215,14 @@ private fun AccentPicker(selected: AccentPalette, onSelect: (AccentPalette) -> U
             val isSelected = palette == selected
             val color = if (dark) palette.dark.accent else palette.light.accent
             // A colour's name, for a pointer that rests on it.
-            Tooltip(palette.name) {
+            Tooltip(Strings.t(palette.name)) {
                 Box(
                     Modifier
                         .size(MinTouchTarget)
                         .clip(CircleShape)
                         .handCursor()
                         .selectable(selected = isSelected, role = Role.RadioButton, onClick = { onSelect(palette) })
-                        .semantics { contentDescription = palette.name },
+                        .semantics { contentDescription = Strings.t(palette.name) },
                     contentAlignment = Alignment.Center,
                 ) {
                     Box(
@@ -1257,8 +1282,8 @@ private fun TextSizeSlider(selected: TextSize, onSelect: (TextSize) -> Unit) {
                     .handCursor()
                     .then(keys)
                     .semantics {
-                        contentDescription = "Text size"
-                        stateDescription = selected.name
+                        contentDescription = Strings.t("Text size")
+                        stateDescription = Strings.t(selected.name)
                         progressBarRangeInfo = ProgressBarRangeInfo(index.toFloat(), 0f..last.toFloat(), steps = last - 1)
                         setProgress { target ->
                             pick(target.roundToInt().coerceIn(0, last))
@@ -1309,7 +1334,7 @@ private fun TextSizeSlider(selected: TextSize, onSelect: (TextSize) -> Unit) {
             }
         }
         Text(
-            selected.name,
+            Strings.t(selected.name),
             style = Theme[typography][label].copy(fontSize = 12.sp),
             color = Theme[colors][accentText],
             textAlign = TextAlign.Center,

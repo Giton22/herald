@@ -7,6 +7,7 @@ import dev.hermeskotlin.core.chat.SHOW_UI_TOOL
 import dev.hermeskotlin.core.phone.AgentScreens
 import dev.hermeskotlin.core.phone.PhoneToolException
 import dev.hermeskotlin.ui.chat.agentScreenProblem
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -21,14 +22,14 @@ class ShowUiTool(private val context: Context, private val screens: AgentScreens
     suspend fun run(args: JsonObject, session: String): JsonElement {
         val screen = AgentScreen.from(SHOW_UI_TOOL, args)
             ?: throw PhoneToolException(
-                "messages must be a list of 1 to ${AgentScreen.MAX_MESSAGES} A2UI messages (JSON objects), each naming its surfaceId.",
+                Strings.t("messages must be a list of 1 to {0} A2UI messages (JSON objects), each naming its surfaceId.", AgentScreen.MAX_MESSAGES),
             )
         // The chat's stored id, as the chat screen knows it; the gateway may name it by its live id.
         val chat = chats.of(session)?.storedSessionId ?: session.takeIf { it.isNotBlank() }
         // An update is checked on top of the screen it changes, as the chat drew it.
         val earlier = screens.earlier(screen, chat)
         val problem = if (earlier == null) {
-            UNKNOWN_SURFACE
+            Strings.t(UNKNOWN_SURFACE)
         } else {
             agentScreenProblem(context, screen.copy(messages = earlier + screen.messages))
         }

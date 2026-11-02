@@ -91,6 +91,7 @@ import androidx.wear.compose.material3.timeTextSeparator
 import androidx.wear.compose.navigation.SwipeDismissableNavHost
 import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.wearlink.ReplyPhase
 import dev.hermeskotlin.wearlink.WatchAccent
 import kotlinx.coroutines.delay
@@ -216,9 +217,9 @@ private fun phoneDot(phone: PhoneState): Color? = when (phone) {
 }
 
 private fun phoneDotLabel(phone: PhoneState): String = when (phone) {
-    PhoneState.Ready -> "Connected"
-    PhoneState.Reconnecting -> "Reconnecting"
-    else -> "Not connected"
+    PhoneState.Ready -> Strings.t("Connected")
+    PhoneState.Reconnecting -> Strings.t("Reconnecting")
+    else -> Strings.t("Not connected")
 }
 
 /** The model's name, short enough for the edge beside the clock. */
@@ -275,7 +276,7 @@ private fun TalkScreen(
 
     if (inCall) {
         ScreenScaffold(modifier = Modifier.halo(mood, MaterialTheme.colorScheme.primaryContainer)) {
-            CallScreen(call, mood, title = chat.title ?: if (chat.id == null) "New chat" else "Chat", onMute = link::toggleMute, onEnd = link::endCall)
+            CallScreen(call, mood, title = chat.title ?: if (chat.id == null) Strings.t("New chat") else Strings.t("Chat"), onMute = link::toggleMute, onEnd = link::endCall)
         }
         return
     }
@@ -296,16 +297,16 @@ private fun TalkScreen(
                             .clip(CircleShape)
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClick = onOrb)
                             .semantics {
-                                contentDescription = when {
-                                    mic.recording -> "Done talking"
-                                    running || speaking -> "Stop"
-                                    else -> "Talk to Hermes"
-                                } + chat.contextPercent?.let { ", context $it% full" }.orEmpty()
+                                contentDescription = (when {
+                                    mic.recording -> Strings.t("Done talking")
+                                    running || speaking -> Strings.t("Stop")
+                                    else -> Strings.t("Talk to Hermes")
+                                }) + chat.contextPercent?.let { Strings.t(", context {0}% full", it) }.orEmpty()
                             },
                     )
                 }
             }
-            item { ChatTitle(chat.title ?: if (chat.id == null) "New chat" else "Chat", onChats) }
+            item { ChatTitle(chat.title ?: if (chat.id == null) Strings.t("New chat") else Strings.t("Chat"), onChats) }
             item { Caption(if (call != null) callCaption(call) else caption(mood, current, mic, phone), mood) }
             val micError = mic.error
             if (micError != null) item { Notice(micError, onClick = onDismissListeningError) }
@@ -342,7 +343,7 @@ private fun CallScreen(call: WatchCallState, mood: OrbMood, title: String, onMut
         )
         CallButton(
             icon = if (call.muted) R.drawable.ic_mic_off else R.drawable.ic_mic,
-            label = if (call.muted) "Unmute" else "Mute",
+            label = if (call.muted) Strings.t("Unmute") else Strings.t("Mute"),
             color = if (call.muted) Text1 else Surface2,
             tint = if (call.muted) Color.Black else Text1,
             enabled = call.stage == CallStage.Live,
@@ -357,7 +358,7 @@ private fun CallScreen(call: WatchCallState, mood: OrbMood, title: String, onMut
         )
         CallButton(
             icon = R.drawable.ic_volume,
-            label = "Volume",
+            label = Strings.t("Volume"),
             color = Surface2,
             tint = Text1,
             enabled = true,
@@ -380,7 +381,7 @@ private fun CallScreen(call: WatchCallState, mood: OrbMood, title: String, onMut
             colors = ButtonDefaults.buttonColors(containerColor = EndCall, contentColor = OnEndCall),
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
-            Icon(painterResource(R.drawable.ic_call_end), contentDescription = "End call", tint = OnEndCall)
+            Icon(painterResource(R.drawable.ic_call_end), contentDescription = Strings.t("End call"), tint = OnEndCall)
         }
     }
 }
@@ -408,7 +409,7 @@ fun RingScreen(title: String, approval: Boolean, onDecline: () -> Unit, onAnswer
             HeraldOrb(mood = OrbMood.Speaking, level = 0f, modifier = Modifier.size(w * 0.24f).align(Alignment.Center).offset(y = -h * 0.02f))
             CallButton(
                 icon = R.drawable.ic_call_end,
-                label = "Decline",
+                label = Strings.t("Decline"),
                 color = EndCall,
                 tint = OnEndCall,
                 enabled = true,
@@ -417,7 +418,7 @@ fun RingScreen(title: String, approval: Boolean, onDecline: () -> Unit, onAnswer
             )
             CallButton(
                 icon = R.drawable.ic_call,
-                label = "Answer",
+                label = Strings.t("Answer"),
                 color = Connected,
                 tint = Color.Black,
                 enabled = true,
@@ -437,9 +438,9 @@ fun RingScreen(title: String, approval: Boolean, onDecline: () -> Unit, onAnswer
 
 /** Why Hermes calls, never what it asks: [agent], it called on its own, and says why on the call. */
 internal fun ringReason(approval: Boolean, agent: Boolean = false): String = when {
-    agent -> "Calling you"
-    approval -> "Needs your approval"
-    else -> "Has a question for you"
+    agent -> Strings.t("Calling you")
+    approval -> Strings.t("Needs your approval")
+    else -> Strings.t("Has a question for you")
 }
 
 /** The time on the call, counting: only this redraws each second, and only while it shows. */
@@ -499,24 +500,24 @@ internal fun callMood(call: WatchCallState): OrbMood = when (call.stage) {
 
 /** What a call is doing, under the orb. */
 internal fun callCaption(call: WatchCallState): String = when (call.stage) {
-    CallStage.Starting -> "Starting…"
-    CallStage.Connecting -> "Connecting…"
+    CallStage.Starting -> Strings.t("Starting…")
+    CallStage.Connecting -> Strings.t("Connecting…")
     CallStage.Live -> when {
-        call.muted -> "Muted"
-        call.thinking -> call.working?.let { "Hermes: $it" } ?: "Hermes is on it…"
-        else -> "Live"
+        call.muted -> Strings.t("Muted")
+        call.thinking -> call.working?.let { Strings.t("Hermes: {0}", it) } ?: Strings.t("Hermes is on it…")
+        else -> Strings.t("Live")
     }
-    CallStage.Ended -> call.error ?: "Call ended"
+    CallStage.Ended -> call.error ?: Strings.t("Call ended")
 }
 
 /** What's going on, under the orb. */
 private fun caption(mood: OrbMood, turn: WatchTurn?, mic: Listening, phone: PhoneState): String? = when {
-    mic.recording -> "Listening… tap when done"
-    mic.waiting -> "Checking your phone…"
-    mood == OrbMood.Speaking -> "Tap to stop"
-    turn != null && turn.update.phase == ReplyPhase.Failed -> turn.update.error ?: "Something went wrong."
+    mic.recording -> Strings.t("Listening… tap when done")
+    mic.waiting -> Strings.t("Checking your phone…")
+    mood == OrbMood.Speaking -> Strings.t("Tap to stop")
+    turn != null && turn.update.phase == ReplyPhase.Failed -> turn.update.error ?: Strings.t("Something went wrong.")
     turn != null && turn.running -> activityLine(turn.update.phase, turn.update.activity)
-    turn == null -> phoneProblem(phone) ?: "Tap to talk"
+    turn == null -> phoneProblem(phone) ?: Strings.t("Tap to talk")
     else -> null
 }
 
@@ -531,7 +532,7 @@ private fun ChatTitle(title: String, onClick: () -> Unit) {
             "$title  ›",
             modifier = Modifier
                 .clip(RoundedCornerShape(12.dp))
-                .clickable(role = Role.Button, onClickLabel = "Open chats", onClick = onClick)
+                .clickable(role = Role.Button, onClickLabel = Strings.t("Open chats"), onClick = onClick)
                 .padding(horizontal = 18.dp, vertical = 2.dp),
             style = geist(14, FontWeight.SemiBold, Text1, line = 18),
             textAlign = TextAlign.Center,
@@ -641,7 +642,7 @@ private fun ChatsScreen(link: WatchLink, store: WatchStore, onPicked: () -> Unit
                 BoxWithConstraints(Modifier.fillMaxWidth().height(56.dp).clip(CallTabsShape)) {
                     val tabSize = if (maxWidth < 210.dp) 12 else 14
                     Row(Modifier.fillMaxSize()) {
-                        listOf("Chats", "Bots").forEachIndexed { index, title ->
+                        listOf(Strings.t("Chats"), Strings.t("Bots")).forEachIndexed { index, title ->
                             val picked = showBots == (index == 1)
                             if (index != 0) Box(Modifier.width(1.dp).fillMaxHeight().background(Color.Black))
                             Box(Modifier.weight(1f).fillMaxHeight().background(if (picked) MaterialTheme.colorScheme.primaryContainer else Surface2)
@@ -665,7 +666,7 @@ private fun ChatsScreen(link: WatchLink, store: WatchStore, onPicked: () -> Unit
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer),
                         label = {
-                            Text("New chat", modifier = Modifier.fillMaxWidth(), style = geist(15, FontWeight.Medium, MaterialTheme.colorScheme.onPrimaryContainer), textAlign = TextAlign.Center, maxLines = 1)
+                            Text(Strings.t("New chat"), modifier = Modifier.fillMaxWidth(), style = geist(15, FontWeight.Medium, MaterialTheme.colorScheme.onPrimaryContainer), textAlign = TextAlign.Center, maxLines = 1)
                         },
                     )
                     FilledIconButton(
@@ -673,7 +674,7 @@ private fun ChatsScreen(link: WatchLink, store: WatchStore, onPicked: () -> Unit
                         modifier = Modifier.size(48.dp),
                         colors = IconButtonDefaults.filledIconButtonColors(containerColor = Surface2, contentColor = Text1),
                     ) {
-                        Icon(painterResource(R.drawable.ic_settings), contentDescription = "Settings", tint = Text1)
+                        Icon(painterResource(R.drawable.ic_settings), contentDescription = Strings.t("Settings"), tint = Text1)
                     }
                 }
             }
@@ -685,7 +686,7 @@ private fun ChatsScreen(link: WatchLink, store: WatchStore, onPicked: () -> Unit
                 }
                 error != null -> item { Box(Modifier.padding(horizontal = 12.dp)) { Notice(error, onClick = link::refreshChats) } }
                 showBots && current.bots.isEmpty() || !showBots && current.chats.isEmpty() -> item {
-                    Text(if (showBots) "No bots yet." else "No chats yet.", modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), style = geist(13, color = Muted), textAlign = TextAlign.Center)
+                    Text(if (showBots) Strings.t("No bots yet.") else Strings.t("No chats yet."), modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), style = geist(13, color = Muted), textAlign = TextAlign.Center)
                 }
                 showBots -> current.bots.forEach { row ->
                     item(key = "bot:${row.profile}") {
@@ -764,9 +765,9 @@ fun AssistPanel(
                     )
                     .semantics {
                         contentDescription = when {
-                            listening.recording -> "Done talking"
-                            listening.waiting -> "Cancel"
-                            else -> "Talk to Hermes"
+                            listening.recording -> Strings.t("Done talking")
+                            listening.waiting -> Strings.t("Cancel")
+                            else -> Strings.t("Talk to Hermes")
                         }
                     },
             )
@@ -810,13 +811,13 @@ private fun SettingsScreen(link: WatchLink, store: WatchStore) {
     ScreenScaffold(scrollState = listState, modifier = Modifier.halo(OrbMood.Idle, MaterialTheme.colorScheme.primaryContainer)) { contentPadding ->
         TransformingLazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
             item {
-                Text("Settings", modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp), style = geist(17, FontWeight.SemiBold), textAlign = TextAlign.Center)
+                Text(Strings.t("Settings"), modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp), style = geist(17, FontWeight.SemiBold), textAlign = TextAlign.Center)
             }
             // One short line each, and what it means under it: longer labels wrap on a round screen.
             if (liveVoice) {
-                item { VoiceSwitch("Talk live", "As a voice call", live, store::setLive) }
+                item { VoiceSwitch(Strings.t("Talk live"), Strings.t("As a voice call"), live, store::setLive) }
             }
-            item { VoiceSwitch("Read aloud", "Every reply", speak, store::setSpeak) }
+            item { VoiceSwitch(Strings.t("Read aloud"), Strings.t("Every reply"), speak, store::setSpeak) }
             // Not a switch: the system's picker decides it, and it can be taken away there too.
             if (canBeAssistant && assistantRequest != null) {
                 item {
@@ -824,13 +825,13 @@ private fun SettingsScreen(link: WatchLink, store: WatchStore) {
                         onClick = { askAssistant.launch(assistantRequest) },
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Surface2, contentColor = Text1, secondaryContentColor = Muted),
-                        label = { Text("Assistant", style = geist(14, FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        label = { Text(Strings.t("Assistant"), style = geist(14, FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         secondaryLabel = {
                             Text(
                                 when {
-                                    isAssistant -> "Kyllene answers the button"
-                                    refused -> "Not set. Tap to try again"
-                                    else -> "Set Kyllene as assistant"
+                                    isAssistant -> Strings.t("Kyllene answers the button")
+                                    refused -> Strings.t("Not set. Tap to try again")
+                                    else -> Strings.t("Set Kyllene as assistant")
                                 },
                                 style = geist(12, color = Text2),
                                 maxLines = 1,
@@ -877,27 +878,27 @@ internal fun ago(epochSeconds: Double?, nowMillis: Long = System.currentTimeMill
     epochSeconds ?: return null
     val minutes = ((nowMillis / 1000.0 - epochSeconds) / 60).toLong()
     return when {
-        minutes < 1 -> "now"
-        minutes < 60 -> "${minutes}m"
-        minutes < 60 * 24 -> "${minutes / 60}h"
-        minutes < 60 * 24 * 7 -> "${minutes / (60 * 24)}d"
-        else -> "${minutes / (60 * 24 * 7)}w"
+        minutes < 1 -> Strings.t("now")
+        minutes < 60 -> Strings.t("{0}m", minutes)
+        minutes < 60 * 24 -> Strings.t("{0}h", minutes / 60)
+        minutes < 60 * 24 * 7 -> Strings.t("{0}d", minutes / (60 * 24))
+        else -> Strings.t("{0}w", minutes / (60 * 24 * 7))
     }
 }
 
 private fun phoneProblem(phone: PhoneState): String? = when (phone) {
     PhoneState.NotConnected -> WatchLink.NOT_CONNECTED
     PhoneState.NoHerald -> WatchLink.NO_HERALD
-    PhoneState.SignedOut -> "Sign in to Kyllene on your phone first."
-    PhoneState.Unreachable -> "Kyllene can't reach your gateway. Check it on your phone."
+    PhoneState.SignedOut -> Strings.t("Sign in to Kyllene on your phone first.")
+    PhoneState.Unreachable -> Strings.t("Kyllene can't reach your gateway. Check it on your phone.")
     PhoneState.Unknown, PhoneState.Ready, PhoneState.Reconnecting -> null
 }
 
 internal fun activityLine(phase: ReplyPhase, activity: String?): String = activity ?: when (phase) {
-    ReplyPhase.Transcribing -> "Writing it down…"
-    ReplyPhase.Sending -> "Sending…"
-    ReplyPhase.WaitingOnPhone -> "Waiting for you on your phone"
-    ReplyPhase.Working -> "Thinking…"
+    ReplyPhase.Transcribing -> Strings.t("Writing it down…")
+    ReplyPhase.Sending -> Strings.t("Sending…")
+    ReplyPhase.WaitingOnPhone -> Strings.t("Waiting for you on your phone")
+    ReplyPhase.Working -> Strings.t("Thinking…")
     ReplyPhase.Done, ReplyPhase.Failed -> ""
 }
 

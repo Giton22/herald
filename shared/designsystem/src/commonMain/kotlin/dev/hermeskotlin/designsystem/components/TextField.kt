@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.ui.draw.clip
 import dev.hermeskotlin.designsystem.rememberHoverIndication
+import dev.hermeskotlin.ui.i18n.Strings
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.KeyboardActionHandler
 import androidx.compose.foundation.text.input.OutputTransformation
@@ -220,7 +221,7 @@ fun TextField(
                     ) {
                         UnstyledIcon(
                             Lucide.X,
-                            contentDescription = "Clear",
+                            contentDescription = Strings.t("Clear"),
                             tint = Theme[colors][textTertiary],
                             modifier = Modifier.size(18.dp),
                         )
@@ -234,7 +235,7 @@ fun TextField(
                     ) {
                         UnstyledIcon(
                             if (revealed) Lucide.EyeOff else Lucide.Eye,
-                            contentDescription = if (revealed) "Hide password" else "Show password",
+                            contentDescription = Strings.t(if (revealed) "Hide password" else "Show password"),
                             tint = Theme[colors][textTertiary],
                             modifier = Modifier.size(18.dp),
                         )

@@ -95,6 +95,7 @@ import dev.hermeskotlin.ui.components.ScreenHeader
 import dev.hermeskotlin.ui.components.ScreenScaffold
 import dev.hermeskotlin.ui.components.rememberClientCertPicker
 import dev.hermeskotlin.ui.CopyableOnDesktop
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.ui.isDesktop
 import kotlinx.coroutines.flow.drop
 import org.koin.compose.viewmodel.koinViewModel
@@ -164,9 +165,9 @@ internal fun ConnectView(
     ScreenScaffold {
         ScreenHeader(
             icon = if (onCancel == null) null else Lucide.PlugZap,
-            title = if (onCancel == null) "Welcome to Kyllene" else "Add a gateway",
-            subtitle = if (onCancel == null) "Connect to your Hermes Agent gateway. Nothing is sent until you sign in."
-            else "Connect to another Hermes Agent gateway. You stay signed in to the ones you saved.",
+            title = if (onCancel == null) Strings.t("Welcome to Kyllene") else Strings.t("Add a gateway"),
+            subtitle = if (onCancel == null) Strings.t("Connect to your Hermes Agent gateway. Nothing is sent until you sign in.")
+            else Strings.t("Connect to another Hermes Agent gateway. You stay signed in to the ones you saved."),
         )
 
         // With a keyboard, the page opens ready for the address to be typed.
@@ -185,9 +186,9 @@ internal fun ConnectView(
         TextField(
             state = url,
             focusRequester = urlFocus,
-            label = "Gateway address",
+            label = Strings.t("Gateway address"),
             placeholder = "100.64.0.1:9119",
-            supportingText = "Where your hermes dashboard runs: LAN, Tailscale or HTTPS.",
+            supportingText = Strings.t("Where your hermes dashboard runs: LAN, Tailscale or HTTPS."),
             error = state.urlError,
             leadingIcon = Lucide.Globe,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Go),
@@ -203,7 +204,7 @@ internal fun ConnectView(
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                     ConnectionChecklist(results = result.serverOnlyResults(), running = false)
                     if (result is ProbeResult.Unreachable) {
-                        Hint("If the dashboard isn't running yet, run this on the server:")
+                        Hint(Strings.t("If the dashboard isn't running yet, run this on the server:"))
                         CodeLine("hermes dashboard --host 0.0.0.0 --port 9119 --no-open")
                     }
                 }
@@ -212,8 +213,8 @@ internal fun ConnectView(
 
         if (result is ProbeResult.Reachable && result.url.isExposed) {
             Text(
-                "This address isn't private and doesn't use https://, so your password and chats would cross " +
-                    "the internet unencrypted. Use https://, Tailscale or your own network instead.",
+                Strings.t("This address isn't private and doesn't use https://, so your password and chats would cross " +
+                    "the internet unencrypted. Use https://, Tailscale or your own network instead."),
                 style = Theme[typography][bodySmall],
                 color = Theme[colors][danger],
             )
@@ -221,14 +222,14 @@ internal fun ConnectView(
 
         Column {
             var guideOpen by remember { mutableStateOf(false) }
-            HelpRow(Lucide.CircleHelp, "Which address do I use?", guideOpen) { guideOpen = !guideOpen }
+            HelpRow(Lucide.CircleHelp, Strings.t("Which address do I use?"), guideOpen) { guideOpen = !guideOpen }
             if (guideOpen) AddressGuide(Modifier.padding(start = 4.dp, end = 4.dp, bottom = 12.dp))
 
             var accessOpen by rememberSaveable { mutableStateOf(false) }
             LaunchedEffect(result, state.accessError, access.saved) {
                 if (result is ProbeResult.AccessBlocked || state.accessError != null || access.saved) accessOpen = true
             }
-            HelpRow(Lucide.KeyRound, "Behind Cloudflare Access?", accessOpen) { accessOpen = !accessOpen }
+            HelpRow(Lucide.KeyRound, Strings.t("Behind Cloudflare Access?"), accessOpen) { accessOpen = !accessOpen }
             if (accessOpen) AccessTokenFields(access, state.accessError, test)
 
             // Client certificates come from Android's system store; the desktop has none to pick from yet.
@@ -237,14 +238,14 @@ internal fun ConnectView(
                 LaunchedEffect(result) {
                     if (result is ProbeResult.ClientCertRequired) certOpen = true
                 }
-                HelpRow(Lucide.ShieldCheck, "Need a client certificate?", certOpen) { certOpen = !certOpen }
+                HelpRow(Lucide.ShieldCheck, Strings.t("Need a client certificate?"), certOpen) { certOpen = !certOpen }
                 if (certOpen) ClientCertFields(cert, demanded = result is ProbeResult.ClientCertRequired, onPick = picker::pick)
             }
         }
 
         if (signInReady) {
             Button(
-                text = "Continue to sign in",
+                text = Strings.t("Continue to sign in"),
                 onClick = { onContinue(result as ProbeResult.Reachable) },
                 trailingIcon = Lucide.ArrowRight,
                 size = ButtonSize.Large,
@@ -254,7 +255,7 @@ internal fun ConnectView(
 
         if (onCancel != null) {
             Button(
-                text = "Back to my gateway",
+                text = Strings.t("Back to my gateway"),
                 onClick = onCancel,
                 variant = ButtonVariant.Ghost,
                 leadingIcon = Lucide.ArrowLeft,
@@ -279,7 +280,7 @@ private fun TestButton(testing: Boolean, onClick: () -> Unit) {
             .clickable(interaction, indication = null, enabled = !testing, role = Role.Button, onClick = onClick)
             // "Test" alone doesn't say what's tested once it's read apart from the field.
             .clearAndSetSemantics {
-                contentDescription = if (testing) "Testing the connection" else "Test connection"
+                contentDescription = if (testing) Strings.t("Testing the connection") else Strings.t("Test connection")
                 role = Role.Button
                 if (testing) disabled()
                 onClick { onClick(); true }
@@ -299,7 +300,7 @@ private fun TestButton(testing: Boolean, onClick: () -> Unit) {
             if (testing) Spinner(Modifier.size(14.dp), color = tint)
             else UnstyledIcon(Lucide.PlugZap, contentDescription = null, tint = tint, modifier = Modifier.size(14.dp))
             Text(
-                if (testing) "Testing…" else "Test",
+                if (testing) Strings.t("Testing…") else Strings.t("Test"),
                 style = Theme[typography][label].copy(fontSize = 13.sp, fontWeight = FontWeight.Medium),
                 color = tint,
                 singleLine = true,
@@ -318,7 +319,7 @@ private fun HelpRow(icon: ImageVector, title: String, open: Boolean, onClick: ()
             .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
             .handCursor()
             .clickable(role = Role.Button, onClick = onClick)
-            .semantics { stateDescription = if (open) "Expanded" else "Collapsed" }
+            .semantics { stateDescription = if (open) Strings.t("Expanded") else Strings.t("Collapsed") }
             .padding(horizontal = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -339,33 +340,33 @@ private fun HelpRow(icon: ImageVector, title: String, open: Boolean, onClick: ()
 private fun AccessTokenFields(access: AccessToken, error: String?, onTest: () -> Unit) {
     Column(Modifier.padding(start = 4.dp, end = 4.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Hint(
-            "If Cloudflare Access protects this address, create a service token in Cloudflare Zero Trust " +
-                "(Access → Service credentials) and add a Service Auth policy for it to the Access application.",
+            Strings.t("If Cloudflare Access protects this address, create a service token in Cloudflare Zero Trust " +
+                "(Access → Service credentials) and add a Service Auth policy for it to the Access application."),
         )
         if (access.saved) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-                StatusDot(Status.Ok, "A service token is saved for this address")
+                StatusDot(Status.Ok, Strings.t("A service token is saved for this address"))
                 Button(
-                    text = "Forget",
+                    text = Strings.t("Forget"),
                     onClick = access.onForget,
                     variant = ButtonVariant.Ghost,
                     size = ButtonSize.Small,
                 )
             }
-            Hint("Leave the fields blank to keep using it, or enter a new token to replace it.")
+            Hint(Strings.t("Leave the fields blank to keep using it, or enter a new token to replace it."))
         }
         TextField(
             state = access.clientId,
-            label = "Client ID",
+            label = Strings.t("Client ID"),
             placeholder = "….access",
             error = error,
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Ascii, imeAction = ImeAction.Next),
         )
         TextField(
             state = access.clientSecret,
-            label = "Client Secret",
+            label = Strings.t("Client Secret"),
             password = true,
-            supportingText = "Stored encrypted on this ${if (isDesktop) "computer" else "phone"}, and sent only to this address.",
+            supportingText = Strings.t("Stored encrypted on this {0}, and sent only to this address.", Strings.t(if (isDesktop) "computer" else "phone")),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Go),
             onKeyboardAction = { onTest() },
         )
@@ -377,25 +378,25 @@ private fun AccessTokenFields(access: AccessToken, error: String?, onTest: () ->
 private fun ClientCertFields(cert: ClientCert, demanded: Boolean, onPick: () -> Unit) {
     Column(Modifier.padding(start = 4.dp, end = 4.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         Hint(
-            if (demanded) "This server asks for a client certificate before it talks. Pick the one it gave you, " +
-                "then test again."
-            else "If a proxy in front of this address asks for a client certificate, pick it here so the test, " +
-                "the sign-in and the chat all present it.",
+            if (demanded) Strings.t("This server asks for a client certificate before it talks. Pick the one it gave you, " +
+                "then test again.")
+            else Strings.t("If a proxy in front of this address asks for a client certificate, pick it here so the test, " +
+                "the sign-in and the chat all present it."),
         )
         if (cert.alias != null) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 StatusDot(Status.Ok, cert.alias)
                 Button(
-                    text = "Forget",
+                    text = Strings.t("Forget"),
                     onClick = cert.onClear,
                     variant = ButtonVariant.Ghost,
                     size = ButtonSize.Small,
                 )
             }
-            Hint("The key itself stays in the system store; only its name is kept, per gateway.")
+            Hint(Strings.t("The key itself stays in the system store; only its name is kept, per gateway."))
         } else {
             Button(
-                text = "Pick certificate",
+                text = Strings.t("Pick certificate"),
                 onClick = onPick,
                 variant = ButtonVariant.Secondary,
                 size = ButtonSize.Small,
@@ -417,12 +418,12 @@ private fun ResultCard(result: ProbeResult.Reachable) {
                 }
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(
-                        status.version?.let { "Hermes $it is reachable" } ?: "Hermes is reachable",
+                        status.version?.let { Strings.t("Hermes {0} is reachable", it) } ?: Strings.t("Hermes is reachable"),
                         style = Theme[typography][bodySmall].copy(fontSize = 15.sp, fontWeight = FontWeight.Medium),
                         color = Theme[colors][text],
                     )
                     if (signInReady) {
-                        Text("Sign-in is tested next, then the chat", style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary])
+                        Text(Strings.t("Sign-in is tested next, then the chat"), style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary])
                     }
                 }
             }
@@ -434,25 +435,25 @@ private fun ResultCard(result: ProbeResult.Reachable) {
                     .padding(start = 14.dp, end = 14.dp, top = 12.dp, bottom = 14.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
-                InfoRow("Agent gateway", if (status.gatewayRunning) "Running" else "Stopped")
+                InfoRow(Strings.t("Agent gateway"), if (status.gatewayRunning) Strings.t("Running") else Strings.t("Stopped"))
                 InfoRow(
-                    "Sign-in",
+                    Strings.t("Sign-in"),
                     when {
-                        !status.authRequired -> "Not required"
-                        status.supportsPasswordLogin && status.supportsNativeSignIn -> "Password or browser"
-                        status.supportsPasswordLogin -> "Username & password"
-                        status.supportsNativeSignIn -> "In the browser (SSO)"
-                        else -> "Unsupported"
+                        !status.authRequired -> Strings.t("Not required")
+                        status.supportsPasswordLogin && status.supportsNativeSignIn -> Strings.t("Password or browser")
+                        status.supportsPasswordLogin -> Strings.t("Username & password")
+                        status.supportsNativeSignIn -> Strings.t("In the browser (SSO)")
+                        else -> Strings.t("Unsupported")
                     },
                 )
-                if (status.profiles.isNotEmpty()) InfoRow("Profiles", status.profiles.joinToString())
+                if (status.profiles.isNotEmpty()) InfoRow(Strings.t("Profiles"), status.profiles.joinToString())
 
                 if (!result.canSignIn) {
-                    StatusDot(Status.Warning, "No sign-in the app can use", Modifier.padding(top = 4.dp))
-                    Hint("This dashboard offers neither a username/password provider nor browser sign-in. Update Hermes, or configure the username/password provider on the server.")
+                    StatusDot(Status.Warning, Strings.t("No sign-in the app can use"), Modifier.padding(top = 4.dp))
+                    Hint(Strings.t("This dashboard offers neither a username/password provider nor browser sign-in. Update Hermes, or configure the username/password provider on the server."))
                 } else if (!status.authRequired) {
-                    StatusDot(Status.Warning, "Auth gate is off", Modifier.padding(top = 4.dp))
-                    Hint("The dashboard is bound to loopback, so other devices won't be allowed to chat. Bind it with --host 0.0.0.0 and configure a password provider.")
+                    StatusDot(Status.Warning, Strings.t("Auth gate is off"), Modifier.padding(top = 4.dp))
+                    Hint(Strings.t("The dashboard is bound to loopback, so other devices won't be allowed to chat. Bind it with --host 0.0.0.0 and configure a password provider."))
                 }
             }
         }

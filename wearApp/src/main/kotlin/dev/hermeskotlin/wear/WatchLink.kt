@@ -6,6 +6,7 @@ import androidx.wear.tiles.TileService
 import com.google.android.gms.wearable.CapabilityClient
 import com.google.android.gms.wearable.Node
 import com.google.android.gms.wearable.Wearable
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.wearlink.CALL_EVENT_TYPES
 import dev.hermeskotlin.wearlink.InOrder
 import dev.hermeskotlin.wearlink.CallEnd
@@ -218,7 +219,7 @@ class WatchLink(
         val chat = store.chat.value
         val ask = WatchAsk(id, text.orEmpty().trim(), chat.id, speak = store.speak.value && speech.canPlay(), audioType = audioType, botProfile = chat.botProfile, scope = chat.scope)
         _turn.value = WatchTurn(id, text?.trim(), ReplyUpdate(id, if (audio != null) ReplyPhase.Transcribing else ReplyPhase.Sending, chatId = chat.id, title = chat.title))
-        if (chat.botProfile != null && !botChats) return fail(id, "Update Kyllene on your phone to talk to bots.")
+        if (chat.botProfile != null && !botChats) return fail(id, Strings.t("Update Kyllene on your phone to talk to bots."))
         val generation = _profileReset.value
         askJob?.cancel()
         askJob = scope.launch(main) {
@@ -284,7 +285,7 @@ class WatchLink(
             val result = withTimeout(20_000) { waiting.await() }
             val owner = result.scope
             if (result.error == null && (owner == null || owner.gateway != store.phoneScope?.gateway || result.botProfile != null && owner.profile != result.botProfile)) {
-                return DefaultCallTarget(id, error = "Call target changed. Tap Call again.")
+                return DefaultCallTarget(id, error = Strings.t("Call target changed. Tap Call again."))
             }
             if (result.error == null) {
                 store.setChat(result.chatId, result.title, result.botProfile, result.scope)
@@ -312,8 +313,8 @@ class WatchLink(
         _turn.value = null
         _call.value = WatchCallState(id, CallStage.Starting)
         val chat = store.chat.value
-        if (defaultRequestId != null && resolvedDefault != defaultRequestId) return finishCall(id, "Default Call Target changed. Tap Call again.")
-        if (defaultRequestId == null && chat.botProfile != null && !botChats) return finishCall(id, "Update Kyllene on your phone to call bots.")
+        if (defaultRequestId != null && resolvedDefault != defaultRequestId) return finishCall(id, Strings.t("Default Call Target changed. Tap Call again."))
+        if (defaultRequestId == null && chat.botProfile != null && !botChats) return finishCall(id, Strings.t("Update Kyllene on your phone to call bots."))
         val generation = _profileReset.value
         callJob = scope.launch(main) {
             if (!synchronizeProfile()) return@launch finishCall(id, NOT_CONNECTED)
@@ -356,12 +357,12 @@ class WatchLink(
                 delay(DROP_GRACE_MS)
                 if (_call.value?.let { it.id == id && it.active } == true) {
                     send(WearPaths.CALL_END, WearJson.encode(CallEnd(id)))
-                    finishCall(id, "The call dropped.")
+                    finishCall(id, Strings.t("The call dropped."))
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                finishCall(id, e.message ?: "Couldn't start the call.")
+                finishCall(id, e.message ?: Strings.t("Couldn't start the call."))
             } finally {
                 ringing.cancel()
             }
@@ -463,7 +464,7 @@ class WatchLink(
                     // Hung up meanwhile: the failure is only the call closing under it.
                     if (_call.value?.let { it.id == now.id && it.active } != true) return@launch
                     send(WearPaths.CALL_END, WearJson.encode(CallEnd(now.id)))
-                    finishCall(now.id, e.message ?: "The call didn't connect.")
+                    finishCall(now.id, e.message ?: Strings.t("The call didn't connect."))
                 }
             }
         }
@@ -680,7 +681,7 @@ class WatchLink(
     private suspend fun reach(path: String, data: ByteArray, current: () -> Boolean = { true }, block: suspend (String) -> Unit): String? {
         return try {
             val node = reachablePhone()
-            if (!current()) return "Phone profile changed. Try again."
+            if (!current()) return Strings.t("Phone profile changed. Try again.")
             if (node == null) {
                 if (fake != null) {
                     phoneNode = "debug-fake"
@@ -691,7 +692,7 @@ class WatchLink(
                 _phone.value = PhoneState.NotConnected
                 return NOT_CONNECTED
             }
-            if (path != WearPaths.STATUS && phoneNode != null && phoneNode != node.id) { profileChecked = false; return "Phone changed. Try again." }
+            if (path != WearPaths.STATUS && phoneNode != null && phoneNode != node.id) { profileChecked = false; return Strings.t("Phone changed. Try again.") }
             phoneNode = node.id
             HeraldWatch.of(context).callDisplay.bindPhone(node.id)
             block(node.id)
@@ -699,7 +700,7 @@ class WatchLink(
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            "Couldn't reach your phone."
+            Strings.t("Couldn't reach your phone.")
         }
     }
 
@@ -721,9 +722,9 @@ class WatchLink(
     }
 
     companion object {
-        private const val UPDATE_PROFILE = "Update Kyllene on your phone to use profile-aware calls."
-        const val NOT_CONNECTED = "Your phone isn't connected."
-        const val NO_HERALD = "Kyllene on your phone didn't answer. Open it there, or update it."
+        private val UPDATE_PROFILE: String get() = Strings.t("Update Kyllene on your phone to use profile-aware calls.")
+        val NOT_CONNECTED: String get() = Strings.t("Your phone isn't connected.")
+        val NO_HERALD: String get() = Strings.t("Kyllene on your phone didn't answer. Open it there, or update it.")
         private const val ANSWER_WITHIN_MS = 30_000L
         private const val CALL_POLL_MS = 100L
         private const val EVENT_GATHER_MS = 120L

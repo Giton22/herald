@@ -3,6 +3,7 @@ package dev.hermeskotlin.ui.chat
 import dev.hermeskotlin.core.chat.ReplyMedia
 import dev.hermeskotlin.core.media.FileText
 import dev.hermeskotlin.core.media.GatewayFile
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlin.math.abs
 
 /** Connection Allowlists, including WebRTC blocking, shipped in Chromium WebView 152. */
@@ -14,9 +15,9 @@ internal fun widgetFile(item: ReplyMedia): GatewayFile? =
     if (item.preview) GatewayFile.fromLink(item.source)?.takeIf { it.extension in setOf("html", "htm") } else null
 
 internal fun widgetProblem(file: FileText): String? = when {
-    file.binary -> "This file isn't HTML text."
-    file.truncated || file.byteSize > 512 * 1024 || file.text.encodeToByteArray().size > 512 * 1024 -> "This widget is over the 512 KB preview limit."
-    file.text.isBlank() -> "This widget is empty."
+    file.binary -> Strings.t("This file isn't HTML text.")
+    file.truncated || file.byteSize > 512 * 1024 || file.text.encodeToByteArray().size > 512 * 1024 -> Strings.t("This widget is over the 512 KB preview limit.")
+    file.text.isBlank() -> Strings.t("This widget is empty.")
     else -> null
 }
 
@@ -129,5 +130,5 @@ internal fun widgetDocument(html: String, theme: WidgetTheme, font: String): Str
         "<style>html,body{margin:0;height:100%;background:transparent}iframe{width:100%;height:100%;border:0}</style>" +
         "<script>addEventListener('message',function(e){var f=document.querySelector('iframe'),v=e.data&&e.data.heraldReport;" +
         "if(f&&e.source===f.contentWindow&&typeof v==='string'&&/^t?b?\\|[0-9,;-]{0,500}\\|[0-9a-z]{1,8}$/.test(v))document.title='$WIDGET_REPORT'+v})</script>" +
-        "</head><body><iframe title=\"HTML widget\" sandbox=\"allow-scripts\" srcdoc=\"$content\"></iframe></body></html>"
+        "</head><body><iframe title=\"${Strings.t("HTML widget")}\" sandbox=\"allow-scripts\" srcdoc=\"$content\"></iframe></body></html>"
 }

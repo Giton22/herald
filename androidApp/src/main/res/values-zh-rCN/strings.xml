@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Kyllene</string>
+    <string name="shortcut_new_chat">新对话</string>
+    <string name="shortcut_voice_short">听写</string>
+    <string name="shortcut_voice">语音新对话</string>
+    <string name="shortcut_voice_chat">呼叫 Hermes</string>
+    <string name="shortcut_voice_chat_moved">呼叫 Hermes 的快捷方式已移动。请长按应用图标并重新固定。</string>
+</resources>

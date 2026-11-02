@@ -57,6 +57,7 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.components.ScreenHeader
 import dev.hermeskotlin.ui.components.ScreenScaffold
 import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.i18n.Strings
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -116,11 +117,11 @@ internal fun SignInView(
 
         ScreenHeader(
             icon = Lucide.KeyRound,
-            title = "Sign in",
+            title = Strings.t("Sign in"),
             subtitle = when {
-                !methods.password -> "Sign in to $host in your browser, with the account its dashboard uses."
-                methods.browser -> "Use the dashboard username and password configured on $host, or sign in in your browser."
-                else -> "Use the dashboard username and password configured on $host."
+                !methods.password -> Strings.t("Sign in to {0} in your browser, with the account its dashboard uses.", host)
+                methods.browser -> Strings.t("Use the dashboard username and password configured on {0}, or sign in in your browser.", host)
+                else -> Strings.t("Use the dashboard username and password configured on {0}.", host)
             },
         )
 
@@ -134,13 +135,13 @@ internal fun SignInView(
                 TextField(
                     state = username,
                     focusRequester = usernameFocus,
-                    label = "Username",
+                    label = Strings.t("Username"),
                     enabled = !state.signingIn,
                     keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Next),
                 )
                 TextField(
                     state = password,
-                    label = "Password",
+                    label = Strings.t("Password"),
                     password = true,
                     enabled = !state.signingIn,
                     error = state.error.takeUnless { methods.browser },
@@ -153,7 +154,7 @@ internal fun SignInView(
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             if (methods.password) {
                 Button(
-                    text = if (state.signingIn && !state.waitingForBrowser) "Signing in…" else "Sign in",
+                    text = Strings.t(if (state.signingIn && !state.waitingForBrowser) "Signing in…" else "Sign in"),
                     onClick = onSignIn,
                     loading = state.signingIn && !state.waitingForBrowser,
                     enabled = !state.waitingForBrowser,
@@ -165,7 +166,7 @@ internal fun SignInView(
             if (methods.browser) {
                 if (methods.password) OrDivider()
                 Button(
-                    text = if (state.waitingForBrowser) "Waiting for the browser…" else "Sign in with browser",
+                    text = Strings.t(if (state.waitingForBrowser) "Waiting for the browser…" else "Sign in with browser"),
                     onClick = onSignInWithBrowser,
                     loading = state.waitingForBrowser,
                     enabled = !state.signingIn,
@@ -176,12 +177,12 @@ internal fun SignInView(
                 )
                 if (state.waitingForBrowser) {
                     Text(
-                        "Finish signing in on the page that opened. Kyllene comes back by itself when you're done.",
+                        Strings.t("Finish signing in on the page that opened. Kyllene comes back by itself when you're done."),
                         style = Theme[typography][bodySmall],
                         color = Theme[colors][textSecondary],
                     )
                     Button(
-                        text = "Cancel",
+                        text = Strings.t("Cancel"),
                         onClick = onCancelBrowser,
                         variant = ButtonVariant.Ghost,
                         modifier = Modifier.fillMaxWidth(),
@@ -191,7 +192,7 @@ internal fun SignInView(
             }
 
             Button(
-                text = "Use a different gateway",
+                text = Strings.t("Use a different gateway"),
                 onClick = onChangeGateway,
                 variant = ButtonVariant.Ghost,
                 leadingIcon = Lucide.ArrowLeft,
@@ -214,7 +215,7 @@ private fun GatewayChip(host: String) {
             .background(Theme[colors][surface], CircleShape)
             .border(1.dp, Theme[colors][stroke], CircleShape)
             .padding(start = 6.dp, end = 12.dp)
-            .semantics(mergeDescendants = true) { contentDescription = "Gateway $host" },
+            .semantics(mergeDescendants = true) { contentDescription = Strings.t("Gateway {0}", host) },
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -237,7 +238,7 @@ private fun OrDivider() {
     val line = Theme[colors][stroke]
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.weight(1f).height(1.dp).background(line))
-        Text("or", style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textMuted])
+        Text(Strings.t("or"), style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textMuted])
         Box(Modifier.weight(1f).height(1.dp).background(line))
     }
 }

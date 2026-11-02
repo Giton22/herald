@@ -9,6 +9,7 @@ import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.Dialog
+import dev.hermeskotlin.ui.i18n.Strings
 
 /**
  * A phone tool asking before it changes something, while Herald is open: the same question as its notification,
@@ -26,11 +27,11 @@ fun PhoneQuestionDialog(question: PhoneQuestion?) {
     Dialog(
         visible = question != null,
         onDismissRequest = q.deny,
-        title = q.title,
-        message = q.what,
+        title = Strings.t(q.title),
+        message = Strings.t(q.what),
         actions = {
-            Button("Deny", onClick = q.deny, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Allow", onClick = q.allow, size = ButtonSize.Small)
+            Button(Strings.t("Deny"), onClick = q.deny, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Allow"), onClick = q.allow, size = ButtonSize.Small)
         },
     )
 }

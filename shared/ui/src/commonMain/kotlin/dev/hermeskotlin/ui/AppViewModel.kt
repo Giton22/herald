@@ -37,6 +37,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import dev.hermeskotlin.core.push.PushSetup
 import dev.hermeskotlin.core.sessions.SeenStore
 import dev.hermeskotlin.ui.chat.ChatTarget
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -192,7 +193,7 @@ class AppViewModel(
                     when {
                         bot != null -> openBotLink(bot, link.title, stored, link.draft, stored?.let { lastLook(it, profile = bot) })
                         stored == null -> newChat(link.draft)
-                        open != stored -> openSession(stored, link.title ?: "Chat", lastLook(stored, currentProfile()))
+                        open != stored -> openSession(stored, link.title ?: Strings.t("Chat"), lastLook(stored, currentProfile()))
                         // Usually the notification is for the chat left open: the reply came in while away.
                         // It stays open, with the line placed from the last look.
                         else -> (_route.value as? Route.Chat)?.let { route ->
@@ -213,34 +214,34 @@ class AppViewModel(
         callJob = viewModelScope.launch {
             try {
                 val target = settings.settings.filterNotNull().first().callTargets[route.gateway.url] ?: CallTarget()
-                require(target.valid) { "Choose a valid Default Call Target in Settings." }
+                require(target.valid) { Strings.t("Choose a valid Default Call Target in Settings.") }
                 val (bot, id) = if (target.profile != null) {
                     withTimeout(15_000) {
                         connection.state.first { it is ConnectionState.Connected }
                         if (_route.value !== route || generation != callGeneration) throw CancellationException()
                         val bot = botsApi.roster().bots.firstOrNull { it.name == target.profile }
-                            ?: error("This bot is unavailable. Choose a Default Call Target in Settings.")
+                            ?: error(Strings.t("This bot is unavailable. Choose a Default Call Target in Settings."))
                         bot to botChats.open(bot)
                     }
                 } else null to target.sessionId
                 if (id != null) {
                     val page = sessions.messages(route.gateway.gatewayUrl, id, limit = 1, profile = target.profile)
-                    check(page is ApiResult.Success) { "Couldn't open the Default Call Target. ${page.errorMessage.orEmpty()}" }
+                    check(page is ApiResult.Success) { Strings.t("Couldn't open the Default Call Target. {0}", page.errorMessage.orEmpty()) }
                 }
                 if (_route.value !== route || generation != callGeneration) return@launch
                 val profile = target.profile ?: currentProfile().takeIf { target.sessionId == null }
                 val chat = newChatTarget(route.gateway, profile).copy(
-                    storedSessionId = id, title = bot?.label ?: if (id == null) "New chat" else target.label,
+                    storedSessionId = id, title = bot?.label ?: if (id == null) Strings.t("New chat") else target.label,
                     draft = ComposeDraft(start = DraftStart.VoiceChat),
                     bot = bot?.let { BotIdentity(it.name, it.label, chatsProfile = currentProfile()) },
                 )
                 _route.value = Route.Chat(chat)
             } catch (_: TimeoutCancellationException) {
-                if (_route.value === route && generation == callGeneration) _callError.value = "Couldn’t reach the bot. Try again once connected."
+                if (_route.value === route && generation == callGeneration) _callError.value = Strings.t("Couldn’t reach the bot. Try again once connected.")
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                if (_route.value === route && generation == callGeneration) _callError.value = e.message ?: "Couldn't open the Default Call Target. Try again."
+                if (_route.value === route && generation == callGeneration) _callError.value = e.message ?: Strings.t("Couldn't open the Default Call Target. Try again.")
             } finally {
                 if (generation == callGeneration) _openingCall.value = false
             }
@@ -432,7 +433,7 @@ class AppViewModel(
                 id != null -> _route.value = Route.Chat(botChatTarget(gateway, id, bot, name, draft))
                 // A share to a bot that's gone (an old shortcut) isn't lost: it waits in a new chat instead,
                 // which says so, since a send from there goes to the profile's own assistant, not the bot.
-                draft != null -> newChat(draft.withNotice("Couldn't open $name's chat, so the share is in a new chat."))
+                draft != null -> newChat(draft.withNotice(Strings.t("Couldn't open {0}'s chat, so the share is in a new chat.", name)))
             }
         }
     }
@@ -483,7 +484,7 @@ class AppViewModel(
         val gateway = signedInGateway() ?: return
         connection.stop()
         host.close()
-        _route.value = Route.SignIn(gateway, notice = "Your session expired. Sign in again.")
+        _route.value = Route.SignIn(gateway, notice = Strings.t("Your session expired. Sign in again."))
     }
 
     /** Signs out of the current gateway; it stays saved, so signing in again (or switching away) is one step. */

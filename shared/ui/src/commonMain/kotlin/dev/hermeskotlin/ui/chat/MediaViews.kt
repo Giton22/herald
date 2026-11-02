@@ -77,6 +77,7 @@ import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
@@ -141,8 +142,8 @@ private fun ReplyImage(item: ReplyMedia) {
         ) {
             UnstyledIcon(Lucide.Image, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(18.dp))
             Column(Modifier.weight(1f)) {
-                Text("Picture from $remoteHost", style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
-                Text("$tapVerb to load it from that site", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                Text(Strings.t("Picture from {0}", remoteHost), style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
+                Text(Strings.t("{0} to load it from that site", tapVerb), style = Theme[typography][caption], color = Theme[colors][textTertiary])
             }
         }
         return
@@ -185,8 +186,8 @@ private fun ReplyImage(item: ReplyMedia) {
             ) {
                 UnstyledIcon(Lucide.ImageOff, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(18.dp))
                 Column {
-                    Text("Couldn't load ${item.name}", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
-                    if (failed) Text("$tapVerb to try again", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                    Text(Strings.t("Couldn't load {0}", item.name), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+                    if (failed) Text(Strings.t("{0} to try again", tapVerb), style = Theme[typography][caption], color = Theme[colors][textTertiary])
                 }
             }
             else -> Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) { Spinner() }
@@ -197,7 +198,7 @@ private fun ReplyImage(item: ReplyMedia) {
 /** The site an `http(s)://` picture would be fetched from; null for the gateway's own files and inline data. */
 internal fun webHost(source: String): String? {
     if (!source.startsWith("http://") && !source.startsWith("https://")) return null
-    return source.substringAfter("://").substringBefore('/').substringBefore('?').substringBefore('#').substringAfterLast('@').ifEmpty { null } ?: "the web"
+    return source.substringAfter("://").substringBefore('/').substringBefore('?').substringBefore('#').substringAfterLast('@').ifEmpty { null } ?: Strings.t("the web")
 }
 
 /** A delivered file: its name, with Save and Share. */
@@ -222,7 +223,7 @@ internal fun ReplyFile(item: ReplyMedia, download: (suspend () -> FileDownload)?
                     }
                 } else {
                     val bytes = load(item.source)
-                    if (bytes == null) notify("Couldn't get ${item.name} from the gateway.") else action(bytes)
+                    if (bytes == null) notify(Strings.t("Couldn't get {0} from the gateway.", item.name)) else action(bytes)
                 }
             } finally {
                 busy = false
@@ -244,13 +245,13 @@ internal fun ReplyFile(item: ReplyMedia, download: (suspend () -> FileDownload)?
         UnstyledIcon(Lucide.File, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(22.dp))
         Column(Modifier.weight(1f)) {
             Text(item.name, style = Theme[typography][label], color = Theme[colors][textColor], maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(item.name.substringAfterLast('.', "file").uppercase(), style = Theme[typography][caption], color = Theme[colors][textTertiary])
+            Text(item.name.substringAfterLast('.', Strings.t("file")).uppercase(), style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }
         if (busy) {
             Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
         } else {
-            IconButton(Lucide.Download, contentDescription = "Save ${item.name}", onClick = { withBytes { notify(actions.save(it, item.name)) } })
-            IconButton(shareIcon, contentDescription = "$shareLabel: ${item.name}", onClick = { withBytes { actions.share(it, item.name) } })
+            IconButton(Lucide.Download, contentDescription = Strings.t("Save {0}", item.name), onClick = { withBytes { notify(actions.save(it, item.name)) } })
+            IconButton(shareIcon, contentDescription = Strings.t("{0}: {1}", shareLabel, item.name), onClick = { withBytes { actions.share(it, item.name) } })
         }
     }
 }
@@ -276,7 +277,7 @@ internal fun ImageViewer(image: ViewerImage, onDismiss: () -> Unit) {
             }
         } else {
             value = image.source?.let { load(it) }
-            if (value == null) failed = "Couldn't load this picture."
+            if (value == null) failed = Strings.t("Couldn't load this picture.")
         }
     }
     var notice by remember { mutableStateOf<String?>(null) }
@@ -315,7 +316,7 @@ internal fun ImageViewer(image: ViewerImage, onDismiss: () -> Unit) {
                 )
             } else {
                 Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-                    val error = failed ?: "Couldn't show this picture.".takeIf { decoded?.decoding == false }
+                    val error = failed ?: Strings.t("Couldn't show this picture.").takeIf { decoded?.decoding == false }
                     if (error != null) {
                         Text(error, style = Theme[typography][bodySmall], color = Color.White, textAlign = TextAlign.Center)
                     } else {
@@ -331,7 +332,7 @@ internal fun ImageViewer(image: ViewerImage, onDismiss: () -> Unit) {
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(Lucide.X, contentDescription = "Close", onClick = onDismiss, tint = Color.White)
+                IconButton(Lucide.X, contentDescription = Strings.t("Close"), onClick = onDismiss, tint = Color.White)
                 Text(
                     image.name,
                     style = Theme[typography][label],
@@ -343,7 +344,7 @@ internal fun ImageViewer(image: ViewerImage, onDismiss: () -> Unit) {
                 val ready = bytes
                 IconButton(
                     Lucide.Download,
-                    contentDescription = "Save",
+                    contentDescription = Strings.t("Save"),
                     onClick = { ready?.let { scope.launch { notice = actions.save(it, image.name.withImageExtension(it)) } } },
                     enabled = ready != null,
                     tint = Color.White,

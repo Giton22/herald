@@ -13,6 +13,7 @@ import androidx.wear.watchface.complications.data.SmallImageComplicationData
 import androidx.wear.watchface.complications.data.SmallImageType
 import androidx.wear.watchface.complications.datasource.ComplicationRequest
 import androidx.wear.watchface.complications.datasource.SuspendingComplicationDataSourceService
+import dev.hermeskotlin.ui.i18n.Strings
 
 /**
  * Calls the phone’s current default target; artwork is read from the background-synced cache. A small-image slot
@@ -26,10 +27,10 @@ class AskComplicationService : SuspendingComplicationDataSourceService() {
 
     private fun data(type: ComplicationType, preview: Boolean): ComplicationData? {
         val icon = Icon.createWithResource(this, R.drawable.ic_call)
-        val description = PlainComplicationText.Builder(if (preview) "Call Hermes" else "Call ${HeraldWatch.of(this).callDisplay.title}").build()
+        val description = PlainComplicationText.Builder(if (preview) Strings.t("Call Hermes") else Strings.t("Call {0}", HeraldWatch.of(this).callDisplay.title)).build()
         val tap = PendingIntent.getActivity(this, 0, MainActivity.callIntent(this), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
         return when (type) {
-            ComplicationType.SHORT_TEXT -> ShortTextComplicationData.Builder(PlainComplicationText.Builder("Call").build(), description)
+            ComplicationType.SHORT_TEXT -> ShortTextComplicationData.Builder(PlainComplicationText.Builder(Strings.t("Call")).build(), description)
                 .setMonochromaticImage(MonochromaticImage.Builder(icon).build())
                 .setTapAction(tap)
                 .build()

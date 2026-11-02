@@ -115,6 +115,7 @@ import dev.hermeskotlin.designsystem.textMuted
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.designsystem.warning
 import dev.hermeskotlin.designsystem.warningSoft
 import dev.hermeskotlin.ui.components.relativeTime
@@ -270,21 +271,21 @@ fun BotsRoster(
                 )
             }
             item(key = "label") {
-                SectionHeader("Bots", top = if (needsYou.isEmpty()) 0.dp else 10.dp) {
-                    IconButton(Lucide.Plus, contentDescription = "New bot", onClick = actions::create, tint = Theme[colors][textTertiary])
+                SectionHeader(Strings.t("Bots"), top = if (needsYou.isEmpty()) 0.dp else 10.dp) {
+                    IconButton(Lucide.Plus, contentDescription = Strings.t("New bot"), onClick = actions::create, tint = Theme[colors][textTertiary])
                 }
             }
             when {
                 state.loading && state.all.isEmpty() -> item(key = "loading") { ListSpinner() }
                 state.unsupported -> item(key = "unsupported") {
-                    ListNotice("This gateway doesn't list bots yet. Bot Mode needs Hermes 0.20.3 or newer.")
+                    ListNotice(Strings.t("This gateway doesn't list bots yet. Bot Mode needs Hermes 0.20.3 or newer."))
                 }
                 state.error != null && state.all.isEmpty() -> item(key = "error") {
-                    ListNotice("Couldn't load the bots. ${state.error}", action = "Try again", onAction = onRetry)
+                    ListNotice(Strings.t("Couldn't load the bots. {0}", state.error), action = Strings.t("Try again"), onAction = onRetry)
                 }
-                state.all.isEmpty() -> item(key = "empty") { ListNotice("No bots on this gateway yet.") }
+                state.all.isEmpty() -> item(key = "empty") { ListNotice(Strings.t("No bots on this gateway yet.")) }
                 state.bots.isEmpty() -> item(key = "all-hidden") {
-                    ListNotice("All bots are hidden. They keep working and keep their history.", action = "Show hidden bots") { hiddenOpen = true }
+                    ListNotice(Strings.t("All bots are hidden. They keep working and keep their history."), action = Strings.t("Show hidden bots")) { hiddenOpen = true }
                 }
             }
             grid(state.bots, "bots", hidden = false)
@@ -296,7 +297,7 @@ fun BotsRoster(
                             .heightIn(min = MinTouchTarget)
                             .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
                             .handCursor()
-                            .clickable(onClickLabel = if (hiddenOpen) "Collapse hidden bots" else "Show hidden bots") { hiddenOpen = !hiddenOpen }
+                            .clickable(onClickLabel = if (hiddenOpen) Strings.t("Collapse hidden bots") else Strings.t("Show hidden bots")) { hiddenOpen = !hiddenOpen }
                             .padding(horizontal = 6.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -307,7 +308,7 @@ fun BotsRoster(
                             tint = Theme[colors][textTertiary],
                             modifier = Modifier.size(14.dp),
                         )
-                        Text("Hidden ${state.hidden.size}", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                        Text(Strings.t("Hidden {0}", state.hidden.size), style = Theme[typography][caption], color = Theme[colors][textTertiary])
                     }
                 }
                 if (hiddenOpen) grid(state.hidden, "hidden", hidden = true)
@@ -315,9 +316,9 @@ fun BotsRoster(
             // Hosted rooms when the gateway runs them, and Desktop's own read-only copies beside them.
             if (roomsAvailable || desktopRooms.isNotEmpty()) {
                 item(key = "rooms-label") {
-                    SectionHeader("Rooms", top = 10.dp) {
+                    SectionHeader(Strings.t("Rooms"), top = 10.dp) {
                         // Only a gateway that hosts rooms can make one; Desktop's are made on Desktop.
-                        if (roomsAvailable) IconButton(Lucide.Plus, contentDescription = "New room", onClick = onNewRoom, tint = Theme[colors][textTertiary])
+                        if (roomsAvailable) IconButton(Lucide.Plus, contentDescription = Strings.t("New room"), onClick = onNewRoom, tint = Theme[colors][textTertiary])
                     }
                 }
                 if (roomsAvailable) {
@@ -326,7 +327,7 @@ fun BotsRoster(
                     }
                     if (rooms.isEmpty()) {
                         // With Desktop rooms below, the page does have rooms to show; only say "none" when there are none.
-                        if (desktopRooms.isEmpty()) item(key = "rooms-empty") { ListNotice("No rooms yet. New room starts one with 2–6 bots.") }
+                        if (desktopRooms.isEmpty()) item(key = "rooms-empty") { ListNotice(Strings.t("No rooms yet. New room starts one with 2–6 bots.")) }
                     } else {
                         items(rooms, key = { "room:${it.roomId}" }) { room ->
                             RoomRow(
@@ -341,7 +342,7 @@ fun BotsRoster(
                     }
                 }
                 if (desktopRooms.isNotEmpty()) {
-                    item(key = "desktop-rooms-label") { SectionHeader("On Hermes Desktop", top = 10.dp) {} }
+                    item(key = "desktop-rooms-label") { SectionHeader(Strings.t("On Hermes Desktop"), top = 10.dp) {} }
                     items(desktopRooms, key = { "desktop-room:${it.key}" }) { room ->
                         DesktopRoomRow(room, roomFaces, onClick = { onOpenDesktopRoom(room) })
                     }
@@ -385,12 +386,12 @@ private fun DeleteBotDialog(bot: Bot?, onDismiss: () -> Unit, onConfirm: (Bot) -
     Dialog(
         visible = bot != null,
         onDismissRequest = onDismiss,
-        title = "Delete ${b.label}?",
-        message = "The ${b.name} profile is removed from the gateway with its chats, memory, skills and settings. " +
-            "This can't be undone.",
+        title = Strings.t("Delete {0}?", b.label),
+        message = Strings.t("The {0} profile is removed from the gateway with its chats, memory, skills and settings. " +
+            "This can't be undone.", b.name),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Delete", onClick = { onDismiss(); onConfirm(b) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Delete"), onClick = { onDismiss(); onConfirm(b) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
         },
     )
 }
@@ -437,30 +438,30 @@ private fun BotCard(
     val preview = bot.rosterPreview()
     val (line, italic) = when {
         // Held up on the user beats everything: nothing moves until they answer.
-        waiting != null -> waiting.label to false
-        thinking -> "Thinking…" to false
-        working -> "Working…" to false
+        waiting != null -> Strings.t(waiting.label) to false
+        thinking -> Strings.t("Thinking…") to false
+        working -> Strings.t("Working…") to false
         // What's wrong outranks the last line: a phone has no hover to say it.
-        trouble != null -> trouble.problem.hint to false
-        failingRoutine != null -> "Routine “${failingRoutine.displayName}” didn't go through" to false
-        preview?.fromBot != null -> "${preview.fromBot}: ${preview.text}" to true
+        trouble != null -> Strings.t(trouble.problem.hint) to false
+        failingRoutine != null -> Strings.t("Routine “{0}” didn't go through", failingRoutine.displayName) to false
+        preview?.fromBot != null -> Strings.t("{0}: {1}", preview.fromBot, preview.text) to true
         preview != null -> preview.text to false
-        else -> (bot.description?.takeIf { it.isNotBlank() } ?: "Say hello") to false
+        else -> (bot.description?.takeIf { it.isNotBlank() } ?: Strings.t("Say hello")) to false
     }
     var contextMenuOpen by remember { mutableStateOf(false) }
     val menuItems = {
         listOfNotNull(
-            RowMenuItem("Check again", Lucide.RefreshCw) { actions.checkAgain(bot) }.takeIf { trouble != null },
-            RowMenuItem(if (pinned) "Unpin" else "Pin to top", if (pinned) Lucide.PinOff else Lucide.Pin) { actions.setPinned(bot, !pinned) },
-            RowMenuItem(if (hidden) "Unhide" else "Hide", if (hidden) Lucide.Eye else Lucide.EyeOff) { actions.setHidden(bot, !hidden) },
-            RowMenuItem("Open recent session", Lucide.History) { actions.openRecent(bot) }.takeIf { recent != null },
-            RowMenuItem("New chat with ${bot.label}", Lucide.MessageSquarePlus) { actions.newChat(bot) },
-            RowMenuItem("Routines", Lucide.CalendarClock) { actions.routines(bot) },
-            RowMenuItem("Start fresh", Lucide.RotateCcw, run = onStartOver).takeIf { bot.canonicalSession != null },
-            RowMenuItem("Edit", Lucide.Pencil) { actions.edit(bot) },
-            RowMenuItem("Duplicate", Lucide.Copy) { actions.duplicate(bot) },
+            RowMenuItem(Strings.t("Check again"), Lucide.RefreshCw) { actions.checkAgain(bot) }.takeIf { trouble != null },
+            RowMenuItem(if (pinned) Strings.t("Unpin") else Strings.t("Pin to top"), if (pinned) Lucide.PinOff else Lucide.Pin) { actions.setPinned(bot, !pinned) },
+            RowMenuItem(if (hidden) Strings.t("Unhide") else Strings.t("Hide"), if (hidden) Lucide.Eye else Lucide.EyeOff) { actions.setHidden(bot, !hidden) },
+            RowMenuItem(Strings.t("Open recent session"), Lucide.History) { actions.openRecent(bot) }.takeIf { recent != null },
+            RowMenuItem(Strings.t("New chat with {0}", bot.label), Lucide.MessageSquarePlus) { actions.newChat(bot) },
+            RowMenuItem(Strings.t("Routines"), Lucide.CalendarClock) { actions.routines(bot) },
+            RowMenuItem(Strings.t("Start fresh"), Lucide.RotateCcw, run = onStartOver).takeIf { bot.canonicalSession != null },
+            RowMenuItem(Strings.t("Edit"), Lucide.Pencil) { actions.edit(bot) },
+            RowMenuItem(Strings.t("Duplicate"), Lucide.Copy) { actions.duplicate(bot) },
             // The gateway keeps its primary profile.
-            RowMenuItem("Delete", Lucide.Trash2, destructive = true, run = onDelete).takeIf { bot.name != Bot.DEFAULT },
+            RowMenuItem(Strings.t("Delete"), Lucide.Trash2, destructive = true, run = onDelete).takeIf { bot.name != Bot.DEFAULT },
         )
     }
     DropdownMenu(
@@ -482,12 +483,12 @@ private fun BotCard(
                 .handCursor()
                 .combinedClickable(
                     onClick = { actions.open(bot) },
-                    onClickLabel = "Open ${bot.label}'s chat",
+                    onClickLabel = Strings.t("Open {0}'s chat", bot.label),
                     onLongClick = {
                         haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                         menuOpen = true
                     },
-                    onLongClickLabel = "${bot.label} actions",
+                    onLongClickLabel = Strings.t("{0} actions", bot.label),
                     interactionSource = null,
                     indication = rememberHoverIndication(Theme[colors][text]),
                 )
@@ -507,7 +508,7 @@ private fun BotCard(
             }
             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                    if (pinned) UnstyledIcon(Lucide.Pin, contentDescription = "Pinned", tint = Theme[colors][textTertiary], modifier = Modifier.size(12.dp))
+                    if (pinned) UnstyledIcon(Lucide.Pin, contentDescription = Strings.t("Pinned"), tint = Theme[colors][textTertiary], modifier = Modifier.size(12.dp))
                     Text(
                         bot.label,
                         style = Theme[typography][body].copy(fontSize = 15.sp, fontWeight = if (unread) FontWeight.Bold else FontWeight.SemiBold),
@@ -517,7 +518,7 @@ private fun BotCard(
                         modifier = Modifier.weight(1f, fill = false),
                     )
                     if (trouble != null || failingRoutine != null) {
-                        UnstyledIcon(Lucide.TriangleAlert, contentDescription = "Needs attention", tint = Theme[colors][warning], modifier = Modifier.size(13.dp))
+                        UnstyledIcon(Lucide.TriangleAlert, contentDescription = Strings.t("Needs attention"), tint = Theme[colors][warning], modifier = Modifier.size(13.dp))
                     }
                 }
                 if (showHandle) {
@@ -558,7 +559,7 @@ private fun StatusDot(tone: BotTone, unread: Boolean) {
         Modifier
             .size(14.dp)
             .background(ring, CircleShape)
-            .clearAndSetSemantics { if (unread) contentDescription = "Unread" },
+            .clearAndSetSemantics { if (unread) contentDescription = Strings.t("Unread") },
         contentAlignment = Alignment.Center,
     ) {
         Box(Modifier.size(8.dp).background(dot, CircleShape))
@@ -577,7 +578,7 @@ private fun NeedsYouCard(item: NeedsYou, picture: ByteArray?, onClick: () -> Uni
             .clip(shape)
             .background(Theme[colors][warningSoft])
             .handCursor()
-            .clickable(onClickLabel = if (item is NeedsYou.Routine) "Open ${item.bot.label}'s routines" else "Open ${item.bot.label}'s chat", onClick = onClick)
+            .clickable(onClickLabel = if (item is NeedsYou.Routine) Strings.t("Open {0}'s routines", item.bot.label) else Strings.t("Open {0}'s chat", item.bot.label), onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -585,7 +586,7 @@ private fun NeedsYouCard(item: NeedsYou, picture: ByteArray?, onClick: () -> Uni
         BotAvatar(item.bot, picture, size = 36.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Text(
-                "${item.bot.label} needs you",
+                Strings.t("{0} needs you", item.bot.label),
                 style = Theme[typography][body].copy(fontSize = 14.5.sp, fontWeight = FontWeight.Medium),
                 color = Theme[colors][text],
                 maxLines = 2,
@@ -596,7 +597,7 @@ private fun NeedsYouCard(item: NeedsYou, picture: ByteArray?, onClick: () -> Uni
         // Not a button of its own: the whole card is the one target, and this says where it goes. A large
         // font leaves it out, so the words keep the room.
         if (LocalDensity.current.fontScale <= 1.3f) Text(
-            if (answer) "Review" else "Open",
+            if (answer) Strings.t("Review") else Strings.t("Open"),
             style = Theme[typography][caption].copy(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold),
             color = Theme[colors][onInverse],
             maxLines = 1,
@@ -617,12 +618,12 @@ internal fun StartOverDialog(bot: Bot?, onDismiss: () -> Unit, onConfirm: (Bot) 
     Dialog(
         visible = bot != null,
         onDismissRequest = onDismiss,
-        title = "Start fresh with ${b.label}?",
-        message = "${b.label}'s chat is archived and a new, empty one begins. ${b.label} keeps its memory, skills " +
-            "and settings, and the old chat stays on the gateway, archived.",
+        title = Strings.t("Start fresh with {0}?", b.label),
+        message = Strings.t("{0}'s chat is archived and a new, empty one begins. {0} keeps its memory, skills " +
+            "and settings, and the old chat stays on the gateway, archived.", b.label),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Start fresh", onClick = { onDismiss(); onConfirm(b) }, variant = ButtonVariant.Primary, size = ButtonSize.Small)
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Start fresh"), onClick = { onDismiss(); onConfirm(b) }, variant = ButtonVariant.Primary, size = ButtonSize.Small)
         },
     )
 }
@@ -653,12 +654,12 @@ private fun RoomRow(room: Room, faces: BotFaces, unread: Boolean, onClick: () ->
             unread,
             Modifier.handCursor().combinedClickable(
                 onClick = onClick,
-                onClickLabel = "Open room ${room.name}",
+                onClickLabel = Strings.t("Open room {0}", room.name),
                 onLongClick = {
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     menuOpen = true
                 },
-                onLongClickLabel = "${room.name} actions",
+                onLongClickLabel = Strings.t("{0} actions", room.name),
                 interactionSource = null,
                 indication = rememberHoverIndication(Theme[colors][text]),
             ).then(if (isDesktop) Modifier.onSecondaryPress { contextMenuOpen = true } else Modifier),
@@ -666,8 +667,8 @@ private fun RoomRow(room: Room, faces: BotFaces, unread: Boolean, onClick: () ->
         // A desktop's way to the same actions: a right-click, with the menu at the pointer.
         RowContextMenu(contextMenuOpen, onDismiss = { contextMenuOpen = false }) {
             listOf(
-                RowMenuItem("Rename", Lucide.Pencil, run = onRename),
-                RowMenuItem("Delete room", Lucide.Trash2, destructive = true, run = onDelete),
+                RowMenuItem(Strings.t("Rename"), Lucide.Pencil, run = onRename),
+                RowMenuItem(Strings.t("Delete room"), Lucide.Trash2, destructive = true, run = onDelete),
             )
         }
     }
@@ -734,7 +735,7 @@ private fun RoomRowLayout(
 
 /** "Ops, Scribe, Cadence": the faces show how many, the names say who. */
 private fun roomSubtitle(room: Room): String {
-    if (room.members.isEmpty()) return "No members"
+    if (room.members.isEmpty()) return Strings.t("No members")
     return room.members.joinToString(", ") { it.label }
 }
 
@@ -755,6 +756,6 @@ private fun DesktopRoomRow(room: DesktopRoom, faces: BotFaces, onClick: () -> Un
         room.updatedAt?.div(1000.0),
         faces,
         marked = room.needsYou,
-        clicks = Modifier.handCursor().clickable(onClickLabel = "Open room ${room.name}") { onClick() },
+        clicks = Modifier.handCursor().clickable(onClickLabel = Strings.t("Open room {0}", room.name)) { onClick() },
     )
 }

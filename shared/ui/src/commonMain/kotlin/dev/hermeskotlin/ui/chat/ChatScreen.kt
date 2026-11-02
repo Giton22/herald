@@ -1,5 +1,6 @@
 package dev.hermeskotlin.ui.chat
 
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.ui.imeVisible
 import dev.hermeskotlin.ui.enterSends
 import dev.hermeskotlin.ui.Shortcut
@@ -473,12 +474,12 @@ fun ChatScreen(
     val attachmentPicker = rememberAttachmentPicker(onPicked = viewModel::addAttachments, onError = viewModel::showAttachmentError)
     val microphone = rememberMicrophonePermission()
     val startVoiceChat = { ringback: Boolean ->
-        microphone.withMicrophone(onDenied = { notice = "Voice needs the microphone. Allow it in Android's settings." }) {
+        microphone.withMicrophone(onDenied = { notice = Strings.t("Voice needs the microphone. Allow it in Android's settings.") }) {
             viewModel.startVoiceChat(ringback)
         }
     }
     val toggleDictation = {
-        microphone.withMicrophone(onDenied = { notice = "Dictation needs the microphone. Allow it in Android's settings." }) {
+        microphone.withMicrophone(onDenied = { notice = Strings.t("Dictation needs the microphone. Allow it in Android's settings.") }) {
             viewModel.toggleDictation()
         }
     }
@@ -516,9 +517,9 @@ fun ChatScreen(
                 // The goal may have been cleared since the menu offered it; an empty sheet would stay up.
                 ChatRequest.OpenControl -> controlOpen = viewModel.state.value.control != null
                 // `/voice` and the like on the desktop, which has no voice yet: say so, as a silent no-op reads as broken.
-                ChatRequest.StartVoice -> if (hasVoice) startVoiceChat(false) else notice = "Voice chat isn't on the desktop yet."
-                ChatRequest.StartCall -> if (hasVoice) startVoiceChat(true) else notice = "Voice chat isn't on the desktop yet."
-                ChatRequest.StartDictation -> if (hasVoice) toggleDictation() else notice = "Dictation isn't on the desktop yet."
+                ChatRequest.StartVoice -> if (hasVoice) startVoiceChat(false) else notice = Strings.t("Voice chat isn't on the desktop yet.")
+                ChatRequest.StartCall -> if (hasVoice) startVoiceChat(true) else notice = Strings.t("Voice chat isn't on the desktop yet.")
+                ChatRequest.StartDictation -> if (hasVoice) toggleDictation() else notice = Strings.t("Dictation isn't on the desktop yet.")
                 ChatRequest.FocusComposer -> focusComposer++
             }
         }
@@ -560,7 +561,7 @@ fun ChatScreen(
     CompositionLocalProvider(LocalModelPillBounds provides modelPillBounds) {
     ChatView(
         // A bot's chat is titled "Bot Chat" on the gateway; the bot's name says more.
-        title = target.bot?.label ?: state.title?.takeIf { it.isNotBlank() } ?: target.title ?: "New chat",
+        title = target.bot?.label ?: state.title?.takeIf { it.isNotBlank() } ?: target.title ?: Strings.t("New chat"),
         titleFace = LocalBotFaces.current.let { faces ->
             faces.find(target.bot?.name)?.let { bot -> { BotAvatar(bot, faces.picture(bot), size = 22.dp) } }
         },
@@ -593,7 +594,7 @@ fun ChatScreen(
         },
         sprite = viewModel.pets.sprite.collectAsStateWithLifecycle().value,
         // Re-rolled per conversation, kept while a new chat gets its stored id.
-        placeholder = remember(target) { (if (target.storedSessionId == null) NEW_CHAT_PROMPTS else FOLLOW_UP_PROMPTS).random() },
+        placeholder = remember(target) { (if (target.storedSessionId == null) NEW_CHAT_PROMPTS else FOLLOW_UP_PROMPTS).random() }.let { Strings.t(it) },
         notice = notice,
         actions = viewModel,
         widgetFiles = transcript.widgetFiles,
@@ -625,7 +626,7 @@ fun ChatScreen(
         otherChatBanner = otherChatBanner,
         onOpenOtherChat = onOpenOtherChat,
         onDismissOtherChat = onDismissOtherChat,
-        onNextChat = onNextChat?.let { next -> { if (!next()) notice = "Nothing waiting" } },
+        onNextChat = onNextChat?.let { next -> { if (!next()) notice = Strings.t("Nothing waiting") } },
         focusComposer = focusComposer,
         keysEnabled = keysEnabled && !dialogOpen,
         attachmentPicker = attachmentPicker.takeIf { isDesktop },
@@ -646,7 +647,7 @@ fun ChatScreen(
         onAdopted = { name ->
             viewModel.showPet()
             petsOpen = false
-            notice = "Adopted $name"
+            notice = Strings.t("Adopted {0}", name)
         },
     )
     JourneySheet(visible = journeyOpen, controller = viewModel.journey, onLoad = viewModel::loadJourney, onDismiss = { journeyOpen = false })
@@ -708,7 +709,7 @@ fun ChatScreen(
         // Read in the sheet, so the pill moving doesn't recompose the whole chat.
         anchor = { modelPillBounds.value.takeIf { isDesktop } },
         // A Bot Chat's model is its bot's (selectModel sets it there), so say what a pick changes.
-        note = target.bot?.let { "A model picked here becomes ${it.label}'s own, for all its chats and routines." },
+        note = target.bot?.let { Strings.t("A model picked here becomes {0}'s own, for all its chats and routines.", it.label) },
     )
     ModelConfirmDialog(
         pending = picker.confirm,
@@ -732,7 +733,7 @@ internal fun ChatView(
     picker: ModelPickerState,
     connected: Boolean,
     /** Which way the link is down, shown under the title while not [connected]. */
-    connectionLabel: String = "No connection",
+    connectionLabel: String = Strings.t("No connection"),
     /** Shown in the chat while the link is being made again, so a reply that stopped streaming says why. */
     linkStatus: String? = null,
     /** Tries the gateway again now, from the offline banner. */
@@ -1092,8 +1093,8 @@ internal fun ChatView(
                         when {
                             !state.historyLoaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
                             state.historyError != null ->
-                                EmptyState(Lucide.CloudOff, "Couldn't load the conversation", state.historyError.orEmpty(), error = true) {
-                                    Button("Try again", onClick = actions::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+                                EmptyState(Lucide.CloudOff, Strings.t("Couldn't load the conversation"), state.historyError.orEmpty(), error = true) {
+                                    Button(Strings.t("Try again"), onClick = actions::retry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                                 }
                             else -> Greeting(
                                 onAttach = onAttach,
@@ -1146,7 +1147,7 @@ internal fun ChatView(
                         SavedCopyPill(lastSavedAt, onRetry = if (connected) actions::retry else null)
                     }
                     AnimatedVisibility(visible = state.loadingOlder, enter = fadeIn(), exit = fadeOut()) {
-                        StatusPill("Loading earlier messages…")
+                        StatusPill(Strings.t("Loading earlier messages…"))
                     }
                 }
                 Column(
@@ -1258,8 +1259,8 @@ private fun DropOverlay() {
     ) {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             UnstyledIcon(Lucide.Paperclip, contentDescription = null, tint = accentColor, modifier = Modifier.size(28.dp))
-            Text("Drop to attach", style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][textColor])
-            Text("Up to ${OutgoingAttachment.MAX_COUNT} files, 25 MB each.", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+            Text(Strings.t("Drop to attach"), style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][textColor])
+            Text(Strings.t("Up to {0} files, 25 MB each.", OutgoingAttachment.MAX_COUNT), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
         }
     }
 }
@@ -1307,7 +1308,7 @@ private fun ColumnScope.Dock(
     onPasteFiles: () -> Boolean = { false },
 ) {
     (state.attachment as? Attachment.Failed)?.let {
-        Banner(it.message, actionLabel = "Retry", onAction = actions::retry)
+        Banner(it.message, actionLabel = Strings.t("Retry"), onAction = actions::retry)
     }
     state.error?.let { Banner(it, actionLabel = null, onAction = actions::dismissError) }
     state.notices.forEach { notice -> key(notice.key) { NoticeBanner(notice, actions::dismissNotice) } }
@@ -1317,7 +1318,7 @@ private fun ColumnScope.Dock(
         val canResend = actions.composer.text.isNotBlank()
         Banner(
             "${refused.title}. ${refused.detail}",
-            actionLabel = "Send again".takeIf { canResend },
+            actionLabel = Strings.t("Send again").takeIf { canResend },
             onAction = { if (canResend) actions.send(null) else actions.dismissError() },
             icon = if (refused == SessionRefusal.OpenElsewhere) Lucide.MonitorSmartphone else Lucide.Hourglass,
         )
@@ -1424,8 +1425,8 @@ private fun ColumnScope.Dock(
         }
         if (editing) {
             Banner(
-                "Editing a message. Sending replaces it and everything after it.",
-                actionLabel = "Cancel",
+                Strings.t("Editing a message. Sending replaces it and everything after it."),
+                actionLabel = Strings.t("Cancel"),
                 onAction = actions::cancelEdit,
                 icon = Lucide.Pencil,
             )
@@ -1488,8 +1489,8 @@ internal data class BarStatus(val text: String, val tone: StatusTone)
 /** The status line for a chat: the link first, then a question waiting, the agent at work, else where it runs. */
 internal fun chatStatus(state: ChatState, connected: Boolean, connectionLabel: String, place: String?): BarStatus = when {
     !connected -> BarStatus(connectionLabel, StatusTone.Trouble)
-    state.attachment is Attachment.Attaching -> BarStatus("Opening…", StatusTone.Busy)
-    state.inputRequests.isNotEmpty() -> BarStatus("Needs your answer", StatusTone.Waiting)
+    state.attachment is Attachment.Attaching -> BarStatus(Strings.t("Opening…"), StatusTone.Busy)
+    state.inputRequests.isNotEmpty() -> BarStatus(Strings.t("Needs your answer"), StatusTone.Waiting)
     state.running -> {
         // Once every step is done the agent is wrapping up, not on a step.
         val plan = state.livePlan()
@@ -1498,10 +1499,10 @@ internal fun chatStatus(state: ChatState, connected: Boolean, connectionLabel: S
         val working = currentStep(state).team.count { it == SubagentStatus.Running }
         BarStatus(
             when {
-                plan != null && step != null -> "Working · step $step of ${plan.total}"
-                working == 1 -> "Working · 1 subagent"
-                working > 1 -> "Working · $working subagents"
-                else -> "Working"
+                plan != null && step != null -> Strings.t("Working · step {0} of {1}", step, plan.total)
+                working == 1 -> Strings.t("Working · 1 subagent")
+                working > 1 -> Strings.t("Working · {0} subagents", working)
+                else -> Strings.t("Working")
             },
             StatusTone.Busy,
         )
@@ -1511,7 +1512,11 @@ internal fun chatStatus(state: ChatState, connected: Boolean, connectionLabel: S
 
 /** Where the empty chat says Hermes runs: "Hermes on homelab · default profile". */
 internal fun greetingPlace(place: String?, profile: String?): String =
-    "${place?.let { "Hermes on $it" } ?: "Hermes"} · ${profile ?: "default"} profile"
+    Strings.t(
+        "{0} · {1} profile",
+        place?.let { Strings.t("Hermes on {0}", it) } ?: "Hermes",
+        profile ?: Strings.t("default"),
+    )
 
 /**
  * The sessions button, the title with a status line under it, and new chat with the chat's options
@@ -1570,12 +1575,12 @@ internal fun TopBar(
             if (trailing != null) {
                 trailing()
             } else {
-                BarButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null, keys = "Ctrl+N")
+                BarButton(Lucide.SquarePen, Strings.t("New chat"), onClick = { onNewChat?.invoke() }, enabled = onNewChat != null, keys = "Ctrl+N")
                 // A plain holder: only the click reads it. The desktop's menu hangs from the button.
                 val menuButton = remember { arrayOfNulls<Rect>(1) }
                 BarButton(
                     Lucide.Ellipsis,
-                    "Chat options",
+                    Strings.t("Chat options"),
                     onClick = { onOpenMenu?.invoke(menuButton[0]) },
                     enabled = onOpenMenu != null,
                     modifier = Modifier.onGloballyPositioned { menuButton[0] = it.boundsInWindow() },
@@ -1662,11 +1667,16 @@ private fun Greeting(
             AppMark(52.dp)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
-                    remember(accentWord) {
-                        buildAnnotatedString {
-                            append("What are we\n")
-                            withStyle(SpanStyle(color = accentWord)) { append("building") }
-                            append(" today?")
+                    buildAnnotatedString {
+                        val phrase = Strings.t("What are we\nbuilding today?")
+                        val accent = Strings.t("building")
+                        val at = phrase.indexOf(accent)
+                        if (at < 0) {
+                            append(phrase)
+                        } else {
+                            append(phrase.substring(0, at))
+                            withStyle(SpanStyle(color = accentWord)) { append(accent) }
+                            append(phrase.substring(at + accent.length))
                         }
                     },
                     style = Theme[typography][display],
@@ -1680,7 +1690,7 @@ private fun Greeting(
             }
             // Other ways to begin than typing, named rather than left to the composer's icons.
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                StartPill(Lucide.Paperclip, "Attach", onClick = onAttach, enabled = canAttach)
+                StartPill(Lucide.Paperclip, Strings.t("Attach"), onClick = onAttach, enabled = canAttach)
                 // Tracks the composer's mic: while recording the same tap finishes it.
                 if (showMic(dictation)) {
                     StartPill(
@@ -1690,7 +1700,7 @@ private fun Greeting(
                         enabled = connected && !dictation.transcribing,
                     )
                 }
-                if (hasVoice) StartPill(Lucide.AudioLines, "Voice chat", onClick = onVoiceChat, enabled = connected)
+                if (hasVoice) StartPill(Lucide.AudioLines, Strings.t("Voice chat"), onClick = onVoiceChat, enabled = connected)
             }
         }
     }
@@ -1750,9 +1760,9 @@ private fun StartPill(icon: ImageVector, text: String, onClick: () -> Unit, enab
 
 /** What the empty chat's dictation pill says for [state]. */
 internal fun dictateLabel(state: DictationState): String = when {
-    state.transcribing -> "Transcribing…"
-    state.recording -> "Finish dictating"
-    else -> "Dictate"
+    state.transcribing -> Strings.t("Transcribing…")
+    state.recording -> Strings.t("Finish dictating")
+    else -> Strings.t("Dictate")
 }
 
 /** Hermes Desktop's composer lines (`composer.newSessionPlaceholders` / `followUpPlaceholders`). */
@@ -2021,7 +2031,7 @@ private fun Messages(
                             connected,
                             // Any prompt with a stored row is edited in place; the last one without can still go through /undo.
                             // Not while the prompt is still on its way or its delivery is in doubt.
-                            editLabel = if (chat.canEdit(message.key)) "Edit" else "Edit last prompt",
+                            editLabel = if (chat.canEdit(message.key)) Strings.t("Edit") else Strings.t("Edit last prompt"),
                             onEdit = if (chat.canEdit(message.key)) {
                                 rewind(MessageChange.Edit, message.key, message.key) { actions.startEdit(message.key) }
                             } else {
@@ -2079,7 +2089,7 @@ private fun Messages(
             val shape = RoundedCornerShape(Theme[radii][radiusMedium])
             // A pointer-sized button on the desktop, named on a rest over it.
             val size = if (isDesktop) 34.dp else 40.dp
-            Tooltip(if (isDesktop && !newBelow) "Jump to latest" else "") { UnstyledButton(
+            Tooltip(if (isDesktop && !newBelow) Strings.t("Jump to latest") else "") { UnstyledButton(
                 onClick = {
                     readerNavigated = true
                     scope.launch {
@@ -2106,11 +2116,11 @@ private fun Messages(
                 ) {
                     UnstyledIcon(
                         Lucide.ArrowDown,
-                        contentDescription = if (newBelow) null else "Jump to latest",
+                        contentDescription = if (newBelow) null else Strings.t("Jump to latest"),
                         tint = tint,
                         modifier = Modifier.size(18.dp),
                     )
-                    if (newBelow) Text("New reply", style = Theme[typography][label], color = tint)
+                    if (newBelow) Text(Strings.t("New reply"), style = Theme[typography][label], color = tint)
                 }
             } }
         }
@@ -2227,9 +2237,9 @@ private fun ChatMessage.contentSize(): Int = when (this) {
 
 /** Tells apart the ways the link can be down: none, being re-made, or needing a new sign-in. */
 internal fun connectionLabel(state: ConnectionState): String = when (state) {
-    is ConnectionState.Connecting, is ConnectionState.Reconnecting -> "No connection · connecting again…"
-    ConnectionState.SessionExpired -> "Signed out · sign in again"
-    is ConnectionState.Failed, ConnectionState.Idle, is ConnectionState.Connected -> "No connection"
+    is ConnectionState.Connecting, is ConnectionState.Reconnecting -> Strings.t("No connection · connecting again…")
+    ConnectionState.SessionExpired -> Strings.t("Signed out · sign in again")
+    is ConnectionState.Failed, ConnectionState.Idle, is ConnectionState.Connected -> Strings.t("No connection")
 }
 
 /**
@@ -2237,8 +2247,8 @@ internal fun connectionLabel(state: ConnectionState): String = when (state) {
  * at all, else reconnecting. Null when it's up, or down for good (the title says so then).
  */
 internal fun linkStatus(state: ConnectionState): String? = when (state) {
-    is ConnectionState.Reconnecting -> if (state.reason.startsWith(UNREACHABLE)) "Waiting for network…" else "Reconnecting…"
-    is ConnectionState.Connecting -> if (state.attempt > 1) "Reconnecting…" else null
+    is ConnectionState.Reconnecting -> if (state.reason.startsWith(UNREACHABLE)) Strings.t("Waiting for network…") else Strings.t("Reconnecting…")
+    is ConnectionState.Connecting -> if (state.attempt > 1) Strings.t("Reconnecting…") else null
     is ConnectionState.Connected, ConnectionState.Idle, ConnectionState.SessionExpired, is ConnectionState.Failed -> null
 }
 
@@ -2268,14 +2278,15 @@ internal fun OfflineBanner(place: String?, status: String, onRetry: () -> Unit) 
                 color = Theme[colors][textColor],
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
-            CopyableOnDesktop { Text("$status Your draft is kept.", style = Theme[typography][caption], color = Theme[colors][textSecondary]) }
+            CopyableOnDesktop { Text(Strings.t("{0} Your draft is kept.", status), style = Theme[typography][caption], color = Theme[colors][textSecondary]) }
         }
-        RetryChip("Retry now", onClick = onRetry)
+        RetryChip(Strings.t("Retry now"), onClick = onRetry)
     }
 }
 
 /** What the offline banner leads with. */
-internal fun offlineTitle(place: String?): String = "Can't reach ${place?.takeIf { it.isNotBlank() } ?: "Hermes"}"
+internal fun offlineTitle(place: String?): String =
+    Strings.t("Can't reach {0}", place?.takeIf { it.isNotBlank() } ?: "Hermes")
 
 /** A small pill button, drawn 30dp tall with the full touch height around it. */
 @Composable
@@ -2325,13 +2336,14 @@ private fun SavedCopyPill(savedAt: Long, onRetry: (() -> Unit)?) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         UnstyledIcon(Lucide.History, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(12.dp))
+        val copyLabel = savedCopyLabel(savedAt, now)
         Text(
-            savedCopyLabel(savedAt, now) + if (onRetry != null) " · couldn't load the latest" else "",
+            if (onRetry != null) Strings.t("{0} · couldn't load the latest", copyLabel) else copyLabel,
             style = Theme[typography][caption],
             color = Theme[colors][textSecondary],
             modifier = Modifier.padding(vertical = 4.dp),
         )
-        if (onRetry != null) RetryChip("Try again", onClick = onRetry)
+        if (onRetry != null) RetryChip(Strings.t("Try again"), onClick = onRetry)
     }
 }
 
@@ -2387,21 +2399,21 @@ internal fun UserBubble(
         Box(Modifier.fillMaxWidth(USER_BUBBLE_WIDTH), contentAlignment = Alignment.TopEnd) {
             val menuItems = {
                 listOfNotNull(
-                    RowMenuItem("Copy", Lucide.Copy) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(message.text)) } }
+                    RowMenuItem(Strings.t("Copy"), Lucide.Copy) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(message.text)) } }
                         .takeIf { message.text.isNotBlank() },
                     // From here the comment is on all of the prompt; a desktop selection's menu comments on part of it.
-                    RowMenuItem("Comment", Lucide.MessageSquare) {
+                    RowMenuItem(Strings.t("Comment"), Lucide.MessageSquare) {
                         commentHost?.onSelection(
                             SelectionAction.Comment,
-                            CommentSource(message.key, "my message that starts “${openingWords(message.text)}”"),
+                            CommentSource(message.key, Strings.t("my message that starts “{0}”", openingWords(message.text))),
                             SelectionAnchor.whole(message.text),
                         )
                     }.takeIf { commentHost != null && review == null && message.text.isNotBlank() && !message.pending },
                     onEdit?.let { RowMenuItem(editLabel, Lucide.Pencil, run = it) },
                     // A prompt in doubt has only Check and Resend under it; taking it back to edit is here.
-                    RowMenuItem("Edit", Lucide.Pencil) { actions.editMessage(message.key) }
+                    RowMenuItem(Strings.t("Edit"), Lucide.Pencil) { actions.editMessage(message.key) }
                         .takeIf { onEdit == null && message.check == SendCheck.Unknown },
-                    onBranch?.let { RowMenuItem("Branch from here", Lucide.GitBranch, run = it) },
+                    onBranch?.let { RowMenuItem(Strings.t("Branch from here"), Lucide.GitBranch, run = it) },
                 )
             }
             // A right-click's menu opens at the pointer, as a desktop's context menus do.
@@ -2444,7 +2456,7 @@ internal fun UserBubble(
                                             haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                                             menuOpen = true
                                         },
-                                        onLongClickLabel = "Message actions",
+                                        onLongClickLabel = Strings.t("Message actions"),
                                         interactionSource = null,
                                         indication = rememberHoverIndication(onBubble),
                                     )
@@ -2463,7 +2475,7 @@ internal fun UserBubble(
                                 LocalTextSelectionColors provides TextSelectionColors(handleColor = onBubble, backgroundColor = onBubble.copy(alpha = 0.32f)),
                             ) {
                                 val source = remember(message.key, message.text) {
-                                    CommentSource(message.key, "my message that starts “${openingWords(message.text)}”")
+                                    CommentSource(message.key, Strings.t("my message that starts “{0}”", openingWords(message.text)))
                                 }
                                 // What a waiting comment is about is marked, in the text color too.
                                 CommentableSelection(source.takeIf { !message.pending }, selection) {
@@ -2489,16 +2501,16 @@ internal fun UserBubble(
                 Row(Modifier.alpha(alpha).onFocusChanged { keysInside = it.hasFocus }, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
                     if (message.text.isNotBlank()) CopyButton(message.text, Modifier.requiredSize(30.dp))
                     onEdit?.let { ReplyAction(Lucide.Pencil, editLabel, it, Modifier.requiredSize(30.dp)) }
-                    onBranch?.let { ReplyAction(Lucide.GitBranch, "Branch from here", it, Modifier.requiredSize(30.dp)) }
+                    onBranch?.let { ReplyAction(Lucide.GitBranch, Strings.t("Branch from here"), it, Modifier.requiredSize(30.dp)) }
                 }
                 MessageTimeLabel(message.timestamp)
             }
         } else if (!message.pending) MessageTimeLabel(message.timestamp)
         if (message.queued) {
-            Text("Queued · sends after this task", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+            Text(Strings.t("Queued · sends after this task"), style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }
         if (editing) {
-            Text("Editing in the composer", style = Theme[typography][caption], color = Theme[colors][accentText])
+            Text(Strings.t("Editing in the composer"), style = Theme[typography][caption], color = Theme[colors][accentText])
         }
         message.check?.let { UnsettledActions(it, message.key, actions, connected) }
     }
@@ -2531,9 +2543,9 @@ private fun DeliveryMark(check: SendCheck) {
 
 /** What's said under a prompt whose delivery is in doubt. */
 internal fun deliveryLabel(check: SendCheck): String = when (check) {
-    SendCheck.Checking -> "Checking whether Hermes got this…"
-    SendCheck.Unknown -> "May not have arrived"
-    SendCheck.NotReceived -> "Not delivered"
+    SendCheck.Checking -> Strings.t("Checking whether Hermes got this…")
+    SendCheck.Unknown -> Strings.t("May not have arrived")
+    SendCheck.NotReceived -> Strings.t("Not delivered")
 }
 
 /**
@@ -2557,24 +2569,23 @@ private fun UnsettledActions(check: SendCheck, key: String, actions: ChatActions
         when (check) {
             SendCheck.Checking -> {}
             SendCheck.Unknown -> {
-                DeliveryChip("Check", Lucide.SearchCheck, description = "Check delivery", onClick = { actions.checkDelivery(key) })
-                DeliveryChip("Resend", Lucide.RotateCw, enabled = connected, onClick = { confirmResend = true })
+                DeliveryChip(Strings.t("Check"), Lucide.SearchCheck, description = Strings.t("Check delivery"), onClick = { actions.checkDelivery(key) })
+                DeliveryChip(Strings.t("Resend"), Lucide.RotateCw, enabled = connected, onClick = { confirmResend = true })
             }
             SendCheck.NotReceived -> {
-                DeliveryChip("Resend", Lucide.RotateCw, enabled = connected, onClick = { actions.resend(key) })
-                DeliveryChip("Edit", Lucide.Pencil, onClick = { actions.editMessage(key) })
+                DeliveryChip(Strings.t("Resend"), Lucide.RotateCw, enabled = connected, onClick = { actions.resend(key) })
+                DeliveryChip(Strings.t("Edit"), Lucide.Pencil, onClick = { actions.editMessage(key) })
             }
         }
     }
     Dialog(
         visible = confirmResend,
         onDismissRequest = { confirmResend = false },
-        title = "Resend this message?",
-        message = "Hermes may already have it. If it does, resending makes Hermes get the same request twice and run it again. " +
-            "$tapVerb Check first to be sure.",
+        title = Strings.t("Resend this message?"),
+        message = Strings.t("Hermes may already have it. If it does, resending makes Hermes get the same request twice and run it again. {0} Check first to be sure.", tapVerb),
         actions = {
-            Button("Cancel", onClick = { confirmResend = false }, variant = ButtonVariant.Ghost)
-            Button("Resend", onClick = { confirmResend = false; actions.resend(key) })
+            Button(Strings.t("Cancel"), onClick = { confirmResend = false }, variant = ButtonVariant.Ghost)
+            Button(Strings.t("Resend"), onClick = { confirmResend = false; actions.resend(key) })
         },
     )
 }
@@ -2646,35 +2657,33 @@ private fun ConfirmChange(
     val promptKey = shown?.let { (change, key) -> if (change == MessageChange.Regenerate) chat.regenerateTarget(key)?.key else key }
     var discarded by remember { mutableIntStateOf(0) }
     if (pending != null && promptKey != null) discarded = chat.discardedAfter(promptKey)
-    val later = if (discarded == 1) "1 later message" else "$discarded later messages"
+    val later = if (discarded == 1) Strings.t("1 later message") else Strings.t("{0} later messages", discarded)
     Dialog(
         visible = pending != null,
         onDismissRequest = onDismiss,
         title = when (shown?.first) {
-            MessageChange.Branch -> "Branch from here?"
-            MessageChange.Regenerate -> "Regenerate this reply?"
-            MessageChange.Edit -> "Edit this message?"
-            else -> "Edit your last prompt?"
+            MessageChange.Branch -> Strings.t("Branch from here?")
+            MessageChange.Regenerate -> Strings.t("Regenerate this reply?")
+            MessageChange.Edit -> Strings.t("Edit this message?")
+            else -> Strings.t("Edit your last prompt?")
         },
         message = when (shown?.first) {
             MessageChange.Branch ->
-                "Copies this chat up to this message into a new chat and opens it. This chat stays as it is. " +
-                    "No task starts until you send something in the new chat."
+                Strings.t("Copies this chat up to this message into a new chat and opens it. This chat stays as it is. No task starts until you send something in the new chat.")
             MessageChange.Regenerate ->
-                "This will discard $later, here and on Hermes, and send the prompt again."
+                Strings.t("This will discard {0}, here and on Hermes, and send the prompt again.", later)
             MessageChange.Edit ->
-                "Sending the edit will discard $later, here and on Hermes. Nothing changes until you send it."
+                Strings.t("Sending the edit will discard {0}, here and on Hermes. Nothing changes until you send it.", later)
             else ->
-                "Takes your last message and Hermes's reply to it off this chat and puts the message back in the composer. " +
-                    "No task starts until you send it again."
+                Strings.t("Takes your last message and Hermes's reply to it off this chat and puts the message back in the composer. No task starts until you send it again.")
         },
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost)
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost)
             Button(
                 when (shown?.first) {
-                    MessageChange.Branch -> "Branch"
-                    MessageChange.Regenerate -> "Regenerate"
-                    else -> "Edit"
+                    MessageChange.Branch -> Strings.t("Branch")
+                    MessageChange.Regenerate -> Strings.t("Regenerate")
+                    else -> Strings.t("Edit")
                 },
                 onClick = {
                     onDismiss()
@@ -2728,11 +2737,11 @@ private fun AssistantReply(
     if (canMenu) {
         RowContextMenu(contextMenuOpen, onDismiss = { contextMenuOpen = false }) {
             listOfNotNull(
-                RowMenuItem("Copy", Lucide.Copy) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(text)) } },
-                onRegenerate?.let { RowMenuItem("Regenerate", Lucide.RefreshCw, run = it) },
-                onBranch?.let { RowMenuItem("Branch from here", Lucide.GitBranch, run = it) },
-                if (reading) RowMenuItem("Stop reading", Lucide.Square, run = onStopReading)
-                else onReadAloud?.let { read -> RowMenuItem("Read aloud", Lucide.Volume2) { read(text) } },
+                RowMenuItem(Strings.t("Copy"), Lucide.Copy) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(text)) } },
+                onRegenerate?.let { RowMenuItem(Strings.t("Regenerate"), Lucide.RefreshCw, run = it) },
+                onBranch?.let { RowMenuItem(Strings.t("Branch from here"), Lucide.GitBranch, run = it) },
+                if (reading) RowMenuItem(Strings.t("Stop reading"), Lucide.Square, run = onStopReading)
+                else onReadAloud?.let { read -> RowMenuItem(Strings.t("Read aloud"), Lucide.Volume2) { read(text) } },
             )
         }
     }
@@ -2757,7 +2766,7 @@ private fun AssistantReply(
             val source = remember(message.key, text, last) {
                 CommentSource(
                     messageKey = message.key,
-                    label = if (last) LAST_REPLY else "your earlier reply that starts “${openingWords(text)}”",
+                    label = if (last) LAST_REPLY else Strings.t("your earlier reply that starts “{0}”", openingWords(text)),
                     markdown = text,
                 )
             }
@@ -2776,9 +2785,9 @@ private fun AssistantReply(
         when (message.outcome) {
             TurnOutcome.Error -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 UnstyledIcon(Lucide.CircleAlert, contentDescription = null, tint = Theme[colors][danger], modifier = Modifier.size(16.dp))
-                CopyableOnDesktop { Text(message.error ?: "The turn failed.", style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
+                CopyableOnDesktop { Text(message.error ?: Strings.t("The turn failed."), style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
             }
-            TurnOutcome.Interrupted -> Text("Stopped", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+            TurnOutcome.Interrupted -> Text(Strings.t("Stopped"), style = Theme[typography][caption], color = Theme[colors][textTertiary])
             else -> Unit
         }
         message.warning?.let { warningText ->
@@ -2806,15 +2815,15 @@ private fun AssistantReply(
                 if (actionable) {
                     // Pointer-sized, as the icons beside it are.
                     CopyButton(text, Modifier.size(32.dp))
-                    onRegenerate?.let { ReplyAction(Lucide.RefreshCw, "Regenerate", it, Modifier) }
-                    onBranch?.let { ReplyAction(Lucide.GitBranch, "Branch from here", it, Modifier) }
+                    onRegenerate?.let { ReplyAction(Lucide.RefreshCw, Strings.t("Regenerate"), it, Modifier) }
+                    onBranch?.let { ReplyAction(Lucide.GitBranch, Strings.t("Branch from here"), it, Modifier) }
                 }
                 usage?.let {
                     Text(
                         replyUsage(it.input, it.output),
                         style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
                         color = Theme[colors][textMuted],
-                        modifier = Modifier.padding(start = 8.dp).semantics { contentDescription = "${compactCount(it.input)} tokens in, ${compactCount(it.output)} out" },
+                        modifier = Modifier.padding(start = 8.dp).semantics { contentDescription = Strings.t("{0} tokens in, {1} out", compactCount(it.input), compactCount(it.output)) },
                     )
                 }
             }
@@ -2825,7 +2834,7 @@ private fun AssistantReply(
                         replyUsage(it.input, it.output),
                         style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
                         color = Theme[colors][textMuted],
-                        modifier = Modifier.semantics { contentDescription = "${compactCount(it.input)} tokens in, ${compactCount(it.output)} out" },
+                        modifier = Modifier.semantics { contentDescription = Strings.t("{0} tokens in, {1} out", compactCount(it.input), compactCount(it.output)) },
                     )
                 }
                 Spacer(Modifier.weight(1f))
@@ -2833,11 +2842,11 @@ private fun AssistantReply(
                     // On the end, under the thumb of the hand holding the phone; Copy, the one used most, sits last.
                     // Copy's padding trimmed off the end lines its icon up with the reply's edge; all of them lose 4dp on top to sit close under it.
                     val action = Modifier.trimEndTop(end = 0.dp, top = 4.dp)
-                    onBranch?.let { ReplyAction(Lucide.GitBranch, "Branch from here", it, action) }
-                    onRegenerate?.let { ReplyAction(Lucide.RefreshCw, "Regenerate", it, action) }
+                    onBranch?.let { ReplyAction(Lucide.GitBranch, Strings.t("Branch from here"), it, action) }
+                    onRegenerate?.let { ReplyAction(Lucide.RefreshCw, Strings.t("Regenerate"), it, action) }
                     when {
-                        reading -> ReplyAction(Lucide.Square, "Stop reading", onStopReading, action)
-                        speakable && onReadAloud != null -> ReplyAction(Lucide.Volume2, "Read aloud", { onReadAloud(text) }, action)
+                        reading -> ReplyAction(Lucide.Square, Strings.t("Stop reading"), onStopReading, action)
+                        speakable && onReadAloud != null -> ReplyAction(Lucide.Volume2, Strings.t("Read aloud"), { onReadAloud(text) }, action)
                     }
                     CopyButton(text, Modifier.trimEndTop(end = 16.dp, top = 4.dp).size(MinTouchTarget))
                 }
@@ -2905,7 +2914,7 @@ private fun UnreadDivider(modifier: Modifier = Modifier) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.weight(1f).height(1.dp).background(line))
-        Text("New messages", style = Theme[typography][caption], color = Theme[colors][accentText])
+        Text(Strings.t("New messages"), style = Theme[typography][caption], color = Theme[colors][accentText])
         Box(Modifier.weight(1f).height(1.dp).background(line))
     }
 }
@@ -3023,7 +3032,7 @@ private fun CommandOutput(message: ChatMessage.Command) {
         }
         if (message.output.isNotEmpty()) {
             val source = remember(message.key, message.command) {
-                CommentSource(message.key, "the output of `${message.command}`", code = true)
+                CommentSource(message.key, Strings.t("the output of `{0}`", message.command), code = true)
             }
             CommentableSelection(source.takeUnless { message.running }) {
                 Text(
@@ -3154,12 +3163,12 @@ internal fun SuggestedReplyChip(text: String, hazeState: HazeState?, onUse: () -
                 .weight(1f)
                 .heightIn(min = MinTouchTarget)
                 .handCursor()
-                .clickable(role = Role.Button, onClickLabel = "Put in the composer", onClick = onUse)
+                .clickable(role = Role.Button, onClickLabel = Strings.t("Put in the composer"), onClick = onUse)
                 .padding(start = 14.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            UnstyledIcon(Lucide.Lightbulb, contentDescription = "Suggested reply", tint = Theme[colors][accentText], modifier = Modifier.size(16.dp))
+            UnstyledIcon(Lucide.Lightbulb, contentDescription = Strings.t("Suggested reply"), tint = Theme[colors][accentText], modifier = Modifier.size(16.dp))
             Text(
                 text,
                 style = Theme[typography][label],
@@ -3168,7 +3177,7 @@ internal fun SuggestedReplyChip(text: String, hazeState: HazeState?, onUse: () -
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        IconButton(Lucide.X, contentDescription = "Dismiss the suggestion", onClick = onDismiss)
+        IconButton(Lucide.X, contentDescription = Strings.t("Dismiss the suggestion"), onClick = onDismiss)
     }
 }
 
@@ -3200,7 +3209,7 @@ internal fun refChoices(mention: MentionQuery?, ref: PathRefQuery?, entries: Lis
     return PathRefKind.entries
         .filter { it.prefix.removePrefix("@").startsWith(mention.query, ignoreCase = true) }
         .map { kind ->
-            val label = if (kind == PathRefKind.File) "A file" else "A folder"
+            val label = if (kind == PathRefKind.File) Strings.t("A file") else Strings.t("A folder")
             RefChoice(label, kind.prefix.removePrefix("@"), if (kind == PathRefKind.File) Lucide.File else Lucide.Folder, mention.start, mention.end, kind.prefix)
         }
 }
@@ -3267,7 +3276,7 @@ internal fun MentionSuggestions(
                     .clickable(
                         interactionSource = null,
                         indication = if (onMark != null) null else LocalIndication.current,
-                        onClickLabel = "Mention ${choice.label}",
+                        onClickLabel = Strings.t("Mention {0}", choice.label),
                     ) { onPick(choice) }
                     .padding(horizontal = 14.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -3306,7 +3315,7 @@ internal fun Disclosure(
             Text(label, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
             UnstyledIcon(
                 if (expanded) Lucide.ChevronDown else Lucide.ChevronRight,
-                contentDescription = if (expanded) "Collapse" else "Expand",
+                contentDescription = if (expanded) Strings.t("Collapse") else Strings.t("Expand"),
                 tint = Theme[colors][textTertiary],
                 modifier = Modifier.size(14.dp),
             )
@@ -3329,7 +3338,7 @@ private fun Reasoning(text: String, streaming: Boolean) {
     var expanded by remember { mutableStateOf(false) }
     Disclosure(
         icon = { UnstyledIcon(Lucide.Brain, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp)) },
-        label = "Reasoning",
+        label = Strings.t("Reasoning"),
         expanded = expanded,
         onToggle = { expanded = !expanded },
     ) {
@@ -3359,7 +3368,7 @@ private fun Tools(tools: List<ToolActivity>, messageKey: String) {
                 .clickable(interaction, indication = null) { expanded = !expanded }
                 .semantics {
                     contentDescription = listOfNotNull(ran, took).joinToString(", ")
-                    stateDescription = if (expanded) "Expanded" else "Collapsed"
+                    stateDescription = if (expanded) Strings.t("Expanded") else Strings.t("Collapsed")
                 },
             contentAlignment = Alignment.CenterStart,
         ) {
@@ -3415,7 +3424,7 @@ private fun LiveSteps(tools: List<ToolActivity>, messageKey: String) {
         if (done.size > shown.size) {
             val earlier = done.size - shown.size
             Text(
-                if (earlier == 1) "1 earlier step" else "$earlier earlier steps",
+                if (earlier == 1) Strings.t("1 earlier step") else Strings.t("{0} earlier steps", earlier),
                 style = Theme[typography][caption],
                 color = Theme[colors][textMuted],
                 modifier = Modifier.padding(start = 30.dp, bottom = 4.dp),
@@ -3436,7 +3445,7 @@ private fun LiveStepRow(tool: ToolActivity, messageKey: String) {
             .heightIn(min = 36.dp)
             .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
             .handCursor()
-            .clickable(onClickLabel = if (open) "Hide details" else "Show details") { open = !open },
+            .clickable(onClickLabel = if (open) Strings.t("Hide details") else Strings.t("Show details")) { open = !open },
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -3446,7 +3455,7 @@ private fun LiveStepRow(tool: ToolActivity, messageKey: String) {
         ) {
             UnstyledIcon(
                 if (tool.failed) Lucide.X else Lucide.Check,
-                contentDescription = if (tool.failed) "Failed" else null,
+                contentDescription = if (tool.failed) Strings.t("Failed") else null,
                 tint = Theme[colors][if (tool.failed) danger else success],
                 modifier = Modifier.size(11.dp),
             )
@@ -3469,7 +3478,7 @@ private fun LiveStepRow(tool: ToolActivity, messageKey: String) {
         }
         // A scan flagged its output: said on the row, so it's seen while Stop is still worth pressing.
         if (tool.risk != null) {
-            UnstyledIcon(Lucide.ShieldAlert, contentDescription = "Suspicious output", tint = Theme[colors][warning], modifier = Modifier.size(14.dp))
+            UnstyledIcon(Lucide.ShieldAlert, contentDescription = Strings.t("Suspicious output"), tint = Theme[colors][warning], modifier = Modifier.size(14.dp))
         }
         tool.durationSeconds?.let { Text(formatDuration(it), style = Theme[typography][caption], color = Theme[colors][textMuted]) }
     }
@@ -3508,7 +3517,7 @@ private fun ToolKindIcon(icon: ImageVector) {
  */
 internal fun workedLabel(tools: List<ToolActivity>): Pair<String, String?> {
     val timed = tools.mapNotNull { it.durationSeconds }
-    val ran = if (tools.size == 1) "Ran 1 tool" else "Ran ${tools.size} tools"
+    val ran = if (tools.size == 1) Strings.t("Ran 1 tool") else Strings.t("Ran {0} tools", tools.size)
     return ran to timed.takeIf { it.isNotEmpty() }?.let { formatDuration(it.sum()) }
 }
 
@@ -3549,13 +3558,18 @@ internal data class LiveStep(val title: String, val detail: String? = null, val 
     /** "1 of 3 done", while subagents work; "finished" once any of those ended without succeeding. */
     val teamProgress: String? get() = team.takeIf { it.isNotEmpty() }?.let { all ->
         val ended = all.filterNot { it.live }
-        "${ended.size} of ${all.size} ${if (ended.all { it == SubagentStatus.Done }) "done" else "finished"}"
+        Strings.t(
+            "{0} of {1} {2}",
+            ended.size,
+            all.size,
+            if (ended.all { it == SubagentStatus.Done }) Strings.t("done") else Strings.t("finished"),
+        )
     }
 }
 
 /** [currentAction] in its two parts, for the live task card. */
 internal fun currentStep(state: ChatState): LiveStep {
-    if (state.inputRequests.isNotEmpty()) return LiveStep("Waiting for your answer")
+    if (state.inputRequests.isNotEmpty()) return LiveStep(Strings.t("Waiting for your answer"))
     state.runningTool()?.let { tool ->
         if (tool.name == "delegate_task") {
             // The same rows the delegation's cards show, tasks not started yet included.
@@ -3567,9 +3581,9 @@ internal fun currentStep(state: ChatState): LiveStep {
     state.livePlan()?.items?.firstOrNull { it.status == TodoStatus.InProgress }?.let { return LiveStep(it.content) }
     state.status?.takeIf { it.isNotBlank() }?.let { status ->
         // A turn woken by another bot's reply arriving says so, not the runner's command line.
-        return LiveStep(if (BOT_DELIVERY_STATUS.containsMatchIn(status)) "Reading another bot's reply" else status)
+        return LiveStep(if (BOT_DELIVERY_STATUS.containsMatchIn(status)) Strings.t("Reading another bot's reply") else status)
     }
-    return LiveStep(state.thinkingFrame ?: "Thinking…")
+    return LiveStep(state.thinkingFrame ?: Strings.t("Thinking…"))
 }
 
 /** What the tool is working on, in one line: its description, else what it was given when that's plain (a command, a query) rather than JSON. */
@@ -3590,21 +3604,23 @@ internal fun runningTurnKey(state: ChatState): String? =
 /** A finished step in a running reply, said in the past: "Ran" and the command, "Read" and the file. */
 internal fun toolDone(tool: ToolActivity): LiveStep {
     val verb = when (tool.name) {
-        "terminal", "shell", "bash", "execute_code" -> "Ran"
-        "read_file", "file_read", "web_extract", "browser", "fetch" -> "Read"
-        "write_file", "patch", "edit_file" -> "Edited"
-        "web_search", "search", "search_files", "session_search" -> "Searched"
-        "delegate_task" -> "Delegated"
-        MESSAGE_AGENT_TOOL -> "Messaged"
-        else -> return LiveStep("Used ${tool.name.replace('_', ' ')}", tool.firstDetailLine())
+        "terminal", "shell", "bash", "execute_code" -> Strings.t("Ran")
+        "read_file", "file_read", "web_extract", "browser", "fetch" -> Strings.t("Read")
+        "write_file", "patch", "edit_file" -> Strings.t("Edited")
+        "web_search", "search", "search_files", "session_search" -> Strings.t("Searched")
+        "delegate_task" -> Strings.t("Delegated")
+        MESSAGE_AGENT_TOOL -> Strings.t("Messaged")
+        else -> return LiveStep(Strings.t("Used {0}", tool.name.replace('_', ' ')), tool.firstDetailLine())
     }
-    return tool.firstDetailLine()?.let { LiveStep(verb, it) } ?: LiveStep("$verb with ${tool.name.replace('_', ' ')}")
+    return tool.firstDetailLine()?.let { LiveStep(verb, it) } ?: LiveStep(Strings.t("{0} with {1}", verb, tool.name.replace('_', ' ')))
 }
 
 /** The status of a turn started by a bot-to-bot delivery finishing (tools/bot_mode_dm.py's runner). */
 private val BOT_DELIVERY_STATUS = Regex("""Background Process Finished:.*(?:bot_mode_dm\.py|--run-delivery)""", RegexOption.IGNORE_CASE)
 
-private fun String.toolVerb(): String = toolInProgress(this)
+private fun String.toolVerb(): String = toolInProgress(this).let { label ->
+    if (label.startsWith("Using ")) Strings.t("Using {0}", label.removePrefix("Using ")) else Strings.t(label)
+}
 
 /** A passing message, like where a file was saved. */
 @Composable
@@ -3651,7 +3667,7 @@ private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit, 
             if (actionLabel != null) {
                 Button(actionLabel, onClick = onAction, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             } else {
-                IconButton(Lucide.X, contentDescription = "Dismiss", onClick = onAction)
+                IconButton(Lucide.X, contentDescription = Strings.t("Dismiss"), onClick = onAction)
             }
         }
     }
@@ -3796,10 +3812,10 @@ private fun Composer(
                         placeholder = {
                             Text(
                                 when {
-                                    !connected -> "Reconnecting to Hermes…"
-                                    comments.isNotEmpty() -> "Anything else? (optional)"
+                                    !connected -> Strings.t("Reconnecting to Hermes…")
+                                    comments.isNotEmpty() -> Strings.t("Anything else? (optional)")
                                     // Mid-task a message joins the running task, by Queue or Steer.
-                                    state.running -> "Add to this task…"
+                                    state.running -> Strings.t("Add to this task…")
                                     else -> placeholder
                                 },
                                 style = Theme[typography][body],
@@ -3814,7 +3830,7 @@ private fun Composer(
                     // Mid-turn, say what Send will do with the message.
                     if (state.running && editing) {
                         Text(
-                            "Send the edit once this reply finishes.",
+                            Strings.t("Send the edit once this reply finishes."),
                             style = Theme[typography][caption],
                             color = Theme[colors][textTertiary],
                             modifier = Modifier.padding(start = 12.dp, top = 10.dp),
@@ -3859,8 +3875,8 @@ private fun Composer(
             {
                 FoldedComposer(
                     placeholder = when {
-                        !connected -> "Reconnecting to Hermes…"
-                        state.running -> "Add to this task…"
+                        !connected -> Strings.t("Reconnecting to Hermes…")
+                        state.running -> Strings.t("Add to this task…")
                         else -> placeholder
                     },
                     state = state,
@@ -3960,7 +3976,7 @@ private fun FoldedComposer(
         AttachButton(onClick = onAttach, enabled = canAttach)
         UnstyledButton(
             onClick = onOpen,
-            modifier = Modifier.weight(1f).heightIn(min = MinTouchTarget).handCursor().semantics { contentDescription = "Write a message" },
+            modifier = Modifier.weight(1f).heightIn(min = MinTouchTarget).handCursor().semantics { contentDescription = Strings.t("Write a message") },
             indication = null,
         ) {
             Box(Modifier.fillMaxWidth().padding(horizontal = 4.dp), contentAlignment = Alignment.CenterStart) {
@@ -3987,7 +4003,7 @@ private fun showMic(dictation: DictationState): Boolean = hasVoice && LocalAppSe
 @Composable
 private fun CommandHint() {
     Text(
-        "Commands run right away.",
+        Strings.t("Commands run right away."),
         style = Theme[typography][caption],
         color = Theme[colors][textTertiary],
         modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 10.dp),
@@ -4016,7 +4032,7 @@ private fun RunningSendSegments(mode: RunningSend, attachments: Boolean, enabled
         above = true,
         items = {
             others.forEach { choice ->
-                MenuAction(choice.label, choice.icon, onClick = {
+                MenuAction(Strings.t(choice.label), choice.icon, onClick = {
                     menuOpen = false
                     onSend(choice)
                 })
@@ -4057,19 +4073,19 @@ private fun RunningSendSegments(mode: RunningSend, attachments: Boolean, enabled
                                     menuOpen = true
                                 }
                             },
-                            onClickLabel = "Send",
-                            onLongClickLabel = "Other ways to send",
+                            onClickLabel = Strings.t("Send"),
+                            onLongClickLabel = Strings.t("Other ways to send"),
                             interactionSource = interaction,
                             indication = null,
                         )
                         // A mouse finds the other ways with a right-click, as it can't feel a long press.
                         .then(if (isDesktop && others.isNotEmpty()) Modifier.onSecondaryPress { menuOpen = true } else Modifier)
                         .semantics {
-                            contentDescription = "${way.label}: ${way.summary}"
+                            contentDescription = Strings.t("{0}: {1}", Strings.t(way.label), Strings.t(way.summary))
                             role = Role.Button
                             // The filled half is the setting's way; a steer can't carry files.
                             selected = on
-                            if (enabled && !usable) stateDescription = "Can't carry files"
+                            if (enabled && !usable) stateDescription = Strings.t("Can't carry files")
                         },
                     contentAlignment = Alignment.Center,
                 ) {
@@ -4087,7 +4103,7 @@ private fun RunningSendSegments(mode: RunningSend, attachments: Boolean, enabled
                     ) {
                         UnstyledIcon(way.icon, contentDescription = null, tint = tint, modifier = Modifier.size(13.dp))
                         Text(
-                            way.label,
+                            Strings.t(way.label),
                             style = Theme[typography][label].copy(fontWeight = if (on) FontWeight.SemiBold else FontWeight.Medium),
                             color = tint,
                             maxLines = 1,
@@ -4105,12 +4121,12 @@ internal val DockShadow =Shadow(radius = 24.dp, color = Color.Black.copy(alpha =
 /** The composer's +. */
 @Composable
 private fun AttachButton(onClick: () -> Unit, enabled: Boolean) =
-    DiscButton(Lucide.Plus, contentDescription = "Add photos or files", onClick = onClick, enabled = enabled, iconSize = 20.dp)
+    DiscButton(Lucide.Plus, contentDescription = Strings.t("Add photos or files"), onClick = onClick, enabled = enabled, iconSize = 20.dp)
 
 /** Voice chat, on a disc like + and Send so the row reads as three round buttons and the mic. */
 @Composable
 private fun VoiceChatButton(onClick: () -> Unit, enabled: Boolean) =
-    DiscButton(Lucide.AudioLines, contentDescription = "Start a voice chat", onClick = onClick, enabled = enabled, iconSize = 19.dp)
+    DiscButton(Lucide.AudioLines, contentDescription = Strings.t("Start a voice chat"), onClick = onClick, enabled = enabled, iconSize = 19.dp)
 
 /** A composer button drawn as a 36dp disc, with the full touch target around it. */
 @Composable
@@ -4193,8 +4209,8 @@ internal fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
     // With its key on the desktop, where Enter sends and Esc stops.
     Tooltip(
         when (icon) {
-            SendIcon.Send -> "Send (Enter)"
-            SendIcon.Stop -> "Stop the task (Esc)"
+            SendIcon.Send -> Strings.t("Send (Enter)")
+            SendIcon.Stop -> Strings.t("Stop the task (Esc)")
         },
     ) {
     Box(
@@ -4211,8 +4227,8 @@ internal fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
                     SendIcon.Stop -> Lucide.Square
                 },
                 contentDescription = when (icon) {
-                    SendIcon.Send -> "Send"
-                    SendIcon.Stop -> "Stop the task"
+                    SendIcon.Send -> Strings.t("Send")
+                    SendIcon.Stop -> Strings.t("Stop the task")
                 },
                 tint = tint,
                 modifier = Modifier.size(if (icon == SendIcon.Stop) 15.dp else 19.dp),
@@ -4264,12 +4280,12 @@ internal fun DictationButton(state: DictationState, onClick: () -> Unit, enabled
         onClick = onClick,
         enabled = enabled,
         tint = tint,
-        label = if (recording) "Finish dictating" else "Dictate",
+        label = if (recording) Strings.t("Finish dictating") else Strings.t("Dictate"),
         disc = if (recording) Modifier.border(2.dp, tint.copy(alpha = 0.25f + 0.75f * state.level), CircleShape) else Modifier,
     ) {
         UnstyledIcon(
             if (recording) Lucide.Square else Lucide.Mic,
-            contentDescription = if (recording) "Finish dictating" else "Dictate",
+            contentDescription = if (recording) Strings.t("Finish dictating") else Strings.t("Dictate"),
             tint = tint,
             modifier = Modifier.size(if (recording) 15.dp else 19.dp),
         )
@@ -4299,14 +4315,17 @@ private fun ModelPill(
     // Gone (no model, a question in the composer's place), the picker opens centred rather than over where it was.
     if (bounds != null) DisposableEffect(bounds) { onDispose { bounds.value = null } }
     // Drawn 36dp tall; the full touch height around it takes the tap.
-    Tooltip("Change model (${keysLabel("Ctrl+Shift+M")})", modifier) { Box(
+    Tooltip(Strings.t("Change model ({0})", keysLabel("Ctrl+Shift+M")), modifier) { Box(
         Modifier
             .then(if (bounds != null) Modifier.onGloballyPositioned { bounds.value = it.boundsInWindow() } else Modifier)
             .heightIn(min = MinTouchTarget)
             .handCursor()
             .clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
             .semantics {
-                contentDescription = listOfNotNull(name, effort?.label, "fast mode".takeIf { fast }).joinToString(", ") + ". Change model"
+                contentDescription = Strings.t(
+                    "{0}. Change model",
+                    listOfNotNull(name, effort?.label, Strings.t("fast mode").takeIf { fast }).joinToString(", "),
+                )
             },
         contentAlignment = Alignment.CenterStart,
     ) {

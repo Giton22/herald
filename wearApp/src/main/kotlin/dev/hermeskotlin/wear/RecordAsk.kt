@@ -3,9 +3,10 @@ package dev.hermeskotlin.wear
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
+import dev.hermeskotlin.ui.i18n.Strings
 
-internal const val PROFILE_CHANGED = "Phone profile changed. Please try again."
-internal const val NOTHING_HEARD = "I didn't hear anything."
+internal val PROFILE_CHANGED: String get() = Strings.t("Phone profile changed. Please try again.")
+internal val NOTHING_HEARD: String get() = Strings.t("I didn't hear anything.")
 
 /**
  * One recorded ask, as the talk screen and the assistant session both make it: [listening] shows the recording
@@ -27,7 +28,7 @@ internal suspend fun recordAsk(
         // Left the screen: nothing to tell.
         throw e
     } catch (e: Exception) {
-        listening.value = Listening(error = e.message ?: "Couldn't use the microphone.")
+        listening.value = Listening(error = e.message ?: Strings.t("Couldn't use the microphone."))
         return
     } finally {
         if (listening.value.recording) listening.value = Listening()

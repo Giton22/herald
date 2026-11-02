@@ -108,6 +108,7 @@ import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.delay
 
 /**
@@ -155,7 +156,7 @@ private fun Panel(todos: TodoList, live: Boolean, hazeState: HazeState) {
         ) {
             UnstyledIcon(Lucide.ListChecks, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(16.dp))
             Text(
-                "${if (live) "Tasks" else "Last plan"} ${todos.done}/${todos.total}",
+                if (live) Strings.t("Tasks {0}/{1}", todos.done, todos.total) else Strings.t("Last plan {0}/{1}", todos.done, todos.total),
                 style = Theme[typography][label],
                 color = if (live) Theme[colors][text] else Theme[colors][textSecondary],
             )
@@ -173,7 +174,7 @@ private fun Panel(todos: TodoList, live: Boolean, hazeState: HazeState) {
             }
             UnstyledIcon(
                 if (expanded) Lucide.ChevronDown else Lucide.ChevronUp,
-                contentDescription = if (expanded) "Fold the tasks" else "Show the tasks",
+                contentDescription = if (expanded) Strings.t("Fold the tasks") else Strings.t("Show the tasks"),
                 tint = Theme[colors][textTertiary],
                 modifier = Modifier.size(16.dp),
             )
@@ -218,8 +219,8 @@ internal fun ProgressPanel(
                 if (hasDetails) {
                     Modifier
                         .handCursor()
-                        .clickable(onClickLabel = if (expanded) "Hide details" else "Show details") { expanded = !expanded }
-                        .semantics { stateDescription = if (expanded) "Details shown" else "Details hidden" }
+                        .clickable(onClickLabel = if (expanded) Strings.t("Hide details") else Strings.t("Show details")) { expanded = !expanded }
+                        .semantics { stateDescription = if (expanded) Strings.t("Details shown") else Strings.t("Details hidden") }
                 } else {
                     Modifier
                 },
@@ -232,10 +233,10 @@ internal fun ProgressPanel(
                 Modifier.heightIn(max = 240.dp).verticalScrollWithBar().padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                statusDetail?.let { DetailLine("Status", it) }
-                toolDetail?.let { DetailLine("Tool", it) }
+                statusDetail?.let { DetailLine(Strings.t("Status"), it) }
+                toolDetail?.let { DetailLine(Strings.t("Tool"), it) }
                 plan?.let { list ->
-                    Text("Tasks ${list.done}/${list.total}", style = Theme[typography][label], color = Theme[colors][textSecondary])
+                    Text(Strings.t("Tasks {0}/{1}", list.done, list.total), style = Theme[typography][label], color = Theme[colors][textSecondary])
                     list.tree().forEach { (item, depth) -> TodoRow(item, depth, live = true) }
                 }
             }
@@ -379,7 +380,7 @@ private fun CardHeader(step: LiveStep, turnKey: String?, plan: TodoList?, hasDet
             PlanBar(plan.done.toFloat() / plan.total.coerceAtLeast(1), Modifier.weight(1f))
             val inHand = planStep(plan)
             Text(
-                if (inHand != null) "Step $inHand of ${plan.total}" else "${plan.done} of ${plan.total} done",
+                if (inHand != null) Strings.t("Step {0} of {1}", inHand, plan.total) else Strings.t("{0} of {1} done", plan.done, plan.total),
                 style = Theme[typography][caption],
                 color = Theme[colors][textTertiary],
             )
@@ -431,7 +432,7 @@ internal fun runningTime(seconds: Long): String {
 
 /** Stops the task: a small round button, with the full touch size around it. */
 @Composable
-private fun StopButton(onStop: () -> Unit, enabled: Boolean) = Tooltip("Stop the task") {
+private fun StopButton(onStop: () -> Unit, enabled: Boolean) = Tooltip(Strings.t("Stop the task")) {
     UnstyledButton(
         onClick = onStop,
         enabled = enabled,
@@ -439,7 +440,7 @@ private fun StopButton(onStop: () -> Unit, enabled: Boolean) = Tooltip("Stop the
         indication = rememberHoverIndication(Theme[colors][text]),
     ) {
         Box(Modifier.size(34.dp).background(Theme[colors][surface3], CircleShape), contentAlignment = Alignment.Center) {
-            UnstyledIcon(Lucide.Square, contentDescription = "Stop the task", tint = Theme[colors][text], modifier = Modifier.size(12.dp))
+            UnstyledIcon(Lucide.Square, contentDescription = Strings.t("Stop the task"), tint = Theme[colors][text], modifier = Modifier.size(12.dp))
         }
     }
 }

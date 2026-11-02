@@ -115,6 +115,7 @@ import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.ListSkeleton
 import dev.hermeskotlin.ui.components.relativeTime
 import dev.hermeskotlin.ui.components.timeUntil
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
 
@@ -217,11 +218,11 @@ internal fun ScheduledPage(
     Dialog(
         visible = leaving != null,
         onDismissRequest = { leaving = null },
-        title = "Discard changes?",
-        message = "What you changed in this ${if (owner != null) "routine" else "job"} isn't saved yet.",
+        title = Strings.t("Discard changes?"),
+        message = Strings.t("What you changed in this {0} isn't saved yet.", Strings.t(if (owner != null) "routine" else "job")),
         actions = {
-            Button("Keep editing", onClick = { leaving = null }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Discard", onClick = {
+            Button(Strings.t("Keep editing"), onClick = { leaving = null }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Discard"), onClick = {
                 val then = leaving
                 leaving = null
                 viewModel.closeEditor()
@@ -262,7 +263,7 @@ internal fun ScheduledView(
 ) {
     val job = state.openJob
     val routines = owner != null
-    val noun = if (routines) "routine" else "job"
+    val noun = if (routines) Strings.t("routine") else Strings.t("job")
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // A desktop page wide enough for both lists the jobs on the left and the open one on the right, as a
         // desktop mail or task app does, so a job is a click away from the next one without a trip back. With no
@@ -281,7 +282,7 @@ internal fun ScheduledView(
                         if (editorPane != null) {
                             editorPane()
                         } else if (job == null) {
-                            EmptyState(Lucide.CalendarClock, "Pick a $noun", "Its prompt, where it reports and its runs show here.")
+                            EmptyState(Lucide.CalendarClock, Strings.t("Pick a {0}", noun), Strings.t("Its prompt, where it reports and its runs show here."))
                         } else {
                             Column(Modifier.fillMaxSize()) {
                                 // The pane's own head: the job, how it stands, and Edit and Delete beside it.
@@ -334,11 +335,11 @@ internal fun ScheduledView(
     Dialog(
         visible = state.confirmingDelete,
         onDismissRequest = actions::cancelDelete,
-        title = if (routines) "Delete routine?" else "Delete job?",
-        message = "“${job?.displayName.orEmpty()}” stops running. The chats from its past runs stay.",
+        title = if (routines) Strings.t("Delete routine?") else Strings.t("Delete job?"),
+        message = Strings.t("“{0}” stops running. The chats from its past runs stay.", job?.displayName.orEmpty()),
         actions = {
-            Button("Cancel", onClick = actions::cancelDelete, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Delete", onClick = actions::deleteJob, variant = ButtonVariant.Danger, size = ButtonSize.Small)
+            Button(Strings.t("Cancel"), onClick = actions::cancelDelete, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Delete"), onClick = actions::deleteJob, variant = ButtonVariant.Danger, size = ButtonSize.Small)
         },
     )
 }
@@ -353,16 +354,25 @@ private val SPLIT_LIST_WIDTH = 320.dp
 private fun JobsHeader(state: ScheduledUiState, actions: ScheduledActions, owner: RoutineOwner?, onBack: () -> Unit, leaveEditor: (() -> Unit) -> Unit) {
     val count = state.jobs.size
     SubpageHeader(
-        owner?.let { "${it.label}'s routines" } ?: "Scheduled",
+        owner?.let { Strings.t("{0}'s routines", it.label) } ?: Strings.t("Scheduled"),
         onBack = onBack,
         subtitle = when {
             state.loading || state.error != null || count == 0 -> null
-            owner != null -> "$count ${if (count == 1) "routine" else "routines"} · each runs as ${owner.label}"
-            else -> "$count ${if (count == 1) "job" else "jobs"} · each run opens as a chat"
+            owner != null -> Strings.t(
+                "{0} {1} · each runs as {2}",
+                count,
+                if (count == 1) Strings.t("routine") else Strings.t("routines"),
+                owner.label,
+            )
+            else -> Strings.t(
+                "{0} {1} · each run opens as a chat",
+                count,
+                if (count == 1) Strings.t("job") else Strings.t("jobs"),
+            )
         },
     ) {
         Button(
-            if (owner != null) "New routine" else "New job",
+            if (owner != null) Strings.t("New routine") else Strings.t("New job"),
             onClick = { leaveEditor(actions::newJob) },
             size = ButtonSize.Small,
             leadingIcon = Lucide.Plus,
@@ -373,8 +383,8 @@ private fun JobsHeader(state: ScheduledUiState, actions: ScheduledActions, owner
 
 @Composable
 private fun JobActions(noun: String, busy: Boolean, actions: ScheduledActions) {
-    IconButton(Lucide.Pencil, contentDescription = "Edit $noun", onClick = actions::editJob, enabled = !busy, tint = Theme[colors][textSecondary])
-    IconButton(Lucide.Trash2, contentDescription = "Delete $noun", onClick = actions::askDelete, enabled = !busy, tint = Theme[colors][textSecondary])
+    IconButton(Lucide.Pencil, contentDescription = Strings.t("Edit {0}", noun), onClick = actions::editJob, enabled = !busy, tint = Theme[colors][textSecondary])
+    IconButton(Lucide.Trash2, contentDescription = Strings.t("Delete {0}", noun), onClick = actions::askDelete, enabled = !busy, tint = Theme[colors][textSecondary])
 }
 
 /** The jobs, or why there are none; [openId] marks the one open beside the list on the desktop. */
@@ -391,21 +401,24 @@ private fun JobsList(
     val routines = owner != null
     when {
         state.loading -> ListSkeleton()
-        state.error != null -> EmptyState(Lucide.CloudOff, if (routines) "Couldn't load routines" else "Couldn't load scheduled jobs", state.error, error = true) {
-            Button("Try again", onClick = actions::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+        state.error != null -> EmptyState(Lucide.CloudOff, if (routines) Strings.t("Couldn't load routines") else Strings.t("Couldn't load scheduled jobs"), state.error, error = true) {
+            Button(Strings.t("Try again"), onClick = actions::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
         }
         state.jobs.isEmpty() && owner != null ->
             EmptyState(
                 Lucide.CalendarClock,
-                "No routines yet",
-                "Have ${owner.label} do something on a schedule, like a morning briefing. It runs as ${owner.label}, " +
-                    "with its own memory and skills, and can report to its chat.",
+                Strings.t("No routines yet"),
+                Strings.t(
+                    "Have {0} do something on a schedule, like a morning briefing. It runs as {1}, with its own memory and skills, and can report to its chat.",
+                    owner.label,
+                    owner.label,
+                ),
             ) {
-                Button("New routine", onClick = actions::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
+                Button(Strings.t("New routine"), onClick = actions::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
             }
         state.jobs.isEmpty() ->
-            EmptyState(Lucide.CalendarClock, "No scheduled jobs", "Have the agent do something on a schedule, like a morning briefing. Each run opens as a chat here.") {
-                Button("New job", onClick = actions::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
+            EmptyState(Lucide.CalendarClock, Strings.t("No scheduled jobs"), Strings.t("Have the agent do something on a schedule, like a morning briefing. Each run opens as a chat here.")) {
+                Button(Strings.t("New job"), onClick = actions::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
             }
         else -> {
             val list = rememberLazyListState()
@@ -430,14 +443,14 @@ private fun JobsList(
                         val open = { openThen {} }
                         // While a change is on its way, only Open, as the job page's own buttons wait too.
                         JobRow(item, selected = item.id == openId, onClick = open, menu = {
-                            val opening = listOf(RowMenuItem("Open", Lucide.CalendarClock, run = open))
+                            val opening = listOf(RowMenuItem(Strings.t("Open"), Lucide.CalendarClock, run = open))
                             if (state.busy) opening else opening + listOf(
-                                RowMenuItem("Run now", Lucide.Zap) { openThen(actions::runNow) },
-                                RowMenuItem(if (item.paused) "Resume" else "Pause", if (item.paused) Lucide.Play else Lucide.Pause) {
+                                RowMenuItem(Strings.t("Run now"), Lucide.Zap) { openThen(actions::runNow) },
+                                RowMenuItem(if (item.paused) Strings.t("Resume") else Strings.t("Pause"), if (item.paused) Lucide.Play else Lucide.Pause) {
                                     openThen(actions::togglePaused)
                                 },
-                                RowMenuItem("Edit", Lucide.Pencil) { openThen(actions::editJob) },
-                                RowMenuItem("Delete", Lucide.Trash2, destructive = true) { openThen(actions::askDelete) },
+                                RowMenuItem(Strings.t("Edit"), Lucide.Pencil) { openThen(actions::editJob) },
+                                RowMenuItem(Strings.t("Delete"), Lucide.Trash2, destructive = true) { openThen(actions::askDelete) },
                             )
                         })
                     }
@@ -475,21 +488,21 @@ private fun JobDetail(
             }
             item(key = "runs-header") {
                 Text(
-                    "RUNS",
+                    Strings.t("RUNS"),
                     style = Theme[typography][eyebrow],
                     color = Theme[colors][textTertiary],
                     modifier = Modifier.padding(start = 6.dp, top = 20.dp, bottom = 6.dp).semantics {
                         heading()
-                        contentDescription = "Runs"
+                        contentDescription = Strings.t("Runs")
                     },
                 )
             }
             when {
                 state.runsLoading -> item(key = "runs-loading") { ListSpinner() }
                 state.runsError != null -> item(key = "runs-error") {
-                    ListNotice("Couldn't load runs. ${state.runsError}", action = "Try again", onAction = actions::refresh)
+                    ListNotice(Strings.t("Couldn't load runs. {0}", state.runsError), action = Strings.t("Try again"), onAction = actions::refresh)
                 }
-                state.runs.isEmpty() -> item(key = "runs-empty") { ListNotice("No runs yet. Each run opens as a chat here.") }
+                state.runs.isEmpty() -> item(key = "runs-empty") { ListNotice(Strings.t("No runs yet. Each run opens as a chat here.")) }
                 else -> items(state.runs, key = { it.id }) { run ->
                     RunRow(run, selected = run.id == selectedId, onOpen = { onOpenRun(run) }, onPopOut = onPopOutRun?.let { { it(run) } })
                 }
@@ -554,15 +567,15 @@ private fun JobRow(job: CronJob, selected: Boolean = false, onClick: () -> Unit,
 
 /** "21h" over "next run", "failed" or "missed" over "last run", or "paused" (over "last run failed" when it did). */
 private fun CronJob.nextColumn(): Pair<String?, String?> = when {
-    paused -> "paused" to ("last run failed".takeIf { problem != null })
-    state == "completed" -> "done" to ("last run failed".takeIf { problem != null })
+    paused -> Strings.t("paused") to (Strings.t("last run failed").takeIf { problem != null })
+    state == "completed" -> Strings.t("done") to (Strings.t("last run failed").takeIf { problem != null })
     // The runner never got the fire, so nothing ran to fail.
-    missedLastFire -> "missed" to "last run"
-    problem != null -> "failed" to "last run"
+    missedLastFire -> Strings.t("missed") to Strings.t("last run")
+    problem != null -> Strings.t("failed") to Strings.t("last run")
     else -> when (val until = timeUntil(nextRunEpochSeconds)) {
         "" -> null to null
-        "now" -> "now" to "next run"
-        else -> until to "next run"
+        "now" -> Strings.t("now") to Strings.t("next run")
+        else -> until to Strings.t("next run")
     }
 }
 
@@ -571,8 +584,8 @@ private fun CronJob.nextColumn(): Pair<String?, String?> = when {
  * for one chat the target list doesn't name.
  */
 internal fun deliveryLabel(id: String, targets: List<DeliveryTarget>, botLabel: String?): String {
-    targets.firstOrNull { it.id == id }?.name?.takeIf { it != id }?.let { return it }
-    if (id == Routines.BOT_CHAT_DELIVERY) return botLabel?.let { "$it's chat" } ?: "the bot's chat"
+    targets.firstOrNull { it.id == id }?.name?.takeIf { it != id }?.let { return Strings.t(it) }
+    if (id == Routines.BOT_CHAT_DELIVERY) return botLabel?.let { Strings.t("{0}'s chat", it) } ?: Strings.t("the bot's chat")
     val platform = id.substringBefore(':', missingDelimiterValue = "")
     return if (platform.isEmpty()) id else "${platform.replaceFirstChar { it.uppercase() }} · ${id.substringAfter(':')}"
 }
@@ -594,13 +607,13 @@ private fun JobSummary(job: CronJob, deliversTo: String?, busy: Boolean, onRunNo
         deliversTo?.let {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 UnstyledIcon(Lucide.Send, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(13.dp))
-                Text("Delivers to $it", style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary])
+                Text(Strings.t("Delivers to {0}", it), style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary])
             }
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button("Run now", onClick = onRunNow, variant = ButtonVariant.Inverse, leadingIcon = Lucide.Zap, loading = busy)
+            Button(Strings.t("Run now"), onClick = onRunNow, variant = ButtonVariant.Inverse, leadingIcon = Lucide.Zap, loading = busy)
             Button(
-                if (job.paused) "Resume" else "Pause",
+                if (job.paused) Strings.t("Resume") else Strings.t("Pause"),
                 onClick = onTogglePaused,
                 variant = ButtonVariant.Secondary,
                 leadingIcon = if (job.paused) Lucide.Play else Lucide.Pause,
@@ -618,8 +631,8 @@ private fun RunRow(run: SessionSummary, selected: Boolean, onOpen: () -> Unit, o
     if (isDesktop) {
         RowContextMenu(menuOpen, onDismiss = { menuOpen = false }, items = {
             listOfNotNull(
-                RowMenuItem("Open", Lucide.MessageSquare, run = onOpen),
-                onPopOut?.let { RowMenuItem("Open in new window", Lucide.AppWindow, run = it) },
+                RowMenuItem(Strings.t("Open"), Lucide.MessageSquare, run = onOpen),
+                onPopOut?.let { RowMenuItem(Strings.t("Open in new window"), Lucide.AppWindow, run = it) },
             )
         })
     }
@@ -647,7 +660,7 @@ private fun RunRow(run: SessionSummary, selected: Boolean, onOpen: () -> Unit, o
             Modifier
                 .size(28.dp)
                 .background(Theme[colors][if (run.isActive) accentSoft else surface2], CircleShape)
-                .clearAndSetSemantics { if (run.isActive) contentDescription = "Running" },
+                .clearAndSetSemantics { if (run.isActive) contentDescription = Strings.t("Running") },
             contentAlignment = Alignment.Center,
         ) {
             if (run.isActive) Spinner(Modifier.size(13.dp), color = Theme[colors][accentText])
@@ -655,7 +668,7 @@ private fun RunRow(run: SessionSummary, selected: Boolean, onOpen: () -> Unit, o
         }
         Column(Modifier.weight(1f)) {
             Text(
-                relativeTime(run.activityAt).let { if (it == "now") "Just now" else "$it ago" },
+                relativeTime(run.activityAt).let { if (it == "now") Strings.t("Just now") else Strings.t("{0} ago", it) },
                 style = Theme[typography][body].copy(fontSize = 14.5.sp),
                 color = Theme[colors][text],
             )
@@ -663,19 +676,19 @@ private fun RunRow(run: SessionSummary, selected: Boolean, onOpen: () -> Unit, o
                 Text(it.trim(), style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        if (run.messageCount > 0) Text("${run.messageCount} msgs", style = Theme[typography][code].copy(fontSize = 11.5.sp), color = Theme[colors][textMuted])
+        if (run.messageCount > 0) Text(Strings.t("{0} msgs", run.messageCount), style = Theme[typography][code].copy(fontSize = 11.5.sp), color = Theme[colors][textMuted])
     }
 }
 
 private fun CronJob.statusLine(): String = listOfNotNull(
     scheduleDisplay.takeIf { it.isNotBlank() && it != "?" }?.let(::readableSchedule),
     when {
-        paused -> "paused"
-        state == "completed" -> "finished"
+        paused -> Strings.t("paused")
+        state == "completed" -> Strings.t("finished")
         else -> when (val until = timeUntil(nextRunEpochSeconds)) {
             "" -> null
-            "now" -> "due now"
-            else -> "next $until"
+            "now" -> Strings.t("due now")
+            else -> Strings.t("next {0}", until)
         }
     },
 ).joinToString(" · ")
@@ -693,9 +706,9 @@ internal fun readableSchedule(display: String): String {
     if (dayOfMonth != "*" || month != "*" || m !in 0..59 || h !in 0..23) return display
     val time = "${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}"
     return when (dayOfWeek) {
-        "*" -> "Daily at $time"
-        "1-5" -> "Weekdays at $time"
-        else -> dayOfWeek.toIntOrNull()?.let { WEEKDAYS.getOrNull(it % 7) }?.let { "${it}s at $time" } ?: display
+        "*" -> Strings.t("Daily at {0}", time)
+        "1-5" -> Strings.t("Weekdays at {0}", time)
+        else -> dayOfWeek.toIntOrNull()?.let { WEEKDAYS.getOrNull(it % 7) }?.let { Strings.t("{0}s at {1}", Strings.t(it), time) } ?: display
     }
 }
 

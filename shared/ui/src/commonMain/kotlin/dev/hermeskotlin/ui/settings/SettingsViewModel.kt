@@ -23,6 +23,7 @@ import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.settings.WallpaperStore
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.SharingStarted
@@ -166,13 +167,13 @@ class SettingsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                e.message ?: "The gateway didn't install it."
+                e.message ?: Strings.t("The gateway didn't install it.")
             }
             val now = lookUpSuggestions(url, profile)
             _suggestions.value = when {
                 now is SuggestionsPlugin.Installed || now == SuggestionsPlugin.NeedsRestart -> now
                 failure != null -> SuggestionsPlugin.Failed(failure)
-                else -> SuggestionsPlugin.Failed("Installed, but the gateway doesn't list it yet. Restart the gateway, then look again.")
+                else -> SuggestionsPlugin.Failed(Strings.t("Installed, but the gateway doesn't list it yet. Restart the gateway, then look again."))
             }
             // Settings moved to another gateway or profile meanwhile.
             if (bound?.gatewayUrl != url || boundProfile != profile) checkSuggestions()

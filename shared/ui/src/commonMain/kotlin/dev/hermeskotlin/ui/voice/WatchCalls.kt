@@ -19,6 +19,7 @@ import dev.hermeskotlin.wearlink.CallUpdate
 import dev.hermeskotlin.wearlink.InOrder
 import dev.hermeskotlin.wearlink.WearJson
 import dev.hermeskotlin.wearlink.WearPaths
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CoroutineStart
@@ -188,10 +189,10 @@ class WatchCalls(
                 held.connect { offer ->
                     val defaultRequest = start.defaultRequestId
                     if (defaultRequest != null && !relay.defaultCallCurrent(node, defaultRequest)) {
-                        error("Default Call Target changed. Tap Call again.")
+                        error(Strings.t("Default Call Target changed. Tap Call again."))
                     }
                     when (val result = audio.startVoiceLive(chat.gateway, offer, conversation.history(), chat.profile)) {
-                        is ApiResult.Success -> result.value.ifBlank { error("GPT-Live sent no answer.") }
+                        is ApiResult.Success -> result.value.ifBlank { error(Strings.t("GPT-Live sent no answer.")) }
                         else -> error(liveFailure(result))
                     }
                 }
@@ -315,8 +316,8 @@ class WatchCalls(
     }
 
     companion object {
-        const val NOT_LIVE = "Live voice isn't set up on your gateway any more. Tap to ask one question at a time."
-        const val CALL_LOST = "Kyllene on your phone lost the call."
+        val NOT_LIVE: String get() = Strings.t("Live voice isn't set up on your gateway any more. Tap to ask one question at a time.")
+        val CALL_LOST: String get() = Strings.t("Kyllene on your phone lost the call.")
         private const val UPDATE_EVERY_MS = 250L
         private const val ANSWER_AGAIN_MS = 1_500L
         private const val SEND_GATHER_MS = 60L

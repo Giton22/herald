@@ -22,13 +22,14 @@ import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.ui.bots.BotAvatar
 import dev.hermeskotlin.ui.bots.BotFaces
+import dev.hermeskotlin.ui.i18n.Strings
 
 /**
  * The bot behind a room member's [profile]: the gateway's own when it still has it, so its picture and
  * chosen look show, else one made up from the profile so the stock face and color stay the same.
  */
 internal fun BotFaces.roomBot(profile: String?): Bot {
-    val name = profile?.takeIf { it.isNotBlank() } ?: "member"
+    val name = profile?.takeIf { it.isNotBlank() } ?: Strings.t("member")
     return find(name) ?: Bot(name = name)
 }
 
@@ -76,10 +77,10 @@ internal fun DesktopRoom.roomMembers(): List<RoomMember> =
  * dot says why. "Continue on Hermes Desktop" while the copy has no lines.
  */
 internal fun DesktopRoom.rowSubtitle(faces: BotFaces): String {
-    val line = lines.lastOrNull() ?: return "Continue on Hermes Desktop"
+    val line = lines.lastOrNull() ?: return Strings.t("Continue on Hermes Desktop")
     val who = if (line.fromUser) line.speaker else faces.roomBot(line.speaker).label
-    val said = "$who: ${line.text}".replace(WHITESPACE, " ").trim()
-    return if (needsYou) "Needs you · $said" else said
+    val said = Strings.t("{0}: {1}", who, line.text).replace(WHITESPACE, " ").trim()
+    return if (needsYou) Strings.t("Needs you · {0}", said) else said
 }
 
 private val WHITESPACE = Regex("\\s+")

@@ -35,6 +35,7 @@ import dev.hermeskotlin.core.phone.CallOutcome
 import dev.hermeskotlin.core.phone.CallReason
 import dev.hermeskotlin.ui.calls.agentCallReason
 import dev.hermeskotlin.ui.calls.callReason
+import dev.hermeskotlin.ui.i18n.Strings
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -62,38 +63,38 @@ class ChatNotifications(
         manager.createNotificationChannelsCompat(
             listOf(
                 NotificationChannelCompat.Builder(CHANNEL_CONNECTION, NotificationManagerCompat.IMPORTANCE_MIN)
-                    .setName("Background connection")
-                    .setDescription("Shown while Kyllene stays connected in the background, or works on a turn.")
+                    .setName(Strings.t("Background connection"))
+                    .setDescription(Strings.t("Shown while Kyllene stays connected in the background, or works on a turn."))
                     .setShowBadge(false)
                     .build(),
                 NotificationChannelCompat.Builder(CHANNEL_REQUESTS, NotificationManagerCompat.IMPORTANCE_HIGH)
-                    .setName("Approvals and questions")
-                    .setDescription("The agent is waiting on you.")
+                    .setName(Strings.t("Approvals and questions"))
+                    .setDescription(Strings.t("The agent is waiting on you."))
                     .build(),
                 NotificationChannelCompat.Builder(CHANNEL_REPLIES, NotificationManagerCompat.IMPORTANCE_DEFAULT)
-                    .setName("Finished replies")
-                    .setDescription("A turn ended while the app was in the background.")
+                    .setName(Strings.t("Finished replies"))
+                    .setDescription(Strings.t("A turn ended while the app was in the background."))
                     .build(),
                 NotificationChannelCompat.Builder(CHANNEL_BOTS, NotificationManagerCompat.IMPORTANCE_DEFAULT)
-                    .setName("Bot messages")
-                    .setDescription("A bot wrote in its chat while the app was in the background.")
+                    .setName(Strings.t("Bot messages"))
+                    .setDescription(Strings.t("A bot wrote in its chat while the app was in the background."))
                     .build(),
                 NotificationChannelCompat.Builder(CHANNEL_INBOX, NotificationManagerCompat.IMPORTANCE_DEFAULT)
-                    .setName("Inbox")
-                    .setDescription("A scheduled job you follow reported, such as a morning briefing.")
+                    .setName(Strings.t("Inbox"))
+                    .setDescription(Strings.t("A scheduled job you follow reported, such as a morning briefing."))
                     .build(),
                 NotificationChannelCompat.Builder(CHANNEL_INBOX_FAILED, NotificationManagerCompat.IMPORTANCE_HIGH)
-                    .setName("Failed jobs")
-                    .setDescription("A scheduled job's run failed.")
+                    .setName(Strings.t("Failed jobs"))
+                    .setDescription(Strings.t("A scheduled job's run failed."))
                     .build(),
                 NotificationChannelCompat.Builder(CHANNEL_VOICE, NotificationManagerCompat.IMPORTANCE_LOW)
-                    .setName("Voice chat")
-                    .setDescription("Shown while a voice chat goes on with the screen off or another app open.")
+                    .setName(Strings.t("Voice chat"))
+                    .setDescription(Strings.t("Shown while a voice chat goes on with the screen off or another app open."))
                     .setShowBadge(false)
                     .build(),
                 NotificationChannelCompat.Builder(CHANNEL_CALLS, NotificationManagerCompat.IMPORTANCE_HIGH)
-                    .setName("Calls for an answer")
-                    .setDescription("An approval or a question rings like a call (Settings → Phone tools → Calls).")
+                    .setName(Strings.t("Calls for an answer"))
+                    .setDescription(Strings.t("An approval or a question rings like a call (Settings → Phone tools → Calls)."))
                     .setSound(
                         RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE),
                         AudioAttributes.Builder()
@@ -174,11 +175,11 @@ class ChatNotifications(
      */
     fun ongoing(connection: ConnectionState, pushAnywhere: Boolean = false): Notification {
         val text = when {
-            connection is ConnectionState.Connected -> "Connected to Hermes"
-            connection is ConnectionState.Connecting || connection is ConnectionState.Reconnecting -> "Reconnecting to Hermes…"
+            connection is ConnectionState.Connected -> Strings.t("Connected to Hermes")
+            connection is ConnectionState.Connecting || connection is ConnectionState.Reconnecting -> Strings.t("Reconnecting to Hermes…")
             // Notifications anywhere holds the ntfy stream instead, so no connection isn't something wrong.
-            pushAnywhere -> "Bot messages reach you through Notifications anywhere"
-            else -> "Not connected to Hermes"
+            pushAnywhere -> Strings.t("Bot messages reach you through Notifications anywhere")
+            else -> Strings.t("Not connected to Hermes")
         }
         return base(CHANNEL_CONNECTION)
             .setContentTitle("Kyllene")
@@ -189,20 +190,20 @@ class ChatNotifications(
             .setPriority(NotificationCompat.PRIORITY_MIN)
             // Shown at once: Android holds a deferred one back, and updates to it with it.
             .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-            .addAction(0, "Turn off", action(NotificationActionReceiver.ACTION_DISCONNECT, "disconnect"))
+            .addAction(0, Strings.t("Turn off"), action(NotificationActionReceiver.ACTION_DISCONNECT, "disconnect"))
             .build()
     }
 
     /** The ongoing notification of a voice chat kept up like a call ([VoiceCallService]): back to it, or [end] it. */
     fun voiceCall(end: PendingIntent): Notification = base(CHANNEL_VOICE)
-        .setContentTitle("Voice chat")
-        .setContentText("Talking with Hermes")
+        .setContentTitle(Strings.t("Voice chat"))
+        .setContentText(Strings.t("Talking with Hermes"))
         .setCategory(NotificationCompat.CATEGORY_CALL)
         .setOngoing(true)
         .setAutoCancel(false)
         .setSilent(true)
         .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_IMMEDIATE)
-        .addAction(0, "End", end)
+        .addAction(0, Strings.t("End"), end)
         .build()
 
     fun postOngoing(connection: ConnectionState, pushAnywhere: Boolean = false) =
@@ -235,7 +236,7 @@ class ChatNotifications(
         when (request) {
             is InputRequest.Approval -> {
                 val body = listOf(request.description, request.command).filter { it.isNotBlank() }.joinToString("\n\n")
-                builder.setContentTitle("Approve this command?")
+                builder.setContentTitle(Strings.t("Approve this command?"))
                     .setContentText(request.command.ifBlank { request.description })
                     .setStyle(NotificationCompat.BigTextStyle().bigText(body))
                 // "Always" is too big a decision for a notification; it stays in the app.
@@ -254,18 +255,18 @@ class ChatNotifications(
             }
             is InputRequest.Clarify -> {
                 val question = request.questions.singleOrNull()
-                builder.setContentTitle("Hermes has a question")
-                    .setContentText(question?.question ?: "${request.questions.size} questions")
+                builder.setContentTitle(Strings.t("Hermes has a question"))
+                    .setContentText(question?.question ?: Strings.t("{0} questions", request.questions.size))
                     .setStyle(NotificationCompat.BigTextStyle().bigText(request.questions.joinToString("\n") { it.question }))
                 if (question != null && !request.batch && !question.multiSelect) {
                     val input = RemoteInput.Builder(NotificationActionReceiver.KEY_TEXT)
-                        .setLabel("Your answer")
+                        .setLabel(Strings.t("Your answer"))
                         .setChoices(question.choices.toTypedArray())
                         .build()
                     builder.addAction(
                         NotificationCompat.Action.Builder(
                             0,
-                            "Answer",
+                            Strings.t("Answer"),
                             action(NotificationActionReceiver.ACTION_CLARIFY, request.id, mutable = true) {
                                 putExtra(NotificationActionReceiver.EXTRA_REQUEST_ID, request.id)
                             },
@@ -277,16 +278,16 @@ class ChatNotifications(
             is InputRequest.Secret -> builder
                 .setContentTitle(
                     when (request.kind) {
-                        InputRequest.Secret.Kind.Sudo -> "Sudo password needed"
-                        InputRequest.Secret.Kind.Secret -> "Secret needed"
-                        InputRequest.Secret.Kind.VaultUnlock -> "Unlock your password manager"
-                        InputRequest.Secret.Kind.VaultCode -> "Sign-in code needed"
+                        InputRequest.Secret.Kind.Sudo -> Strings.t("Sudo password needed")
+                        InputRequest.Secret.Kind.Secret -> Strings.t("Secret needed")
+                        InputRequest.Secret.Kind.VaultUnlock -> Strings.t("Unlock your password manager")
+                        InputRequest.Secret.Kind.VaultCode -> Strings.t("Sign-in code needed")
                     },
                 )
                 .setContentText(request.command ?: request.prompt)
             is InputRequest.VaultSaveLogin -> builder
                 .setContentTitle(request.title)
-                .setContentText("Hermes has no login for ${request.site.ifBlank { "this site" }}. Open the chat to save one.")
+                .setContentText(Strings.t("Hermes has no login for {0}. Open the chat to save one.", request.site.ifBlank { Strings.t("this site") }))
         }
         return post(request.id, REQUEST_ID, builder.build())
     }
@@ -505,17 +506,17 @@ class ChatNotifications(
 
     /** A finished turn, with an inline Reply that sends the next prompt to the same chat. */
     fun postReply(storedSessionId: String, title: String?, text: String, failed: Boolean) {
-        val preview = text.toPlainText().take(MAX_PREVIEW).ifBlank { if (failed) "The turn failed." else "Done." }
-        val input = RemoteInput.Builder(NotificationActionReceiver.KEY_TEXT).setLabel("Message Hermes").build()
+        val preview = text.toPlainText().take(MAX_PREVIEW).ifBlank { if (failed) Strings.t("The turn failed.") else Strings.t("Done.") }
+        val input = RemoteInput.Builder(NotificationActionReceiver.KEY_TEXT).setLabel(Strings.t("Message Hermes")).build()
         val notification = base(CHANNEL_REPLIES, storedSessionId, title)
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
-            .setContentTitle(if (failed) "Turn failed" else title?.takeIf { it.isNotBlank() } ?: "Hermes replied")
+            .setContentTitle(if (failed) Strings.t("Turn failed") else title?.takeIf { it.isNotBlank() } ?: Strings.t("Hermes replied"))
             .setContentText(preview)
             .setStyle(NotificationCompat.BigTextStyle().bigText(preview))
             .addAction(
                 NotificationCompat.Action.Builder(
                     0,
-                    "Reply",
+                    Strings.t("Reply"),
                     action(NotificationActionReceiver.ACTION_REPLY, storedSessionId, mutable = true) {
                         putExtra(NotificationActionReceiver.EXTRA_SESSION_ID, storedSessionId)
                     },
@@ -549,11 +550,11 @@ class ChatNotifications(
         }
         val shortcut = BotShortcuts.push(context, bot, picture)
         val person = BotShortcuts.person(bot, picture)
-        val me = Person.Builder().setName("You").build()
+        val me = Person.Builder().setName(Strings.t("You")).build()
         // Messages stack like a messaging app's until the bot's notification is opened or cleared.
         val history = (unreadBotMessages[bot.name].orEmpty() + (preview to System.currentTimeMillis())).takeLast(MAX_STACKED)
         unreadBotMessages[bot.name] = history
-        val input = RemoteInput.Builder(NotificationActionReceiver.KEY_TEXT).setLabel("Message ${bot.label}").build()
+        val input = RemoteInput.Builder(NotificationActionReceiver.KEY_TEXT).setLabel(Strings.t("Message {0}", bot.label)).build()
         val notification = NotificationCompat.Builder(context, CHANNEL_BOTS)
             // The bot's own silhouette in the status bar, not Herald's.
             .setSmallIcon(BotIcons.statusIcon(bot))
@@ -574,7 +575,7 @@ class ChatNotifications(
             .addAction(
                 NotificationCompat.Action.Builder(
                     0,
-                    "Reply",
+                    Strings.t("Reply"),
                     action(NotificationActionReceiver.ACTION_BOT_REPLY, bot.name, mutable = true) {
                         putExtra(NotificationActionReceiver.EXTRA_BOT, bot.name)
                         putExtra(NotificationActionReceiver.EXTRA_SESSION_ID, storedSessionId)
@@ -596,7 +597,7 @@ class ChatNotifications(
         if (fresh.isEmpty()) return
         val history = (unreadRoomLines[roomId].orEmpty() + fresh).takeLast(MAX_STACKED)
         unreadRoomLines[roomId] = history
-        val me = Person.Builder().setName("You").build()
+        val me = Person.Builder().setName(Strings.t("You")).build()
         val notification = base(CHANNEL_BOTS)
             .setContentIntent(openRoom(roomId, name))
             .setCategory(NotificationCompat.CATEGORY_MESSAGE)
@@ -658,9 +659,9 @@ class ChatNotifications(
      * job's next run replaces its last.
      */
     fun postCronRun(gatewayUrl: String, key: String, bot: String, job: String, title: String, text: String, failed: Boolean) {
-        val body = text.toPlainText().take(MAX_PREVIEW).ifBlank { if (failed) "The run failed." else "Finished." }
+        val body = text.toPlainText().take(MAX_PREVIEW).ifBlank { if (failed) Strings.t("The run failed.") else Strings.t("Finished.") }
         val notification = base(if (failed) CHANNEL_INBOX_FAILED else CHANNEL_INBOX)
-            .setContentTitle(if (failed) "$title failed" else title)
+            .setContentTitle(if (failed) Strings.t("{0} failed", title) else title)
             .setContentText(body.lineSequence().firstOrNull { it.isNotBlank() }?.trim() ?: body)
             .setStyle(NotificationCompat.BigTextStyle().bigText(body))
             .setCategory(if (failed) NotificationCompat.CATEGORY_ERROR else NotificationCompat.CATEGORY_MESSAGE)
@@ -669,7 +670,7 @@ class ChatNotifications(
             // so an older run's extras can't stand in for the newer one's.
             .addAction(
                 0,
-                "Mark read",
+                Strings.t("Mark read"),
                 action(NotificationActionReceiver.ACTION_INBOX_READ, key + "\u0000" + gatewayUrl, data = inboxUri(gatewayUrl, key)) {
                     putExtra(EXTRA_OPEN_INBOX, key)
                     putExtra(EXTRA_INBOX_GATEWAY, gatewayUrl)
@@ -725,8 +726,8 @@ class ChatNotifications(
         null,
         PUSH_TEST_ID,
         base(CHANNEL_BOTS)
-            .setContentTitle("Notifications anywhere work")
-            .setContentText("This came end-to-end encrypted through ntfy, not over your gateway connection.")
+            .setContentTitle(Strings.t("Notifications anywhere work"))
+            .setContentText(Strings.t("This came end-to-end encrypted through ntfy, not over your gateway connection."))
             .setCategory(NotificationCompat.CATEGORY_STATUS)
             .build(),
     )
@@ -744,7 +745,7 @@ class ChatNotifications(
     fun postFailure(tag: String?, id: Int, message: String) = post(
         tag,
         id,
-        base(CHANNEL_REQUESTS).setContentTitle("Couldn't send").setContentText(message).build(),
+        base(CHANNEL_REQUESTS).setContentTitle(Strings.t("Couldn't send")).setContentText(message).build(),
     )
 
     /** Everything except the ongoing notification, once the user is looking at the app. */
@@ -857,10 +858,10 @@ class ChatNotifications(
 
 private val ApprovalChoice.label: String
     get() = when (this) {
-        ApprovalChoice.Once -> "Allow once"
-        ApprovalChoice.Session -> "Allow for chat"
-        ApprovalChoice.Always -> "Always allow"
-        ApprovalChoice.Deny -> "Deny"
+        ApprovalChoice.Once -> Strings.t("Allow once")
+        ApprovalChoice.Session -> Strings.t("Allow for chat")
+        ApprovalChoice.Always -> Strings.t("Always allow")
+        ApprovalChoice.Deny -> Strings.t("Deny")
     }
 
 /** Markdown reads badly in the shade; keep the words, drop the markup. */

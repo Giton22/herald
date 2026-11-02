@@ -62,6 +62,7 @@ import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.i18n.Strings
 
 /**
  * Names a new room and picks its bots: 2 to 6, named by their handles so members can cite each other.
@@ -86,11 +87,11 @@ fun CreateRoomDialog(
     Dialog(
         visible = visible,
         onDismissRequest = { if (busy == null) onDismiss() },
-        title = "New room",
+        title = Strings.t("New room"),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small, enabled = busy == null)
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small, enabled = busy == null)
             Button(
-                "Create",
+                Strings.t("Create"),
                 onClick = create,
                 variant = ButtonVariant.Primary,
                 size = ButtonSize.Small,
@@ -101,8 +102,8 @@ fun CreateRoomDialog(
     ) {
         TextField(
             state = name,
-            label = "Room name",
-            placeholder = "Release room",
+            label = Strings.t("Room name"),
+            placeholder = Strings.t("Release room"),
             enabled = busy == null,
             autofocus = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -110,12 +111,12 @@ fun CreateRoomDialog(
             onKeyboardAction = { closeKeyboard -> if (isDesktop) create() else closeKeyboard() },
         )
         Text(
-            "The bots you pick talk things over in the room. It runs on the gateway, so it keeps going " +
-                "with no app open, and the whole conversation is there when you come back.",
+            Strings.t("The bots you pick talk things over in the room. It runs on the gateway, so it keeps going " +
+                "with no app open, and the whole conversation is there when you come back."),
             style = Theme[typography][bodySmall],
             color = Theme[colors][textSecondary],
         )
-        SectionLabel("Bots · pick $MIN_MEMBERS to $MAX_MEMBERS")
+        SectionLabel(Strings.t("Bots · pick {0} to {1}", MIN_MEMBERS, MAX_MEMBERS))
         Column(
             Modifier.fillMaxWidth().heightIn(max = 260.dp).verticalScrollWithBar(),
         ) {
@@ -151,7 +152,7 @@ fun CreateRoomDialog(
             }
         }
         Text(
-            "${selected.size} picked",
+            Strings.t("{0} picked", selected.size),
             style = Theme[typography][caption],
             color = Theme[colors][textTertiary],
         )

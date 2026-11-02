@@ -12,6 +12,7 @@ import dev.hermeskotlin.core.capabilities.SkillsHubApi
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
@@ -198,7 +199,7 @@ class SkillsHubViewModel(private val api: SkillsHubApi) : ViewModel(), SkillsHub
                     r is ApiResult.Success -> s.copy(detail = s.detail.copy(scan = r.value))
                     // Install scans again when this one failed.
                     else -> s.copy(
-                        detail = s.detail.copy(scanError = "Couldn't scan: ${r.errorMessage}"),
+                        detail = s.detail.copy(scanError = Strings.t("Couldn't scan: {0}", r.errorMessage)),
                         sessionExpired = s.sessionExpired || r == ApiResult.SessionExpired,
                     )
                 }
@@ -241,7 +242,7 @@ class SkillsHubViewModel(private val api: SkillsHubApi) : ViewModel(), SkillsHub
                 else -> {
                     stopRunning(key)
                     _state.update {
-                        it.copy(message = "Couldn't check ${skill.name}: ${r.errorMessage}", sessionExpired = it.sessionExpired || r == ApiResult.SessionExpired)
+                        it.copy(message = Strings.t("Couldn't check {0}: {1}", skill.name, r.errorMessage), sessionExpired = it.sessionExpired || r == ApiResult.SessionExpired)
                     }
                 }
             }
@@ -267,9 +268,14 @@ class SkillsHubViewModel(private val api: SkillsHubApi) : ViewModel(), SkillsHub
         if (name in _state.value.running) return
         setRunning(name)
         viewModelScope.launch(binding) {
-            finish(name, api.uninstall(url, profile, name), failure = "Couldn't remove $name") {
+            finish(name, api.uninstall(url, profile, name), failure = Strings.t("Couldn't remove {0}", name)) {
                 localChanges++
-                _state.update { s -> s.copy(installed = s.installed.filterNot { it == name || it.endsWith("/$name") }.toSet(), message = "Removed $name. $APPLIES_NEXT_CHAT") }
+                _state.update { s ->
+                    s.copy(
+                        installed = s.installed.filterNot { it == name || it.endsWith("/$name") }.toSet(),
+                        message = Strings.t("Removed {0}. {1}", name, Strings.t(APPLIES_NEXT_CHAT)),
+                    )
+                }
             }
         }
     }
@@ -279,8 +285,8 @@ class SkillsHubViewModel(private val api: SkillsHubApi) : ViewModel(), SkillsHub
         if (UPDATE_ALL in _state.value.running) return
         setRunning(UPDATE_ALL)
         viewModelScope.launch(binding) {
-            finish(UPDATE_ALL, api.updateAll(url, profile), failure = "Couldn't update skills") {
-                _state.update { it.copy(message = "Skills updated. $APPLIES_NEXT_CHAT") }
+            finish(UPDATE_ALL, api.updateAll(url, profile), failure = Strings.t("Couldn't update skills")) {
+                _state.update { it.copy(message = Strings.t("Skills updated. {0}", Strings.t(APPLIES_NEXT_CHAT))) }
             }
         }
     }
@@ -296,7 +302,7 @@ class SkillsHubViewModel(private val api: SkillsHubApi) : ViewModel(), SkillsHub
             val result = api.install(url, profile, key)
             if (result is ApiResult.Success && result.value is HubActionResult.Blocked) {
                 stopRunning(key)
-                _state.update { it.copy(message = "${skill.name} was blocked by the security scan.") }
+                _state.update { it.copy(message = Strings.t("{0} was blocked by the security scan.", skill.name)) }
                 when (val scan = api.scan(url, profile, key)) {
                     is ApiResult.Success -> showScan(skill, scan.value)
                     // Only the sheet still open on this skill gets the error; the Blocked message already told them.
@@ -310,9 +316,14 @@ class SkillsHubViewModel(private val api: SkillsHubApi) : ViewModel(), SkillsHub
                 }
                 return@launch
             }
-            finish(key, result, failure = "Couldn't install ${skill.name}") {
+            finish(key, result, failure = Strings.t("Couldn't install {0}", skill.name)) {
                 localChanges++
-                _state.update { it.copy(installed = it.installed + key, message = "Installed ${skill.name}. $APPLIES_NEXT_CHAT") }
+                _state.update {
+                    it.copy(
+                        installed = it.installed + key,
+                        message = Strings.t("Installed {0}. {1}", skill.name, Strings.t(APPLIES_NEXT_CHAT)),
+                    )
+                }
             }
         }
     }

@@ -15,6 +15,7 @@ import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.ui.components.EmptyState
+import dev.hermeskotlin.ui.i18n.Strings
 
 /** What the app shows instead of its screens while App lock is locked, until [onUnlock] succeeds. */
 @Composable
@@ -25,8 +26,12 @@ fun AppLockCover(onUnlock: () -> Unit) {
             .background(Theme[colors][background])
             .windowInsetsPadding(WindowInsets.safeDrawing),
     ) {
-        EmptyState(Lucide.Lock, "Kyllene is locked", "Unlock with your fingerprint, face or screen lock.") {
-            Button("Unlock", onClick = onUnlock)
+        EmptyState(
+            Lucide.Lock,
+            Strings.t("Kyllene is locked"),
+            Strings.t("Unlock with your fingerprint, face or screen lock."),
+        ) {
+            Button(Strings.t("Unlock"), onClick = onUnlock)
         }
     }
 }

@@ -1,6 +1,7 @@
 package dev.hermeskotlin.ui.components
 
 import androidx.compose.runtime.Composable
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlin.time.Clock
 
 /** A moment as the device's clock and calendar show it. [dayOfWeek] runs 1 (Monday) to 7; [month] 1 to 12. */
@@ -29,13 +30,13 @@ expect fun uses24HourClock(): Boolean
 fun messageTime(at: LocalMoment, now: LocalMoment, use24Hour: Boolean): String {
     val clock = clockTime(at, use24Hour)
     val daysAgo = now.epochDay - at.epochDay
-    val date = "${MONTHS[at.month - 1]} ${at.day}"
+    val date = Strings.t("{0} {1}", Strings.t(MONTHS[at.month - 1]), at.day)
     return when {
         daysAgo <= 0 -> clock
-        daysAgo == 1L -> "Yesterday $clock"
-        daysAgo < 7 -> "${WEEKDAYS[at.dayOfWeek - 1]} $clock"
-        at.year == now.year -> "$date, $clock"
-        else -> "$date, ${at.year}"
+        daysAgo == 1L -> Strings.t("Yesterday {0}", clock)
+        daysAgo < 7 -> Strings.t("{0} {1}", Strings.t(WEEKDAYS[at.dayOfWeek - 1]), clock)
+        at.year == now.year -> Strings.t("{0}, {1}", date, clock)
+        else -> Strings.t("{0}, {1}", date, at.year)
     }
 }
 
@@ -49,14 +50,21 @@ fun messageTime(epochSeconds: Double?, use24Hour: Boolean, nowMillis: Long = Clo
 fun fullMessageTime(epochSeconds: Double?, use24Hour: Boolean): String {
     if (epochSeconds == null || epochSeconds <= 0 || !epochSeconds.isFinite()) return ""
     val at = localMoment((epochSeconds * 1000).toLong())
-    return "${DAY_NAMES[at.dayOfWeek - 1]}, ${MONTHS[at.month - 1]} ${at.day}, ${at.year}, ${clockTime(at, use24Hour)}"
+    return Strings.t(
+        "{0}, {1} {2}, {3}, {4}",
+        Strings.t(DAY_NAMES[at.dayOfWeek - 1]),
+        Strings.t(MONTHS[at.month - 1]),
+        at.day,
+        at.year,
+        clockTime(at, use24Hour),
+    )
 }
 
 private fun clockTime(at: LocalMoment, use24Hour: Boolean): String {
     val minute = at.minute.toString().padStart(2, '0')
     if (use24Hour) return "${at.hour.toString().padStart(2, '0')}:$minute"
     val hour = (at.hour % 12).let { if (it == 0) 12 else it }
-    return "$hour:$minute ${if (at.hour < 12) "AM" else "PM"}"
+    return Strings.t("{0}:{1} {2}", hour, minute, if (at.hour < 12) Strings.t("AM") else Strings.t("PM"))
 }
 
 private val MONTHS = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
@@ -66,11 +74,11 @@ private val WEEKDAYS = listOf("Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun")
 fun dayHeading(at: LocalMoment, now: LocalMoment): String {
     val daysAgo = now.epochDay - at.epochDay
     return when {
-        daysAgo <= 0 -> "Today"
-        daysAgo == 1L -> "Yesterday"
-        daysAgo < 7 -> DAY_NAMES[at.dayOfWeek - 1]
-        at.year == now.year -> "${MONTHS[at.month - 1]} ${at.day}"
-        else -> "${MONTHS[at.month - 1]} ${at.day}, ${at.year}"
+        daysAgo <= 0 -> Strings.t("Today")
+        daysAgo == 1L -> Strings.t("Yesterday")
+        daysAgo < 7 -> Strings.t(DAY_NAMES[at.dayOfWeek - 1])
+        at.year == now.year -> Strings.t("{0} {1}", Strings.t(MONTHS[at.month - 1]), at.day)
+        else -> Strings.t("{0} {1}, {2}", Strings.t(MONTHS[at.month - 1]), at.day, at.year)
     }
 }
 

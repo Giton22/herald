@@ -38,6 +38,7 @@ import dev.hermeskotlin.core.voice.readAloudText
 import dev.hermeskotlin.core.voice.speakableText
 import dev.hermeskotlin.core.voice.speechChunks
 import dev.hermeskotlin.core.voice.speakableSoFar
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -326,7 +327,7 @@ class VoiceController(
             error = conversation.run {
                 call.connect { offer ->
                     when (val answer = audio.startVoiceLive(gateway, offer, conversation.history(), profile)) {
-                        is ApiResult.Success -> answer.value.ifBlank { error("GPT-Live sent no answer.") }
+                        is ApiResult.Success -> answer.value.ifBlank { error(Strings.t("GPT-Live sent no answer.")) }
                         else -> error(liveFailure(answer))
                     }
                 }
@@ -416,7 +417,7 @@ class VoiceController(
                 throw e
             }
             if (!sent) {
-                _chat.update { it.copy(error = session.state.value.error ?: "Couldn't send that.") }
+                _chat.update { it.copy(error = session.state.value.error ?: Strings.t("Couldn't send that.")) }
                 closeUnused(opening)
                 return@coroutineScope null
             }
@@ -630,9 +631,9 @@ class VoiceController(
                 stopped = true
                 pointedAt += typed.id
                 val said = if (typed is InputRequest.Approval) {
-                    "Hermes needs your approval. Unlock the phone, and I'll ask you for it."
+                    Strings.t("Hermes needs your approval. Unlock the phone, and I'll ask you for it.")
                 } else {
-                    "Hermes needs something typed in the chat to go on."
+                    Strings.t("Hermes needs something typed in the chat to go on.")
                 }
                 _chat.update { it.copy(phase = VoicePhase.Speaking, caption = said, captionIsVoice = true) }
                 speak(said, gateway, profile)
@@ -691,7 +692,7 @@ class VoiceController(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _chat.update { it.copy(error = e.message ?: "Couldn't use the microphone.") }
+                _chat.update { it.copy(error = e.message ?: Strings.t("Couldn't use the microphone.")) }
                 return Heard.Broken
             }
             // Cut off by Mute: the sentence is dropped, and it listens afresh once unmuted.
@@ -701,7 +702,7 @@ class VoiceController(
             val transcript = when (val result = audio.transcribe(gateway, recording.bytes, recording.mimeType, profile)) {
                 is ApiResult.Success -> result.value
                 else -> {
-                    _chat.update { it.copy(error = result.errorMessage ?: "Couldn't transcribe that.") }
+                    _chat.update { it.copy(error = result.errorMessage ?: Strings.t("Couldn't transcribe that.")) }
                     return Heard.Unclear
                 }
             }
@@ -777,7 +778,7 @@ class VoiceController(
         // The phone locked while it was asked: whoever is near it doesn't get to approve. It's asked again unlocked.
         if (request is InputRequest.Approval && deviceLock.locked()) return true
         if (!session.answer(request, answer)) {
-            _chat.update { it.copy(error = session.state.value.error ?: "Couldn't send the answer.") }
+            _chat.update { it.copy(error = session.state.value.error ?: Strings.t("Couldn't send the answer.")) }
             return false
         }
         return true
@@ -805,7 +806,7 @@ class VoiceController(
         while (tries < MAX_ASKS) {
             if (answeredElsewhere(session, request)) return null
             if (say) {
-                val said = if (tries == 0) prompt else "Sorry, I didn't get that. $prompt"
+                val said = if (tries == 0) prompt else Strings.t("Sorry, I didn't get that. {0}", prompt)
                 _chat.update { it.copy(phase = VoicePhase.Speaking, caption = said, captionIsVoice = true) }
                 speak(said, gateway, profile)
                 if (answeredElsewhere(session, request)) return null
@@ -831,7 +832,7 @@ class VoiceController(
             say = true
         }
         // The chat ends here, so it says why, and where the question went.
-        val said = "I couldn't get that, so it's waiting in the chat."
+        val said = Strings.t("I couldn't get that, so it's waiting in the chat.")
         _chat.update { it.copy(phase = VoicePhase.Speaking, caption = said, captionIsVoice = true) }
         speak(said, gateway, profile)
         return null
@@ -989,7 +990,7 @@ class VoiceController(
                 val clip = keptAs?.let { readAloudVoices.piece(it, chunk) } ?: when (val result = audio.speak(gateway, chunk, profile)) {
                     is ApiResult.Success -> result.value.also { made -> keptAs?.let { readAloudVoices.keep(it, chunk, made) } }
                     else -> {
-                        onError(result.errorMessage ?: "Couldn't voice the reply.")
+                        onError(result.errorMessage ?: Strings.t("Couldn't voice the reply."))
                         break
                     }
                 }
@@ -1004,7 +1005,7 @@ class VoiceController(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                onError(e.message ?: "Couldn't play the reply.")
+                onError(e.message ?: Strings.t("Couldn't play the reply."))
             } finally {
                 playing.value = false
             }
@@ -1085,13 +1086,13 @@ class VoiceController(
                         null
                     }
                     if (text != null) {
-                        _dictation.value = DictationState(error = "Didn't catch anything.".takeIf { text.isEmpty() })
+                        _dictation.value = DictationState(error = Strings.t("Didn't catch anything.").takeIf { text.isEmpty() })
                         if (text.isNotEmpty()) onText(text)
                         return@launch
                     }
                     // Stopped while the recognizers were being tried: nothing to record.
                     if (dictationFinished) {
-                        _dictation.value = DictationState(error = "Didn't catch anything.")
+                        _dictation.value = DictationState(error = Strings.t("Didn't catch anything."))
                         return@launch
                     }
                 }
@@ -1101,23 +1102,23 @@ class VoiceController(
                     onLevel = { level -> _dictation.update { it.copy(level = level) } },
                 )
                 if (!recording.heardSpeech) {
-                    _dictation.value = DictationState(error = "Didn't catch anything.")
+                    _dictation.value = DictationState(error = Strings.t("Didn't catch anything."))
                     return@launch
                 }
                 _dictation.value = DictationState(transcribing = true)
                 when (val result = audio.transcribe(gateway, recording.bytes, recording.mimeType, profile)) {
                     is ApiResult.Success -> {
-                        _dictation.value = DictationState(error = "Didn't catch anything.".takeIf { result.value.isBlank() })
+                        _dictation.value = DictationState(error = Strings.t("Didn't catch anything.").takeIf { result.value.isBlank() })
                         if (result.value.isNotBlank()) onText(result.value)
                     }
-                    else -> _dictation.value = DictationState(error = result.errorMessage ?: "Couldn't transcribe that.")
+                    else -> _dictation.value = DictationState(error = result.errorMessage ?: Strings.t("Couldn't transcribe that."))
                 }
             } catch (e: CancellationException) {
                 _dictation.value = DictationState()
                 onCancelled()
                 throw e
             } catch (e: Exception) {
-                _dictation.value = DictationState(error = e.message ?: "Couldn't use the microphone.")
+                _dictation.value = DictationState(error = e.message ?: Strings.t("Couldn't use the microphone."))
             }
         }
     }
@@ -1227,8 +1228,8 @@ internal fun liveFailure(result: ApiResult<*>): String {
     }
     val vendor = raw?.let { VENDOR_MESSAGE.find(it)?.groupValues?.get(1) }
     return when {
-        vendor != null -> "GPT-Live couldn't start: $vendor"
-        else -> result.errorMessage ?: "Couldn't start the live call."
+        vendor != null -> Strings.t("GPT-Live couldn't start: {0}", vendor)
+        else -> result.errorMessage ?: Strings.t("Couldn't start the live call.")
     }
 }
 
@@ -1318,4 +1319,4 @@ private val SPACES = Regex("""\s{2,}""")
 /** Past this, a line is long enough to cut before it's searched. */
 private const val LINE_MAX = 2_000
 private const val BRIEF_MAX = 200
-private const val VOICE_FAILED = "The voice service failed."
+private val VOICE_FAILED: String get() = Strings.t("The voice service failed.")

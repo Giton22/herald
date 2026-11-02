@@ -84,6 +84,7 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
 import dev.hermeskotlin.designsystem.warningSoft
 import dev.hermeskotlin.designsystem.components.handCursor
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.ui.isDesktop
 import dev.hermeskotlin.ui.sessions.OtherChatEvent
 import dev.hermeskotlin.ui.sessions.onSecondaryPress
@@ -102,8 +103,8 @@ internal fun SessionsButton(badge: SessionsBadge, onClick: () -> Unit, onNext: (
     // A desktop's way to the long press is a right-click, which the tooltip names.
     when {
         !isDesktop -> badge.description
-        onNext != null && !badge.none -> "${badge.description} (${keysLabel("Ctrl+B")}) · Right-click for the next"
-        else -> "${badge.description} (${keysLabel("Ctrl+B")})"
+        onNext != null && !badge.none -> Strings.t("{0} ({1}) · Right-click for the next", badge.description, keysLabel("Ctrl+B"))
+        else -> Strings.t("{0} ({1})", badge.description, keysLabel("Ctrl+B"))
     },
 ) {
     val haptics = LocalHapticFeedback.current
@@ -121,8 +122,8 @@ internal fun SessionsButton(badge: SessionsBadge, onClick: () -> Unit, onNext: (
                         next()
                     }
                 },
-                onClickLabel = "Open sessions",
-                onLongClickLabel = if (onNext != null) "Next chat needing you" else null,
+                onClickLabel = Strings.t("Open sessions"),
+                onLongClickLabel = if (onNext != null) Strings.t("Next chat needing you") else null,
                 role = Role.Button,
                 interactionSource = null,
                 indication = rememberHoverIndication(Theme[colors][textColor]),
@@ -207,7 +208,7 @@ internal fun OtherChatBanner(
             .border(1.dp, Theme[colors][strokeStrong], shape)
             // The whole card opens the chat; Open stays for those who look for a button.
             .handCursor()
-            .clickable(onClickLabel = "Open", role = Role.Button, onClick = onOpen)
+            .clickable(onClickLabel = Strings.t("Open"), role = Role.Button, onClick = onOpen)
             .padding(start = 14.dp, top = 6.dp, bottom = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -268,10 +269,10 @@ internal fun OtherChatBanner(
                     .padding(horizontal = 14.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
-                Text("Open", style = Theme[typography][label].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][onAccent])
+                Text(Strings.t("Open"), style = Theme[typography][label].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][onAccent])
             }
         }
-        IconButton(Lucide.X, contentDescription = "Dismiss", onClick = onDismiss, tint = Theme[colors][textMuted], iconSize = 15.dp)
+        IconButton(Lucide.X, contentDescription = Strings.t("Dismiss"), onClick = onDismiss, tint = Theme[colors][textMuted], iconSize = 15.dp)
     }
 }
 

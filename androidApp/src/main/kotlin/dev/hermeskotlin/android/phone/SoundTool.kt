@@ -5,6 +5,7 @@ import android.content.Context
 import android.media.AudioManager
 import android.os.Build
 import android.service.notification.Condition
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.core.phone.PhoneToolException
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonObject
@@ -64,7 +65,7 @@ internal class SoundTool(private val context: Context, private val confirmations
         if (volume != null && volume !in 0..100) throw PhoneToolException("volume is a percent, 0 to 100.")
         if (ringer != null && ringer != AudioManager.RINGER_MODE_NORMAL && streamName in RINGER_STREAMS && volume != 0) {
             // A ring volume above 0 is a normal ringer, and a quiet ringer mutes it: both can't be true.
-            throw PhoneToolException("A silent or vibrating ringer can't have a $streamName volume above 0. Set one or the other.")
+            throw PhoneToolException(Strings.t("A silent or vibrating ringer can't have a {0} volume above 0. Set one or the other.", Strings.t(streamName ?: "")))
         }
         if ((dnd != null || ringer != null) && !notifications.isNotificationPolicyAccessGranted) {
             throw PhoneToolException("Kyllene isn't allowed to change Do Not Disturb. The user can allow it in Settings → Phone tools.")

@@ -44,6 +44,7 @@ import dev.hermeskotlin.designsystem.LocalAccentPalette
 import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.label
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.ui.chat.rememberImageBitmap
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -64,7 +65,7 @@ internal fun CircleOverlay(screen: ScreenCapture, onCircled: (ScreenRegion) -> U
     val edge = LocalAccentPalette.current.edge
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        shot?.let { Image(it, contentDescription = "Your screen", contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize()) }
+        shot?.let { Image(it, contentDescription = Strings.t("Your screen"), contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize()) }
         Canvas(
             Modifier
                 .fillMaxSize()
@@ -151,8 +152,8 @@ internal fun CircleOverlay(screen: ScreenCapture, onCircled: (ScreenRegion) -> U
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Circle or tap what to ask about", style = Theme[typography][label], color = Color.White)
-            IconButton(Lucide.X, contentDescription = "Stop circling", onClick = onCancel, tint = Color.White)
+            Text(Strings.t("Circle or tap what to ask about"), style = Theme[typography][label], color = Color.White)
+            IconButton(Lucide.X, contentDescription = Strings.t("Stop circling"), onClick = onCancel, tint = Color.White)
         }
     }
 }

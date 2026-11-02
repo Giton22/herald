@@ -11,6 +11,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.i18n.Strings
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -104,17 +105,22 @@ internal fun JourneySheetView(
         }
         val graph = state.graph
         SheetHeader(
-            "Journey",
-            graph?.let { "${count(it.skills, "skill")} and ${count(it.memories, "memory", "memories")} this profile's agent has picked up." },
+            Strings.t("Journey"),
+            graph?.let {
+                Strings.t(
+                    "{0} and {1} this profile's agent has picked up.",
+                    count(it.skills, "1 skill", "{0} skills"),
+                    count(it.memories, "1 memory", "{0} memories"),
+                )
+            },
         )
         when {
             graph == null && state.loading -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Spinner() }
-            graph == null -> Note(state.error ?: "Couldn't load the journey.", error = true)
-            graph.nodes.isEmpty() -> Note("Nothing learned yet. Skills the agent writes and memories it saves show up here.")
+            graph == null -> Note(state.error ?: Strings.t("Couldn't load the journey."), error = true)
+            graph.nodes.isEmpty() -> Note(Strings.t("Nothing learned yet. Skills the agent writes and memories it saves show up here."))
             else -> {
-                val months = remember(graph) {
-                    graph.nodes.sortedByDescending { it.timestamp ?: Long.MIN_VALUE }.groupBy { node -> node.timestamp?.let(::monthLabel) ?: "Undated" }
-                }
+                val months = graph.nodes.sortedByDescending { it.timestamp ?: Long.MIN_VALUE }
+                    .groupBy { node -> node.timestamp?.let(::monthLabel) ?: Strings.t("Undated") }
                 ScrollbarBox { listState -> LazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp), state = listState) {
                     months.forEach { (month, nodes) ->
                         item(key = "m-$month") {
@@ -179,7 +185,7 @@ private fun NodeRow(node: JourneyNode, onClick: () -> Unit) {
             )
             Text(node.detailLine(), style = Theme[typography][caption].copy(fontSize = 12.sp), color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (node.pinned) UnstyledIcon(Lucide.Pin, contentDescription = "Pinned", tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
+        if (node.pinned) UnstyledIcon(Lucide.Pin, contentDescription = Strings.t("Pinned"), tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
     }
 }
 
@@ -191,7 +197,7 @@ private fun NodeDetail(node: JourneyNode, read: suspend (JourneyNode) -> Journey
     val back = remember { FocusRequester() }
     LaunchedEffect(node.id) { if (isDesktop) runCatching { back.requestFocus() } }
     Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(Lucide.ArrowLeft, contentDescription = "Back to the journey", onClick = onBack, modifier = Modifier.focusRequester(back))
+        IconButton(Lucide.ArrowLeft, contentDescription = Strings.t("Back to the journey"), onClick = onBack, modifier = Modifier.focusRequester(back))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 node.title,
@@ -207,7 +213,7 @@ private fun NodeDetail(node: JourneyNode, read: suspend (JourneyNode) -> Journey
     val content = detail?.getOrNull()?.content
     when {
         detail == null -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Spinner() }
-        content.isNullOrBlank() -> Note("Couldn't read this one.", error = true)
+        content.isNullOrBlank() -> Note(Strings.t("Couldn't read this one."), error = true)
         else -> Box(Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScrollWithBar().padding(horizontal = 20.dp, vertical = 12.dp)) {
             SelectionContainer { MarkdownText(content) }
         }
@@ -225,21 +231,21 @@ private fun Note(text: String, error: Boolean = false) {
 }
 
 private fun JourneyNode.detailLine(): String = if (isMemory) {
-    listOfNotNull("Memory", memorySource?.substringAfterLast('/')?.takeIf { it.isNotBlank() }).joinToString(" · ")
+    listOfNotNull(Strings.t("Memory"), memorySource?.substringAfterLast('/')?.takeIf { it.isNotBlank() }).joinToString(" · ")
 } else {
     listOfNotNull(
-        "Skill",
+        Strings.t("Skill"),
         category?.takeIf { it.isNotBlank() && it != "uncategorized" },
         when (useCount) {
             0 -> null
-            1 -> "used once"
-            else -> "used $useCount times"
+            1 -> Strings.t("used once")
+            else -> Strings.t("used {0} times", useCount)
         },
-        "archived".takeIf { state == "archived" },
+        Strings.t("archived").takeIf { state == "archived" },
     ).joinToString(" · ")
 }
 
-private fun count(n: Int, one: String, many: String = "${one}s"): String = "$n ${if (n == 1) one else many}"
+private fun count(n: Int, one: String, many: String): String = if (n == 1) Strings.t(one) else Strings.t(many, n)
 
 private val MONTHS = listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
 
@@ -254,5 +260,5 @@ internal fun monthLabel(epochSeconds: Long): String {
     val mp = (5 * doy + 2) / 153
     val month = (if (mp < 10) mp + 3 else mp - 9).toInt()
     val year = yoe + era * 400 + if (month <= 2) 1 else 0
-    return "${MONTHS[month - 1]} $year"
+    return "${Strings.t(MONTHS[month - 1])} $year"
 }

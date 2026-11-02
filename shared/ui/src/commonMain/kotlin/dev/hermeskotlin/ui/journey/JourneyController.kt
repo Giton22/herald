@@ -7,6 +7,7 @@ import dev.hermeskotlin.core.journey.JourneyNode
 import dev.hermeskotlin.core.journey.JourneyNodeDetail
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -37,7 +38,7 @@ class JourneyController(private val api: JourneyApi, private val scope: Coroutin
         scope.launch {
             when (val result = api.graph(gateway, profile)) {
                 is ApiResult.Success -> _state.update { it.copy(graph = result.value, loading = false) }
-                else -> _state.update { it.copy(loading = false, error = result.errorMessage ?: "Couldn't load the journey.") }
+                else -> _state.update { it.copy(loading = false, error = result.errorMessage ?: Strings.t("Couldn't load the journey.")) }
             }
         }
     }

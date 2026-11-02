@@ -154,6 +154,7 @@ import dev.hermeskotlin.ui.chat.BarStatus
 import dev.hermeskotlin.ui.chat.SendIcon
 import dev.hermeskotlin.ui.chat.StatusTone
 import dev.hermeskotlin.ui.chat.TopBar
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.ui.sessions.ListNotice
 import dev.hermeskotlin.ui.sessions.ListSpinner
 import dev.hermeskotlin.ui.sessions.MessageBanner
@@ -222,7 +223,7 @@ internal fun RoomView(
                 titleFace = members.takeIf { it.isNotEmpty() }?.let { { RoomFaces(it, faces, size = 20.dp, max = 3) } },
                 // Who's in it, unless the room waits on the user.
                 status = when {
-                    room.pendingActions.isNotEmpty() -> BarStatus("Waiting on you", StatusTone.Waiting)
+                    room.pendingActions.isNotEmpty() -> BarStatus(Strings.t("Waiting on you"), StatusTone.Waiting)
                     members.isNotEmpty() -> BarStatus(members.joinToString(", ") { it.label }, StatusTone.Neutral)
                     else -> null
                 },
@@ -241,9 +242,9 @@ internal fun RoomView(
                             )
                         },
                     ) {
-                        BarButton(Lucide.Ellipsis, "Room options", onClick = { menuOpen = true })
+                        BarButton(Lucide.Ellipsis, Strings.t("Room options"), onClick = { menuOpen = true })
                     }
-                    BarButton(Lucide.X, "Close the room", onClick = onBack)
+                    BarButton(Lucide.X, Strings.t("Close the room"), onClick = onBack)
                 },
             )
             Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -261,7 +262,7 @@ internal fun RoomView(
                     Spinner(Modifier.size(14.dp))
                     // Who's replying to the user's message; past its first round, bots answering each other.
                     Text(
-                        waitingLine(room.waiting) ?: "The room is talking it over…",
+                        waitingLine(room.waiting) ?: Strings.t("The room is talking it over…"),
                         style = Theme[typography][caption],
                         color = Theme[colors][textTertiary],
                         maxLines = 1,
@@ -319,7 +320,7 @@ private fun Transcript(room: OpenRoom, faces: BotFaces, onLoadEarlier: () -> Uni
     }
     when {
         (room.loading || room.loadingEarlier || room.canLoadEarlier) && lines.isEmpty() -> ListSpinner()
-        lines.isEmpty() -> ListNotice("The room is quiet. Say something to start it.")
+        lines.isEmpty() -> ListNotice(Strings.t("The room is quiet. Say something to start it."))
         else -> Box(Modifier.fillMaxSize()) {
             TranscriptList(lines, listState, faces, onOpenFile)
             // Over the list, not in it: a row on top would hold the scroll there and pull the reader up.
@@ -459,7 +460,7 @@ internal fun copyable(text: String): Boolean = text.isNotBlank()
 
 /** What a screen reader hears for a line's Copy: whose message it copies, the user's when [speaker] is null. */
 internal fun copyLabel(speaker: String?): String =
-    if (speaker == null) "Copy your message" else "Copy $speaker's message"
+    if (speaker == null) Strings.t("Copy your message") else Strings.t("Copy {0}'s message", speaker)
 
 /** A line the gateway wrote: centred and quiet between the messages. */
 @Composable
@@ -484,19 +485,19 @@ private fun PendingActions(room: OpenRoom, onApprove: (RoomPendingAction, String
         room.pendingActions.forEach { action ->
             Surface(Modifier.fillMaxWidth(), elevated = true) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val who = room.room.member(action.memberId)?.label ?: "A member"
+                    val who = room.room.member(action.memberId)?.label ?: Strings.t("A member")
                     if (action.kind == "approval") {
-                        Text("$who needs your approval", style = Theme[typography][bodySmall], color = Theme[colors][warning])
+                        Text(Strings.t("{0} needs your approval", who), style = Theme[typography][bodySmall], color = Theme[colors][warning])
                         action.approvalSummary?.let {
                             Text(it, style = Theme[typography][caption], color = Theme[colors][textSecondary])
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button("Deny", onClick = { onApprove(action, "deny") }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-                            Button("Approve once", onClick = { onApprove(action, "once") }, variant = ButtonVariant.Primary, size = ButtonSize.Small)
+                            Button(Strings.t("Deny"), onClick = { onApprove(action, "deny") }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+                            Button(Strings.t("Approve once"), onClick = { onApprove(action, "once") }, variant = ButtonVariant.Primary, size = ButtonSize.Small)
                         }
                     } else {
-                        Text("$who's turn didn't go through", style = Theme[typography][bodySmall], color = Theme[colors][warning])
-                        Button("Retry", onClick = { onRetry(action) }, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
+                        Text(Strings.t("{0}'s turn didn't go through", who), style = Theme[typography][bodySmall], color = Theme[colors][warning])
+                        Button(Strings.t("Retry"), onClick = { onRetry(action) }, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
                     }
                 }
             }
@@ -522,7 +523,7 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomActions, mentions: RoomM
         )
     }
     AttachSheet(attachOpen, onDismiss = { attachOpen = false }, picker = picker,
-        subtitle = RoomAttachment.LIMITS)
+        subtitle = Strings.t(RoomAttachment.LIMITS))
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     var focused by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
@@ -565,8 +566,8 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomActions, mentions: RoomM
     ) {
         if (room.attachments.isNotEmpty()) ComposerTray(room.attachments, onRemove = viewModel::removeAttachment)
         if (room.attachmentRetry) Text(
-            if (room.retryText.isBlank()) "Send again to confirm the previous message."
-            else "Send again to confirm the previous message: “${room.retryText}”", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+            if (room.retryText.isBlank()) Strings.t("Send again to confirm the previous message.")
+            else Strings.t("Send again to confirm the previous message: “{0}”", room.retryText), style = Theme[typography][caption], color = Theme[colors][textTertiary])
         UnstyledTextField(
             state = viewModel.composer,
             enabled = !room.attachmentRetry,
@@ -593,21 +594,21 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomActions, mentions: RoomM
         ) {
             TextInput(
                 placeholder = {
-                    Text("Message the room", style = Theme[typography][body], color = Theme[colors][textTertiary])
+                    Text(Strings.t("Message the room"), style = Theme[typography][body], color = Theme[colors][textTertiary])
                 },
             )
         }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            BarButton(Lucide.Paperclip, "Add photos or files", onClick = {
+            BarButton(Lucide.Paperclip, Strings.t("Add photos or files"), onClick = {
                 // A desktop has no camera, and its file dialog picks photos as well: it opens straight away.
                 if (room.attachmentsSupported) { if (isDesktop) picker.pickFiles() else attachOpen = true }
-                else viewModel.attachmentError("This gateway doesn't support room attachments. Update Hermes to use them.", room.draftKey)
+                else viewModel.attachmentError(Strings.t("This gateway doesn't support room attachments. Update Hermes to use them."), room.draftKey)
             }, enabled = !room.sending && !room.attachmentRetry && room.attachments.size < RoomAttachment.MAX_COUNT)
             // Who answers first, by the gateway's own @ rule: everyone, unless the message names someone.
             val members = room.room.members
             val recipients by remember(members) { derivedStateOf { roomRecipients(viewModel.composer.text.toString(), members) } }
             // Starts an @ where the cursor is, which brings up the members to pick from.
-            BarButton(Lucide.AtSign, "Mention a member", onClick = {
+            BarButton(Lucide.AtSign, Strings.t("Mention a member"), onClick = {
                 viewModel.composer.edit {
                     val at = selection
                     val previous = asCharSequence().getOrNull(at.start - 1)
@@ -621,7 +622,7 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomActions, mentions: RoomM
             }, enabled = !room.attachmentRetry)
             Text(
                 if (recipients.size == members.size) members.joinToString(" · ") { it.label }
-                else "To ${recipients.joinToString(", ") { it.label }}",
+                else Strings.t("To {0}", recipients.joinToString(", ") { it.label }),
                 style = Theme[typography][caption],
                 color = Theme[colors][textTertiary],
                 maxLines = 1,
@@ -679,7 +680,7 @@ private fun rememberRoomMentions(room: OpenRoom, viewModel: RoomActions, faces: 
     val retry = room.attachmentRetry
     return remember(mention, members, faces, retry) {
         val typed = mention
-        val everyone = MentionChoice("Everyone", "all", bot = null).takeIf { typed != null && mentionsEveryone(typed.query) }
+        val everyone = MentionChoice(Strings.t("Everyone"), "all", bot = null).takeIf { typed != null && mentionsEveryone(typed.query) }
         val choices = if (typed == null || retry) emptyList() else listOfNotNull(everyone) + members.mentionable(typed.query).mapNotNull { member ->
             member.handle?.let { MentionChoice(member.label, it, faces.roomBot(member.profile ?: member.memberId)) }
         }
@@ -714,10 +715,10 @@ internal data class RoomFileLink(val gateway: GatewayUrl, val room: String, val 
     }
 
     suspend fun preview(media: MediaApi, linked: GatewayFile = file): FileLoad =
-        if (profile.isNullOrBlank()) FileLoad.Failed(NO_OWNER) else media.fileLoad(gateway, linked, profile)
+        if (profile.isNullOrBlank()) FileLoad.Failed(Strings.t(NO_OWNER)) else media.fileLoad(gateway, linked, profile)
 
     suspend fun download(media: MediaApi, linked: GatewayFile = file): FileDownload =
-        if (profile.isNullOrBlank()) FileDownload.Failed(NO_OWNER) else media.fileDownload(gateway, linked, profile)
+        if (profile.isNullOrBlank()) FileDownload.Failed(Strings.t(NO_OWNER)) else media.fileDownload(gateway, linked, profile)
 
     companion object {
         /** No request goes out without an owner: another profile's file at the same path is not this one. */

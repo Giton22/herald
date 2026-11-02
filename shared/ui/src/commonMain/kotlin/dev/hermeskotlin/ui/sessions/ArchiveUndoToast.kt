@@ -32,6 +32,7 @@ import com.composables.icons.lucide.ArchiveRestore
 import com.composables.icons.lucide.Lucide
 import dev.hermeskotlin.designsystem.components.Toast
 import dev.hermeskotlin.ui.chat.AFTER_HOVER_MILLIS
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.delay
 import kotlin.time.Clock
 import org.koin.compose.viewmodel.koinViewModel
@@ -75,10 +76,10 @@ fun ArchiveUndoToast(viewModel: SessionsViewModel = koinViewModel()) {
         ) {
             shown?.let {
                 Toast(
-                    "${it.message} “${it.session.displayTitle}”",
+                    Strings.t("{0} “{1}”", it.message, it.session.displayTitle),
                     modifier = Modifier.widthIn(max = MaxToastWidth).fillMaxWidth().hoverable(hover),
                     icon = if (it.session.archived) Lucide.ArchiveRestore else Lucide.Archive,
-                    actionLabel = "Undo",
+                    actionLabel = Strings.t("Undo"),
                     onAction = viewModel::undoArchive,
                     // It goes by itself, unless a screen reader keeps it until it's closed.
                     onDismiss = viewModel::dismissUndo.takeIf { timeout == Long.MAX_VALUE },

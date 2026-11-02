@@ -128,6 +128,7 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonObject
 
@@ -165,7 +166,7 @@ internal fun InputRequestPanel(
             Modifier.heightIn(max = 460.dp).verticalScrollWithBar().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            val more = (requests.size - 1).takeIf { it > 0 }?.let { "+$it more" }
+            val more = (requests.size - 1).takeIf { it > 0 }?.let { Strings.t("+{0} more", it) }
             // Keyed, so nothing carries over to the next request: a password shown with the eye stays hidden.
             key(request.id) {
                 when (request) {
@@ -229,7 +230,7 @@ private fun Header(
     }
     // On a line of its own, so the title and what it's about keep the width.
     if (onStop != null) {
-        Button("Stop task", onClick = onStop, variant = ButtonVariant.Ghost, size = ButtonSize.Small, leadingIcon = Lucide.CircleStop)
+        Button(Strings.t("Stop task"), onClick = onStop, variant = ButtonVariant.Ghost, size = ButtonSize.Small, leadingIcon = Lucide.CircleStop)
     }
 }
 
@@ -242,7 +243,7 @@ private fun WiderChoice(title: String, description: String, enabled: Boolean, on
             .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
             .handCursor(enabled)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = "$title. $description" }
+            .semantics { contentDescription = Strings.t("{0}. {1}", title, description) }
             .padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
@@ -355,7 +356,7 @@ private fun CommandBlock(command: String) {
         }
         if (long) {
             Button(
-                if (full) "Show less" else "Show full command",
+                if (full) Strings.t("Show less") else Strings.t("Show full command"),
                 onClick = { full = !full },
                 variant = ButtonVariant.Ghost,
                 size = ButtonSize.Small,
@@ -367,7 +368,7 @@ private fun CommandBlock(command: String) {
 
 /** The tool and purpose ahead of the command, each only when the gateway named it; null when neither. */
 internal fun approvalIntro(request: InputRequest.Approval): String? {
-    val tool = request.toolName?.takeIf { it.isNotBlank() }?.let { "Hermes wants to run this with $it." }
+    val tool = request.toolName?.takeIf { it.isNotBlank() }?.let { Strings.t("Hermes wants to run this with {0}.", it) }
     val purpose = request.description.takeIf { it.isNotBlank() }?.replaceFirstChar { it.uppercase() }
     return listOfNotNull(tool, purpose).joinToString(" ").ifEmpty { null }
 }
@@ -388,7 +389,7 @@ private fun ApprovalContent(request: InputRequest.Approval, more: String?, conne
         Lucide.ShieldAlert,
         Theme[colors][warning],
         Theme[colors][warningSoft],
-        "Allow this command?",
+        Strings.t("Allow this command?"),
         more,
         onStop,
         subtitle = approvalIntro(request),
@@ -400,8 +401,8 @@ private fun ApprovalContent(request: InputRequest.Approval, more: String?, conne
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, if (isDesktop) Alignment.End else Alignment.Start)) {
         val deny = if (isDesktop) Modifier.widthIn(min = 120.dp) else Modifier.weight(1f)
         val once = if (isDesktop) Modifier.widthIn(min = 150.dp) else Modifier.weight(1.3f)
-        AnswerPill("Deny", strong = false, enabled = ready, onClick = { choose(ApprovalChoice.Deny) }, modifier = deny, keyHint = "Esc".takeIf { isDesktop })
-        AnswerPill("Allow once", strong = true, enabled = ready, onClick = { choose(ApprovalChoice.Once) }, modifier = once, keyHint = "Enter".takeIf { isDesktop })
+        AnswerPill(Strings.t("Deny"), strong = false, enabled = ready, onClick = { choose(ApprovalChoice.Deny) }, modifier = deny, keyHint = "Esc".takeIf { isDesktop })
+        AnswerPill(Strings.t("Allow once"), strong = true, enabled = ready, onClick = { choose(ApprovalChoice.Once) }, modifier = once, keyHint = "Enter".takeIf { isDesktop })
     }
     val wider = request.choices.filter { it == ApprovalChoice.Session || it == ApprovalChoice.Always }
     if (wider.isNotEmpty()) {
@@ -415,11 +416,11 @@ private fun ApprovalContent(request: InputRequest.Approval, more: String?, conne
                 if (i > 0) Box(Modifier.padding(horizontal = 4.dp).size(3.dp).background(Theme[colors][textMuted], CircleShape))
                 val session = choice == ApprovalChoice.Session
                 WiderChoice(
-                    title = if (session) "Allow for this chat" else "Always allow",
+                    title = if (session) Strings.t("Allow for this chat") else Strings.t("Always allow"),
                     description = if (session) {
-                        "Commands like this run without asking again, in this chat only, until it ends."
+                        Strings.t("Commands like this run without asking again, in this chat only, until it ends.")
                     } else {
-                        "Commands like this run without asking again, in every chat. Opens a confirmation first."
+                        Strings.t("Commands like this run without asking again, in every chat. Opens a confirmation first.")
                     },
                     enabled = ready,
                     onClick = { if (session) choose(choice) else confirmAlways = true },
@@ -428,7 +429,7 @@ private fun ApprovalContent(request: InputRequest.Approval, more: String?, conne
         }
         // Said where it shows: the broader choices cover a kind of command, not just this one.
         Text(
-            "Allow once runs just this command. The others also let commands like it run without asking.",
+            Strings.t("Allow once runs just this command. The others also let commands like it run without asking."),
             style = Theme[typography][caption],
             color = Theme[colors][textTertiary],
             textAlign = TextAlign.Center,
@@ -439,11 +440,11 @@ private fun ApprovalContent(request: InputRequest.Approval, more: String?, conne
     Dialog(
         visible = confirmAlways,
         onDismissRequest = { confirmAlways = false },
-        title = "Always allow?",
-        message = "Commands like this will run without asking again, in every chat. The rule is saved in the gateway's config; remove it there to undo.",
+        title = Strings.t("Always allow?"),
+        message = Strings.t("Commands like this will run without asking again, in every chat. The rule is saved in the gateway's config; remove it there to undo."),
         actions = {
-            Button("Cancel", onClick = { confirmAlways = false }, variant = ButtonVariant.Ghost)
-            Button("Always allow", onClick = { confirmAlways = false; choose(ApprovalChoice.Always) })
+            Button(Strings.t("Cancel"), onClick = { confirmAlways = false }, variant = ButtonVariant.Ghost)
+            Button(Strings.t("Always allow"), onClick = { confirmAlways = false; choose(ApprovalChoice.Always) })
         },
     )
 }
@@ -464,8 +465,8 @@ private fun ClarifyContent(request: InputRequest.Clarify, more: String?, connect
         }
     }
 
-    val counter = if (questions.size > 1) "${index + 1} of ${questions.size}" else more
-    Header(Lucide.MessageCircleQuestion, Theme[colors][accentText], Theme[colors][accentSoft], "Hermes asks", counter, onStop)
+    val counter = if (questions.size > 1) Strings.t("{0} of {1}", index + 1, questions.size) else more
+    Header(Lucide.MessageCircleQuestion, Theme[colors][accentText], Theme[colors][accentSoft], Strings.t("Hermes asks"), counter, onStop)
     CopyableOnDesktop { Text(question.question, style = Theme[typography][body], color = Theme[colors][textColor]) }
     if (question.choices.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -494,7 +495,7 @@ private fun ClarifyContent(request: InputRequest.Clarify, more: String?, connect
     TextField(
         state = drafts[index],
         modifier = if (isDesktop) Modifier.onPreviewKeyEvent { it.isPlainEnter().also { enter -> if (enter && canGoOn) goOn() } } else Modifier,
-        placeholder = if (question.choices.isEmpty()) "Your answer" else "Something else…",
+        placeholder = if (question.choices.isEmpty()) Strings.t("Your answer") else Strings.t("Something else…"),
         singleLine = false,
         maxLines = 4,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
@@ -502,14 +503,14 @@ private fun ClarifyContent(request: InputRequest.Clarify, more: String?, connect
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(
-            if (index > 0) "Back" else "Skip",
+            if (index > 0) Strings.t("Back") else Strings.t("Skip"),
             onClick = { if (index > 0) index-- else answer(InputAnswers.clarifyCancel.takeIf { request.batch } ?: InputAnswers.clarify(request, listOf(emptyList()))) },
             variant = ButtonVariant.Outline,
             enabled = connected || index > 0,
             modifier = Modifier.weight(1f),
         )
         Button(
-            if (last) "Send" else "Next",
+            if (last) Strings.t("Send") else Strings.t("Next"),
             onClick = goOn,
             enabled = canGoOn,
             modifier = Modifier.weight(1f),
@@ -556,15 +557,15 @@ private fun SecretContent(request: InputRequest.Secret, more: String?, connected
     val typed = value.text.toString().let { if (kind == InputRequest.Secret.Kind.VaultCode) it.trim() else it }
     val submit = { if (connected && typed.isNotEmpty()) answer(InputAnswers.value(typed)) }
     val title = when (kind) {
-        InputRequest.Secret.Kind.Sudo -> "Sudo password needed"
-        InputRequest.Secret.Kind.Secret -> "Secret needed"
-        InputRequest.Secret.Kind.VaultUnlock -> "Unlock your password manager"
-        InputRequest.Secret.Kind.VaultCode -> "Sign-in code needed"
+        InputRequest.Secret.Kind.Sudo -> Strings.t("Sudo password needed")
+        InputRequest.Secret.Kind.Secret -> Strings.t("Secret needed")
+        InputRequest.Secret.Kind.VaultUnlock -> Strings.t("Unlock your password manager")
+        InputRequest.Secret.Kind.VaultCode -> Strings.t("Sign-in code needed")
     }
 
     Header(if (kind == InputRequest.Secret.Kind.VaultCode) Lucide.RectangleEllipsis else Lucide.KeyRound, Theme[colors][warning], Theme[colors][warningSoft], title, more, onStop)
     if (kind == InputRequest.Secret.Kind.Sudo) {
-        Text("To run this command as root:", style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
+        Text(Strings.t("To run this command as root:"), style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
         request.command?.takeIf { it.isNotBlank() }?.let { CommandBlock(it) }
     } else {
         Text(request.prompt, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
@@ -576,10 +577,10 @@ private fun SecretContent(request: InputRequest.Secret, more: String?, connected
         state = value,
         focusRequester = field,
         label = when (kind) {
-            InputRequest.Secret.Kind.Sudo -> "Password"
+            InputRequest.Secret.Kind.Sudo -> Strings.t("Password")
             InputRequest.Secret.Kind.Secret -> request.envVar
-            InputRequest.Secret.Kind.VaultUnlock -> "Master password"
-            InputRequest.Secret.Kind.VaultCode -> "Code"
+            InputRequest.Secret.Kind.VaultUnlock -> Strings.t("Master password")
+            InputRequest.Secret.Kind.VaultCode -> Strings.t("Code")
         },
         // A one-time code is read off another screen, so it shows as typed.
         password = kind != InputRequest.Secret.Kind.VaultCode,
@@ -589,13 +590,13 @@ private fun SecretContent(request: InputRequest.Secret, more: String?, connected
             KeyboardOptions(imeAction = ImeAction.Done)
         },
         onKeyboardAction = { submit() },
-        supportingText = "Sent to your gateway only.",
+        supportingText = Strings.t("Sent to your gateway only."),
         contentType = ContentType.SmsOtpCode.takeIf { kind == InputRequest.Secret.Kind.VaultCode },
     )
     val vault = kind == InputRequest.Secret.Kind.VaultUnlock || kind == InputRequest.Secret.Kind.VaultCode
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(
-            if (vault) "Skip" else "Decline",
+            if (vault) Strings.t("Skip") else Strings.t("Decline"),
             onClick = { answer(InputAnswers.value("")) },
             variant = ButtonVariant.Outline,
             enabled = connected,
@@ -603,9 +604,9 @@ private fun SecretContent(request: InputRequest.Secret, more: String?, connected
         )
         Button(
             when (kind) {
-                InputRequest.Secret.Kind.VaultUnlock -> "Unlock"
-                InputRequest.Secret.Kind.VaultCode -> "Send"
-                else -> "Submit"
+                InputRequest.Secret.Kind.VaultUnlock -> Strings.t("Unlock")
+                InputRequest.Secret.Kind.VaultCode -> Strings.t("Send")
+                else -> Strings.t("Submit")
             },
             onClick = submit,
             enabled = connected && typed.isNotEmpty(),
@@ -635,8 +636,8 @@ private fun SaveLoginContent(request: InputRequest.VaultSaveLogin, more: String?
 
     Header(Lucide.KeyRound, Theme[colors][warning], Theme[colors][warningSoft], request.title, more, onStop)
     Text(
-        (if (page.isBlank()) "Hermes is on a sign-in page" else "Hermes is on the sign-in page of $page") +
-            " and has no login for it. Save one to your gateway's vault, and Hermes signs in with it.",
+        if (page.isBlank()) Strings.t("Hermes is on a sign-in page and has no login for it. Save one to your gateway's vault, and Hermes signs in with it.")
+        else Strings.t("Hermes is on the sign-in page of {0} and has no login for it. Save one to your gateway's vault, and Hermes signs in with it.", page),
         style = Theme[typography][bodySmall],
         color = Theme[colors][textSecondary],
     )
@@ -645,27 +646,27 @@ private fun SaveLoginContent(request: InputRequest.VaultSaveLogin, more: String?
     TextField(
         state = identifier,
         focusRequester = first,
-        label = "Email or username",
+        label = Strings.t("Email or username"),
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, autoCorrectEnabled = false, imeAction = ImeAction.Next),
         contentType = ContentType.Username,
     )
     TextField(
         state = password,
-        label = "Password",
+        label = Strings.t("Password"),
         password = true,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
         onKeyboardAction = { save() },
-        supportingText = "Sent to your gateway only.",
+        supportingText = Strings.t("Sent to your gateway only."),
         contentType = ContentType.Password,
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(
-            "Don't save",
+            Strings.t("Don't save"),
             onClick = { answer(InputAnswers.value("")) },
             variant = ButtonVariant.Outline,
             enabled = connected,
             modifier = Modifier.weight(1f),
         )
-        Button("Save", onClick = save, enabled = connected && password.text.isNotEmpty(), modifier = Modifier.weight(1f))
+        Button(Strings.t("Save"), onClick = save, enabled = connected && password.text.isNotEmpty(), modifier = Modifier.weight(1f))
     }
 }

@@ -14,6 +14,9 @@ import kotlinx.serialization.Serializable
 
 enum class ThemeMode { System, Light, Dark }
 
+/** The interface's language: [System] follows the device, the others override it. */
+enum class AppLanguage { System, English, Chinese }
+
 /** The accent [AppSettings.accent] starts with: Desktop's blue. */
 const val DEFAULT_ACCENT = "Blue"
 
@@ -61,6 +64,11 @@ enum class RunningSend { Steer, Queue, StopAndSend }
 @Serializable
 data class AppSettings(
     val theme: ThemeMode = ThemeMode.System,
+    /**
+     * The interface's language. [AppLanguage.System] follows the phone's; the other two override it. A name, not
+     * the language itself, so it survives a version that drops one.
+     */
+    val language: AppLanguage = AppLanguage.System,
     /** Dark mode uses true black backgrounds (OLED). */
     val pureBlack: Boolean = false,
     /**

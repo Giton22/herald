@@ -1,5 +1,6 @@
 package dev.hermeskotlin.ui.chat
 
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.core.voice.ReadAloudVoices
 import dev.hermeskotlin.core.voice.InMemoryReadAloudVoices
 import androidx.compose.foundation.text.input.TextFieldState
@@ -609,7 +610,7 @@ class ChatViewModel(
         viewModelScope.launch {
             val ready = withTimeoutOrNull(VOICE_CONNECT_WAIT_MS) { connectionState.first { it is ConnectionState.Connected } }
             if (this@ChatViewModel.target != target) return@launch
-            if (ready != null) send() else showAttachmentError("The prompt wasn't sent: Kyllene couldn't reach the gateway. It's in the composer.")
+            if (ready != null) send() else showAttachmentError(Strings.t("The prompt wasn't sent: Kyllene couldn't reach the gateway. It's in the composer."))
         }
     }
 
@@ -636,7 +637,7 @@ class ChatViewModel(
             when {
                 ready is ConnectionState.Connected -> _requests.send(ChatRequest.StartCall)
                 ready is ConnectionState.Failed || (ready == null && connectionState.value !is ConnectionState.Connected) ->
-                    showAttachmentError("The call didn't start: Kyllene couldn't reach the gateway.")
+                    showAttachmentError(Strings.t("The call didn't start: Kyllene couldn't reach the gateway."))
             }
         }
     }
@@ -765,7 +766,7 @@ class ChatViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _picker.update { it.copy(loading = false, error = e.message ?: "Couldn't load the models.") }
+                _picker.update { it.copy(loading = false, error = e.message ?: Strings.t("Couldn't load the models.")) }
             }
         }
     }
@@ -795,7 +796,7 @@ class ChatViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                chat.showModel(null, null, error = "Couldn't change ${bot.label}'s model. ${e.message.orEmpty()}".trim())
+                chat.showModel(null, null, error = Strings.t("Couldn't change {0}'s model. {1}", bot.label, e.message.orEmpty()).trim())
             }
         }
     }
@@ -843,7 +844,7 @@ class ChatViewModel(
     suspend fun previewFile(file: GatewayFile): FileLoad = previewFile(file, target)
 
     internal suspend fun previewFile(file: GatewayFile, owner: ChatTarget?): FileLoad {
-        val gateway = owner?.gateway?.gatewayUrl ?: return FileLoad.Failed("Not connected to a gateway.")
+        val gateway = owner?.gateway?.gatewayUrl ?: return FileLoad.Failed(Strings.t("Not connected to a gateway."))
         return media.fileLoad(gateway, file, owner.profile)
     }
 
@@ -854,14 +855,14 @@ class ChatViewModel(
     suspend fun downloadFile(file: GatewayFile): FileDownload = downloadFile(file, target)
 
     internal suspend fun downloadFile(file: GatewayFile, owner: ChatTarget?): FileDownload {
-        val gateway = owner?.gateway?.gatewayUrl ?: return FileDownload.Failed("Not connected to a gateway.")
+        val gateway = owner?.gateway?.gatewayUrl ?: return FileDownload.Failed(Strings.t("Not connected to a gateway."))
         return media.fileDownload(gateway, file, owner.profile)
     }
 
     /** Adds picked files to the composer tray, up to [OutgoingAttachment.MAX_COUNT]. */
     fun addAttachments(picked: List<OutgoingAttachment>) {
         val room = OutgoingAttachment.MAX_COUNT - _attachments.value.size
-        if (picked.size > room) showAttachmentError("Up to ${OutgoingAttachment.MAX_COUNT} attachments per message.")
+        if (picked.size > room) showAttachmentError(Strings.t("Up to {0} attachments per message.", OutgoingAttachment.MAX_COUNT))
         _attachments.update { it + picked.take(room.coerceAtLeast(0)) }
     }
 
@@ -976,7 +977,7 @@ class ChatViewModel(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            chat.showCommandOutput(command, e.message ?: "Couldn't start ${thread.name} fresh.", failed = true)
+            chat.showCommandOutput(command, e.message ?: Strings.t("Couldn't start {0} fresh.", thread.name), failed = true)
         }
     }
 
@@ -1005,7 +1006,7 @@ class ChatViewModel(
                 SlashRoute.Aside -> chat.askAside(arg)
                 SlashRoute.Background -> chat.runInBackground(arg)
                 SlashRoute.Steer -> if (arg.isEmpty()) {
-                    chat.showCommandOutput("/steer", "Usage: /steer <note>. The running reply reads it after its current step, without stopping.")
+                    chat.showCommandOutput("/steer", Strings.t("Usage: /steer <note>. The running reply reads it after its current step, without stopping."))
                 } else if (chat.steer(arg) == SendOutcome.NotSent) {
                     giveBack("/steer $arg")
                 }
@@ -1019,13 +1020,13 @@ class ChatViewModel(
                 SlashRoute.Title -> when {
                     arg.isEmpty() -> onGateway()
                     // Its title is what makes it the bot's chat; renamed, the bot would start a new one.
-                    target?.bot != null -> chat.showCommandOutput("/title", "A bot's chat keeps its name, so the bot can find it.", failed = true)
+                    target?.bot != null -> chat.showCommandOutput("/title", Strings.t("A bot's chat keeps its name, so the bot can find it."), failed = true)
                     else -> chat.retitle(arg)
                 }
                 SlashRoute.Branch -> {
                     val count = arg.toIntOrNull()
                     if (arg.isNotEmpty() && (count == null || count < 1)) {
-                        chat.showCommandOutput("/branch", "Usage: /branch [how many messages to keep]", failed = true)
+                        chat.showCommandOutput("/branch", Strings.t("Usage: /branch [how many messages to keep]"), failed = true)
                     } else {
                         chat.branch(count)?.let { (id, title) -> _requests.send(ChatRequest.OpenChat(id, title)) }
                     }
@@ -1058,15 +1059,15 @@ class ChatViewModel(
             "dark" -> current.copy(theme = ThemeMode.Dark, pureBlack = false)
             "black", "oled", "amoled" -> current.copy(theme = ThemeMode.Dark, pureBlack = true)
             "system", "auto", "default" -> current.copy(theme = ThemeMode.System)
-            else -> return chat.showCommandOutput("/skin", "Themes here: light, dark, black or system.", failed = true)
+            else -> return chat.showCommandOutput("/skin", Strings.t("Themes here: light, dark, black or system."), failed = true)
         }
         settings.update { next }
         val name = when (next.theme) {
-            ThemeMode.System -> "matches the system"
-            ThemeMode.Light -> "light"
-            ThemeMode.Dark -> if (next.pureBlack) "black" else "dark"
+            ThemeMode.System -> Strings.t("matches the system")
+            ThemeMode.Light -> Strings.t("light")
+            ThemeMode.Dark -> if (next.pureBlack) Strings.t("black") else Strings.t("dark")
         }
-        chat.showCommandOutput("/skin", "Theme: $name.")
+        chat.showCommandOutput("/skin", Strings.t("Theme: {0}.", name))
     }
 
     /** `/pet [name|off]`: bare opens the gallery; a name adopts that pet; `off` puts it away. */
@@ -1075,24 +1076,24 @@ class ChatViewModel(
             "", "list", "gallery", "browse", "all" -> _requests.send(ChatRequest.OpenPets)
             "off", "hide", "disable", "none" -> try {
                 pets.hide()
-                chat.showCommandOutput("/pet", "Pet put away. Bring one back with /pet.")
+                chat.showCommandOutput("/pet", Strings.t("Pet put away. Bring one back with /pet."))
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                chat.showCommandOutput("/pet", e.message ?: "Couldn't put the pet away.", failed = true)
+                chat.showCommandOutput("/pet", e.message ?: Strings.t("Couldn't put the pet away."), failed = true)
             }
             else -> try {
                 val name = pets.adopt(arg)
                 if (name == null) {
-                    chat.showCommandOutput("/pet", "No pet called “$arg”. Type /pet to browse them.", failed = true)
+                    chat.showCommandOutput("/pet", Strings.t("No pet called “{0}”. Type /pet to browse them.", arg), failed = true)
                 } else {
                     if (settings.settings.value?.showPet == false) settings.update { it.copy(showPet = true) }
-                    chat.showCommandOutput("/pet", "Adopted $name.")
+                    chat.showCommandOutput("/pet", Strings.t("Adopted {0}.", name))
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                chat.showCommandOutput("/pet", e.message ?: "Couldn't adopt $arg.", failed = true)
+                chat.showCommandOutput("/pet", e.message ?: Strings.t("Couldn't adopt {0}.", arg), failed = true)
             }
         }
     }
@@ -1102,8 +1103,8 @@ class ChatViewModel(
         val target = target ?: return
         when (val result = sessions.search(target.gateway.gatewayUrl, query, limit = 1, profile = target.profile)) {
             is ApiResult.Success -> result.value.firstOrNull()?.let { _requests.send(ChatRequest.OpenChat(it.id, it.displayTitle)) }
-                ?: chat.showCommandOutput("/resume", "No chat matches “$query”.", failed = true)
-            else -> chat.showCommandOutput("/resume", result.errorMessage ?: "Couldn't search the chats.", failed = true)
+                ?: chat.showCommandOutput("/resume", Strings.t("No chat matches “{0}”.", query), failed = true)
+            else -> chat.showCommandOutput("/resume", result.errorMessage ?: Strings.t("Couldn't search the chats."), failed = true)
         }
     }
 
@@ -1111,31 +1112,31 @@ class ChatViewModel(
     private suspend fun profile(chat: ChatSession, name: String) {
         val target = target ?: return
         val roster = (profiles.roster(target.gateway.gatewayUrl) as? ApiResult.Success)?.value
-            ?: return chat.showCommandOutput("/profile", "Couldn't load the gateway's profiles.", failed = true)
+            ?: return chat.showCommandOutput("/profile", Strings.t("Couldn't load the gateway's profiles."), failed = true)
         val current = roster.profiles.find { it.name == (target.profile ?: roster.launch) }
         if (name.isEmpty()) {
             val others = roster.profiles.filter { it != current }.map { it.name }
+            val line = Strings.t("Profile: {0}", current?.label ?: target.profile ?: roster.launch)
             chat.showCommandOutput(
                 "/profile",
-                "Profile: ${current?.label ?: target.profile ?: roster.launch}" +
-                    if (others.isEmpty()) "" else "\nAlso on this gateway: ${others.joinToString(", ")}",
+                line + if (others.isEmpty()) "" else "\n" + Strings.t("Also on this gateway: {0}", others.joinToString(", ")),
             )
             return
         }
         val match = roster.profiles.find { it.name.equals(name, ignoreCase = true) }
             ?: return chat.showCommandOutput(
                 "/profile",
-                "No profile named “$name”. This gateway has: ${roster.profiles.joinToString(", ") { it.name }}",
+                Strings.t("No profile named “{0}”. This gateway has: {1}", name, roster.profiles.joinToString(", ") { it.name }),
                 failed = true,
             )
-        if (match == current) return chat.showCommandOutput("/profile", "Already in ${match.label}.")
+        if (match == current) return chat.showCommandOutput("/profile", Strings.t("Already in {0}.", match.label))
         _requests.send(ChatRequest.SwitchProfile(match.name.takeIf { it != roster.launch }))
     }
 
     private fun helpText(catalog: SlashCatalog?): String {
         val rows = catalog?.suggestions.orEmpty().filterNot { SlashRoute.hidden(it.text.removePrefix("/"), catalog) }
-        if (rows.isEmpty()) return "Couldn't load the command list. Type / to try again."
-        return rows.groupBy { it.group ?: "Commands" }.entries.joinToString("\n\n") { (group, items) ->
+        if (rows.isEmpty()) return Strings.t("Couldn't load the command list. Type / to try again.")
+        return rows.groupBy { it.group ?: Strings.t("Commands") }.entries.joinToString("\n\n") { (group, items) ->
             group + "\n" + items.joinToString("\n") { row -> if (row.description.isBlank()) row.text else "${row.text}  ${row.description}" }
         }
     }
@@ -1441,21 +1442,21 @@ internal suspend fun MediaApi.fileDownload(gateway: GatewayUrl, file: GatewayFil
  */
 internal fun fileError(result: ApiResult<*>, whole: Boolean = false): String = when (result) {
     is ApiResult.Failed -> when (result.status) {
-        404 -> "It isn't on the gateway, or it has moved since the reply was written."
+        404 -> Strings.t("It isn't on the gateway, or it has moved since the reply was written.")
         403 -> if (result.message.contains("sensitive", ignoreCase = true)) {
-            "The gateway keeps files like this one private."
+            Strings.t("The gateway keeps files like this one private.")
         } else {
-            "The gateway won't share it: ${result.message.trimEnd('.')}."
+            Strings.t("The gateway won't share it: {0}.", result.message.trimEnd('.'))
         }
         413 -> when {
-            !whole -> "It's too large for the gateway to preview. Save still gets it."
-            result.message == MediaApi.TOO_LARGE -> MediaApi.TOO_LARGE
-            else -> "It's too large for the gateway to hand over."
+            !whole -> Strings.t("It's too large for the gateway to preview. Save still gets it.")
+            result.message == MediaApi.TOO_LARGE -> Strings.t(MediaApi.TOO_LARGE)
+            else -> Strings.t("It's too large for the gateway to hand over.")
         }
         else -> result.message.trimEnd('.') + "."
     }
-    ApiResult.SessionExpired -> "Sign in again to open files."
-    ApiResult.RateLimited -> "The gateway is busy. Try again in a moment."
-    is ApiResult.Unavailable -> "Couldn't reach the gateway."
-    else -> "Couldn't open it."
+    ApiResult.SessionExpired -> Strings.t("Sign in again to open files.")
+    ApiResult.RateLimited -> Strings.t("The gateway is busy. Try again in a moment.")
+    is ApiResult.Unavailable -> Strings.t("Couldn't reach the gateway.")
+    else -> Strings.t("Couldn't open it.")
 }

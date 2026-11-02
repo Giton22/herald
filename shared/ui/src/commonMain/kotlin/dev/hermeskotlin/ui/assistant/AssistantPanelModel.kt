@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui.assistant
 
+import dev.hermeskotlin.ui.i18n.Strings
+
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
@@ -454,8 +456,8 @@ class AssistantPanelModel(
     }
 
     companion object {
-        const val SCREEN_ONLY_PROMPT = "What's on my screen?"
-        const val CIRCLED_PROMPT = "What's this?"
+        val SCREEN_ONLY_PROMPT get() = Strings.t("What's on my screen?")
+        val CIRCLED_PROMPT get() = Strings.t("What's this?")
         private const val SCREEN_WAIT_MS = 2_000L
 
         /** Long past a slow app's text and screenshot, which take well under a second. */

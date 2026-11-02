@@ -2,6 +2,7 @@ package dev.hermeskotlin.ui.sessions
 
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.chat.Waiting
+import dev.hermeskotlin.ui.i18n.Strings
 
 /**
  * A chat other than the one on screen, as the Sessions badge, the banner and Next see it. [waiting]: what it
@@ -36,7 +37,11 @@ data class SessionsBadge(val waiting: Int = 0, val replies: Int = 0) {
     val urgent: Boolean get() = waiting > 0
 
     /** What a screen reader says for the button. */
-    val description: String get() = if (none) "Sessions" else "Sessions, $count need${if (count == 1) "s" else ""} you"
+    val description: String
+        get() = if (none) Strings.t("Sessions") else Strings.t(
+            if (count == 1) "Sessions, {0} needs you" else "Sessions, {0} need you",
+            count,
+        )
 }
 
 /** What the banner says happened in another chat. */
@@ -59,12 +64,12 @@ data class OtherChatEvent(
 ) {
     val message: String get() {
         val said = when (call) {
-            OtherChatCall.Reply -> "Reply in $title"
-            OtherChatCall.Approval -> "$title needs your OK"
-            OtherChatCall.Question -> "$title needs an answer"
-            OtherChatCall.Input -> "$title needs your input"
+            OtherChatCall.Reply -> Strings.t("Reply in {0}", title)
+            OtherChatCall.Approval -> Strings.t("{0} needs your OK", title)
+            OtherChatCall.Question -> Strings.t("{0} needs an answer", title)
+            OtherChatCall.Input -> Strings.t("{0} needs your input", title)
         }
-        return if (more > 0) "$said, and $more more" else said
+        return if (more > 0) Strings.t("{0}, and {1} more", said, more) else said
     }
 
     /** The chat is waiting on the user: the phone buzzes for these, not for replies. */
@@ -305,7 +310,7 @@ fun previewOf(request: InputRequest?): String? = when (request) {
     null -> null
     is InputRequest.Approval -> if (request.command.isNotBlank()) commandPreview(request.command) else previewOf(request.description)
     is InputRequest.Clarify -> request.questions.firstOrNull()?.question?.let { first ->
-        previewOf(if (request.questions.size > 1) "$first (+${request.questions.size - 1} more)" else first)
+        previewOf(if (request.questions.size > 1) Strings.t("{0} (+{1} more)", first, request.questions.size - 1) else first)
     }
     is InputRequest.Secret -> if (request.prompt.isNotBlank()) previewOf(request.prompt) else (request.command ?: request.envVar)?.let(::commandPreview)
     is InputRequest.VaultSaveLogin -> previewOf(request.title)

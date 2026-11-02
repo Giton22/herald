@@ -137,6 +137,7 @@ import dev.hermeskotlin.ui.chat.rememberImageBitmap
 import dev.hermeskotlin.ui.chat.userBubbleShape
 import dev.hermeskotlin.ui.voice.DictationState
 import dev.hermeskotlin.ui.voice.briefError
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.serialization.json.JsonObject
 import org.koin.compose.koinInject
@@ -322,7 +323,7 @@ internal fun AssistantCard(
             Header(
                 status = when (state.phase) {
                     AssistantPhase.Loading -> null
-                    AssistantPhase.SignedOut -> BarStatus("Not signed in", StatusTone.Neutral)
+                    AssistantPhase.SignedOut -> BarStatus(Strings.t("Not signed in"), StatusTone.Neutral)
                     AssistantPhase.Ready -> chatStatus(state.chat, connected, state.linkLabel, place = null)
                 },
                 // A question from Hermes takes the composer's place, and circling with it; the bar keeps it then.
@@ -366,9 +367,9 @@ private fun Header(status: BarStatus?, onCircle: (() -> Unit)?, onOpenHerald: ()
                 .background(Theme[colors][surface], shape)
                 .border(1.dp, Theme[colors][stroke], shape),
         ) {
-            onCircle?.let { BarButton(Lucide.LassoSelect, "Circle part of the screen", onClick = it) }
-            BarButton(Lucide.Maximize2, "Open in Kyllene", onClick = onOpenHerald)
-            BarButton(Lucide.X, "Close", onClick = onClose)
+            onCircle?.let { BarButton(Lucide.LassoSelect, Strings.t("Circle part of the screen"), onClick = it) }
+            BarButton(Lucide.Maximize2, Strings.t("Open in Kyllene"), onClick = onOpenHerald)
+            BarButton(Lucide.X, Strings.t("Close"), onClick = onClose)
         }
     }
 }
@@ -377,11 +378,11 @@ private fun Header(status: BarStatus?, onCircle: (() -> Unit)?, onOpenHerald: ()
 private fun SignedOut(onOpenHerald: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 4.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
         Text(
-            "Sign in to a Hermes gateway in Kyllene to ask about your screen.",
+            Strings.t("Sign in to a Hermes gateway in Kyllene to ask about your screen."),
             style = Theme[typography][body],
             color = Theme[colors][textSecondary],
         )
-        Button("Open Kyllene", onClick = onOpenHerald, modifier = Modifier.fillMaxWidth())
+        Button(Strings.t("Open Kyllene"), onClick = onOpenHerald, modifier = Modifier.fillMaxWidth())
     }
 }
 
@@ -527,13 +528,13 @@ private fun Composer(
                 placeholder = {
                     Text(
                         when {
-                            dictation.recording -> "Listening…"
-                            dictation.transcribing -> "Writing down what you said…"
-                            !connected -> "Connecting to Hermes…"
-                            circled != null -> "Ask about what you circled"
-                            chat.hasConversation -> "Ask a follow-up"
-                            includeScreen -> "Ask about your screen"
-                            else -> "Ask Hermes"
+                            dictation.recording -> Strings.t("Listening…")
+                            dictation.transcribing -> Strings.t("Writing down what you said…")
+                            !connected -> Strings.t("Connecting to Hermes…")
+                            circled != null -> Strings.t("Ask about what you circled")
+                            chat.hasConversation -> Strings.t("Ask a follow-up")
+                            includeScreen -> Strings.t("Ask about your screen")
+                            else -> Strings.t("Ask Hermes")
                         },
                         style = Theme[typography][body],
                         color = Theme[colors][textTertiary],
@@ -544,7 +545,7 @@ private fun Composer(
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             // Circling a part works from a screenshot, before the first question or after it.
             if (screen.screenshot != null && circled == null) {
-                ComposerButton(Lucide.LassoSelect, "Circle part of the screen", onClick = actions::startCircling, enabled = true)
+                ComposerButton(Lucide.LassoSelect, Strings.t("Circle part of the screen"), onClick = actions::startCircling, enabled = true)
             }
             Spacer(Modifier.weight(1f))
             if (canDictate) {
@@ -575,7 +576,7 @@ private fun ScreenChip(screen: ScreenCapture, included: Boolean, onIncluded: (Bo
             .clip(shape)
             .background(if (included) Theme[colors][accentSoft] else Theme[colors][surface2], shape)
             .border(if (included) 1.5.dp else 1.dp, if (included) Theme[colors][accentText] else Theme[colors][stroke], shape)
-            .clickable(role = Role.Checkbox, onClickLabel = if (included) "Leave the screen out" else "Include the screen") { onIncluded(!included) }
+            .clickable(role = Role.Checkbox, onClickLabel = if (included) Strings.t("Leave the screen out") else Strings.t("Include the screen")) { onIncluded(!included) }
             .padding(start = 6.dp, top = 6.dp, bottom = 6.dp, end = if (included) 0.dp else 6.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -593,15 +594,15 @@ private fun ScreenChip(screen: ScreenCapture, included: Boolean, onIncluded: (Bo
         }
         Column(Modifier.weight(1f, fill = false)) {
             Text(
-                if (included) "This screen" else "Include this screen?",
+                if (included) Strings.t("This screen") else Strings.t("Include this screen?"),
                 style = Theme[typography][label].copy(fontWeight = FontWeight.Medium),
                 color = Theme[colors][textColor],
             )
             Text(
                 when {
-                    screen.pending > 0 && context.isEmpty -> "Reading the screen…"
-                    context.screenshot == null -> listOfNotNull(screen.app, "text only").joinToString(" · ")
-                    else -> screen.app ?: "Screenshot"
+                    screen.pending > 0 && context.isEmpty -> Strings.t("Reading the screen…")
+                    context.screenshot == null -> listOfNotNull(screen.app, Strings.t("text only")).joinToString(" · ")
+                    else -> screen.app ?: Strings.t("Screenshot")
                 },
                 style = Theme[typography][caption],
                 color = Theme[colors][textTertiary],
@@ -610,9 +611,9 @@ private fun ScreenChip(screen: ScreenCapture, included: Boolean, onIncluded: (Bo
             )
         }
         if (included) {
-            IconButton(Lucide.X, contentDescription = "Leave the screen out", onClick = { onIncluded(false) })
+            IconButton(Lucide.X, contentDescription = Strings.t("Leave the screen out"), onClick = { onIncluded(false) })
         } else {
-            Button("Add", onClick = { onIncluded(true) }, variant = ButtonVariant.Secondary, size = ButtonSize.Small, leadingIcon = Lucide.Plus)
+            Button(Strings.t("Add"), onClick = { onIncluded(true) }, variant = ButtonVariant.Secondary, size = ButtonSize.Small, leadingIcon = Lucide.Plus)
         }
     }
 }
@@ -637,16 +638,16 @@ private fun ScreenUnavailable(onOpenSettings: () -> Unit) {
             UnstyledIcon(Lucide.ScanText, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(18.dp))
         }
         Column(Modifier.weight(1f, fill = false)) {
-            Text("Kyllene can't see the screen", style = Theme[typography][label].copy(fontWeight = FontWeight.Medium), color = Theme[colors][textColor])
+            Text(Strings.t("Kyllene can't see the screen"), style = Theme[typography][label].copy(fontWeight = FontWeight.Medium), color = Theme[colors][textColor])
             Text(
-                "Turn on \"Use text from screen\"",
+                Strings.t("Turn on \"Use text from screen\""),
                 style = Theme[typography][caption],
                 color = Theme[colors][textTertiary],
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
         }
-        Button("Settings", onClick = onOpenSettings, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
+        Button(Strings.t("Settings"), onClick = onOpenSettings, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
     }
 }
 
@@ -667,18 +668,18 @@ private fun CircledChip(part: ScreenContext, onCircleAgain: () -> Unit, onRemove
         Box(Modifier.heightIn(max = 56.dp).width(96.dp), contentAlignment = Alignment.Center) {
             // Whole, not cropped again: a wide strip should still read as the strip that was circled.
             if (crop != null) {
-                Image(crop, contentDescription = "What you circled", contentScale = ContentScale.Fit, modifier = Modifier.clip(RoundedCornerShape(Theme[radii][radiusMedium])))
+                Image(crop, contentDescription = Strings.t("What you circled"), contentScale = ContentScale.Fit, modifier = Modifier.clip(RoundedCornerShape(Theme[radii][radiusMedium])))
             } else {
                 Spinner(Modifier.size(16.dp))
             }
         }
         Column(Modifier.weight(1f, fill = false)) {
-            Text("Circled", style = Theme[typography][label].copy(fontWeight = FontWeight.Medium), color = Theme[colors][textColor])
+            Text(Strings.t("Circled"), style = Theme[typography][label].copy(fontWeight = FontWeight.Medium), color = Theme[colors][textColor])
             part.app?.let {
                 Text(it, style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        IconButton(Lucide.LassoSelect, contentDescription = "Circle again", onClick = onCircleAgain)
-        IconButton(Lucide.X, contentDescription = "Remove what you circled", onClick = onRemove)
+        IconButton(Lucide.LassoSelect, contentDescription = Strings.t("Circle again"), onClick = onCircleAgain)
+        IconButton(Lucide.X, contentDescription = Strings.t("Remove what you circled"), onClick = onRemove)
     }
 }

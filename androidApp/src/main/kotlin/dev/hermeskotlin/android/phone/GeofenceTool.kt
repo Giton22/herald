@@ -12,6 +12,7 @@ import dev.hermeskotlin.core.phone.forQuestion
 import dev.hermeskotlin.core.phone.hidden
 import dev.hermeskotlin.core.profiles.ProfileStore
 import dev.hermeskotlin.core.profiles.ProfilesApi
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -63,7 +64,7 @@ internal class GeofenceTool(
         "list" -> list(session)
         "remove" -> remove(args, session)
         "add" -> add(args, session)
-        else -> throw PhoneToolException("action is add, list or remove.")
+        else -> throw PhoneToolException(Strings.t("action is add, list or remove."))
     }
 
     /**
@@ -102,15 +103,15 @@ internal class GeofenceTool(
                 }
             }
         }
-        if (!on) put("note", "The Watched places tool is off, so none of these fire.")
+        if (!on) put("note", Strings.t("The Watched places tool is off, so none of these fire."))
     }
 
     private suspend fun remove(args: JsonObject, session: String): JsonObject {
-        val id = args.string("id") ?: throw PhoneToolException("id is needed: take it from action=list.")
-        val place = visible(session).firstOrNull { it.id == id } ?: throw PhoneToolException("No watched place has that id.")
+        val id = args.string("id") ?: throw PhoneToolException(Strings.t("id is needed: take it from action=list."))
+        val place = visible(session).firstOrNull { it.id == id } ?: throw PhoneToolException(Strings.t("No watched place has that id."))
         // The user allowed the place: only the user takes it back.
-        val event = if (place.arriving) "arrive at" else "leave"
-        confirmations.confirm("Stop watching ${forQuestion(place.name)}? Nothing is sent any more when you $event it.", TITLE_REMOVE) {
+        val event = if (place.arriving) Strings.t("arrive at") else Strings.t("leave")
+        confirmations.confirm(Strings.t("Stop watching {0}? Nothing is sent any more when you {1} it.", forQuestion(place.name), event), Strings.t(TITLE_REMOVE)) {
             places.remove(id)
         }
         return buildJsonObject {
@@ -120,39 +121,43 @@ internal class GeofenceTool(
     }
 
     private suspend fun add(args: JsonObject, session: String): JsonObject {
-        val name = args.string("name")?.trim()?.takeIf { it.isNotEmpty() } ?: throw PhoneToolException("name is needed, such as Home.")
-        val message = args.string("message")?.trim()?.takeIf { it.isNotEmpty() } ?: throw PhoneToolException("message is needed: what to send when it fires.")
-        if (name.length > MAX_NAME) throw PhoneToolException("name is at most $MAX_NAME characters.")
-        if (message.length > MAX_MESSAGE) throw PhoneToolException("message is at most $MAX_MESSAGE characters.")
+        val name = args.string("name")?.trim()?.takeIf { it.isNotEmpty() } ?: throw PhoneToolException(Strings.t("name is needed, such as Home."))
+        val message = args.string("message")?.trim()?.takeIf { it.isNotEmpty() } ?: throw PhoneToolException(Strings.t("message is needed: what to send when it fires."))
+        if (name.length > MAX_NAME) throw PhoneToolException(Strings.t("name is at most {0} characters.", MAX_NAME))
+        if (message.length > MAX_MESSAGE) throw PhoneToolException(Strings.t("message is at most {0} characters.", MAX_MESSAGE))
         if (hidden(name, newlines = false) || hidden(message, newlines = true)) {
-            throw PhoneToolException("name or message has hidden characters or odd spaces in it.")
+            throw PhoneToolException(Strings.t("name or message has hidden characters or odd spaces in it."))
         }
         // The name goes inside the "[Arrived at … · watched place]" mark: it mustn't close or fake it.
-        if (name.any { it in "[]·" }) throw PhoneToolException("name can't have [, ] or · in it.")
+        if (name.any { it in "[]·" }) throw PhoneToolException(Strings.t("name can't have [, ] or · in it."))
         val trigger = args.string("trigger") ?: WatchedPlace.ENTER
-        if (trigger != WatchedPlace.ENTER && trigger != WatchedPlace.EXIT) throw PhoneToolException("trigger is enter or exit.")
+        if (trigger != WatchedPlace.ENTER && trigger != WatchedPlace.EXIT) throw PhoneToolException(Strings.t("trigger is enter or exit."))
         val radius = args.int("radius_m") ?: DEFAULT_RADIUS
-        if (radius !in MIN_RADIUS..MAX_RADIUS) throw PhoneToolException("radius_m is $MIN_RADIUS to $MAX_RADIUS.")
+        if (radius !in MIN_RADIUS..MAX_RADIUS) throw PhoneToolException(Strings.t("radius_m is {0} to {1}.", MIN_RADIUS, MAX_RADIUS))
         if (!places.allowed()) {
             throw PhoneToolException(
-                "Watching places needs precise location all the time, which Kyllene doesn't have. The user can allow it in " +
-                    "Kyllene: Settings → Phone tools → Watched places.",
+                Strings.t(
+                    "Watching places needs precise location all the time, which Kyllene doesn't have. The user can allow it in " +
+                        "Kyllene: Settings → Phone tools → Watched places.",
+                ),
             )
         }
-        if (context.getSystemService(LocationManager::class.java) == null) throw PhoneToolException("The phone has no location service.")
+        if (context.getSystemService(LocationManager::class.java) == null) throw PhoneToolException(Strings.t("The phone has no location service."))
         val target = chats.of(session) ?: throw PhoneToolException(
-            "A place can only be watched for a chat open on this phone, so its message has somewhere to go. Ask the user " +
-                "to add it from a chat in Kyllene.",
+            Strings.t(
+                "A place can only be watched for a chat open on this phone, so its message has somewhere to go. Ask the user " +
+                    "to add it from a chat in Kyllene.",
+            ),
         )
         val lat = args.double("latitude")
         val lon = args.double("longitude")
-        if ((lat == null) != (lon == null)) throw PhoneToolException("latitude and longitude go together; leave both out for where the phone is now.")
+        if ((lat == null) != (lon == null)) throw PhoneToolException(Strings.t("latitude and longitude go together; leave both out for where the phone is now."))
         // Where the phone is goes back to the agent: that's the Location tool's, and only while it's on.
         if (lat == null && !places.locationOn()) {
-            throw PhoneToolException("Give latitude and longitude: the Location tool is off, so the phone doesn't say where it is.")
+            throw PhoneToolException(Strings.t("Give latitude and longitude: the Location tool is off, so the phone doesn't say where it is."))
         }
         if (lat != null && lon != null && (lat !in -90.0..90.0 || lon !in -180.0..180.0)) {
-            throw PhoneToolException("latitude or longitude is out of range.")
+            throw PhoneToolException(Strings.t("latitude or longitude is out of range."))
         }
         // Here and now, never an old fix: a place set where the phone was hours ago would watch the wrong spot.
         val here = if (lat == null) location.locate(fresh = true, old = false) else runCatching { location.locate(fresh = false) }.getOrNull()
@@ -165,7 +170,7 @@ internal class GeofenceTool(
             meters[0] <= radius
         }
         if (places.places.value.size >= Geofences.MAX_PLACES) {
-            throw PhoneToolException("The phone already watches ${Geofences.MAX_PLACES} places. Remove one first.")
+            throw PhoneToolException(Strings.t("The phone already watches {0} places. Remove one first.", Geofences.MAX_PLACES))
         }
         val place = WatchedPlace(
             id = UUID.randomUUID().toString().replace("-", "").take(12),
@@ -183,14 +188,14 @@ internal class GeofenceTool(
             inside = inside,
         )
         val point = String.format(Locale.ROOT, "%.5f, %.5f", latitude, longitude)
-        val where = if (lat == null) "where the phone is now, $point" else point
-        val chat = target.title?.takeIf { it.isNotBlank() }?.let { "\"${forQuestion(it)}\"" } ?: "this chat"
-        val event = if (place.arriving) "When you arrive at" else "When you leave"
+        val where = if (lat == null) Strings.t("where the phone is now, {0}", point) else point
+        val chat = target.title?.takeIf { it.isNotBlank() }?.let { "\"${forQuestion(it)}\"" } ?: Strings.t("this chat")
+        val event = if (place.arriving) Strings.t("When you arrive at") else Strings.t("When you leave")
         confirmations.confirm(
-            "$event ${forQuestion(name)} ($where, $radius m), Kyllene sends this to $chat as you: ${forQuestion(place.sent)}",
-            TITLE,
+            Strings.t("{0} {1} ({2}, {3} m), Kyllene sends this to {4} as you: {5}", event, forQuestion(name), where, radius, chat, forQuestion(place.sent)),
+            Strings.t(TITLE),
         ) {
-            if (!places.add(place)) throw PhoneToolException("The phone already watches ${Geofences.MAX_PLACES} places. Remove one first.")
+            if (!places.add(place)) throw PhoneToolException(Strings.t("The phone already watches {0} places. Remove one first.", Geofences.MAX_PLACES))
         }
         return buildJsonObject {
             put("added", true)
@@ -200,8 +205,10 @@ internal class GeofenceTool(
             put("radius_m", radius)
             put(
                 "note",
-                "The user allowed it. The message is sent to this chat as the user when it fires, marked as coming from the " +
-                    "place. Android checks the place every few minutes, so it can fire a little late.",
+                Strings.t(
+                    "The user allowed it. The message is sent to this chat as the user when it fires, marked as coming from the " +
+                        "place. Android checks the place every few minutes, so it can fire a little late.",
+                ),
             )
         }
     }

@@ -34,6 +34,7 @@ kotlin {
             }
         }
         commonMain.dependencies {
+            implementation(projects.shared.core)
             api(libs.compose.runtime)
             api(libs.compose.foundation)
             api(libs.compose.ui)

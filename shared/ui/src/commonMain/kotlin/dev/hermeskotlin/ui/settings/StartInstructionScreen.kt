@@ -38,6 +38,7 @@ import dev.hermeskotlin.designsystem.components.halo
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.PlatformBackHandler
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.ui.sessions.SubpageHeader
 
 /** Settings › Starting instruction: what every new chat tells the agent first. Saved as it's typed. */
@@ -65,14 +66,16 @@ internal fun StartInstructionView(text: String, onChange: (String) -> Unit, onBa
         contentAlignment = Alignment.TopCenter,
     ) {
         Column(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
-            SubpageHeader("Starting instruction", onBack = onBack)
+            SubpageHeader(Strings.t("Starting instruction"), onBack = onBack)
             Column(
                 Modifier.weight(1f).verticalScrollWithBar().padding(start = 14.dp, end = 14.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Text(
-                    "Each new chat you start in Kyllene tells the agent this first. It stays out of the chat, here and on " +
-                        "your other Hermes apps. Chats already going keep what they started with. Leave it empty for none.",
+                    Strings.t(
+                        "Each new chat you start in Kyllene tells the agent this first. It stays out of the chat, here and on " +
+                            "your other Hermes apps. Chats already going keep what they started with. Leave it empty for none.",
+                    ),
                     style = Theme[typography][bodySmall],
                     color = Theme[colors][textTertiary],
                     modifier = Modifier.padding(horizontal = 4.dp),
@@ -80,14 +83,14 @@ internal fun StartInstructionView(text: String, onChange: (String) -> Unit, onBa
                 TextField(
                     field,
                     modifier = Modifier.fillMaxWidth(),
-                    placeholder = "What should every new chat know?",
+                    placeholder = Strings.t("What should every new chat know?"),
                     singleLine = false,
                     maxLines = 12,
                     clearable = true,
                     autofocus = true,
                 )
                 Text(
-                    "Suggestions",
+                    Strings.t("Suggestions"),
                     style = Theme[typography][bodySmall],
                     color = Theme[colors][textTertiary],
                     modifier = Modifier.padding(horizontal = 4.dp),
@@ -95,7 +98,7 @@ internal fun StartInstructionView(text: String, onChange: (String) -> Unit, onBa
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     (if (isDesktop) DESKTOP_SUGGESTIONS else SUGGESTIONS).forEach { suggestion ->
                         Button(
-                            suggestion,
+                            Strings.t(suggestion),
                             onClick = { field.setTextAndPlaceCursorAtEnd(suggestion) },
                             variant = ButtonVariant.Secondary,
                             size = ButtonSize.Small,

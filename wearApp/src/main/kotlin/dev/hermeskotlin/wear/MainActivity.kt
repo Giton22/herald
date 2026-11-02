@@ -16,6 +16,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -61,7 +62,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private val microphone = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) completeInput(inputGeneration, ::record) else listening.value = Listening(error = NEEDS_MICROPHONE)
+        if (granted) completeInput(inputGeneration, ::record) else listening.value = Listening(error = Strings.t(NEEDS_MICROPHONE))
     }
 
     private val callMicrophone = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
@@ -71,7 +72,7 @@ class MainActivity : ComponentActivity() {
         callPermissionPending = false
         if (granted) {
             if (pending) completeInput(inputGeneration) { app.link.startCall(target) }
-        } else listening.value = Listening(error = NEEDS_MICROPHONE)
+        } else listening.value = Listening(error = Strings.t(NEEDS_MICROPHONE))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -191,7 +192,7 @@ class MainActivity : ComponentActivity() {
             callGeneration = app.link.profileReset.value
             val target = try { app.link.resolveDefaultCall() } catch (e: CancellationException) {
                 if (e !is kotlinx.coroutines.TimeoutCancellationException) throw e
-                listening.value = Listening(error = "Kyllene on your phone didn't answer. Try again.")
+                listening.value = Listening(error = Strings.t("Kyllene on your phone didn't answer. Try again."))
                 return@launch
             }
             if (target.error != null) { listening.value = Listening(error = target.error); return@launch }
@@ -254,7 +255,7 @@ class MainActivity : ComponentActivity() {
         // The watch's speech recognizer, straight to listening: talking is what the mic is for.
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            .putExtra(RecognizerIntent.EXTRA_PROMPT, "Ask Hermes")
+            .putExtra(RecognizerIntent.EXTRA_PROMPT, Strings.t("Ask Hermes"))
         if (intent.resolveActivity(packageManager) != null) {
             try {
                 recognitionGeneration = app.link.profileReset.value

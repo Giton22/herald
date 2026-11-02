@@ -46,6 +46,7 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.components.MinTouchTarget
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.launch
 import org.koin.compose.koinInject
 
@@ -107,24 +108,26 @@ fun UpdateBanner(modifier: Modifier = Modifier) {
     ) {
         Row(verticalAlignment = Alignment.Top) {
             Column(Modifier.weight(1f).padding(top = 2.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                Text("Version ${update.version} is out", style = Theme[typography][bodySmall], color = Theme[colors][text])
+                Text(Strings.t("Version {0} is out", update.version), style = Theme[typography][bodySmall], color = Theme[colors][text])
                 Text(
-                    "Install it over this one; your sign-in and settings stay.",
+                    Strings.t("Install it over this one; your sign-in and settings stay."),
                     style = Theme[typography][caption],
                     color = Theme[colors][textSecondary],
                 )
             }
             UnstyledButton(onClick = offer.onDismiss, modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusSmall]))) {
-                UnstyledIcon(Lucide.X, contentDescription = "Not now", tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
+                UnstyledIcon(Lucide.X, contentDescription = Strings.t("Not now"), tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
             }
         }
         Button(
-            when {
-                installing -> "Downloading…"
-                installer != null -> "Install"
-                update.downloadUrl != null -> "Download"
-                else -> "Open release"
-            },
+            Strings.t(
+                when {
+                    installing -> "Downloading…"
+                    installer != null -> "Install"
+                    update.downloadUrl != null -> "Download"
+                    else -> "Open release"
+                },
+            ),
             onClick = {
                 if (installer == null) {
                     uriHandler.openUri(update.downloadUrl ?: update.pageUrl)

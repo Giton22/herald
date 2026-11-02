@@ -16,6 +16,7 @@ import android.os.SystemClock
 import androidx.core.content.ContextCompat
 import androidx.core.location.LocationManagerCompat
 import dev.hermeskotlin.core.phone.PhoneToolException
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
@@ -56,22 +57,24 @@ internal class LocationTool(private val context: Context) {
     suspend fun locate(fresh: Boolean, old: Boolean = true): Location {
         val precise = granted(Manifest.permission.ACCESS_FINE_LOCATION)
         if (!precise && !granted(Manifest.permission.ACCESS_COARSE_LOCATION)) {
-            throw PhoneToolException("Kyllene isn't allowed to use the phone's location. The user can allow it in Kyllene: Settings → Phone tools.")
+            throw PhoneToolException(Strings.t("Kyllene isn't allowed to use the phone's location. The user can allow it in Kyllene: Settings → Phone tools."))
         }
         // Android only hands an app in the background its location with "all the time" access, and then quietly.
         if (!visible() && !backgroundAllowed()) {
             throw PhoneToolException(
-                "Kyllene is in the background and may only read the location while it's open. Ask the user to open Kyllene, " +
-                    "or to allow location all the time in Kyllene: Settings → Phone tools.",
+                Strings.t(
+                    "Kyllene is in the background and may only read the location while it's open. Ask the user to open Kyllene, " +
+                        "or to allow location all the time in Kyllene: Settings → Phone tools.",
+                ),
             )
         }
-        val manager = context.getSystemService(LocationManager::class.java) ?: throw PhoneToolException("The phone has no location service.")
-        if (!LocationManagerCompat.isLocationEnabled(manager)) throw PhoneToolException("Location is turned off on the phone.")
+        val manager = context.getSystemService(LocationManager::class.java) ?: throw PhoneToolException(Strings.t("The phone has no location service."))
+        if (!LocationManagerCompat.isLocationEnabled(manager)) throw PhoneToolException(Strings.t("Location is turned off on the phone."))
         val known = lastKnown(manager)
         return known?.takeIf { !fresh && ageMillis(it) <= RECENT_MS }
             ?: measure(manager, precise)
             ?: known?.takeIf { old || ageMillis(it) <= RECENT_MS }
-            ?: throw PhoneToolException("The phone couldn't tell where it is just now.")
+            ?: throw PhoneToolException(Strings.t("The phone couldn't tell where it is just now."))
     }
 
     private fun granted(permission: String) = ContextCompat.checkSelfPermission(context, permission) == PackageManager.PERMISSION_GRANTED

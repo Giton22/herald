@@ -89,6 +89,7 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.GatewayChoices
 import dev.hermeskotlin.ui.components.rememberClientCertPicker
+import dev.hermeskotlin.ui.i18n.Strings
 
 /**
  * The saved gateways, primary first, the one in use checked. Tapping one switches to it (its sign-in when it
@@ -114,7 +115,7 @@ fun GatewaysSheet(
     val list = choices.list
 
     BottomSheet(visible = visible, onDismiss = onDismiss) {
-        SheetHeader("Gateways", "Each gateway is its own Hermes, with its own profiles and chats.")
+        SheetHeader(Strings.t("Gateways"), Strings.t("Each gateway is its own Hermes, with its own profiles and chats."))
         // A card each; the sheet scrolls only when there are more than fit.
         Column(
             Modifier
@@ -141,7 +142,7 @@ fun GatewaysSheet(
             }
         }
         Spacer(Modifier.height(6.dp))
-        SheetAction("Add a gateway", Lucide.Plus, onClick = { onDismiss(); onAdd() })
+        SheetAction(Strings.t("Add a gateway"), Lucide.Plus, onClick = { onDismiss(); onAdd() })
     }
 
     RenameGatewayDialog(renameTarget, onDismiss = { renameTarget = null }, onRename = onRename)
@@ -167,9 +168,9 @@ private fun GatewayRow(
     var contextOpen by remember { mutableStateOf(false) }
     RowContextMenu(contextOpen, onDismiss = { contextOpen = false }) {
         listOfNotNull(
-            RowMenuItem("Make primary", Lucide.Star, run = onSetPrimary).takeIf { !primary },
-            RowMenuItem("Rename", Lucide.Pencil, run = onRename),
-            RowMenuItem("Remove", Lucide.Trash2, destructive = true, run = onRemove),
+            RowMenuItem(Strings.t("Make primary"), Lucide.Star, run = onSetPrimary).takeIf { !primary },
+            RowMenuItem(Strings.t("Rename"), Lucide.Pencil, run = onRename),
+            RowMenuItem(Strings.t("Remove"), Lucide.Trash2, destructive = true, run = onRemove),
         )
     }
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
@@ -216,7 +217,7 @@ private fun GatewayRow(
                 )
                 if (primary && showPrimary) {
                     Text(
-                        "Primary",
+                        Strings.t("Primary"),
                         style = Theme[typography][caption].copy(fontSize = 10.5.sp, fontWeight = FontWeight.SemiBold),
                         color = Theme[colors][textSecondary],
                         maxLines = 1,
@@ -239,7 +240,7 @@ private fun GatewayRow(
                     }
                     if (!signedIn) {
                         Text(
-                            if (address != null) "· Signed out" else "Signed out",
+                            if (address != null) Strings.t("· Signed out") else Strings.t("Signed out"),
                             style = Theme[typography][bodySmall].copy(fontSize = 12.sp),
                             color = Theme[colors][warning],
                             maxLines = 1,
@@ -256,14 +257,14 @@ private fun GatewayRow(
             // A phone's sheet sits at the bottom of the screen, with no room below the row; a desktop's is centred.
             above = !isDesktop,
             items = {
-                if (!primary) MenuAction("Make primary", Lucide.Star, onClick = { menuOpen = false; onSetPrimary() })
-                MenuAction("Rename", Lucide.Pencil, onClick = { menuOpen = false; onRename() })
+                if (!primary) MenuAction(Strings.t("Make primary"), Lucide.Star, onClick = { menuOpen = false; onSetPrimary() })
+                MenuAction(Strings.t("Rename"), Lucide.Pencil, onClick = { menuOpen = false; onRename() })
                 // Client certificates come from Android's system store; the desktop has none to pick from yet.
-                if (!isDesktop) MenuAction("Client certificate", Lucide.ShieldCheck, onClick = { menuOpen = false; onClientCert() })
-                MenuAction("Remove", Lucide.Trash2, onClick = { menuOpen = false; onRemove() })
+                if (!isDesktop) MenuAction(Strings.t("Client certificate"), Lucide.ShieldCheck, onClick = { menuOpen = false; onClientCert() })
+                MenuAction(Strings.t("Remove"), Lucide.Trash2, onClick = { menuOpen = false; onRemove() })
             },
         ) {
-            IconButton(Lucide.EllipsisVertical, contentDescription = "More for ${gateway.label}", onClick = { menuOpen = true })
+            IconButton(Lucide.EllipsisVertical, contentDescription = Strings.t("More for {0}", gateway.label), onClick = { menuOpen = true })
         }
     }
 }
@@ -284,11 +285,11 @@ private fun RenameGatewayDialog(gateway: SavedGateway?, onDismiss: () -> Unit, o
     Dialog(
         visible = gateway != null,
         onDismissRequest = onDismiss,
-        title = "Rename gateway",
-        message = "Leave empty to show its address.",
+        title = Strings.t("Rename gateway"),
+        message = Strings.t("Leave empty to show its address."),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Save", onClick = submit, size = ButtonSize.Small)
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Save"), onClick = submit, size = ButtonSize.Small)
         },
     ) {
         TextField(
@@ -309,11 +310,11 @@ private fun RemoveGatewayDialog(gateway: SavedGateway?, onDismiss: () -> Unit, o
     Dialog(
         visible = gateway != null,
         onDismissRequest = onDismiss,
-        title = "Remove gateway?",
-        message = "Kyllene signs out of “${g.label}” and forgets it. Its chats stay on the gateway.",
+        title = Strings.t("Remove gateway?"),
+        message = Strings.t("Kyllene signs out of “{0}” and forgets it. Its chats stay on the gateway.", g.label),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Remove", onClick = { onDismiss(); onRemove(g) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Remove"), onClick = { onDismiss(); onRemove(g) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
         },
     )
 }
@@ -337,12 +338,15 @@ private fun ClientCertDialog(gateway: SavedGateway?, onDismiss: () -> Unit, onSe
     Dialog(
         visible = gateway != null,
         onDismissRequest = onDismiss,
-        title = "Client certificate",
-        message = "Kyllene presents this certificate to “${g.label}” when its server asks for one. " +
-            "The key stays in the system store; only its name is kept.",
+        title = Strings.t("Client certificate"),
+        message = Strings.t(
+            "Kyllene presents this certificate to “{0}” when its server asks for one. " +
+                "The key stays in the system store; only its name is kept.",
+            g.label,
+        ),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button(if (g.clientCertAlias == null) "Pick…" else "Change…", onClick = picker::pick, size = ButtonSize.Small)
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(if (g.clientCertAlias == null) Strings.t("Pick…") else Strings.t("Change…"), onClick = picker::pick, size = ButtonSize.Small)
         },
     ) {
         val alias = g.clientCertAlias
@@ -356,7 +360,7 @@ private fun ClientCertDialog(gateway: SavedGateway?, onDismiss: () -> Unit, onSe
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                Button("Clear", onClick = { onDismiss(); onSet(g, null) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+                Button(Strings.t("Clear"), onClick = { onDismiss(); onSet(g, null) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             }
         }
     }

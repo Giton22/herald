@@ -31,6 +31,7 @@ import com.composables.icons.lucide.Share2
 import androidx.compose.ui.window.DialogProperties
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.hermeskotlin.ui.i18n.Strings
 
 /** Whether the on-screen keyboard is showing. */
 internal expect val imeVisible: Boolean
@@ -92,16 +93,16 @@ internal val PageFoot: Dp get() = if (isDesktop) 24.dp else 96.dp
 internal val PageRowHeight: Dp get() = if (isDesktop) 44.dp else 56.dp
 
 /** What a hint says the user does to a control: "Click" with a mouse, "Tap" on a phone. */
-internal val tapVerb: String get() = if (isDesktop) "Click" else "Tap"
+internal val tapVerb: String get() = Strings.t(if (isDesktop) "Click" else "Tap")
 
 /** What a file's Share does: a phone's share sheet, or on the desktop, which has none, the app that opens it. */
-internal val shareLabel: String get() = if (isDesktop) "Open in app" else "Share"
+internal val shareLabel: String get() = Strings.t(if (isDesktop) "Open in app" else "Share")
 
 /** [shareLabel]'s icon. */
 internal val shareIcon: ImageVector get() = if (isDesktop) Lucide.ExternalLink else Lucide.Share2
 
 /** What Herald runs on, for text that says where something is kept: "phone", or "computer" on the desktop. */
-internal val deviceNoun: String get() = if (isDesktop) "computer" else "phone"
+internal val deviceNoun: String get() = Strings.t(if (isDesktop) "computer" else "phone")
 
 /**
  * Text a user may want to copy (an error, a path, a command) made selectable on the desktop, where a drag selects

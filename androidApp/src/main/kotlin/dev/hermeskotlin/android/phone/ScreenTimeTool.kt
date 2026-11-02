@@ -11,6 +11,7 @@ import android.os.PowerManager
 import android.os.Process
 import dev.hermeskotlin.core.phone.PhoneToolException
 import dev.hermeskotlin.core.phone.ScreenTimeCounter
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -30,12 +31,12 @@ internal class ScreenTimeTool(private val context: Context) {
 
     fun run(args: JsonObject): JsonObject {
         val days = args.int("days") ?: 1
-        if (days !in 1..7) throw PhoneToolException("days is 1 (today) to 7.")
+        if (days !in 1..7) throw PhoneToolException(Strings.t("days is 1 (today) to 7."))
         if (!allowed(context)) {
-            throw PhoneToolException("Kyllene isn't allowed to see screen time. The user can allow it in Settings → Phone tools.")
+            throw PhoneToolException(Strings.t("Kyllene isn't allowed to see screen time. The user can allow it in Settings → Phone tools."))
         }
         val stats = context.getSystemService(UsageStatsManager::class.java)
-            ?: throw PhoneToolException("The phone doesn't keep screen time.")
+            ?: throw PhoneToolException(Strings.t("The phone doesn't keep screen time."))
         val zone = ZoneId.systemDefault()
         val first = LocalDate.now(zone).minusDays(days - 1L)
         // Each day's start in this time zone, and the next day's: a day can be 23 or 25 hours long.

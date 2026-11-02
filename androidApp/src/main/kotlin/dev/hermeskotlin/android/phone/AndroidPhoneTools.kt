@@ -13,6 +13,7 @@ import dev.hermeskotlin.core.phone.AgentScreens
 import dev.hermeskotlin.core.phone.PhoneTool
 import dev.hermeskotlin.core.phone.PhoneToolException
 import dev.hermeskotlin.core.phone.PhoneToolRunner
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.JsonElement
@@ -65,7 +66,7 @@ class AndroidPhoneTools(
     private fun battery(): JsonObject {
         // A sticky broadcast: registering for it with no receiver hands back the latest state.
         val state = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-            ?: throw PhoneToolException("The phone didn't say how its battery is.")
+            ?: throw PhoneToolException(Strings.t("The phone didn't say how its battery is."))
         val level = state.getIntExtra(BatteryManager.EXTRA_LEVEL, -1)
         val scale = state.getIntExtra(BatteryManager.EXTRA_SCALE, 100).takeIf { it > 0 } ?: 100
         val status = state.getIntExtra(BatteryManager.EXTRA_STATUS, BatteryManager.BATTERY_STATUS_UNKNOWN)
@@ -104,7 +105,7 @@ class AndroidPhoneTools(
 
     private fun network(): JsonObject {
         val manager = context.getSystemService(ConnectivityManager::class.java)
-            ?: throw PhoneToolException("The phone didn't say how it's connected.")
+            ?: throw PhoneToolException(Strings.t("The phone didn't say how it's connected."))
         val caps = manager.activeNetwork?.let(manager::getNetworkCapabilities)
         return buildJsonObject {
             if (caps == null) {

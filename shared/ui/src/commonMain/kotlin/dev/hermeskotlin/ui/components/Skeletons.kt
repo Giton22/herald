@@ -22,6 +22,7 @@ import androidx.compose.ui.unit.dp
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.Skeleton
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusLarge
 import dev.hermeskotlin.designsystem.radiusMedium
@@ -31,7 +32,7 @@ import dev.hermeskotlin.designsystem.surface2
 @Composable
 fun ReportSkeleton() {
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp).semantics(mergeDescendants = true) { contentDescription = "Loading" },
+        Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp).semantics(mergeDescendants = true) { contentDescription = Strings.t("Loading") },
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Skeleton(Modifier.width(160.dp).height(40.dp))
@@ -52,7 +53,7 @@ fun ReportSkeleton() {
 @Composable
 fun ListSkeleton(rows: Int = 6) {
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp).semantics(mergeDescendants = true) { contentDescription = "Loading" },
+        Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp).semantics(mergeDescendants = true) { contentDescription = Strings.t("Loading") },
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         repeat(rows) { i ->

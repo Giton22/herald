@@ -54,6 +54,7 @@ import dev.hermeskotlin.designsystem.components.TextField
 import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
@@ -82,10 +83,10 @@ internal fun ProjectActionsSheet(
         SheetHeader(p.label, subtitle = p.path)
         val act = { action: (Project) -> Unit -> { onDismiss(); action(p) } }
         if (p.isUserMade) {
-            SheetAction("Rename", Lucide.Pencil, act(onRename))
-            SheetAction("Delete project", Lucide.Trash2, act(onDelete), destructive = true)
+            SheetAction(Strings.t("Rename"), Lucide.Pencil, act(onRename))
+            SheetAction(Strings.t("Delete project"), Lucide.Trash2, act(onDelete), destructive = true)
         } else if (p.path != null) {
-            SheetAction("Save as project", Lucide.FolderPlus, act(onSave))
+            SheetAction(Strings.t("Save as project"), Lucide.FolderPlus, act(onSave))
         }
     }
 }
@@ -127,13 +128,13 @@ internal fun NewProjectDialog(
     Dialog(
         visible = draft != null,
         onDismissRequest = { if (dir != null) browsing = null else if (!busy) onDismiss() },
-        title = if (dir != null) "Choose a folder" else "New project",
-        message = if (dir != null) null else "Chats in the folder group under the project, and a new chat started in it runs there.",
+        title = if (dir != null) Strings.t("Choose a folder") else Strings.t("New project"),
+        message = if (dir != null) null else Strings.t("Chats in the folder group under the project, and a new chat started in it runs there."),
         actions = {
             if (dir != null) {
-                Button("Back", onClick = { browsing = null }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+                Button(Strings.t("Back"), onClick = { browsing = null }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
                 Button(
-                    "Use this folder",
+                    Strings.t("Use this folder"),
                     onClick = {
                         folder.edit { replace(0, length, FolderPath.picked(dir)) }
                         if (nameText.isEmpty()) FolderPath.name(dir)?.let { n -> name.edit { replace(0, length, n) } }
@@ -142,8 +143,8 @@ internal fun NewProjectDialog(
                     size = ButtonSize.Small,
                 )
             } else {
-                Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small, enabled = !busy)
-                Button("Create", onClick = submit, size = ButtonSize.Small, enabled = nameText.isNotEmpty(), loading = busy)
+                Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small, enabled = !busy)
+                Button(Strings.t("Create"), onClick = submit, size = ButtonSize.Small, enabled = nameText.isNotEmpty(), loading = busy)
             }
         },
     ) {
@@ -151,18 +152,18 @@ internal fun NewProjectDialog(
             FolderPicker(dir, onOpen = { browsing = it }, listFolders = listFolders, makeFolder = makeFolder)
             return@Dialog
         }
-        TextField(state = name, label = "Name", placeholder = "Kyllene", enabled = !busy, autofocus = true)
+        TextField(state = name, label = Strings.t("Name"), placeholder = "Kyllene", enabled = !busy, autofocus = true)
         TextField(
             state = folder,
-            label = "Folder on the gateway",
+            label = Strings.t("Folder on the gateway"),
             placeholder = "/home/you/projects/herald",
-            supportingText = "Optional. A folder on the machine Hermes runs on.",
+            supportingText = Strings.t("Optional. A folder on the machine Hermes runs on."),
             enabled = !busy,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             onKeyboardAction = { submit() },
         )
         Button(
-            "Browse folders",
+            Strings.t("Browse folders"),
             onClick = { browsing = FolderPath.dirOf(folder.text.toString()) },
             variant = ButtonVariant.Outline,
             size = ButtonSize.Small,
@@ -209,27 +210,27 @@ private fun FolderPicker(
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            failed = e.message?.takeIf { it.isNotBlank() } ?: "Couldn't list this folder."
+            failed = e.message?.takeIf { it.isNotBlank() } ?: Strings.t("Couldn't list this folder.")
         }
     }
     val secondary = Theme[colors][textSecondary]
     Text(dir, style = Theme[typography][bodySmall], color = secondary)
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
         val up = FolderPath.parent(dir)
-        IconButton(Lucide.FolderUp, contentDescription = "Up a folder", onClick = { up?.let(onOpen) }, enabled = up != null)
+        IconButton(Lucide.FolderUp, contentDescription = Strings.t("Up a folder"), onClick = { up?.let(onOpen) }, enabled = up != null)
         IconButton(
             Lucide.House,
-            contentDescription = "Home folder",
+            contentDescription = Strings.t("Home folder"),
             onClick = { onOpen(FolderPath.HOME) },
             enabled = dir != FolderPath.HOME,
         )
         if (canMake) {
-            IconButton(Lucide.FolderPlus, contentDescription = "New folder", onClick = {
+            IconButton(Lucide.FolderPlus, contentDescription = Strings.t("New folder"), onClick = {
                 naming = !naming
                 makeError = null
             })
         }
-        TextField(state = filter, modifier = Modifier.weight(1f), placeholder = "Filter", leadingIcon = Lucide.Search)
+        TextField(state = filter, modifier = Modifier.weight(1f), placeholder = Strings.t("Filter"), leadingIcon = Lucide.Search)
     }
     if (naming && canMake && makeFolder != null) {
         val name = newName.text.toString().trim()
@@ -251,12 +252,12 @@ private fun FolderPicker(
             TextField(
                 state = newName,
                 modifier = Modifier.weight(1f),
-                placeholder = "New folder's name",
+                placeholder = Strings.t("New folder's name"),
                 enabled = !making,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 onKeyboardAction = { make() },
             )
-            Button("Create", onClick = make, size = ButtonSize.Small, enabled = valid, loading = making)
+            Button(Strings.t("Create"), onClick = make, size = ButtonSize.Small, enabled = valid, loading = making)
         }
         makeError?.let { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
     }
@@ -267,12 +268,12 @@ private fun FolderPicker(
         when {
             failed != null -> CopyableOnDesktop { Text(failed.orEmpty(), style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
             listing == null -> Spinner(Modifier.padding(12.dp).size(20.dp))
-            folders.isEmpty() -> Text("No folders here.", style = Theme[typography][bodySmall], color = secondary)
+            folders.isEmpty() -> Text(Strings.t("No folders here."), style = Theme[typography][bodySmall], color = secondary)
             else -> folders.forEach { SheetAction(it, Lucide.Folder, onClick = { onOpen(FolderPath.child(dir, it)) }) }
         }
         if (failed == null && listing?.more == true) {
             Text(
-                "Some folders may not show here. Type the start of a name to find one.",
+                Strings.t("Some folders may not show here. Type the start of a name to find one."),
                 style = Theme[typography][bodySmall],
                 color = secondary,
                 modifier = Modifier.padding(top = 8.dp),
@@ -341,10 +342,10 @@ internal fun RenameProjectDialog(project: Project?, onDismiss: () -> Unit, onRen
     Dialog(
         visible = project != null,
         onDismissRequest = onDismiss,
-        title = "Rename project",
+        title = Strings.t("Rename project"),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Save", onClick = submit, size = ButtonSize.Small, enabled = nameText.isNotEmpty())
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Save"), onClick = submit, size = ButtonSize.Small, enabled = nameText.isNotEmpty())
         },
     ) {
         TextField(
@@ -365,11 +366,11 @@ internal fun DeleteProjectDialog(project: Project?, onDismiss: () -> Unit, onDel
     Dialog(
         visible = project != null,
         onDismissRequest = onDismiss,
-        title = "Delete project?",
-        message = "“${p.label}” is removed from the gateway. Its chats stay, and are grouped by their folder again.",
+        title = Strings.t("Delete project?"),
+        message = Strings.t("“{0}” is removed from the gateway. Its chats stay, and are grouped by their folder again.", p.label),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Delete", onClick = { onDismiss(); onDelete(p) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
+            Button(Strings.t("Cancel"), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(Strings.t("Delete"), onClick = { onDismiss(); onDelete(p) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
         },
     )
 }

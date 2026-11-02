@@ -12,6 +12,7 @@ import androidx.core.content.ContextCompat
 import dev.hermeskotlin.core.phone.PhoneToolException
 import dev.hermeskotlin.core.phone.forQuestion
 import dev.hermeskotlin.core.phone.hidden
+import dev.hermeskotlin.ui.i18n.Strings
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.addJsonObject
 import kotlinx.serialization.json.buildJsonObject
@@ -38,7 +39,7 @@ internal class CalendarTool(private val context: Context, private val confirmati
         "list" -> list(args)
         "add" -> add(args)
         "move" -> move(args)
-        else -> throw PhoneToolException("action is list, add or move.")
+        else -> throw PhoneToolException(Strings.t("action is list, add or move."))
     }
 
     private fun list(args: JsonObject): JsonObject {
@@ -46,8 +47,8 @@ internal class CalendarTool(private val context: Context, private val confirmati
         val zone = ZoneId.systemDefault()
         val from = args.string("from")?.let { time(it, "from") } ?: LocalDate.now(zone).atStartOfDay()
         val to = args.string("to")?.let { time(it, "to") } ?: from.plusDays(1)
-        if (!to.isAfter(from)) throw PhoneToolException("to must be after from.")
-        if (Duration.between(from, to) > Duration.ofDays(MAX_DAYS)) throw PhoneToolException("A list covers at most $MAX_DAYS days.")
+        if (!to.isAfter(from)) throw PhoneToolException(Strings.t("to must be after from."))
+        if (Duration.between(from, to) > Duration.ofDays(MAX_DAYS)) throw PhoneToolException(Strings.t("A list covers at most {0} days.", MAX_DAYS))
         val uri = CalendarContract.Instances.CONTENT_URI.buildUpon().also {
             ContentUris.appendId(it, from.atZone(zone).toInstant().toEpochMilli())
             ContentUris.appendId(it, to.atZone(zone).toInstant().toEpochMilli())
@@ -84,7 +85,7 @@ internal class CalendarTool(private val context: Context, private val confirmati
                         val allDay = c.getInt(4) == 1
                         val event = buildJsonObject {
                             put("event_id", c.getLong(0).toString())
-                            put("title", (c.text(1) ?: "(no title)").short())
+                            put("title", (c.text(1) ?: Strings.t("(no title)")).short())
                             put("start", shown(c.getLong(2), allDay))
                             // An all-day event's last day, as people count it; the provider's end is the day after.
                             put("end", shown(c.getLong(3), allDay, last = true))
@@ -104,18 +105,18 @@ internal class CalendarTool(private val context: Context, private val confirmati
                     }
                 }
             }
-            if (listed < total) put("note", "Only the first $listed of $total events; ask for a shorter range for the rest.")
+            if (listed < total) put("note", Strings.t("Only the first {0} of {1} events; ask for a shorter range for the rest.", listed, total))
         }
     }
 
     private suspend fun add(args: JsonObject): JsonObject {
         need(Manifest.permission.READ_CALENDAR)
         need(Manifest.permission.WRITE_CALENDAR)
-        val title = text(args, "title", MAX_TITLE) ?: throw PhoneToolException("title is needed.")
+        val title = text(args, "title", MAX_TITLE) ?: throw PhoneToolException(Strings.t("title is needed."))
         val location = text(args, "location", MAX_TITLE)
         val notes = text(args, "notes", MAX_NOTES, newlines = true)
         val allDay = args.boolean("all_day") ?: false
-        val startText = args.string("start") ?: throw PhoneToolException("start is needed.")
+        val startText = args.string("start") ?: throw PhoneToolException(Strings.t("start is needed."))
         val zone = ZoneId.systemDefault()
         val values = ContentValues()
         val start: LocalDateTime
@@ -124,7 +125,7 @@ internal class CalendarTool(private val context: Context, private val confirmati
             // Whole days: end is the last day, as people say it. The provider wants UTC days, its end the day after.
             val first = time(startText, "start").toLocalDate()
             val last = args.string("end")?.let { time(it, "end").toLocalDate() } ?: first
-            if (last < first) throw PhoneToolException("For an all-day event, end is its last day: the same day as start or later.")
+            if (last < first) throw PhoneToolException(Strings.t("For an all-day event, end is its last day: the same day as start or later."))
             start = first.atStartOfDay()
             end = last.plusDays(1).atStartOfDay()
             values.put(CalendarContract.Events.ALL_DAY, 1)
@@ -135,27 +136,27 @@ internal class CalendarTool(private val context: Context, private val confirmati
             // Through the zone and back: a time the clocks skip shows as the one the event really gets.
             start = time(startText, "start").atZone(zone).toLocalDateTime()
             end = (args.string("end")?.let { time(it, "end") } ?: start.plusHours(1)).atZone(zone).toLocalDateTime()
-            if (!end.isAfter(start)) throw PhoneToolException("end must be after start.")
+            if (!end.isAfter(start)) throw PhoneToolException(Strings.t("end must be after start."))
             values.put(CalendarContract.Events.EVENT_TIMEZONE, zone.id)
             values.put(CalendarContract.Events.DTSTART, start.atZone(zone).toInstant().toEpochMilli())
             values.put(CalendarContract.Events.DTEND, end.atZone(zone).toInstant().toEpochMilli())
         }
-        val calendar = writableCalendar() ?: throw PhoneToolException("The phone has no calendar Kyllene can add to.")
+        val calendar = writableCalendar() ?: throw PhoneToolException(Strings.t("The phone has no calendar Kyllene can add to."))
         values.put(CalendarContract.Events.CALENDAR_ID, calendar.id)
         values.put(CalendarContract.Events.TITLE, title)
         location?.let { values.put(CalendarContract.Events.EVENT_LOCATION, it) }
         notes?.let { values.put(CalendarContract.Events.DESCRIPTION, it) }
         // When, where and which calendar first, the agent's own text after: a title can't push them out of sight.
         val what = buildString {
-            append("${span(start, end, allDay)}, in ${forQuestion(calendar.shown)}")
-            location?.let { append(", at ${forQuestion(it)}") }
-            append(".\nTitle: ${forQuestion(title)}")
-            notes?.let { append("\nNotes: ${forQuestion(it)}") }
+            append(Strings.t("{0}, in {1}", span(start, end, allDay), forQuestion(calendar.shown)))
+            location?.let { append(Strings.t(", at {0}", forQuestion(it))) }
+            append(Strings.t(".\nTitle: {0}", forQuestion(title)))
+            notes?.let { append(Strings.t("\nNotes: {0}", forQuestion(it))) }
         }
         var id = 0L
-        confirmations.confirm(what, TITLE_ADD) {
+        confirmations.confirm(what, Strings.t(TITLE_ADD)) {
             val uri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
-                ?: throw PhoneToolException("The calendar didn't take the event.")
+                ?: throw PhoneToolException(Strings.t("The calendar didn't take the event."))
             id = ContentUris.parseId(uri)
         }
         return buildJsonObject {
@@ -176,23 +177,23 @@ internal class CalendarTool(private val context: Context, private val confirmati
     private suspend fun move(args: JsonObject): JsonObject {
         need(Manifest.permission.READ_CALENDAR)
         need(Manifest.permission.WRITE_CALENDAR)
-        val id = args.string("event_id")?.toLongOrNull() ?: throw PhoneToolException("event_id is needed: take it from action=list.")
-        val startText = args.string("start") ?: throw PhoneToolException("start is needed: when the event moves to.")
+        val id = args.string("event_id")?.toLongOrNull() ?: throw PhoneToolException(Strings.t("event_id is needed: take it from action=list."))
+        val startText = args.string("start") ?: throw PhoneToolException(Strings.t("start is needed: when the event moves to."))
         val uri = ContentUris.withAppendedId(CalendarContract.Events.CONTENT_URI, id)
-        val event = event(uri) ?: throw PhoneToolException("No event has that event_id.")
-        if (event.repeats) throw PhoneToolException("That event repeats. Moving one of a series is for the calendar app; ask the user to do it there.")
-        if (event.access < CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR) throw PhoneToolException("That event's calendar is read-only.")
-        if (event.allDay) throw PhoneToolException("Moving all-day events isn't supported; ask the user to do it in the calendar app.")
+        val event = event(uri) ?: throw PhoneToolException(Strings.t("No event has that event_id."))
+        if (event.repeats) throw PhoneToolException(Strings.t("That event repeats. Moving one of a series is for the calendar app; ask the user to do it there."))
+        if (event.access < CalendarContract.Calendars.CAL_ACCESS_CONTRIBUTOR) throw PhoneToolException(Strings.t("That event's calendar is read-only."))
+        if (event.allDay) throw PhoneToolException(Strings.t("Moving all-day events isn't supported; ask the user to do it in the calendar app."))
         // An invitation sits in the user's own calendar, but only its organizer can move it: sync would undo the change.
         if (!event.organizing && !event.guestsCanModify) {
-            throw PhoneToolException("The user was invited to that event; only its organizer can move it.")
+            throw PhoneToolException(Strings.t("The user was invited to that event; only its organizer can move it."))
         }
-        val length = event.length ?: throw PhoneToolException("That event's length isn't known: give end too.")
+        val length = event.length ?: throw PhoneToolException(Strings.t("That event's length isn't known: give end too."))
         val zone = ZoneId.systemDefault()
         val start = time(startText, "start").atZone(zone)
         // The same real length, also across a change of the clocks.
         val end = args.string("end")?.let { time(it, "end").atZone(zone) } ?: start.plus(length).withZoneSameInstant(zone)
-        if (!end.isAfter(start)) throw PhoneToolException("end must be after start.")
+        if (!end.isAfter(start)) throw PhoneToolException(Strings.t("end must be after start."))
         val was = LocalDateTime.ofInstant(Instant.ofEpochMilli(event.start), zone)
         // Only the times change: the event keeps its own time zone, which its guests see it in.
         val values = ContentValues().apply {
@@ -203,12 +204,12 @@ internal class CalendarTool(private val context: Context, private val confirmati
         }
         val guests = guests(id)
         val what = buildString {
-            append("From ${at(was)} to ${span(start.toLocalDateTime(), end.toLocalDateTime(), false)}, in ${forQuestion(event.calendar)}.")
-            if (guests > 0) append(" ${if (guests == 1) "1 guest" else "$guests guests"} may be told.")
-            append("\nTitle: ${forQuestion(event.title)}")
+            append(Strings.t("From {0} to {1}, in {2}.", at(was), span(start.toLocalDateTime(), end.toLocalDateTime(), false), forQuestion(event.calendar)))
+            if (guests > 0) append(Strings.t(" {0} may be told.", if (guests == 1) Strings.t("1 guest") else Strings.t("{0} guests", guests)))
+            append(Strings.t("\nTitle: {0}", forQuestion(event.title)))
         }
-        confirmations.confirm(what, TITLE_MOVE) {
-            if (context.contentResolver.update(uri, values, null, null) != 1) throw PhoneToolException("The calendar didn't take the change.")
+        confirmations.confirm(what, Strings.t(TITLE_MOVE)) {
+            if (context.contentResolver.update(uri, values, null, null) != 1) throw PhoneToolException(Strings.t("The calendar didn't take the change."))
         }
         return buildJsonObject {
             put("moved", true)
@@ -255,7 +256,7 @@ internal class CalendarTool(private val context: Context, private val confirmati
             val length = if (!c.isNull(2) && c.getLong(2) > start) Duration.ofMillis(c.getLong(2) - start) else duration?.let(::rfcDuration)
             val organizer = c.text(8)
             Event(
-                title = c.text(0) ?: "(no title)",
+                title = c.text(0) ?: Strings.t("(no title)"),
                 start = start,
                 length = length,
                 hasDuration = duration != null,
@@ -266,7 +267,7 @@ internal class CalendarTool(private val context: Context, private val confirmati
                 // No organizer: a plain event of the user's own.
                 organizing = organizer == null || organizer.equals(c.text(9), ignoreCase = true),
                 guestsCanModify = c.getInt(10) == 1,
-                calendar = c.text(11) ?: "your calendar",
+                calendar = c.text(11) ?: Strings.t("your calendar"),
             )
         }
     }
@@ -295,7 +296,7 @@ internal class CalendarTool(private val context: Context, private val confirmati
         class Found(val id: Long, val name: String, val primary: Boolean, val account: String?)
         val found = mutableListOf<Found>()
         context.contentResolver.query(CalendarContract.Calendars.CONTENT_URI, columns, where, null, "${CalendarContract.Calendars._ID} ASC")?.use { c ->
-            while (c.moveToNext()) found += Found(c.getLong(0), c.text(1) ?: "your calendar", c.getInt(2) == 1, c.text(3))
+            while (c.moveToNext()) found += Found(c.getLong(0), c.text(1) ?: Strings.t("your calendar"), c.getInt(2) == 1, c.text(3))
         }
         val pick = found.firstOrNull { it.primary } ?: found.firstOrNull() ?: return null
         // Two calendars of one name: the account tells the user which.
@@ -314,14 +315,14 @@ internal class CalendarTool(private val context: Context, private val confirmati
 
     private fun need(permission: String) {
         if (ContextCompat.checkSelfPermission(context, permission) != PackageManager.PERMISSION_GRANTED) {
-            throw PhoneToolException("Kyllene isn't allowed to use the calendar. The user can allow it in Kyllene: Settings → Phone tools.")
+            throw PhoneToolException(Strings.t("Kyllene isn't allowed to use the calendar. The user can allow it in Kyllene: Settings → Phone tools."))
         }
     }
 
     private fun text(args: JsonObject, name: String, max: Int, newlines: Boolean = false): String? {
         val value = args.string(name)?.trim()?.takeIf { it.isNotEmpty() } ?: return null
-        if (value.length > max) throw PhoneToolException("$name is at most $max characters.")
-        if (hidden(value.replace("\r\n", "\n"), newlines)) throw PhoneToolException("$name has hidden characters or odd spaces in it.")
+        if (value.length > max) throw PhoneToolException(Strings.t("{0} is at most {1} characters.", name, max))
+        if (hidden(value.replace("\r\n", "\n"), newlines)) throw PhoneToolException(Strings.t("{0} has hidden characters or odd spaces in it.", name))
         return value
     }
 
@@ -329,7 +330,7 @@ internal class CalendarTool(private val context: Context, private val confirmati
     private fun time(text: String, name: String): LocalDateTime = try {
         if (text.length <= DATE_LENGTH) LocalDate.parse(text).atStartOfDay() else LocalDateTime.parse(text)
     } catch (e: DateTimeParseException) {
-        throw PhoneToolException("$name is a local date and time like 2026-10-14T09:30, or a date like 2026-10-14.")
+        throw PhoneToolException(Strings.t("{0} is a local date and time like 2026-10-14T09:30, or a date like 2026-10-14.", name))
     }
 
     private fun shown(millis: Long, allDay: Boolean, last: Boolean = false): String = if (allDay) {
@@ -341,10 +342,10 @@ internal class CalendarTool(private val context: Context, private val confirmati
 
     /** "Wed 14 Oct, 9:30–10:30" for the question; the year too when it isn't this one. */
     private fun span(start: LocalDateTime, end: LocalDateTime, allDay: Boolean): String = when {
-        allDay && end.toLocalDate().minusDays(1) <= start.toLocalDate() -> "${day(start)}, all day"
-        allDay -> "${day(start)} to ${day(end.minusDays(1))}, all day"
-        start.toLocalDate() == end.toLocalDate() -> "${day(start)}, ${start.format(HOUR)}–${end.format(HOUR)}"
-        else -> "${at(start)} to ${at(end)}"
+        allDay && end.toLocalDate().minusDays(1) <= start.toLocalDate() -> Strings.t("{0}, all day", day(start))
+        allDay -> Strings.t("{0} to {1}, all day", day(start), day(end.minusDays(1)))
+        start.toLocalDate() == end.toLocalDate() -> Strings.t("{0}, {1}–{2}", day(start), start.format(HOUR), end.format(HOUR))
+        else -> Strings.t("{0} to {1}", at(start), at(end))
     }
 
     private fun day(time: LocalDateTime): String {

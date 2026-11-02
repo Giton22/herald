@@ -17,6 +17,7 @@ import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.app.Person
 import androidx.core.content.ContextCompat
+import dev.hermeskotlin.ui.i18n.Strings
 import dev.hermeskotlin.wearlink.WatchRing
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -43,8 +44,8 @@ class WatchRings(private val context: Context) {
     init {
         manager.createNotificationChannel(
             NotificationChannelCompat.Builder(CHANNEL, NotificationManagerCompat.IMPORTANCE_HIGH)
-                .setName("Calls for an answer")
-                .setDescription("Hermes calls when it needs an approval or an answer, or something can't wait, if the phone rings for it.")
+                .setName(Strings.t("Calls for an answer"))
+                .setDescription(Strings.t("Hermes calls when it needs an approval or an answer, or something can't wait, if the phone rings for it."))
                 .setVibrationEnabled(true)
                 .setVibrationPattern(VIBRATION)
                 .build(),

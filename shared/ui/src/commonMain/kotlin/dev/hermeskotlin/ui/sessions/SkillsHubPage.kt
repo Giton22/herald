@@ -70,6 +70,7 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.ListSkeleton
 import dev.hermeskotlin.ui.PlatformBackHandler
+import dev.hermeskotlin.ui.i18n.Strings
 
 /** Browse, search and install skills from the hub, into [profile]'s skills; [profileLabel] is how the subtitle names it. */
 @Composable
@@ -104,7 +105,13 @@ internal fun SkillsHubPage(
             onSessionExpired()
         }
     }
-    SkillsHubView(state, viewModel.query, viewModel, onBack, subtitle = "Installs into ${profileLabel ?: profile ?: "the main profile"}")
+    SkillsHubView(
+        state,
+        viewModel.query,
+        viewModel,
+        onBack,
+        subtitle = Strings.t("Installs into {0}", profileLabel ?: profile ?: Strings.t("the main profile")),
+    )
 }
 
 @Composable
@@ -133,13 +140,13 @@ internal fun SkillsHubView(
 private fun HubBrowse(state: SkillsHubUiState, query: TextFieldState, actions: SkillsHubActions, onBack: () -> Unit, subtitle: String, modifier: Modifier) {
     Column(modifier) {
         SubpageHeader(
-            "Skills hub",
+            Strings.t("Skills hub"),
             onBack = onBack,
             subtitle = subtitle,
             actions = {
                 if (!state.unsupported) {
                     Button(
-                        "Update all",
+                        Strings.t("Update all"),
                         onClick = actions::updateAll,
                         variant = ButtonVariant.Ghost,
                         size = ButtonSize.Small,
@@ -150,11 +157,11 @@ private fun HubBrowse(state: SkillsHubUiState, query: TextFieldState, actions: S
         )
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
-                state.unsupported -> Box(Modifier.fillMaxSize().padding(12.dp)) { ListNotice("This gateway doesn't have the skills hub yet.") }
+                state.unsupported -> Box(Modifier.fillMaxSize().padding(12.dp)) { ListNotice(Strings.t("This gateway doesn't have the skills hub yet.")) }
                 else -> Column(Modifier.fillMaxSize()) {
                     TextField(
                         state = query,
-                        placeholder = "Search the hub",
+                        placeholder = Strings.t("Search the hub"),
                         leadingIcon = Lucide.Search,
                         clearable = true,
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -177,8 +184,8 @@ private fun HubLists(state: SkillsHubUiState, actions: SkillsHubActions) {
                 found == null && results.error != null -> HubError(results.error, actions::refresh)
                 found == null -> ListSkeleton()
                 else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = HubPadding) {
-                    if (state.timedOut.isNotEmpty()) item(key = "timeout") { Hint("Some sources didn't answer: ${state.timedOut.joinToString()}") }
-                    if (found.isEmpty()) item(key = "none") { Hint("No skills match your search.") }
+                    if (state.timedOut.isNotEmpty()) item(key = "timeout") { Hint(Strings.t("Some sources didn't answer: {0}", state.timedOut.joinToString())) }
+                    if (found.isEmpty()) item(key = "none") { Hint(Strings.t("No skills match your search.")) }
                     else item(key = "results") { HubRows(found, state, actions) }
                 }
             }
@@ -188,28 +195,28 @@ private fun HubLists(state: SkillsHubUiState, actions: SkillsHubActions) {
         else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = HubPadding) {
             val featured = state.featured.items.orEmpty()
             if (featured.isNotEmpty()) {
-                item(key = "h-featured") { HubHeading("FEATURED") }
+                item(key = "h-featured") { HubHeading(Strings.t("FEATURED")) }
                 item(key = "featured") { HubRows(featured, state, actions) }
             } else if (state.featured.error != null) {
-                item(key = "h-featured") { HubHeading("FEATURED") }
+                item(key = "h-featured") { HubHeading(Strings.t("FEATURED")) }
                 item(key = "featured-error") { Hint(state.featured.error) }
                 item(key = "featured-retry") {
-                    Button("Try again", onClick = actions::refresh, variant = ButtonVariant.Secondary, size = ButtonSize.Small, leadingIcon = Lucide.RefreshCw, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
+                    Button(Strings.t("Try again"), onClick = actions::refresh, variant = ButtonVariant.Secondary, size = ButtonSize.Small, leadingIcon = Lucide.RefreshCw, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
                 }
             }
-            item(key = "h-official") { HubHeading("OFFICIAL") }
+            item(key = "h-official") { HubHeading(Strings.t("OFFICIAL")) }
             val official = state.official.items
             when {
                 official == null && state.official.error != null -> {
                     item(key = "official-error") { Hint(state.official.error) }
                     item(key = "official-retry") {
-                        Button("Try again", onClick = actions::refresh, variant = ButtonVariant.Secondary, size = ButtonSize.Small, leadingIcon = Lucide.RefreshCw, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
+                        Button(Strings.t("Try again"), onClick = actions::refresh, variant = ButtonVariant.Secondary, size = ButtonSize.Small, leadingIcon = Lucide.RefreshCw, modifier = Modifier.padding(start = 2.dp, bottom = 8.dp))
                     }
                 }
-                official == null -> item(key = "official-loading") { Hint("Loading…") }
-                official.isEmpty() -> item(key = "official-none") { Hint("Nothing in the official catalog.") }
+                official == null -> item(key = "official-loading") { Hint(Strings.t("Loading…")) }
+                official.isEmpty() -> item(key = "official-none") { Hint(Strings.t("Nothing in the official catalog.")) }
                 else -> officialGroups(official).forEach { (category, inGroup) ->
-                    item(key = "c-$category") { HubHeading(category.uppercase()) }
+                    item(key = "c-$category") { HubHeading(if (category == "other") Strings.t("Other") else category.uppercase()) }
                     item(key = "g-$category") { HubRows(inGroup, state, actions) }
                 }
             }
@@ -227,8 +234,8 @@ private val HubPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 4.dp, b
 
 @Composable
 private fun HubError(message: String, onRetry: () -> Unit) =
-    EmptyState(Lucide.CloudOff, "Couldn't load", message, error = true) {
-        Button("Try again", onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+    EmptyState(Lucide.CloudOff, Strings.t("Couldn't load"), message, error = true) {
+        Button(Strings.t("Try again"), onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
     }
 
 @Composable
@@ -261,7 +268,7 @@ private fun HubRows(skills: List<HubSkill>, state: SkillsHubUiState, actions: Sk
                     overflow = TextOverflow.Ellipsis,
                 )
                 skill.trustLevel.takeIf { it.isNotBlank() }?.let { Tag(it, accent = false) }
-                if (installed) Tag("Installed", accent = true)
+                if (installed) Tag(Strings.t("Installed"), accent = true)
             }
             if (skill.description.isNotBlank()) {
                 Text(
@@ -290,8 +297,8 @@ private fun HubDetailPage(d: HubDetail, state: SkillsHubUiState, actions: Skills
             subtitle = listOfNotNull(skill.trustLevel.takeIf { it.isNotBlank() }, skill.source.takeIf { it.isNotBlank() }).joinToString(" · ").ifBlank { null },
             actions = {
                 when {
-                    installed -> Button("Installed", onClick = {}, enabled = false, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
-                    else -> Button("Install", onClick = { actions.install(skill) }, enabled = !blocked, loading = id in state.running, size = ButtonSize.Small)
+                    installed -> Button(Strings.t("Installed"), onClick = {}, enabled = false, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
+                    else -> Button(Strings.t("Install"), onClick = { actions.install(skill) }, enabled = !blocked, loading = id in state.running, size = ButtonSize.Small)
                 }
             },
         )
@@ -309,7 +316,7 @@ private fun HubDetailPage(d: HubDetail, state: SkillsHubUiState, actions: Skills
                 if (tags.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) { tags.forEach { Tag(it, accent = false) } }
                 }
-                if (blocked) Text("Blocked by security scan", style = Theme[typography][bodySmall], color = Theme[colors][danger])
+                if (blocked) Text(Strings.t("Blocked by security scan"), style = Theme[typography][bodySmall], color = Theme[colors][danger])
                 d.error?.let { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
                 d.scanError?.let { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
                 d.scan?.let { ScanFindings(it, expanded = blocked) }
@@ -321,7 +328,7 @@ private fun HubDetailPage(d: HubDetail, state: SkillsHubUiState, actions: Skills
                         }
                     }
                     d.error != null -> Unit
-                    else -> Text("Loading…", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+                    else -> Text(Strings.t("Loading…"), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
                 }
             }
         }
@@ -334,7 +341,7 @@ private fun ScanFindings(scan: HubScan, expanded: Boolean) {
     var open by remember(scan) { mutableStateOf(expanded) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (!open && scan.findings.isNotEmpty()) {
-            Button("View scan", onClick = { open = true }, variant = ButtonVariant.Outline, size = ButtonSize.Small)
+            Button(Strings.t("View scan"), onClick = { open = true }, variant = ButtonVariant.Outline, size = ButtonSize.Small)
         } else {
             Text(
                 listOf(scan.verdict, scan.summary).filter { it.isNotBlank() }.joinToString(": "),
@@ -356,7 +363,7 @@ internal fun HubConfirmSheet(scan: HubScan?, actions: SkillsHubActions) {
     BottomSheet(visible = scan != null, onDismiss = actions::cancelConfirm) {
         val s = kept ?: return@BottomSheet
         Column(Modifier.heightIn(max = 600.dp).verticalScroll(rememberScrollState())) {
-            SheetHeader("${s.verdict.replaceFirstChar { it.uppercase() }} scan", s.name.ifBlank { null })
+            SheetHeader(Strings.t("{0} scan", Strings.t(s.verdict.replaceFirstChar { it.uppercase() })), s.name.ifBlank { null })
             Column(Modifier.padding(horizontal = 18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 listOf(s.summary, s.policyReason).filter { it.isNotBlank() }.forEach {
                     Text(it, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
@@ -365,8 +372,8 @@ internal fun HubConfirmSheet(scan: HubScan?, actions: SkillsHubActions) {
                     FindingLine(it)
                 }
                 Row(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                    Button("Install anyway", onClick = actions::confirmInstall, variant = ButtonVariant.Danger)
-                    Button("Cancel", onClick = actions::cancelConfirm, variant = ButtonVariant.Secondary)
+                    Button(Strings.t("Install anyway"), onClick = actions::confirmInstall, variant = ButtonVariant.Danger)
+                    Button(Strings.t("Cancel"), onClick = actions::cancelConfirm, variant = ButtonVariant.Secondary)
                 }
             }
         }

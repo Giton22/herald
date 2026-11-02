@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.height
 import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.i18n.Strings
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -108,18 +109,18 @@ internal fun PluginsView(
 ) {
     Column(Modifier.fillMaxSize()) {
         SubpageHeader(
-            "Plugins",
+            Strings.t("Plugins"),
             onBack = onBack,
-            subtitle = "The gateway's dashboard plugins with a page of their own, like Kanban. One opens in the app.",
+            subtitle = Strings.t("The gateway's dashboard plugins with a page of their own, like Kanban. One opens in the app."),
         )
         Box(Modifier.weight(1f).fillMaxWidth()) {
             val plugins = state.plugins
             when {
-                plugins == null && state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load plugins", state.error, error = true) {
-                    Button("Try again", onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+                plugins == null && state.error != null -> EmptyState(Lucide.CloudOff, Strings.t("Couldn't load plugins"), state.error, error = true) {
+                    Button(Strings.t("Try again"), onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                 }
                 plugins == null -> CenteredSpinner()
-                state.openable.isEmpty() -> EmptyState(Lucide.Puzzle, "No plugin pages", "A plugin with a page, like Kanban, shows up here.")
+                state.openable.isEmpty() -> EmptyState(Lucide.Puzzle, Strings.t("No plugin pages"), Strings.t("A plugin with a page, like Kanban, shows up here."))
                 else -> BoxWithConstraints(Modifier.fillMaxSize()) {
                     val list = rememberLazyListState()
                     // A wide desktop page sets the cards side by side, as a desktop's catalogue does; a phone, one a row.
@@ -160,7 +161,7 @@ private fun PluginRow(plugin: DashboardPlugin, modifier: Modifier = Modifier.fil
             .background(Theme[colors][surface])
             .border(1.dp, Theme[colors][stroke], RoundedCornerShape(Theme[radii][radiusLarge]))
             .handCursor()
-            .clickable(onClickLabel = "Open ${plugin.label}") { onClick() }
+            .clickable(onClickLabel = Strings.t("Open {0}", plugin.label)) { onClick() }
             .padding(start = 14.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
