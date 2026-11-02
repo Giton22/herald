@@ -10,6 +10,7 @@ import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.network.HermesJson
 import dev.hermeskotlin.core.rpc.FakeGateway
 import dev.hermeskotlin.core.rpc.FakeTransport
+import dev.hermeskotlin.core.rpc.JsonRpcClient
 import dev.hermeskotlin.core.rpc.event
 import dev.hermeskotlin.core.rpc.isCall
 import dev.hermeskotlin.core.rpc.json
@@ -958,6 +959,46 @@ class ChatSessionTest {
         assertEquals("@file:attachments/notes.txt\n\n@file:attachments/notes.txt\n\nsummarise", submit.param("text"))
         val user = assertIs<ChatMessage.User>(chat.state.value.messages.single())
         assertEquals(listOf("cat.jpg", "spec.pdf", "notes.txt"), user.attachments.map { it.name })
+    }
+
+    @Test
+    fun aFileOverTheLimitIsTurnedDownAndTheLinkStaysUp() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
+                "image.attach_bytes" to """{"attached":true,"path":"/tmp/upload_1.jpg"}""",
+            ),
+        )
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        // #340: a 12.8 MB PDF is 17 MB base64, past what the socket carries in one message.
+        val image = OutgoingAttachment("a1", "cat.jpg", "image/jpeg", byteArrayOf(1))
+        val big = OutgoingAttachment("a2", "report.pdf", "application/pdf", ByteArray(12_806_962))
+        assertFalse(chat.send("summarise", listOf(image, big)))
+
+        assertEquals("report.pdf is larger than 12 MB, too large to send.", chat.state.value.error)
+        // Turned down before anything went, the image beside it included.
+        val uploads = listOf("image.attach_bytes", "pdf.attach", "file.attach", "prompt.submit", "session.create")
+        assertTrue(transport.sent.value.none { frame -> uploads.any { frame.isCall(it) } })
+        assertTrue(chat.state.value.messages.isEmpty())
+        assertIs<ConnectionState.Connected>(connection.state.value)
+    }
+
+    @Test
+    fun aPromptTooLargeForTheSocketIsHandedBackAndTheLinkStaysUp() = runTest {
+        val (chat, transport) = resumedChat(backgroundScope, emptyMap())
+
+        // Nothing went out, so there's no transcript to check: the text comes straight back.
+        val huge = "a".repeat(JsonRpcClient.MAX_FRAME_BYTES)
+        assertEquals(SendOutcome.NotSent, chat.submit(huge))
+
+        assertEquals("That's too large to send to the gateway.", chat.state.value.error)
+        assertEquals(emptyList(), transport.sent.value.filter { it.isCall("prompt.submit") })
+        // Only the history it opened with: no bubble left for the prompt that didn't go.
+        assertEquals(listOf("row-1", "row-2"), chat.state.value.messages.map { it.key })
     }
 
     @Test

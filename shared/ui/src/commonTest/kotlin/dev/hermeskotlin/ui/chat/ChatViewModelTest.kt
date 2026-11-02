@@ -329,6 +329,18 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun aPasteOverTheSizeLimitStaysOutOfTheTray() = runTest(dispatcher) {
+        val (vm, _) = viewModel()
+        // #340: a long paste becomes pasted.txt with no picker to stop it; past 12 MB it couldn't be sent.
+        val pasted = pastedTextAttachment("a".repeat(OutgoingAttachment.MAX_BYTES + 1), "p1")
+
+        vm.addAttachments(listOf(attachment("ok"), pasted))
+
+        assertEquals(listOf("ok"), vm.attachments.value.map { it.id })
+        assertEquals("pasted.txt is larger than 12 MB.", vm.attachmentError.value)
+    }
+
+    @Test
     fun sharedFilesStopAtTheTrayLimit() = runTest(dispatcher) {
         val (vm, _) = viewModel()
         val many = (1..OutgoingAttachment.MAX_COUNT + 2).map { attachment("f$it") }

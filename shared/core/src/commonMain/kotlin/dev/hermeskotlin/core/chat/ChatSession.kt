@@ -236,6 +236,10 @@ class ChatSession(
             ?.messages?.count { it is ChatMessage.User && !it.pending && it.check == null }
         var submitted = false
         return try {
+            // The composer holds files to this size; checked before any goes, so none is uploaded for nothing.
+            attachments.firstOrNull { it.bytes.size > OutgoingAttachment.MAX_BYTES }?.let {
+                throw RpcException(JsonRpcClient.MESSAGE_TOO_LARGE, "${it.name} is larger than ${OutgoingAttachment.MAX_SIZE}, too large to send.")
+            }
             val client = connectedClient() ?: throw RpcException(0, "Not connected to the gateway. Your message will need resending.")
             val runtimeId = ensureAttached(client)
             uploadClient = client
