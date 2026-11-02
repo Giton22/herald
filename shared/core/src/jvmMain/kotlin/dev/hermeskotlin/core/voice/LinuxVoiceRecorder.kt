@@ -90,7 +90,8 @@ internal class LinuxVoiceRecorder(private val microphone: () -> Microphone) : Vo
                 current.compareAndSet(session, null)
                 session.released.complete(Unit)
             }
-            // A device that won't stop doesn't cost the user what they already said; the next start reports it.
+            // A device that won't stop doesn't cost the user what they already said. It goes with a failed recording;
+            // after a good one, a device that's still held fails the next start with its own error.
             cleanupFailure?.let { failure?.addSuppressed(it) }
         }
     }
