@@ -4,6 +4,8 @@
     inbox_ for the Inbox, assistant_ for the panel.
 -->
 <resources>
+    <!-- A message, then the gateway's own reason after it ("Couldn’t send." and why). -->
+    <string name="inbox_then_detail">%1$s %2$s</string>
     <string name="inbox_title">Inbox</string>
     <string name="inbox_all">All</string>
     <string name="inbox_other">Other</string>

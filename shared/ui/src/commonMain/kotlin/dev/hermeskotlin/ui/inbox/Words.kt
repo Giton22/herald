@@ -1,6 +1,8 @@
 package dev.hermeskotlin.ui.inbox
 
 import androidx.compose.runtime.Composable
+import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.inbox_then_detail
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -32,6 +34,7 @@ fun Words.text(): String = when (this) {
     is Words.Of -> if (args.isEmpty()) stringResource(res) else stringResource(res, *args.map { if (it is Words) it.text() else it }.toTypedArray())
     is Words.Then -> {
         val head = first.text()
-        detail?.trim()?.takeIf { it.isNotEmpty() }?.let { "$head $it" } ?: head
+        // How a language joins a sentence and the gateway's reason after it: a space, or none in Chinese.
+        detail?.trim()?.takeIf { it.isNotEmpty() }?.let { stringResource(Res.string.inbox_then_detail, head, it) } ?: head
     }
 }

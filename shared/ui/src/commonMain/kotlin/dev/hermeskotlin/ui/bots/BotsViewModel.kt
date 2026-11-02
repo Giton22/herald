@@ -415,7 +415,9 @@ class BotsViewModel(
             } catch (e: Exception) {
                 // The sheet is the chat's, which takes text: said here, in the app's language.
                 val said = getString(Res.string.bots_model_change_failed, bot.label)
-                _modelPicker.update { it.copy(saving = false, saveError = "$said ${e.message.orEmpty()}".trim()) }
+                val why = e.message?.trim()?.takeIf { it.isNotEmpty() }
+                val text = if (why == null) said else getString(Res.string.inbox_then_detail, said, why)
+                _modelPicker.update { it.copy(saving = false, saveError = text) }
             }
         }
     }

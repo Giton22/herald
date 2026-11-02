@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Chinese (Simplified): the Inbox and the assistant panel, as values/strings_inbox.xml. -->
 <resources>
+    <string name="inbox_then_detail">%1$s%2$s</string>
     <string name="inbox_title">收件箱</string>
     <string name="inbox_all">全部</string>
     <string name="inbox_other">其他</string>
