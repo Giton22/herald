@@ -229,7 +229,11 @@ class ChatSession(
         // One prompt's uploads and submit at a time: images queued on the session ride with the next
         // prompt.submit, so another send in between (while a large file goes up) would take them. Held
         // until this one is settled, so the next one sees whether a turn is running.
-        sendMutex.lock()
+        val waited = !sendMutex.tryLock()
+        if (waited) sendMutex.lock()
+        // Sent while nothing ran, then held behind a prompt that started a turn: it runs after that turn,
+        // as it would have alone, rather than going in as a correction to a turn it wasn't meant for.
+        val queued = queue || (waited && _state.value.running)
         // Counted before submitting: the turn's message.start can arrive before the prompt.submit reply.
         ownTurnsPending++
         // Images and PDF pages queued on the session: if the prompt never goes out they would ride along
@@ -239,7 +243,7 @@ class ChatSession(
         var uploadRuntimeId: String? = null
         // Only a prompt that starts a turn is written to the transcript at once; a correction or a
         // queued one isn't, so for those the transcript can't say whether it arrived.
-        val startsTurn = !queue && !_state.value.running
+        val startsTurn = !queued && !_state.value.running
         // The prompts shown, which the transcript has too; not countable when the transcript failed to load.
         val promptsBefore = _state.value.takeIf { it.historyRead }
             ?.messages?.count { it is ChatMessage.User && !it.pending && it.check == null }
@@ -261,7 +265,7 @@ class ChatSession(
                     put("session_id", runtimeId)
                     // Like Desktop: the file references first, then what was typed.
                     put("text", (refs + visible).filter { it.isNotEmpty() }.joinToString("\n\n"))
-                    if (queue) put("queued", true)
+                    if (queued) put("queued", true)
                     if (voiceLive != null) {
                         put("surface", "voice-live")
                         if (voiceLive.context.isNotBlank()) put("voice_context", voiceLive.context)

@@ -1369,8 +1369,11 @@ class ChatSessionTest {
         assertTrue(chat.send("look", listOf(streamed("logs.tar", "application/x-tar", 13_000_000L))))
         assertTrue(assertNotNull(second).await())
 
-        val submits = transport.sent.value.filter { it.isCall("prompt.submit") }.map { it.param("text") }
-        assertEquals(listOf("@file:logs.tar\n\nlook", "meanwhile"), submits)
+        val submits = transport.sent.value.filter { it.isCall("prompt.submit") }
+        assertEquals(listOf("@file:logs.tar\n\nlook", "meanwhile"), submits.map { it.param("text") })
+        // Sent while nothing ran, it waits for the turn the first one started instead of steering it.
+        assertNull(submits[0].param("queued"))
+        assertEquals("true", submits[1].param("queued"))
     }
 
     private fun ByteArray.indexOfSequence(needle: ByteArray, from: Int = 0): Int {
