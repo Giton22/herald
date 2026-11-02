@@ -39,5 +39,7 @@ if __name__ == '__main__':
         groups = [json.loads(file.read_text()) for file in sorted(Path(output).glob('*.json'))]
     if not groups:
         raise ValueError('Generator produced no dependency inputs')
+    # The generator leaves out BOMs that a plugin's POM imports; those are kept by hand.
+    groups.append(json.loads(Path(__file__).with_name('extra-sources.json').read_text()))
     Path(__file__).with_name('gradle-sources.json').write_text(
         json.dumps(merge_sources(groups), indent=2) + '\n')
