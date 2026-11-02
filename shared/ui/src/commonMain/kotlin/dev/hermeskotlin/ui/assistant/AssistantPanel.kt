@@ -649,7 +649,8 @@ private fun ScreenUnavailable(onOpenSettings: () -> Unit) {
                 stringResource(Res.string.assistant_turn_on_screen_text),
                 style = Theme[typography][caption],
                 color = Theme[colors][textTertiary],
-                maxLines = 1,
+                // Two lines: the setting's name runs longer in most languages than in English.
+                maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
         }
