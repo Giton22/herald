@@ -65,9 +65,9 @@ class PebbleLinkTest {
         assertTrue(items.all { it[PebbleKeys.COUNT] == num(3) })
         assertEquals(listOf("now", "2h", null), items.map { (it[PebbleKeys.AGO] as? PebbleValue.Text)?.value })
 
-        val failed = PebbleLink.chats(ChatList(error = "Sign in to Herald on your phone first."), now).single()
+        val failed = PebbleLink.chats(ChatList(error = "Sign in to Kyllene on your phone first."), now).single()
         assertEquals(num(0), failed[PebbleKeys.COUNT])
-        assertEquals(text("Sign in to Herald on your phone first."), failed[PebbleKeys.ERROR])
+        assertEquals(text("Sign in to Kyllene on your phone first."), failed[PebbleKeys.ERROR])
     }
 
     @Test

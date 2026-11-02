@@ -33,7 +33,7 @@ static bool s_on_phone;
 
 static AppTimer *s_buzz_timer;
 static AppTimer *s_ring_out_timer;
-// Herald was opened for this ring: it quits once the ring's over, unless it was picked up here.
+// Kyllene was opened for this ring: it quits once the ring's over, unless it was picked up here.
 static bool s_for_ring;
 static bool s_rang_before;
 
@@ -167,7 +167,7 @@ static void prv_redraw(void) {
   layer_set_hidden(text_layer_get_layer(s_decline_layer), s_on_phone);
 }
 
-// The ring's over here: the window goes, and so does Herald when it was opened for this ring.
+// The ring's over here: the window goes, and so does Kyllene when it was opened for this ring.
 static void prv_close(bool quit) {
   prv_stop_ringing();
   if (s_window) window_stack_remove(s_window, true);
@@ -185,7 +185,7 @@ static void prv_answer(ClickRecognizerRef recognizer, void *context) {
     prv_redraw();
     return;
   }
-  // The request comes next, over the talk screen: Herald stays.
+  // The request comes next, over the talk screen: Kyllene stays.
   s_for_ring = false;
   s_send_end = 1;
   prv_tell();
@@ -286,7 +286,7 @@ static void prv_rang_out(void *data) {
 }
 
 void ring_show(const LinkRing *ring, GColor fill, GColor on_fill) {
-  // The same ring again (sent once more as Herald opened): it rings on as it is.
+  // The same ring again (sent once more as Kyllene opened): it rings on as it is.
   if (s_window && strcmp(s_id, ring->request_id) == 0) return;
   if (!s_rang_before) s_for_ring = launch_reason() == APP_LAUNCH_PHONE;
   s_rang_before = true;

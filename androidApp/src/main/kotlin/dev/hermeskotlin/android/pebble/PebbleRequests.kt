@@ -24,7 +24,7 @@ import kotlinx.coroutines.launch
 
 /**
  * Approvals and questions on a Pebble, while answering there is on (Settings → Connected devices → Answer on the Pebble).
- * Those in the watch's chat go to the Pebble that asked, as they come, and again when Herald opens there; what's
+ * Those in the watch's chat go to the Pebble that asked, as they come, and again when Kyllene opens there; what's
  * picked or dictated there comes back through [answer]. Off, none are sent, and the watch says to answer on the
  * phone, where they're the usual notifications ([WearRequests]); on, those are posted quietly and on the phone only.
  */
@@ -50,7 +50,7 @@ class PebbleRequests(
     private val on: Boolean get() = settings.settings.value?.answersOnPebble == true
 
     fun start() {
-        // Shown here, they'd show twice: once from Herald, once mirrored from the phone's notification.
+        // Shown here, they'd show twice: once from Kyllene, once mirrored from the phone's notification.
         wearRequests.shownOnWatch = { on && node.value != null }
         scope.launch {
             val state = relay.session.flatMapLatest { it?.state ?: flowOf(null) }
@@ -77,7 +77,7 @@ class PebbleRequests(
         }
     }
 
-    /** Herald opened on [watch], which starts with nothing: what waits for it goes again. */
+    /** Kyllene opened on [watch], which starts with nothing: what waits for it goes again. */
     fun reopened(watch: String) {
         val now = node.value ?: return
         if (now.first != watch) return
@@ -109,13 +109,13 @@ class PebbleRequests(
     fun answer(watch: String, answer: PebbleIncoming.Answer) {
         scope.launch {
             val error = if (!on) {
-                "Answering on the Pebble is off in Herald's settings. Answer on your phone."
+                "Answering on the Pebble is off in Kyllene's settings. Answer on your phone."
             } else {
                 when (answers.answer(answer.requestId) { watchAnswer(it, answer.index, answer.text) }) {
                     RequestAnswers.Outcome.Answered -> null
                     RequestAnswers.Outcome.Gone -> "It was already answered."
                     RequestAnswers.Outcome.Refused -> "That answer doesn't fit any more. Answer on your phone."
-                    RequestAnswers.Outcome.NotConnected -> "Herald can't reach your gateway right now."
+                    RequestAnswers.Outcome.NotConnected -> "Kyllene can't reach your gateway right now."
                 }
             }
             outbox.watch(watch).message(PebbleLink.requestEnd(answer.requestId, error))

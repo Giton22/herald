@@ -1,14 +1,14 @@
 # Pebble companion: plan
 
-**Goal:** talk to Hermes from a Pebble (first target: **Pebble Time 2**) through Herald on an Android phone. It should work the way the Wear OS companion does wherever the hardware allows, and do something sensible where it doesn't.
+**Goal:** talk to Hermes from a Pebble (first target: **Pebble Time 2**) through Kyllene on an Android phone. It should work the way the Wear OS companion does wherever the hardware allows, and do something sensible where it doesn't.
 
-**Status:** this is a plan. No code exists yet. Written 2026-10-27 against Herald `master` @ `687d80e3` and Pebble SDK 4.33.1.
+**Status:** this is a plan. No code exists yet. Written 2026-10-27 against Kyllene `master` @ `687d80e3` and Pebble SDK 4.33.1.
 
 **Evidence labels.** ✅ means verified from source or docs (the link is given). ❓ means inferred or unverified, and the plan says which phase settles it.
 
 ---
 
-## 1. What Herald does for Wear OS today
+## 1. What Kyllene does for Wear OS today
 
 The Wear companion is a thin watch UI over a phone-side relay. The phone holds the gateway connection and the sign-in. The watch never sees either.
 
@@ -63,8 +63,8 @@ The docs say it is the [currently recommended](https://developer.repebble.com/gu
 - **Receiving:** subclass `BasePebbleListenerService`. It has `onMessageReceived(uuid, dict, watch)` (returns Ack or Nack), `onAppOpened` and `onAppClosed`. The Pebble app binds it while our watchapp runs.
 - **Also available:** `startAppOnTheWatch()`, `stopAppOnTheWatch()`, timeline pins from the phone, and `PebbleInfoRetriever`.
 - **The watchapp must name its companion.** Its `package.json` needs a `companionApp.android.apps[].package` entry, or sends fail with `FailedNoPermissions`. List **both** `dev.herald.android` and `dev.herald.android.dev` (the debug suffix).
-- **Turn off auto-select.** By default the library trusts any app that claims to be the Pebble app. Set `DefaultPebbleAndroidAppPicker.enableAutoSelect = false` and use the `client-ui` picker. Herald sends private agent output.
-- **Avoid classic PebbleKit** (`com.getpebble:pebblekit`). It uses broadcasts that any app can read and that can't wake Herald, and the Gravel fork turns it off.
+- **Turn off auto-select.** By default the library trusts any app that claims to be the Pebble app. Set `DefaultPebbleAndroidAppPicker.enableAutoSelect = false` and use the `client-ui` picker. Kyllene sends private agent output.
+- **Avoid classic PebbleKit** (`com.getpebble:pebblekit`). It uses broadcasts that any app can read and that can't wake Kyllene, and the Gravel fork turns it off.
 
 ### AppMessage limits ✅ ([AppMessage](https://developer.repebble.com/docs/c/Foundation/AppMessage/))
 
@@ -98,12 +98,12 @@ What the Core app's source shows ✅:
 - It turns `RemoteInput` into a Reply action, with canned replies and dictation.
 - It turns other actions into buttons that fire their `PendingIntent`.
 - It **prefers `WearableExtender` actions** when a notification has them.
-- It **ignores ongoing notifications.** Herald's ringing "call" notification is ongoing, so it won't show.
+- It **ignores ongoing notifications.** Kyllene's ringing "call" notification is ongoing, so it won't show.
 - It skips `setLocalOnly` notifications.
-- It **drops actions marked `showsUserInterface`** (the `NotificationCompat` default) unless *Enable showsUserInterface actions* is on in the Pebble app. Herald's actions are all marked that way today (see Phase 0 findings).
+- It **drops actions marked `showsUserInterface`** (the `NotificationCompat` default) unless *Enable showsUserInterface actions* is on in the Pebble app. Kyllene's actions are all marked that way today (see Phase 0 findings).
 - *(The earlier claim that it sends nothing while the phone is unlocked was wrong: `alwaysSendNotifications` defaults to `true`.)*
 
-**Never tested on a watch** ❓: whether Herald's existing reply and approval notifications already work on a Pebble with no code.
+**Never tested on a watch** ❓: whether Kyllene's existing reply and approval notifications already work on a Pebble with no code.
 
 ---
 
@@ -131,7 +131,7 @@ What the Core app's source shows ✅:
 ## 4. Architecture
 
 ```
- Pebble Time 2 (C watchapp, pebbleApp/)                    Android phone (Herald)
+ Pebble Time 2 (C watchapp, pebbleApp/)                    Android phone (Kyllene)
  ┌───────────────────────────────┐    AppMessage dicts    ┌──────────────────────────────────────────┐
  │ talk_window   chats_window    │◄──────────────────────►│ PebbleBridgeService : BasePebbleListener │
  │ ring_window   status/glance   │   (via Pebble app,     │        │ decode → WatchAsk/Stop/…          │
@@ -201,7 +201,7 @@ The Wear JSON protocol stays untouched. `PebbleOutbox` **decodes the JSON for ea
 - **Plain text:** strip markdown (code fences, headings, links) before sending. The watch draws plain text in a `ScrollLayer`.
 - **Speech:** the watch always sends `speak=false` for now, so the relay never voices. `PebbleOutbox.stream()` returns `false`.
 - **Replay:** `PebbleWatch` keeps the newest `REPLY` for its watch. `onAppOpened` sends it again from 0, so reopening the app mid-turn (or after it) shows where things stand. Verified on the device (Phase 1 results).
-- **Who may send:** the bridge is exported for the Pebble app to bind. PebbleKit's `BasePebbleListenerService` drops any call whose caller (by binder uid) isn't the Pebble app picked in `DefaultPebbleAndroidAppPicker`; Herald turns auto-select off and picks only `coredevices.coreapp` (`PebbleApps`). Without that, any app could start Hermes turns through it.
+- **Who may send:** the bridge is exported for the Pebble app to bind. PebbleKit's `BasePebbleListenerService` drops any call whose caller (by binder uid) isn't the Pebble app picked in `DefaultPebbleAndroidAppPicker`; Kyllene turns auto-select off and picks only `coredevices.coreapp` (`PebbleApps`). Without that, any app could start Hermes turns through it.
 
 ### 4.3 Node identity
 
@@ -216,7 +216,7 @@ PebbleKit 2 gives a `WatchIdentifier` on every message. Node ids are `pebble:<id
 3. The watch shows a ring window, with a custom vibration pattern and a speaker ringtone.
 4. The watch answers with `RING_ON`, so the existing "phone's call shows on the watch" fallback logic is reused.
 
-**Finished replies while the app is closed.** When a `Done` reply gets `FailedDifferentAppOpen`, Herald posts a normal reply notification for that chat, which the Pebble app mirrors (✅ *decided* 2026-10-27, over a timeline pin or reopening the watchapp).
+**Finished replies while the app is closed.** When a `Done` reply gets `FailedDifferentAppOpen`, Kyllene posts a normal reply notification for that chat, which the Pebble app mirrors (✅ *decided* 2026-10-27, over a timeline pin or reopening the watchapp).
 
 Either way, the AppGlance is updated the next time the app runs.
 
@@ -224,9 +224,9 @@ Either way, the AppGlance is updated the next time the app runs.
 
 On Wear, `keepUp()` starts `ChatService` as a foreground service from inside the Data Layer callback, because Play Services grants a temporary allowlist to start one.
 
-**Spiked in Phase 1 ✅: it works on Android 17.** With Herald Dev swiped away (`Killing … remove task`), opening the watchapp made Android start Herald's process for the Pebble app's binding (`Start proc … for bound-service PebbleBridgeService`). The ask then started `ChatService` from the background: `Background started FGS: Allowed … uidState: FGS`. Being bound by the Pebble app, which runs a foreground service, appears to lend Herald that state (inferred from `uidState: FGS`). Herald's process stayed up after the watchapp was closed mid-reply.
+**Spiked in Phase 1 ✅: it works on Android 17.** With Kyllene Dev swiped away (`Killing … remove task`), opening the watchapp made Android start Kyllene's process for the Pebble app's binding (`Start proc … for bound-service PebbleBridgeService`). The ask then started `ChatService` from the background: `Background started FGS: Allowed … uidState: FGS`. Being bound by the Pebble app, which runs a foreground service, appears to lend Kyllene that state (inferred from `uidState: FGS`). Kyllene's process stayed up after the watchapp was closed mid-reply.
 
-The fallback, should a later Android or another Pebble app change that: ask the user to exempt Herald from battery optimisation, which lifts the background-start ban. A foreground service *type* such as `connectedDevice` doesn't lift it on its own.
+The fallback, should a later Android or another Pebble app change that: ask the user to exempt Kyllene from battery optimisation, which lifts the background-start ban. A foreground service *type* such as `connectedDevice` doesn't lift it on its own.
 
 ---
 
@@ -234,9 +234,9 @@ The fallback, should a later Android or another Pebble app change that: ask the 
 
 Each phase ends in something testable on the user's phone and Time 2.
 
-### Phase 0: groundwork and baseline (no Herald code)
+### Phase 0: groundwork and baseline (no Kyllene code)
 
-1. **Fork and branch.** Fork `Giton22/herald` to `faultoverload/herald`. Set the local git identity to the faultoverload noreply address. Then open a feature-request issue upstream proposing the plan, since CONTRIBUTING asks for an issue before anything big.
+1. **Fork and branch.** Fork `Giton22/kyllene` to `faultoverload/herald`. Set the local git identity to the faultoverload noreply address. Then open a feature-request issue upstream proposing the plan, since CONTRIBUTING asks for an issue before anything big.
 2. **Toolchain.** Arch ships Python 3.14, which pebble-tool doesn't support:
 
    ```
@@ -246,14 +246,14 @@ Each phase ends in something testable on the user's phone and Time 2.
 
    Build and run the PebbleKit 2 sample ([`sample/`](https://github.com/pebble-dev/PebbleKitAndroid2/tree/main/sample)) on the Time 2 with the Core app. That proves a message round trip.
 3. **Developer Connection.** Turn it on in the Pebble app. Then `pebble install --phone <ip>` and `pebble logs --phone <ip>` work.
-4. **Zero-code baseline.** Install Herald's current release and record what the Time 2 shows for each case below. Test each one with the phone screen on and with it off.
+4. **Zero-code baseline.** Install Kyllene's current release and record what the Time 2 shows for each case below. Test each one with the phone screen on and with it off.
    - A finished-reply notification, replying by dictation and by canned reply.
    - An approval notification, using Approve/Deny.
    - A question notification.
    - The ringing "Hermes is calling" notification. It is expected **not** to mirror (ongoing).
    - The watch chat's quiet requests (`setLocalOnly`). These are expected not to mirror.
    - Which speech-to-text backend the Pebble app uses, and whether it needs internet or a subscription.
-5. **Security check.** Herald sets `setAuthenticationRequired(true)` on approve and reply actions so a locked phone can't approve. `NotificationActionReceiver` doesn't check the lock itself (no `KeyguardManager` use), so the system shade is the only gate. **Find out whether firing them from the Pebble skips the unlock.**
+5. **Security check.** Kyllene sets `setAuthenticationRequired(true)` on approve and reply actions so a locked phone can't approve. `NotificationActionReceiver` doesn't check the lock itself (no `KeyguardManager` use), so the system shade is the only gate. **Find out whether firing them from the Pebble skips the unlock.**
    - It isn't specific to Pebble: any notification listener (Gadgetbridge, other bridges) can fire the `PendingIntent` directly. If the unlock is skipped, it may deserve an upstream issue on its own.
    - It also decides the wrist-approval policy below.
 
@@ -278,26 +278,26 @@ Each phase ends in something testable on the user's phone and Time 2.
   - No permission prompt appeared for the sample (its `companionApp` entry was enough).
 - **Notification baseline, Test 1 (finished reply)** ✅ with a setting
   - The reply notification reaches the watch. **Its Reply action is dropped by default.**
-  - Why: Herald builds its actions with `NotificationCompat.Action.Builder`, which defaults `showsUserInterface` to `true`. The Pebble app [drops such actions](https://github.com/coredevices/mobileapp/blob/main/libpebble3/src/androidMain/kotlin/io/rebble/libpebblecommon/notification/LibPebbleNotificationAction.kt) unless `addShowsUserInterfaceActions` is set, and that is off by default.
+  - Why: Kyllene builds its actions with `NotificationCompat.Action.Builder`, which defaults `showsUserInterface` to `true`. The Pebble app [drops such actions](https://github.com/coredevices/mobileapp/blob/main/libpebble3/src/androidMain/kotlin/io/rebble/libpebblecommon/notification/LibPebbleNotificationAction.kt) unless `addShowsUserInterfaceActions` is set, and that is off by default.
   - **Requirement today:** in the Pebble app, turn on *Settings → Phone → Notifications → Enable showsUserInterface actions*.
-  - With that on, Reply appears. A dictated reply went through the `RemoteInput` (`handleReply() actionIntent result code: 0`), and Herald sent it to the chat.
-  - **Fix in Herald:** mark the Reply, Approve and Answer actions `setShowsUserInterface(false)`, since they go to `NotificationActionReceiver` and open no screen. Tracked in [faultoverload/herald#1](https://github.com/faultoverload/herald/issues/1), to send upstream.
+  - With that on, Reply appears. A dictated reply went through the `RemoteInput` (`handleReply() actionIntent result code: 0`), and Kyllene sent it to the chat.
+  - **Fix in Kyllene:** mark the Reply, Approve and Answer actions `setShowsUserInterface(false)`, since they go to `NotificationActionReceiver` and open no screen. Tracked in [faultoverload/herald#1](https://github.com/faultoverload/herald/issues/1), to send upstream.
   - Correction to §2: the Pebble app's `alwaysSendNotifications` defaults to `true`, so notifications are sent even while the phone is unlocked with its screen on.
 - **Test 2 (approval) couldn't run:** this gateway has command approvals turned off.
-  - A question notification (Hermes's clarify tool) arrived with `actions = null`. Herald only adds **Answer** for a single, non-multi-select question that isn't in batch form (`qid` set; `ChatNotifications.postRequest`). Otherwise it shows no buttons on the phone either.
+  - A question notification (Hermes's clarify tool) arrived with `actions = null`. Kyllene only adds **Answer** for a single, non-multi-select question that isn't in batch form (`qid` set; `ChatNotifications.postRequest`). Otherwise it shows no buttons on the phone either.
   - **Test 3a confirmed it:** a single, single-choice question still arrived with `actions = null`, because current Hermes always sends batch form. See §8.
-- **Test 2b, the unlock check, using Reply instead** ❌ **The unlock is skipped.** This is an **upstream risk** in Herald, not something the Pebble work introduced; it is listed in §8 for a future patch.
+- **Test 2b, the unlock check, using Reply instead** ❌ **The unlock is skipped.** This is an **upstream risk** in Kyllene, not something the Pebble work introduced; it is listed in §8 for a future patch.
   - Reply carries the same `setAuthenticationRequired(true)` as Approve and Answer.
   - The phone was locked by the power button at 16:15:18 (`locking without delay due to "power button"`, `isDeviceUnlocked=false`).
-  - A dictated reply from the watch fired at 16:16:10 (`handleReply() actionIntent result code: 0`), with the screen off until 16:16:38. Herald sent it to the chat.
+  - A dictated reply from the watch fired at 16:16:10 (`handleReply() actionIntent result code: 0`), with the screen off until 16:16:38. Kyllene sent it to the chat.
   - **So `setAuthenticationRequired` is only enforced by the system notification shade.** A notification listener (the Pebble app, Gadgetbridge, any app granted notification access) fires the `PendingIntent` directly, and `NotificationActionReceiver` doesn't check the lock itself.
   - On a gateway with approvals on, Approve would very likely go through from a locked phone the same way. Today that only happens with the Pebble "showsUserInterface" setting on, and the [#1](https://github.com/faultoverload/herald/issues/1) fix would make it the default.
   - **Consequence for #1:** don't ship `setShowsUserInterface(false)` on the Approve actions alone. Either pair it with a receiver-side lock check (`KeyguardManager.isDeviceLocked`, refusing Approve or opening an unlock prompt), or leave Approve as it is so it stays off the watch. This feeds decision 2 in §7.
 - **Test 3b, the ringing call** ❌ **It doesn't reach the watch.**
-  - Herald's ring is a `CallStyle`, `CATEGORY_CALL`, ongoing notification with a full-screen intent.
+  - Kyllene's ring is a `CallStyle`, `CATEGORY_CALL`, ongoing notification with a full-screen intent.
   - The Pebble app's [`NotificationCallDetector`](https://github.com/coredevices/mobileapp/blob/main/libpebble3/src/androidMain/kotlin/io/rebble/libpebblecommon/calls/NotificationCallDetector.kt) did see it (`Call notification from dev.herald.android (answer=true, decline=true)`). But by design it is a *passive store* that "does not drive call state": only telephony calls ring the watch, and the detector only lends them answer and decline actions. Nothing was sent to the watch for the 10 s it rang.
-  - After the call, Herald posted the question again: once quietly (`NotSentLocalOnly`, as designed), then as a normal notification. The normal one reached the watch at 16:26:18 (BlobDB insert succeeded), again with no actions (see §8).
-  - **Confirms the plan:** Pebble rings have to come from Herald's own watchapp (`PebbleRinger`, §4.4), not from mirroring.
+  - After the call, Kyllene posted the question again: once quietly (`NotSentLocalOnly`, as designed), then as a normal notification. The normal one reached the watch at 16:26:18 (BlobDB insert succeeded), again with no actions (see §8).
+  - **Confirms the plan:** Pebble rings have to come from Kyllene's own watchapp (`PebbleRinger`, §4.4), not from mirroring.
 - **Phase 0 notification baseline: done.** Summary:
 
   | Case | On the Pebble today, no code |
@@ -319,14 +319,14 @@ Each phase ends in something testable on the user's phone and Time 2.
    - Markdown stripping.
    - Round-trip of every type.
 3. `RoutingOutbox`, `PebbleOutbox` (in-flight queue, latest wins, replay cache) and `PebbleBridgeService` (manifest entry with the `RECEIVE_DATA_FROM_WATCH` action).
-4. **Spike: background wake (§4.5)** with Herald swiped away, on Android 14+. **Gate:** don't build the watchapp until a turn completes from a closed phone app.
+4. **Spike: background wake (§4.5)** with Kyllene swiped away, on Android 14+. **Gate:** don't build the watchapp until a turn completes from a closed phone app.
 5. ~~Settings → Watch: a "Pebble" switch and the companion-app picker~~ **Moved to Phase 4.** For now `PebbleApps` turns auto-select off and picks the Core app by name.
 
 *Exit:* a stub watchapp sends an ask and gets the streamed reply through to `Done`.
 
 #### Phase 1 results
 
-**Setup:** Herald Dev (`./gradlew :androidApp:assembleDev`, `dev.herald.android.dev`, R8-minified) on the Pixel 9a, signed in to the gateway, and the bare watchapp in `pebbleApp/` on the Time 2.
+**Setup:** Kyllene Dev (`./gradlew :androidApp:assembleDev`, `dev.herald.android.dev`, R8-minified) on the Pixel 9a, signed in to the gateway, and the bare watchapp in `pebbleApp/` on the Time 2.
 
 - **Tests:** 26 new tests in `shared/wearlink`, all passing with the 22 existing ones:
   - codec and size limits (`PebbleLinkTest`);
@@ -338,7 +338,7 @@ Each phase ends in something testable on the user's phone and Time 2.
 - **Round trip on the device** ✅
   - Dictated asks (the Core app transcribed them with `LocalFirst`, on the phone) reached the bridge.
   - Each reply streamed back in about 5 pieces, every one ACKed and none NACKed. *(From the logs; the outbox log didn't record the phase, so reaching `Done` is confirmed only where the user saw it on the watch.)*
-  - The PebbleKit library works under R8 with no keep rules of Herald's own.
+  - The PebbleKit library works under R8 with no keep rules of Kyllene's own.
 - **Background wake** ✅ (§4.5).
 - **Closed mid-reply** ✅ *(per the logs)*
   - Closing the watchapp right after the first update (`AppRunStateStop`) stopped the sending.
@@ -363,7 +363,7 @@ Each phase ends in something testable on the user's phone and Time 2.
    - **Changed from the plan:** Back always leaves; the turn goes on on the phone, and reopening catches up (Phase 1's replay). Stopping is in the hold-Select menu (`ActionMenu`): *Stop* (while a turn runs), *New chat*, *Check phone*. A stop ends the turn as `Done` with what came so far on both sides, as the Wear watch does, so reopening doesn't show it running again.
 3. Phone status and error states, in the Wear watch's words:
    - phone not connected (from `connection_service`);
-   - Herald not answering (no `STATUS` within 5 s);
+   - Kyllene not answering (no `STATUS` within 5 s);
    - signed out;
    - gateway out of reach;
    - reconnecting.
@@ -407,26 +407,26 @@ Decided on 2026-10-27 (§7, decisions 2 and 3, and §4.4).
    - *Answer*, with the setting on, opens the request on the watch (3).
    - *Answer*, with the setting off (and always for a call from the agent), stops the watch ringing and says "Answer on your phone"; the phone rings on.
    - *Decline* goes both ways (decline on the watch stops the phone, and the reverse).
-5. **Closed-app delivery:** when the turn's `Done` gets `NotOpen`, Herald posts its usual reply notification for that chat, which the Pebble app mirrors. Its Reply action works with the Pebble app's *showsUserInterface* setting on, and by default once [#1](https://github.com/faultoverload/herald/issues/1) is fixed.
+5. **Closed-app delivery:** when the turn's `Done` gets `NotOpen`, Kyllene posts its usual reply notification for that chat, which the Pebble app mirrors. Its Reply action works with the Pebble app's *showsUserInterface* setting on, and by default once [#1](https://github.com/faultoverload/herald/issues/1) is fixed.
 
 *Exit:* the full talk → question or approval → reply loop on the device, with the setting on and off, and with the app open and closed.
 
 **Results so far (2026-10-27, Pebble Time 2, Pixel 9a):**
 
 - ✅ Chats (1): the list, picking a chat, and each chat opening on its last exchange (`HISTORY_REQ`).
-- ✅ Closed-app delivery (5): a turn that ends while the watchapp is closed posts the reply notification, and its Reply works. This needs Herald's notification permission.
+- ✅ Closed-app delivery (5): a turn that ends while the watchapp is closed posts the reply notification, and its Reply works. This needs Kyllene's notification permission.
 - ✅ Setting and requests (2, 3), with a clarify question:
-  - With the setting on, the question shows only in the watchapp. Herald still posts it on the phone, but silently and phone-only (`setLocalOnly`), so the Pebble app doesn't mirror it on top of the watchapp's prompt (`WearRequests.shownOnWatch`).
+  - With the setting on, the question shows only in the watchapp. Kyllene still posts it on the phone, but silently and phone-only (`setLocalOnly`), so the Pebble app doesn't mirror it on top of the watchapp's prompt (`WearRequests.shownOnWatch`).
   - Both a picked choice and a dictated answer reach Hermes.
   - Bugs found on the device:
     - An `ActionMenu` callback's `context` is the menu's, not the item's, so every pick sent the first choice. Fixed: the choice index now comes from `action_menu_item_get_action_data`.
     - With a dictation session per screen, the question's dictated answer went to the talk screen and was sent as a new message. Fixed: the app now has one session (`dictate.c`), whose result goes to the screen that started it.
   - Approvals were checked only in unit tests and on the emulator. The test gateway has approvals off.
 - ✅ Rings (4), with a question from a chat not on screen:
-  - The phone opens Herald on the watch (`startAppOnTheWatch`), holds the `RING` until it has opened, and the watch says `RING_ON` within a second.
-  - *Answer* with the setting on shows the question, and its answer goes through. *Decline* stops the phone, which posts the usual notification, and Herald on the watch closes when it was opened for the ring. With the setting off, *Answer* says to answer on the phone, which rings on.
+  - The phone opens Kyllene on the watch (`startAppOnTheWatch`), holds the `RING` until it has opened, and the watch says `RING_ON` within a second.
+  - *Answer* with the setting on shows the question, and its answer goes through. *Decline* stops the phone, which posts the usual notification, and Kyllene on the watch closes when it was opened for the ring. With the setting off, *Answer* says to answer on the phone, which rings on.
   - Watches stop each other: whichever ends a ring, the phone tells every other Wear OS watch and Pebble (`ChatNotifications.AllRings`). A request picked up from a ring closes on the watch once it's answered anywhere (`AlsoRings.gone`).
-  - Only Pebbles that Herald has heard from ring, so the watchapp has to be opened once after it's installed.
+  - Only Pebbles that Kyllene has heard from ring, so the watchapp has to be opened once after it's installed.
   - Known limit: with a Wear OS watch and a Pebble both paired, the phone's call can show on a watch that is ringing itself, when the other watch doesn't confirm its ring in time.
 
 ### Phase 4: glanceables and polish
@@ -440,9 +440,9 @@ Decided on 2026-10-27 (§7, decisions 2 and 3, and §4.4).
 
 **Results (2026-10-28, Pebble Time 2), all ✅ on the device:**
 
-- (0) Built as the switch only, by choice: *Settings → Connected devices → Herald on the Pebble*, on by default (`AppSettings.pebble`), with *Answer on the Pebble* beside it. Connected devices opens from the Phone section, and also says where the Wear OS settings are. Off, the phone answers every message from the watch with a status flagged `FLAG_OFF`. The watch then says "Off in Herald" and fails any ask that's still sending. Nothing rings the watch and no requests go to it. The picker for other Pebble apps waits until someone uses one.
+- (0) Built as the switch only, by choice: *Settings → Connected devices → Kyllene on the Pebble*, on by default (`AppSettings.pebble`), with *Answer on the Pebble* beside it. Connected devices opens from the Phone section, and also says where the Wear OS settings are. Off, the phone answers every message from the watch with a status flagged `FLAG_OFF`. The watch then says "Off in Kyllene" and fails any ask that's still sending. Nothing rings the watch and no requests go to it. The picker for other Pebble apps waits until someone uses one.
 - (1) A quick launch (`APP_LAUNCH_QUICK_LAUNCH`) opens straight into dictation.
-- (2) On closing, Herald sets its glance:
+- (2) On closing, Kyllene sets its glance:
   - Mid-turn, "Working on it..." for 10 minutes, then "Ask Hermes anything".
   - After a finished turn, the reply's first line, at most 140 bytes and with braces swapped out, since they start template fields.
   - Otherwise, "Ask Hermes anything".
@@ -451,13 +451,13 @@ Decided on 2026-10-27 (§7, decisions 2 and 3, and §4.4).
   - The watch sends the revision of the prompts it has with each status request (`PROMPTS_REV`). When that's out of date, the phone sends the list back (`PROMPTS`, type 71).
   - The list is up to six prompts, one per line and each at most 60 bytes, with blank ones left out.
   - The watch keeps them in persistent storage, so the menu still works with the phone out of reach. With none, the menu has no Prompts entry.
-  - Tested on the Time 2: a prompt edited in Herald Dev showed up in the watch's menu and stayed there after Herald was reopened.
+  - Tested on the Time 2: a prompt edited in Kyllene Dev showed up in the watch's menu and stayed there after Kyllene was reopened.
 - (5) On the talk screen, a tap dictates and a vertical drag scrolls, using the SDK's tap and pan recognizers with the system touch bridge turned off for that window. The chat list's `MenuLayer` already scrolls by touch. The ring screen stays buttons-only, so a stray tap can't answer.
 
 ### Phase 5: other models, CI and release
 
 1. Add `basalt`, `chalk`, `diorite`, `flint` and `gabbro` to `targetPlatforms`. Black-and-white and round layouts use `PBL_COLOR` and `PBL_ROUND`. The ringtone is speaker-only, vibration everywhere else.
-2. CI: a job that installs pebble-tool (Python 3.13) and runs `pebble build`, uploading `herald-pebble.pbw`. The release workflow attaches `herald-pebble-$v.pbw` next to `herald-wear-$v.apk`. `UpdateChecker` must skip it the way it skips the watch APK (see commit `cb98f888`).
+2. CI: a job that installs pebble-tool (Python 3.13) and runs `pebble build`, uploading `kyllene-pebble.pbw`. The release workflow attaches `kyllene-pebble-$v.pbw` next to `herald-wear-$v.apk`. `UpdateChecker` must skip it the way it skips the watch APK (see commit `cb98f888`).
 3. Docs: a README section ("Pebble watch: open the `.pbw` on your phone") and ticked ROADMAP items.
 4. Optionally, publish to the Pebble app store through the [developer dashboard](https://developer.repebble.com/dashboard).
 
@@ -471,7 +471,7 @@ Decided on 2026-10-27 (§7, decisions 2 and 3, and §4.4).
   - On a 144-wide screen, the ring screen stacks its lines.
   - The ringtone is played only where the speaker API exists (emery, flint, gabbro). Touch (emery, gabbro) and the glance are guarded by the SDK's API macros.
   - Checked on the emulators for basalt, diorite, chalk, gabbro and emery. Long header titles are cut short on chalk's narrow top.
-- (2) CI has a `pebble` job: `pipx install pebble-tool==5.0.40`, `pebble sdk install latest`, then `pebble build`, uploading `pebbleApp.pbw`. Installing the SDK only prints its terms; it asks nothing. The same recipe was run from scratch, with a clean home directory and Python 3.12. The release job builds the watchapp at the tag's version, without any pre-release suffix, and attaches `herald-pebble-$v.pbw` and its SHA-256. `UpdateChecker` only offers `.apk` files; a test makes sure a `.pbw` is never offered.
+- (2) CI has a `pebble` job: `pipx install pebble-tool==5.0.40`, `pebble sdk install latest`, then `pebble build`, uploading `pebbleApp.pbw`. Installing the SDK only prints its terms; it asks nothing. The same recipe was run from scratch, with a clean home directory and Python 3.12. The release job builds the watchapp at the tag's version, without any pre-release suffix, and attaches `kyllene-pebble-$v.pbw` and its SHA-256. `UpdateChecker` only offers `.apk` files; a test makes sure a `.pbw` is never offered.
 - (3) The README and ROADMAP cover the Pebble watch.
 - (4) Not done: publishing to the Pebble app store is for the maintainers to decide.
 
@@ -489,17 +489,17 @@ Decided on 2026-10-27 (§7, decisions 2 and 3, and §4.4).
 | Codec and protocol | Kotlin `commonTest` in `shared/wearlink`, run in CI with the existing `:shared:wearlink:testAndroidHostTest` |
 | Phone transport | Unit tests with a fake `PebbleSender`. The relay already has a fake-outbox pattern (`WatchTurnTest`) |
 | Watch UI | The emulator (`emery`) with fake-phone mode. **The emulator can't reach a real PebbleKit 2 companion on the phone**, so it is for UI only |
-| End to end | Real hardware only: the user's Android phone and Time 2, Developer Connection, `pebble logs --phone`, and `adb logcat` for Herald. Test against a test gateway, never real chats in screenshots (CONTRIBUTING) |
+| End to end | Real hardware only: the user's Android phone and Time 2, Developer Connection, `pebble logs --phone`, and `adb logcat` for Kyllene. Test against a test gateway, never real chats in screenshots (CONTRIBUTING) |
 
 Device test script for each phase:
 
-1. Ask with Herald in the foreground.
-2. Ask with Herald in the background.
-3. Ask with Herald swiped away.
+1. Ask with Kyllene in the foreground.
+2. Ask with Kyllene in the background.
+3. Ask with Kyllene swiped away.
 4. Ask with the phone locked.
 5. Ask with Bluetooth dropped mid-turn, then reconnected.
 6. Change the accent colour.
-7. Sign out of Herald.
+7. Sign out of Kyllene.
 
 ---
 
@@ -521,9 +521,9 @@ Device test script for each phase:
 
 ## 8. Upstream risks
 
-Problems found in Herald itself while doing this work. The Pebble work doesn't fix them; each is left for a future patch.
+Problems found in Kyllene itself while doing this work. The Pebble work doesn't fix them; each is left for a future patch.
 
 | Risk | Where | Effect | Suggested patch |
 |---|---|---|---|
 | Notification actions skip the unlock when fired by a notification listener | `ChatNotifications` (actions with `setAuthenticationRequired(true)`), `NotificationActionReceiver` | Reply, Answer, and very likely Approve (not tested, since this gateway has approvals off) can be fired with the phone locked by any app with notification access: the Pebble app, Gadgetbridge, others. Confirmed for Reply from a Pebble in Phase 0 Test 2b | In `NotificationActionReceiver`, check `KeyguardManager.isDeviceLocked` for Approve (and decide for Answer and Reply). When locked, refuse, or post an "unlock to approve" prompt. Must land before or with [#1](https://github.com/faultoverload/herald/issues/1), which would put Approve on Pebbles by default |
-| Questions never get an Answer action | `ChatNotifications.postRequest` | Current Hermes **always** sends questions as `questions=[{qid: "q0", …}]`, even a single one ([`tools/clarify_tool.py`](https://github.com/NousResearch/hermes-agent/blob/main/tools/clarify_tool.py)). Herald's `!request.batch` check then leaves every question notification without buttons, on the phone and the watch. Confirmed in Phase 0 Test 3a | Drop `!request.batch` when there is exactly one question and it isn't multi-select. `NotificationActionReceiver` already answers batch form through `InputAnswers.clarify` (`answers: {q0: …}`). Check how Hermes treats the "(recommended)" label on the first choice when it comes back as the answer |
+| Questions never get an Answer action | `ChatNotifications.postRequest` | Current Hermes **always** sends questions as `questions=[{qid: "q0", …}]`, even a single one ([`tools/clarify_tool.py`](https://github.com/NousResearch/hermes-agent/blob/main/tools/clarify_tool.py)). Kyllene's `!request.batch` check then leaves every question notification without buttons, on the phone and the watch. Confirmed in Phase 0 Test 3a | Drop `!request.batch` when there is exactly one question and it isn't multi-select. `NotificationActionReceiver` already answers batch form through `InputAnswers.clarify` (`answers: {q0: …}`). Check how Hermes treats the "(recommended)" label on the first choice when it comes back as the answer |

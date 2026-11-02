@@ -30,9 +30,9 @@ import org.koin.android.ext.android.inject
 import java.util.UUID
 
 /**
- * Where Herald's Pebble watchapp lands on the phone, even with Herald closed: the Pebble phone app binds this while
+ * Where Kyllene's Pebble watchapp lands on the phone, even with Kyllene closed: the Pebble phone app binds this while
  * the watchapp is open, and hands it what the watch sends. Each message goes to [WatchRelay], as a Wear OS watch's
- * does. Only the Pebble phone app Herald picked ([PebbleApps]) gets through: the base class checks the caller.
+ * does. Only the Pebble phone app Kyllene picked ([PebbleApps]) gets through: the base class checks the caller.
  */
 class PebbleBridgeService : BasePebbleListenerService() {
 
@@ -76,7 +76,7 @@ class PebbleBridgeService : BasePebbleListenerService() {
             }
             PebbleIncoming.ChatsRequest -> relay.chats(node)
             is PebbleIncoming.StatusRequest -> scope.launch {
-                // Waited for: the watch's first message often starts Herald, and the stored settings are still being read then.
+                // Waited for: the watch's first message often starts Kyllene, and the stored settings are still being read then.
                 val current = settings.settings.filterNotNull().first()
                 val accent = watchAccent(current.accent)
                 relay.status(node, accent = accent.updateFor(incoming.accentRevision))

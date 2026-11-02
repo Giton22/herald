@@ -1,7 +1,7 @@
 package dev.hermeskotlin.wearlink
 
 /*
- * What Herald on the phone and its Pebble watchapp (pebbleApp/) say to each other. A Pebble talks in AppMessage
+ * What Kyllene on the phone and its Pebble watchapp (pebbleApp/) say to each other. A Pebble talks in AppMessage
  * dictionaries, small maps of numbered keys to integers or text, through the Pebble phone app (PebbleKit Android 2).
  * The phone keeps speaking WearLink's JSON to WatchRelay; the Pebble side of it decodes that JSON per path and
  * writes these dictionaries instead, so the watch never parses JSON. Each dictionary says what it is in [PebbleKeys.TYPE].
@@ -320,7 +320,7 @@ object PebbleLink {
         PebbleKeys.PROMPTS to text(promptLines(prompts).joinToString("\n")),
     )
 
-    /** The status while Herald's Pebble switch is off, whatever the watch sent. */
+    /** The status while Kyllene's Pebble switch is off, whatever the watch sent. */
     fun off(): PebbleDict = mapOf(PebbleKeys.TYPE to num(PebbleTypes.STATUS), PebbleKeys.FLAGS to num(FLAG_OFF))
 
     fun ringEnd(end: RingEnd): PebbleDict = mapOf(
@@ -342,7 +342,7 @@ object PebbleLink {
     const val FLAG_SIGNED_IN = 1
     const val FLAG_CONNECTED = 2
     const val FLAG_FAILED = 4
-    /** Herald's Pebble switch is off: the phone takes nothing from the watch. */
+    /** Kyllene's Pebble switch is off: the phone takes nothing from the watch. */
     const val FLAG_OFF = 8
 
     private fun num(value: Int) = PebbleValue.Num(value)

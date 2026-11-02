@@ -1,6 +1,6 @@
 #pragma once
 
-// An approval or a question from Hermes, answered on the watch (when answering on the Pebble is on in Herald).
+// An approval or a question from Hermes, answered on the watch (when answering on the Pebble is on in Kyllene).
 
 #include "link.h"
 

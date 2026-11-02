@@ -11,7 +11,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.serialization.json.JsonObject
 
 /**
- * Answers an approval or a question wherever it waits: the chat open in Herald, the watch's chat (it has its own
+ * Answers an approval or a question wherever it waits: the chat open in Kyllene, the watch's chat (it has its own
  * session), or a chat [SessionWatcher] follows. For a notification's buttons and for a Pebble.
  */
 class RequestAnswers(

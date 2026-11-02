@@ -1,6 +1,6 @@
 #pragma once
 
-// What Herald on the phone and this watchapp say to each other: the message types and keys of
+// What Kyllene on the phone and this watchapp say to each other: the message types and keys of
 // shared/wearlink's PebbleLink.kt (keys from package.json's messageKeys), read into plain structs.
 
 #include <pebble.h>
@@ -18,7 +18,7 @@ typedef enum {
 #define LINK_FLAG_SIGNED_IN 1
 #define LINK_FLAG_CONNECTED 2
 #define LINK_FLAG_FAILED 4
-// Herald's Pebble switch is off on the phone.
+// Kyllene's Pebble switch is off on the phone.
 #define LINK_FLAG_OFF 8
 
 // One piece of a turn: its state, and text to place at byte offset of the reply.

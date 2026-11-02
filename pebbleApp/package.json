@@ -1,10 +1,10 @@
 {
-  "name": "herald",
-  "author": "Herald",
+  "name": "kyllene",
+  "author": "Kyllene",
   "version": "0.1.0",
   "private": true,
   "pebble": {
-    "displayName": "Herald",
+    "displayName": "Kyllene",
     "uuid": "5f539f5a-9395-4cf1-8601-c3882e672ccd",
     "sdkVersion": "3",
     "enableMultiJS": false,
@@ -46,7 +46,7 @@
     },
     "companionApp": {
       "android": {
-        "url": "https://github.com/Giton22/herald",
+        "url": "https://github.com/Giton22/kyllene",
         "apps": [
           { "package": "dev.herald.android" },
           { "package": "dev.herald.android.dev" }

@@ -32,8 +32,8 @@ import java.util.concurrent.ConcurrentHashMap
 /**
  * [WatchOutbox] for Pebbles: what [dev.hermeskotlin.core.wear.WatchRelay] writes for a watch in WearLink's JSON goes
  * to the Pebble as the watchapp's dictionaries ([PebbleLink]), through the Pebble phone app. Each Pebble gets a
- * [PebbleWatch], which streams the reply in pieces and sends nothing while Herald isn't open on the watch.
- * Voice clips never go: a Pebble can't play them, and its asks never ask for them. A turn that ends while Herald
+ * [PebbleWatch], which streams the reply in pieces and sends nothing while Kyllene isn't open on the watch.
+ * Voice clips never go: a Pebble can't play them, and its asks never ask for them. A turn that ends while Kyllene
  * isn't open on the watch is told the way a phone's is, as the usual reply notification, which the Pebble app
  * shows on the watch.
  */
@@ -73,11 +73,11 @@ class PebbleOutbox(
         return true
     }
 
-    /** Opens Herald on the Pebble [node] names; false when that can't be done (not connected, or no Pebble app). */
+    /** Opens Kyllene on the Pebble [node] names; false when that can't be done (not connected, or no Pebble app). */
     suspend fun launch(node: String): Boolean {
         val watch = watchOf(node)
         val result = sender.startAppOnTheWatch(APP_UUID, listOf(watch))?.get(watch)
-        Log.d(TAG, "Opening Herald on the Pebble: $result")
+        Log.d(TAG, "Opening Kyllene on the Pebble: $result")
         return result == TransmissionResult.Success
     }
 
@@ -94,8 +94,8 @@ class PebbleOutbox(
             }
             TransmissionResult.FailedDifferentAppOpen, TransmissionResult.FailedWatchNotConnected -> PebbleSent.NotOpen
             TransmissionResult.FailedNoPermissions -> {
-                // The watchapp's package.json doesn't name this build of Herald.
-                Log.w(TAG, "The Pebble app refused Herald for the watchapp")
+                // The watchapp's package.json doesn't name this build of Kyllene.
+                Log.w(TAG, "The Pebble app refused Kyllene for the watchapp")
                 PebbleSent.NotOpen
             }
             else -> {

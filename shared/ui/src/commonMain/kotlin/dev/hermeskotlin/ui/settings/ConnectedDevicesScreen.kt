@@ -45,7 +45,7 @@ import dev.hermeskotlin.ui.sessions.SubpageHeader
 import dev.hermeskotlin.wearlink.PebbleLink
 import kotlinx.coroutines.flow.drop
 
-/** Settings › Connected devices: the watches Herald talks to, and how. Saved as it changes. */
+/** Settings › Connected devices: the watches Kyllene talks to, and how. Saved as it changes. */
 @Composable
 fun ConnectedDevicesScreen(settings: AppSettings, onUpdate: ((AppSettings) -> AppSettings) -> Unit, onBack: () -> Unit) {
     PlatformBackHandler(enabled = true, onBack = onBack)
@@ -72,8 +72,8 @@ internal fun ConnectedDevicesView(settings: AppSettings, onUpdate: ((AppSettings
             ) {
                 Section("Pebble") {
                     SwitchRow(
-                        title = "Herald on the Pebble",
-                        detail = "Talk to Hermes from Herald's Pebble watchapp, and let it ring there. Off, the watchapp " +
+                        title = "Kyllene on the Pebble",
+                        detail = "Talk to Hermes from Kyllene's Pebble watchapp, and let it ring there. Off, the watchapp " +
                             "says so and nothing goes to it.",
                         checked = settings.pebble,
                         onCheckedChange = { on -> onUpdate { it.copy(pebble = on) } },
@@ -105,7 +105,7 @@ internal fun ConnectedDevicesView(settings: AppSettings, onUpdate: ((AppSettings
                 }
                 Section("Wear OS") {
                     Text(
-                        "Herald on a Wear OS watch keeps its own settings: on the watch, open Herald's chats and tap " +
+                        "Kyllene on a Wear OS watch keeps its own settings: on the watch, open Kyllene's chats and tap " +
                             "Settings. Whether it rings along with the phone is in Phone tools › Calls, as for a Pebble.",
                         style = Theme[typography][bodySmall],
                         color = Theme[colors][textTertiary],

@@ -6,8 +6,8 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.launch
 
 /**
- * Which Pebble phone app Herald talks through. PebbleKit would take any app that says it's one, and the watch's
- * asks start real turns on the gateway, so Herald picks only one it knows by name, and [PebbleBridgeService] hears
+ * Which Pebble phone app Kyllene talks through. PebbleKit would take any app that says it's one, and the watch's
+ * asks start real turns on the gateway, so Kyllene picks only one it knows by name, and [PebbleBridgeService] hears
  * only from that one. A Settings choice for other Pebble apps can come later.
  */
 object PebbleApps {

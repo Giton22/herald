@@ -105,9 +105,9 @@ The full feature list, and what's planned, is in the [roadmap](docs/ROADMAP.md).
 2. Open it, and allow installing from your browser when Android asks.
 3. Kyllene tells you when a new release is out. Install it over the old one; your sign-in and settings stay.
 
-**Pebble watch:** download `herald-pebble-<version>.pbw` from the same release and open it on the phone; the Pebble
+**Pebble watch:** download `kyllene-pebble-<version>.pbw` from the same release and open it on the phone; the Pebble
 app installs it on the watch. It works on every Pebble with a microphone (Pebble Time, Time Round, Pebble 2,
-Pebble 2 Duo, Time 2 and Round 2) and talks through Herald on the phone, which needs no setup beyond being signed in.
+Pebble 2 Duo, Time 2 and Round 2) and talks through Kyllene on the phone, which needs no setup beyond being signed in.
 What it does, and how, is in [docs/pebble.md](docs/pebble.md).
 
 ## Requirements
