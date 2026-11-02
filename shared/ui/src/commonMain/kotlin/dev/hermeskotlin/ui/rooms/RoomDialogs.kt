@@ -93,7 +93,7 @@ private fun DeleteRoomDialog(room: Room, visible: Boolean, onDismiss: () -> Unit
     Dialog(
         visible = visible,
         onDismissRequest = onDismiss,
-        title = stringResource(Res.string.rooms_delete_title, room.name),
+        title = stringResource(Res.string.rooms_delete_title, room.name.ifBlank { stringResource(Res.string.rooms_room) }),
         message = stringResource(Res.string.rooms_delete_detail),
         actions = {
             Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)

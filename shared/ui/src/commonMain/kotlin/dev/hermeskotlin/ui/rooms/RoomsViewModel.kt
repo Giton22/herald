@@ -539,7 +539,7 @@ class RoomsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                say(room.roomId, wordsThen(Res.string.rooms_delete_failed, e.message, room.name))
+                say(room.roomId, wordsThen(Res.string.rooms_delete_failed, e.message, room.shownName()))
             }
         }
     }
@@ -558,12 +558,15 @@ class RoomsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                say(room.roomId, wordsThen(Res.string.rooms_rename_failed, e.message, room.name))
+                say(room.roomId, wordsThen(Res.string.rooms_rename_failed, e.message, room.shownName()))
             }
         }
     }
 
     fun dismissActionNotice() = _state.update { it.copy(actionNotice = null) }
+
+    /** The room's name for a message: "Room" in the app's language while a room opened by id has none yet. */
+    private fun Room.shownName(): Any = name.ifBlank { null } ?: words(Res.string.rooms_room)
 
     /** Tells the user about [roomId]: on its screen while it's open, else in the sidebar's Rooms. */
     private fun say(roomId: String, message: Words) {
