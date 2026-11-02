@@ -53,6 +53,8 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.PlatformBackHandler
 import dev.hermeskotlin.ui.sessions.SubpageHeader
+import dev.hermeskotlin.ui.resources.Res
+import org.jetbrains.compose.resources.stringResource
 
 /** Settings › App icon: every icon as the launcher draws it; the one tapped goes on the home screen with Apply. */
 @Composable
@@ -90,7 +92,7 @@ internal fun AppIconView(
         contentAlignment = Alignment.TopCenter,
     ) {
         Column(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
-            SubpageHeader("App icon", onBack = onBack)
+            SubpageHeader(stringResource(Res.string.settings_app_icon), onBack = onBack)
             Column(
                 Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(22.dp),
@@ -115,13 +117,12 @@ internal fun AppIconView(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    "Kyllene restarts to switch its icon. Some launchers take it off the home screen; add it again " +
-                        "from the app list.",
+                    stringResource(Res.string.app_icon_restart),
                     style = Theme[typography][bodySmall],
                     color = Theme[colors][textTertiary],
                     textAlign = TextAlign.Center,
                 )
-                Button("Apply", onClick = { onApply(picked) }, enabled = picked != current, modifier = Modifier.fillMaxWidth())
+                Button(stringResource(Res.string.common_apply), onClick = { onApply(picked) }, enabled = picked != current, modifier = Modifier.fillMaxWidth())
             }
         }
     }

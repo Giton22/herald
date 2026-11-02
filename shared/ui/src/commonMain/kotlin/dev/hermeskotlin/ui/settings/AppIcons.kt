@@ -2,27 +2,29 @@ package dev.hermeskotlin.ui.settings
 
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.ImageBitmap
+import dev.hermeskotlin.ui.resources.Res
+import org.jetbrains.compose.resources.StringResource
 
 /** The rows of the app icon picker. */
-enum class AppIconGroup(val title: String) {
-    Colors("Colors"),
-    Patterns("Patterns"),
+enum class AppIconGroup(val titleRes: StringResource) {
+    Colors(Res.string.app_icon_group_colors),
+    Patterns(Res.string.app_icon_group_patterns),
 }
 
 /**
  * The launcher icons Herald comes with. [Blue] is the brand icon every install starts with; the colors are the
  * accents', and the patterns put the outlined mark over a print.
  */
-enum class AppIcon(val label: String, val group: AppIconGroup) {
-    Blue("Blue", AppIconGroup.Colors),
-    Violet("Violet", AppIconGroup.Colors),
-    Green("Green", AppIconGroup.Colors),
-    Orange("Orange", AppIconGroup.Colors),
-    Pink("Pink", AppIconGroup.Colors),
-    Teal("Teal", AppIconGroup.Colors),
-    Hearts("Hearts", AppIconGroup.Patterns),
-    Marks("Marks", AppIconGroup.Patterns),
-    Bubbles("Bubbles", AppIconGroup.Patterns),
+enum class AppIcon(val labelRes: StringResource, val group: AppIconGroup) {
+    Blue(Res.string.app_icon_blue, AppIconGroup.Colors),
+    Violet(Res.string.app_icon_violet, AppIconGroup.Colors),
+    Green(Res.string.app_icon_green, AppIconGroup.Colors),
+    Orange(Res.string.app_icon_orange, AppIconGroup.Colors),
+    Pink(Res.string.app_icon_pink, AppIconGroup.Colors),
+    Teal(Res.string.app_icon_teal, AppIconGroup.Colors),
+    Hearts(Res.string.app_icon_hearts, AppIconGroup.Patterns),
+    Marks(Res.string.app_icon_marks, AppIconGroup.Patterns),
+    Bubbles(Res.string.app_icon_bubbles, AppIconGroup.Patterns),
 }
 
 /** Which launcher icon Herald shows, and switching it. */
