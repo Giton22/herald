@@ -53,6 +53,9 @@ class ScreenViewModel(
     private var core = ScreenState()
     private var zoom = 1f
 
+    /** Whether the pane is on the screen. Work that answers it afterwards is about a pane that is gone. */
+    private var paneHere = false
+
     private val _state = MutableStateFlow(ScreenUiState())
     val state: StateFlow<ScreenUiState> = _state.asStateFlow()
 
@@ -71,8 +74,11 @@ class ScreenViewModel(
      * asks for it.
      */
     fun bind(gateway: SavedGateway, profile: String) {
+        paneHere = true
         if (boundGateway != gateway || boundProfile != profile) {
-            sessions.value?.close()
+            // The last bot's session is done with: its watchers stop with it, so a bot the user has left
+            // asks the gateway nothing more.
+            sessions.value?.dispose()
             sessions.value = null
             core = ScreenState()
             boundGateway = gateway
@@ -83,7 +89,13 @@ class ScreenViewModel(
         viewModelScope.launch {
             session.refresh()
             // A screen that is already running is watched at once; one that is stopped waits for the user.
-            if (session.state.value.status?.running == true && session.state.value.connection == null) {
+            // The pane may have gone, or the bot may be another one, while the gateway was thinking: then
+            // nothing is opened.
+            if (paneHere &&
+                sessions.value === session &&
+                session.state.value.status?.running == true &&
+                session.state.value.connection == null
+            ) {
                 session.open()
             }
         }
@@ -91,6 +103,7 @@ class ScreenViewModel(
 
     /** Puts the screen away when the pane goes. The session stays, so coming back reopens it. */
     fun close() {
+        paneHere = false
         sessions.value?.close()
     }
 
@@ -163,7 +176,8 @@ class ScreenViewModel(
     }
 
     override fun onCleared() {
-        sessions.value?.close()
+        paneHere = false
+        sessions.value?.dispose()
         sessions.value = null
         super.onCleared()
     }

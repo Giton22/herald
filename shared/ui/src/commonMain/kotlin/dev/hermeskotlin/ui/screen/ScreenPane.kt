@@ -87,7 +87,9 @@ fun ScreenPane(
     viewModel: ScreenViewModel = koinViewModel(),
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(gateway, bot.name) { viewModel.bind(gateway, bot.name) }
+    // The pane and its view model are bound together: a view model the pane has never bound would show
+    // nothing, and one the pane has left asks the gateway nothing more.
+    LaunchedEffect(viewModel, gateway, bot.name) { viewModel.bind(gateway, bot.name) }
     // The screen goes away with the pane, so the gateway isn't left sending pictures nobody watches.
     DisposableEffect(viewModel) { onDispose { viewModel.close() } }
     // The screen going dark stops the app, so the phone keeps its own awake while the bot's is watched.

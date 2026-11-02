@@ -2,8 +2,10 @@ package dev.hermeskotlin.core.screen
 
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.rpc.FakeGateway
+import dev.hermeskotlin.core.rpc.event
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -39,10 +41,13 @@ class ScreenSessionTest {
     private val released = """{"lease":{"holder":"agent","epoch":5}}"""
 
     /** What the gateway answers each call with; null means it says nothing at all. */
-    private class Answers {
+    private inner class Answers {
         var observe: String? = null
         var acquire: String? = null
         var release: String? = null
+        var start: String? = null
+        /** What the gateway says about the screen; null holds the answer back. */
+        var status: String? = this@ScreenSessionTest.status
     }
 
     /** A gateway that answers the screen's calls; the link never comes back on its own. */
@@ -50,10 +55,11 @@ class ScreenSessionTest {
         val gateway = FakeGateway(scope, reconnects = false)
         gateway.answer = { call ->
             when (call.method) {
-                "display.status" -> status
+                "display.status" -> answers.status
                 "display.observe" -> answers.observe
                 "display.lease.acquire" -> answers.acquire
                 "display.lease.release" -> answers.release
+                "display.start" -> answers.start
                 else -> "{}"
             }
         }
@@ -299,5 +305,100 @@ class ScreenSessionTest {
         assertNotNull(connection)
         assertTrue(connection.url.contains("display_ticket=T"))
         assertEquals("V1", session.state.value.viewerId)
+    }
+
+    @Test
+    fun aStartThatArrivesAfterThePaneClosedOpensNothing() = runTest {
+        // The gateway says nothing about the start: the answer is held until the test says so.
+        val answers = Answers().also {
+            it.observe = observe
+        }
+        val gateway = gateway(backgroundScope, answers)
+        val session = session(gateway, backgroundScope)
+
+        val starting = launch { session.start() }
+        runCurrent()
+        val id = gateway.sent("display.start").last()["id"]
+
+        session.close()
+
+        // The gateway's answer arrives late: the pane that asked for it is gone, so the screen is not
+        // started for nobody and nothing is opened.
+        gateway.socket.push("""{"jsonrpc":"2.0","id":$id,"result":${status.replace("\n", " ")}}""")
+        runCurrent()
+        starting.join()
+
+        assertNull(session.state.value.connection)
+        assertEquals(emptyList(), gateway.sent("display.observe"))
+    }
+
+    @Test
+    fun aStatusThatArrivesAfterThePaneClosedChangesNothing() = runTest {
+        // The gateway says nothing about the screen yet: the answer is held until the test says so.
+        val answers = Answers().also {
+            it.observe = observe
+            it.status = null
+        }
+        val gateway = gateway(backgroundScope, answers)
+        val session = session(gateway, backgroundScope)
+
+        val refreshing = launch { session.refresh() }
+        runCurrent()
+        val id = gateway.sent("display.status").last()["id"]
+
+        session.close()
+
+        gateway.socket.push("""{"jsonrpc":"2.0","id":$id,"result":${status.replace("\n", " ")}}""")
+        runCurrent()
+        refreshing.join()
+
+        // The pane is gone: the answer is about a screen nobody watches. Nothing is opened, and the
+        // answer is not taken for the screen's state either.
+        assertNull(session.state.value.connection)
+        assertNull(session.state.value.status)
+        assertEquals(emptyList(), gateway.sent("display.observe"))
+    }
+
+    @Test
+    fun aSessionThatWasPutAwayAsksNothingMore() = runTest {
+        val gateway = workingGateway(backgroundScope)
+        val session = session(gateway, backgroundScope)
+        runCurrent()
+        val before = gateway.sent("display.status").size
+
+        session.dispose()
+
+        // The gateway says the screen moved on: a session that is gone asks nothing.
+        gateway.socket.push(event("display.status", payload = """{"profile_key":"scribe"}"""))
+        runCurrent()
+
+        assertEquals(before, gateway.sent("display.status").size)
+    }
+
+    @Test
+    fun anEventAboutAnotherProfileIsIgnored() = runTest {
+        val gateway = workingGateway(backgroundScope)
+        val session = session(gateway, backgroundScope)
+        runCurrent()
+        val before = gateway.sent("display.status").size
+
+        // One connection serves every profile on the gateway; this event is about another bot's screen.
+        gateway.socket.push(event("display.status", payload = """{"profile_key":"another"}"""))
+        runCurrent()
+
+        assertEquals(before, gateway.sent("display.status").size)
+    }
+
+    @Test
+    fun anEventAboutThisProfileAsksTheGatewayAgain() = runTest {
+        val gateway = workingGateway(backgroundScope)
+        val session = session(gateway, backgroundScope)
+        runCurrent()
+        val before = gateway.sent("display.status").size
+
+        gateway.socket.push(event("display.status", payload = """{"profile_key":"scribe"}"""))
+        runCurrent()
+
+        assertTrue(gateway.sent("display.status").size > before)
     }
 }

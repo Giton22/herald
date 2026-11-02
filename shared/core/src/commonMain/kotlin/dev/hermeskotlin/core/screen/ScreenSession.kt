@@ -3,15 +3,21 @@ package dev.hermeskotlin.core.screen
 import dev.hermeskotlin.core.auth.sha256
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
+import dev.hermeskotlin.core.rpc.GatewayEvent
 import dev.hermeskotlin.core.rpc.RpcException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 
 /** How far the screen has come. */
 enum class ScreenStage {
@@ -103,6 +109,14 @@ class ScreenSession(
 
     private val api = DisplayApi(connection)
 
+    /**
+     * The session's own work: the events it watches and the opening in flight.
+     *
+     * It is a child of the scope it was given, so a session that is put away takes its watchers with it. A
+     * session that was left behind keeps asking the gateway about a bot the user is no longer looking at.
+     */
+    private val work = CoroutineScope(scope.coroutineContext + SupervisorJob(scope.coroutineContext[Job]))
+
     private val _state = MutableStateFlow(ScreenState())
     val state: StateFlow<ScreenState> = _state.asStateFlow()
 
@@ -111,9 +125,19 @@ class ScreenSession(
     /** The opening in flight. It is the session's, so closing the pane can call it off. */
     private var opening: Job? = null
 
+    /**
+     * How many times the pane has gone away.
+     *
+     * Work that was in flight when it did gives up when it comes back: a gateway that answers a start for a
+     * pane that is no longer there must not open the screen behind the user's back.
+     */
+    private var generation = 0
+
     init {
-        scope.launch {
+        work.launch {
             connection.events.collect { event ->
+                // The gateway's events are for every profile on the connection; this session is about one.
+                if (!event.isAboutProfile(profile)) return@collect
                 when (event.type) {
                     "display.lease" -> refreshLease()
                     "display.status" -> refresh()
@@ -125,7 +149,10 @@ class ScreenSession(
 
     /** Reads the gateway's state of this bot's screen. */
     suspend fun refresh() {
+        val mine = generation
         val status = ask { api.status(profile) }.getOrElse { return }
+        // The pane went away while the gateway was thinking: its answer is about a screen nobody watches.
+        if (mine != generation) return
         if (status == null) {
             _state.update { it.copy(supported = false, status = null, lease = null) }
             return
@@ -137,7 +164,10 @@ class ScreenSession(
 
     /** Starts the screen and opens it. */
     suspend fun start() {
+        val mine = generation
         val status = ask { api.start(profile) }.getOrElse { return }
+        // The pane went away while the gateway was starting the screen: it is not opened for nobody.
+        if (mine != generation) return
         if (status == null) {
             _state.update { it.copy(supported = false, error = "This gateway has no Bot Screen.") }
             return
@@ -155,7 +185,7 @@ class ScreenSession(
      */
     fun open() {
         opening?.cancel()
-        opening = scope.launch { openNow() }
+        opening = work.launch { openNow() }
     }
 
     /** The viewer is showing the screen. */
@@ -175,9 +205,20 @@ class ScreenSession(
 
     /** Puts the screen away: the viewer is closed and any opening in flight is called off. */
     fun close() {
+        generation++
         opening?.cancel()
         opening = null
         _state.update { it.copy(stage = ScreenStage.Idle, connection = null) }
+    }
+
+    /**
+     * The session is done with: it is not coming back.
+     *
+     * Its watchers stop with it, so a bot the user has left asks the gateway nothing more.
+     */
+    fun dispose() {
+        close()
+        work.cancel()
     }
 
     /**
@@ -285,3 +326,17 @@ internal fun viewerHash(viewerId: String): String =
     sha256(viewerId.encodeToByteArray())
         .joinToString("") { (it.toInt() and 0xff).toString(16).padStart(2, '0') }
         .take(12)
+
+/**
+ * Whether a gateway event is about this profile's screen.
+ *
+ * One connection serves every profile on the gateway, and the events name the profile they are about. An
+ * event that names none is taken as ours: a gateway that does not say is not saying it is about somebody
+ * else, and a screen that never refreshes its lease is worse than one that refreshes it too often.
+ */
+internal fun GatewayEvent.isAboutProfile(profile: String): Boolean {
+    val named = (payload as? JsonObject)
+        ?.get("profile_key")
+        ?.let { (it as? JsonPrimitive)?.contentOrNull }
+    return named == null || named == profile
+}
