@@ -43,7 +43,9 @@ import dev.hermeskotlin.core.chat.DraftStart
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.storage.appDataDir
+import dev.hermeskotlin.core.storage.desktopStorageFolder
 import dev.hermeskotlin.core.storage.prepareDesktopStorage
+import dev.hermeskotlin.core.storage.startDesktopStorageFresh
 import dev.hermeskotlin.desktop.web.Jcef
 import dev.hermeskotlin.ui.App
 import dev.hermeskotlin.ui.DesktopBack
@@ -98,7 +100,11 @@ fun main(args: Array<String>) {
     val instance = SingleInstance.claim(appDataDir, launchLink) ?: exitProcess(0)
     val koin = startKoin {
         modules(sharedModules + desktopModule)
-        if (!unlockDesktopStorage(prepare = { prepareDesktopStorage(this.koin.get()) })) exitProcess(0)
+        if (!unlockDesktopStorage(
+                prepare = { prepareDesktopStorage(this.koin.get()) },
+                startFresh = { startDesktopStorageFresh(this.koin.get()) },
+                folder = desktopStorageFolder(this.koin.get()),
+            )) exitProcess(0)
     }.koin
     useAppTextContextMenu()
     val settingsStore = koin.get<SettingsStore>()

@@ -67,6 +67,10 @@ internal class AtomicSettingsFile(
             current?.fill(0)
             if (!same(expected, actual)) throw SecureStorageException(SecureStorageException.Reason.Changed)
             val parent = file.absoluteFile.parentFile.toPath()
+            // A write killed before its rename leaves its temp file; under this lock no other write owns one.
+            Files.newDirectoryStream(parent, file.name + ".*.encrypted.part").use { leftovers ->
+                leftovers.forEach { Files.deleteIfExists(it) }
+            }
             val partial = Files.createTempFile(parent, file.name + ".", ".encrypted.part",
                 PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")))
             AutoCloseable { Files.deleteIfExists(partial) }.use {

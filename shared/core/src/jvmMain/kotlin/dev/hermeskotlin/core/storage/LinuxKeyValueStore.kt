@@ -38,16 +38,15 @@ internal fun desktopKeyValueStore(
     file: File,
     osName: String = System.getProperty("os.name").orEmpty(),
     flatpakInfo: File = File("/.flatpak-info"),
-    flatpakHint: String? = System.getenv("FLATPAK_ID"),
     readMetadata: (File) -> String? = ::flatpakApplicationId,
 ): KeyValueStore {
     if (!osName.startsWith("Linux")) return FileKeyValueStore(file)
+    // Every Flatpak sandbox has /.flatpak-info, so without it this is a host install, whatever FLATPAK_ID a launching
+    // terminal or IDE passed on (it's only a hint, never an identity).
     val identity = try { readMetadata(flatpakInfo) }
-        catch (_: NoSuchFileException) {
-            if (flatpakHint.isNullOrBlank()) return FileKeyValueStore(file)
-            null
-        } catch (_: IOException) { null }
-          catch (_: SecurityException) { null }
+        catch (_: NoSuchFileException) { return FileKeyValueStore(file) }
+        catch (_: IOException) { null }
+        catch (_: SecurityException) { null }
     return LinuxKeyValueStore(File(file.absoluteFile.parentFile, "settings.secure"), identity, legacy = file)
 }
 
@@ -66,8 +65,16 @@ suspend fun prepareDesktopStorage(store: KeyValueStore) {
     if (store is LinuxKeyValueStore) store.prepare()
 }
 
+/** Sets aside encrypted settings this key can't open, so the next start begins signed out; see [LinuxKeyValueStore.setAsideUnreadable]. */
+suspend fun startDesktopStorageFresh(store: KeyValueStore) {
+    if (store is LinuxKeyValueStore) store.setAsideUnreadable()
+}
+
+/** The folder the user may need to look in when storage can't open, or null when there's nothing to resolve by hand. */
+fun desktopStorageFolder(store: KeyValueStore): String? = (store as? LinuxKeyValueStore)?.folder
+
 internal class LinuxKeyValueStore(
-    file: File,
+    private val file: File,
     private val appId: String?,
     private val legacy: File = File(file.absoluteFile.parentFile, "settings.json"),
     private val deleteLegacy: (Path) -> Unit = { Files.delete(it) },
@@ -85,12 +92,37 @@ internal class LinuxKeyValueStore(
     private var pending: Snapshot? = null
     private var pendingBytes: ByteArray? = null
 
+    val folder: String get() = file.absoluteFile.parent
+
     suspend fun prepare() = mutex.withLock {
         if (blocked?.reason == SecureStorageException.Reason.Uncertain && pending != null) reconcileInitialCommit()
         load()
         Unit
     }
-    override suspend fun get(key: String): String? = mutex.withLock { load().values[key] }
+
+    /**
+     * For encrypted settings that won't open with this key (the keyring was reset, or a different one answered):
+     * renames the file aside, never deletes it, so a later key or a backup can still open it, and the next [prepare]
+     * starts empty. Sign-ins are lost; everything in the file can be set up again.
+     */
+    suspend fun setAsideUnreadable() = mutex.withLock {
+        withContext(Dispatchers.IO) {
+            if (Files.exists(file.toPath(), LinkOption.NOFOLLOW_LINKS)) {
+                val aside = File(file.absoluteFile.parentFile, file.name + ".unreadable-" + System.currentTimeMillis())
+                try { Files.move(file.toPath(), aside.toPath(), java.nio.file.StandardCopyOption.ATOMIC_MOVE) }
+                catch (_: IOException) { throw SecureStorageException(SecureStorageException.Reason.Write) }
+                disk.syncDirectory()
+            }
+        }
+        state = null; ready = false; blocked = null; pending = null; pendingBytes = null
+    }
+
+    // After startup a failed or uncertain save stops further writes, not reads of what was last committed: every
+    // part of the app reads settings, and none of them can do anything with the error.
+    override suspend fun get(key: String): String? = mutex.withLock {
+        val committed = state
+        if (ready && committed != null) committed.values[key] else load().values[key]
+    }
     override suspend fun put(key: String, value: String) = mutex.withLock {
         val previous = load()
         commit(Snapshot(previous.values + (key to value), previous.key, previous.token, previous.digest, previous.legacyDigest))
@@ -107,9 +139,7 @@ internal class LinuxKeyValueStore(
         state?.let { return if (ready) it else activate(it) }
         pending?.let { return activate(commit(it)) }
         if (appId.isNullOrBlank()) throw SecureStorageException(SecureStorageException.Reason.Unsupported)
-        if (Files.exists(File(legacy.parentFile, legacy.name + ".part").toPath(), LinkOption.NOFOLLOW_LINKS)) {
-            throw SecureStorageException(SecureStorageException.Reason.Legacy)
-        }
+        withContext(Dispatchers.IO) { checkLegacyPart() }
         val bytes = withContext(Dispatchers.IO) { disk.read() }
         try {
             val candidate: Snapshot
@@ -129,7 +159,12 @@ internal class LinuxKeyValueStore(
             } else {
                 val old = withContext(Dispatchers.IO) { legacyDisk.read() }
                 try {
-                    val values = old?.let { SettingsEnvelope.values(SettingsEnvelope.parse(it)) }.orEmpty()
+                    // Unreadable old settings are kept, not imported as empty; say it's that file, not the encrypted one.
+                    val values = try {
+                        old?.let { SettingsEnvelope.values(SettingsEnvelope.parse(it)) }.orEmpty()
+                    } catch (_: SecureStorageException) {
+                        throw SecureStorageException(SecureStorageException.Reason.Legacy)
+                    }
                     val material = key(null)
                     candidate = Snapshot(values, material.key, material.token, null, AtomicSettingsFile.digest(old))
                 } finally { old?.fill(0) }
@@ -175,10 +210,22 @@ internal class LinuxKeyValueStore(
             .also { state = it; pending = null; pendingBytes = null }
     }
 
+    /**
+     * The old store wrote settings.json.part and renamed it over settings.json. Beside a settings.json, or once the
+     * encrypted file exists, a .part is a save that never landed, which that store would have overwritten next time:
+     * it goes. Alone, it may hold the only copy, so startup stops for the user to resolve it.
+     */
+    private fun checkLegacyPart() {
+        val part = File(legacy.parentFile, legacy.name + ".part").toPath()
+        if (!Files.exists(part, LinkOption.NOFOLLOW_LINKS)) return
+        val superseded = Files.exists(legacy.toPath(), LinkOption.NOFOLLOW_LINKS) ||
+            Files.exists(file.toPath(), LinkOption.NOFOLLOW_LINKS)
+        if (!superseded) throw SecureStorageException(SecureStorageException.Reason.Legacy)
+        try { Files.deleteIfExists(part) } catch (_: IOException) { throw SecureStorageException(SecureStorageException.Reason.Write) }
+    }
+
     private suspend fun activate(snapshot: Snapshot): Snapshot = withContext(Dispatchers.IO) {
-        if (Files.exists(File(legacy.parentFile, legacy.name + ".part").toPath(), LinkOption.NOFOLLOW_LINKS)) {
-            throw SecureStorageException(SecureStorageException.Reason.Legacy)
-        }
+        checkLegacyPart()
         // Durability of the encrypted name must be confirmed before the only legacy copy can be removed.
         disk.syncDirectory()
         val current = disk.read()

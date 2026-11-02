@@ -69,6 +69,52 @@ class LinuxKeyValueStoreTest {
         assertContentEquals(before, file.readBytes())
     }
 
+    @Test fun settingsAWrongKeyCantOpenAreSetAsideNotDeleted() = fixture { file ->
+        store(file).put("session", "synthetic-cookie")
+        val before = file.readBytes()
+        val resetKeyring = LinuxKeyValueStore(file, "io.example.StorageFixture") { PortalSecret(ByteArray(32) { 8 }, null) }
+        assertEquals(SecureStorageException.Reason.Corrupt,
+            assertFailsWith<SecureStorageException> { resetKeyring.prepare() }.reason)
+        resetKeyring.setAsideUnreadable()
+        resetKeyring.prepare()
+        assertEquals(null, resetKeyring.get("session"))
+        resetKeyring.put("session", "new-cookie")
+        val aside = file.parentFile.listFiles().orEmpty().single { it.name.startsWith("settings.secure.unreadable-") }
+        assertContentEquals(before, aside.readBytes())
+        assertEquals("synthetic-cookie", LinuxKeyValueStore(aside, "io.example.StorageFixture") {
+            PortalSecret(ByteArray(32) { 7 }, null)
+        }.get("session"))
+    }
+
+    @Test fun aSaveTheOldStoreNeverFinishedDoesntBlockMigration() = fixture { file ->
+        legacy(file).writeText("{\"session\":\"saved-cookie\"}")
+        val part = File(file.parentFile, "settings.json.part")
+        part.writeText("{\"session\":\"unsaved")
+        assertEquals("saved-cookie", store(file).get("session"))
+        assertFalse(part.exists())
+        assertFalse(legacy(file).exists())
+        // Left behind after migration too, it's just as stale.
+        part.writeText("{}")
+        assertEquals("saved-cookie", store(file).get("session"))
+        assertFalse(part.exists())
+    }
+
+    @Test fun unreadableOldSettingsAreReportedAsTheOldFile() = fixture { file ->
+        legacy(file).writeText("{\"session\":")
+        assertEquals(SecureStorageException.Reason.Legacy,
+            assertFailsWith<SecureStorageException> { store(file).prepare() }.reason)
+    }
+
+    @Test fun aWriteKilledBeforeItsRenameLeavesNoTempFileForGood() = fixture { file ->
+        val store = store(file)
+        store.put("session", "first")
+        val leftover = File(file.parentFile, "settings.secure.123456.encrypted.part")
+        leftover.writeText("killed mid-write")
+        store.put("session", "second")
+        assertFalse(leftover.exists())
+        assertEquals("second", store(file).get("session"))
+    }
+
     @Test fun unavailableKeyPreservesTheOnlyLegacyCopy() = fixture { file ->
         FileKeyValueStore(legacy(file)).put("session", "synthetic-cookie")
         val before = legacy(file).readBytes()
@@ -151,7 +197,7 @@ class LinuxKeyValueStoreTest {
         assertEquals("new-cookie", store(file).get("session"))
     }
 
-    @Test fun anUnreadableCommitOutcomeBlocksFurtherOperationsUntilReopen() = fixture { file ->
+    @Test fun anUnreadableCommitOutcomeBlocksFurtherWritesUntilReopen() = fixture { file ->
         val permissionProbe = File(file.parentFile, "permission-probe")
         permissionProbe.writeText("probe")
         permissionProbe.setReadable(false, false)
@@ -172,7 +218,8 @@ class LinuxKeyValueStoreTest {
         failAfterMove = true
         try {
             assertFailsWith<IOException> { store.put("session", "new-cookie") }
-            assertFailsWith<IOException> { store.get("session") }
+            // Reads keep the last confirmed value: the rest of the app can't act on a storage error.
+            assertEquals("old-cookie", store.get("session"))
         } finally { Files.setPosixFilePermissions(file.toPath(), PosixFilePermissions.fromString("rw-------")) }
         assertFailsWith<IOException> { store.put("session", "third-cookie") }
         assertEquals("new-cookie", store(file).get("session"))
