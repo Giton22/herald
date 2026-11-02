@@ -6621,6 +6621,46 @@
   },
   {
     "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/dev/onvoid/webrtc/webrtc-java/0.20.0/webrtc-java-0.20.0-linux-x86_64.jar",
+    "sha512": "5073bda32e74b9e206cd727198f502b35af188c03620c461f69bb381e9182d9842732d4e320746dd264d4ff193a0a73c964f6219d1e37e20c7c8035253b18b88",
+    "dest": "offline-repository/dev/onvoid/webrtc/webrtc-java/0.20.0",
+    "dest-filename": "webrtc-java-0.20.0-linux-x86_64.jar",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/dev/onvoid/webrtc/webrtc-java/0.20.0/webrtc-java-0.20.0.jar",
+    "sha512": "8661326b322aa78b91c8a8ceb7e55dfce998b0ec89b3fcd1aa071bc4a935a8a9410d1e57eb0c9d03f0df249231469930197ced3fa0a3ef14b4d31aef2f502dae",
+    "dest": "offline-repository/dev/onvoid/webrtc/webrtc-java/0.20.0",
+    "dest-filename": "webrtc-java-0.20.0.jar",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/dev/onvoid/webrtc/webrtc-java/0.20.0/webrtc-java-0.20.0.pom",
+    "sha512": "2f1a31f6df7ea682ce4aff570a838c340348356799a1985f34c0193817e792321014451b9b1e23bd97b0bc109fc9bdf14bfc6cd850e96be592234df5740098d7",
+    "dest": "offline-repository/dev/onvoid/webrtc/webrtc-java/0.20.0",
+    "dest-filename": "webrtc-java-0.20.0.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/dev/onvoid/webrtc/webrtc-java-parent/0.20.0/webrtc-java-parent-0.20.0.pom",
+    "sha512": "c61f0ff14a089c9bfbe569145742741a5f0f3eae72b634b53df55d2ca997dccd7149ed451ceda7004c8022a8daf5661a1c63506330c916b68646b1e429ba5379",
+    "dest": "offline-repository/dev/onvoid/webrtc/webrtc-java-parent/0.20.0",
+    "dest-filename": "webrtc-java-parent-0.20.0.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
     "url": "https://repo.maven.apache.org/maven2/dev/snipme/highlights/1.1.0/highlights-1.1.0.module",
     "sha512": "994a67abc6ed0af73797b06aad65b1ea33a32d50450762cf59433715a38942d55167a44ad7a7ef54fd09e264e25e31b3e73017b198ca78b8cb9d2fc807511358",
     "dest": "offline-repository/dev/snipme/highlights/1.1.0",

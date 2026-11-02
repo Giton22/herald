@@ -55,10 +55,11 @@ internal class LinuxSecretPortal(
         if (System.getProperty("os.name") != "Linux") throw SecretPortalFailure(SecretPortalFailure.Reason.Unavailable)
         // Outside a sandbox the portal sees a host app, whose secret every other host app may share.
         if (address == null && !File("/.flatpak-info").isFile) throw SecretPortalFailure(SecretPortalFailure.Reason.Unavailable)
-        val builder = if (address == null) DBusConnectionBuilder.forSessionBus() else DBusConnectionBuilder.forAddress(address)
-        builder.withShared(false).transportConfig().withTimeout(3_000)
         var received: ByteArray? = null
         try {
+            // Inside the try: a session without a bus address fails here, and is then a missing portal, not a crash.
+            val builder = if (address == null) DBusConnectionBuilder.forSessionBus() else DBusConnectionBuilder.forAddress(address)
+            builder.withShared(false).transportConfig().withTimeout(3_000)
             // The pipe outlives the connection: a call cancelled before the sender thread wrote it out must not have
             // its descriptor closed, and the number reused by another file, while that thread may still pass it on.
             SecretPipe().use { pipe ->
