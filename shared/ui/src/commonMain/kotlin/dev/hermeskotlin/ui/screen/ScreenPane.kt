@@ -151,6 +151,9 @@ internal fun ScreenView(
     var handle by remember { mutableStateOf<ScreenViewerHandle?>(null) }
     // The zoom is the viewer's to carry out: the page is what looks at a part of the screen.
     LaunchedEffect(handle, state.zoom) { handle?.setZoom(state.zoom) }
+    // What the user may do follows the lease, not the page, so the page is told when the lease changes.
+    // It is told again when the screen is showing, because a page that was not up yet could not hear it.
+    LaunchedEffect(handle, state.holding, state.stage) { handle?.viewOnly(!state.holding) }
     Column(
         modifier
             .fillMaxSize()

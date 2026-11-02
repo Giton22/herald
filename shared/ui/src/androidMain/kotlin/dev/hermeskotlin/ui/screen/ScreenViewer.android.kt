@@ -39,7 +39,10 @@ actual fun ScreenViewer(
     val context = LocalContext.current
     val event by rememberUpdatedState(onEvent)
     val handle by rememberUpdatedState(onHandle)
-    val webView = remember {
+    // The stream in hand now: a viewer that was replaced says nothing about this one.
+    val current = rememberUpdatedState(streamUrl)
+    // A viewer per stream: the page of one stream is not the page of another, and what it says is its own.
+    val webView = remember(streamUrl) {
         ScreenWebView(context).apply {
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             settings.javaScriptEnabled = true
@@ -61,7 +64,8 @@ actual fun ScreenViewer(
                     // The page cannot talk to the app any other way: it asks for an address of its own
                     // and the app reads the answer out of it.
                     val answer = request.url.toString().let(::screenEvent) ?: return false
-                    event(answer)
+                    // What a viewer that was replaced says is about the screen it was watching.
+                    screenEventAbout(streamUrl, current.value, answer)?.let { event(it) }
                     return true
                 }
 
@@ -87,7 +91,9 @@ actual fun ScreenViewer(
         }
     }
     // The page's address is in the fragment: a file: address has no query of its own to carry it.
-    val address = remember(streamUrl, viewOnly) {
+    // The lease is not in it: the page is told when the lease changes, and a page that was loaded again
+    // would spend the ticket a second time.
+    val address = remember(streamUrl) {
         "file:///android_asset/screen-viewer.html#ws=" + Uri.encode(streamUrl) + "&viewOnly=" + if (viewOnly) "1" else "0"
     }
     LaunchedEffect(address) { webView.loadUrl(address) }
@@ -107,10 +113,6 @@ actual fun ScreenViewer(
                 }
             },
         )
-    }
-    // What the user may do changes with the lease, not with the page: the page is told.
-    LaunchedEffect(webView, viewOnly) {
-        webView.evaluateJavascript("window.kylleneScreen && window.kylleneScreen.setViewOnly($viewOnly)", null)
     }
     AndroidView(factory = { webView }, modifier = modifier)
 }

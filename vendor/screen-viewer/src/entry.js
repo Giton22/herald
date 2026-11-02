@@ -39,6 +39,13 @@ let connected = false;
 let zoom = 1;
 /** The zoom the app asked for, kept for the moment the screen is not there to show it in. */
 let wantedZoom = 1;
+/**
+ * Whether the user may drive the screen, as the app last said: kept for the moment the screen is not there.
+ *
+ * The lease changes while the page is open, and the app tells the page what the user may do. A page that
+ * was not listening yet keeps the answer until the screen is there to apply it in.
+ */
+let wantedViewOnly = viewOnly;
 /** The furthest the view may be zoomed in. */
 const MAX_ZOOM = 8;
 
@@ -78,7 +85,8 @@ function applyZoom(factor) {
 window.kylleneScreen = {
     /** Whether the user may drive the screen. The gateway decides; this keeps the page honest. */
     setViewOnly(value) {
-        if (rfb) rfb.viewOnly = !!value;
+        wantedViewOnly = !!value;
+        if (rfb) rfb.viewOnly = wantedViewOnly;
     },
     /** A key on the bot's screen: the app maps what the user typed to a keysym. */
     sendKey(keysym, down) {
@@ -145,7 +153,7 @@ window.addEventListener('error', () => {
 
 if (socketUrl) {
     rfb = new RFB(container, socketUrl, { shared: true });
-    rfb.viewOnly = viewOnly;
+    rfb.viewOnly = wantedViewOnly;
     // The screen is a fixed size on the host; the page shows all of it, scaled to fit.
     rfb.scaleViewport = true;
     rfb.resizeSession = false;

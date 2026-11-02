@@ -34,6 +34,43 @@ interface ScreenViewerHandle {
 }
 
 /**
+ * How far the app's own browser has come.
+ *
+ * On the desktop the browser is the runtime's own Chromium, and it takes a moment to start. A browser that
+ * is still starting is not a failure: the page has not had its chance yet, and saying otherwise takes the
+ * screen away before it was ever opened.
+ */
+enum class ScreenBrowserStage {
+    /** The browser is coming up. */
+    Starting,
+
+    /** The browser is up, and the page may open in it. */
+    Ready,
+
+    /** The browser is not coming up. */
+    Failed,
+}
+
+/**
+ * What the browser's state means for the screen, or null when it means nothing yet.
+ *
+ * Only a browser that will not start is a failure.
+ */
+fun screenBrowserEvent(stage: ScreenBrowserStage): ScreenViewerEvent? = when (stage) {
+    ScreenBrowserStage.Starting, ScreenBrowserStage.Ready -> null
+    ScreenBrowserStage.Failed -> ScreenViewerEvent.Failed("The browser didn't start.")
+}
+
+/**
+ * The event, if it is about the screen in hand.
+ *
+ * A viewer that was replaced — another bot, another gateway, another ticket — says nothing about the
+ * screen in front of the user now, so what it says is dropped.
+ */
+fun screenEventAbout(stream: String, current: String, event: ScreenViewerEvent): ScreenViewerEvent? =
+    if (stream == current) event else null
+
+/**
  * The bot's screen, drawn by a browser.
  *
  * The page is the app's own (see `vendor/screen-viewer`), served from a `file:` address so that it has no
