@@ -8411,6 +8411,16 @@
   },
   {
     "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/bouncycastle/bc-jdk18on-bom/1.80.2/bc-jdk18on-bom-1.80.2.pom",
+    "sha512": "0199a221010148aa74fe430971c6a601e3c6cb3ec8b11670b9e074b5884363e08d45cbe69a2c4fb01ab6aaa33f0c4e78b552e454fd34cc863d3ca01a47cf3ae5",
+    "dest": "offline-repository/org/bouncycastle/bc-jdk18on-bom/1.80.2",
+    "dest-filename": "bc-jdk18on-bom-1.80.2.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
     "url": "https://repo.maven.apache.org/maven2/org/bouncycastle/bcpkix-jdk18on/1.80.2/bcpkix-jdk18on-1.80.2.jar",
     "sha512": "fe7c9fc01faa27abe065337e560507194dc2b6e448e8281bda97eb6514bec29ea18ef7ebea48d668b8e1145eb2e2a11ed9b6663d7cc28fce6247fed22c91e635",
     "dest": "offline-repository/org/bouncycastle/bcpkix-jdk18on/1.80.2",
