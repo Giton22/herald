@@ -121,6 +121,7 @@ internal class LinuxSpeechPlayer(private val decoder: SpeechDecoder, private val
         // Device-thread state: the decoded frame being played and where in it (in 48 kHz samples), how long the
         // device has been fed only silence, and how long since the input ended.
         private var playing: ByteArray? = null
+        private var next: ByteArray? = null
         private var position = 0.0
         private var quietMs = 0L
         private var tailMs = 0L
@@ -157,8 +158,10 @@ internal class LinuxSpeechPlayer(private val decoder: SpeechDecoder, private val
             val count = bytes.size / (2 * channels)
             val step = DECODED_RATE.toDouble() / sampleRate
             var written = 0
+            var audible = false
             while (written < count) {
                 val sample = nextSample(step) ?: break
+                if (sample != 0.toShort()) audible = true
                 for (channel in 0 until channels) {
                     val at = (written * channels + channel) * 2
                     bytes[at] = sample.toByte()
@@ -167,15 +170,14 @@ internal class LinuxSpeechPlayer(private val decoder: SpeechDecoder, private val
                 written++
             }
             val ms = count * 1000L / sampleRate
-            if (written > 0) {
-                quietMs = 0
-                sound.trySend(true)
-                return
-            }
             // A gap between sentences, or a late network chunk, isn't the end of speaking: as Android, report
-            // silence only once it has lasted.
-            quietMs += ms
-            if (quietMs >= QUIET_MS) sound.trySend(false)
+            // silence only once it has lasted. Silent samples in the speech count as a gap too.
+            if (audible) { quietMs = 0; sound.trySend(true) }
+            else {
+                quietMs += ms
+                if (quietMs >= QUIET_MS) sound.trySend(false)
+            }
+            if (written > 0) return
             val poll = lastPoll
             if (poll != null && poll.isClosed) {
                 poll.exceptionOrNull()?.let { fail(it); return }
@@ -193,7 +195,8 @@ internal class LinuxSpeechPlayer(private val decoder: SpeechDecoder, private val
                     if (position < size) {
                         val index = position.toInt()
                         val a = sampleAt(pcm, index)
-                        val b = if (index + 1 < size) sampleAt(pcm, index + 1) else a
+                        // The last sample leans toward the next frame's first, when it has arrived.
+                        val b = if (index + 1 < size) sampleAt(pcm, index + 1) else upcoming()?.let { sampleAt(it, 0) } ?: a
                         val sample = a + (b - a) * (position - index)
                         position += step
                         return sample.roundToInt().toShort()
@@ -202,11 +205,17 @@ internal class LinuxSpeechPlayer(private val decoder: SpeechDecoder, private val
                     pcm.fill(0)
                     playing = null
                 }
-                val next = frames.tryReceive()
-                lastPoll = next
-                if (!next.isSuccess) return null
-                playing = next.getOrThrow()
+                playing = upcoming() ?: return null
+                next = null
             }
+        }
+
+        /** The frame after the playing one, received but not yet started. */
+        private fun upcoming(): ByteArray? {
+            next?.let { return it }
+            val received = frames.tryReceive()
+            lastPoll = received
+            return received.getOrNull()?.also { next = it }
         }
 
         private fun sampleAt(pcm: ByteArray, index: Int): Int =

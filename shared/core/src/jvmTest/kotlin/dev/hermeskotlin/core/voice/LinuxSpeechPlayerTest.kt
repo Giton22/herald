@@ -174,18 +174,65 @@ class LinuxSpeechPlayerTest {
         } finally { scope.cancel() }
     }
 
-    @Test fun aSpeakerAt44kHzStereoPlaysTheDecodedSpeech() = checkPlayback {
-        // A PulseAudio server's usual default; WebRTC asks at the server's rate and channel count.
-        val speaker = FakeOutput(rate = 44_100, channels = 2)
-        val player = LinuxSpeechPlayer(decoder { emit -> repeat(3) { emit(ByteArray(960) { 7 }) } }) { speaker }
+    @Test fun speakersAtOtherRatesPlayTheDecodedSpeech() {
+        // 44.1 kHz stereo is a PulseAudio server's usual default; WebRTC asks at the server's rate and channels.
+        // 96 kHz lands between a frame's last sample and the next frame's first.
+        speakerPlaysARamp(44_100, 2)
+        speakerPlaysARamp(96_000, 1)
+    }
+
+    private fun speakerPlaysARamp(rate: Int, channels: Int) = checkPlayback {
+        // A ramp, ten per 48 kHz sample, across three frames: linear interpolation reproduces it exactly, including
+        // across frame edges and from one pull to the next.
+        fun ramp(frame: Int) = ByteArray(960).also { pcm ->
+            for (i in 0 until 480) {
+                val value = (frame * 480 + i) * 10
+                pcm[i * 2] = value.toByte(); pcm[i * 2 + 1] = (value shr 8).toByte()
+            }
+        }
+        val emitted = CompletableDeferred<Unit>()
+        val speaker = FakeOutput(rate, channels)
+        val player = LinuxSpeechPlayer(decoder { emit -> repeat(3) { emit(ramp(it)) }; emitted.complete(Unit) }) { speaker }
         val job = async { player.play(SpokenAudio(byteArrayOf(1), "audio/wav")) }
-        speaker.ready.await()
-        val pulled = speaker.render()
-        assertEquals(441 * 2 * 2, pulled.size)
-        assertContentEquals(ByteArray(pulled.size) { 7 }, pulled)
+        speaker.ready.await(); emitted.await()
+        val pulled = speaker.render() + speaker.render()
+        val frames = 2 * rate / 100
+        assertEquals(frames * channels * 2, pulled.size)
+        for (frame in 0 until frames) {
+            val expected = Math.round(frame * 48_000.0 / rate * 10).toInt()
+            for (channel in 0 until channels) {
+                val at = (frame * channels + channel) * 2
+                val actual = ((pulled[at].toInt() and 255) or (pulled[at + 1].toInt() shl 8)).toShort().toInt()
+                assertEquals(expected, actual, "$rate Hz frame $frame channel $channel")
+            }
+        }
         repeat(50) { speaker.render() }
         job.await()
         assertTrue(speaker.closed)
+    }
+
+    @Test fun leadingSilenceIsntSpeaking() = checkPlayback {
+        val speaker = FakeOutput()
+        val sounds = Channel<Boolean>(Channel.UNLIMITED)
+        val chunks = Channel<ByteArray>(Channel.UNLIMITED)
+        val player = LinuxSpeechPlayer(object : SpeechDecoder {
+            override suspend fun decode(chunks: ReceiveChannel<ByteArray>, format: PcmFormat?, emit: suspend (ByteArray) -> Unit) {
+                for (chunk in chunks) emit(chunk)
+            }
+        }) { speaker }
+        val job = async { player.playPcm(48_000, 1, chunks) { sounds.trySend(it) } }
+        repeat(3) { chunks.send(ByteArray(960)) }
+        chunks.send(ByteArray(960) { 1 })
+        speaker.ready.await()
+        delay(100) // Lets the decoder hand over all four frames.
+        repeat(3) { speaker.render() }
+        delay(100)
+        assertTrue(sounds.tryReceive().isFailure, "Silence reported as speaking")
+        speaker.render()
+        assertEquals(true, sounds.receive())
+        chunks.close()
+        repeat(70) { speaker.render() }
+        job.await()
     }
 
     @Test fun aShortGapBetweenSentencesIsntTheEndOfSpeaking() = checkPlayback {
