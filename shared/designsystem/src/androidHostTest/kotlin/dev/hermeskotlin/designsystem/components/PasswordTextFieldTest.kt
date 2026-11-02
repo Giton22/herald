@@ -4,6 +4,7 @@ import android.content.ComponentName
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.text.TextRange
@@ -87,6 +88,16 @@ class PasswordTextFieldTest {
         composeRule.onNode(hasSetTextAction()).performTextInputSelection(TextRange(1, 3))
         composeRule.onNode(hasSetTextAction()).performTextInput("X")
         assertValue("aXb", TextRange(2))
+    }
+
+    @Test
+    fun aCursorPlacedOnTheBulletsStaysACursorAroundASupplementaryCharacter() {
+        show("a😀b")
+        // On-screen offsets, as TalkBack or arrow keys place them: in "•••" the cursor after the second bullet is after the emoji.
+        composeRule.onNode(hasSetTextAction()).performSemanticsAction(SemanticsActions.SetSelection) { it(2, 2, false) }
+        assertValue("a😀b", TextRange(3))
+        composeRule.onNode(hasSetTextAction()).performTextInput("X")
+        assertValue("a😀Xb", TextRange(4))
     }
 
     @Test
