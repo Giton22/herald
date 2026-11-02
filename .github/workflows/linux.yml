@@ -47,7 +47,7 @@ jobs:
           cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
       - name: JVM tests
         run: >
-          ./gradlew --no-daemon --max-workers=2
+          ./gradlew --no-daemon --max-workers=4
           :shared:core:jvmTest :shared:designsystem:jvmTest :shared:ui:jvmTest
           :shared:wearlink:jvmTest :desktopApp:jvmTest
       - name: Install Flatpak tools and SDK
