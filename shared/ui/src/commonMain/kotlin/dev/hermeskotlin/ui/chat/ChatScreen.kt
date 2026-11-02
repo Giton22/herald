@@ -2692,7 +2692,7 @@ private fun ConfirmChange(
 }
 
 @Composable
-private fun AssistantReply(
+internal fun AssistantReply(
     message: ChatMessage.Assistant,
     onBranch: (() -> Unit)?,
     /** Drops this reply and what follows and sends its prompt again; null when it can't. */
