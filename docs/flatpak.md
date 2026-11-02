@@ -88,7 +88,10 @@ stops startup for manual resolution. Atomic replacement and parent-directory syn
 are required. A per-profile file lock serializes version checks and replacement;
 a stale writer must reopen. Failed or uncertain writes do not permit further unsafe mutations.
 
-Back up the complete profile before upgrades. Other Flatpak identities are never
+Back up the complete profile before upgrades. The file's format has a version: a
+`settings.secure` written by a newer Kyllene stops an older one at startup, with
+Quit as the only choice, instead of being read wrongly or replaced. Go back to that
+version or newer, or restore the backup taken before the upgrade. Other Flatpak identities are never
 searched or imported. Removing old plaintext does not securely erase disk blocks
 or backups. Encryption does not protect an unlocked process or prevent a same-user
 attacker replacing the entire profile. Run the Linux storage and migration tests

@@ -104,7 +104,7 @@ fun main(args: Array<String>) {
                 prepare = { prepareDesktopStorage(this.koin.get()) },
                 startFresh = { startDesktopStorageFresh(this.koin.get()) },
                 folder = desktopStorageFolder(this.koin.get()),
-            )) exitProcess(0)
+            )) exitProcess(1) // Quit: the app didn't start, which a launcher or script can tell from the status.
     }.koin
     useAppTextContextMenu()
     val settingsStore = koin.get<SettingsStore>()
