@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tray_open">Kyllene öffnen</string>
+    <string name="tray_new_chat">Neuer Chat</string>
+    <string name="tray_quick_entry">Schnelleingabe</string>
+    <string name="tray_quit">Kyllene beenden</string>
+
+    <string name="quick_entry_window_title">Kyllene-Schnelleingabe</string>
+    <string name="quick_entry_new_chat">Neuer Chat</string>
+    <string name="quick_entry_this_chat">Dieser Chat</string>
+    <string name="quick_entry_field">Hermes fragen</string>
+    <string name="quick_entry_placeholder">Frag Hermes, was du willst…</string>
+    <string name="quick_entry_keys">Enter sendet · Tab wechselt · Esc schließt</string>
+
+    <string name="notice_reply_failed">Hermes ist auf ein Problem gestoßen</string>
+    <string name="notice_replied">Hermes hat geantwortet</string>
+    <string name="notice_reply_in">Die Antwort ist da.</string>
+    <string name="notice_approval">Freigabe nötig</string>
+    <string name="notice_question">Hermes hat eine Frage</string>
+    <string name="notice_needs_you">Hermes braucht dich</string>
+    <string name="notice_approve_once">Einmal freigeben</string>
+    <string name="notice_deny">Ablehnen</string>
+
+    <string name="storage_title">Kyllene-Speicher</string>
+    <string name="storage_folder">Einstellungsordner:</string>
+    <string name="storage_retry">Wiederholen</string>
+    <string name="storage_start_fresh">Neu beginnen</string>
+    <string name="storage_quit">Beenden</string>
+    <string name="storage_with_start_fresh">%1$s „Neu beginnen“ legt die Datei unter einem anderen Namen ab und öffnet Kyllene abgemeldet.</string>
+    <string name="storage_unavailable">Kyllene konnte seinen Speicherschlüssel nicht abrufen. Entsperre den Schlüsselbund deines Desktops, prüfe, ob sein Secret-Portal verfügbar ist, und versuche es dann erneut.</string>
+    <string name="storage_cancelled">Das Entsperren des Speichers wurde abgebrochen. Versuche es erneut, um ihn zu entsperren; vorhandene Daten bleiben erhalten.</string>
+    <string name="storage_corrupt">Kyllene konnte seine verschlüsselten Einstellungen nicht öffnen. Stelle eine funktionierende Sicherung wieder her oder nutze die ursprüngliche App-Identität. Vorhandene Daten bleiben erhalten.</string>
+    <string name="storage_version">Dieses Einstellungsformat braucht eine andere Version von Kyllene. Vorhandene Daten bleiben erhalten.</string>
+    <string name="storage_read">Kyllene konnte seine Einstellungen nicht lesen, oder die Datei ist größer als 16 MiB. Prüfe den Dateizugriff, bevor du es erneut versuchst.</string>
+    <string name="storage_write">Kyllene konnte das Speichern oder Aufräumen seiner Einstellungen nicht abschließen. Vorhandene Kopien bleiben erhalten; prüfe Speicherplatz und Dateizugriff, bevor du es erneut versuchst.</string>
+    <string name="storage_uncertain">Kyllene konnte nicht bestätigen, dass seine Einstellungen gespeichert wurden. Prüfe den Dateizugriff, starte dann erneut oder beende und starte neu, bevor du weitere Änderungen machst.</string>
+    <string name="storage_changed">Die Einstellungen wurden außerhalb dieses Fensters geändert. Beende Kyllene und starte es neu, um sie vor dem Speichern neu zu laden.</string>
+    <string name="storage_legacy">Widersprüchliche oder unvollständige alte Einstellungen gefunden. Vorhandene Dateien bleiben erhalten. Beende Kyllene und kläre die ältere Kopie, bevor du es erneut versuchst.</string>
+    <string name="storage_unsupported">Kyllene konnte seine Flatpak-App-Identität nicht prüfen. Prüfe die Installation, bevor du es erneut versuchst. Ein unverschlüsselter Ausweichspeicher steht nicht zur Verfügung.</string>
+
+    <string name="web_widget_no_browser">Der Browser für Widgets konnte nicht starten.</string>
+    <string name="web_widget_failed">Dieses Widget kann nicht angezeigt werden.</string>
+    <string name="web_close_page">Seite schließen</string>
+    <string name="web_page_failed">Die Seite konnte nicht geöffnet werden.</string>
+    <string name="web_try_again">Erneut versuchen</string>
+</resources>
