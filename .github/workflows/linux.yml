@@ -10,7 +10,8 @@ on:
       - "desktopApp/**"
       - "packaging/flatpak/**"
       - "gradle/**"
-      - "*.gradle.kts"
+      # Offline Gradle configures every project, the Android ones too.
+      - "**/*.gradle.kts"
       - "gradle.properties"
       - ".github/workflows/linux.yml"
   pull_request:
@@ -19,9 +20,10 @@ on:
 permissions:
   contents: read
 
-# A newer push to a PR replaces its run; every master commit keeps its own result.
+# A newer push to a PR replaces its run; every master commit keeps its own result. A group holds only one
+# pending run even without cancel-in-progress, so master runs are grouped by commit.
 concurrency:
-  group: linux-${{ github.ref }}
+  group: linux-${{ github.event_name == 'pull_request' && github.ref || github.sha }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
