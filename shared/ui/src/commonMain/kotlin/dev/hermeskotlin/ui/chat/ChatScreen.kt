@@ -184,6 +184,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.util.lerp
 import androidx.compose.foundation.layout.offset
 import androidx.compose.animation.core.animateFloatAsState
@@ -2692,7 +2693,7 @@ private fun ConfirmChange(
 }
 
 @Composable
-private fun AssistantReply(
+internal fun AssistantReply(
     message: ChatMessage.Assistant,
     onBranch: (() -> Unit)?,
     /** Drops this reply and what follows and sends its prompt again; null when it can't. */
@@ -2814,21 +2815,28 @@ private fun AssistantReply(
                         replyUsage(it.input, it.output),
                         style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
                         color = Theme[colors][textMuted],
+                        // On one line in a narrow window at the largest text, as on the phone.
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(start = 8.dp).semantics { contentDescription = "${compactCount(it.input)} tokens in, ${compactCount(it.output)} out" },
                     )
                 }
             }
         } else if (actionable || usage != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                usage?.let {
+                // The count takes only what the actions leave: at the largest text it ellipsizes instead of squeezing them out.
+                if (usage != null) {
                     Text(
-                        replyUsage(it.input, it.output),
+                        replyUsage(usage.input, usage.output),
                         style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
                         color = Theme[colors][textMuted],
-                        modifier = Modifier.semantics { contentDescription = "${compactCount(it.input)} tokens in, ${compactCount(it.output)} out" },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "${compactCount(usage.input)} tokens in, ${compactCount(usage.output)} out" },
                     )
+                } else {
+                    Spacer(Modifier.weight(1f))
                 }
-                Spacer(Modifier.weight(1f))
                 if (actionable) {
                     // On the end, under the thumb of the hand holding the phone; Copy, the one used most, sits last.
                     // Copy's padding trimmed off the end lines its icon up with the reply's edge; all of them lose 4dp on top to sit close under it.
@@ -4355,5 +4363,10 @@ private fun ModelPill(
 private fun Modifier.trimEndTop(end: Dp, top: Dp) = layout { measurable, constraints ->
     val placeable = measurable.measure(constraints)
     val dy = top.roundToPx()
-    layout(placeable.width - end.roundToPx(), placeable.height - dy) { placeable.placeRelative(0, -dy) }
+    val size = trimmedSize(placeable.width, placeable.height, end.roundToPx(), dy)
+    layout(size.width, size.height) { placeable.placeRelative(0, -dy) }
 }
+
+/** What [trimEndTop] leaves of a [width] by [height] element, never below nothing: the largest text can squeeze one narrower than its trim. */
+internal fun trimmedSize(width: Int, height: Int, end: Int, top: Int): IntSize =
+    IntSize((width - end).coerceAtLeast(0), (height - top).coerceAtLeast(0))
