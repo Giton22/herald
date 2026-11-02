@@ -43,9 +43,12 @@ import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.DesktopWeb
+import dev.hermeskotlin.ui.screen.ScreenBrowserStage
 import dev.hermeskotlin.ui.screen.ScreenViewerEvent
 import dev.hermeskotlin.ui.screen.ScreenViewerHandle
+import dev.hermeskotlin.ui.screen.screenBrowserEvent
 import dev.hermeskotlin.ui.screen.screenEvent
+import dev.hermeskotlin.ui.screen.screenEventAbout
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.currentCoroutineContext
@@ -89,6 +92,32 @@ import java.net.URI
 import java.net.URLEncoder
 import java.util.Date
 import java.util.Vector
+
+/**
+ * How far the app's own browser has come.
+ *
+ * The browser is the runtime's Chromium, and it takes a moment to start. A browser that is still starting is
+ * not a failure, so it has a state of its own: telling the screen that it failed before the browser had its
+ * chance takes the screen away before it was ever opened.
+ */
+private sealed interface BrowserState {
+    /** The browser is coming up. */
+    data object Starting : BrowserState
+
+    /** The browser is up. */
+    data class Ready(val app: CefApp) : BrowserState
+
+    /** The browser is not coming up. */
+    data object Failed : BrowserState
+
+    /** The stage, in the words the screen knows. */
+    val stage: ScreenBrowserStage
+        get() = when (this) {
+            Starting -> ScreenBrowserStage.Starting
+            Failed -> ScreenBrowserStage.Failed
+            is Ready -> ScreenBrowserStage.Ready
+        }
+}
 
 /** Widgets and plugin pages in the Chromium the JetBrains Runtime carries; see [Jcef]. */
 internal class JcefWeb(private val cookies: WebCookieJar, private val gateways: GatewayRepository) : DesktopWeb {
@@ -150,14 +179,42 @@ internal class JcefWeb(private val cookies: WebCookieJar, private val gateways: 
         onEvent: (ScreenViewerEvent) -> Unit,
         modifier: Modifier,
     ) {
-        val app by produceState<CefApp?>(null) { value = app() }
-        val cef = app
-        if (cef == null) {
-            LaunchedEffect(Unit) { onEvent(ScreenViewerEvent.Failed("The browser didn't start.")) }
-            return
-        }
         val event by rememberUpdatedState(onEvent)
         val handle by rememberUpdatedState(onHandle)
+        // The browser is the runtime's own Chromium, and it takes a moment to start. A browser that is still
+        // starting is not a failure: the page has not had its chance yet, and saying otherwise takes the
+        // screen away before it was ever opened.
+        val browser by produceState<BrowserState>(BrowserState.Starting) {
+            val cef = app()
+            value = if (cef == null) BrowserState.Failed else BrowserState.Ready(cef)
+        }
+        // Only a browser that will not start is a failure.
+        screenBrowserEvent(browser.stage)?.let { failure ->
+            LaunchedEffect(failure) { event(failure) }
+        }
+        val state = browser
+        if (state is BrowserState.Ready) {
+            ScreenBrowser(state.app, streamUrl, viewOnly, handle, event, modifier)
+        }
+    }
+
+    /**
+     * The screen, in the app's own browser.
+     *
+     * The page is the app's own (see `vendor/screen-viewer`), written to a file because the gateway accepts
+     * a display stream only to a page without an origin of its own: a `file:` address is the one a browser
+     * gives it. The page opens the stream itself, so nothing of the gateway's reaches it but the ticket the
+     * app hands over.
+     */
+    @Composable
+    private fun ScreenBrowser(
+        cef: CefApp,
+        streamUrl: String,
+        viewOnly: Boolean,
+        handle: (ScreenViewerHandle) -> Unit,
+        event: (ScreenViewerEvent) -> Unit,
+        modifier: Modifier,
+    ) {
         val client = remember(cef) {
             cef.createClient().apply {
                 // The page cannot talk to the app any other way: it asks for an address of its own and the
