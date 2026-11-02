@@ -83,6 +83,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -366,7 +368,6 @@ fun SessionsSidebar(
         viewModel.setVisible(visible)
         rooms.setVisible(visible)
     }
-    LaunchedEffect(selectedId) { bots.setOpenSession(selectedId) }
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
     val user by viewModel.user.collectAsStateWithLifecycle()
     val roster by viewModel.roster.collectAsStateWithLifecycle()
@@ -512,24 +513,19 @@ fun SessionsSidebar(
     // The thread rows as the section shows them; moving one goes past its neighbour here, not in the whole list.
     val shownThreads = sections.threads.filter { attentionFilter.keeps(statuses[it.session.id]) }
     val openHere: (SessionSummary) -> Unit = {
-        // Taken before the chat counts as read, so it can show where the new messages start.
+        // The viewport decides when the new messages have actually been read.
         val readUpTo = viewModel.readUpTo(it)
-        viewModel.markSeen(it)
         onOpenSession(it, readUpTo)
         if (searchOpen) closeSearch()
     }
-    // The open chat is being read, so whatever it has said is seen.
-    val openSession = state.sessions.firstOrNull { it.id == selectedId }
-    LaunchedEffect(openSession) { openSession?.let(viewModel::markSeen) }
     val rowActions: (SessionSummary) -> Unit = { actionTarget = it }
     // A click with keys held, on the desktop: pin, archive, or the chat in a window of its own.
     val windowInfo = LocalWindowInfo.current
     val shortcutBus = LocalShortcuts.current
     // The chat in a window of its own; where no window can open (a phone), it opens as a plain click does.
     val popOut: (SessionSummary) -> Unit = { s ->
-        // Taken before the chat counts as read, as for a plain click.
+        // Opening a window preserves the unread boundary too.
         val readUpTo = viewModel.readUpTo(s)
-        viewModel.markSeen(s)
         val popped = shortcutBus.fire(Shortcut.PopOut(ChatTarget(gateway, s.id, s.displayTitle, profile = profile, readUpTo = readUpTo)))
         if (!popped) openHere(s) else if (s.id == selectedId) onNewChat(null)
     }
@@ -3026,11 +3022,11 @@ private fun AccountSheet(
 }
 
 /**
- * Desktop's profile picker: the gateway's profiles, default first, the active one checked. Each is its
+ * The gateway's profiles, default first, the active one checked. Each is its
  * own agent, so switching changes the chats listed and starts from where that profile left off.
  */
 @Composable
-private fun ProfileSheet(
+internal fun ProfileSheet(
     visible: Boolean,
     profiles: List<Profile>,
     selected: String?,
@@ -3039,11 +3035,25 @@ private fun ProfileSheet(
 ) {
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         SheetHeader("Profiles", "Each profile is its own agent, with its own chats, memory and model.")
-        // On the desktop a long list scrolls under the header rather than running past the window; a phone's
-        // sheet is as it was.
-        Column(if (isDesktop) Modifier.weight(1f, fill = false).verticalScrollWithBar() else Modifier) {
+        // A long list scrolls under the header; a short one keeps the sheet sized to its content. It opens with the
+        // active profile in sight, wherever it is in the list: two frames on, as the desktop's panel is only laid out
+        // after the frame it opens on.
+        val activeRow = remember { BringIntoViewRequester() }
+        LaunchedEffect(visible) {
+            if (!visible) return@LaunchedEffect
+            withFrameNanos {}
+            withFrameNanos {}
+            runCatching { activeRow.bringIntoView() }
+        }
+        Column(Modifier.weight(1f, fill = false).verticalScrollWithBar()) {
             profiles.forEach { profile ->
-                ProfileRow(profile, checked = profile.name == selected, onClick = { onSelect(profile) })
+                val checked = profile.name == selected
+                ProfileRow(
+                    profile,
+                    checked = checked,
+                    onClick = { onSelect(profile) },
+                    modifier = if (checked) Modifier.bringIntoViewRequester(activeRow) else Modifier,
+                )
             }
         }
         if (profiles.size < 2) {
@@ -3058,10 +3068,10 @@ private fun ProfileSheet(
 }
 
 @Composable
-private fun ProfileRow(profile: Profile, checked: Boolean, onClick: () -> Unit) {
+private fun ProfileRow(profile: Profile, checked: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val detail = profile.description?.trim()?.takeIf { it.isNotEmpty() } ?: profile.model?.let(::displayModelName)
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
             .handCursor()

@@ -129,7 +129,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Token usage per turn (live turns) and per session with cost, context window and account limits (`session.usage`, `MessageCompletePayload.usage`, `GET /api/sessions/{id}`)
 - [x] Error banner and live status line (`error`, `status.update`, failed turns)
 - [x] Notices and warnings (`notice`, `MessageCompletePayload.warning`)
-- [x] A New messages line where the unread messages start; a chat with unread messages (opened from the list or from a notification) opens there instead of at the bottom. The line stays put while the chat is open, so it does not jump while you read, and is gone the next time it is opened (the last look is kept per chat on the phone). Other bots' messages count as new; when the first new message is more than five pages back, there is no line rather than a misplaced one
+- [x] A New messages line where the unread messages start; a chat with unread messages (opened from the list or from a notification) opens there instead of at the bottom. The line stays put while the chat is open, so it does not jump while you read, and is gone the next time it is opened (the gateway's shared read watermark is used when available, with a per-chat local fallback; reaching the latest messages marks them read). Other bots' messages count as new; when the first new message is more than five pages back, there is no line rather than a misplaced one
 
 ### 5. Tool activity
 - [x] Tool rows in the reply: name, what it is doing, running spinner → done (`tool.start`, `tool.complete` summary)
