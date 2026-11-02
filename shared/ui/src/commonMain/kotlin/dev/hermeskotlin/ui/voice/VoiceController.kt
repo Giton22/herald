@@ -1089,16 +1089,20 @@ class VoiceController(
                         if (text.isNotEmpty()) onText(text)
                         return@launch
                     }
-                    // Stopped while the recognizers were being tried: nothing to record.
-                    if (dictationFinished) {
-                        _dictation.value = DictationState(error = "Didn't catch anything.")
-                        return@launch
-                    }
+                }
+                // Stopped before the microphone opened (or while the recognizers were tried): nothing to record.
+                if (dictationFinished) {
+                    _dictation.value = DictationState(error = "Didn't catch anything.")
+                    return@launch
                 }
                 // Pauses to think are fine here; a long quiet spell still ends it.
                 val recording = recorder.record(
                     VoiceActivity(silenceMs = DICTATION_SILENCE_MS, idleMs = DICTATION_IDLE_MS, maxMs = DICTATION_MAX_MS),
-                    onLevel = { level -> _dictation.update { it.copy(level = level) } },
+                    onLevel = { level ->
+                        // A recorder forgets a Finish that came while it started, so it's passed on once it listens.
+                        if (dictationFinished) recorder.finish()
+                        _dictation.update { it.copy(level = level) }
+                    },
                 )
                 if (!recording.heardSpeech) {
                     _dictation.value = DictationState(error = "Didn't catch anything.")
