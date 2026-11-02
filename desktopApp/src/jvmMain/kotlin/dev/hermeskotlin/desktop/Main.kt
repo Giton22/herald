@@ -43,6 +43,9 @@ import dev.hermeskotlin.core.chat.DraftStart
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.storage.appDataDir
+import dev.hermeskotlin.core.storage.desktopStorageFolder
+import dev.hermeskotlin.core.storage.prepareDesktopStorage
+import dev.hermeskotlin.core.storage.startDesktopStorageFresh
 import dev.hermeskotlin.desktop.web.Jcef
 import dev.hermeskotlin.ui.App
 import dev.hermeskotlin.ui.DesktopBack
@@ -95,7 +98,14 @@ fun main(args: Array<String>) {
     val launchLink = args.firstOrNull { it.startsWith("${AppLink.DESKTOP_SCHEME}:", ignoreCase = true) }
     // A second launch brings the running Herald forward, with its link, instead of opening another.
     val instance = SingleInstance.claim(appDataDir, launchLink) ?: exitProcess(0)
-    val koin = startKoin { modules(sharedModules + desktopModule) }.koin
+    val koin = startKoin {
+        modules(sharedModules + desktopModule)
+        if (!unlockDesktopStorage(
+                prepare = { prepareDesktopStorage(this.koin.get()) },
+                startFresh = { startDesktopStorageFresh(this.koin.get()) },
+                folder = desktopStorageFolder(this.koin.get()),
+            )) exitProcess(1) // Quit: the app didn't start, which a launcher or script can tell from the status.
+    }.koin
     useAppTextContextMenu()
     val settingsStore = koin.get<SettingsStore>()
     val links = koin.get<ChatLinks>()
