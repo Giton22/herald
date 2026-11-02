@@ -40,6 +40,8 @@ import dev.hermeskotlin.ui.isDesktop
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -89,6 +91,7 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.GatewayChoices
 import dev.hermeskotlin.ui.components.rememberClientCertPicker
+import dev.hermeskotlin.ui.components.clientCertificatesAvailable
 
 /**
  * The saved gateways, primary first, the one in use checked. Tapping one switches to it (its sign-in when it
@@ -258,8 +261,7 @@ private fun GatewayRow(
             items = {
                 if (!primary) MenuAction("Make primary", Lucide.Star, onClick = { menuOpen = false; onSetPrimary() })
                 MenuAction("Rename", Lucide.Pencil, onClick = { menuOpen = false; onRename() })
-                // Client certificates come from Android's system store; the desktop has none to pick from yet.
-                if (!isDesktop) MenuAction("Client certificate", Lucide.ShieldCheck, onClick = { menuOpen = false; onClientCert() })
+                if (clientCertificatesAvailable() && (!isDesktop || gateway.url.startsWith("https://"))) MenuAction("Client certificate", Lucide.ShieldCheck, onClick = { menuOpen = false; onClientCert() })
                 MenuAction("Remove", Lucide.Trash2, onClick = { menuOpen = false; onRemove() })
             },
         ) {
@@ -320,7 +322,7 @@ private fun RemoveGatewayDialog(gateway: SavedGateway?, onDismiss: () -> Unit, o
 
 /**
  * The client certificate to present to [gateway], for proxies that ask for one (`ssl_verify_client`).
- * Picking opens the system store; only the chosen name is kept, the key never leaves the store.
+ * Android picks a system identity; secure Linux builds import it for this gateway's TLS hostname.
  */
 @Composable
 private fun ClientCertDialog(gateway: SavedGateway?, onDismiss: () -> Unit, onSet: (SavedGateway, String?) -> Unit) {
@@ -328,18 +330,23 @@ private fun ClientCertDialog(gateway: SavedGateway?, onDismiss: () -> Unit, onSe
     if (gateway != null) shown = gateway
     val g = shown ?: return
     val parsed = GatewayUrl.parseOrNull(g.url)
-    val picker = rememberClientCertPicker(parsed?.host, parsed?.port ?: -1, onPicked = { alias ->
-        if (alias != null) {
-            onDismiss()
-            onSet(g, alias)
-        }
-    })
+    val current by rememberUpdatedState(gateway)
+    val picker = key(g.url, gateway != null) {
+        val host = parsed?.takeIf { !isDesktop || it.value.startsWith("https://") }?.host
+        rememberClientCertPicker(host, parsed?.port ?: -1, onPicked = { alias ->
+            if (alias != null && current?.url == g.url) {
+                onDismiss()
+                onSet(g, alias)
+            }
+        })
+    }
     Dialog(
         visible = gateway != null,
         onDismissRequest = onDismiss,
         title = "Client certificate",
         message = "Kyllene presents this certificate to “${g.label}” when its server asks for one. " +
-            "The key stays in the system store; only its name is kept.",
+            if (isDesktop) "Imported keys are stored encrypted for this TLS hostname. Clearing this selection may still use another saved certificate for the same hostname. Imported keys remain in encrypted settings."
+            else "The key stays in the system store; only its name is kept.",
         actions = {
             Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             Button(if (g.clientCertAlias == null) "Pick…" else "Change…", onClick = picker::pick, size = ButtonSize.Small)
@@ -356,7 +363,7 @@ private fun ClientCertDialog(gateway: SavedGateway?, onDismiss: () -> Unit, onSe
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                Button("Clear", onClick = { onDismiss(); onSet(g, null) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+                Button(if (isDesktop) "Clear selection" else "Clear", onClick = { onDismiss(); onSet(g, null) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             }
         }
     }

@@ -21,6 +21,7 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -160,7 +161,13 @@ internal fun ConnectView(
 ) {
     val result = state.result
     val parsed = GatewayUrl.parseOrNull(url.text.toString())
-    val picker = rememberClientCertPicker(parsed?.host, parsed?.port ?: -1, onPicked = { it?.let(cert.onPick) })
+    val requested = url.text.toString()
+    val picker = key(requested) {
+        val host = parsed?.takeIf { !isDesktop || it.value.startsWith("https://") }?.host
+        rememberClientCertPicker(host, parsed?.port ?: -1, onPicked = { alias ->
+            if (alias != null && url.text.toString() == requested) cert.onPick(alias)
+        })
+    }
     ScreenScaffold {
         ScreenHeader(
             icon = if (onCancel == null) null else Lucide.PlugZap,
@@ -231,8 +238,7 @@ internal fun ConnectView(
             HelpRow(Lucide.KeyRound, "Behind Cloudflare Access?", accessOpen) { accessOpen = !accessOpen }
             if (accessOpen) AccessTokenFields(access, state.accessError, test)
 
-            // Client certificates come from Android's system store; the desktop has none to pick from yet.
-            if (!isDesktop) {
+            if (picker.available) {
                 var certOpen by rememberSaveable { mutableStateOf(false) }
                 LaunchedEffect(result) {
                     if (result is ProbeResult.ClientCertRequired) certOpen = true
@@ -372,7 +378,7 @@ private fun AccessTokenFields(access: AccessToken, error: String?, onTest: () ->
     }
 }
 
-/** A client certificate to present to this address, picked from the system store for proxies that ask for one. */
+/** A client certificate selected for the proxy at this address. */
 @Composable
 private fun ClientCertFields(cert: ClientCert, demanded: Boolean, onPick: () -> Unit) {
     Column(Modifier.padding(start = 4.dp, end = 4.dp, bottom = 12.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -386,13 +392,14 @@ private fun ClientCertFields(cert: ClientCert, demanded: Boolean, onPick: () -> 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 StatusDot(Status.Ok, cert.alias)
                 Button(
-                    text = "Forget",
+                    text = if (isDesktop) "Clear selection" else "Forget",
                     onClick = cert.onClear,
                     variant = ButtonVariant.Ghost,
                     size = ButtonSize.Small,
                 )
             }
-            Hint("The key itself stays in the system store; only its name is kept, per gateway.")
+            Hint(if (isDesktop) "Imported keys are stored encrypted for this TLS hostname. Clearing this selection may still use another saved certificate for the same hostname. Imported keys remain in encrypted settings."
+                else "The key itself stays in the system store; only its name is kept, per gateway.")
         } else {
             Button(
                 text = "Pick certificate",
