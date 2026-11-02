@@ -24,7 +24,7 @@
         }
       },
       "build-commands": [
-        "./gradle/bin/gradle --offline --no-daemon --max-workers=2 --no-configuration-cache -I packaging/flatpak/offline.init.gradle :desktopApp:createReleaseDistributable",
+        "./gradle/bin/gradle --offline --no-daemon --max-workers=4 --no-configuration-cache -I packaging/flatpak/offline.init.gradle :desktopApp:createReleaseDistributable",
         "python3 packaging/flatpak/stage.py desktopApp/build/compose/binaries/main-release/app/Kyllene /app jdk/bin/java",
         "install -Dm644 packaging/flatpak/fonts.conf /app/etc/fonts/local.conf",
         "install -Dm644 packaging/flatpak/io.github.Giton22.Kyllene.Devel.desktop /app/share/applications/io.github.Giton22.Kyllene.Devel.desktop",
