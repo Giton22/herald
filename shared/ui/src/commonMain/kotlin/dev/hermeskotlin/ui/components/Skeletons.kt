@@ -26,12 +26,15 @@ import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusLarge
 import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.surface2
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /** A page of numbers on its way: a headline figure, three tiles, a chart and a few bars, as Insights lays them out. */
 @Composable
 fun ReportSkeleton() {
+    val loading = stringResource(Res.string.app_loading)
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp).semantics(mergeDescendants = true) { contentDescription = "Loading" },
+        Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp).semantics(mergeDescendants = true) { contentDescription = loading },
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Skeleton(Modifier.width(160.dp).height(40.dp))
@@ -51,8 +54,9 @@ fun ReportSkeleton() {
 /** A list on its way: [rows] stand-in rows, each a round mark and a line. */
 @Composable
 fun ListSkeleton(rows: Int = 6) {
+    val loading = stringResource(Res.string.app_loading)
     Column(
-        Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp).semantics(mergeDescendants = true) { contentDescription = "Loading" },
+        Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 8.dp).semantics(mergeDescendants = true) { contentDescription = loading },
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         repeat(rows) { i ->

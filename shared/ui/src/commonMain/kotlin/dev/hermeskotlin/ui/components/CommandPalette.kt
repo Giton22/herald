@@ -87,6 +87,8 @@ import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /** One thing the palette can do: [label] under [group], found by it or its [keywords]; [hint] is its shortcut. */
 class PaletteItem(
@@ -148,8 +150,10 @@ fun CommandPalette(
     if (visible) kept = items
     val found by remember(kept) { derivedStateOf { paletteMatches(query.text.toString(), kept) } }
     val typed = query.text.toString().trim()
+    val searchGroup = stringResource(Res.string.app_palette_search)
+    val searchAll = stringResource(Res.string.app_palette_search_all, typed)
     val rows = if (onSearchAll != null && typed.isNotEmpty()) {
-        found + PaletteItem("Search", "Search all chats for “$typed”", Lucide.Search) { onSearchAll(typed) }
+        found + PaletteItem(searchGroup, searchAll, Lucide.Search) { onSearchAll(typed) }
     } else {
         found
     }
@@ -184,7 +188,7 @@ fun CommandPalette(
     ) {
         Box(Modifier.fillMaxSize().padding(horizontal = 24.dp, vertical = 72.dp), contentAlignment = Alignment.TopCenter) {
             DialogPanel(
-                paneTitle = "Command palette",
+                paneTitle = stringResource(Res.string.app_palette_title),
                 enter = fadeIn() + scaleIn(initialScale = 0.97f),
                 exit = fadeOut() + scaleOut(targetScale = 0.97f),
                 modifier = Modifier.widthIn(max = 600.dp).fillMaxWidth(),
@@ -222,14 +226,14 @@ fun CommandPalette(
                                 },
                         ) {
                             TextInput(placeholder = {
-                                Text("Search chats, pages and actions", style = Theme[typography][body], color = Theme[colors][textTertiary])
+                                Text(stringResource(Res.string.app_palette_placeholder), style = Theme[typography][body], color = Theme[colors][textTertiary])
                             })
                         }
                     }
                     Box(Modifier.fillMaxWidth().background(Theme[colors][stroke]).heightIn(min = 1.dp, max = 1.dp))
                     if (rows.isEmpty()) {
                         Text(
-                            "Nothing matches",
+                            stringResource(Res.string.app_palette_nothing),
                             style = Theme[typography][bodySmall],
                             color = Theme[colors][textTertiary],
                             modifier = Modifier.padding(16.dp),
