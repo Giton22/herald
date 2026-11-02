@@ -18,7 +18,9 @@ import dev.hermeskotlin.core.slash.SlashResult
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
@@ -93,6 +95,9 @@ class ChatSession(
      */
     private var rowExists = initialStoredId != null
     private val attachMutex = Mutex()
+
+    /** Held by a [submit] from its uploads until its prompt is settled; see there. */
+    private val sendMutex = Mutex()
 
     /**
      * Prompts this client submitted whose turn hasn't started yet. A `message.start` beyond them is a
@@ -221,6 +226,10 @@ class ChatSession(
                 refused = null,
             )
         }
+        // One prompt's uploads and submit at a time: images queued on the session ride with the next
+        // prompt.submit, so another send in between (while a large file goes up) would take them. Held
+        // until this one is settled, so the next one sees whether a turn is running.
+        sendMutex.lock()
         // Counted before submitting: the turn's message.start can arrive before the prompt.submit reply.
         ownTurnsPending++
         // Images and PDF pages queued on the session: if the prompt never goes out they would ride along
@@ -237,14 +246,14 @@ class ChatSession(
         var submitted = false
         return try {
             // The composer holds files to this size; checked before any goes, so none is uploaded for nothing.
-            attachments.firstOrNull { it.bytes.size > OutgoingAttachment.MAX_BYTES }?.let {
+            attachments.firstOrNull { it.size > OutgoingAttachment.MAX_BYTES }?.let {
                 throw RpcException(JsonRpcClient.MESSAGE_TOO_LARGE, "${it.name} is larger than ${OutgoingAttachment.MAX_SIZE}, too large to send.")
             }
             val client = connectedClient() ?: throw RpcException(0, "Not connected to the gateway. Your message will need resending.")
             val runtimeId = ensureAttached(client)
             uploadClient = client
             uploadRuntimeId = runtimeId
-            val refs = attachments.mapNotNull { upload(client, runtimeId, it, queuedImages) }
+            val refs = attachments.mapNotNull { upload(client, runtimeId, it, queuedImages, key) }
             submitted = true
             val result = client.request(
                 "prompt.submit",
@@ -299,6 +308,8 @@ class ChatSession(
                 )
             }
             SendOutcome.NotSent
+        } finally {
+            sendMutex.unlock()
         }
     }
 
@@ -542,13 +553,15 @@ class ChatSession(
 
     /**
      * Uploads one attachment to [runtimeId]. Images and PDF pages are queued for the next turn; a file
-     * comes back as the `@file:` reference to put in the prompt, which this returns.
+     * comes back as the `@file:` reference to put in the prompt, which this returns. Bubble [key] shows
+     * how far a large one has gone up.
      */
     private suspend fun upload(
         client: JsonRpcClient,
         runtimeId: String,
         attachment: OutgoingAttachment,
         queuedImages: MutableList<String>,
+        key: String,
     ): String? {
         val failure = "Couldn't attach ${attachment.name}"
         suspend fun asFile(): String {
@@ -563,6 +576,7 @@ class ChatSession(
             ) as? JsonObject
             return result.string("ref_text")?.takeIf { result.boolean("attached") == true } ?: throw RpcException(0, failure)
         }
+        if (!attachment.inline) return uploadStaged(client, runtimeId, attachment, queuedImages, key)
         return when (attachment.kind) {
             AttachmentKind.Image -> {
                 val result = client.request(
@@ -595,6 +609,82 @@ class ChatSession(
                 if (e.code == PDF_RENDER_UNAVAILABLE) asFile() else throw e
             }
             AttachmentKind.File -> asFile()
+        }
+    }
+
+    /**
+     * An attachment too large for one WebSocket message: it goes up over HTTP ([AttachmentUploads]) and is
+     * attached by its path there. A PDF the gateway can render gives its pages, as [upload] does; anything
+     * else, or a PDF it can't render, becomes an `@file:` reference. `file.attach` copies a file from outside
+     * the session's workspace into it, so the upload is removed after; one inside the workspace stays.
+     * Bubble [key] shows how far it has gone up, by whole percents, while it goes.
+     */
+    private suspend fun uploadStaged(
+        client: JsonRpcClient,
+        runtimeId: String,
+        attachment: OutgoingAttachment,
+        queuedImages: MutableList<String>,
+        key: String,
+    ): String? {
+        fun show(progress: UploadProgress?) =
+            _state.update { it.copy(messages = it.messages.updateUser(key) { u -> u.copy(upload = progress) }) }
+        var shown = UploadProgress(attachment.name, 0, attachment.size)
+        show(shown)
+        val staged = try {
+            sessions.uploads.stage(gateway, attachment) { sent ->
+                val next = shown.copy(sent = sent)
+                if (next.percent != shown.percent) {
+                    shown = next
+                    show(next)
+                }
+            }
+        } finally {
+            show(null)
+        }
+        var usedInPlace = false
+        try {
+            if (attachment.kind == AttachmentKind.Pdf && attachment.size <= OutgoingAttachment.MAX_PDF_PAGES_BYTES) {
+                try {
+                    val result = client.request(
+                        "pdf.attach",
+                        buildJsonObject {
+                            put("session_id", runtimeId)
+                            put("path", staged.path)
+                            put("filename", attachment.name)
+                        },
+                        // Past the gateway's own 120 s for rendering, so its answer comes before this gives up.
+                        timeoutMs = PDF_PAGES_TIMEOUT_MS,
+                    ) as? JsonObject
+                    result?.get("pages").asObjectList().mapNotNullTo(queuedImages) { it.string("path") }
+                    return null
+                } catch (e: RpcException) {
+                    // Pages it can't make (no poppler, a PDF it can't read): the agent can still read the file.
+                    if (e.code == JsonRpcClient.MESSAGE_TOO_LARGE) throw e
+                }
+            }
+            val result = client.request(
+                "file.attach",
+                buildJsonObject {
+                    put("session_id", runtimeId)
+                    put("path", staged.path)
+                    put("name", attachment.name)
+                },
+                timeoutMs = UPLOAD_TIMEOUT_MS,
+            ) as? JsonObject
+            // `uploaded: false` is a file referenced where it is (in the chat's workspace), which has to stay.
+            usedInPlace = result.boolean("uploaded")?.not() ?: (result.string("path") == staged.path)
+            return result.string("ref_text")?.takeIf { result.boolean("attached") == true }
+                ?: throw RpcException(0, "Couldn't attach ${attachment.name}")
+        } finally {
+            if (!usedInPlace) {
+                withContext(NonCancellable) {
+                    try {
+                        sessions.uploads.discard(gateway, staged)
+                    } catch (_: Exception) {
+                        // Best effort: a leftover upload is only a file in the gateway's uploads folder.
+                    }
+                }
+            }
         }
     }
 
@@ -2198,6 +2288,9 @@ class ChatSession(
 
         /** Uploads of several MB over a phone link take a while. */
         const val UPLOAD_TIMEOUT_MS = 120_000L
+
+        /** `pdf.attach` of an uploaded PDF: the gateway gives pdftoppm 120 s, so this waits longer. */
+        const val PDF_PAGES_TIMEOUT_MS = 180_000L
 
         const val PDF_RENDER_UNAVAILABLE = 5028
 
