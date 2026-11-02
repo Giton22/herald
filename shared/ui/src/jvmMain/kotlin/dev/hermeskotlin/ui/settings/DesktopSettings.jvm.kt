@@ -4,6 +4,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.graphics.ImageBitmap
 import dev.hermeskotlin.core.phone.PhoneTool
+import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.phone_need_android
 
 /** The desktop keeps the one icon its installer gives it. */
 @Composable
@@ -25,7 +27,7 @@ actual fun deviceHasScreenLock(): Boolean = false
 @Composable
 actual fun rememberPhoneToolAccess(): PhoneToolAccess = remember {
     object : PhoneToolAccess {
-        override fun missing(tool: PhoneTool) = "Phone tools work from Kyllene on an Android phone."
+        override fun missing(tool: PhoneTool) = Res.string.phone_need_android
 
         override fun request(tool: PhoneTool) = Unit
     }
