@@ -38,8 +38,11 @@ installed by hand updates from it too.
   it into an empty repository. The upload adds that repository's objects to the R2
   bucket behind `flatpak.kyllene.app`, then replaces its refs and summary. Objects
   are named by their hash and never change, so earlier releases' objects stay, and an
-  update downloads only what changed. To publish a release again, run the workflow by
-  hand with its tag.
+  update downloads only what changed. Only GitHub's latest release is published,
+  because Flatpak refuses a commit older than the installed one, so an older tag
+  would stop every update. The workflow waits up to an hour for the release job to
+  attach the bundle. To publish the latest release again, run the workflow by hand
+  with its tag.
 - **Signing key:** the public half is `packaging/flatpak/kyllene-repo.asc`.
   `website/kyllene.flatpakref` and `website/kyllene.flatpakrepo` carry the same key
   (`test_repo_files.py` checks this). The private half is the
@@ -52,7 +55,8 @@ installed by hand updates from it too.
 - **Tests:** the Linux workflow runs `tests/repo_smoke.sh` on every Flatpak build. It
   publishes three releases to a local server with a throwaway key, and checks that:
   - a bundle install and a `.flatpakref` install both update with `flatpak update`;
-  - a release signed with another key is refused.
+  - a commit signed with another key is refused, even when the summary is signed
+    with ours.
 
 Install `org.flatpak.Builder`, `org.freedesktop.Sdk//26.08` and its matching
 runtime in the user installation. From the repository root, build and install:

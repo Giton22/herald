@@ -51,16 +51,21 @@ release() {
 }
 installed() { flatpak info --user --show-commit "$app"; }
 published() { ostree --repo="$served" rev-parse "$ref"; }
+# A failing command substitution doesn't stop the script, so an empty answer must not pass for a match.
+same() {
+  a="$(installed)" b="$(published)"
+  [ -n "$a" ] && [ "$a" = "$b" ] || { echo "Installed '$a', published '$b'" >&2; exit 1; }
+}
 
 ostree --repo="$work/build" init --mode=archive-z2
 release
 echo "1. Bundle that names the repository"
 flatpak install --user --noninteractive -y "$work/release-1.flatpak"
 flatpak remotes --user -d
-test "$(installed)" = "$(published)"
+same
 release
 flatpak update --user --noninteractive -y "$app"
-test "$(installed)" = "$(published)"
+same
 echo "   flatpak update took release 2 from the repository"
 flatpak uninstall --user --noninteractive -y "$app"
 flatpak remote-delete --user --force "$(flatpak remotes --user --columns=name | grep -i origin | head -1)" 2>/dev/null || true
@@ -69,22 +74,23 @@ echo "2. The .flatpakref"
 printf '[Flatpak Ref]\nName=%s\nBranch=%s\nTitle=Kyllene\nUrl=%s\nSuggestRemoteName=kyllene-smoke\nRuntimeRepo=https://dl.flathub.org/repo/flathub.flatpakrepo\nIsRuntime=false\nGPGKey=%s\n' \
   "$app" "$branch" "$url" "$(base64 -w0 "$work/key.gpg")" > "$work/kyllene.flatpakref"
 flatpak install --user --noninteractive -y --from "$work/kyllene.flatpakref"
-test "$(installed)" = "$(published)"
+same
 release
 flatpak update --user --noninteractive -y "$app"
-test "$(installed)" = "$(published)"
+same
 echo "   flatpak update took release 3 from the repository"
 
-# Signatures are checked: a release signed by another key (its commit and an unsigned summary) is refused.
+# Signatures are checked: a commit signed by another key is refused, even in a summary signed with ours.
 other="$work/other"
 mkdir -m 700 "$other"
 GNUPGHOME="$other" gpg --batch --quiet --passphrase '' --quick-gen-key "Not Kyllene" rsa2048 sign never
 before="$(installed)"
+[ -n "$before" ]
 flatpak build-commit-from --force --src-repo="$build" --src-ref="$ref" --subject="forged" \
   --gpg-sign="$(GNUPGHOME="$other" gpg --list-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')" \
   --gpg-homedir="$other" "$served" "$ref" >/dev/null
-flatpak build-update-repo "$served" >/dev/null
-if flatpak update --user --noninteractive -y "$app"; then echo "An update without our signature was accepted" >&2; exit 1; fi
+flatpak build-update-repo --gpg-sign="$key" --gpg-homedir="$GNUPGHOME" "$served" >/dev/null
+if flatpak update --user --noninteractive -y "$app"; then echo "A commit signed by another key was accepted" >&2; exit 1; fi
 test "$(installed)" = "$before"
-echo "   a release signed by another key was refused"
+echo "   a commit signed by another key was refused"
 echo "Repository: bundle and .flatpakref installs update from it"
