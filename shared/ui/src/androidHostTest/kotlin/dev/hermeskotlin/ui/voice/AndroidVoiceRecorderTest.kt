@@ -1,6 +1,7 @@
 package dev.hermeskotlin.ui.voice
 
 import android.media.AudioRecord
+import android.media.audiofx.AcousticEchoCanceler
 import android.media.audiofx.NoiseSuppressor
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
@@ -31,7 +32,7 @@ import org.robolectric.annotation.Implements
 import kotlin.test.*
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [33], manifest = Config.NONE, shadows = [AndroidVoiceRecorderTest.Microphone::class, AndroidVoiceRecorderTest.Suppression::class])
+@Config(sdk = [33], manifest = Config.NONE, shadows = [AndroidVoiceRecorderTest.Microphone::class, AndroidVoiceRecorderTest.Suppression::class, AndroidVoiceRecorderTest.EchoCancelling::class])
 class AndroidVoiceRecorderTest {
     @Before fun reset() {
         mode = "empty"
@@ -92,16 +93,44 @@ class AndroidVoiceRecorderTest {
         voice.startChat(session, gateway, null)
         withTimeout(2_000) { voice.chat.first { it.error != null } }
         withTimeout(2_000) { voice.chat.first { it.phase == VoicePhase.Off } }
-        assertEquals("Couldn't read from the microphone.", voice.chat.value.error)
+        assertEquals("The microphone was disconnected.", voice.chat.value.error)
         assertEquals(1, reads.get())
         assertEquals(1, released.get())
     }
 
     @Test fun noDataFailsWithoutSpinning() = runBlocking {
         mode = "zero"
-        val result = withTimeout(8_000) { runCatching { AndroidVoiceRecorder().record(VoiceActivity()) } }
+        val result = withTimeout(2_000) { runCatching { AndroidVoiceRecorder(noAudioMs = 200).record(VoiceActivity()) } }
         assertEquals("The microphone stopped sending audio.", result.exceptionOrNull()?.message)
-        assertTrue(reads.get() in 2..400)
+        assertTrue(reads.get() in 2..40)
+        assertEquals(1, released.get())
+    }
+
+    @Test fun partialReadsAreMeasuredAsWholeFrames() = runBlocking {
+        mode = "partial"
+        var levels = 0
+        withTimeout(2_000) { AndroidVoiceRecorder().record(VoiceActivity(idleMs = 0, maxMs = 400), onLevel = { levels++ }) }
+        // 20 frames of 20 ms, then the 0 that closes the meter; not one per one-sample read.
+        assertEquals(21, levels)
+    }
+
+    @Test fun cancellingListenOverReleasesAStarvedMicrophone() = runBlocking {
+        val listening = async(Dispatchers.Default) { AndroidVoiceRecorder().listenOver(BargeIn(), { true }, {}) }
+        try {
+            awaitRead()
+            withTimeout(2_000) { listening.cancelAndJoin() }
+            assertEquals(1, released.get())
+        } finally {
+            unblock.countDown()
+            listening.cancelAndJoin()
+        }
+    }
+
+    @Test fun listenOverWithoutDataFailsWithoutSpinning() = runBlocking {
+        mode = "zero"
+        val result = withTimeout(2_000) { runCatching { AndroidVoiceRecorder(noAudioMs = 200).listenOver(BargeIn(), { true }, {}) } }
+        assertEquals("The microphone stopped sending audio.", result.exceptionOrNull()?.message)
+        assertTrue(reads.get() in 2..40)
         assertEquals(1, released.get())
     }
 
@@ -204,11 +233,18 @@ class AndroidVoiceRecorderTest {
         }
     }
 
+    @Implements(AcousticEchoCanceler::class)
+    class EchoCancelling {
+        companion object {
+            @JvmStatic @Implementation fun isAvailable() = false
+        }
+    }
+
     companion object {
         private val gateway = GatewayUrl.parse("https://fixture.example")
         @Volatile private var mode = "empty"
-        private var entered = CountDownLatch(1)
-        private var unblock = CountDownLatch(1)
+        @Volatile private var entered = CountDownLatch(1)
+        @Volatile private var unblock = CountDownLatch(1)
         private val opened = AtomicInteger()
         private val reads = AtomicInteger()
         private val released = AtomicInteger()
