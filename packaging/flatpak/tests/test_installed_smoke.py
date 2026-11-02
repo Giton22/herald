@@ -100,8 +100,9 @@ class InstalledSmokeTest(unittest.TestCase):
     def test_page_reloaded_by_the_resize_cannot_pass_the_second_click(self):
         app = Mock()
         app.poll.return_value = None
-        # Moved button, and the first click's colour again: what a reloaded page shows after one more click.
-        shown = {smoke.BUTTON: [(390, 360)], smoke.CLICKED: [(0, 0)] * 2000}
+        # Moved button, the loaded colour and the first click's colour again: what a reloaded page shows after one
+        # more click. A check for the loaded colour alone would pass here.
+        shown = {smoke.BUTTON: [(390, 360)], smoke.LOADED: [(0, 0)] * 2000, smoke.CLICKED: [(0, 0)] * 2000}
         with patch.object(smoke, 'run', return_value='WIDTH=1200\nHEIGHT=800'), \
              patch.object(smoke, 'pixels', side_effect=shown.get), \
              patch.object(smoke.time, 'monotonic', side_effect=[0, 0, 0, 0, 0, 0, 31]), \
