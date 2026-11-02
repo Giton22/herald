@@ -19,7 +19,7 @@
     <string name="desktop_saved_to">Mentve ide: %1$s</string>
     <string name="desktop_save_failed">Nem sikerült menteni: %1$s</string>
 
-    <string name="desktop_pdf_unsupported">A PDF-ek még nem nyílnak meg az asztali alkalmazásban. A Mentéssel megkapod a fájlt.</string>
+    <string name="desktop_pdf_unsupported">A PDF-ek még nem nyílnak meg az asztali alkalmazásban. A fájlt elmentheted.</string>
     <string name="desktop_widgets_unsupported">Az asztali alkalmazás ezen buildjében a widgetek nem jelennek meg.</string>
     <string name="desktop_phone_tools_need_phone">A telefonos eszközök Android telefonon, a Kyllene-ből működnek.</string>
 

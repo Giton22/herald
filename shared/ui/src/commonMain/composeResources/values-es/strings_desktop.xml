@@ -19,7 +19,7 @@
     <string name="desktop_saved_to">Guardado en %1$s</string>
     <string name="desktop_save_failed">No se pudo guardar: %1$s</string>
 
-    <string name="desktop_pdf_unsupported">Los PDF aún no se abren en la aplicación de escritorio. Con Guardar obtienes el archivo.</string>
+    <string name="desktop_pdf_unsupported">Los PDF aún no se abren en la aplicación de escritorio. Puedes guardar el archivo.</string>
     <string name="desktop_widgets_unsupported">Los widgets no se muestran en esta versión de la aplicación de escritorio.</string>
     <string name="desktop_phone_tools_need_phone">Las herramientas del teléfono funcionan con Kyllene en un teléfono Android.</string>
 

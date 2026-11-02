@@ -19,7 +19,7 @@
     <string name="desktop_saved_to">已保存到 %1$s</string>
     <string name="desktop_save_failed">无法保存：%1$s</string>
 
-    <string name="desktop_pdf_unsupported">桌面版暂时无法打开 PDF。点“保存”即可获取文件。</string>
+    <string name="desktop_pdf_unsupported">桌面版暂时无法打开 PDF。你可以保存该文件。</string>
     <string name="desktop_widgets_unsupported">此版本的桌面版不显示小组件。</string>
     <string name="desktop_phone_tools_need_phone">手机工具需要在 Android 手机上的 Kyllene 中使用。</string>
 

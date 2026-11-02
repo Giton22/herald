@@ -19,7 +19,7 @@
     <string name="desktop_saved_to">Gespeichert unter %1$s</string>
     <string name="desktop_save_failed">Speichern fehlgeschlagen: %1$s</string>
 
-    <string name="desktop_pdf_unsupported">PDFs öffnen sich in der Desktop-App noch nicht. Mit „Speichern“ bekommst du die Datei.</string>
+    <string name="desktop_pdf_unsupported">PDFs öffnen sich in der Desktop-App noch nicht. Du kannst die Datei speichern.</string>
     <string name="desktop_widgets_unsupported">Widgets werden in diesem Build der Desktop-App nicht angezeigt.</string>
     <string name="desktop_phone_tools_need_phone">Telefon-Tools funktionieren mit Kyllene auf einem Android-Telefon.</string>
 

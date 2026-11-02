@@ -19,7 +19,7 @@
     <string name="desktop_saved_to">Salvo em %1$s</string>
     <string name="desktop_save_failed">Não foi possível salvar: %1$s</string>
 
-    <string name="desktop_pdf_unsupported">PDFs ainda não abrem no app para desktop. Use Salvar para obter o arquivo.</string>
+    <string name="desktop_pdf_unsupported">PDFs ainda não abrem no app para desktop. Você pode salvar o arquivo.</string>
     <string name="desktop_widgets_unsupported">Os widgets não aparecem nesta versão do app para desktop.</string>
     <string name="desktop_phone_tools_need_phone">As ferramentas do telefone funcionam com o Kyllene em um telefone Android.</string>
 
