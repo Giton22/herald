@@ -42,8 +42,10 @@ def stable_files(directory, version, date):
     (directory / (STABLE + '.desktop')).write_text(desktop)
     metainfo = (directory / (DEVEL + '.metainfo.xml')).read_text()
     metainfo = metainfo.replace(DEVEL, STABLE).replace('<name>Kyllene (Development)</name>', '<name>Kyllene</name>')
+    # A pre-release (1.2.3-rc.1) is a development release to software centres.
+    kind = 'development' if '-' in version else 'stable'
     metainfo, count = re.subn(r'<releases>.*?</releases>',
-                              f'<releases><release version="{version}" date="{date}" type="stable"/></releases>',
+                              f'<releases><release version="{version}" date="{date}" type="{kind}"/></releases>',
                               metainfo, flags=re.S)
     if count != 1:
         raise ValueError('Expected one <releases> element in the metainfo')

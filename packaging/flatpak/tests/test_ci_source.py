@@ -105,6 +105,9 @@ class CiSourceTest(unittest.TestCase):
             self.assertEqual(prepare(devel_files(root), 'flatpak-release', '--release', '1.2.3-rc.1').returncode, 0)
             prepared = json.loads((root / 'release.json').read_text())
             self.assertIn(' -PappVersion=1.2.3-rc.1', json.dumps(prepared))
+            metainfo = (root / 'app.kyllene.Kyllene.metainfo.xml').read_text()
+            self.assertIn('<release version="1.2.3-rc.1"', metainfo)
+            self.assertIn('type="development"', metainfo)
 
     def test_a_release_version_is_one_plain_word(self):
         for version in ('1.2', 'v1.2.3', '1.2.3; rm -rf /', '1.2.3 -PreleasesRepo=x', '1.2.3-$(id)'):
