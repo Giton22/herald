@@ -1,0 +1,478 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The sessions list and sidebar and the pages it opens, in Brazilian Portuguese. Keys and placeholders as in values/. -->
+<resources>
+    <!-- Sidebar: header, switch, pages -->
+    <string name="sessions_mode_chats">Conversas</string>
+    <string name="sessions_mode_bots">Bots</string>
+    <string name="sessions_new_chat">Nova conversa</string>
+    <string name="sessions_search_chats">Buscar conversas</string>
+    <string name="sessions_close_search">Fechar busca</string>
+    <string name="sessions_account">Conta</string>
+    <string name="sessions_account_and_gateways">Conta e gateways</string>
+    <string name="sessions_nav_inbox">Caixa de entrada</string>
+    <string name="sessions_nav_scheduled">Agendado</string>
+    <string name="sessions_nav_insights">Estatísticas</string>
+    <string name="sessions_nav_capabilities">Recursos</string>
+    <string name="sessions_nav_plugins">Plugins</string>
+    <string name="sessions_nav_config">Configuração</string>
+    <string name="sessions_nav_archived">Arquivadas</string>
+    <plurals name="sessions_unread_count">
+        <item quantity="one">%1$d não lida</item>
+        <item quantity="other">%1$d não lidas</item>
+    </plurals>
+
+    <!-- Connection -->
+    <string name="sessions_connection_connected">Conectado</string>
+    <string name="sessions_connection_not_connected">Desconectado</string>
+    <string name="sessions_connection_signed_out">Sessão encerrada</string>
+    <string name="sessions_connection_reconnecting">Reconectando</string>
+    <string name="sessions_connection_connecting">Conectando</string>
+
+    <!-- The list -->
+    <string name="sessions_no_matches">Nenhum resultado</string>
+    <string name="sessions_no_matches_detail">A busca considera títulos, IDs de sessão e o texto das mensagens.</string>
+    <string name="sessions_saved_copy">Cópia salva · %1$s</string>
+    <string name="sessions_saved_copy_unreachable">%1$s. Não é possível acessar o Hermes agora.</string>
+    <string name="sessions_try_again">Tentar de novo</string>
+    <string name="sessions_load_failed">Não foi possível carregar as sessões</string>
+    <string name="sessions_load_failed_detail">Não foi possível carregar as sessões. %1$s</string>
+    <string name="sessions_empty_project">Nenhuma conversa neste projeto.</string>
+    <string name="sessions_empty">Suas conversas vão aparecer aqui.</string>
+    <string name="sessions_none_running">Nada em andamento agora.</string>
+    <string name="sessions_none_waiting">Nada esperando por você agora.</string>
+    <string name="sessions_nothing_archived">Nada arquivado</string>
+    <string name="sessions_nothing_archived_detail">Sessões arquivadas ficam ocultas em Recentes, mas podem ser retomadas.</string>
+    <string name="sessions_filter_all">Todas</string>
+    <string name="sessions_filter_needs_you">Esperam você</string>
+    <string name="sessions_section_threads">Tópicos</string>
+    <string name="sessions_section_pinned">Fixadas</string>
+    <string name="sessions_show_threads">Mostrar tópicos</string>
+    <string name="sessions_hide_threads">Ocultar tópicos</string>
+    <string name="sessions_show_pinned">Mostrar conversas fixadas</string>
+    <string name="sessions_hide_pinned">Ocultar conversas fixadas</string>
+    <string name="sessions_collapsed">Recolhido</string>
+    <string name="sessions_expanded">Expandido</string>
+    <string name="sessions_threads_drag_to_reorder">Tópicos · arraste para reordenar</string>
+    <string name="sessions_done">Concluído</string>
+    <string name="sessions_drag_thread">Arrastar %1$s</string>
+    <string name="sessions_session_actions">Ações da sessão</string>
+    <string name="sessions_thread">Tópico</string>
+    <string name="sessions_in_project">No projeto %1$s</string>
+    <string name="sessions_dismiss">Fechar</string>
+
+    <!-- A row's status line -->
+    <string name="sessions_status_running">Em andamento</string>
+    <string name="sessions_status_new_reply">Nova resposta</string>
+    <string name="sessions_status_draft">Rascunho</string>
+    <string name="sessions_waiting_approval">Precisa de aprovação</string>
+    <string name="sessions_waiting_question">Tem uma pergunta</string>
+    <string name="sessions_waiting_input">Precisa de uma resposta</string>
+    <string name="sessions_waiting_unknown">Esperando você</string>
+
+    <!-- Ages -->
+    <string name="sessions_age_now">agora</string>
+    <string name="sessions_age_minutes">%1$d min</string>
+    <string name="sessions_age_hours">%1$d h</string>
+    <string name="sessions_age_days">%1$d d</string>
+    <string name="sessions_age_weeks">%1$d sem</string>
+    <string name="sessions_age_months">%1$d m</string>
+    <string name="sessions_age_years">%1$d a</string>
+    <string name="sessions_just_now">agora mesmo</string>
+    <plurals name="sessions_minutes_ago">
+        <item quantity="one">há %1$d minuto</item>
+        <item quantity="other">há %1$d minutos</item>
+    </plurals>
+    <plurals name="sessions_hours_ago">
+        <item quantity="one">há %1$d hora</item>
+        <item quantity="other">há %1$d horas</item>
+    </plurals>
+    <plurals name="sessions_days_ago">
+        <item quantity="one">há %1$d dia</item>
+        <item quantity="other">há %1$d dias</item>
+    </plurals>
+    <plurals name="sessions_weeks_ago">
+        <item quantity="one">há %1$d semana</item>
+        <item quantity="other">há %1$d semanas</item>
+    </plurals>
+    <plurals name="sessions_months_ago">
+        <item quantity="one">há %1$d mês</item>
+        <item quantity="other">há %1$d meses</item>
+    </plurals>
+    <plurals name="sessions_years_ago">
+        <item quantity="one">há %1$d ano</item>
+        <item quantity="other">há %1$d anos</item>
+    </plurals>
+    <string name="sessions_active_ago">Ativa %1$s</string>
+
+    <!-- A chat's actions -->
+    <string name="sessions_pin">Fixar</string>
+    <string name="sessions_unpin">Desafixar</string>
+    <string name="sessions_archive">Arquivar</string>
+    <string name="sessions_unarchive">Desarquivar</string>
+    <string name="sessions_archived">Arquivada</string>
+    <string name="sessions_unarchived">Desarquivada</string>
+    <string name="sessions_undo_toast">%1$s: “%2$s”</string>
+    <string name="sessions_undo">Desfazer</string>
+    <string name="sessions_delete">Excluir</string>
+    <string name="sessions_rename">Renomear</string>
+    <string name="sessions_save">Salvar</string>
+    <string name="sessions_create">Criar</string>
+    <string name="sessions_open_in_new_window">Abrir em nova janela</string>
+    <string name="sessions_make_a_thread">Transformar em tópico</string>
+    <string name="sessions_make_thread">Transformar em tópico</string>
+    <string name="sessions_start_fresh">Recomeçar</string>
+    <string name="sessions_usage_and_cost">Uso e custo</string>
+    <string name="sessions_background_processes">Processos em segundo plano</string>
+    <string name="sessions_checkpoints">Checkpoints</string>
+    <string name="sessions_goal_and_loops">Objetivo e loops</string>
+    <string name="sessions_export_markdown">Exportar como Markdown</string>
+    <string name="sessions_copy_session_id">Copiar ID da sessão</string>
+    <string name="sessions_rename_chat">Renomear conversa</string>
+    <string name="sessions_rename_chat_detail">Deixe vazio para limpar o título.</string>
+    <string name="sessions_delete_chat_title">Excluir conversa?</string>
+    <string name="sessions_delete_chat_detail">“%1$s” e as mensagens dela são removidas do gateway. Isso não pode ser desfeito.</string>
+
+    <!-- Threads -->
+    <string name="sessions_rename_thread">Renomear tópico</string>
+    <string name="sessions_rename_thread_detail">A conversa dele também é renomeada, e cada nova conversa recebe esse nome.</string>
+    <string name="sessions_move_up">Mover para cima</string>
+    <string name="sessions_move_down">Mover para baixo</string>
+    <string name="sessions_reorder">Reordenar</string>
+    <string name="sessions_remove_thread">Remover tópico</string>
+    <string name="sessions_start_thread_fresh_title">Recomeçar %1$s?</string>
+    <string name="sessions_start_thread_fresh_detail">A conversa dele é arquivada como “%1$s · data e hora” e uma nova, vazia, toma o lugar. Conversas arquivadas são mantidas por 30 dias.</string>
+    <string name="sessions_thread_make_failed">Não foi possível criar o tópico.</string>
+    <string name="sessions_thread_remove_failed">Não foi possível remover o tópico.</string>
+    <string name="sessions_thread_rename_failed">Não foi possível renomear o tópico.</string>
+    <string name="sessions_thread_move_failed">Não foi possível mover o tópico.</string>
+    <string name="sessions_thread_order_failed">Não foi possível salvar a ordem.</string>
+    <string name="sessions_thread_fresh_failed">Não foi possível recomeçar o tópico.</string>
+
+    <!-- Projects -->
+    <string name="sessions_all_projects">Todos os projetos</string>
+    <string name="sessions_new_project">Novo projeto</string>
+    <string name="sessions_project_options">Opções de %1$s</string>
+    <string name="sessions_choose_project">Escolher um projeto</string>
+    <string name="sessions_delete_project">Excluir projeto</string>
+    <string name="sessions_save_as_project">Salvar como projeto</string>
+    <string name="sessions_choose_folder">Escolher uma pasta</string>
+    <string name="sessions_new_project_detail">As conversas da pasta ficam agrupadas no projeto, e uma nova conversa iniciada nele roda lá.</string>
+    <string name="sessions_use_this_folder">Usar esta pasta</string>
+    <string name="sessions_project_name">Nome</string>
+    <string name="sessions_project_folder">Pasta no gateway</string>
+    <string name="sessions_project_folder_hint">Opcional. Uma pasta na máquina onde o Hermes roda.</string>
+    <string name="sessions_browse_folders">Procurar pastas</string>
+    <string name="sessions_folder_list_failed">Não foi possível listar esta pasta.</string>
+    <string name="sessions_folder_up">Pasta acima</string>
+    <string name="sessions_folder_home">Pasta pessoal</string>
+    <string name="sessions_folder_new">Nova pasta</string>
+    <string name="sessions_folder_filter">Filtrar</string>
+    <string name="sessions_folder_new_name">Nome da nova pasta</string>
+    <string name="sessions_folder_empty">Nenhuma pasta aqui.</string>
+    <string name="sessions_folder_more">Algumas pastas podem não aparecer aqui. Digite o começo de um nome para encontrá-la.</string>
+    <string name="sessions_rename_project">Renomear projeto</string>
+    <string name="sessions_delete_project_title">Excluir projeto?</string>
+    <string name="sessions_delete_project_detail">“%1$s” é removido do gateway. As conversas dele continuam e voltam a ser agrupadas pela pasta.</string>
+    <string name="sessions_not_connected">Desconectado.</string>
+    <string name="sessions_cant_make_folders">Esta versão não consegue criar pastas.</string>
+    <string name="sessions_gateway_cant_change_projects">Este gateway não consegue alterar projetos.</string>
+    <string name="sessions_project_change_failed">Não foi possível alterar o projeto.</string>
+
+    <!-- Account and profiles -->
+    <string name="sessions_signed_in">Conectado</string>
+    <string name="sessions_profile_named">Perfil: %1$s</string>
+    <string name="sessions_refresh_chats">Atualizar conversas</string>
+    <string name="sessions_refreshing_chats">Atualizando conversas…</string>
+    <string name="sessions_retry_connection">Reconectar agora</string>
+    <string name="sessions_sign_out">Sair</string>
+    <string name="sessions_switch_gateway">Trocar ou adicionar um gateway</string>
+    <string name="sessions_profiles">Perfis</string>
+    <string name="sessions_profiles_detail">Cada perfil é um agente próprio, com suas conversas, memória e modelo.</string>
+    <string name="sessions_profiles_add_hint">Adicione perfis na máquina do gateway com “hermes profile create”.</string>
+    <string name="sessions_profile_default">Padrão</string>
+    <string name="sessions_profile_active">Ativo</string>
+
+    <!-- Other chats -->
+    <string name="sessions_badge">Sessões</string>
+    <plurals name="sessions_badge_need_you">
+        <item quantity="one">Sessões, %1$d espera você</item>
+        <item quantity="other">Sessões, %1$d esperam você</item>
+    </plurals>
+    <string name="sessions_other_reply">Resposta em %1$s</string>
+    <string name="sessions_other_approval">%1$s precisa do seu OK</string>
+    <string name="sessions_other_question">%1$s precisa de uma resposta</string>
+    <string name="sessions_other_input">%1$s precisa que você digite algo</string>
+    <plurals name="sessions_other_and_more">
+        <item quantity="one">%1$s, e mais %2$d</item>
+        <item quantity="other">%1$s, e mais %2$d</item>
+    </plurals>
+
+    <string name="sessions_with_detail">%1$s: %2$s</string>
+
+    <!-- Shared words -->
+    <string name="sessions_couldnt_load">Não foi possível carregar</string>
+    <string name="sessions_loading">Carregando…</string>
+    <string name="sessions_open">Abrir</string>
+    <string name="sessions_edit">Editar</string>
+    <string name="sessions_discard">Descartar</string>
+    <string name="sessions_keep_editing">Continuar editando</string>
+    <string name="sessions_replace">Substituir</string>
+    <string name="sessions_optional">Opcional</string>
+    <string name="sessions_turn_off">Desativar</string>
+    <string name="sessions_change_ellipsis">Alterar…</string>
+    <string name="sessions_more_for">Mais sobre %1$s</string>
+    <string name="sessions_in_time">em %1$s</string>
+    <string name="sessions_just_now_alone">Agora mesmo</string>
+
+    <!-- Scheduled jobs and routines -->
+    <string name="sessions_bot_routines">Rotinas de %1$s</string>
+    <plurals name="sessions_jobs_count">
+        <item quantity="one">%1$d tarefa · cada execução abre como conversa</item>
+        <item quantity="other">%1$d tarefas · cada execução abre como conversa</item>
+    </plurals>
+    <plurals name="sessions_routines_count">
+        <item quantity="one">%1$d rotina · roda como %2$s</item>
+        <item quantity="other">%1$d rotinas · cada uma roda como %2$s</item>
+    </plurals>
+    <string name="sessions_new_job">Nova tarefa</string>
+    <string name="sessions_new_routine">Nova rotina</string>
+    <string name="sessions_edit_job">Editar tarefa</string>
+    <string name="sessions_edit_routine">Editar rotina</string>
+    <string name="sessions_delete_job">Excluir tarefa</string>
+    <string name="sessions_delete_routine">Excluir rotina</string>
+    <string name="sessions_delete_job_title">Excluir tarefa?</string>
+    <string name="sessions_delete_routine_title">Excluir rotina?</string>
+    <string name="sessions_delete_job_detail">“%1$s” deixa de rodar. As conversas das execuções anteriores continuam.</string>
+    <string name="sessions_discard_changes_title">Descartar alterações?</string>
+    <string name="sessions_discard_job_detail">O que você mudou nesta tarefa ainda não foi salvo.</string>
+    <string name="sessions_discard_routine_detail">O que você mudou nesta rotina ainda não foi salvo.</string>
+    <string name="sessions_pick_job">Escolha uma tarefa</string>
+    <string name="sessions_pick_routine">Escolha uma rotina</string>
+    <string name="sessions_pick_job_detail">O prompt dela, para onde ela envia e as execuções aparecem aqui.</string>
+    <string name="sessions_jobs_load_failed">Não foi possível carregar as tarefas agendadas</string>
+    <string name="sessions_routines_load_failed">Não foi possível carregar as rotinas</string>
+    <string name="sessions_no_jobs">Nenhuma tarefa agendada</string>
+    <string name="sessions_no_jobs_detail">Faça o agente fazer algo em um horário, como um resumo matinal. Cada execução abre aqui como conversa.</string>
+    <string name="sessions_no_routines">Nenhuma rotina ainda</string>
+    <string name="sessions_no_routines_detail">Faça %1$s fazer algo em um horário, como um resumo matinal. Ela roda como %1$s, com a própria memória e skills, e pode informar na conversa dele.</string>
+    <string name="sessions_run_now">Executar agora</string>
+    <string name="sessions_pause">Pausar</string>
+    <string name="sessions_resume">Retomar</string>
+    <string name="sessions_runs">Execuções</string>
+    <string name="sessions_runs_load_failed">Não foi possível carregar as execuções. %1$s</string>
+    <string name="sessions_no_runs">Nenhuma execução ainda. Cada uma abre aqui como conversa.</string>
+    <plurals name="sessions_run_messages">
+        <item quantity="one">%1$d msg</item>
+        <item quantity="other">%1$d msgs</item>
+    </plurals>
+    <string name="sessions_delivers_to">Envia para %1$s</string>
+    <string name="sessions_delivery_local">Local (só salvar)</string>
+    <string name="sessions_delivery_bot_chat">a conversa de %1$s</string>
+    <string name="sessions_delivery_the_bot_chat">a conversa do bot</string>
+    <string name="sessions_job_paused">pausada</string>
+    <string name="sessions_job_done">concluída</string>
+    <string name="sessions_job_finished">encerrada</string>
+    <string name="sessions_job_missed">perdida</string>
+    <string name="sessions_job_failed">falhou</string>
+    <string name="sessions_job_last_run">última execução</string>
+    <string name="sessions_job_last_run_failed">a última execução falhou</string>
+    <string name="sessions_job_next_run">próxima execução</string>
+    <string name="sessions_job_next">próxima %1$s</string>
+    <string name="sessions_job_due_now">para agora</string>
+    <string name="sessions_schedule_daily">Todo dia às %1$s</string>
+    <string name="sessions_schedule_weekdays">Dias úteis às %1$s</string>
+    <string name="sessions_schedule_sundays">Domingos às %1$s</string>
+    <string name="sessions_schedule_mondays">Segundas às %1$s</string>
+    <string name="sessions_schedule_tuesdays">Terças às %1$s</string>
+    <string name="sessions_schedule_wednesdays">Quartas às %1$s</string>
+    <string name="sessions_schedule_thursdays">Quintas às %1$s</string>
+    <string name="sessions_schedule_fridays">Sextas às %1$s</string>
+    <string name="sessions_schedule_saturdays">Sábados às %1$s</string>
+    <string name="sessions_job_prompt">Prompt</string>
+    <string name="sessions_job_prompt_example">Resuma meus e-mails não lidos e sinalize o que for urgente</string>
+    <string name="sessions_job_prompt_hint">O que o agente faz em cada execução, como uma nova conversa.</string>
+    <string name="sessions_routine_prompt_hint">O que %1$s faz em cada execução, como ele mesmo, com a própria memória e skills.</string>
+    <string name="sessions_job_schedule">Horário</string>
+    <string name="sessions_job_schedule_hint_new">Por exemplo “every 2h”, “0 9 * * *”, “every monday 9am”, ou “in 30m” para uma vez.</string>
+    <string name="sessions_job_schedule_hint_edit">Deixe como está para manter o horário atual. Tarefas únicas começam vazias.</string>
+    <string name="sessions_preset_every_30_min">A cada 30 min</string>
+    <string name="sessions_preset_hourly">A cada hora</string>
+    <string name="sessions_preset_daily">Todo dia 9:00</string>
+    <string name="sessions_preset_weekdays">Dias úteis 9:00</string>
+    <string name="sessions_preset_mondays">Segundas 9:00</string>
+    <string name="sessions_preset_once">Uma vez, em 1 h</string>
+    <string name="sessions_routine_name_example">Resumo matinal</string>
+    <string name="sessions_deliver_to">Enviar para</string>
+    <string name="sessions_deliver_no_home">%1$s não tem canal principal no gateway, então as execuções não teriam para onde ir.</string>
+    <string name="sessions_deliver_bot_chat_detail">O resultado de cada execução chega em %1$s como uma mensagem que ele lê e responde, então cada execução custa a ele mais um turno.</string>
+    <string name="sessions_schedule_job">Agendar tarefa</string>
+    <string name="sessions_schedule_routine">Agendar rotina</string>
+    <string name="sessions_job_gone">Esta tarefa foi excluída no gateway, então não há nada para salvar.</string>
+    <string name="sessions_job_needs_name">Dê um nome à rotina.</string>
+    <string name="sessions_job_needs_prompt">Diga o que o agente deve fazer em cada execução.</string>
+    <string name="sessions_job_needs_schedule">Diga quando ela deve rodar.</string>
+    <string name="sessions_job_scheduled">Tarefa agendada</string>
+    <string name="sessions_job_saved">Tarefa salva</string>
+    <string name="sessions_job_deleted">Tarefa excluída</string>
+    <string name="sessions_routine_scheduled">Rotina agendada</string>
+    <string name="sessions_routine_saved">Rotina salva</string>
+    <string name="sessions_routine_deleted">Rotina excluída</string>
+    <string name="sessions_job_run_started">Execução iniciada</string>
+    <string name="sessions_job_run_failed">Não foi possível iniciar uma execução</string>
+    <string name="sessions_job_pause_failed">Não foi possível pausar a tarefa</string>
+    <string name="sessions_job_resume_failed">Não foi possível retomar a tarefa</string>
+    <string name="sessions_job_save_failed">Não foi possível salvar a tarefa</string>
+    <string name="sessions_job_delete_failed">Não foi possível excluir a tarefa</string>
+
+    <!-- Insights -->
+    <plurals name="sessions_insights_days">
+        <item quantity="one">%1$d dia</item>
+        <item quantity="other">%1$d dias</item>
+    </plurals>
+    <string name="sessions_insights_load_failed">Não foi possível carregar as estatísticas</string>
+    <string name="sessions_insights_empty">Nada usado ainda</string>
+    <string name="sessions_insights_empty_detail">As conversas deste período, e quanto custaram, aparecem aqui.</string>
+    <string name="sessions_insights_billed">cobrado</string>
+    <string name="sessions_insights_estimated">custo estimado</string>
+    <plurals name="sessions_insights_chats">
+        <item quantity="one">conversa</item>
+        <item quantity="other">conversas</item>
+    </plurals>
+    <string name="sessions_insights_tokens_in_out">tokens de entrada e saída</string>
+    <string name="sessions_insights_from_cache">do prompt vindo do cache</string>
+    <string name="sessions_insights_models">Modelos</string>
+    <string name="sessions_insights_tokens">%1$s tokens</string>
+    <string name="sessions_insights_tool_calls">Chamadas de ferramentas</string>
+    <string name="sessions_insights_tool_calls_spoken">%1$s, %2$s chamadas</string>
+    <string name="sessions_insights_skill_uses">Uso de skills</string>
+    <string name="sessions_insights_skill_uses_spoken">%1$s, %2$s usos</string>
+    <string name="sessions_insights_tokens_by_day">Tokens por dia</string>
+    <string name="sessions_insights_peak">Pico %1$s · %2$s</string>
+    <plurals name="sessions_insights_day_chats">
+        <item quantity="one">%1$d conversa</item>
+        <item quantity="other">%1$d conversas</item>
+    </plurals>
+    <string name="sessions_insights_hint_touch">Toque em um dia para ver os números.</string>
+    <string name="sessions_insights_hint_pointer">Aponte para um dia para ver os números.</string>
+    <string name="sessions_insights_show_numbers">Mostrar os números</string>
+    <string name="sessions_insights_day_spoken">%1$s: %2$s tokens</string>
+    <string name="sessions_short_date">%2$s de %1$s</string>
+    <string name="sessions_month_1">jan.</string>
+    <string name="sessions_month_2">fev.</string>
+    <string name="sessions_month_3">mar.</string>
+    <string name="sessions_month_4">abr.</string>
+    <string name="sessions_month_5">mai.</string>
+    <string name="sessions_month_6">jun.</string>
+    <string name="sessions_month_7">jul.</string>
+    <string name="sessions_month_8">ago.</string>
+    <string name="sessions_month_9">set.</string>
+    <string name="sessions_month_10">out.</string>
+    <string name="sessions_month_11">nov.</string>
+    <string name="sessions_month_12">dez.</string>
+
+    <!-- Capabilities -->
+    <string name="sessions_capabilities_detail">O que o agente pode usar em novas conversas</string>
+    <string name="sessions_tab_skills">Skills</string>
+    <string name="sessions_tab_toolsets">Conjuntos</string>
+    <string name="sessions_tab_mcp">MCP</string>
+    <string name="sessions_no_toolsets">Nenhum conjunto de ferramentas configurado.</string>
+    <string name="sessions_toolsets_hint">Os conjuntos de ferramentas que o agente recebe em novas conversas.</string>
+    <string name="sessions_no_mcp_servers">Nenhum servidor MCP. Adicione um no gateway com `hermes mcp add`, ou pelo Hermes Desktop.</string>
+    <string name="sessions_changes_next_chat">As mudanças valem a partir da próxima conversa.</string>
+    <string name="sessions_no_skills">Nenhuma skill ainda. O agente as escreve enquanto aprende, ou instale-as com `hermes skills`.</string>
+    <plurals name="sessions_search_skills">
+        <item quantity="one">Buscar em %1$d skill</item>
+        <item quantity="other">Buscar em %1$d skills</item>
+    </plurals>
+    <string name="sessions_browse_hub">Explorar o hub</string>
+    <string name="sessions_no_skills_match">Nenhuma skill corresponde a “%1$s”.</string>
+    <string name="sessions_skills_other">outras</string>
+    <string name="sessions_skill_tag_hub">hub</string>
+    <string name="sessions_skill_tag_learned">aprendida</string>
+    <string name="sessions_skill_tag_external">externa</string>
+    <string name="sessions_toolset_needs_setup">precisa de configuração</string>
+    <plurals name="sessions_tools_count">
+        <item quantity="one">%1$d ferramenta</item>
+        <item quantity="other">%1$d ferramentas</item>
+    </plurals>
+    <string name="sessions_mcp_from_plugin">de %1$s</string>
+    <string name="sessions_mcp_set_by_plugin">definido por %1$s</string>
+    <string name="sessions_locked_note">não pode ser alterado aqui</string>
+    <string name="sessions_switch_on_locked">Ativado, %1$s</string>
+    <string name="sessions_switch_off_locked">Desativado, %1$s</string>
+    <string name="sessions_mcp_test">Testar</string>
+    <plurals name="sessions_mcp_connected_tools">
+        <item quantity="one">Conectado · %1$d ferramenta</item>
+        <item quantity="other">Conectado · %1$d ferramentas</item>
+    </plurals>
+    <string name="sessions_mcp_connect_failed">Não foi possível conectar.</string>
+    <string name="sessions_turn_on_failed">Não foi possível ativar %1$s</string>
+    <string name="sessions_turn_off_failed">Não foi possível desativar %1$s</string>
+    <string name="sessions_uninstall">Desinstalar</string>
+    <string name="sessions_uninstall_skill_detail">Remover %1$s de %2$s? Desativar a mantém instalada.</string>
+    <string name="sessions_uninstall_skill_main_detail">Remover %1$s do perfil principal? Desativar a mantém instalada.</string>
+
+    <!-- Skills hub -->
+    <string name="sessions_hub_title">Hub de skills</string>
+    <string name="sessions_hub_installs_into">Instala em %1$s</string>
+    <string name="sessions_hub_installs_into_main">Instala no perfil principal</string>
+    <string name="sessions_hub_update_all">Atualizar tudo</string>
+    <string name="sessions_hub_unsupported">Este gateway ainda não tem o hub de skills.</string>
+    <string name="sessions_hub_search">Buscar no hub</string>
+    <string name="sessions_hub_timed_out">Algumas fontes não responderam: %1$s</string>
+    <string name="sessions_hub_no_match">Nenhuma skill corresponde à sua busca.</string>
+    <string name="sessions_hub_featured">Em destaque</string>
+    <string name="sessions_hub_official">Oficiais</string>
+    <string name="sessions_hub_official_empty">Nada no catálogo oficial.</string>
+    <string name="sessions_hub_installed_tag">Instalada</string>
+    <string name="sessions_hub_blocked_by_scan">Bloqueada pela verificação de segurança</string>
+    <string name="sessions_hub_view_scan">Ver verificação</string>
+    <string name="sessions_hub_scan_title">Verificação: %1$s</string>
+    <string name="sessions_hub_install_anyway">Instalar mesmo assim</string>
+    <string name="sessions_hub_scan_failed">Não foi possível verificar</string>
+    <string name="sessions_hub_check_failed">Não foi possível conferir %1$s</string>
+    <string name="sessions_hub_blocked">%1$s foi bloqueada pela verificação de segurança.</string>
+    <string name="sessions_hub_installed">%1$s instalada. Vale a partir da próxima conversa.</string>
+    <string name="sessions_hub_removed">%1$s removida. Vale a partir da próxima conversa.</string>
+    <string name="sessions_hub_updated">Skills atualizadas. Vale a partir da próxima conversa.</string>
+    <string name="sessions_hub_install_failed">Não foi possível instalar %1$s</string>
+    <string name="sessions_hub_remove_failed">Não foi possível remover %1$s</string>
+    <string name="sessions_hub_update_failed">Não foi possível atualizar as skills</string>
+
+    <!-- Config -->
+    <string name="sessions_config_detail">As configurações do próprio Hermes, salvas no config.yaml dele. A maioria vale a partir da próxima conversa.</string>
+    <string name="sessions_config_edit_yaml">Editar config.yaml</string>
+    <string name="sessions_config_yaml_row_detail">O arquivo inteiro, para tudo que não está na lista</string>
+    <string name="sessions_config_yaml_detail">O arquivo de configuração completo do perfil.</string>
+    <string name="sessions_config_all">Todas as configurações</string>
+    <string name="sessions_config_all_detail">Cada configuração que o gateway conhece, pelo agrupamento dele.</string>
+    <string name="sessions_config_all_row_detail">Cada campo, pelo agrupamento do gateway</string>
+    <plurals name="sessions_config_search">
+        <item quantity="one">Buscar em %1$d configuração</item>
+        <item quantity="other">Buscar em %1$d configurações</item>
+    </plurals>
+    <plurals name="sessions_config_settings">
+        <item quantity="one">%1$d configuração</item>
+        <item quantity="other">%1$d configurações</item>
+    </plurals>
+    <string name="sessions_config_first_of">As primeiras %1$d de %2$d configurações</string>
+    <string name="sessions_config_no_match">Nenhuma configuração corresponde a “%1$s”.</string>
+    <string name="sessions_config_type_more">Digite mais para refinar.</string>
+    <string name="sessions_config_none_here">Este gateway não tem nenhuma dessas configurações.</string>
+    <string name="sessions_config_voice_note">Só aparecem as configurações dos provedores escolhidos.</string>
+    <string name="sessions_config_model_note">O padrão para novas conversas; o seletor de modelo de uma conversa ainda pode mudar o dela.</string>
+    <string name="sessions_config_search_options">Buscar em %1$d</string>
+    <string name="sessions_config_other">Outro…</string>
+    <string name="sessions_config_one_per_line">Um por linha.</string>
+    <string name="sessions_copy_key">Copiar chave</string>
+    <string name="sessions_copy_value">Copiar valor</string>
+    <string name="sessions_discard_title">Descartar suas alterações?</string>
+    <string name="sessions_config_discard_detail">O config.yaml fica como estava salvo.</string>
+    <string name="sessions_config_all_off_title">Desativar todos os conjuntos de ferramentas?</string>
+    <string name="sessions_config_all_off_detail">O agente perderia a memória, o terminal, a busca na web, os subagentes e a maioria das ferramentas até que alguns sejam reativados.</string>
+    <string name="sessions_config_replace_title">Substituir config.yaml?</string>
+    <string name="sessions_config_replace_detail">O arquivo passa a ser exatamente este texto. O Hermes o lê de novo para novas conversas; algumas configurações exigem reiniciar o gateway.</string>
+    <string name="sessions_config_refresh_failed">Não foi possível atualizar</string>
+    <string name="sessions_config_save_failed">Não foi possível salvar %1$s</string>
+    <string name="sessions_config_yaml_saved">config.yaml salvo</string>
+</resources>
