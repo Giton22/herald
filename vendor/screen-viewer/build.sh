@@ -22,9 +22,13 @@ cd "$WORK"
 npm pack "@novnc/novnc@$VERSION" >/dev/null
 tar -xzf "novnc-novnc-$VERSION.tgz"
 
-# noVNC's own licence travels with the code it covers.
-cp package/LICENSE.txt "$HERE/LICENSE.noVNC.txt"
-cp package/AUTHORS "$HERE/AUTHORS.noVNC.txt"
+# noVNC's own licence travels with the code it covers, and so does pako's: the page carries noVNC's core,
+# and noVNC's core carries the pako it ships with. The notices go into dist/, because dist/ is what the
+# apps package: a licence that is not in the app that carries the code is no notice at all.
+mkdir -p "$HERE/dist"
+cp package/LICENSE.txt "$HERE/dist/LICENSE.noVNC.txt"
+cp package/AUTHORS "$HERE/dist/AUTHORS.noVNC.txt"
+cp package/vendor/pako/LICENSE "$HERE/dist/LICENSE.pako.txt"
 
 echo "Installing esbuild $ESBUILD"
 npm install --no-audit --no-fund --silent "esbuild@$ESBUILD" >/dev/null
@@ -66,10 +70,11 @@ echo "Bundling"
     --outfile=bundle.js
 
 echo "Writing the page"
-node - "$HERE" <<'NODE'
+node - "$HERE" "$VERSION" <<'NODE'
 const fs = require('fs');
 const path = require('path');
 const here = process.argv[2];
+const version = process.argv[3];
 const bundle = fs.readFileSync(path.join(process.cwd(), 'bundle.js'), 'utf8');
 const page = `<!DOCTYPE html>
 <html>
@@ -77,6 +82,15 @@ const page = `<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>Bot screen</title>
+<!--
+  This page is Kyllene's, and it carries two other people's code:
+
+    noVNC ${version} — Mozilla Public License 2.0 — https://github.com/novnc/noVNC
+    pako 1.0.3 — MIT License — https://github.com/nodeca/pako
+
+  Their licence texts and authors travel with this page: LICENSE.noVNC.txt, AUTHORS.noVNC.txt and
+  LICENSE.pako.txt, in the same place as this file.
+-->
 <style>
   html, body { margin: 0; padding: 0; height: 100%; background: #0b0b0d; overflow: hidden; }
   /* The page is the screen: the browser may not scroll it, and may not zoom it either. The viewer

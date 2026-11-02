@@ -10,7 +10,7 @@ noVNC is published as ES modules, and a browser will not load a module script fr
 classic script, and the result is committed: the app's build needs neither Node nor a network.
 
 Run `./build.sh` after upgrading noVNC, and commit what it writes. It fetches the pinned release from
-npm, patches it, bundles the page and copies noVNC's licence next to it.
+npm, patches it, bundles the page and copies the licences of everything it carries into `dist/`.
 
 ## The patches
 
@@ -69,9 +69,20 @@ The app and the page talk in two directions, and neither side trusts the other w
   is zoomed, which is how a pinch reaches the app's buttons.
 
 The page's parameters are the address of the display stream (`ws`, with the gateway's single-use
-ticket already in it) and whether the user may drive the screen (`viewOnly`).
+ticket already in it) and whether the user may drive the screen (`viewOnly`). The lease changes while the
+page is open, so the app tells the page with `setViewOnly`; the page keeps the answer until the screen is
+there to apply it in.
 
 ## Licence
 
-noVNC is MPL-2.0; the bundled page is covered by it. `LICENSE.noVNC.txt` and `AUTHORS.noVNC.txt` are
-noVNC's own, and travel with the page.
+noVNC is MPL-2.0; the bundled page is covered by it. noVNC's core carries the pako it ships with, which
+is MIT. Both licences, and noVNC's authors, travel with the page in `dist/`:
+
+- `dist/LICENSE.noVNC.txt` — noVNC's own licence.
+- `dist/AUTHORS.noVNC.txt` — who wrote it.
+- `dist/LICENSE.pako.txt` — the pako noVNC's core carries.
+
+`dist/` is what the apps package: the Android app ships it as assets, the desktop app as resources, and
+the page itself says what it carries in a comment at the top. A build that would ship the page without
+those notices does not get made — `shared/ui` checks them before the apps are built, and the Android app
+checks them again in the APK it has just built.

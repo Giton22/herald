@@ -45,6 +45,19 @@ jobs:
           :shared:core:testAndroidHostTest :shared:designsystem:testAndroidHostTest :shared:ui:testAndroidHostTest :shared:wearlink:testAndroidHostTest
           :androidApp:assembleDebug :androidApp:assembleDev :androidApp:lintDebug :wearApp:testDebugUnitTest :wearApp:assembleDebug :wearApp:lintDebug
 
+      # The viewer page carries noVNC, and noVNC carries pako. Their licences have to travel with it, in the
+      # packaged app and not only in the repository.
+      - name: The viewer carries its third-party notices
+        run: |
+          apk=androidApp/build/outputs/apk/dev/androidApp-dev.apk
+          [ -f "$apk" ] || { echo "::error::No dev APK at $apk"; exit 1; }
+          for notice in LICENSE.noVNC.txt AUTHORS.noVNC.txt LICENSE.pako.txt; do
+            unzip -l "$apk" "assets/$notice" | grep -q "$notice" || {
+              echo "::error::The viewer ships without $notice"; exit 1;
+            }
+          done
+          echo "$apk carries the viewer's licences"
+
       # WebRTC's native code looks up org.jni_zero classes by name. If R8 renames them, live voice aborts in
       # JNI_OnLoad, and only in minified builds.
       - name: R8 kept WebRTC's JNI classes
