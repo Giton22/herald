@@ -117,3 +117,18 @@ The existing desktop voice UI remains disabled until playback is implemented;
 this backend alone does not enable dictation, spoken replies or live calls.
 Unit tests use synthetic PCM. Installed capture, audio quality and live-provider
 behavior require separate qualification; synthetic frames do not prove them.
+
+## Advisory CI
+
+The separate Linux workflow runs JVM/packaging tests and exports an x86_64 bundle.
+It runs only when the desktop app's sources, the build or this packaging change.
+It builds the exact commit tested by the workflow (a pull request's merge commit)
+from a Git clone of the checkout, with the same locked build inputs, so committed
+files only: never untracked files in the runner workspace. Only the bundle is uploaded. The
+font-filter contract uses the selected SDK's fontconfig, independent of the
+runner host's fontconfig version. CI uses the native `flatpak-builder` package;
+the Builder application needs a desktop host-command service unavailable there.
+
+Keep these Linux checks non-required in branch rules. Failures stay visibly
+failed; Android checks and release publication remain independent. A built CI
+bundle still needs installed-sandbox and Bazzite acceptance before publication.
