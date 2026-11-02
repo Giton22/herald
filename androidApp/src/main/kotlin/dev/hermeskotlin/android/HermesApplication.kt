@@ -8,6 +8,7 @@ import dev.hermeskotlin.android.notify.ChatNotifications
 import dev.hermeskotlin.android.notify.ChatNotifier
 import dev.hermeskotlin.android.notify.RoomNotifier
 import dev.hermeskotlin.android.notify.WatchNotifier
+import dev.hermeskotlin.android.phone.PhoneConfirmations
 import dev.hermeskotlin.android.notify.notifyModule
 import dev.hermeskotlin.android.phone.Geofences
 import dev.hermeskotlin.android.push.PushListener
@@ -57,6 +58,9 @@ class HermesApplication : Application() {
     /** A new language: the notification channels take its names, as Settings › Notifications lists them. */
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        GlobalContext.getOrNull()?.run { get<ChatNotifications>().createChannels() }
+        GlobalContext.getOrNull()?.run {
+            get<ChatNotifications>().createChannels()
+            get<PhoneConfirmations>().createChannel()
+        }
     }
 }

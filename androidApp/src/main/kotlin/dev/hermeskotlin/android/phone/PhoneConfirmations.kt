@@ -60,9 +60,10 @@ class PhoneConfirmations(private val context: Context) {
     /**
      * The channel questions go on. It gets through Do Not Disturb (priority only) once Herald may manage Do Not
      * Disturb, which the Sound tool needs anyway: else the agent could never ask to turn it off. Created again
-     * before each question, since that access can come after the channel was first made.
+     * before each question, since that access can come after the channel was first made, and when the language
+     * changes, so it takes the new name.
      */
-    private fun createChannel() {
+    fun createChannel() {
         system?.createNotificationChannel(
             NotificationChannel(CHANNEL, text(R.string.channel_phone_tools_name), NotificationManager.IMPORTANCE_HIGH).apply {
                 description = text(R.string.channel_phone_tools_description)
