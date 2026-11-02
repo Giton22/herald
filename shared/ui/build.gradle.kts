@@ -43,6 +43,8 @@ kotlin {
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.core.ktx)
+            implementation(libs.androidx.webkit)
+            implementation(libs.kotlinx.serialization.json)
             // The Health switch asks for Health Connect's permissions through its own screen.
             implementation(libs.androidx.health.connect)
             // Screens the agent draws in the chat (experiment), themed through Material's roles.

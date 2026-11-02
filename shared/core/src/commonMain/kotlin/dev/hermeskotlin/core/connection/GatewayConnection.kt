@@ -77,6 +77,8 @@ class GatewayConnection(
 
     private var job: Job? = null
     private var url: GatewayUrl? = null
+    /** Gateway targeted by the current connection. */
+    val gateway: GatewayUrl? get() = url
     private val wake = Channel<Unit>(Channel.CONFLATED)
 
     fun start(gateway: GatewayUrl) {

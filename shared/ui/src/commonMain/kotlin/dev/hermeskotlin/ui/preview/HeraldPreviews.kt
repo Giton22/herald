@@ -104,6 +104,16 @@ import dev.hermeskotlin.ui.sessions.ProjectDraft
 import dev.hermeskotlin.core.projects.FolderListing
 import dev.hermeskotlin.ui.sessions.ProjectActionsSheet
 import dev.hermeskotlin.ui.sessions.NewProjectDialog
+import androidx.compose.foundation.background
+import com.composeunstyled.theme.Theme
+import dev.hermeskotlin.designsystem.background
+import dev.hermeskotlin.designsystem.colors
+import dev.hermeskotlin.designsystem.components.halo
+import dev.hermeskotlin.core.plugins.GitInstallResult
+import dev.hermeskotlin.ui.settings.AgentScreenSection
+import dev.hermeskotlin.ui.settings.GitInstallSheet
+import dev.hermeskotlin.ui.settings.GitInstallUi
+import dev.hermeskotlin.ui.settings.ScreenPluginStatus
 import dev.hermeskotlin.ui.settings.AppIconScreen
 import dev.hermeskotlin.ui.settings.ConnectionCheckSheet
 import dev.hermeskotlin.ui.settings.GatewayInfo
@@ -153,6 +163,9 @@ enum class PreviewScene(val label: String) {
     NewRoom("A new room"),
     BotEditor("Editing a bot"),
     Settings("Settings"),
+    AgentScreenSettings("Agent Screen settings (synthetic)"),
+    AgentScreenInstall("Agent Screen install confirmation (synthetic release configured)"),
+    AgentScreenUnreleased("Agent Screen setup unavailable (synthetic unconfigured release)"),
     AppIcons("The app icons"),
     StartInstruction("The starting instruction for new chats"),
     Gateways("Saved gateways"),
@@ -594,6 +607,34 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                     SampleChat(ChatSamples.reply)
                     SessionControlSheetView(visible = true, control = PageSamples.control, busy = null, error = null, onAction = { _, _, _ -> }, onDismiss = {})
                 }
+                PreviewScene.AgentScreenSettings, PreviewScene.AgentScreenInstall, PreviewScene.AgentScreenUnreleased -> {
+                    Box(Modifier.fillMaxSize().background(Theme[colors][background]).halo().windowInsetsPadding(WindowInsets.safeDrawing)) {
+                        Column(Modifier.fillMaxSize()) {
+                            SubpageHeader("Settings", onBack = {})
+                            Column(Modifier.padding(horizontal = 14.dp)) {
+                                AgentScreenSection(
+                                    settings = AppSettings(),
+                                    screenStatus = ScreenPluginStatus.Enabled,
+                                    onUpdate = {},
+                                    onRefreshScreenStatus = {},
+                                    onInstallScreen = {},
+                                )
+                            }
+                        }
+                        if (scene != PreviewScene.AgentScreenSettings) {
+                            // The confirmation is hypothetical; an unconfigured release refuses installation instead.
+                            GitInstallSheet(
+                                state = GitInstallUi(
+                                    visible = true,
+                                    gateway = "https://gateway.example",
+                                    result = if (scene == PreviewScene.AgentScreenUnreleased)
+                                        GitInstallResult.Refused("Agent Screen setup will be available once released.") else null,
+                                ),
+                                onDismiss = {}, onInstall = {}, onReset = {},
+                            )
+                        }
+                    }
+                }
                 PreviewScene.Settings -> SettingsView(
                     settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light, accent = accent, glow = glow),
                     info = GatewayInfo(userLabel = ChatSamples.USER, version = "0.9.0"),
@@ -792,6 +833,30 @@ private fun SidebarPreview() = HeraldPreview(PreviewScene.Sidebar)
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun ThreadsPreview() = HeraldPreview(PreviewScene.Threads)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun AgentScreenSettingsPreview() = HeraldPreview(PreviewScene.AgentScreenSettings)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun AgentScreenSettingsLightPreview() = HeraldPreview(PreviewScene.AgentScreenSettings, dark = false)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun AgentScreenInstallPreview() = HeraldPreview(PreviewScene.AgentScreenInstall)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun AgentScreenInstallLightPreview() = HeraldPreview(PreviewScene.AgentScreenInstall, dark = false)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun AgentScreenUnreleasedPreview() = HeraldPreview(PreviewScene.AgentScreenUnreleased)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun AgentScreenUnreleasedLightPreview() = HeraldPreview(PreviewScene.AgentScreenUnreleased, dark = false)
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable

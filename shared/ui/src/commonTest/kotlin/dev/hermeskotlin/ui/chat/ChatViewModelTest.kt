@@ -26,8 +26,10 @@ import dev.hermeskotlin.core.sessions.CaughtUp
 import dev.hermeskotlin.core.sessions.SeenStore
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.settings.SettingsStore
+import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.core.slash.SlashApi
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
+import dev.hermeskotlin.core.storage.KeyValueStore
 import dev.hermeskotlin.core.voice.AudioApi
 import dev.hermeskotlin.core.voice.NoDeviceDictation
 import dev.hermeskotlin.core.voice.Recording
@@ -126,6 +128,7 @@ class ChatViewModelTest {
     private lateinit var connection: GatewayConnection
 
     private fun viewModel(drafts: DraftStore = DraftStore(InMemoryKeyValueStore()), fileReads: MutableList<Pair<String, String?>>? = null,
+        settings: SettingsStore = SettingsStore(InMemoryKeyValueStore(), scope),
         seenStore: SeenStore? = null,
         readState: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData? = { null },
     ): Pair<ChatViewModel, ChatHost> {
@@ -149,7 +152,7 @@ class ChatViewModelTest {
         val vm = ChatViewModel(
             connection, chatHost, LastChatStore(InMemoryKeyValueStore()), drafts,
             ModelsApi(connection), MediaApi(client), SlashApi(connection), sessions, ProfilesApi(client),
-            SettingsStore(InMemoryKeyValueStore(), scope), PetApi(connection), JourneyApi(client), AudioApi(client),
+            settings, PetApi(connection), JourneyApi(client), AudioApi(client),
             NoRecorder, NoPlayer, scope, BotsApi(connection), { null },
             object : VoiceKeepAlive {
                 override fun hold(onEnd: () -> Unit, onLost: () -> Unit) = false
@@ -161,6 +164,72 @@ class ChatViewModelTest {
         )
         viewModels.put("chat", vm)
         return vm to chatHost
+    }
+
+    @Test
+    fun skinBeforeSettingsLoadDoesNotOverwriteStoredInstallerMarker() = runTest(dispatcher) {
+        val memory = InMemoryKeyValueStore()
+        memory.put("settings.v1", """{"theme":"Dark","pureBlack":true,"uncertainGitInstalls":["marker"]}""")
+        val release = CompletableDeferred<Unit>()
+        val backing = object : KeyValueStore by memory {
+            override suspend fun get(key: String): String? {
+                release.await()
+                return memory.get(key)
+            }
+        }
+        val settings = SettingsStore(backing, scope)
+        val (vm, host) = viewModel(settings = settings)
+        vm.open(ChatTarget(gateway, "skin", "Chat"))
+        vm.composer.setTextAndPlaceCursorAtEnd("/skin")
+        vm.send(null)
+        val output = assertNotNull(host.session.value).state.value.messages.filterIsInstance<ChatMessage.Command>().last()
+        assertTrue(output.failed)
+        assertEquals("Settings are still loading. Try /skin again shortly.", output.output)
+        release.complete(Unit)
+        runCurrent()
+        assertEquals(ThemeMode.Dark, settings.settings.value!!.theme)
+        assertEquals(setOf("marker"), settings.settings.value!!.uncertainGitInstalls)
+
+        vm.composer.setTextAndPlaceCursorAtEnd("/skin")
+        vm.send(null)
+        runCurrent()
+        assertEquals(ThemeMode.System, settings.settings.value!!.theme)
+        assertTrue(settings.settings.value!!.pureBlack)
+        val restored = SettingsStore(memory, scope)
+        runCurrent()
+        assertEquals(setOf("marker"), restored.settings.value!!.uncertainGitInstalls)
+        assertEquals(ThemeMode.System, restored.settings.value!!.theme)
+    }
+
+    @Test
+    fun skinCommandsPreserveOtherSettingsAndReportTheAppliedTheme() = runTest(dispatcher) {
+        val settings = SettingsStore(InMemoryKeyValueStore(), scope)
+        settings.update { it.copy(uncertainGitInstalls = setOf("marker")) }
+        val (vm, host) = viewModel(settings = settings)
+        vm.open(ChatTarget(gateway, "skin", "Chat"))
+        fun check(command: String, theme: ThemeMode, black: Boolean, output: String) {
+            vm.composer.setTextAndPlaceCursorAtEnd(command)
+            vm.send(null)
+            val actual = settings.settings.value!!
+            assertEquals(theme, actual.theme, command)
+            assertEquals(black, actual.pureBlack, command)
+            assertEquals(setOf("marker"), actual.uncertainGitInstalls, command)
+            val card = assertNotNull(host.session.value).state.value.messages.filterIsInstance<ChatMessage.Command>().last()
+            assertEquals(output, card.output, command)
+        }
+        check("/skin black", ThemeMode.Dark, true, "Theme: black.")
+        check("/skin light", ThemeMode.Light, true, "Theme: light.")
+        check("/skin", ThemeMode.Dark, true, "Theme: black.")
+        check("/skin", ThemeMode.System, true, "Theme: matches the system.")
+        check("/skin", ThemeMode.Light, true, "Theme: light.")
+        check("/skin dark", ThemeMode.Dark, false, "Theme: dark.")
+        check("/skin oled", ThemeMode.Dark, true, "Theme: black.")
+        check("/skin amoled", ThemeMode.Dark, true, "Theme: black.")
+        check("/skin system", ThemeMode.System, true, "Theme: matches the system.")
+        check("/skin auto", ThemeMode.System, true, "Theme: matches the system.")
+        check("/skin default", ThemeMode.System, true, "Theme: matches the system.")
+        check("/skin nope", ThemeMode.System, true, "Themes here: light, dark, black or system.")
+        assertTrue(assertNotNull(host.session.value).state.value.messages.filterIsInstance<ChatMessage.Command>().last().failed)
     }
 
     @Test

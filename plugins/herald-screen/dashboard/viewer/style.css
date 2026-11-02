@@ -1,0 +1,54 @@
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body { margin: 0; height: 100dvh; display: flex; flex-direction: column; overflow: hidden; background: #08090b; color: #f4f4f5; font: 15px system-ui, sans-serif; }
+.icon-definitions { position: absolute; width: 0; height: 0; overflow: hidden; }
+svg { width: 23px; height: 23px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex-shrink: 0; }
+button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 48px; padding: 0 14px; border: 1px solid transparent; border-radius: 28px; background: #292b2f; color: inherit; font: inherit; font-weight: 550; cursor: pointer; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+button:hover:not(:disabled) { background: #36393e; }
+button:focus-visible { outline: 2px solid #9dccff; outline-offset: 3px; }
+button:disabled { opacity: .35; cursor: default; }
+button[aria-pressed="true"] { background: #344c49; color: #c0e9de; }
+header { display: grid; grid-template-columns: 48px minmax(0, 1fr) 48px; gap: 12px; align-items: start; flex-shrink: 0; padding: max(16px, env(safe-area-inset-top)) max(16px, env(safe-area-inset-right)) 12px max(16px, env(safe-area-inset-left)); }
+.circle { width: 48px; padding: 0; border-color: #3a3c40; }
+.identity { display: flex; flex-direction: column; align-items: center; min-width: 0; gap: 8px; }
+.computer-title { display: flex; align-items: center; justify-content: center; gap: 9px; min-height: 48px; max-width: 100%; padding: 0 17px; border-radius: 28px; background: #292b2f; font-weight: 600; white-space: nowrap; }
+.computer-title svg { width: 21px; }
+.computer-title span { overflow: hidden; text-overflow: ellipsis; }
+#state { color: #a5a9b0; font-size: 11px; text-align: center; line-height: 1.4; overflow-wrap: anywhere; }
+#scroll-mode[aria-pressed="true"] { background:#344c49; }
+main { position: relative; flex: 1; min-width: 0; min-height: 0; overflow: hidden; }
+#screen { width: 100%; height: 100%; min-width: 0; min-height: 0; overflow: hidden; background: #08090b; }
+#screen canvas { touch-action: none; }
+#viewport { width:100%; height:100%; overflow:auto; }
+body.mobile-browser #viewport { touch-action:none; overflow:hidden; }
+body.mobile-browser #screen, body.mobile-browser #screen > div { touch-action:none; }
+body.mobile-browser #screen canvas { pointer-events:none; }
+
+#placeholder { display: grid; place-items: center; height: 100%; padding: 24px; color: #a5a9b0; text-align: center; font-size: 14px; }
+#connect { position: absolute; left: 50%; top: 60%; transform: translateX(-50%); white-space: nowrap; }
+#notice { flex-shrink: 0; min-height: 20px; margin: 0; padding: 0 16px; color: #b9d9cf; font-size: 12px; line-height: 20px; text-align: center; }
+#copy-explanation { flex-shrink: 0; margin: 0; padding: 0 16px; color: #b9d9cf; font-size: 12px; line-height: 1.4; text-align: center; }
+footer { display: flex; flex-shrink: 0; align-items: center; justify-content: space-between; gap: 8px; padding: 12px max(16px, env(safe-area-inset-right)) max(16px, env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left)); }
+.control-pill, .tools-pill { display: flex; align-items: center; padding: 4px; border-radius: 32px; background: #292b2f; }
+.control-pill button { min-width: 126px; padding: 0 10px; font-size: 13px; }
+.control-pill svg { width: 19px; height: 19px; }
+.tools-pill button { width: 44px; min-height: 48px; padding: 0; }
+.tools-pill #viewer-fit, .tools-pill #scroll-mode { display: none; }
+body.mobile-browser .tools-pill #viewer-fit, body.mobile-browser .tools-pill #scroll-mode { display: inline-flex; }
+body.mobile-browser .control-pill button { width: 48px; min-width: 48px; padding: 0; }
+body.mobile-browser .control-pill span { display: none; }
+.scaling { margin-left: auto; }
+.scaling button { font-size: 12px; padding: 0 10px; }
+.keyboard-input { position: fixed; left: 0; bottom: 0; width: 1px; height: 1px; padding: 0; border: 0; opacity: 0; font-size: 16px; resize: none; }
+@media (max-width: 360px) {
+  header { gap: 7px; padding-left: 10px; padding-right: 10px; }
+  footer { gap: 4px; padding-left: 10px; padding-right: 10px; }
+  .computer-title { padding: 0 10px; font-size: 13px; }
+  .control-pill button { min-width: 116px; gap: 6px; }
+}
+@media (max-height: 450px) {
+  header { padding-top: max(8px, env(safe-area-inset-top)); padding-bottom: 4px; }
+  .identity { gap: 3px; }
+  footer { padding-top: 4px; padding-bottom: max(8px, env(safe-area-inset-bottom)); }
+  #notice { min-height: 16px; line-height: 16px; }
+}

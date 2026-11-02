@@ -1,0 +1,8 @@
+name: herald-screen
+version: "0.1.0"
+description: Authenticated profile-scoped Bot Screen with explicit control handoff and protected selection Copy.
+requires_hermes: ">=0.22.4"
+python_dependencies:
+  - aiohttp
+  - anyio
+  - fastapi

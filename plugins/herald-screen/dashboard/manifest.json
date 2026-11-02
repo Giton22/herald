@@ -1,0 +1,10 @@
+{
+  "name": "herald-screen",
+  "label": "Screen",
+  "description": "Bot desktop with explicit Take over / Hand back",
+  "icon": "Monitor",
+  "version": "0.1.0",
+  "entry": "index.js",
+  "api": "plugin_api.py",
+  "tab": { "path": "/api/plugins/herald-screen/index.html", "position": "end" }
+}

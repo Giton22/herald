@@ -2,6 +2,8 @@ package dev.hermeskotlin.ui.plugins
 
 import android.content.ActivityNotFoundException
 import android.content.Intent
+import android.content.ClipboardManager
+import android.graphics.Bitmap
 import android.net.Uri
 import android.view.ViewGroup
 import android.webkit.CookieManager
@@ -27,6 +29,7 @@ import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,12 +42,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.webkit.WebViewFeature
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
 import com.composeunstyled.Text
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.auth.WebCookieJar
 import dev.hermeskotlin.core.auth.WebSession
+import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.colors
@@ -74,6 +79,7 @@ import org.koin.compose.koinInject
 @Composable
 actual fun PluginWebView(url: String, gateway: String, title: String, onClose: () -> Unit) {
     val cookies = koinInject<WebCookieJar>()
+    val appSettings = koinInject<SettingsStore>()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var loading by remember { mutableStateOf(true) }
@@ -113,14 +119,33 @@ actual fun PluginWebView(url: String, gateway: String, title: String, onClose: (
         scope.launch { renewAndReload(webView, url) }
     }
 
-    val webView = remember {
+    var bridgeUnavailable by remember(url, gateway) { mutableStateOf(false) }
+    val screenPage = remember(url, gateway) { isHeraldScreenUrl(url, gateway) }
+    val screenBridge = remember(url, gateway) { arrayOfNulls<ScreenBridgeHandle>(1) }
+    val webView = remember(url, gateway) {
         WebView(context).apply {
             // AndroidView leaves a view at wrap_content, and a WebView that wraps its height gives the
             // page a zero-high viewport: every vh/dvh is 0 and the dashboard's h-dvh shell draws nothing.
             layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT)
             settings.javaScriptEnabled = true
             settings.domStorageEnabled = true
+            if (screenPage) {
+                if (WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+                    screenBridge[0] = try {
+                        HeraldScreenBridge.install(this, Uri.parse(gateway), context.getSystemService(ClipboardManager::class.java), { appSettings.settings.value?.screenClipboardAccess == true }, onClose)
+                    } catch (_: RuntimeException) {
+                        bridgeUnavailable = true
+                        null
+                    }
+                } else {
+                    bridgeUnavailable = true
+                }
+            }
             webViewClient = object : WebViewClient() {
+                override fun onPageStarted(view: WebView, startedUrl: String?, favicon: Bitmap?) {
+                    screenBridge[0]?.navigationStarted?.invoke()
+                }
+
                 override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                     // The gateway's own pages stay here; anywhere else is the browser's to show, not a
                     // page passed off under this plugin's title. Embeds (iframes) load where they are.
@@ -144,7 +169,11 @@ actual fun PluginWebView(url: String, gateway: String, title: String, onClose: (
                 }
 
                 override fun onPageFinished(view: WebView, finishedUrl: String?) {
+                    screenBridge[0]?.documentReady?.invoke(finishedUrl.orEmpty())
                     loading = false
+                    if (screenPage && view.url == finishedUrl) {
+                        bridgeUnavailable = screenBridge[0] == null || !isHeraldScreenUrl(finishedUrl.orEmpty(), gateway)
+                    }
                 }
 
                 override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
@@ -165,7 +194,13 @@ actual fun PluginWebView(url: String, gateway: String, title: String, onClose: (
             }
         }
     }
-    LaunchedEffect(url) {
+    LaunchedEffect(webView, url, gateway) {
+        // An overlay is insufficient: the viewer's navigator.clipboard fallback would still run.
+        // Do not lend credentials or navigate at all if its native host could not be installed.
+        if (!mayLoadPluginDocument(screenPage, screenBridge[0] != null)) {
+            loading = false
+            return@LaunchedEffect
+        }
         // The jar first, so the first navigation already carries the session.
         var session = lend(fresh = true)
         webView.loadUrl(url, headers)
@@ -182,21 +217,33 @@ actual fun PluginWebView(url: String, gateway: String, title: String, onClose: (
     }
     DisposableEffect(webView) {
         onDispose {
+            screenBridge[0]?.dispose?.invoke()
+            screenBridge[0] = null
             webView.destroy()
             // The view's jar is on disk and outlives the page: leave no copy of the session there once it
             // closes. The app's own jar still has it, and the next page is lent it fresh.
             CookieManager.getInstance().removeAllCookies(null)
         }
     }
-    // Back walks the page's own history first (the dashboard moves between its pages in place).
-    PlatformBackHandler(enabled = true) { if (webView.canGoBack()) webView.goBack() else onClose() }
+    fun requestClose() {
+        if (!screenPage) { onClose(); return }
+        if (screenBridge[0] == null || !isHeraldScreenUrl(webView.url.orEmpty(), gateway)) { onClose(); return }
+        webView.evaluateJavascript("typeof window.heraldScreenRequestClose==='function'") { result ->
+            if (result == "true") webView.evaluateJavascript("window.heraldScreenRequestClose()", null)
+            else onClose()
+        }
+    }
+    // Back walks generic plugin history; Screen close gives its ownership hook a chance to release first.
+    PlatformBackHandler(enabled = true) {
+        if (!screenPage && webView.canGoBack()) webView.goBack() else requestClose()
+    }
     Column(
         Modifier
             .fillMaxSize()
             .background(Theme[colors][background])
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom)),
     ) {
-        Row(
+        if (!screenPage) Row(
             Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -213,7 +260,15 @@ actual fun PluginWebView(url: String, gateway: String, title: String, onClose: (
             if (loading) Spinner(Modifier.size(16.dp))
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
-            AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize())
+            key(webView) { AndroidView(factory = { webView }, modifier = Modifier.fillMaxSize()) }
+            if (bridgeUnavailable) {
+                Column(Modifier.fillMaxSize().background(Theme[colors][background]).padding(24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically)) {
+                    Text("This screen needs a compatible Android WebView. Update WebView and try again.", style = Theme[typography][body], color = Theme[colors][textTertiary])
+                    Button("Close", onClick = onClose, variant = ButtonVariant.Secondary)
+                }
+            }
             if (failed) {
                 Column(
                     Modifier.fillMaxSize().background(Theme[colors][background]).padding(24.dp),

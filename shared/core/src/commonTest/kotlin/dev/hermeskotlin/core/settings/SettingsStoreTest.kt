@@ -9,6 +9,17 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class SettingsStoreTest {
+    @Test fun screenClipboardPreferenceSurvivesReloadAndLegacySettings() = runTest {
+        val disk = InMemoryKeyValueStore()
+        disk.put("settings.v1", "{}")
+        val first = SettingsStore(disk, backgroundScope)
+        assertEquals(false, first.settings.filterNotNull().first().screenClipboardAccess)
+        first.update { it.copy(screenClipboardAccess = true) }
+        advanceUntilIdle()
+        assertEquals(true, SettingsStore(disk, backgroundScope).settings.filterNotNull().first().screenClipboardAccess)
+    }
+
+
 
     @Test
     fun callTargetsSurviveLoadingAndSavingAlongsideOtherPreferences() = runTest {

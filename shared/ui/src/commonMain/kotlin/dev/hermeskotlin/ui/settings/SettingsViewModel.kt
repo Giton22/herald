@@ -3,6 +3,12 @@ package dev.hermeskotlin.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.auth.AuthApi
+import dev.hermeskotlin.core.connection.GatewayConnection
+import dev.hermeskotlin.core.connection.ConnectionState
+import dev.hermeskotlin.core.plugins.ScreenPluginRelease
+import dev.hermeskotlin.core.plugins.GitPluginInstaller
+import dev.hermeskotlin.core.plugins.GitPluginSpec
+import dev.hermeskotlin.core.plugins.GitInstallResult
 import dev.hermeskotlin.core.gateway.CheckStage
 import dev.hermeskotlin.core.gateway.ConnectionCheck
 import dev.hermeskotlin.core.gateway.GatewayProbe
@@ -31,7 +37,11 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 
 /** Who is signed in where, for the Settings account and about sections. */
 data class GatewayInfo(val userLabel: String? = null, val version: String? = null)
@@ -57,6 +67,11 @@ sealed interface SuggestionsPlugin {
 /** "Check connection": the stages done so far, and whether it's still going. */
 data class ConnectionCheckState(val results: Map<CheckStage, StageResult> = emptyMap(), val running: Boolean = false)
 
+data class GitInstallUi(
+    val visible: Boolean = false, val gateway: String = "", val busy: Boolean = false, val result: GitInstallResult? = null,
+)
+
+
 class SettingsViewModel(
     private val store: SettingsStore,
     private val auth: AuthApi,
@@ -67,6 +82,7 @@ class SettingsViewModel(
     private val profilesApi: ProfilesApi,
     private val sessionsApi: SessionsApi,
     private val nextPrompt: NextPromptApi,
+    private val connection: GatewayConnection,
 ) : ViewModel() {
 
     /** The chat background's encoded image, or null when there's none (or it isn't read yet). */
@@ -101,6 +117,110 @@ class SettingsViewModel(
     private var bound: SavedGateway? = null
     private var boundProfile: String? = null
 
+    private val screenTarget = MutableStateFlow<SavedGateway?>(null)
+    private val screenRefresh = MutableStateFlow(0)
+    internal fun refreshScreenStatus() { screenRefresh.value++ }
+    private val _screenStatus = MutableStateFlow(ScreenPluginStatus.Unknown)
+    internal val screenStatus: StateFlow<ScreenPluginStatus> = _screenStatus.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            combine(screenTarget, connection.state, screenRefresh) { target, state, refresh -> Triple(target, state, refresh) }.collectLatest { (target, state, refresh) ->
+                val client = (state as? ConnectionState.Connected)?.client
+                if (target == null || client == null || connection.gateway != target.gatewayUrl) {
+                    _screenStatus.value = ScreenPluginStatus.Unknown
+                    return@collectLatest
+                }
+                _screenStatus.value = ScreenPluginStatus.Checking
+                val status = try {
+                    screenPluginStatus(client.request("plugins.manage", buildJsonObject { put("action", "list") }))
+                } catch (e: CancellationException) { throw e } catch (_: Exception) { ScreenPluginStatus.Unknown }
+                if (screenRefresh.value == refresh && screenTarget.value == target && connection.gateway == target.gatewayUrl &&
+                    (connection.state.value as? ConnectionState.Connected)?.client === client) _screenStatus.value = status
+            }
+        }
+    }
+
+    internal var screenReleaseSpec: () -> GitPluginSpec? = { ScreenPluginRelease.spec }
+    private val _gitInstall = MutableStateFlow(GitInstallUi())
+    internal val gitInstall = _gitInstall.asStateFlow()
+    private var gitInstaller: GitPluginInstaller? = null
+    private var gitGeneration = 0L
+    private var gitClient: dev.hermeskotlin.core.rpc.JsonRpcClient? = null
+    private val gitActive = mutableSetOf<String>()
+    private fun gitKey(target: SavedGateway) = "${target.gatewayUrl}|herald-screen"
+    private val gitWarning = "A previous install may still be running or may have installed a different plugin. A missing list entry does not prove completion. Inspect the gateway and confirm the operation has stopped before manually clearing this warning; retrying sooner can run concurrent installs."
+    private fun invalidateGitSheet() {
+        gitGeneration++
+        gitInstaller = null; gitClient = null
+        if (_gitInstall.value.visible) _gitInstall.value = _gitInstall.value.copy(busy = false, result = GitInstallResult.Refused("Gateway connection or target changed; close and reopen the sheet. Any sent install may still be running."))
+    }
+    init {
+        viewModelScope.launch {
+            connection.state.collect { state ->
+                val client = (state as? ConnectionState.Connected)?.client
+                if (_gitInstall.value.visible && gitClient != null &&
+                    (client !== gitClient || connection.gateway != bound?.gatewayUrl)) invalidateGitSheet()
+            }
+        }
+    }
+    fun openScreenInstall() {
+        if (_gitInstall.value.busy) return
+        val target = bound ?: return
+        val rpc = (connection.state.value as? ConnectionState.Connected)?.client
+        val generation = ++gitGeneration
+        gitClient = rpc
+        gitInstaller = if (rpc != null && connection.gateway == target.gatewayUrl)
+            GitPluginInstaller(connection, rpc) { gitGeneration == generation && bound == target && connection.gateway == target.gatewayUrl } else null
+        val blocked = store.settings.value?.uncertainGitInstalls?.contains(gitKey(target)) != false || gitKey(target) in gitActive
+        _gitInstall.value = GitInstallUi(visible = true, gateway = target.url,
+            result = when { blocked -> GitInstallResult.Uncertain(gitWarning); gitInstaller == null -> GitInstallResult.Refused("Connect to this gateway first."); screenReleaseSpec() == null -> GitInstallResult.Refused("Agent Screen setup will be available once released."); else -> null })
+    }
+    fun closeScreenInstall() { if (!_gitInstall.value.busy) { gitGeneration++; gitInstaller = null; gitClient = null; _gitInstall.value = GitInstallUi() } }
+    fun resetScreenInstallWarning() {
+        val target = bound ?: return
+        val key = gitKey(target)
+        if (!_gitInstall.value.visible || _gitInstall.value.result !is GitInstallResult.Uncertain || key in gitActive) return
+        val generation = gitGeneration
+        _gitInstall.update { it.copy(busy = true) }
+        viewModelScope.launch {
+            try {
+                store.updateDurably { it.copy(uncertainGitInstalls = it.uncertainGitInstalls - key) }
+                if (generation == gitGeneration) { closeAfterGitReset() }
+            } catch (e: CancellationException) { throw e } catch (_: Exception) {
+                if (generation == gitGeneration) _gitInstall.update { it.copy(busy = false, result = GitInstallResult.Uncertain("Could not save recovery. $gitWarning")) }
+            }
+        }
+    }
+    private fun closeAfterGitReset() { _gitInstall.update { it.copy(busy = false) }; closeScreenInstall() }
+    fun confirmScreenInstall() {
+        val state = _gitInstall.value
+        val installer = gitInstaller ?: return
+        val target = bound ?: return
+        val key = gitKey(target)
+        val generation = gitGeneration
+        if (!state.visible || state.busy || state.result != null || key in gitActive || store.settings.value?.uncertainGitInstalls?.contains(key) != false) return
+        val spec = screenReleaseSpec() ?: return
+        if (spec.id != "herald-screen") return
+        gitActive.add(key)
+        _gitInstall.update { it.copy(busy = true) }
+        viewModelScope.launch {
+            try {
+                // The marker must reach durable storage before even beginning the remote operation.
+                store.updateDurably { it.copy(uncertainGitInstalls = it.uncertainGitInstalls + key) }
+                val result = installer.setup(spec)
+                if (generation == gitGeneration && result !is GitInstallResult.Uncertain) {
+                    store.updateDurably { it.copy(uncertainGitInstalls = it.uncertainGitInstalls - key) }
+                }
+                if (generation == gitGeneration) {
+                    _gitInstall.update { it.copy(busy = false, result = if (result is GitInstallResult.Uncertain) GitInstallResult.Uncertain("${result.detail} $gitWarning") else result) }
+                    refreshScreenStatus()
+                }
+            } catch (e: CancellationException) { throw e } catch (_: Exception) {
+                if (generation == gitGeneration) _gitInstall.update { it.copy(busy = false, result = GitInstallResult.Uncertain("Could not complete or save operation. $gitWarning")) }
+            } finally { gitActive.remove(key) }
+        }
+    }
     private val _suggestions = MutableStateFlow<SuggestionsPlugin>(SuggestionsPlugin.Checking)
 
     /** Whether the gateway has the Next Prompt plugin that Suggested replies needs, for the profile the chats use. */
@@ -111,8 +231,10 @@ class SettingsViewModel(
     fun bind(gateway: SavedGateway, profile: String? = null) {
         if (bound == gateway && boundProfile == profile) return
         val sameGateway = bound == gateway
+        if (!sameGateway && _gitInstall.value.visible) invalidateGitSheet()
         bound = gateway
         boundProfile = profile
+        screenTarget.value = gateway
         checkSuggestions()
         if (sameGateway) return
         _gateway.value = GatewayInfo()
