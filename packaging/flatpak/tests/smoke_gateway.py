@@ -6,8 +6,10 @@ import json
 import struct
 from urllib.parse import parse_qs, urlsplit
 
+# Each click gives a colour not seen before (green, magenta, orange), so a page reloaded by a resize can't pass the
+# second click by toggling back to a colour it already had.
 HTML = '''<!doctype html><html><body style="margin:0;background:#19c37d;height:100vh">
-<button style="background:#1245ab;color:white;border:0;width:240px;height:112px" onclick="document.body.style.background=this.dataset.on?'#19c37d':'#c319e0';this.dataset.on=this.dataset.on?'':'1'">Widget fixture</button>
+<button style="background:#1245ab;color:white;border:0;width:240px;height:112px" onclick="this.dataset.n=(+(this.dataset.n||0))+1;document.body.style.background=['#19c37d','#c319e0','#e0a019'][Math.min(this.dataset.n,2)]">Widget fixture</button>
 <p>LOCAL_WIDGET_READY</p></body></html>'''
 SESSION = {'id': 'smoke-session', 'title': 'Flatpak fixture', 'source': 'desktop', 'message_count': 1}
 
@@ -19,6 +21,8 @@ class Gateway(BaseHTTPRequestHandler):
         pass
 
     def reply(self, value, status=200, cookie=False):
+        if status == 200:
+            self.server.served.append((self.command, urlsplit(self.path).path))
         data = json.dumps(value).encode()
         self.send_response(status)
         self.send_header('Content-Type', 'application/json')
@@ -27,6 +31,11 @@ class Gateway(BaseHTTPRequestHandler):
             self.send_header('Set-Cookie', 'hermes_session_at=synthetic-fixture; Path=/; HttpOnly')
         self.end_headers()
         self.wfile.write(data)
+
+    def signed_in(self):
+        """As the gateway: only the session cookie the login set opens the API, so the sandbox's cookie store counts."""
+        cookies = [c.strip() for c in self.headers.get('Cookie', '').split(';')]
+        return self.server.authenticated and 'hermes_session_at=synthetic-fixture' in cookies
 
     def do_POST(self):
         body = self.rfile.read(int(self.headers.get('Content-Length', '0')))
@@ -40,6 +49,9 @@ class Gateway(BaseHTTPRequestHandler):
             self.server.authenticated = True
             self.reply({'ok': True}, cookie=True)
         elif path == '/api/auth/ws-ticket':
+            if not self.signed_in():
+                self.reply({}, 401)
+                return
             self.reply({'ticket': 'fixture', 'ttl_seconds': 30})
         else:
             self.reply({}, 404)
@@ -49,11 +61,17 @@ class Gateway(BaseHTTPRequestHandler):
         self.server.calls.append(('GET', path))
         print('GET', path, flush=True)
         if path == '/api/ws':
+            protocols = [p.strip() for p in self.headers.get('Sec-WebSocket-Protocol', '').split(',')]
+            if 'hermes-gateway-ticket.fixture' not in protocols:
+                self.reply({}, 401)
+                return
             self.websocket()
         elif path == '/api/status':
             self.reply({'version': 'fixture', 'gateway_running': True, 'auth_required': True, 'auth_providers': ['basic']})
         elif path == '/api/auth/me':
-            self.reply({'user_id': 'fixture', 'display_name': 'Fixture'}, 200 if self.server.authenticated else 401)
+            self.reply({'user_id': 'fixture', 'display_name': 'Fixture'}, 200 if self.signed_in() else 401)
+        elif path.startswith('/api/') and not self.signed_in():
+            self.reply({}, 401)
         elif path == '/api/sessions':
             self.reply({'sessions': [SESSION], 'total': 1})
         elif path == '/api/sessions/smoke-session/messages':
@@ -127,5 +145,7 @@ def server():
         return {'error': {'code': -32601, 'message': 'Fixture method unavailable'}}
     service.rpc = rpc
     service.calls = []
+    # Requests answered with 200: past the cookie check, unlike a 401 in calls.
+    service.served = []
     service.authenticated = False
     return service
