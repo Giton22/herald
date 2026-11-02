@@ -17,6 +17,7 @@ import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -189,6 +190,9 @@ private fun FolderPicker(
     val newName = rememberTextFieldState()
     var naming by remember(dir) { mutableStateOf(false) }
     var making by remember(dir) { mutableStateOf(false) }
+    // Which Create is the field's own; closing the field moves it on, so a Create still waiting is dropped.
+    var makeTry by remember(dir) { mutableIntStateOf(0) }
+    var relist by remember(dir) { mutableIntStateOf(0) }
     var makeError by remember(dir) { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
     val current by rememberUpdatedState(dir)
@@ -201,7 +205,7 @@ private fun FolderPicker(
     val prefix = filter.text.toString()
     var listing by remember(dir) { mutableStateOf<FolderListing?>(null) }
     var failed by remember(dir) { mutableStateOf<String?>(null) }
-    LaunchedEffect(dir, prefix) {
+    LaunchedEffect(dir, prefix, relist) {
         if (prefix.isNotEmpty()) delay(250)
         try {
             listing = listFolders(dir, prefix)
@@ -227,6 +231,12 @@ private fun FolderPicker(
             IconButton(Lucide.FolderPlus, contentDescription = "New folder", onClick = {
                 naming = !naming
                 makeError = null
+                if (!naming) {
+                    // Closed: reopened, it starts empty, and a Create still waiting doesn't open its folder.
+                    newName.edit { replace(0, length, "") }
+                    makeTry++
+                    making = false
+                }
             })
         }
         TextField(state = filter, modifier = Modifier.weight(1f), placeholder = "Filter", leadingIcon = Lucide.Search)
@@ -239,11 +249,18 @@ private fun FolderPicker(
                 // Set before the launch, so Done and Create in the same frame make it once.
                 making = true
                 val asked = dir
+                val thisTry = ++makeTry
                 scope.launch {
-                    makeError = makeFolder(asked, name)
+                    val error = makeFolder(asked, name)
+                    if (thisTry != makeTry) {
+                        // The field was closed while the gateway was asked, but it may have made the folder.
+                        if (error == null && current == asked) relist++
+                        return@launch
+                    }
+                    makeError = error
                     making = false
                     // Not if Up, Home or a folder moved the picker on while the gateway was asked.
-                    if (makeError == null && current == asked) onOpen(FolderPath.child(asked, name))
+                    if (error == null && current == asked) onOpen(FolderPath.child(asked, name))
                 }
             }
         }
