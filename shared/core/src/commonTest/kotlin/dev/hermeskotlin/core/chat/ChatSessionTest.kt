@@ -1657,6 +1657,25 @@ class ChatSessionTest {
         assertEquals("2", transport.sent.value.last { it.isCall("session.branch") }.param("count"))
     }
 
+    @Test
+    fun branchingBeforeFoldedSystemMessagesStopsWhereTheyStart() = runTest {
+        history = """{"session_id":"stored-1","messages":[
+            {"id":1,"role":"user","content":"one"},{"id":2,"role":"assistant","content":"First"},
+            {"id":3,"role":"user","content":"[Cron delivery: Monitor]\nAll quiet"},
+            {"id":4,"role":"user","content":"[Cron delivery: Monitor]\nStill quiet"},
+            {"id":5,"role":"user","content":"two"},{"id":6,"role":"assistant","content":"Second"}]}"""
+        val (chat, transport) = resumedChat(
+            backgroundScope,
+            mapOf("session.branch" to """{"session_id":"rt2","stored_session_id":"stored-2","title":"Greeting #2"}"""),
+        )
+        // The group is keyed by its newest row, so an earlier page doesn't move it.
+        assertEquals(listOf("row-1", "row-2", "row-4", "row-5", "row-6"), chat.state.value.messages.map { it.key })
+
+        // Up to "First": the routine rows after it stay out.
+        chat.branchFrom("row-2")
+        assertEquals("2", transport.sent.value.last { it.isCall("session.branch") }.param("count"))
+    }
+
     private val threeTurns = """{"session_id":"stored-1","messages":[
         {"id":1,"role":"user","content":"one"},{"id":2,"role":"assistant","content":"First"},
         {"id":3,"role":"user","content":"two"},{"id":4,"role":"assistant","content":"Second"},

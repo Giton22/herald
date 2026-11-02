@@ -4,10 +4,10 @@ import com.sun.jna.Library
 import com.sun.jna.Memory
 import com.sun.jna.Native
 import com.sun.jna.Pointer
+import java.util.concurrent.TimeUnit
 
 /** A bounded anonymous pipe; neither endpoint may survive an exec. */
 internal class SecretPipe : AutoCloseable {
-    private val libc = Native.load("c", LibC::class.java)
     private val descriptors = IntArray(2)
     private var writerOpen = true
     val output: Int get() = descriptors[1]
@@ -23,7 +23,8 @@ internal class SecretPipe : AutoCloseable {
         }
     }
 
-    fun read(): ByteArray {
+    fun read(timeoutMillis: Long): ByteArray {
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(timeoutMillis)
         Memory(4097).use { bytes ->
             Memory(8).use { poll ->
                 poll.setInt(0, descriptors[0])
@@ -32,10 +33,13 @@ internal class SecretPipe : AutoCloseable {
                 try {
                     while (true) {
                         if (Thread.currentThread().isInterrupted) throw InterruptedException()
+                        if (System.nanoTime() - deadline > 0) throw SecretPortalFailure(SecretPortalFailure.Reason.Failed)
                         val ready = libc.poll(poll, 1, 100)
-                        if (ready == 0) continue
+                        // A signal (the JVM's own, for one) can cut a wait short; the secret is still in the pipe.
+                        if (ready == 0 || ready < 0 && Native.getLastError() == EINTR) continue
                         if (ready < 0 || poll.getShort(6).toInt() and 32 != 0) fail()
                         val count = libc.read(descriptors[0], bytes.share(total.toLong()), 4097L - total).toInt()
+                        if (count < 0 && Native.getLastError() == EINTR) continue
                         if (count < 0) fail()
                         if (count == 0) {
                             if (total == 0) throw SecretPortalFailure(SecretPortalFailure.Reason.InvalidSecret)
@@ -54,6 +58,11 @@ internal class SecretPipe : AutoCloseable {
     }
 
     private fun fail(): Nothing = throw SecretPortalFailure(SecretPortalFailure.Reason.Failed)
+
+    private companion object {
+        const val EINTR = 4
+        val libc: LibC by lazy { Native.load("c", LibC::class.java) }
+    }
 
     internal interface LibC : Library {
         fun pipe2(descriptors: IntArray, flags: Int): Int
