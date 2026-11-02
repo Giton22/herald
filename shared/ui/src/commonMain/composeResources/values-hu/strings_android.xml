@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="android_media_picture_not_shown">A kép nem jelenik meg</string>
+    <string name="android_media_picture_failed">A kép nem töltődött be</string>
+    <string name="android_media_audio_not_played">A hang nem szól</string>
+    <string name="android_media_video_not_shown">A videó nem jelenik meg</string>
+    <string name="android_media_audio_failed">A hang nem töltődött be</string>
+    <string name="android_media_video_failed">A videó nem töltődött be</string>
+    <string name="android_screen_closed">Az ügynök bezárta ezt a képernyőt.</string>
+
+    <string name="android_attach_photo_failed">Nem sikerült beolvasni a fotót.</string>
+    <string name="android_attach_no_camera">Nincs elérhető kameraalkalmazás.</string>
+    <string name="android_attach_not_allowed">A megosztó alkalmazás nem engedte, hogy a Kyllene beolvassa a fájlt.</string>
+    <string name="android_attach_read_failed">Nem sikerült beolvasni egy fájlt.</string>
+    <string name="android_attach_photo_too_large">%1$s nagyobb 50 MB-nál.</string>
+    <string name="android_attach_file_too_large">%1$s nagyobb 25 MB-nál.</string>
+    <string name="android_attach_too_large">%1$s túl nagy a csatoláshoz.</string>
+    <string name="android_attach_unreadable">Nem sikerült beolvasni: %1$s.</string>
+    <string name="android_attach_not_image">Nem sikerült képként beolvasni: %1$s.</string>
+    <string name="android_attach_too_much">Ez egyszerre több mint 50 MB melléklet.</string>
+
+    <string name="android_widget_update_webview">Frissítsd az Android System WebView-t a widget futtatásához.</string>
+    <string name="android_widget_failed">Nem sikerült megjeleníteni ezt a widgetet.</string>
+
+    <string name="android_save_needs_android_10">A mentéshez Android 10 kell. Használd inkább a Megosztást.</string>
+    <string name="android_save_failed">Nem sikerült menteni: %1$s.</string>
+    <string name="android_saved_to">Mentve ide: %1$s</string>
+
+    <string name="android_plugin_close">Oldal bezárása</string>
+    <string name="android_plugin_failed">Nem sikerült megnyitni az oldalt.</string>
+    <string name="android_plugin_retry">Újra</string>
+
+    <string name="android_wallpaper_too_large">A fotó túl nagy, vagy nem olvasható.</string>
+    <string name="android_wallpaper_not_image">Ez a fájl nem olyan kép, amit a Kyllene be tud olvasni.</string>
+    <string name="android_wallpaper_failed">Nem sikerült beolvasni a fotót.</string>
+
+    <string name="android_access_notifications">Kapcsold be a Kyllene értesítéseit: a módosításokról ott kérdez.</string>
+    <string name="android_access_dnd">Engedd, hogy a Kyllene módosítsa a Ne zavarjanak módot.</string>
+    <string name="android_access_usage">Adj a Kyllene-nek használati hozzáférést, hogy lássa, mely alkalmazásokat használod.</string>
+    <string name="android_access_location">Engedd, hogy a Kyllene használja a telefon helyadatait.</string>
+    <string name="android_access_precise">Engedélyezd a pontos helyet: az Android csak ezzel figyel helyeket.</string>
+    <string name="android_access_background">Engedélyezd a helyet mindig: a helyeket akkor is figyeli, ha a Kyllene be van zárva. Válaszd a „Mindig engedélyezett” lehetőséget.</string>
+    <string name="android_access_calendar">Engedd, hogy a Kyllene használja a naptáradat.</string>
+    <string name="android_access_contacts">Engedd, hogy a Kyllene olvassa a névjegyeidet.</string>
+    <string name="android_access_health_update">Frissítsd a Health Connectet, onnan jönnek az adatok.</string>
+    <string name="android_access_health_install">Telepítsd a Health Connectet, onnan jönnek az adatok.</string>
+    <string name="android_access_health_none">Ezen a telefonon nincs Health Connect.</string>
+    <string name="android_access_health_read">Engedd, hogy a Kyllene olvassa a lépéseket, az alvást vagy a pulzust a Health Connectben.</string>
+    <string name="android_access_closed_optional">Akkor is, ha a Kyllene be van zárva (nem kötelező)</string>
+    <string name="android_access_health_more_optional">A lépések, az alvás vagy a pulzus is (nem kötelező)</string>
+    <string name="android_access_call_notifications">Kapcsold be a Kyllene értesítéseit: a hívás ott csörög.</string>
+    <string name="android_access_full_screen">Engedélyezd a teljes képernyős értesítéseket, hogy a hívás a lezárási képernyőn is megjelenjen.</string>
+</resources>

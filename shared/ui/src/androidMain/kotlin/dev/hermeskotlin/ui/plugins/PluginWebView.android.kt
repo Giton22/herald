@@ -64,6 +64,8 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
 import org.koin.compose.koinInject
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The plugin page in a WebView: the gateway's own HTML and JS for it, loaded at the gateway's origin.
@@ -201,7 +203,7 @@ actual fun PluginWebView(url: String, gateway: String, title: String, onClose: (
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            BarButton(Lucide.X, "Close the page", onClick = onClose)
+            BarButton(Lucide.X, stringResource(Res.string.android_plugin_close), onClick = onClose)
             Text(
                 title,
                 style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold),
@@ -220,8 +222,8 @@ actual fun PluginWebView(url: String, gateway: String, title: String, onClose: (
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
                 ) {
-                    Text("Couldn't open the page.", style = Theme[typography][body], color = Theme[colors][textTertiary])
-                    Button("Try again", onClick = {
+                    Text(stringResource(Res.string.android_plugin_failed), style = Theme[typography][body], color = Theme[colors][textTertiary])
+                    Button(stringResource(Res.string.android_plugin_retry), onClick = {
                         failed = false
                         loading = true
                         val target = webView.url?.takeUnless { it == "about:blank" } ?: url
