@@ -7,6 +7,7 @@
     <string name="android_media_audio_failed">音频未加载</string>
     <string name="android_media_video_failed">视频未加载</string>
     <string name="android_screen_closed">代理关闭了这个界面。</string>
+    <string name="android_screen_part_failed">无法显示这部分</string>
 
     <string name="android_attach_photo_failed">无法读取照片。</string>
     <string name="android_attach_no_camera">没有可用的相机应用。</string>

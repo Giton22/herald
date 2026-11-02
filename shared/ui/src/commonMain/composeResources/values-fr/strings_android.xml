@@ -7,6 +7,7 @@
     <string name="android_media_audio_failed">Audio non chargé</string>
     <string name="android_media_video_failed">Vidéo non chargée</string>
     <string name="android_screen_closed">L’agent a fermé cet écran.</string>
+    <string name="android_screen_part_failed">Impossible d’afficher cette partie</string>
 
     <string name="android_attach_photo_failed">Impossible de lire la photo.</string>
     <string name="android_attach_no_camera">Aucune application d’appareil photo n’est disponible.</string>

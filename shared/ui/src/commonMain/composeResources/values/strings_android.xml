@@ -12,6 +12,7 @@
     <string name="android_media_audio_failed">Audio didn’t load</string>
     <string name="android_media_video_failed">Video didn’t load</string>
     <string name="android_screen_closed">The agent closed this screen.</string>
+    <string name="android_screen_part_failed">Couldn’t draw this part</string>
 
     <!-- Attachments: picked, taken or shared from another app -->
     <string name="android_attach_photo_failed">Couldn’t read the photo.</string>

@@ -7,6 +7,7 @@
     <string name="android_media_audio_failed">A hang nem töltődött be</string>
     <string name="android_media_video_failed">A videó nem töltődött be</string>
     <string name="android_screen_closed">Az ügynök bezárta ezt a képernyőt.</string>
+    <string name="android_screen_part_failed">Ezt a részt nem sikerült megjeleníteni</string>
 
     <string name="android_attach_photo_failed">Nem sikerült beolvasni a fotót.</string>
     <string name="android_attach_no_camera">Nincs elérhető kameraalkalmazás.</string>

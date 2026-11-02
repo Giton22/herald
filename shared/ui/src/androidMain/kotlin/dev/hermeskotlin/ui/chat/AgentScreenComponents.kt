@@ -44,6 +44,8 @@ import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.surface2
 import dev.hermeskotlin.designsystem.surface3
 import dev.hermeskotlin.designsystem.text
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Whether this part of the screen is inside a row. A row gives each child the width the ones before it left, so a
@@ -83,7 +85,7 @@ internal object ScreenCard : A2uiBasicCatalogV1.Card {
             is A2uiComponentState.Success -> A2uiComponent(child.component, Modifier.padding(16.dp))
             // The agent hears why through the screen's error; the user needn't read it.
             is A2uiComponentState.Error -> Text(
-                "Couldn't draw this part",
+                stringResource(Res.string.android_screen_part_failed),
                 Modifier.padding(16.dp),
                 color = MaterialTheme.colorScheme.error,
                 style = MaterialTheme.typography.bodySmall,
@@ -201,7 +203,7 @@ private fun Child(state: A2uiComponentState, modifier: Modifier) {
     when (state) {
         is A2uiComponentState.Success -> A2uiComponent(state.component, modifier)
         is A2uiComponentState.Error -> Text(
-            "Couldn't draw this part",
+            stringResource(Res.string.android_screen_part_failed),
             modifier,
             color = MaterialTheme.colorScheme.error,
             style = MaterialTheme.typography.bodySmall,
