@@ -113,10 +113,26 @@ microphone and output devices; it is not a per-recording permission prompt.
 Recording begins only when requested, uses bounded PCM buffering, and releases its
 native device on completion, cancellation or failure. It changes no device defaults
 or system volume and writes no temporary recording files.
-The existing desktop voice UI remains disabled until playback is implemented;
+The existing desktop voice UI remains disabled until capability and UI integration;
 this backend alone does not enable dictation, spoken replies or live calls.
 Unit tests use synthetic PCM. Installed capture, audio quality and live-provider
 behavior require separate qualification; synthetic frames do not prove them.
+
+### Spoken playback backend
+
+Linux playback implements the existing `SpeechPlayer` contract through the same
+native audio backend and default output device. Freedesktop 26.08 supplies
+`/usr/bin/ffmpeg`; encoded replies and raw PCM are decoded through pipes to
+48 kHz mono PCM. Only pipe input and selected audio formats are allowed. The
+codec inherits no environment, opens no temporary media files and needs no new
+sandbox permission. Other Linux distributions need that executable separately.
+
+Playback buffers are bounded. Hold emits silence without consuming queued audio;
+cancellation or failure retires the owned codec and output device. No system
+volume, mute or device defaults are changed. Unit tests cover lifecycle and codec
+failures. Installed output, physical audio quality and live-provider behavior
+require separate qualification. This backend does not enable the desktop voice
+UI or live calls; those need their own capability and lifecycle integration.
 
 ## Advisory CI
 
