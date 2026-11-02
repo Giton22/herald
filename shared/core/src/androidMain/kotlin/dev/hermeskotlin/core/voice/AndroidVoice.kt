@@ -16,6 +16,7 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.ensureActive
@@ -35,7 +36,10 @@ import kotlin.math.sqrt
  * Records 16 kHz mono PCM with [AudioRecord] and hands it over as WAV, which every speech-to-text
  * provider takes. The level is Desktop's: RMS of the waveform, scaled so 1.0 is loud speech.
  */
-class AndroidVoiceRecorder : VoiceRecorder {
+class AndroidVoiceRecorder(
+    /** How long a microphone may send nothing before the recording fails. */
+    private val noAudioMs: Long = NO_AUDIO_MS,
+) : VoiceRecorder {
 
     @Volatile private var finishRequested = false
 
@@ -63,33 +67,23 @@ class AndroidVoiceRecorder : VoiceRecorder {
         val frame = ShortArray(FRAME_SAMPLES)
         val bytes = ByteBuffer.allocate(FRAME_SAMPLES * 2).order(ByteOrder.LITTLE_ENDIAN)
         val endOfSpeech = EndOfSpeech(activity)
-        var samples = 0L
-        var lastAudioAt = System.nanoTime()
+        var elapsed = 0L
         try {
             record.startRecording()
             if (record.recordingState != AudioRecord.RECORDSTATE_RECORDING) error("The microphone isn't available.")
             while (!finishRequested) {
                 ensureActive()
-                // A blocking read can keep cancellation from reaching the microphone's cleanup.
-                val read = record.read(frame, 0, frame.size, AudioRecord.READ_NON_BLOCKING)
-                if (read < 0) error("Couldn't read from the microphone.")
-                if (read == 0) {
-                    if ((System.nanoTime() - lastAudioAt) / NANOS_PER_MS >= NO_AUDIO_MS) error("The microphone stopped sending audio.")
-                    delay(FRAME_MS)
-                    continue
-                }
-                lastAudioAt = System.nanoTime()
+                if (!record.readFrame(frame) { finishRequested }) break
                 bytes.clear()
                 var sum = 0.0
-                for (i in 0 until read) {
-                    bytes.putShort(frame[i])
-                    sum += frame[i].toDouble() * frame[i]
+                for (sample in frame) {
+                    bytes.putShort(sample)
+                    sum += sample.toDouble() * sample
                 }
-                pcm.write(bytes.array(), 0, read * 2)
-                samples += read
-                val elapsed = samples * 1000L / SAMPLE_RATE
+                pcm.write(bytes.array())
+                elapsed += FRAME_MS
                 // Desktop measures 8-bit samples (±128) against 42; 16-bit samples are 256 times larger.
-                val level = min(1.0, sqrt(sum / read) / 256.0 / 42.0).toFloat()
+                val level = min(1.0, sqrt(sum / frame.size) / 256.0 / 42.0).toFloat()
                 onLevel(level)
                 val heardBefore = endOfSpeech.heardSpeech
                 val done = endOfSpeech.onFrame(level, elapsed)
@@ -157,17 +151,15 @@ class AndroidVoiceRecorder : VoiceRecorder {
                 onListening()
                 while (true) {
                     ensureActive()
-                    val read = record.read(frame, 0, frame.size)
-                    if (read < 0) return@withContext null
-                    if (read == 0) continue
-                    val bytes = ByteBuffer.allocate(read * 2).order(ByteOrder.LITTLE_ENDIAN)
+                    if (!record.readFrame(frame) { tripped && finishRequested }) break
+                    val bytes = ByteBuffer.allocate(frame.size * 2).order(ByteOrder.LITTLE_ENDIAN)
                     var sum = 0.0
-                    for (i in 0 until read) {
-                        bytes.putShort(frame[i])
-                        sum += frame[i].toDouble() * frame[i]
+                    for (sample in frame) {
+                        bytes.putShort(sample)
+                        sum += sample.toDouble() * sample
                     }
-                    elapsed += read * 1000L / SAMPLE_RATE
-                    val level = min(1.0, sqrt(sum / read) / 256.0 / 42.0).toFloat()
+                    elapsed += FRAME_MS
+                    val level = min(1.0, sqrt(sum / frame.size) / 256.0 / 42.0).toFloat()
                     if (tripped) {
                         pcm.write(bytes.array())
                         onLevel(level)
@@ -199,6 +191,32 @@ class AndroidVoiceRecorder : VoiceRecorder {
             }
             Recording(wav(pcm.toByteArray()), "audio/wav", heardSpeech = bargeIn.spoke || finishRequested)
         }
+
+    /**
+     * Fills [frame] with the next 20 ms, or returns false once [stop] says so. Reads don't block, so cancelling (and
+     * Finish) reach the caller even when the microphone stops sending; a whole frame each time keeps the level and
+     * the speech timers measuring 20 ms steps.
+     */
+    private suspend fun AudioRecord.readFrame(frame: ShortArray, stop: () -> Boolean): Boolean {
+        var filled = 0
+        var lastAudioAt = System.nanoTime()
+        while (filled < frame.size) {
+            currentCoroutineContext().ensureActive()
+            if (stop()) return false
+            val read = read(frame, filled, frame.size - filled, AudioRecord.READ_NON_BLOCKING)
+            when {
+                read == AudioRecord.ERROR_DEAD_OBJECT -> error("The microphone was disconnected.")
+                read < 0 -> error("Couldn't read from the microphone (error $read).")
+                read > 0 -> {
+                    filled += read
+                    lastAudioAt = System.nanoTime()
+                }
+                (System.nanoTime() - lastAudioAt) / NANOS_PER_MS >= noAudioMs -> error("The microphone stopped sending audio.")
+                else -> delay(FRAME_MS / 2)
+            }
+        }
+        return true
+    }
 
     private fun wav(pcm: ByteArray): ByteArray {
         val header = ByteBuffer.allocate(44).order(ByteOrder.LITTLE_ENDIAN).apply {
