@@ -1,6 +1,7 @@
 package dev.hermeskotlin.core.voice
 
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineStart
@@ -36,6 +37,7 @@ internal interface LivePeer : AutoCloseable {
 }
 
 /** Signaling and events only; a LiveCall supplies real media separately. One connection per instance. */
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 internal class LinuxLiveTransport(private val makePeer: (LivePeerEvents) -> LivePeer) : AutoCloseable {
     private val owner = Any()
     private var peer: LivePeer? = null
@@ -43,6 +45,7 @@ internal class LinuxLiveTransport(private val makePeer: (LivePeerEvents) -> Live
     private val terminal = AtomicReference<Throwable?>()
     private val ended = CompletableDeferred<Throwable>()
     private val releaseReported = AtomicBoolean()
+    private val queuedBytes = AtomicLong()
     // A reply streams one event per transcript fragment: a short pause in the consumer mustn't end the call.
     private val incoming = Channel<String>(MAX_QUEUED_EVENTS)
     val events: ReceiveChannel<String> = incoming
@@ -55,6 +58,12 @@ internal class LinuxLiveTransport(private val makePeer: (LivePeerEvents) -> Live
             val text = try { bytes.decodeToString(throwOnInvalidSequence = true) }
             catch (_: CharacterCodingException) {
                 ended(IllegalStateException("The call received an invalid text event.")); return false
+            }
+            // Bound the bytes as well as the count. Only this callback adds, so a queue seen empty holds nothing
+            // older: the tally restarts there, and otherwise only overcounts what the consumer has taken.
+            if (incoming.isEmpty) queuedBytes.set(0)
+            if (queuedBytes.addAndGet(bytes.size.toLong()) > MAX_QUEUED_BYTES) {
+                ended(IllegalStateException("The call's event queue is full.")); return false
             }
             val sent = incoming.trySend(text)
             if (sent.isFailure && !sent.isClosed) ended(IllegalStateException("The call's event queue is full."))
@@ -172,6 +181,7 @@ internal class LinuxLiveTransport(private val makePeer: (LivePeerEvents) -> Live
     companion object {
         const val MAX_EVENT_BYTES = 1024 * 1024
         const val MAX_QUEUED_EVENTS = 1024
+        const val MAX_QUEUED_BYTES = 16L * 1024 * 1024
         private const val MAX_SDP_CHARS = 1024 * 1024
     }
 }

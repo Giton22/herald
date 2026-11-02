@@ -110,6 +110,23 @@ class LinuxLiveTransportTest {
         } finally { transport.close() }
     }
 
+    @Test fun largeEventsTheConsumerHasntTakenAreBoundedByBytes() = checkTransport {
+        val peer = FakePeer()
+        val transport = LinuxLiveTransport { listener -> peer.apply { events = listener } }
+        try {
+            transport.connect { "answer" }
+            val large = ByteArray(1024 * 1024) { 'x'.code.toByte() }
+            // A consumer that keeps up never reaches the bound.
+            repeat(32) {
+                assertTrue(peer.events.message(large, false))
+                transport.events.receive()
+            }
+            repeat(16) { assertTrue(peer.events.message(large, false)) }
+            assertFalse(peer.events.message(large, false))
+            assertFalse(transport.send("retired"))
+        } finally { transport.close() }
+    }
+
     @Test fun binaryMalformedAndOversizedEventsEndWithoutForwardingPayload() = checkTransport {
         for ((bytes, binary) in listOf(byteArrayOf(1) to true, byteArrayOf(0xc3.toByte(), 0x28) to false, ByteArray(1024 * 1024 + 1) to false)) {
             val peer = FakePeer()
