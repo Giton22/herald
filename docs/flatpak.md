@@ -26,8 +26,9 @@ desktop dependencies differ per OS). Generate from the commit the manifest pins 
 move the pin with it; `test_catalog.py` fails when the version catalog has plugins
 the offline repository lacks. Review the generated diff and rebuild offline. The
 generator leaves out BOMs that a plugin's POM imports (AGP 9.5.0's `sdk-common`
-imports `org.bouncycastle:bc-jdk18on-bom`), so add any file the offline build reports
-missing by hand, with its sha512. Set `JAVA_HOME` to JBR 25 for generation and the Gradle fixture test. Run tests with
+imports `org.bouncycastle:bc-jdk18on-bom`). Add any file the offline build reports
+missing to `packaging/flatpak/extra-sources.json`, with its sha512; the script merges
+that file into every regeneration. Set `JAVA_HOME` to JBR 25 for generation and the Gradle fixture test. Run tests with
 `python3 -m unittest discover -s packaging/flatpak/tests -v`.
 
 JBR includes Chromium: security updates require updating its pinned archive and
