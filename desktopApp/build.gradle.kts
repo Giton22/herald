@@ -146,6 +146,12 @@ afterEvaluate {
                 // The remote-process server is for JCEF's out-of-process mode, which Herald doesn't use.
                 .filterNot { it.startsWith("cef_server") }
                 .forEach { File(jdk, "bin/$it").copyTo(File(bin, it), overwrite = true) }
+            // On Linux Chromium's helper process is a native-lib entry, lib/jcef_helper, and jlink writes those without
+            // the executable bit: Chromium then can't start it, and no widget or plugin page renders in the .deb.
+            val helper = runtime.get().asFile.resolve("lib/jcef_helper")
+            if (helper.isFile) {
+                check(helper.setExecutable(true, false) && helper.canExecute()) { "Couldn't make $helper executable" }
+            }
         }
     }
 }
