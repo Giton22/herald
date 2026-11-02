@@ -7,9 +7,11 @@ import dev.hermeskotlin.core.chat.TodoItem
 import dev.hermeskotlin.core.chat.TodoList
 import dev.hermeskotlin.core.chat.TodoStatus
 import dev.hermeskotlin.core.chat.ToolActivity
+import dev.hermeskotlin.ui.resources.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
+/** What [currentAction] is made of, the step [currentStep] picks; the words are the catalogue's. */
 class CurrentActionTest {
 
     private val plan = TodoList(
@@ -32,7 +34,7 @@ class CurrentActionTest {
     fun aRunningToolComesFirstInPlainWords() {
         val tool = ToolActivity("t1", "terminal", detail = "df -h\nmore", running = true)
 
-        assertEquals("Running a command: df -h", currentAction(running(tool, plan, "musing…")))
+        assertEquals(LiveStep(Words.Of(Res.string.chat_step_running_command), "df -h"), currentStep(running(tool, plan, "musing…")))
     }
 
     @Test
@@ -40,14 +42,14 @@ class CurrentActionTest {
         val tool = ToolActivity("t1", "terminal", detail = "sleep 25", running = true)
         val state = running(tool, plan).let { it.copy(messages = it.messages + ChatMessage.User("u2", "Then say hi", queued = true)) }
 
-        assertEquals("Running a command: sleep 25", currentAction(state))
+        assertEquals(LiveStep(Words.Of(Res.string.chat_step_running_command), "sleep 25"), currentStep(state))
     }
 
     @Test
     fun withoutAToolThePlanStepThenTheStatusThenThinking() {
-        assertEquals("Measure storage growth", currentAction(running(todos = plan, status = "musing…")))
-        assertEquals("musing…", currentAction(running(status = "musing…")))
-        assertEquals("Thinking…", currentAction(running()))
+        assertEquals(LiveStep(Words.Said("Measure storage growth")), currentStep(running(todos = plan, status = "musing…")))
+        assertEquals(LiveStep(Words.Said("musing…")), currentStep(running(status = "musing…")))
+        assertEquals(LiveStep(Words.Of(Res.string.chat_thinking)), currentStep(running()))
     }
 
     @Test
@@ -55,7 +57,7 @@ class CurrentActionTest {
         // Stopped mid-plan, then asked something else: that turn hasn't planned anything.
         val state = running(todos = plan, status = "musing…").copy(todosLive = false)
 
-        assertEquals("musing…", currentAction(state))
+        assertEquals(LiveStep(Words.Said("musing…")), currentStep(state))
     }
 
     @Test
@@ -63,6 +65,6 @@ class CurrentActionTest {
         val tool = ToolActivity("t1", "terminal", running = true)
         val state = running(tool).copy(inputRequests = listOf(InputRequest.Clarify("r1", emptyList())))
 
-        assertEquals("Waiting for your answer", currentAction(state))
+        assertEquals(LiveStep(Words.Of(Res.string.chat_screen_waiting)), currentStep(state))
     }
 }

@@ -1,0 +1,623 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+    The chat screen, its composer and everything drawn over it: the sheets, panels, cards and viewers.
+    Keys start with chat_. The running-send modes reuse running_send_* from strings.xml, so the Send menu
+    and Settings name them alike.
+    -->
+
+    <!-- Words several chat surfaces share -->
+    <string name="chat_open">Open</string>
+    <string name="chat_close">Close</string>
+    <string name="chat_dismiss">Dismiss</string>
+    <string name="chat_save">Save</string>
+    <string name="chat_save_named">Save %1$s</string>
+    <string name="chat_share">Share</string>
+    <string name="chat_share_named">Share: %1$s</string>
+    <string name="chat_open_in_app">Open in app</string>
+    <string name="chat_open_in_app_named">Open in app: %1$s</string>
+    <string name="chat_stop">Stop</string>
+    <string name="chat_restore">Restore</string>
+    <string name="chat_remove_named">Remove %1$s</string>
+    <string name="chat_hide_details">Hide details</string>
+    <string name="chat_show_details">Show details</string>
+    <string name="chat_details_shown">Details shown</string>
+    <string name="chat_details_hidden">Details hidden</string>
+    <string name="chat_detail_line">%1$s: %2$s</string>
+    <string name="chat_retry_tap">Tap to try again</string>
+    <string name="chat_retry_click">Click to try again</string>
+    <string name="chat_available_after_first_reply">Available once this chat is connected and has had its first reply.</string>
+
+    <!-- File kinds, as screen readers name them -->
+    <string name="chat_kind_markdown">Markdown</string>
+    <string name="chat_kind_json">JSON</string>
+    <string name="chat_kind_table">Table</string>
+    <string name="chat_kind_code">Code</string>
+    <string name="chat_kind_text">Text</string>
+    <string name="chat_kind_picture">Picture</string>
+    <string name="chat_kind_pdf">PDF</string>
+    <string name="chat_kind_file">File</string>
+
+    <!-- The file viewer -->
+    <string name="chat_file_line">line %1$d</string>
+    <plurals name="chat_pdf_pages">
+        <item quantity="one">%1$d page</item>
+        <item quantity="other">%1$d pages</item>
+    </plurals>
+    <string name="chat_pdf_page_of">Page %1$d of %2$d</string>
+    <string name="chat_file_source">Source</string>
+    <string name="chat_file_formatted">Formatted</string>
+    <string name="chat_file_preview">Preview</string>
+    <string name="chat_file_wrap">Wrap lines</string>
+    <string name="chat_file_no_wrap">Don’t wrap lines</string>
+    <string name="chat_file_copy_text">Copy the text</string>
+    <string name="chat_file_copy_failed">Couldn’t copy it to the clipboard. Save gets the whole file.</string>
+    <string name="chat_file_copied_part">Copied the part shown. Save gets the whole file.</string>
+    <string name="chat_file_copied_first">Copied the first %1$s characters. Save gets the whole file.</string>
+    <string name="chat_file_showing_first">Showing the first %1$s of %2$s. Save gets the whole file.</string>
+    <string name="chat_file_empty">The file is empty.</string>
+    <plurals name="chat_table_rows">
+        <item quantity="one">%1$d row</item>
+        <item quantity="other">%1$d rows</item>
+    </plurals>
+    <plurals name="chat_table_columns">
+        <item quantity="one">%1$d column</item>
+        <item quantity="other">%1$d columns</item>
+    </plurals>
+    <string name="chat_table_more">more in the full file</string>
+    <string name="chat_file_open_failed">Couldn’t open %1$s</string>
+    <string name="chat_file_no_preview">No preview for this file</string>
+    <string name="chat_file_no_preview_type">No preview for %1$s files</string>
+    <string name="chat_file_save_hint">Save it to the phone, or share it to an app that opens it.</string>
+    <string name="chat_file_save_hint_desktop">Save it, then open it with an app that can.</string>
+    <string name="chat_file_get_failed">Couldn’t get %1$s. %2$s</string>
+    <string name="chat_get_failed_named">Couldn’t get %1$s from the gateway.</string>
+
+    <!-- Why a file can't be shown -->
+    <string name="chat_file_not_connected">Not connected to a gateway.</string>
+    <string name="chat_file_missing">It isn’t on the gateway, or it has moved since the reply was written.</string>
+    <string name="chat_file_private">The gateway keeps files like this one private.</string>
+    <string name="chat_file_refused">The gateway won’t share it: %1$s.</string>
+    <string name="chat_file_too_large_preview">It’s too large for the gateway to preview. Save still gets it.</string>
+    <string name="chat_file_too_large_whole">It’s too large for the gateway to hand over.</string>
+    <string name="chat_file_sign_in">Sign in again to open files.</string>
+    <string name="chat_file_busy">The gateway is busy. Try again in a moment.</string>
+    <string name="chat_file_unreachable">Couldn’t reach the gateway.</string>
+    <string name="chat_file_could_not_open">Couldn’t open it.</string>
+    <string name="chat_pdf_locked">It’s protected with a password. Save it, or share it to an app that asks for one.</string>
+    <string name="chat_pdf_broken">It doesn’t read as a PDF: it may be damaged or cut short. Save gets the file as it is.</string>
+    <string name="chat_pdf_no_room">The phone has no room to open it right now. Save or share it instead.</string>
+
+    <!-- HTML widgets in a reply -->
+    <string name="chat_widget_not_html">This file isn’t HTML text.</string>
+    <string name="chat_widget_too_big">This widget is over the 512 KB preview limit.</string>
+    <string name="chat_widget_empty">This widget is empty.</string>
+    <string name="chat_widget_slow">The widget took too long to load.</string>
+    <string name="chat_widget_unreadable">Couldn’t read this widget.</string>
+    <string name="chat_widget_not_loaded">Couldn’t load this widget from the gateway.</string>
+    <string name="chat_widget_not_fetched">Couldn’t get this widget from the gateway.</string>
+    <string name="chat_widget_retry_tap">%1$s Tap to retry.</string>
+    <string name="chat_widget_retry_click">%1$s Click to retry.</string>
+
+    <!-- Pictures and files in a reply -->
+    <string name="chat_picture_from">Picture from %1$s</string>
+    <string name="chat_picture_from_web">Picture from the web</string>
+    <string name="chat_picture_load_tap">Tap to load it from that site</string>
+    <string name="chat_picture_load_click">Click to load it from that site</string>
+    <string name="chat_load_failed_named">Couldn’t load %1$s</string>
+    <string name="chat_picture_load_failed">Couldn’t load this picture.</string>
+    <string name="chat_picture_show_failed">Couldn’t show this picture.</string>
+    <string name="chat_link_open">Open link</string>
+    <string name="chat_link_copy">Copy link</string>
+
+    <!-- Attachments -->
+    <string name="chat_attachment_image">Image</string>
+    <string name="chat_attach_title">Add to message</string>
+    <string name="chat_attach_limits">Up to %1$d photos or files, %2$d MB each</string>
+    <string name="chat_attach_photos">Photos</string>
+    <string name="chat_attach_camera">Camera</string>
+    <string name="chat_attach_files">Files</string>
+
+    <!-- Comments on a reply, and the selection menu -->
+    <string name="chat_comment_note_placeholder">Add a note (optional)</string>
+    <string name="chat_comment_remove">Remove comment %1$d</string>
+    <string name="chat_select_comment">Comment</string>
+    <string name="chat_select_explain">Explain</string>
+    <string name="chat_select_ask_aside">Ask aside</string>
+
+    <!-- Find in chat -->
+    <string name="chat_find_placeholder">Find in this chat</string>
+    <string name="chat_find_none">No matches</string>
+    <string name="chat_find_position">%1$d of %2$d</string>
+    <string name="chat_find_previous">Previous match</string>
+    <string name="chat_find_next">Next match</string>
+    <string name="chat_find_close">Close find</string>
+
+    <!-- The Sessions button and the toast about another chat -->
+    <string name="chat_sessions_tooltip">%1$s (%2$s)</string>
+    <string name="chat_sessions_tooltip_next">%1$s (%2$s) · Right-click for the next</string>
+    <string name="chat_sessions_open">Open sessions</string>
+    <string name="chat_sessions_next">Next chat needing you</string>
+
+    <!-- A screen the agent shows -->
+    <string name="chat_screen_waiting">Waiting for your answer</string>
+    <string name="chat_screen_opening">Opening…</string>
+    <string name="chat_screen_tap_answers">A tap answers in the chat</string>
+    <string name="chat_screen_click_answers">A click answers in the chat</string>
+
+    <!-- Tool calls -->
+    <string name="chat_tool_failed">Failed</string>
+    <string name="chat_tool_suspicious">Suspicious output</string>
+    <string name="chat_tool_input">Input</string>
+    <string name="chat_tool_changes">Changes</string>
+    <string name="chat_tool_error">Error</string>
+    <string name="chat_tool_output">Output</string>
+    <string name="chat_tool_still_running">Still running…</string>
+    <string name="chat_tool_risk">This output looks like it’s trying to steer the agent or reach secrets. The agent was told not to trust it.</string>
+    <string name="chat_tool_risk_found">Found: %1$s</string>
+    <string name="chat_tool_redacted">Parts of it were redacted.</string>
+    <plurals name="chat_tool_count">
+        <item quantity="one">%1$d tool</item>
+        <item quantity="other">%1$d tools</item>
+    </plurals>
+
+    <!-- The task list and the live task card -->
+    <string name="chat_tasks_count">Tasks %1$d/%2$d</string>
+    <string name="chat_last_plan_count">Last plan %1$d/%2$d</string>
+    <string name="chat_tasks_fold">Fold the tasks</string>
+    <string name="chat_tasks_show">Show the tasks</string>
+    <string name="chat_detail_status">Status</string>
+    <string name="chat_detail_tool">Tool</string>
+    <string name="chat_plan_step_of">Step %1$d of %2$d</string>
+    <string name="chat_plan_done_of">%1$d of %2$d done</string>
+    <string name="chat_stop_task">Stop the task</string>
+
+    <!-- Subagents -->
+    <string name="chat_subagent_activity">Activity</string>
+    <string name="chat_subagent_result">Result</string>
+    <string name="chat_subagent_what_went_wrong">What went wrong</string>
+    <string name="chat_subagent_files_written">Files written</string>
+    <string name="chat_subagent_running">Running</string>
+    <string name="chat_subagent_waiting">Waiting to start</string>
+    <string name="chat_subagent_done">Done</string>
+    <string name="chat_subagent_running_background">Running in the background</string>
+    <string name="chat_subagent_in_background">In the background</string>
+    <string name="chat_subagent_stop">Stop this subagent</string>
+
+    <!-- Checkpoints -->
+    <string name="chat_checkpoints_title">Checkpoints</string>
+    <string name="chat_checkpoints_subtitle">Snapshots of this chat’s folder</string>
+    <plurals name="chat_checkpoints_count">
+        <item quantity="one">%1$d snapshot, taken before the agent changed files</item>
+        <item quantity="other">%1$d snapshots, taken before the agent changed files</item>
+    </plurals>
+    <string name="chat_checkpoints_read_failed">Couldn’t read the checkpoints.</string>
+    <string name="chat_checkpoints_off">Checkpoints are off on the gateway. Turn them on with checkpoints.enabled in the profile’s config.yaml; older Hermes versions read only HERMES_TUI_CHECKPOINTS=1 in the dashboard’s environment.</string>
+    <string name="chat_checkpoints_none">None yet. Hermes takes one just before the agent first changes a file in this chat’s folder. It never snapshots the home folder, so start the chat in a project to get them.</string>
+    <string name="chat_checkpoints_restore_waits">Restoring waits until the reply is done.</string>
+    <string name="chat_checkpoints_restore_title">Restore this checkpoint?</string>
+    <string name="chat_checkpoints_restore_message">Files the agent changed go back to this snapshot (%1$s), and this chat’s last turn is taken back. Files you edited yourself since are left alone.</string>
+    <string name="chat_checkpoints_hide_changes">Hide changes</string>
+    <string name="chat_checkpoints_show_changes">Show changes since this checkpoint</string>
+    <string name="chat_checkpoint">Checkpoint</string>
+    <string name="chat_checkpoints_unchanged">The folder is the same as at this checkpoint.</string>
+
+    <!-- Background processes -->
+    <string name="chat_processes_title">Background processes</string>
+    <string name="chat_processes_subtitle">Started by the agent in this chat</string>
+    <string name="chat_processes_none_running">None running</string>
+    <plurals name="chat_processes_running">
+        <item quantity="one">%1$d running</item>
+        <item quantity="other">%1$d running</item>
+    </plurals>
+    <string name="chat_processes_empty">Nothing running. Dev servers, builds and watchers the agent starts in the background show up here.</string>
+    <string name="chat_processes_finished">Finished</string>
+    <string name="chat_process_hide_output">Hide output</string>
+    <string name="chat_process_show_output">Show output</string>
+    <string name="chat_process_stopping">Stopping</string>
+    <string name="chat_process_no_output">No output yet.</string>
+    <string name="chat_process_running">Running</string>
+    <string name="chat_process_stopped">Stopped</string>
+    <string name="chat_process_exited">Exited with code %1$d</string>
+    <string name="chat_process_ended">Ended</string>
+    <string name="chat_process_pid">pid %1$d</string>
+
+    <!-- The model sheet -->
+    <string name="chat_model_title">Model</string>
+    <string name="chat_model_for_this_chat">For this chat</string>
+    <string name="chat_model_saving">Saving…</string>
+    <string name="chat_model_thinking">Thinking</string>
+    <string name="chat_model_load_failed">Couldn’t load the models.</string>
+    <string name="chat_try_again">Try again</string>
+    <string name="chat_model_search">Search models or providers</string>
+    <string name="chat_model_yours">Your models</string>
+    <string name="chat_model_all">All</string>
+    <string name="chat_model_starred">Starred</string>
+    <string name="chat_model_recent">Recent</string>
+    <string name="chat_model_models">Models</string>
+    <string name="chat_model_from">From %1$s</string>
+    <string name="chat_model_none">The gateway offers no models.</string>
+    <string name="chat_model_no_match">No models match “%1$s”.</string>
+    <string name="chat_model_fast">Fast mode</string>
+    <string name="chat_model_fast_detail">Priority processing. Costs more.</string>
+    <string name="chat_model_star">Star</string>
+    <string name="chat_model_unstar">Unstar</string>
+    <string name="chat_model_star_named">Star %1$s</string>
+    <string name="chat_model_unstar_named">Unstar %1$s</string>
+    <string name="chat_model_all_models">All models</string>
+    <string name="chat_model_switch_title">Switch to %1$s?</string>
+    <string name="chat_model_switch">Switch</string>
+    <string name="chat_effort_off">Off</string>
+    <string name="chat_effort_minimal">Minimal</string>
+    <string name="chat_effort_low">Low</string>
+    <string name="chat_effort_medium">Medium</string>
+    <string name="chat_effort_high">High</string>
+    <string name="chat_effort_xhigh">Extra high</string>
+    <string name="chat_effort_max">Max</string>
+    <string name="chat_effort_ultra">Ultra</string>
+
+    <!-- Rows the machinery writes into the chat -->
+    <string name="chat_event_compaction">Earlier messages summarized</string>
+    <string name="chat_event_routine">Routine “%1$s” ran</string>
+    <string name="chat_event_failed_turn">This turn did not complete.</string>
+    <string name="chat_event_system_messages">System messages · %1$d</string>
+    <string name="chat_event_other_bot">the other bot</string>
+    <string name="chat_event_delivered">Delivered to %1$s</string>
+    <string name="chat_event_noted">What %1$s noted after reading it</string>
+    <string name="chat_event_no_reply">%1$s read it and chose not to reply</string>
+    <string name="chat_event_still_waiting">Still waiting on %1$s · don’t send it again</string>
+    <string name="chat_event_unreachable">Couldn’t reach %1$s · %2$s</string>
+    <string name="chat_to_bot_to">To</string>
+    <string name="chat_to_bot_another">another bot</string>
+    <string name="chat_to_bot_reply">reply</string>
+    <string name="chat_to_bot_sending">sending…</string>
+    <string name="chat_to_bot_not_sent">not sent</string>
+    <string name="chat_to_bot_message">message</string>
+    <string name="chat_show_all">Show all</string>
+    <string name="chat_show_less">Show less</string>
+
+    <!-- The usage sheet -->
+    <string name="chat_usage_load_failed">Couldn’t load this chat’s usage.</string>
+    <string name="chat_usage_nothing">Nothing used yet.</string>
+    <string name="chat_usage_heading">Usage, this chat</string>
+    <string name="chat_usage_heading_model">Usage, this chat, %1$s</string>
+    <string name="chat_usage_this_chat">This chat</string>
+    <string name="chat_usage_included">Included</string>
+    <string name="chat_usage_not_priced">Not priced</string>
+    <string name="chat_usage_cost">Cost, %1$s</string>
+    <string name="chat_usage_cost_included">Covered by your plan with the provider</string>
+    <string name="chat_usage_cost_unpriced">The gateway has no price for this model, so its cost isn’t counted</string>
+    <string name="chat_usage_cost_estimated">Estimated from the model’s list prices</string>
+    <string name="chat_usage_cost_billed">As billed by the provider</string>
+    <plurals name="chat_usage_model_calls">
+        <item quantity="one">model call</item>
+        <item quantity="other">model calls</item>
+    </plurals>
+    <string name="chat_usage_reasoning">Reasoning</string>
+    <string name="chat_usage_from_cache">From cache</string>
+    <string name="chat_usage_read_from_cache">Read from cache</string>
+    <string name="chat_usage_to_cache">To cache</string>
+    <string name="chat_usage_written_to_cache">Written to cache</string>
+    <string name="chat_usage_tokens_spoken">%1$s, %2$s tokens</string>
+    <string name="chat_usage_context_window">Context window</string>
+    <string name="chat_usage_context_spoken">%1$s of %2$s tokens, %3$d percent</string>
+    <string name="chat_usage_context_spoken_about">About %1$s of %2$s tokens, %3$d percent</string>
+    <string name="chat_usage_cache_hit">%1$d% of the prompt came from cache</string>
+    <string name="chat_usage_files_read_in">Files read in</string>
+    <string name="chat_usage_skipped">skipped</string>
+    <string name="chat_usage_account">Account</string>
+
+    <!-- Approvals, questions and secrets the agent asks for -->
+    <string name="chat_requests_more">+%1$d more</string>
+    <string name="chat_stop_task_button">Stop task</string>
+    <string name="chat_approval_title">Allow this command?</string>
+    <string name="chat_approval_tool">Hermes wants to run this with %1$s.</string>
+    <string name="chat_approval_full_command">Show full command</string>
+    <string name="chat_approval_once">Allow once</string>
+    <string name="chat_approval_session">Allow for this chat</string>
+    <string name="chat_approval_always">Always allow</string>
+    <string name="chat_approval_session_detail">Commands like this run without asking again, in this chat only, until it ends.</string>
+    <string name="chat_approval_always_detail">Commands like this run without asking again, in every chat. Opens a confirmation first.</string>
+    <string name="chat_approval_choice_spoken">%1$s. %2$s</string>
+    <string name="chat_approval_choices_note">Allow once runs just this command. The others also let commands like it run without asking.</string>
+    <string name="chat_approval_always_title">Always allow?</string>
+    <string name="chat_approval_always_message">Commands like this will run without asking again, in every chat. The rule is saved in the gateway’s config; remove it there to undo.</string>
+    <string name="chat_clarify_title">Hermes asks</string>
+    <string name="chat_clarify_answer">Your answer</string>
+    <string name="chat_clarify_other">Something else…</string>
+    <string name="chat_skip">Skip</string>
+    <string name="chat_send">Send</string>
+    <string name="chat_next">Next</string>
+    <string name="chat_decline">Decline</string>
+    <string name="chat_submit">Submit</string>
+    <string name="chat_secret_sudo_title">Sudo password needed</string>
+    <string name="chat_secret_title">Secret needed</string>
+    <string name="chat_secret_vault_title">Unlock your password manager</string>
+    <string name="chat_secret_code_title">Sign-in code needed</string>
+    <string name="chat_secret_sudo_detail">To run this command as root:</string>
+    <string name="chat_secret_password">Password</string>
+    <string name="chat_secret_master_password">Master password</string>
+    <string name="chat_secret_code">Code</string>
+    <string name="chat_secret_gateway_only">Sent to your gateway only.</string>
+    <string name="chat_login_detail">Hermes is on a sign-in page and has no login for it. Save one to your gateway’s vault, and Hermes signs in with it.</string>
+    <string name="chat_login_detail_page">Hermes is on the sign-in page of %1$s and has no login for it. Save one to your gateway’s vault, and Hermes signs in with it.</string>
+    <string name="chat_login_identifier">Email or username</string>
+    <string name="chat_login_dont_save">Don’t save</string>
+
+    <!-- Goal, loop and heartbeat: the strip over the chat and its sheet -->
+    <string name="chat_control_title">Goal and loops</string>
+    <string name="chat_control_subtitle">Set with /goal, /loop and /heartbeat</string>
+    <string name="chat_control_open">Open goal and loops</string>
+    <string name="chat_control_spoken">%1$s. %2$s</string>
+    <string name="chat_goal">Goal</string>
+    <string name="chat_loop">Loop</string>
+    <string name="chat_heartbeat">Heartbeat</string>
+    <string name="chat_paused">Paused</string>
+    <string name="chat_goal_working">Working</string>
+    <string name="chat_goal_waiting">Waiting</string>
+    <string name="chat_goal_blocked">Blocked</string>
+    <string name="chat_goal_turn">turn %1$d</string>
+    <plurals name="chat_goal_turns_of">
+        <item quantity="one">%1$d of %2$d turn</item>
+        <item quantity="other">%1$d of %2$d turns</item>
+    </plurals>
+    <string name="chat_loop_held">Held by the goal</string>
+    <string name="chat_loop_finished">Finished</string>
+    <plurals name="chat_loop_runs">
+        <item quantity="one">%1$d run</item>
+        <item quantity="other">%1$d runs</item>
+    </plurals>
+    <plurals name="chat_loop_runs_of">
+        <item quantity="one">%1$d of %2$d run</item>
+        <item quantity="other">%1$d of %2$d runs</item>
+    </plurals>
+    <string name="chat_loop_due_now">due now</string>
+    <string name="chat_loop_next">next %1$s</string>
+    <string name="chat_loop_due_now_detail">Due now</string>
+    <string name="chat_loop_next_run">Next run %1$s</string>
+    <string name="chat_loop_self_paced">Self-paced</string>
+    <string name="chat_loop_until">Until: %1$s</string>
+    <string name="chat_loop_waits_for_goal">Waits while the goal is working.</string>
+    <string name="chat_loop_awaiting_reply">Waiting for its last reply.</string>
+    <string name="chat_loop_stopped_reason">Stopped: %1$s</string>
+    <plurals name="chat_heartbeat_fired">
+        <item quantity="one">%1$d fired</item>
+        <item quantity="other">%1$d fired</item>
+    </plurals>
+    <string name="chat_heartbeat_fired_now">Last fired just now</string>
+    <string name="chat_heartbeat_fired_ago">Last fired %1$s ago</string>
+    <string name="chat_every_seconds">every %1$d s</string>
+    <string name="chat_every_minutes">every %1$d min</string>
+    <string name="chat_every_hours">every %1$d h</string>
+    <string name="chat_every_hours_minutes">every %1$d h %2$d min</string>
+    <string name="chat_gate_not_run">not run yet</string>
+    <plurals name="chat_gate_attempts">
+        <item quantity="one">%1$d of %2$d attempt</item>
+        <item quantity="other">%1$d of %2$d attempts</item>
+    </plurals>
+    <string name="chat_gate_exit">exit %1$d</string>
+    <string name="chat_wait_until">Waiting until %1$s</string>
+    <string name="chat_wait_resume">Waiting to resume</string>
+    <string name="chat_wait_other_chat">Waiting on another chat</string>
+    <string name="chat_wait_process">Waiting on process %1$d</string>
+    <string name="chat_contract_outcome">Outcome</string>
+    <string name="chat_contract_verification">How it’s checked</string>
+    <string name="chat_contract_constraints">Constraints</string>
+    <string name="chat_contract_boundaries">Boundaries</string>
+    <string name="chat_contract_stop_when">Stop when</string>
+    <string name="chat_goal_checks">Checks</string>
+    <string name="chat_subgoals">Sub-goals</string>
+    <string name="chat_subgoal_add_placeholder">Add a sub-goal</string>
+    <string name="chat_subgoal_remove">Remove sub-goal</string>
+    <string name="chat_add">Add</string>
+    <string name="chat_pause">Pause</string>
+    <string name="chat_resume">Resume</string>
+    <string name="chat_resume_now">Resume now</string>
+    <string name="chat_clear">Clear</string>
+    <string name="chat_clear_all">Clear all</string>
+    <string name="chat_goal_clear">Clear goal</string>
+    <string name="chat_goal_clear_title">Clear this goal?</string>
+    <string name="chat_goal_clear_message">The agent stops working toward it. The chat stays.</string>
+    <string name="chat_subgoal_remove_title">Remove this sub-goal?</string>
+    <string name="chat_subgoal_remove_message">“%1$s” leaves the goal’s criteria. The goal itself stays.</string>
+    <string name="chat_subgoals_clear_title">Clear all sub-goals?</string>
+    <string name="chat_subgoals_clear_message">The goal keeps going without its criteria.</string>
+    <string name="chat_loop_stop_title">Stop this loop?</string>
+    <string name="chat_heartbeat_clear_title">Clear this heartbeat?</string>
+    <string name="chat_wont_fire_again">It won’t fire again. The chat stays.</string>
+
+    <!-- The top bar, its status line and the empty chat -->
+    <string name="chat_new_chat">New chat</string>
+    <string name="chat_options">Chat options</string>
+    <string name="chat_status_needs_answer">Needs your answer</string>
+    <string name="chat_status_working">Working</string>
+    <string name="chat_status_working_step">Working · step %1$d of %2$d</string>
+    <plurals name="chat_status_working_subagents">
+        <item quantity="one">Working · %1$d subagent</item>
+        <item quantity="other">Working · %1$d subagents</item>
+    </plurals>
+    <string name="chat_greeting_question">What are we\n%1$s today?</string>
+    <string name="chat_greeting_accent">building</string>
+    <string name="chat_greeting_place_profile">Hermes on %1$s · %2$s profile</string>
+    <string name="chat_greeting_place_default">Hermes on %1$s · default profile</string>
+    <string name="chat_greeting_profile">Hermes · %1$s profile</string>
+    <string name="chat_greeting_default">Hermes · default profile</string>
+    <string name="chat_attach">Attach</string>
+    <string name="chat_voice_chat">Voice chat</string>
+    <string name="chat_dictate">Dictate</string>
+    <string name="chat_finish_dictating">Finish dictating</string>
+    <string name="chat_transcribing">Transcribing…</string>
+    <!-- The composer's hint lines, picked at random: a new chat's, then a follow-up's -->
+    <string name="chat_prompt_new_1">What are we building?</string>
+    <string name="chat_prompt_new_2">Give Hermes a task</string>
+    <string name="chat_prompt_new_3">What’s on your mind?</string>
+    <string name="chat_prompt_new_4">Describe what you need</string>
+    <string name="chat_prompt_new_5">What should we tackle?</string>
+    <string name="chat_prompt_new_6">Ask anything</string>
+    <string name="chat_prompt_new_7">Start with a goal</string>
+    <string name="chat_prompt_follow_1">Send a follow-up</string>
+    <string name="chat_prompt_follow_2">Add more context</string>
+    <string name="chat_prompt_follow_3">Refine the request</string>
+    <string name="chat_prompt_follow_4">What’s next?</string>
+    <string name="chat_prompt_follow_5">Keep it going</string>
+    <string name="chat_prompt_follow_6">Push it further</string>
+    <string name="chat_prompt_follow_7">Adjust or continue</string>
+
+    <!-- The link to the gateway -->
+    <string name="chat_link_none">No connection</string>
+    <string name="chat_link_connecting_again">No connection · connecting again…</string>
+    <string name="chat_link_signed_out">Signed out · sign in again</string>
+    <string name="chat_link_waiting_network">Waiting for network…</string>
+    <string name="chat_link_reconnecting">Reconnecting…</string>
+    <string name="chat_offline_title">Can’t reach %1$s</string>
+    <string name="chat_offline_draft_kept">%1$s Your draft is kept.</string>
+    <string name="chat_retry_now">Retry now</string>
+    <string name="chat_retry">Retry</string>
+    <string name="chat_saved_copy_stale">%1$s · couldn’t load the latest</string>
+    <string name="chat_history_failed">Couldn’t load the conversation</string>
+    <string name="chat_loading_older">Loading earlier messages…</string>
+
+    <!-- Short notices over the composer -->
+    <string name="chat_notice_voice_mic">Voice needs the microphone. Allow it in Android’s settings.</string>
+    <string name="chat_notice_dictation_mic">Dictation needs the microphone. Allow it in Android’s settings.</string>
+    <string name="chat_notice_no_desktop_voice">Voice chat isn’t on the desktop yet.</string>
+    <string name="chat_notice_no_desktop_dictation">Dictation isn’t on the desktop yet.</string>
+    <string name="chat_notice_nothing_waiting">Nothing waiting</string>
+    <string name="chat_notice_adopted">Adopted %1$s</string>
+    <string name="chat_notice_prompt_not_sent">The prompt wasn’t sent: Kyllene couldn’t reach the gateway. It’s in the composer.</string>
+    <string name="chat_notice_call_not_started">The call didn’t start: Kyllene couldn’t reach the gateway.</string>
+    <string name="chat_notice_too_many_files">Up to %1$d attachments per message.</string>
+    <string name="chat_model_bot_note">A model picked here becomes %1$s’s own, for all its chats and routines.</string>
+    <string name="chat_drop_title">Drop to attach</string>
+    <string name="chat_drop_limits">Up to %1$d files, %2$d MB each.</string>
+    <string name="chat_send_again">Send again</string>
+    <string name="chat_editing_banner">Editing a message. Sending replaces it and everything after it.</string>
+
+    <!-- Messages in the conversation and what can be done with them -->
+    <string name="chat_copy">Copy</string>
+    <string name="chat_edit">Edit</string>
+    <string name="chat_edit_last_prompt">Edit last prompt</string>
+    <string name="chat_branch">Branch</string>
+    <string name="chat_branch_here">Branch from here</string>
+    <string name="chat_regenerate">Regenerate</string>
+    <string name="chat_read_aloud">Read aloud</string>
+    <string name="chat_stop_reading">Stop reading</string>
+    <string name="chat_message_actions">Message actions</string>
+    <string name="chat_queued">Queued · sends after this task</string>
+    <string name="chat_editing_in_composer">Editing in the composer</string>
+    <string name="chat_jump_latest">Jump to latest</string>
+    <string name="chat_new_reply">New reply</string>
+    <string name="chat_new_messages">New messages</string>
+    <string name="chat_turn_failed">The turn failed.</string>
+    <string name="chat_stopped">Stopped</string>
+    <string name="chat_reply_tokens_spoken">%1$s tokens in, %2$s out</string>
+    <string name="chat_delivery_checking">Checking whether Hermes got this…</string>
+    <string name="chat_delivery_unknown">May not have arrived</string>
+    <string name="chat_delivery_not_received">Not delivered</string>
+    <string name="chat_check_delivery">Check delivery</string>
+    <string name="chat_resend">Resend</string>
+    <string name="chat_resend_title">Resend this message?</string>
+    <string name="chat_resend_message_tap">Hermes may already have it. If it does, resending makes Hermes get the same request twice and run it again. Tap Check first to be sure.</string>
+    <string name="chat_resend_message_click">Hermes may already have it. If it does, resending makes Hermes get the same request twice and run it again. Click Check first to be sure.</string>
+    <string name="chat_change_branch_title">Branch from here?</string>
+    <string name="chat_change_regenerate_title">Regenerate this reply?</string>
+    <string name="chat_change_edit_title">Edit this message?</string>
+    <string name="chat_change_last_title">Edit your last prompt?</string>
+    <string name="chat_change_branch_message">Copies this chat up to this message into a new chat and opens it. This chat stays as it is. No task starts until you send something in the new chat.</string>
+    <plurals name="chat_change_regenerate_message">
+        <item quantity="one">This will discard %1$d later message, here and on Hermes, and send the prompt again.</item>
+        <item quantity="other">This will discard %1$d later messages, here and on Hermes, and send the prompt again.</item>
+    </plurals>
+    <plurals name="chat_change_edit_message">
+        <item quantity="one">Sending the edit will discard %1$d later message, here and on Hermes. Nothing changes until you send it.</item>
+        <item quantity="other">Sending the edit will discard %1$d later messages, here and on Hermes. Nothing changes until you send it.</item>
+    </plurals>
+    <string name="chat_change_last_message">Takes your last message and Hermes’s reply to it off this chat and puts the message back in the composer. No task starts until you send it again.</string>
+    <string name="chat_suggestion">Suggested reply</string>
+    <string name="chat_suggestion_use">Put in the composer</string>
+    <string name="chat_suggestion_dismiss">Dismiss the suggestion</string>
+    <string name="chat_ref_file">A file</string>
+    <string name="chat_ref_folder">A folder</string>
+    <string name="chat_mention">Mention %1$s</string>
+    <string name="chat_expand">Expand</string>
+    <string name="chat_collapse">Collapse</string>
+    <string name="chat_expanded">Expanded</string>
+    <string name="chat_collapsed">Collapsed</string>
+
+    <!-- What the agent is doing, and the steps it has done -->
+    <string name="chat_thinking">Thinking…</string>
+    <string name="chat_step_reading_bot_reply">Reading another bot’s reply</string>
+    <string name="chat_step_running_command">Running a command</string>
+    <string name="chat_step_reading_file">Reading a file</string>
+    <string name="chat_step_editing_file">Editing a file</string>
+    <string name="chat_step_searching_web">Searching the web</string>
+    <string name="chat_step_reading_page">Reading a web page</string>
+    <string name="chat_step_delegating">Working with subagents</string>
+    <string name="chat_step_messaging_bot">Messaging another bot</string>
+    <string name="chat_step_using">Using %1$s</string>
+    <string name="chat_team_done">%1$d of %2$d done</string>
+    <string name="chat_team_finished">%1$d of %2$d finished</string>
+    <string name="chat_done_ran">Ran</string>
+    <string name="chat_done_read">Read</string>
+    <string name="chat_done_edited">Edited</string>
+    <string name="chat_done_searched">Searched</string>
+    <string name="chat_done_delegated">Delegated</string>
+    <string name="chat_done_messaged">Messaged</string>
+    <string name="chat_done_ran_with">Ran with %1$s</string>
+    <string name="chat_done_read_with">Read with %1$s</string>
+    <string name="chat_done_edited_with">Edited with %1$s</string>
+    <string name="chat_done_searched_with">Searched with %1$s</string>
+    <string name="chat_done_delegated_with">Delegated with %1$s</string>
+    <string name="chat_done_messaged_with">Messaged with %1$s</string>
+    <string name="chat_done_used">Used %1$s</string>
+    <plurals name="chat_tools_ran">
+        <item quantity="one">Ran %1$d tool</item>
+        <item quantity="other">Ran %1$d tools</item>
+    </plurals>
+    <plurals name="chat_earlier_steps">
+        <item quantity="one">%1$d earlier step</item>
+        <item quantity="other">%1$d earlier steps</item>
+    </plurals>
+
+    <!-- The composer -->
+    <string name="chat_composer_reconnecting">Reconnecting to Hermes…</string>
+    <string name="chat_composer_anything_else">Anything else? (optional)</string>
+    <string name="chat_composer_add_to_task">Add to this task…</string>
+    <string name="chat_composer_edit_waits">Send the edit once this reply finishes.</string>
+    <string name="chat_commands_run_now">Commands run right away.</string>
+    <string name="chat_write_message">Write a message</string>
+    <string name="chat_add_files">Add photos or files</string>
+    <string name="chat_start_voice">Start a voice chat</string>
+    <string name="chat_send_tooltip">Send (Enter)</string>
+    <string name="chat_stop_task_tooltip">Stop the task (Esc)</string>
+    <string name="chat_send_other_ways">Other ways to send</string>
+    <string name="chat_send_no_files">Can’t carry files</string>
+    <string name="chat_change_model">Change model</string>
+    <string name="chat_model_fast_spoken">fast mode</string>
+    <string name="chat_model_pill_spoken">%1$s. %2$s</string>
+
+    <!-- Replies to commands this app answers itself; command names and their arguments stay as typed -->
+    <string name="chat_cmd_fresh_failed">Couldn’t start %1$s fresh.</string>
+    <string name="chat_cmd_steer_usage">Usage: /steer &lt;note&gt;. The running reply reads it after its current step, without stopping.</string>
+    <string name="chat_cmd_title_bot">A bot’s chat keeps its name, so the bot can find it.</string>
+    <string name="chat_cmd_branch_usage">Usage: /branch [how many messages to keep]</string>
+    <string name="chat_cmd_skin_usage">Themes here: light, dark, black or system.</string>
+    <string name="chat_cmd_skin_system">Theme: matches the system.</string>
+    <string name="chat_cmd_skin_light">Theme: light.</string>
+    <string name="chat_cmd_skin_dark">Theme: dark.</string>
+    <string name="chat_cmd_skin_black">Theme: black.</string>
+    <string name="chat_cmd_pet_hidden">Pet put away. Bring one back with /pet.</string>
+    <string name="chat_cmd_pet_hide_failed">Couldn’t put the pet away.</string>
+    <string name="chat_cmd_pet_unknown">No pet called “%1$s”. Type /pet to browse them.</string>
+    <string name="chat_cmd_pet_adopted">Adopted %1$s.</string>
+    <string name="chat_cmd_pet_adopt_failed">Couldn’t adopt %1$s.</string>
+    <string name="chat_cmd_resume_none">No chat matches “%1$s”.</string>
+    <string name="chat_cmd_resume_failed">Couldn’t search the chats.</string>
+    <string name="chat_cmd_profile_failed">Couldn’t load the gateway’s profiles.</string>
+    <string name="chat_cmd_profile_current">Profile: %1$s</string>
+    <string name="chat_cmd_profile_others">Also on this gateway: %1$s</string>
+    <string name="chat_cmd_profile_unknown">No profile named “%1$s”. This gateway has: %2$s</string>
+    <string name="chat_cmd_profile_already">Already in %1$s.</string>
+    <string name="chat_cmd_help_failed">Couldn’t load the command list. Type / to try again.</string>
+    <string name="chat_cmd_help_group">Commands</string>
+</resources>
