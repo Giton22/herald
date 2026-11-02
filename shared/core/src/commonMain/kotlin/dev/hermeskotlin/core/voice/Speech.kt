@@ -112,8 +112,8 @@ interface VoiceRecorder {
      * Listens while the agent works and speaks, for someone talking over it ([bargeIn] decides), with the echo
      * cancelling a call uses. [playing] says whether the voice is sounding right now; [onTrip] fires the moment
      * someone cuts in, and [onLevel] gets the input level from then on. [onListening] fires once the microphone is
-     * actually listening. Returns what they said, from its first syllable, once they pause; null when the microphone
-     * couldn't listen. Cancelling stops it. Its [Recording.heardSpeech] says whether they went on talking once the
+     * actually listening. Returns what they said, from its first syllable, once they pause; null (or a throw) when the
+     * microphone couldn't listen or stopped sending audio. Cancelling stops it. Its [Recording.heardSpeech] says whether they went on talking once the
      * voice held ([BargeIn.spoke]), which its own echo doesn't.
      *
      * A recorder that can't listen over the voice never returns, so nobody ever cuts in.

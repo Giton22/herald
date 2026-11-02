@@ -98,6 +98,13 @@ class AndroidVoiceRecorderTest {
         assertEquals(1, released.get())
     }
 
+    @Test fun otherReadErrorsSayTheirCode() = runBlocking {
+        mode = "invalid"
+        val failure = withTimeout(2_000) { runCatching { AndroidVoiceRecorder().record(VoiceActivity()) } }.exceptionOrNull()
+        assertEquals("Couldn't read from the microphone (error ${AudioRecord.ERROR_INVALID_OPERATION}).", failure?.message)
+        assertEquals(1, released.get())
+    }
+
     @Test fun noDataFailsWithoutSpinning() = runBlocking {
         mode = "zero"
         val result = withTimeout(2_000) { runCatching { AndroidVoiceRecorder(noAudioMs = 200).record(VoiceActivity()) } }
@@ -213,6 +220,7 @@ class AndroidVoiceRecorderTest {
                 return 0
             }
             if (mode == "error") return AudioRecord.ERROR_DEAD_OBJECT
+            if (mode == "invalid") return AudioRecord.ERROR_INVALID_OPERATION
             if (mode == "empty" || mode == "zero" || mode == "gapped" && attempt % 2 == 1) return 0
             val size = if (mode == "partial") 1 else count
             data.fill(0, offset, offset + size)
