@@ -1,5 +1,6 @@
 package dev.hermeskotlin.ui.chat
 
+import androidx.compose.ui.unit.IntSize
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.ui.voice.DictationState
 import kotlin.test.Test
@@ -51,10 +52,10 @@ class ChatScreenTest {
 
     @Test
     fun aTrimNeverLeavesANegativeSize() {
-        assertEquals(32 to 40, trimmedSize(width = 48, height = 44, end = 16, top = 4))
+        assertEquals(IntSize(32, 40), trimmedSize(width = 48, height = 44, end = 16, top = 4))
         // The largest text on the cover screen squeezed Copy to nothing; it used to lay out at -42 wide and crash.
-        assertEquals(0 to 111, trimmedSize(width = 0, height = 115, end = 42, top = 4))
-        assertEquals(0 to 0, trimmedSize(width = 10, height = 2, end = 42, top = 4))
+        assertEquals(IntSize(0, 111), trimmedSize(width = 0, height = 115, end = 42, top = 4))
+        assertEquals(IntSize(0, 0), trimmedSize(width = 10, height = 2, end = 42, top = 4))
     }
 
     @Test
