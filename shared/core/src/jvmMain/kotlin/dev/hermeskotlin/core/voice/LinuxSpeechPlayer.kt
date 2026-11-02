@@ -3,6 +3,7 @@ package dev.hermeskotlin.core.voice
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.atomic.AtomicReference
+import kotlin.math.roundToInt
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
@@ -26,8 +27,11 @@ internal interface SpeechDecoder {
     suspend fun decode(chunks: ReceiveChannel<ByteArray>, format: PcmFormat?, emit: suspend (ByteArray) -> Unit)
 }
 internal interface SpeechOutput : AutoCloseable {
-    /** Each pull supplies a 960-byte frame; callbacks must not block the native audio thread. */
-    fun start(fill: (ByteArray) -> Unit, fail: (Throwable) -> Unit)
+    /**
+     * Each pull supplies a frame of 16-bit PCM at the device's own rate and channel count (a PulseAudio server often
+     * runs at 44.1 kHz, or in stereo); callbacks must not block the native audio thread.
+     */
+    fun start(fill: (bytes: ByteArray, sampleRate: Int, channels: Int) -> Unit, fail: (Throwable) -> Unit)
 }
 
 /** Every playback owns its decoder/device; cancellation cannot retire another caller's audio. */
@@ -114,7 +118,13 @@ internal class LinuxSpeechPlayer(private val decoder: SpeechDecoder, private val
         private val stopped = AtomicBoolean()
         private val frames = Channel<ByteArray>(32, onUndeliveredElement = { it.fill(0) })
         private var submitted = 0
-        private var tail = 0
+        // Device-thread state: the decoded frame being played and where in it (in 48 kHz samples), how long the
+        // device has been fed only silence, and how long since the input ended.
+        private var playing: ByteArray? = null
+        private var position = 0.0
+        private var quietMs = 0L
+        private var tailMs = 0L
+        private var lastPoll: kotlinx.coroutines.channels.ChannelResult<ByteArray>? = null
 
         suspend fun frame(bytes: ByteArray) {
             check(bytes.isNotEmpty() && bytes.size <= 960 && bytes.size % 2 == 0) { "Unsupported decoded speech format." }
@@ -134,28 +144,73 @@ internal class LinuxSpeechPlayer(private val decoder: SpeechDecoder, private val
                 done.completeExceptionally(caught)
             }
         }
-        fun fill(bytes: ByteArray) {
+        fun fill(bytes: ByteArray, sampleRate: Int, channels: Int) {
             bytes.fill(0)
             if (stopped.get()) return
             lastPull.set(System.nanoTime())
             if (holding.get()) { sound.trySend(false); return }
-            if (bytes.size != 960) { fail(IllegalStateException("Unsupported speaker format.")); return }
-            val next = frames.tryReceive()
-            if (next.isSuccess) {
-                val pcm = next.getOrThrow()
-                val audible = pcm.any { it != 0.toByte() }
-                pcm.copyInto(bytes)
-                pcm.fill(0)
-                sound.trySend(audible)
-            } else {
-                sound.trySend(false)
-                if (next.isClosed) {
-                    next.exceptionOrNull()?.let { fail(it); return }
-                    // Continue pulling silence briefly so the final frame can leave the backend's buffer.
-                    if (++tail >= 20) succeed()
+            if (sampleRate !in 8_000..192_000 || channels !in 1..2 || bytes.size % (2 * channels) != 0) {
+                fail(IllegalStateException("Unsupported speaker format.")); return
+            }
+            // Decoded speech is 48 kHz mono; step through it at the device's rate (linear interpolation) and copy
+            // each sample to every channel.
+            val count = bytes.size / (2 * channels)
+            val step = DECODED_RATE.toDouble() / sampleRate
+            var written = 0
+            while (written < count) {
+                val sample = nextSample(step) ?: break
+                for (channel in 0 until channels) {
+                    val at = (written * channels + channel) * 2
+                    bytes[at] = sample.toByte()
+                    bytes[at + 1] = (sample.toInt() shr 8).toByte()
                 }
+                written++
+            }
+            val ms = count * 1000L / sampleRate
+            if (written > 0) {
+                quietMs = 0
+                sound.trySend(true)
+                return
+            }
+            // A gap between sentences, or a late network chunk, isn't the end of speaking: as Android, report
+            // silence only once it has lasted.
+            quietMs += ms
+            if (quietMs >= QUIET_MS) sound.trySend(false)
+            val poll = lastPoll
+            if (poll != null && poll.isClosed) {
+                poll.exceptionOrNull()?.let { fail(it); return }
+                // Keep pulling silence while the last frames leave the backend's buffer, as long as Android waits.
+                tailMs += ms
+                if (tailMs >= TAIL_MS) succeed()
             }
         }
+
+        private fun nextSample(step: Double): Short? {
+            while (true) {
+                val pcm = playing
+                if (pcm != null) {
+                    val size = pcm.size / 2
+                    if (position < size) {
+                        val index = position.toInt()
+                        val a = sampleAt(pcm, index)
+                        val b = if (index + 1 < size) sampleAt(pcm, index + 1) else a
+                        val sample = a + (b - a) * (position - index)
+                        position += step
+                        return sample.roundToInt().toShort()
+                    }
+                    position -= size
+                    pcm.fill(0)
+                    playing = null
+                }
+                val next = frames.tryReceive()
+                lastPoll = next
+                if (!next.isSuccess) return null
+                playing = next.getOrThrow()
+            }
+        }
+
+        private fun sampleAt(pcm: ByteArray, index: Int): Int =
+            ((pcm[index * 2].toInt() and 255) or (pcm[index * 2 + 1].toInt() shl 8)).toShort().toInt()
         private fun succeed() {
             if (terminal.compareAndSet(null, completed)) {
                 stopped.set(true)
@@ -163,5 +218,11 @@ internal class LinuxSpeechPlayer(private val decoder: SpeechDecoder, private val
             }
         }
         fun stop() { stopped.set(true); frames.cancel(); sound.cancel() }
+    }
+
+    private companion object {
+        const val DECODED_RATE = 48_000
+        const val QUIET_MS = 600L
+        const val TAIL_MS = 400L
     }
 }

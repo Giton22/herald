@@ -47,6 +47,39 @@ class FfmpegSpeechDecoderTest {
         assertTrue(process.destroyed)
     }
 
+    @Test fun eachChunkReachesTheCodecWithoutWaitingForMore() = runBlocking {
+        // cat stands in for ffmpeg over real pipes: a chunk left in the JVM's stdin buffer never comes back out.
+        assumeTrue(System.getProperty("os.name") == "Linux" && File("/usr/bin/cat").canExecute())
+        val chunks = Channel<ByteArray>(1)
+        val frames = Channel<ByteArray>(Channel.UNLIMITED)
+        val job = launch(Dispatchers.IO) {
+            FfmpegSpeechDecoder { ProcessBuilder("/usr/bin/cat").start() }.decode(chunks, PcmFormat(48_000, 1)) { frames.send(it) }
+        }
+        chunks.send(ByteArray(960) { 3 })
+        assertContentEquals(ByteArray(960) { 3 }, withTimeout(2_000) { frames.receive() })
+        chunks.close()
+        job.join()
+    }
+
+    @Test fun inputRejectedByTheCodecIsADecodeErrorNotABrokenPipe() = runBlocking {
+        val process = object : Process() {
+            override fun getOutputStream() = object : java.io.OutputStream() {
+                override fun write(b: Int) = throw java.io.IOException("Broken pipe")
+            }
+            override fun getInputStream() = ByteArrayInputStream(byteArrayOf())
+            override fun getErrorStream() = ByteArrayInputStream(byteArrayOf())
+            override fun waitFor() = 1
+            override fun waitFor(timeout: Long, unit: TimeUnit) = true
+            override fun exitValue() = 1
+            override fun destroy() {}
+            override fun isAlive() = false
+        }
+        val chunks = Channel<ByteArray>(1)
+        chunks.send(byteArrayOf(1, 2, 3)); chunks.close()
+        val failure = assertFailsWith<IllegalStateException> { FfmpegSpeechDecoder { process }.decode(chunks, null) { } }
+        assertEquals("The spoken reply couldn't be decoded.", failure.message)
+    }
+
     @Test fun unsuccessfulCodecExitFailsAndReleasesOwnedProcess() = runBlocking {
         val process = FinishedProcess(byteArrayOf(1, 2), 7)
         val chunks = Channel<ByteArray>(1); chunks.close()

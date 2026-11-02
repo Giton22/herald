@@ -37,8 +37,10 @@ actual val platformModule: Module = module {
             LinuxVoiceRecorder(::WebRtcMicrophone)
         } else NoVoiceRecorder
     }
+    // Decoding needs ffmpeg at the runtime's path: the Flatpak runtime has it, a host install may not.
     single<SpeechPlayer> {
-        if (System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in setOf("amd64", "x86_64", "aarch64")) {
+        if (System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in setOf("amd64", "x86_64", "aarch64") &&
+            File("/usr/bin/ffmpeg").canExecute()) {
             LinuxSpeechPlayer(FfmpegSpeechDecoder(), ::WebRtcSpeaker)
         } else NoSpeechPlayer
     }

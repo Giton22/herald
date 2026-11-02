@@ -38,7 +38,17 @@ internal class FfmpegSpeechDecoder(private val start: (ProcessBuilder) -> Proces
                     val writer = launch {
                         var remainder = 0
                         for (bytes in chunks) {
-                            runInterruptible(Dispatchers.IO) { child.outputStream.write(bytes) }
+                            // The process's stdin is buffered (8 KB): without a flush a sentence's last chunk waits in
+                            // it while the agent works on the next, and the reply goes quiet mid-word.
+                            try {
+                                runInterruptible(Dispatchers.IO) { child.outputStream.write(bytes); child.outputStream.flush() }
+                            } catch (broken: java.io.IOException) {
+                                // ffmpeg exits as soon as it rejects the input, which breaks the pipe under this write.
+                                if (runInterruptible(Dispatchers.IO) { child.waitFor(2, TimeUnit.SECONDS) } && child.exitValue() != 0) {
+                                    throw IllegalStateException("The spoken reply couldn't be decoded.", broken)
+                                }
+                                throw broken
+                            }
                             if (format != null) remainder = (remainder + bytes.size % (2 * format.channels)) % (2 * format.channels)
                         }
                         check(remainder == 0) { "The speech stream ended inside a PCM sample." }

@@ -32,7 +32,8 @@ class LinuxSpeechPlayerTest {
         val app = koinApplication { modules(platformModule) }
         try {
             val player = app.koin.get<SpeechPlayer>()
-            if (System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in setOf("amd64", "x86_64", "aarch64")) {
+            if (System.getProperty("os.name") == "Linux" && System.getProperty("os.arch") in setOf("amd64", "x86_64", "aarch64") &&
+                java.io.File("/usr/bin/ffmpeg").canExecute()) {
                 assertIs<LinuxSpeechPlayer>(player)
             } else assertTrue(player === NoSpeechPlayer)
         } finally { app.close() }
@@ -46,7 +47,7 @@ class LinuxSpeechPlayerTest {
         val job = async { player.play(SpokenAudio(input, "audio/mpeg")) }
         speaker.ready.await()
         assertContentEquals(ByteArray(960) { 7 }, speaker.render())
-        repeat(25) { speaker.render() }
+        repeat(45) { speaker.render() }
         speaker.fail(IllegalStateException("Retired device callback"))
         job.await()
         assertTrue(speaker.closed)
@@ -80,7 +81,7 @@ class LinuxSpeechPlayerTest {
         assertFalse(job.isCompleted)
         assertTrue(player.hold(false))
         assertContentEquals(ByteArray(960) { 5 }, speaker.render())
-        repeat(25) { speaker.render() }
+        repeat(45) { speaker.render() }
         job.await()
         assertTrue(speaker.closed)
     }
@@ -106,7 +107,7 @@ class LinuxSpeechPlayerTest {
         var closed = false
         val player = LinuxSpeechPlayer(decoder { it(ByteArray(960)) }) {
             object : SpeechOutput {
-                override fun start(fill: (ByteArray) -> Unit, fail: (Throwable) -> Unit) { throw original }
+                override fun start(fill: (ByteArray, Int, Int) -> Unit, fail: (Throwable) -> Unit) { throw original }
                 override fun close() { closed = true; throw cleanup }
             }
         }
@@ -123,7 +124,7 @@ class LinuxSpeechPlayerTest {
         var closed = false
         val player = LinuxSpeechPlayer(decoder { it(ByteArray(960)) }) {
             object : SpeechOutput {
-                override fun start(fill: (ByteArray) -> Unit, fail: (Throwable) -> Unit) { throw original }
+                override fun start(fill: (ByteArray, Int, Int) -> Unit, fail: (Throwable) -> Unit) { throw original }
                 override fun close() { closed = true; throw original }
             }
         }
@@ -153,7 +154,7 @@ class LinuxSpeechPlayerTest {
         delay(650)
         assertFalse(job.isCompleted)
         assertContentEquals(ByteArray(960) { 6 }, speaker.render())
-        repeat(25) { speaker.render() }
+        repeat(45) { speaker.render() }
         assertTrue(job.await().isSuccess)
     }
 
@@ -173,6 +174,45 @@ class LinuxSpeechPlayerTest {
         } finally { scope.cancel() }
     }
 
+    @Test fun aSpeakerAt44kHzStereoPlaysTheDecodedSpeech() = checkPlayback {
+        // A PulseAudio server's usual default; WebRTC asks at the server's rate and channel count.
+        val speaker = FakeOutput(rate = 44_100, channels = 2)
+        val player = LinuxSpeechPlayer(decoder { emit -> repeat(3) { emit(ByteArray(960) { 7 }) } }) { speaker }
+        val job = async { player.play(SpokenAudio(byteArrayOf(1), "audio/wav")) }
+        speaker.ready.await()
+        val pulled = speaker.render()
+        assertEquals(441 * 2 * 2, pulled.size)
+        assertContentEquals(ByteArray(pulled.size) { 7 }, pulled)
+        repeat(50) { speaker.render() }
+        job.await()
+        assertTrue(speaker.closed)
+    }
+
+    @Test fun aShortGapBetweenSentencesIsntTheEndOfSpeaking() = checkPlayback {
+        val speaker = FakeOutput()
+        val sounds = Channel<Boolean>(Channel.UNLIMITED)
+        val chunks = Channel<ByteArray>(Channel.UNLIMITED)
+        val player = LinuxSpeechPlayer(object : SpeechDecoder {
+            override suspend fun decode(chunks: ReceiveChannel<ByteArray>, format: PcmFormat?, emit: suspend (ByteArray) -> Unit) {
+                for (chunk in chunks) emit(chunk)
+            }
+        }) { speaker }
+        val job = async { player.playPcm(48_000, 1, chunks) { sounds.trySend(it) } }
+        chunks.send(ByteArray(960) { 1 })
+        speaker.ready.await()
+        speaker.render()
+        assertEquals(true, sounds.receive())
+        // 300 ms with nothing to play: a late chunk, not silence yet.
+        repeat(30) { speaker.render() }
+        delay(100)
+        assertTrue(sounds.tryReceive().isFailure)
+        repeat(31) { speaker.render() }
+        assertEquals(false, sounds.receive())
+        chunks.close()
+        repeat(45) { speaker.render() }
+        job.await()
+    }
+
     @Test fun unsupportedPcmDoesNotOpenCodecOrDevice() = checkPlayback {
         var opened = false
         val player = LinuxSpeechPlayer(decoder { opened = true }) { opened = true; FakeOutput() }
@@ -186,14 +226,15 @@ class LinuxSpeechPlayerTest {
     private fun decoder(block: suspend (suspend (ByteArray) -> Unit) -> Unit) = object : SpeechDecoder {
         override suspend fun decode(chunks: ReceiveChannel<ByteArray>, format: PcmFormat?, emit: suspend (ByteArray) -> Unit) = block(emit)
     }
-    private class FakeOutput : SpeechOutput {
+    private class FakeOutput(private val rate: Int = 48_000, private val channels: Int = 1) : SpeechOutput {
         val ready = CompletableDeferred<Unit>()
         var closed = false
-        private lateinit var fill: (ByteArray) -> Unit
+        private lateinit var fill: (ByteArray, Int, Int) -> Unit
         private lateinit var failure: (Throwable) -> Unit
-        override fun start(fill: (ByteArray) -> Unit, fail: (Throwable) -> Unit) { this.fill = fill; failure = fail; ready.complete(Unit) }
+        override fun start(fill: (ByteArray, Int, Int) -> Unit, fail: (Throwable) -> Unit) { this.fill = fill; failure = fail; ready.complete(Unit) }
         fun fail(cause: Throwable) = failure(cause)
-        fun pullNow(): ByteArray = ByteArray(960).also { fill(it) }
+        /** One 10 ms pull, as WebRTC asks. */
+        fun pullNow(): ByteArray = ByteArray(rate / 100 * 2 * channels).also { fill(it, rate, channels) }
         suspend fun render(): ByteArray = pullNow().also { yield() }
         override fun close() { closed = true }
     }

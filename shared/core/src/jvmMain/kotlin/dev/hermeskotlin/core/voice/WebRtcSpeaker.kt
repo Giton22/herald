@@ -8,19 +8,22 @@ import dev.onvoid.webrtc.media.audio.AudioLayer
 internal class WebRtcSpeaker : SpeechOutput {
     private var module: AudioDeviceModule? = null
 
-    override fun start(fill: (ByteArray) -> Unit, fail: (Throwable) -> Unit) {
+    override fun start(fill: (ByteArray, Int, Int) -> Unit, fail: (Throwable) -> Unit) {
         check(module == null)
         try {
             val native = AudioDeviceModule(AudioLayer.kLinuxPulseAudio)
             module = native
             val device = MediaDevices.getDefaultAudioRenderDevice() ?: error("No default speaker")
             native.setPlayoutDevice(device)
+            // The device asks at its server's own rate and channel count; WebRTC's "bytes per sample" is per frame
+            // of all channels.
             native.setAudioSource { bytes, samples, bytesPerSample, channels, rate ->
                 bytes.fill(0)
-                if (bytes.size != 960 || samples != 480 || bytesPerSample != 2 || channels != 1 || rate != 48_000) {
+                if (channels !in 1..2 || bytesPerSample != channels * 2 || rate !in 8_000..192_000 || samples <= 0 ||
+                    samples.toLong() * bytesPerSample != bytes.size.toLong()) {
                     fail(IllegalStateException("The speaker returned an unsupported audio format."))
                 } else {
-                    try { fill(bytes) } catch (caught: Throwable) {
+                    try { fill(bytes, rate, channels) } catch (caught: Throwable) {
                         bytes.fill(0)
                         fail(caught)
                     }
