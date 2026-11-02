@@ -182,14 +182,17 @@ the installation for inspection instead of deleting an unverified ref.
 
 Run `python3 packaging/flatpak/tests/installed_smoke.py build/kyllene.flatpak`
 on Linux with Flatpak, its matching runtime, Xvfb, xauth, xdotool and Pillow
-installed, in a session whose Secret portal can answer: the app reads its settings
-key from it at startup. A desktop session has one; CI starts its own bus with an
-unlocked gnome-keyring as the portal's backend. Direct invocation on Windows/macOS exits before optional imports or
-external actions; use a suitable Linux environment or open/update a PR to trigger
-the Ubuntu GitHub Actions job. Portable fixture/platform contracts still run in
+installed. The app reads its settings key from the Secret portal at startup, so
+run it as CI does: `dbus-run-session` with a throwaway unlocked gnome-keyring as
+the portal's Secret backend (see `.github/workflows/linux.yml`). On a desktop
+session it would use, and leave an item in, your own keyring. Direct invocation
+on Windows/macOS exits before optional imports or external actions; use a
+suitable Linux environment or open/update a PR to trigger the Ubuntu GitHub
+Actions job. Portable fixture/platform contracts still run in
 normal test discovery; Linux-only integration coverage is explicitly skipped
 on unsupported platforms. It refuses to replace an existing
 user installation; use a disposable Flatpak user installation with its matching
 runtime available. Screenshots and profiles are not uploaded. Xvfb smoke does
-not qualify KDE focus, context menus, portals, voice or live-provider behavior;
+not qualify KDE focus, context menus, portals other than the Secret portal
+through gnome-keyring, voice or live-provider behavior;
 real Bazzite acceptance remains a separate release gate.
