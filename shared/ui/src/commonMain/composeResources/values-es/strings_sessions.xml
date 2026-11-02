@@ -75,7 +75,7 @@
     <string name="sessions_age_hours">%1$d h</string>
     <string name="sessions_age_days">%1$d d</string>
     <string name="sessions_age_weeks">%1$d sem</string>
-    <string name="sessions_age_months">%1$d m</string>
+    <string name="sessions_age_months">%1$d mes.</string>
     <string name="sessions_age_years">%1$d a</string>
     <string name="sessions_just_now">ahora mismo</string>
     <plurals name="sessions_minutes_ago">
@@ -275,7 +275,7 @@
     <string name="sessions_job_missed">perdida</string>
     <string name="sessions_job_failed">falló</string>
     <string name="sessions_job_last_run">última ejecución</string>
-    <string name="sessions_job_last_run_failed">la última ejecución falló</string>
+    <string name="sessions_job_last_run_failed">última falló</string>
     <string name="sessions_job_next_run">próxima ejecución</string>
     <string name="sessions_job_next">próxima %1$s</string>
     <string name="sessions_job_due_now">toca ahora</string>
@@ -304,7 +304,7 @@
     <string name="sessions_routine_name_example">Resumen matutino</string>
     <string name="sessions_deliver_to">Entregar en</string>
     <string name="sessions_deliver_no_home">%1$s no tiene canal principal en el gateway, así que las ejecuciones no tendrían a dónde ir.</string>
-    <string name="sessions_deliver_bot_chat_detail">El resultado de cada ejecución llega a %1$s como un mensaje que lee y responde, así que cada ejecución le cuesta un turno más.</string>
+    <string name="sessions_deliver_bot_chat_detail">Cada ejecución deja su resultado en %1$s como un mensaje que el bot lee y responde, así que cada ejecución le cuesta un turno más.</string>
     <string name="sessions_schedule_job">Programar tarea</string>
     <string name="sessions_schedule_routine">Programar rutina</string>
     <string name="sessions_job_gone">Esta tarea se eliminó en el gateway, así que no hay nada que guardar.</string>

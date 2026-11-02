@@ -265,17 +265,17 @@
         <item quantity="one">%1$d Nachr.</item>
         <item quantity="other">%1$d Nachr.</item>
     </plurals>
-    <string name="sessions_delivers_to">Liefert an %1$s</string>
+    <string name="sessions_delivers_to">Ziel: %1$s</string>
     <string name="sessions_delivery_local">Lokal (nur speichern)</string>
     <string name="sessions_delivery_bot_chat">Chat von %1$s</string>
-    <string name="sessions_delivery_the_bot_chat">den Chat des Bots</string>
+    <string name="sessions_delivery_the_bot_chat">Chat des Bots</string>
     <string name="sessions_job_paused">pausiert</string>
     <string name="sessions_job_done">fertig</string>
     <string name="sessions_job_finished">beendet</string>
     <string name="sessions_job_missed">verpasst</string>
     <string name="sessions_job_failed">fehlgeschlagen</string>
     <string name="sessions_job_last_run">letzter Lauf</string>
-    <string name="sessions_job_last_run_failed">letzter Lauf fehlgeschlagen</string>
+    <string name="sessions_job_last_run_failed">Lauf fehlgeschlagen</string>
     <string name="sessions_job_next_run">nächster Lauf</string>
     <string name="sessions_job_next">nächster %1$s</string>
     <string name="sessions_job_due_now">jetzt fällig</string>
@@ -304,7 +304,7 @@
     <string name="sessions_routine_name_example">Morgenbriefing</string>
     <string name="sessions_deliver_to">Liefern an</string>
     <string name="sessions_deliver_no_home">%1$s hat auf dem Gateway keinen Heimkanal, also wüssten Läufe nicht wohin.</string>
-    <string name="sessions_deliver_bot_chat_detail">Das Ergebnis jedes Laufs kommt in %1$s als Nachricht an, die er liest und beantwortet; ein Lauf kostet ihn also einen Zug mehr.</string>
+    <string name="sessions_deliver_bot_chat_detail">Ziel: %1$s. Das Ergebnis jedes Laufs kommt dort als Nachricht an, die der Bot liest und beantwortet; ein Lauf kostet ihn also einen Zug mehr.</string>
     <string name="sessions_schedule_job">Job planen</string>
     <string name="sessions_schedule_routine">Routine planen</string>
     <string name="sessions_job_gone">Dieser Job wurde auf dem Gateway gelöscht, es gibt also nichts zu speichern.</string>

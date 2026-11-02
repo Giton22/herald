@@ -75,7 +75,7 @@
     <string name="sessions_age_hours">%1$d h</string>
     <string name="sessions_age_days">%1$d d</string>
     <string name="sessions_age_weeks">%1$d sem</string>
-    <string name="sessions_age_months">%1$d m</string>
+    <string name="sessions_age_months">%1$d mês</string>
     <string name="sessions_age_years">%1$d a</string>
     <string name="sessions_just_now">agora mesmo</string>
     <plurals name="sessions_minutes_ago">
@@ -275,10 +275,10 @@
     <string name="sessions_job_missed">perdida</string>
     <string name="sessions_job_failed">falhou</string>
     <string name="sessions_job_last_run">última execução</string>
-    <string name="sessions_job_last_run_failed">a última execução falhou</string>
+    <string name="sessions_job_last_run_failed">última falhou</string>
     <string name="sessions_job_next_run">próxima execução</string>
     <string name="sessions_job_next">próxima %1$s</string>
-    <string name="sessions_job_due_now">para agora</string>
+    <string name="sessions_job_due_now">agora</string>
     <string name="sessions_schedule_daily">Todo dia às %1$s</string>
     <string name="sessions_schedule_weekdays">Dias úteis às %1$s</string>
     <string name="sessions_schedule_sundays">Domingos às %1$s</string>
@@ -304,7 +304,7 @@
     <string name="sessions_routine_name_example">Resumo matinal</string>
     <string name="sessions_deliver_to">Enviar para</string>
     <string name="sessions_deliver_no_home">%1$s não tem canal principal no gateway, então as execuções não teriam para onde ir.</string>
-    <string name="sessions_deliver_bot_chat_detail">O resultado de cada execução chega em %1$s como uma mensagem que ele lê e responde, então cada execução custa a ele mais um turno.</string>
+    <string name="sessions_deliver_bot_chat_detail">O resultado de cada execução é enviado para %1$s como uma mensagem que o bot lê e responde, então cada execução custa a ele mais um turno.</string>
     <string name="sessions_schedule_job">Agendar tarefa</string>
     <string name="sessions_schedule_routine">Agendar rotina</string>
     <string name="sessions_job_gone">Esta tarefa foi excluída no gateway, então não há nada para salvar.</string>

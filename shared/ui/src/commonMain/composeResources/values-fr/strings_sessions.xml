@@ -76,7 +76,7 @@
     <string name="sessions_age_days">%1$d j</string>
     <string name="sessions_age_weeks">%1$d sem</string>
     <string name="sessions_age_months">%1$d mois</string>
-    <string name="sessions_age_years">%1$d an</string>
+    <string name="sessions_age_years">%1$d a</string>
     <string name="sessions_just_now">à l’instant</string>
     <plurals name="sessions_minutes_ago">
         <item quantity="one">il y a %1$d minute</item>
@@ -275,7 +275,7 @@
     <string name="sessions_job_missed">manquée</string>
     <string name="sessions_job_failed">échec</string>
     <string name="sessions_job_last_run">dernière exécution</string>
-    <string name="sessions_job_last_run_failed">dernière exécution en échec</string>
+    <string name="sessions_job_last_run_failed">dernière en échec</string>
     <string name="sessions_job_next_run">prochaine exécution</string>
     <string name="sessions_job_next">prochaine %1$s</string>
     <string name="sessions_job_due_now">due maintenant</string>

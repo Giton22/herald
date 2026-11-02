@@ -275,7 +275,7 @@
     <string name="sessions_job_missed">kimaradt</string>
     <string name="sessions_job_failed">sikertelen</string>
     <string name="sessions_job_last_run">utolsó futás</string>
-    <string name="sessions_job_last_run_failed">az utolsó futás sikertelen</string>
+    <string name="sessions_job_last_run_failed">utolsó sikertelen</string>
     <string name="sessions_job_next_run">következő futás</string>
     <string name="sessions_job_next">következő: %1$s</string>
     <string name="sessions_job_due_now">most esedékes</string>
@@ -373,7 +373,7 @@
     <!-- Capabilities -->
     <string name="sessions_capabilities_detail">Amit az ügynök az új csevegésekben használhat</string>
     <string name="sessions_tab_skills">Képességek</string>
-    <string name="sessions_tab_toolsets">Eszközkészletek</string>
+    <string name="sessions_tab_toolsets">Eszközök</string>
     <string name="sessions_tab_mcp">MCP</string>
     <string name="sessions_no_toolsets">Nincs beállított eszközkészlet.</string>
     <string name="sessions_toolsets_hint">Az eszközkészletek, amelyeket az ügynök az új csevegésekben kap.</string>
