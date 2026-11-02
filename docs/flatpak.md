@@ -2,18 +2,25 @@
 
 The x86_64 development recipe builds the existing desktop application from a
 pinned upstream revision, using Freedesktop 26.08 and JBRSDK 25 with JCEF. It does
-not extract a DEB or use host Java. The development identity is provisional,
-separate from other installations; a stable identity needs maintainer agreement.
+not extract a DEB or use host Java. Its identity, `app.kyllene.Kyllene.Devel`, is
+separate from other installations. The stable app is `app.kyllene.Kyllene`, after
+the project's domain, kyllene.app, so Flathub can verify it.
+
+A Flatpak doesn't update itself from GitHub releases: `flatpak update` and software
+centres take new versions from the remote it was installed from. A bundle installed
+with `flatpak install build/kyllene.flatpak` has no remote and never updates; the
+stable app is meant for Flathub, which delivers its updates. The app's own update
+check is off in this build (it sets no `-PreleasesRepo`), and it should stay off.
 
 Install `org.flatpak.Builder`, `org.freedesktop.Sdk//26.08` and its matching
 runtime in the user installation. From the repository root, build and install:
 
 ```sh
 user_flatpak="$(realpath "${XDG_DATA_HOME:-$HOME/.local/share}/flatpak")"
-flatpak run --env=FLATPAK_USER_DIR="$user_flatpak" --filesystem="$user_flatpak" org.flatpak.Builder --user --repo=build/flatpak-repo build/flatpak packaging/flatpak/io.github.Giton22.Kyllene.Devel.json
-flatpak build-bundle build/flatpak-repo build/kyllene.flatpak io.github.Giton22.Kyllene.Devel devel
+flatpak run --env=FLATPAK_USER_DIR="$user_flatpak" --filesystem="$user_flatpak" org.flatpak.Builder --user --repo=build/flatpak-repo build/flatpak packaging/flatpak/app.kyllene.Kyllene.Devel.json
+flatpak build-bundle build/flatpak-repo build/kyllene.flatpak app.kyllene.Kyllene.Devel devel
 flatpak install --user build/kyllene.flatpak
-flatpak run io.github.Giton22.Kyllene.Devel
+flatpak run app.kyllene.Kyllene.Devel
 ```
 
 Flatpak-builder downloads checksummed inputs before running Gradle offline in
