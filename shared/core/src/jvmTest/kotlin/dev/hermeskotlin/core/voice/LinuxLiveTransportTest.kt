@@ -102,7 +102,7 @@ class LinuxLiveTransportTest {
         val transport = LinuxLiveTransport { listener -> peer.apply { events = listener } }
         try {
             transport.connect { "answer" }
-            repeat(16) { assertTrue(peer.events.message("queued".encodeToByteArray(), false)) }
+            repeat(LinuxLiveTransport.MAX_QUEUED_EVENTS) { assertTrue(peer.events.message("queued".encodeToByteArray(), false)) }
             assertFalse(peer.events.message("overflow".encodeToByteArray(), false))
             val result = transport.events.receiveCatching()
             assertTrue(result.isClosed && result.exceptionOrNull() is IllegalStateException)
@@ -238,13 +238,46 @@ class LinuxLiveTransportTest {
         assertEquals(1, peer.closes)
     }
 
-    @Test fun aLaterOwnerCloseStillObservesTheRetirementError() = checkTransport {
+    @Test fun theRetirementErrorIsReportedOnce() = checkTransport {
         val peer = FakePeer().apply { closeFailure = IllegalStateException("Synthetic release failure") }
         val transport = LinuxLiveTransport { listener -> peer.apply { events = listener } }
         transport.connect { "answer" }
         assertFailsWith<IllegalStateException> { transport.close() }
-        assertFailsWith<IllegalStateException> { transport.close() }
+        transport.close()
         assertEquals(1, peer.closes)
+    }
+
+    @Test fun aCloseInFinallyDoesNotHideTheConnectFailure() = checkTransport {
+        val original = IllegalStateException("Synthetic offer failure")
+        val peer = FakePeer().apply { offerBlock = { throw original }; closeFailure = IllegalStateException("Synthetic close failure") }
+        val transport = LinuxLiveTransport { listener -> peer.apply { events = listener } }
+        val failure = runCatching { try { transport.connect { "answer" } } finally { transport.close() } }.exceptionOrNull()
+        assertTrue(generateSequence(failure) { it.cause }.any { it === original })
+    }
+
+    @Test fun aCloseFromElsewhereDuringSetupFailsTheCallerInsteadOfCancellingIt() = checkTransport {
+        val peer = FakePeer()
+        val transport = LinuxLiveTransport { listener -> peer.apply { events = listener } }
+        val answering = CompletableDeferred<Unit>()
+        val operation = async { runCatching { transport.connect { answering.complete(Unit); awaitCancellation() } } }
+        answering.await()
+        transport.close()
+        val failure = operation.await().exceptionOrNull()
+        assertTrue(failure is IllegalStateException, "Got $failure")
+        assertTrue(peer.closed)
+    }
+
+    @Test fun anOversizedSendDoesNotWaitForTheRelease() = checkTransport {
+        val release = CountDownLatch(1)
+        val peer = FakePeer().apply { closeBlock = { check(release.await(2, TimeUnit.SECONDS)) } }
+        val transport = LinuxLiveTransport { listener -> peer.apply { events = listener } }
+        transport.connect { "answer" }
+        try {
+            val started = System.nanoTime()
+            assertFalse(transport.send("x".repeat(1024 * 1024 + 1)))
+            assertTrue(System.nanoTime() - started < 500_000_000L, "send blocked on the native release")
+            assertTrue(peer.closed)
+        } finally { release.countDown(); transport.close() }
     }
 
     private class FakePeer : LivePeer {

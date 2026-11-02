@@ -42,7 +42,9 @@ internal class LinuxLiveTransport(private val makePeer: (LivePeerEvents) -> Live
     private val started = AtomicBoolean()
     private val terminal = AtomicReference<Throwable?>()
     private val ended = CompletableDeferred<Throwable>()
-    private val incoming = Channel<String>(16)
+    private val releaseReported = AtomicBoolean()
+    // A reply streams one event per transcript fragment: a short pause in the consumer mustn't end the call.
+    private val incoming = Channel<String>(MAX_QUEUED_EVENTS)
     val events: ReceiveChannel<String> = incoming
     private val listener = object : LivePeerEvents {
         override fun message(bytes: ByteArray, binary: Boolean): Boolean {
@@ -126,8 +128,10 @@ internal class LinuxLiveTransport(private val makePeer: (LivePeerEvents) -> Live
             val callerCancellation = try { currentCoroutineContext().ensureActive(); null }
                 catch (cancelled: CancellationException) { cancelled }
             val primary = callerCancellation ?: terminal.get() ?: caught
-            val failure = if (callerCancellation != null || (primary is CancellationException && primary !is TimeoutCancellationException)) primary
-                else IllegalStateException(if (primary is TimeoutCancellationException) "The call took too long to connect." else primary.message, primary)
+            // Only the caller's own cancellation stays one: a close from elsewhere is a failure the caller must see,
+            // not a CancellationException its still-active coroutine would quietly swallow.
+            val failure = callerCancellation
+                ?: IllegalStateException(if (primary is TimeoutCancellationException) "The call took too long to connect." else primary.message, primary)
             try { withContext(NonCancellable + Dispatchers.IO) { close() } }
             catch (cleanup: Throwable) { if (cleanup !== failure) failure.addSuppressed(cleanup) }
             throw failure
@@ -138,9 +142,9 @@ internal class LinuxLiveTransport(private val makePeer: (LivePeerEvents) -> Live
         if (terminal.get() != null) return false
         val bytes = if (event.length <= MAX_EVENT_BYTES) event.encodeToByteArray() else null
         if (bytes == null || bytes.size > MAX_EVENT_BYTES) {
-            val failure = IllegalStateException("The call's outgoing event is too large.")
-            listener.ended(failure)
-            try { releasePeer() } catch (cleanup: Throwable) { if (cleanup !== failure) failure.addSuppressed(cleanup) }
+            listener.ended(IllegalStateException("The call's outgoing event is too large."))
+            // Send runs on the caller's thread: start the release, and leave waiting for it to the owner's close.
+            synchronized(owner) { peer }?.retire()
             return false
         }
         // The peer serializes its own native lifetime; never hold this publication lock across a native call.
@@ -151,7 +155,11 @@ internal class LinuxLiveTransport(private val makePeer: (LivePeerEvents) -> Live
     private fun releasePeer() {
         // Retain the single-use peer so every owner close joins the same native retirement.
         val owned = synchronized(owner) { peer }
-        owned?.close()
+        try { owned?.close() } catch (failure: Throwable) {
+            // Report a release failure once: connect's own cleanup usually has, and a caller's
+            // `finally { close() }` throwing it again would replace connect's error.
+            if (releaseReported.compareAndSet(false, true)) throw failure
+        }
     }
 
     override fun close() {
@@ -163,6 +171,7 @@ internal class LinuxLiveTransport(private val makePeer: (LivePeerEvents) -> Live
 
     companion object {
         const val MAX_EVENT_BYTES = 1024 * 1024
+        const val MAX_QUEUED_EVENTS = 1024
         private const val MAX_SDP_CHARS = 1024 * 1024
     }
 }

@@ -46,6 +46,7 @@ internal class WebRtcLivePeer(private val events: LivePeerEvents) : LivePeer {
     private val released = CompletableFuture<Throwable?>()
     private val inCallback = ThreadLocal<Boolean>()
     private val extraChannels = ConcurrentLinkedQueue<RTCDataChannel>()
+    private val outbox = ConcurrentLinkedQueue<ByteArray>()
     private val gathered = CompletableDeferred<Unit>()
     private var audio: AudioDeviceModule? = null
     private var factory: PeerConnectionFactory? = null
@@ -153,19 +154,36 @@ internal class WebRtcLivePeer(private val events: LivePeerEvents) : LivePeer {
     }
 
     override fun send(bytes: ByteArray): Boolean {
-        // Native send/getters can wait on WebRTC threads; callbacks only enqueue incoming events.
-        if (inCallback.get() == true || retired.get() || bytes.size > LinuxLiveTransport.MAX_EVENT_BYTES) return false
+        if (retired.get() || bytes.size > LinuxLiveTransport.MAX_EVENT_BYTES) return false
+        outbox.add(bytes)
+        if (inCallback.get() == true) {
+            // Native send/getters can wait on WebRTC threads, so a consumer resumed inline by an event callback
+            // can't send here. Its reply keeps its place in the outbox and goes out from IO.
+            try { Dispatchers.IO.dispatch(EmptyCoroutineContext, Runnable { flush() }) }
+            catch (caught: Throwable) { retire(IllegalStateException("The call couldn't send an event.", caught), true); return false }
+            return true
+        }
+        return flush()
+    }
+
+    /** Sends everything queued, oldest first; any send's failure ends the call. */
+    private fun flush(): Boolean {
         var failure: Throwable? = null
-        val sent = synchronized(owner) {
-            val data = channel
-            if (retired.get() || data == null || data.state != RTCDataChannelState.OPEN) false
-            else {
-                val buffered = data.bufferedAmount
-                if (buffered < 0 || buffered > LinuxLiveTransport.MAX_EVENT_BYTES - bytes.size) {
-                    failure = IllegalStateException("The call's outgoing event queue is full."); false
-                } else try { data.send(RTCDataChannelBuffer(ByteBuffer.wrap(bytes), false)); true }
-                catch (_: Exception) { failure = IllegalStateException("The call couldn't send an event."); false }
+        var sent = true
+        synchronized(owner) {
+            while (sent) {
+                val bytes = outbox.poll() ?: break
+                val data = channel
+                if (retired.get() || data == null || data.state != RTCDataChannelState.OPEN) sent = false
+                else {
+                    val buffered = data.bufferedAmount
+                    if (buffered < 0 || buffered > LinuxLiveTransport.MAX_EVENT_BYTES - bytes.size) {
+                        failure = IllegalStateException("The call's outgoing event queue is full."); sent = false
+                    } else try { data.send(RTCDataChannelBuffer(ByteBuffer.wrap(bytes), false)) }
+                    catch (_: Exception) { failure = IllegalStateException("The call couldn't send an event."); sent = false }
+                }
             }
+            if (!sent) outbox.clear()
         }
         failure?.let { retire(it, true) }
         return sent
