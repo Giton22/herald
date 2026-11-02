@@ -67,6 +67,10 @@ kotlin {
         jvmMain.dependencies {
             implementation(libs.filekit.dialogs)
         }
+        // The bot screen's viewer page: the app's own page, built from noVNC (see vendor/screen-viewer).
+        // It travels in the resources because a browser will only load it from a file: address, which is
+        // the one the gateway accepts for a display stream.
+        jvmMain.get().resources.srcDir(rootProject.file("vendor/screen-viewer/dist"))
         jvmTest.dependencies {
             implementation(compose.desktop.uiTestJUnit4)
             implementation(compose.desktop.currentOs)
