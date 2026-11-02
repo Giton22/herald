@@ -76,15 +76,28 @@ class LinuxSecretPortalTest {
         assertEquals(SecretPortalFailure.Reason.Failed, assertFailsWith<SecretPortalFailure> { portal.retrieve() }.reason)
     }
 
-    @Test fun differentReturnedHandleIsRejected() = fixture { service, portal ->
+    @Test fun differentReturnedHandleIsRejectedAndThatRequestClosed() = fixture { service, portal ->
         service.wrongHandle = true
+        service.pending = true
         assertEquals(SecretPortalFailure.Reason.Failed, assertFailsWith<SecretPortalFailure> { portal.retrieve() }.reason)
+        // The fixture serves the request only at the path it returned, as an older portal would.
+        service.closed.get(3, TimeUnit.SECONDS)
     }
 
     @Test fun timeoutClosesThePendingRequest() = fixture { service, portal ->
         service.pending = true
-        assertFailsWith<kotlinx.coroutines.TimeoutCancellationException> { portal.retrieve() }
+        assertEquals(SecretPortalFailure.Reason.Failed, assertFailsWith<SecretPortalFailure> { portal.retrieve() }.reason)
         service.closed.get(3, TimeUnit.SECONDS)
+    }
+
+    @Test fun aSlowUnlockPromptOutlastsTheStepTimeout() = fixture(
+        portal = { LinuxSecretPortal(it, timeoutMillis = 500, responseTimeoutMillis = 10_000) },
+    ) { service, portal ->
+        service.respondAfterMillis = 1_500
+        val result = portal.retrieve()
+        assertContentEquals(service.bytes, result.bytes)
+        assertFalse(service.closed.isDone)
+        result.bytes.fill(0)
     }
 
     @Test fun cleanupFailureDoesNotReplaceTheOriginalRefusal() = fixture { service, portal ->
@@ -102,7 +115,11 @@ class LinuxSecretPortalTest {
         assertContentEquals(service.bytes, portal.retrieve().bytes)
     }
 
-    private fun fixture(registerName: Boolean = true, test: suspend kotlinx.coroutines.CoroutineScope.(Fixture, LinuxSecretPortal) -> Unit) {
+    private fun fixture(
+        registerName: Boolean = true,
+        portal: (String) -> LinuxSecretPortal = { LinuxSecretPortal(it, 2_000, 2_000) },
+        test: suspend kotlinx.coroutines.CoroutineScope.(Fixture, LinuxSecretPortal) -> Unit,
+    ) {
         assumeTrue("Secret-portal FD integration requires Linux", System.getProperty("os.name") == "Linux")
         assumeTrue("Secret-portal integration requires dbus-daemon", java.io.File("/usr/bin/dbus-daemon").canExecute())
         val config = Files.createTempFile("secret-portal-bus-", ".conf")
@@ -120,7 +137,7 @@ class LinuxSecretPortalTest {
                 if (registerName) bus.requestBusName("org.freedesktop.portal.Desktop")
                 val service = Fixture(bus, address)
                 bus.exportObject(service)
-                try { runBlocking { test(service, LinuxSecretPortal(address, 2_000)) } }
+                try { runBlocking { test(service, portal(address)) } }
                 finally { service.failClose = false; service.Close() }
             }
         } finally {
@@ -150,6 +167,8 @@ class LinuxSecretPortalTest {
         var wrongHandle = false
         var failClose = false
         var spoofResponse = false
+        /** Answers this long after the call, as a portal waiting on the user's keyring password. */
+        var respondAfterMillis = 0L
         val started = CompletableFuture<Unit>()
         val closed = CompletableFuture<Unit>()
         private val libc = Native.load("c", LibC::class.java)
@@ -160,8 +179,18 @@ class LinuxSecretPortalTest {
             val path = "$objectPath/request/$sender/${options.getValue("handle_token").value}"
             previousToken = options["token"]?.value as String?
             held = fd.intFileDescriptor
-            bus.exportObject(path, this)
-            if (!pending) {
+            val returned = if (wrongHandle) path + "_other" else path
+            bus.exportObject(returned, this)
+            if (respondAfterMillis > 0) {
+                val writer = held
+                held = -1
+                Thread {
+                    Thread.sleep(respondAfterMillis)
+                    check(libc.write(writer, bytes, bytes.size.toLong()) == bytes.size.toLong())
+                    libc.close(writer)
+                    bus.sendMessage(SecretPortalRequest.Response(path, UInt32(0), results))
+                }.start()
+            } else if (!pending) {
                 check(libc.write(held, bytes, bytes.size.toLong()) == bytes.size.toLong())
                 libc.close(held)
                 held = -1
@@ -176,7 +205,7 @@ class LinuxSecretPortalTest {
                 bus.sendMessage(signal)
             }
             started.complete(Unit)
-            return DBusPath(if (wrongHandle) path + "_other" else path)
+            return DBusPath(returned)
         }
         override fun Close() {
             if (held >= 0) { libc.close(held); held = -1 }
