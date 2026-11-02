@@ -63,7 +63,11 @@ kotlin {
         }
         // The desktop's own menus, driven with a mouse.
         jvmMain.dependencies {
-            implementation(libs.filekit.dialogs)
+            implementation(libs.filekit.dialogs.get().toString()) {
+                if (System.getProperty("os.name").startsWith("Linux")) {
+                    exclude(group = "com.github.hypfvieh", module = "dbus-java-transport-native-unixsocket")
+                }
+            }
         }
         // The bot screen's viewer page: the app's own page, built from noVNC (see vendor/screen-viewer).
         // It travels in the resources because a browser will only load it from a file: address, which is

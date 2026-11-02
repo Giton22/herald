@@ -1,0 +1,14 @@
+// Redirect existing repositories so exclusive-content filters still point to
+// their original repository. Gradle runs offline against builder-verified inputs.
+beforeSettings { settings ->
+    settings.pluginManagement.repositories.withType(
+            org.gradle.api.artifacts.repositories.MavenArtifactRepository).configureEach { repository ->
+        repository.url = new File(settings.settingsDir, 'offline-repository').toURI()
+    }
+}
+settingsEvaluated { settings ->
+    settings.dependencyResolutionManagement.repositories.withType(
+            org.gradle.api.artifacts.repositories.MavenArtifactRepository).configureEach { repository ->
+        repository.url = new File(settings.settingsDir, 'offline-repository').toURI()
+    }
+}
