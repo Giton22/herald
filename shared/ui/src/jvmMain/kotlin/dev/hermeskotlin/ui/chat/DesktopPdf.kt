@@ -65,7 +65,10 @@ private fun startPdfWorker(): Process {
     }
     return ProcessBuilder(
         java.path, "-Xmx256m", "-XX:MaxDirectMemorySize=64m", "-XX:+ExitOnOutOfMemoryError",
-        "-Djava.awt.headless=true", "-cp", paths.joinToString(File.pathSeparator), PdfWorker::class.java.name,
+        "-Djava.awt.headless=true",
+        "-Dorg.apache.commons.logging.LogFactory=org.apache.commons.logging.impl.LogFactoryImpl",
+        "-Dorg.apache.commons.logging.Log=org.apache.commons.logging.impl.NoOpLog",
+        "-cp", paths.joinToString(File.pathSeparator), PdfWorker::class.java.name,
     ).apply {
         val inherited = environment().filterKeys { it in setOf("LANG", "LC_ALL", "TMPDIR", "TEMP", "TMP", "SystemRoot", "WINDIR") }
         environment().clear()
