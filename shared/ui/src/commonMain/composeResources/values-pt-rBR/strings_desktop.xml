@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="desktop_open_link">Abrir link</string>
+    <string name="desktop_copy_link">Copiar link</string>
+
+    <string name="desktop_attach_photos">Anexar fotos</string>
+    <string name="desktop_attach_files">Anexar arquivos</string>
+    <string name="desktop_file_dialog_failed">Não foi possível abrir a janela de arquivos.</string>
+    <string name="desktop_attach_read_failed">Não foi possível ler um arquivo.</string>
+    <string name="desktop_attach_no_camera">O app para desktop ainda não pode usar uma câmera.</string>
+    <string name="desktop_attach_photo_too_large">%1$s tem mais de 50 MB.</string>
+    <string name="desktop_attach_file_too_large">%1$s tem mais de 25 MB.</string>
+    <string name="desktop_attach_over_budget">São mais de 50 MB de anexos de uma vez.</string>
+    <string name="desktop_attach_not_an_image">Não foi possível ler %1$s como imagem.</string>
+
+    <string name="desktop_save_title">Salvar</string>
+    <string name="desktop_save_dialog_failed">Não foi possível abrir a janela Salvar.</string>
+    <string name="desktop_save_cancelled">Não salvo.</string>
+    <string name="desktop_saved_to">Salvo em %1$s</string>
+    <string name="desktop_save_failed">Não foi possível salvar: %1$s</string>
+
+    <string name="desktop_pdf_unsupported">PDFs ainda não abrem no app para desktop. Use Salvar para obter o arquivo.</string>
+    <string name="desktop_widgets_unsupported">Os widgets não aparecem nesta versão do app para desktop.</string>
+    <string name="desktop_phone_tools_need_phone">As ferramentas do telefone funcionam com o Kyllene em um telefone Android.</string>
+
+    <string name="desktop_wallpaper_title">Fundo da conversa</string>
+    <string name="desktop_wallpaper_unreadable">Não foi possível ler essa imagem.</string>
+</resources>

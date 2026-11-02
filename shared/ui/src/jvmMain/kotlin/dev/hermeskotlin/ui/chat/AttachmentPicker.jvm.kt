@@ -13,9 +13,13 @@ import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.DragData
 import androidx.compose.ui.draganddrop.dragData
 import dev.hermeskotlin.core.chat.OutgoingAttachment
+import dev.hermeskotlin.ui.resources.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
 import java.awt.Image
 import java.awt.Toolkit
 import java.awt.datatransfer.Clipboard
@@ -36,12 +40,13 @@ actual fun rememberAttachmentPicker(
 ): AttachmentPicker {
     val picked = rememberUpdatedState(onPicked)
     val failed = rememberUpdatedState(onError)
+    val noCamera = rememberUpdatedState(stringResource(Res.string.desktop_attach_no_camera))
     val scope = rememberCoroutineScope()
     return remember {
         fun load(read: () -> List<Result<OutgoingAttachment>>) {
             scope.launch {
                 val results = withContext(Dispatchers.IO) { read() }
-                results.firstNotNullOfOrNull { it.exceptionOrNull() }?.let { failed.value(it.message ?: "Couldn't read a file.") }
+                results.firstNotNullOfOrNull { it.exceptionOrNull() }?.let { failed.value(it.pickMessage()) }
                 results.mapNotNull { it.getOrNull() }.takeIf { it.isNotEmpty() }?.let { picked.value(it) }
             }
         }
@@ -55,19 +60,20 @@ actual fun rememberAttachmentPicker(
             }
         }
         object : AttachmentPicker {
-            fun pick(title: String, extensions: Set<String>?) {
+            fun pick(title: StringResource, extensions: Set<String>?) {
                 scope.launch {
-                    fromDialog { openFiles(title, multiple = true, extensions) }
+                    val dialogTitle = getString(title)
+                    fromDialog { openFiles(dialogTitle, multiple = true, extensions) }
                         .onSuccess(::read)
-                        .onFailure { failed.value("Couldn't open the file dialog.") }
+                        .onFailure { failed.value(getString(Res.string.desktop_file_dialog_failed)) }
                 }
             }
 
-            override fun pickPhotos() = pick("Attach photos", IMAGE_EXTENSIONS)
+            override fun pickPhotos() = pick(Res.string.desktop_attach_photos, IMAGE_EXTENSIONS)
 
-            override fun takePhoto() = failed.value("The desktop app can't use a camera yet.")
+            override fun takePhoto() = failed.value(noCamera.value)
 
-            override fun pickFiles() = pick("Attach files", null)
+            override fun pickFiles() = pick(Res.string.desktop_attach_files, null)
 
             override fun attachFiles(paths: List<String>) = read(paths.mapNotNull(::fileOf).filter { it.isFile })
 
@@ -136,17 +142,26 @@ private fun Image.png(): ByteArray {
 
 private fun newId() = "att-${Random.nextLong().toULong().toString(16)}"
 
+/** A file that can't go, and the words for why; [name] fills the sentence where it has a place for one. */
+private class PickRefused(val text: StringResource, val name: String? = null) : Exception()
+
+/** Why a pick failed, in the app's words where it's one of [PickRefused]; otherwise the system's own. */
+private suspend fun Throwable.pickMessage(): String = when {
+    this is PickRefused -> if (name != null) getString(text, name) else getString(text)
+    else -> message ?: getString(Res.string.desktop_attach_read_failed)
+}
+
 /** One picked file: photos at most [MAX_EDGE] px and JPEG; anything else as is. */
 private fun readAttachment(file: File, budget: Long): OutgoingAttachment {
     val name = file.name
     val mime = Files.probeContentType(file.toPath()) ?: mimeTypeOf(name)
     val size = file.length()
     if (mime.startsWith("image/") && mime != "image/gif" && mime != "image/svg+xml") {
-        if (size > MAX_PHOTO_BYTES) error("$name is larger than 50 MB.")
+        if (size > MAX_PHOTO_BYTES) throw PickRefused(Res.string.desktop_attach_photo_too_large, name)
         return imageAttachment(name, file.readBytes(), budget)
     }
-    if (size > OutgoingAttachment.MAX_BYTES) error("$name is larger than 25 MB.")
-    if (size > budget) error("That's more than 50 MB of attachments at once.")
+    if (size > OutgoingAttachment.MAX_BYTES) throw PickRefused(Res.string.desktop_attach_file_too_large, name)
+    if (size > budget) throw PickRefused(Res.string.desktop_attach_over_budget)
     val bytes = file.readBytes()
     val thumbnail = if (mime.startsWith("image/")) decodeScaled(bytes, THUMBNAIL_EDGE)?.jpeg(THUMBNAIL_QUALITY) else null
     return OutgoingAttachment(newId(), name, mime, bytes, thumbnail)
@@ -154,9 +169,9 @@ private fun readAttachment(file: File, budget: Long): OutgoingAttachment {
 
 /** A picture, scaled to at most [MAX_EDGE] px and sent as JPEG, with its thumbnail. */
 private fun imageAttachment(name: String, bytes: ByteArray, budget: Long): OutgoingAttachment {
-    val scaled = decodeScaled(bytes, MAX_EDGE) ?: error("Couldn't read $name as an image.")
-    val upload = scaled.jpeg(UPLOAD_QUALITY) ?: error("Couldn't read $name as an image.")
-    if (upload.size > budget) error("That's more than 50 MB of attachments at once.")
+    val scaled = decodeScaled(bytes, MAX_EDGE) ?: throw PickRefused(Res.string.desktop_attach_not_an_image, name)
+    val upload = scaled.jpeg(UPLOAD_QUALITY) ?: throw PickRefused(Res.string.desktop_attach_not_an_image, name)
+    if (upload.size > budget) throw PickRefused(Res.string.desktop_attach_over_budget)
     val thumbnail = decodeScaled(upload, THUMBNAIL_EDGE)?.jpeg(THUMBNAIL_QUALITY)
     return OutgoingAttachment(newId(), name.substringBeforeLast('.', name) + ".jpg", "image/jpeg", upload, thumbnail)
 }

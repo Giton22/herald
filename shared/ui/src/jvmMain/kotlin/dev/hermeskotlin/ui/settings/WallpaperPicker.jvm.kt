@@ -12,9 +12,11 @@ import dev.hermeskotlin.ui.chat.decodeScaled
 import dev.hermeskotlin.ui.chat.fromDialog
 import dev.hermeskotlin.ui.chat.jpeg
 import dev.hermeskotlin.ui.chat.openFiles
+import dev.hermeskotlin.ui.resources.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import org.jetbrains.compose.resources.getString
 
 @Composable
 actual fun rememberWallpaperPicker(onPicked: (ByteArray) -> Unit, onError: (String) -> Unit): () -> Unit {
@@ -24,13 +26,14 @@ actual fun rememberWallpaperPicker(onPicked: (ByteArray) -> Unit, onError: (Stri
     return remember {
         {
             scope.launch {
-                val file = fromDialog { openFiles("Chat background", multiple = false, IMAGE_EXTENSIONS) }
-                    .getOrElse { return@launch failed.value("Couldn't open the file dialog.") }
+                val title = getString(Res.string.desktop_wallpaper_title)
+                val file = fromDialog { openFiles(title, multiple = false, IMAGE_EXTENSIONS) }
+                    .getOrElse { return@launch failed.value(getString(Res.string.desktop_file_dialog_failed)) }
                     .firstOrNull() ?: return@launch
                 val bytes = withContext(Dispatchers.IO) {
                     runCatching { file.takeIf { it.length() <= MAX_PHOTO_BYTES }?.readBytes()?.let { decodeScaled(it, WALLPAPER_EDGE) }?.jpeg(WALLPAPER_QUALITY) }.getOrNull()
                 }
-                if (bytes != null) picked.value(bytes) else failed.value("Couldn't read that picture.")
+                if (bytes != null) picked.value(bytes) else failed.value(getString(Res.string.desktop_wallpaper_unreadable))
             }
         }
     }

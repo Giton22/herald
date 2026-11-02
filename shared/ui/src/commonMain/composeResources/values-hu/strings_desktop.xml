@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="desktop_open_link">Link megnyitása</string>
+    <string name="desktop_copy_link">Link másolása</string>
+
+    <string name="desktop_attach_photos">Fotók csatolása</string>
+    <string name="desktop_attach_files">Fájlok csatolása</string>
+    <string name="desktop_file_dialog_failed">Nem sikerült megnyitni a fájlválasztót.</string>
+    <string name="desktop_attach_read_failed">Nem sikerült beolvasni egy fájlt.</string>
+    <string name="desktop_attach_no_camera">Az asztali alkalmazás még nem tud kamerát használni.</string>
+    <string name="desktop_attach_photo_too_large">%1$s nagyobb 50 MB-nál.</string>
+    <string name="desktop_attach_file_too_large">%1$s nagyobb 25 MB-nál.</string>
+    <string name="desktop_attach_over_budget">Ez egyszerre több mint 50 MB melléklet.</string>
+    <string name="desktop_attach_not_an_image">Nem sikerült képként beolvasni ezt: %1$s.</string>
+
+    <string name="desktop_save_title">Mentés</string>
+    <string name="desktop_save_dialog_failed">Nem sikerült megnyitni a Mentés ablakot.</string>
+    <string name="desktop_save_cancelled">Nincs mentve.</string>
+    <string name="desktop_saved_to">Mentve ide: %1$s</string>
+    <string name="desktop_save_failed">Nem sikerült menteni: %1$s</string>
+
+    <string name="desktop_pdf_unsupported">A PDF-ek még nem nyílnak meg az asztali alkalmazásban. A Mentéssel megkapod a fájlt.</string>
+    <string name="desktop_widgets_unsupported">Az asztali alkalmazás ezen buildjében a widgetek nem jelennek meg.</string>
+    <string name="desktop_phone_tools_need_phone">A telefonos eszközök Android telefonon, a Kyllene-ből működnek.</string>
+
+    <string name="desktop_wallpaper_title">Csevegés háttere</string>
+    <string name="desktop_wallpaper_unreadable">Nem sikerült beolvasni ezt a képet.</string>
+</resources>
