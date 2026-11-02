@@ -195,6 +195,14 @@ jobs:
           ./gradlew --no-daemon :desktopApp:${{ matrix.task }} ${{ env.NOTARIZE && ':desktopApp:notarizeReleaseDmg' || '' }}
           -PappVersion="${GITHUB_REF_NAME#v}" -PreleasesRepo="$GITHUB_REPOSITORY"
 
+      - name: macOS launcher follows system appearance
+        if: runner.os == 'macOS'
+        run: |
+          shopt -s nullglob
+          configs=(desktopApp/build/compose/binaries/main-release/app/*.app/Contents/app/*.cfg)
+          [ "${#configs[@]}" -eq 1 ] || { echo 'Expected one macOS launcher configuration'; exit 1; }
+          python3 desktopApp/tests/check_macos_launcher.py "${configs[0]}"
+
       - name: Sign the MSI
         if: runner.os == 'Windows'
         shell: pwsh
