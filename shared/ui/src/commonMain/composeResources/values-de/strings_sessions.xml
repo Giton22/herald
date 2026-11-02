@@ -1,0 +1,478 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The sessions list and sidebar and the pages it opens, in German. Keys and placeholders as in values/. -->
+<resources>
+    <!-- Sidebar: header, switch, pages -->
+    <string name="sessions_mode_chats">Chats</string>
+    <string name="sessions_mode_bots">Bots</string>
+    <string name="sessions_new_chat">Neuer Chat</string>
+    <string name="sessions_search_chats">Chats durchsuchen</string>
+    <string name="sessions_close_search">Suche schließen</string>
+    <string name="sessions_account">Konto</string>
+    <string name="sessions_account_and_gateways">Konto und Gateways</string>
+    <string name="sessions_nav_inbox">Posteingang</string>
+    <string name="sessions_nav_scheduled">Geplant</string>
+    <string name="sessions_nav_insights">Statistik</string>
+    <string name="sessions_nav_capabilities">Fähigkeiten</string>
+    <string name="sessions_nav_plugins">Plugins</string>
+    <string name="sessions_nav_config">Konfiguration</string>
+    <string name="sessions_nav_archived">Archiviert</string>
+    <plurals name="sessions_unread_count">
+        <item quantity="one">%1$d ungelesen</item>
+        <item quantity="other">%1$d ungelesen</item>
+    </plurals>
+
+    <!-- Connection -->
+    <string name="sessions_connection_connected">Verbunden</string>
+    <string name="sessions_connection_not_connected">Nicht verbunden</string>
+    <string name="sessions_connection_signed_out">Abgemeldet</string>
+    <string name="sessions_connection_reconnecting">Verbindet erneut</string>
+    <string name="sessions_connection_connecting">Verbindet</string>
+
+    <!-- The list -->
+    <string name="sessions_no_matches">Keine Treffer</string>
+    <string name="sessions_no_matches_detail">Die Suche prüft Titel, Sitzungs-IDs und Nachrichtentext.</string>
+    <string name="sessions_saved_copy">Gespeicherte Kopie · %1$s</string>
+    <string name="sessions_saved_copy_unreachable">%1$s. Hermes ist gerade nicht erreichbar.</string>
+    <string name="sessions_try_again">Erneut versuchen</string>
+    <string name="sessions_load_failed">Sitzungen konnten nicht geladen werden</string>
+    <string name="sessions_load_failed_detail">Sitzungen konnten nicht geladen werden. %1$s</string>
+    <string name="sessions_empty_project">Keine Chats in diesem Projekt.</string>
+    <string name="sessions_empty">Deine Unterhaltungen erscheinen hier.</string>
+    <string name="sessions_none_running">Gerade läuft nichts.</string>
+    <string name="sessions_none_waiting">Gerade wartet nichts auf dich.</string>
+    <string name="sessions_nothing_archived">Nichts archiviert</string>
+    <string name="sessions_nothing_archived_detail">Archivierte Sitzungen sind unter „Zuletzt“ ausgeblendet, lassen sich aber fortsetzen.</string>
+    <string name="sessions_filter_all">Alle</string>
+    <string name="sessions_filter_needs_you">Wartet auf dich</string>
+    <string name="sessions_section_threads">Threads</string>
+    <string name="sessions_section_pinned">Angeheftet</string>
+    <string name="sessions_show_threads">Threads zeigen</string>
+    <string name="sessions_hide_threads">Threads ausblenden</string>
+    <string name="sessions_show_pinned">Angeheftete Chats zeigen</string>
+    <string name="sessions_hide_pinned">Angeheftete Chats ausblenden</string>
+    <string name="sessions_collapsed">Eingeklappt</string>
+    <string name="sessions_expanded">Ausgeklappt</string>
+    <string name="sessions_threads_drag_to_reorder">Threads · zum Sortieren ziehen</string>
+    <string name="sessions_done">Fertig</string>
+    <string name="sessions_drag_thread">%1$s ziehen</string>
+    <string name="sessions_session_actions">Sitzungsaktionen</string>
+    <string name="sessions_thread">Thread</string>
+    <string name="sessions_in_project">Im Projekt %1$s</string>
+    <string name="sessions_dismiss">Schließen</string>
+
+    <!-- A row's status line -->
+    <string name="sessions_status_running">Läuft</string>
+    <string name="sessions_status_new_reply">Neue Antwort</string>
+    <string name="sessions_status_draft">Entwurf</string>
+    <string name="sessions_waiting_approval">Braucht Freigabe</string>
+    <string name="sessions_waiting_question">Hat eine Frage</string>
+    <string name="sessions_waiting_input">Braucht Eingabe</string>
+    <string name="sessions_waiting_unknown">Wartet auf dich</string>
+
+    <!-- Ages -->
+    <string name="sessions_age_now">jetzt</string>
+    <string name="sessions_age_minutes">%1$d Min</string>
+    <string name="sessions_age_hours">%1$d Std</string>
+    <string name="sessions_age_days">%1$d T</string>
+    <string name="sessions_age_weeks">%1$d W</string>
+    <string name="sessions_age_months">%1$d M</string>
+    <string name="sessions_age_years">%1$d J</string>
+    <string name="sessions_just_now">gerade eben</string>
+    <plurals name="sessions_minutes_ago">
+        <item quantity="one">vor %1$d Minute</item>
+        <item quantity="other">vor %1$d Minuten</item>
+    </plurals>
+    <plurals name="sessions_hours_ago">
+        <item quantity="one">vor %1$d Stunde</item>
+        <item quantity="other">vor %1$d Stunden</item>
+    </plurals>
+    <plurals name="sessions_days_ago">
+        <item quantity="one">vor %1$d Tag</item>
+        <item quantity="other">vor %1$d Tagen</item>
+    </plurals>
+    <plurals name="sessions_weeks_ago">
+        <item quantity="one">vor %1$d Woche</item>
+        <item quantity="other">vor %1$d Wochen</item>
+    </plurals>
+    <plurals name="sessions_months_ago">
+        <item quantity="one">vor %1$d Monat</item>
+        <item quantity="other">vor %1$d Monaten</item>
+    </plurals>
+    <plurals name="sessions_years_ago">
+        <item quantity="one">vor %1$d Jahr</item>
+        <item quantity="other">vor %1$d Jahren</item>
+    </plurals>
+    <string name="sessions_active_ago">Aktiv %1$s</string>
+
+    <!-- A chat's actions -->
+    <string name="sessions_pin">Anheften</string>
+    <string name="sessions_unpin">Loslösen</string>
+    <string name="sessions_archive">Archivieren</string>
+    <string name="sessions_unarchive">Wiederherstellen</string>
+    <string name="sessions_archived">Archiviert</string>
+    <string name="sessions_unarchived">Wiederhergestellt</string>
+    <string name="sessions_undo_toast">%1$s: „%2$s“</string>
+    <string name="sessions_undo">Rückgängig</string>
+    <string name="sessions_delete">Löschen</string>
+    <string name="sessions_rename">Umbenennen</string>
+    <string name="sessions_save">Speichern</string>
+    <string name="sessions_create">Erstellen</string>
+    <string name="sessions_open_in_new_window">In neuem Fenster öffnen</string>
+    <string name="sessions_make_a_thread">Zum Thread machen</string>
+    <string name="sessions_make_thread">Zum Thread machen</string>
+    <string name="sessions_start_fresh">Neu beginnen</string>
+    <string name="sessions_usage_and_cost">Verbrauch und Kosten</string>
+    <string name="sessions_background_processes">Hintergrundprozesse</string>
+    <string name="sessions_checkpoints">Checkpoints</string>
+    <string name="sessions_goal_and_loops">Ziel und Schleifen</string>
+    <string name="sessions_export_markdown">Als Markdown exportieren</string>
+    <string name="sessions_copy_session_id">Sitzungs-ID kopieren</string>
+    <string name="sessions_rename_chat">Chat umbenennen</string>
+    <string name="sessions_rename_chat_detail">Leer lassen, um den Titel zu entfernen.</string>
+    <string name="sessions_delete_chat_title">Chat löschen?</string>
+    <string name="sessions_delete_chat_detail">„%1$s“ und seine Nachrichten werden vom Gateway entfernt. Das lässt sich nicht rückgängig machen.</string>
+
+    <!-- Threads -->
+    <string name="sessions_rename_thread">Thread umbenennen</string>
+    <string name="sessions_rename_thread_detail">Sein Chat wird mit umbenannt, und jeder neue Chat bekommt diesen Namen.</string>
+    <string name="sessions_move_up">Nach oben</string>
+    <string name="sessions_move_down">Nach unten</string>
+    <string name="sessions_reorder">Sortieren</string>
+    <string name="sessions_remove_thread">Thread entfernen</string>
+    <string name="sessions_start_thread_fresh_title">%1$s neu beginnen?</string>
+    <string name="sessions_start_thread_fresh_detail">Sein Chat wird als „%1$s · Datum und Uhrzeit“ archiviert, und ein neuer, leerer tritt an seine Stelle. Archivierte Chats bleiben 30 Tage erhalten.</string>
+    <string name="sessions_thread_make_failed">Thread konnte nicht erstellt werden.</string>
+    <string name="sessions_thread_remove_failed">Thread konnte nicht entfernt werden.</string>
+    <string name="sessions_thread_rename_failed">Thread konnte nicht umbenannt werden.</string>
+    <string name="sessions_thread_move_failed">Thread konnte nicht verschoben werden.</string>
+    <string name="sessions_thread_order_failed">Reihenfolge konnte nicht gespeichert werden.</string>
+    <string name="sessions_thread_fresh_failed">Thread konnte nicht neu begonnen werden.</string>
+
+    <!-- Projects -->
+    <string name="sessions_all_projects">Alle Projekte</string>
+    <string name="sessions_new_project">Neues Projekt</string>
+    <string name="sessions_project_options">Optionen für %1$s</string>
+    <string name="sessions_choose_project">Projekt wählen</string>
+    <string name="sessions_delete_project">Projekt löschen</string>
+    <string name="sessions_save_as_project">Als Projekt speichern</string>
+    <string name="sessions_choose_folder">Ordner wählen</string>
+    <string name="sessions_new_project_detail">Chats im Ordner werden unter dem Projekt gruppiert, und ein darin begonnener Chat läuft dort.</string>
+    <string name="sessions_use_this_folder">Diesen Ordner nehmen</string>
+    <string name="sessions_project_name">Name</string>
+    <string name="sessions_project_folder">Ordner auf dem Gateway</string>
+    <string name="sessions_project_folder_hint">Optional. Ein Ordner auf dem Rechner, auf dem Hermes läuft.</string>
+    <string name="sessions_browse_folders">Ordner durchsuchen</string>
+    <string name="sessions_folder_list_failed">Dieser Ordner konnte nicht gelesen werden.</string>
+    <string name="sessions_folder_up">Einen Ordner höher</string>
+    <string name="sessions_folder_home">Home-Ordner</string>
+    <string name="sessions_folder_new">Neuer Ordner</string>
+    <string name="sessions_folder_filter">Filtern</string>
+    <string name="sessions_folder_new_name">Name des neuen Ordners</string>
+    <string name="sessions_folder_empty">Hier gibt es keine Ordner.</string>
+    <string name="sessions_folder_more">Manche Ordner werden hier vielleicht nicht angezeigt. Tippe den Anfang eines Namens, um einen zu finden.</string>
+    <string name="sessions_rename_project">Projekt umbenennen</string>
+    <string name="sessions_delete_project_title">Projekt löschen?</string>
+    <string name="sessions_delete_project_detail">„%1$s“ wird vom Gateway entfernt. Seine Chats bleiben und werden wieder nach ihrem Ordner gruppiert.</string>
+    <string name="sessions_not_connected">Nicht verbunden.</string>
+    <string name="sessions_cant_make_folders">Dieser Build kann keine Ordner anlegen.</string>
+    <string name="sessions_gateway_cant_change_projects">Dieses Gateway kann Projekte nicht ändern.</string>
+    <string name="sessions_project_change_failed">Das Projekt konnte nicht geändert werden.</string>
+
+    <!-- Account and profiles -->
+    <string name="sessions_signed_in">Angemeldet</string>
+    <string name="sessions_profile_named">Profil: %1$s</string>
+    <string name="sessions_refresh_chats">Chats aktualisieren</string>
+    <string name="sessions_refreshing_chats">Chats werden aktualisiert…</string>
+    <string name="sessions_retry_connection">Jetzt neu verbinden</string>
+    <string name="sessions_sign_out">Abmelden</string>
+    <string name="sessions_switch_gateway">Gateway wechseln oder hinzufügen</string>
+    <string name="sessions_profiles">Profile</string>
+    <string name="sessions_profiles_detail">Jedes Profil ist ein eigener Agent, mit eigenen Chats, eigenem Gedächtnis und Modell.</string>
+    <string name="sessions_profiles_add_hint">Profile legst du auf dem Gateway-Rechner mit „hermes profile create“ an.</string>
+    <string name="sessions_profile_default">Standard</string>
+    <string name="sessions_profile_active">Aktiv</string>
+
+    <!-- Other chats -->
+    <string name="sessions_badge">Sitzungen</string>
+    <plurals name="sessions_badge_need_you">
+        <item quantity="one">Sitzungen, %1$d wartet auf dich</item>
+        <item quantity="other">Sitzungen, %1$d warten auf dich</item>
+    </plurals>
+    <string name="sessions_other_reply">Antwort in %1$s</string>
+    <string name="sessions_other_approval">%1$s braucht dein OK</string>
+    <string name="sessions_other_question">%1$s braucht eine Antwort</string>
+    <string name="sessions_other_input">%1$s braucht deine Eingabe</string>
+    <plurals name="sessions_other_and_more">
+        <item quantity="one">%1$s, und %2$d weiterer</item>
+        <item quantity="other">%1$s, und %2$d weitere</item>
+    </plurals>
+
+    <string name="sessions_with_detail">%1$s: %2$s</string>
+
+    <!-- Shared words -->
+    <string name="sessions_couldnt_load">Konnte nicht geladen werden</string>
+    <string name="sessions_loading">Lädt…</string>
+    <string name="sessions_open">Öffnen</string>
+    <string name="sessions_edit">Bearbeiten</string>
+    <string name="sessions_discard">Verwerfen</string>
+    <string name="sessions_keep_editing">Weiter bearbeiten</string>
+    <string name="sessions_replace">Ersetzen</string>
+    <string name="sessions_optional">Optional</string>
+    <string name="sessions_turn_off">Ausschalten</string>
+    <string name="sessions_change_ellipsis">Ändern…</string>
+    <string name="sessions_more_for">Mehr zu %1$s</string>
+    <string name="sessions_in_time">in %1$s</string>
+    <string name="sessions_just_now_alone">Gerade eben</string>
+
+    <!-- Scheduled jobs and routines -->
+    <string name="sessions_bot_routines">Routinen von %1$s</string>
+    <plurals name="sessions_jobs_count">
+        <item quantity="one">%1$d Job · jeder Lauf öffnet sich als Chat</item>
+        <item quantity="other">%1$d Jobs · jeder Lauf öffnet sich als Chat</item>
+    </plurals>
+    <plurals name="sessions_routines_count">
+        <item quantity="one">%1$d Routine · läuft als %2$s</item>
+        <item quantity="other">%1$d Routinen · jede läuft als %2$s</item>
+    </plurals>
+    <string name="sessions_new_job">Neuer Job</string>
+    <string name="sessions_new_routine">Neue Routine</string>
+    <string name="sessions_edit_job">Job bearbeiten</string>
+    <string name="sessions_edit_routine">Routine bearbeiten</string>
+    <string name="sessions_delete_job">Job löschen</string>
+    <string name="sessions_delete_routine">Routine löschen</string>
+    <string name="sessions_delete_job_title">Job löschen?</string>
+    <string name="sessions_delete_routine_title">Routine löschen?</string>
+    <string name="sessions_delete_job_detail">„%1$s“ läuft nicht mehr. Die Chats seiner bisherigen Läufe bleiben.</string>
+    <string name="sessions_discard_changes_title">Änderungen verwerfen?</string>
+    <string name="sessions_discard_job_detail">Was du an diesem Job geändert hast, ist noch nicht gespeichert.</string>
+    <string name="sessions_discard_routine_detail">Was du an dieser Routine geändert hast, ist noch nicht gespeichert.</string>
+    <string name="sessions_pick_job">Wähle einen Job</string>
+    <string name="sessions_pick_routine">Wähle eine Routine</string>
+    <string name="sessions_pick_job_detail">Hier stehen sein Prompt, wohin er berichtet, und seine Läufe.</string>
+    <string name="sessions_jobs_load_failed">Geplante Jobs konnten nicht geladen werden</string>
+    <string name="sessions_routines_load_failed">Routinen konnten nicht geladen werden</string>
+    <string name="sessions_no_jobs">Keine geplanten Jobs</string>
+    <string name="sessions_no_jobs_detail">Lass den Agenten etwas nach Zeitplan tun, etwa ein Morgenbriefing. Jeder Lauf öffnet sich hier als Chat.</string>
+    <string name="sessions_no_routines">Noch keine Routinen</string>
+    <string name="sessions_no_routines_detail">Lass %1$s etwas nach Zeitplan tun, etwa ein Morgenbriefing. Es läuft als %1$s, mit eigenem Gedächtnis und eigenen Skills, und kann in seinen Chat berichten.</string>
+    <string name="sessions_run_now">Jetzt ausführen</string>
+    <string name="sessions_pause">Pausieren</string>
+    <string name="sessions_resume">Fortsetzen</string>
+    <string name="sessions_runs">Läufe</string>
+    <string name="sessions_runs_load_failed">Läufe konnten nicht geladen werden. %1$s</string>
+    <string name="sessions_no_runs">Noch keine Läufe. Jeder Lauf öffnet sich hier als Chat.</string>
+    <plurals name="sessions_run_messages">
+        <item quantity="one">%1$d Nachr.</item>
+        <item quantity="other">%1$d Nachr.</item>
+    </plurals>
+    <string name="sessions_delivers_to">Liefert an %1$s</string>
+    <string name="sessions_delivery_local">Lokal (nur speichern)</string>
+    <string name="sessions_delivery_bot_chat">Chat von %1$s</string>
+    <string name="sessions_delivery_the_bot_chat">den Chat des Bots</string>
+    <string name="sessions_job_paused">pausiert</string>
+    <string name="sessions_job_done">fertig</string>
+    <string name="sessions_job_finished">beendet</string>
+    <string name="sessions_job_missed">verpasst</string>
+    <string name="sessions_job_failed">fehlgeschlagen</string>
+    <string name="sessions_job_last_run">letzter Lauf</string>
+    <string name="sessions_job_last_run_failed">letzter Lauf fehlgeschlagen</string>
+    <string name="sessions_job_next_run">nächster Lauf</string>
+    <string name="sessions_job_next">nächster %1$s</string>
+    <string name="sessions_job_due_now">jetzt fällig</string>
+    <string name="sessions_schedule_daily">Täglich um %1$s</string>
+    <string name="sessions_schedule_weekdays">Werktags um %1$s</string>
+    <string name="sessions_schedule_sundays">Sonntags um %1$s</string>
+    <string name="sessions_schedule_mondays">Montags um %1$s</string>
+    <string name="sessions_schedule_tuesdays">Dienstags um %1$s</string>
+    <string name="sessions_schedule_wednesdays">Mittwochs um %1$s</string>
+    <string name="sessions_schedule_thursdays">Donnerstags um %1$s</string>
+    <string name="sessions_schedule_fridays">Freitags um %1$s</string>
+    <string name="sessions_schedule_saturdays">Samstags um %1$s</string>
+    <string name="sessions_job_prompt">Prompt</string>
+    <string name="sessions_job_prompt_example">Fasse meine ungelesenen E-Mails zusammen und markiere alles Dringende</string>
+    <string name="sessions_job_prompt_hint">Was der Agent bei jedem Lauf tut, als neuer Chat.</string>
+    <string name="sessions_routine_prompt_hint">Was %1$s bei jedem Lauf tut, als es selbst, mit eigenem Gedächtnis und eigenen Skills.</string>
+    <string name="sessions_job_schedule">Zeitplan</string>
+    <string name="sessions_job_schedule_hint_new">Etwa „every 2h“, „0 9 * * *“, „every monday 9am“ oder „in 30m“ für einmal.</string>
+    <string name="sessions_job_schedule_hint_edit">So lassen, um den aktuellen Zeitplan zu behalten. Einmalige Jobs beginnen leer.</string>
+    <string name="sessions_preset_every_30_min">Alle 30 Min.</string>
+    <string name="sessions_preset_hourly">Stündlich</string>
+    <string name="sessions_preset_daily">Täglich 9:00</string>
+    <string name="sessions_preset_weekdays">Werktags 9:00</string>
+    <string name="sessions_preset_mondays">Montags 9:00</string>
+    <string name="sessions_preset_once">Einmal, in 1 Std.</string>
+    <string name="sessions_routine_name_example">Morgenbriefing</string>
+    <string name="sessions_deliver_to">Liefern an</string>
+    <string name="sessions_deliver_no_home">%1$s hat auf dem Gateway keinen Heimkanal, also wüssten Läufe nicht wohin.</string>
+    <string name="sessions_deliver_bot_chat_detail">Das Ergebnis jedes Laufs kommt in %1$s als Nachricht an, die er liest und beantwortet; ein Lauf kostet ihn also einen Zug mehr.</string>
+    <string name="sessions_schedule_job">Job planen</string>
+    <string name="sessions_schedule_routine">Routine planen</string>
+    <string name="sessions_job_gone">Dieser Job wurde auf dem Gateway gelöscht, es gibt also nichts zu speichern.</string>
+    <string name="sessions_job_needs_name">Gib der Routine einen Namen.</string>
+    <string name="sessions_job_needs_prompt">Sag, was der Agent bei jedem Lauf tun soll.</string>
+    <string name="sessions_job_needs_schedule">Sag, wann er laufen soll.</string>
+    <string name="sessions_job_scheduled">Job geplant</string>
+    <string name="sessions_job_saved">Job gespeichert</string>
+    <string name="sessions_job_deleted">Job gelöscht</string>
+    <string name="sessions_routine_scheduled">Routine geplant</string>
+    <string name="sessions_routine_saved">Routine gespeichert</string>
+    <string name="sessions_routine_deleted">Routine gelöscht</string>
+    <string name="sessions_job_run_started">Lauf gestartet</string>
+    <string name="sessions_job_run_failed">Lauf konnte nicht gestartet werden</string>
+    <string name="sessions_job_pause_failed">Job konnte nicht pausiert werden</string>
+    <string name="sessions_job_resume_failed">Job konnte nicht fortgesetzt werden</string>
+    <string name="sessions_job_save_failed">Job konnte nicht gespeichert werden</string>
+    <string name="sessions_job_delete_failed">Job konnte nicht gelöscht werden</string>
+
+    <!-- Insights -->
+    <plurals name="sessions_insights_days">
+        <item quantity="one">%1$d Tag</item>
+        <item quantity="other">%1$d Tage</item>
+    </plurals>
+    <string name="sessions_insights_load_failed">Statistik konnte nicht geladen werden</string>
+    <string name="sessions_insights_empty">Noch nichts genutzt</string>
+    <string name="sessions_insights_empty_detail">Chats aus diesem Zeitraum und was sie gekostet haben, erscheinen hier.</string>
+    <string name="sessions_insights_billed">abgerechnet</string>
+    <string name="sessions_insights_estimated">geschätzte Kosten</string>
+    <plurals name="sessions_insights_chats">
+        <item quantity="one">Chat</item>
+        <item quantity="other">Chats</item>
+    </plurals>
+    <string name="sessions_insights_tokens_in_out">Tokens rein und raus</string>
+    <string name="sessions_insights_from_cache">Prompt aus dem Cache</string>
+    <string name="sessions_insights_models">Modelle</string>
+    <string name="sessions_insights_tokens">%1$s Tokens</string>
+    <string name="sessions_insights_tool_calls">Tool-Aufrufe</string>
+    <string name="sessions_insights_tool_calls_spoken">%1$s, %2$s Aufrufe</string>
+    <string name="sessions_insights_skill_uses">Skill-Nutzung</string>
+    <string name="sessions_insights_skill_uses_spoken">%1$s, %2$s-mal genutzt</string>
+    <string name="sessions_insights_tokens_by_day">Tokens pro Tag</string>
+    <string name="sessions_insights_peak">Spitze %1$s · %2$s</string>
+    <plurals name="sessions_insights_day_chats">
+        <item quantity="one">%1$d Chat</item>
+        <item quantity="other">%1$d Chats</item>
+    </plurals>
+    <string name="sessions_insights_hint_touch">Tippe auf einen Tag für seine Zahlen.</string>
+    <string name="sessions_insights_hint_pointer">Zeige auf einen Tag für seine Zahlen.</string>
+    <string name="sessions_insights_show_numbers">Zahlen zeigen</string>
+    <string name="sessions_insights_day_spoken">%1$s: %2$s Tokens</string>
+    <string name="sessions_short_date">%2$s. %1$s</string>
+    <string name="sessions_month_1">Jan.</string>
+    <string name="sessions_month_2">Feb.</string>
+    <string name="sessions_month_3">März</string>
+    <string name="sessions_month_4">Apr.</string>
+    <string name="sessions_month_5">Mai</string>
+    <string name="sessions_month_6">Juni</string>
+    <string name="sessions_month_7">Juli</string>
+    <string name="sessions_month_8">Aug.</string>
+    <string name="sessions_month_9">Sept.</string>
+    <string name="sessions_month_10">Okt.</string>
+    <string name="sessions_month_11">Nov.</string>
+    <string name="sessions_month_12">Dez.</string>
+
+    <!-- Capabilities -->
+    <string name="sessions_capabilities_detail">Was der Agent in neuen Chats nutzen kann</string>
+    <string name="sessions_tab_skills">Skills</string>
+    <string name="sessions_tab_toolsets">Toolsets</string>
+    <string name="sessions_tab_mcp">MCP</string>
+    <string name="sessions_no_toolsets">Keine Toolsets eingerichtet.</string>
+    <string name="sessions_toolsets_hint">Die Toolsets, die der Agent in neuen Chats bekommt.</string>
+    <string name="sessions_no_mcp_servers">Keine MCP-Server. Füge auf dem Gateway mit `hermes mcp add` oder in Hermes Desktop einen hinzu.</string>
+    <string name="sessions_changes_next_chat">Änderungen gelten ab dem nächsten Chat.</string>
+    <string name="sessions_no_skills">Noch keine Skills. Der Agent schreibt sie, während er lernt, oder du installierst sie mit `hermes skills`.</string>
+    <plurals name="sessions_search_skills">
+        <item quantity="one">%1$d Skill durchsuchen</item>
+        <item quantity="other">%1$d Skills durchsuchen</item>
+    </plurals>
+    <string name="sessions_browse_hub">Hub durchsuchen</string>
+    <string name="sessions_no_skills_match">Keine Skills passen zu „%1$s“.</string>
+    <string name="sessions_skills_other">Sonstige</string>
+    <string name="sessions_skill_tag_hub">Hub</string>
+    <string name="sessions_skill_tag_learned">gelernt</string>
+    <string name="sessions_skill_tag_external">extern</string>
+    <string name="sessions_toolset_needs_setup">braucht Einrichtung</string>
+    <plurals name="sessions_tools_count">
+        <item quantity="one">%1$d Tool</item>
+        <item quantity="other">%1$d Tools</item>
+    </plurals>
+    <string name="sessions_mcp_from_plugin">von %1$s</string>
+    <string name="sessions_mcp_set_by_plugin">von %1$s festgelegt</string>
+    <string name="sessions_locked_note">kann hier nicht geändert werden</string>
+    <string name="sessions_switch_on_locked">An, %1$s</string>
+    <string name="sessions_switch_off_locked">Aus, %1$s</string>
+    <string name="sessions_mcp_test">Testen</string>
+    <plurals name="sessions_mcp_connected_tools">
+        <item quantity="one">Verbunden · %1$d Tool</item>
+        <item quantity="other">Verbunden · %1$d Tools</item>
+    </plurals>
+    <string name="sessions_mcp_connect_failed">Verbindung fehlgeschlagen.</string>
+    <string name="sessions_turn_on_failed">%1$s konnte nicht eingeschaltet werden</string>
+    <string name="sessions_turn_off_failed">%1$s konnte nicht ausgeschaltet werden</string>
+    <string name="sessions_uninstall">Deinstallieren</string>
+    <string name="sessions_uninstall_skill_detail">%1$s aus %2$s entfernen? Ausschalten lässt ihn installiert.</string>
+    <string name="sessions_uninstall_skill_main_detail">%1$s aus dem Hauptprofil entfernen? Ausschalten lässt ihn installiert.</string>
+
+    <!-- Skills hub -->
+    <string name="sessions_hub_title">Skills-Hub</string>
+    <string name="sessions_hub_installs_into">Installiert in %1$s</string>
+    <string name="sessions_hub_installs_into_main">Installiert ins Hauptprofil</string>
+    <string name="sessions_hub_update_all">Alle aktualisieren</string>
+    <string name="sessions_hub_unsupported">Dieses Gateway hat den Skills-Hub noch nicht.</string>
+    <string name="sessions_hub_search">Hub durchsuchen</string>
+    <string name="sessions_hub_timed_out">Manche Quellen haben nicht geantwortet: %1$s</string>
+    <string name="sessions_hub_no_match">Keine Skills passen zu deiner Suche.</string>
+    <string name="sessions_hub_featured">Empfohlen</string>
+    <string name="sessions_hub_official">Offiziell</string>
+    <string name="sessions_hub_official_empty">Nichts im offiziellen Katalog.</string>
+    <string name="sessions_hub_installed_tag">Installiert</string>
+    <string name="sessions_hub_blocked_by_scan">Vom Sicherheitsscan blockiert</string>
+    <string name="sessions_hub_view_scan">Scan ansehen</string>
+    <string name="sessions_hub_scan_title">Scan: %1$s</string>
+    <string name="sessions_hub_install_anyway">Trotzdem installieren</string>
+    <string name="sessions_hub_scan_failed">Scan fehlgeschlagen</string>
+    <string name="sessions_hub_check_failed">%1$s konnte nicht geprüft werden</string>
+    <string name="sessions_hub_blocked">%1$s wurde vom Sicherheitsscan blockiert.</string>
+    <string name="sessions_hub_installed">%1$s installiert. Gilt ab dem nächsten Chat.</string>
+    <string name="sessions_hub_removed">%1$s entfernt. Gilt ab dem nächsten Chat.</string>
+    <string name="sessions_hub_updated">Skills aktualisiert. Gilt ab dem nächsten Chat.</string>
+    <string name="sessions_hub_install_failed">%1$s konnte nicht installiert werden</string>
+    <string name="sessions_hub_remove_failed">%1$s konnte nicht entfernt werden</string>
+    <string name="sessions_hub_update_failed">Skills konnten nicht aktualisiert werden</string>
+
+    <!-- Config -->
+    <string name="sessions_config_detail">Die Einstellungen von Hermes selbst, gespeichert in seiner config.yaml. Die meisten gelten ab dem nächsten Chat.</string>
+    <string name="sessions_config_edit_yaml">config.yaml bearbeiten</string>
+    <string name="sessions_config_yaml_row_detail">Die ganze Datei, für alles, was nicht aufgeführt ist</string>
+    <string name="sessions_config_yaml_detail">Die ganze Konfigurationsdatei des Profils.</string>
+    <string name="sessions_config_all">Alle Einstellungen</string>
+    <string name="sessions_config_all_detail">Jede Einstellung, die das Gateway kennt, nach seiner eigenen Gruppierung.</string>
+    <string name="sessions_config_all_row_detail">Jedes Feld, nach der Gruppierung des Gateways</string>
+    <plurals name="sessions_config_search">
+        <item quantity="one">%1$d Einstellung durchsuchen</item>
+        <item quantity="other">%1$d Einstellungen durchsuchen</item>
+    </plurals>
+    <plurals name="sessions_config_settings">
+        <item quantity="one">%1$d Einstellung</item>
+        <item quantity="other">%1$d Einstellungen</item>
+    </plurals>
+    <string name="sessions_config_first_of">Erste %1$d von %2$d Einstellungen</string>
+    <string name="sessions_config_no_match">Keine Einstellungen passen zu „%1$s“.</string>
+    <string name="sessions_config_type_more">Tippe mehr, um es einzugrenzen.</string>
+    <string name="sessions_config_none_here">Dieses Gateway hat keine dieser Einstellungen.</string>
+    <string name="sessions_config_voice_note">Nur die Einstellungen der gewählten Anbieter werden gezeigt.</string>
+    <string name="sessions_config_model_note">Der Standard für neue Chats; die Modellauswahl eines Chats kann dessen eigenes noch ändern.</string>
+    <string name="sessions_config_search_options">%1$d durchsuchen</string>
+    <string name="sessions_config_other">Andere…</string>
+    <string name="sessions_config_one_per_line">Eins pro Zeile.</string>
+    <string name="sessions_copy_key">Schlüssel kopieren</string>
+    <string name="sessions_copy_value">Wert kopieren</string>
+    <string name="sessions_discard_title">Deine Änderungen verwerfen?</string>
+    <string name="sessions_config_discard_detail">config.yaml bleibt, wie sie gespeichert war.</string>
+    <string name="sessions_config_all_off_title">Alle Toolsets ausschalten?</string>
+    <string name="sessions_config_all_off_detail">Der Agent verlöre Gedächtnis, Terminal, Websuche, Subagenten und die meisten seiner Tools, bis einige wieder eingeschaltet sind.</string>
+    <string name="sessions_config_replace_title">config.yaml ersetzen?</string>
+    <string name="sessions_config_replace_detail">Die Datei wird genau dieser Text. Hermes liest sie für neue Chats neu; manche Einstellungen brauchen einen Neustart des Gateways.</string>
+    <string name="sessions_config_refresh_failed">Konnte nicht aktualisiert werden</string>
+    <string name="sessions_config_save_failed">%1$s konnte nicht gespeichert werden</string>
+    <string name="sessions_config_yaml_saved">config.yaml gespeichert</string>
+</resources>
