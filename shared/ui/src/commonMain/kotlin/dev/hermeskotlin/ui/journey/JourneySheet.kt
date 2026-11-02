@@ -1,9 +1,16 @@
 package dev.hermeskotlin.ui.journey
 
+import dev.hermeskotlin.designsystem.components.handCursor
+
+import dev.hermeskotlin.designsystem.components.ScrollbarBox
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import dev.hermeskotlin.ui.isDesktop
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
@@ -26,9 +33,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
+import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -89,7 +95,8 @@ internal fun JourneySheetView(
 ) {
     var open by remember { mutableStateOf<JourneyNode?>(null) }
     LaunchedEffect(visible) { if (!visible) open = null }
-    BottomSheet(visible = visible, onDismiss = onDismiss) {
+    // Escape on an item's page goes back to the list, as its Back does; on the list it closes the sheet.
+    BottomSheet(visible = visible, onDismiss = onDismiss, onEscape = if (open != null) ({ open = null }) else null) {
         val node = open
         if (node != null) {
             NodeDetail(node, detail, onBack = { open = null })
@@ -108,7 +115,7 @@ internal fun JourneySheetView(
                 val months = remember(graph) {
                     graph.nodes.sortedByDescending { it.timestamp ?: Long.MIN_VALUE }.groupBy { node -> node.timestamp?.let(::monthLabel) ?: "Undated" }
                 }
-                LazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp)) {
+                ScrollbarBox { listState -> LazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp), state = listState) {
                     months.forEach { (month, nodes) ->
                         item(key = "m-$month") {
                             Text(
@@ -125,7 +132,7 @@ internal fun JourneySheetView(
                         }
                         items(nodes, key = { it.id }) { NodeRow(it, onClick = { open = it }) }
                     }
-                }
+                } }
             }
         }
     }
@@ -139,6 +146,7 @@ private fun NodeRow(node: JourneyNode, onClick: () -> Unit) {
             .heightIn(min = MinTouchTarget)
             .padding(horizontal = 8.dp)
             .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
+            .handCursor()
             .clickable(onClick = onClick)
             .padding(horizontal = 10.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -178,8 +186,12 @@ private fun NodeRow(node: JourneyNode, onClick: () -> Unit) {
 @Composable
 private fun NodeDetail(node: JourneyNode, read: suspend (JourneyNode) -> JourneyNodeDetail?, onBack: () -> Unit) {
     val detail by produceState<Result<JourneyNodeDetail?>?>(null, node.id) { value = runCatching { read(node) } }
+    // The row that opened this page is gone, so on the desktop Back takes the focus: Escape then
+    // still reaches the sheet and goes back to the list instead of closing it.
+    val back = remember { FocusRequester() }
+    LaunchedEffect(node.id) { if (isDesktop) runCatching { back.requestFocus() } }
     Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(Lucide.ArrowLeft, contentDescription = "Back to the journey", onClick = onBack)
+        IconButton(Lucide.ArrowLeft, contentDescription = "Back to the journey", onClick = onBack, modifier = Modifier.focusRequester(back))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 node.title,
@@ -196,7 +208,7 @@ private fun NodeDetail(node: JourneyNode, read: suspend (JourneyNode) -> Journey
     when {
         detail == null -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Spinner() }
         content.isNullOrBlank() -> Note("Couldn't read this one.", error = true)
-        else -> Box(Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScroll(rememberScrollState()).padding(horizontal = 20.dp, vertical = 12.dp)) {
+        else -> Box(Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScrollWithBar().padding(horizontal = 20.dp, vertical = 12.dp)) {
             SelectionContainer { MarkdownText(content) }
         }
     }

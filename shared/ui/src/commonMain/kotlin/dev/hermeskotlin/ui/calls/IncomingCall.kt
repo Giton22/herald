@@ -89,7 +89,7 @@ internal fun IncomingCallView(caller: String, why: String, onAnswer: () -> Unit,
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Text("Herald call", style = Theme[typography][label], color = Theme[colors][textSecondary])
+            Text("Kyllene call", style = Theme[typography][label], color = Theme[colors][textSecondary])
             Text(
                 caller,
                 style = Theme[typography][display],
@@ -195,11 +195,13 @@ internal fun InCallView(state: PhoneCallState, seconds: Long, onMute: () -> Unit
                 )
             }
         }
+        // A live call mutes from the start; the chained chat once it listens.
+        val mutable = voice.live || voice.phase != VoicePhase.Off && voice.phase != VoicePhase.Connecting
         Row(
             Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(start = 48.dp, end = 48.dp, bottom = 72.dp),
-            horizontalArrangement = if (voice.live) Arrangement.SpaceBetween else Arrangement.Center,
+            horizontalArrangement = if (mutable) Arrangement.SpaceBetween else Arrangement.Center,
         ) {
-            if (voice.live) {
+            if (mutable) {
                 CallButton(
                     if (voice.muted) "Unmute" else "Mute",
                     if (voice.muted) Lucide.MicOff else Lucide.Mic,

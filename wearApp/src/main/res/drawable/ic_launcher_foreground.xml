@@ -1,23 +1,39 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-    The app mark: an H whose two halves reach for each other, the phone meeting the server.
-    Drawn in the 108dp adaptive-icon grid, inside the 66dp safe zone; also the themed (monochrome) icon.
+    The app mark, the summit at dawn, as the phone's default launcher icon (androidApp's ic_launcher_foreground.xml,
+    shapes in its launcher_icons.xml): Mount Kyllene with a lit face, a shaded face and a snowcap, the sun rising
+    off its right shoulder. The sky is ic_launcher_background.
 -->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M38.5,30a5.5,5.5 0,0 1,5.5 5.5v37a5.5,5.5 0,0 1,-5.5 5.5a5.5,5.5 0,0 1,-5.5 -5.5v-37a5.5,5.5 0,0 1,5.5 -5.5z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M69.5,30a5.5,5.5 0,0 1,5.5 5.5v37a5.5,5.5 0,0 1,-5.5 5.5a5.5,5.5 0,0 1,-5.5 -5.5v-37a5.5,5.5 0,0 1,5.5 -5.5z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M38,43h18a5,5 0,0 1,5 5a5,5 0,0 1,-5 5h-18a5,5 0,0 1,-5 -5a5,5 0,0 1,5 -5z" />
-    <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M52,55h18a5,5 0,0 1,5 5a5,5 0,0 1,-5 5h-18a5,5 0,0 1,-5 -5a5,5 0,0 1,5 -5z" />
+    <path android:pathData="M60,49a11,11 0,1 0,22 0a11,11 0,1 0,-22 0z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="38" android:endX="0" android:endY="60"
+                android:startColor="@color/launcher_sun_top" android:endColor="@color/launcher_sun_bottom" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="M11.6,108L51,40Q54,35 57,40L96.4,108" android:strokeWidth="4" android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient android:type="linear" android:startX="0" android:startY="18" android:endX="0" android:endY="90"
+                android:startColor="@color/launcher_sky_top" android:endColor="@color/launcher_sky_bottom" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="M11.6,108L51,40Q54,35 57,40L58,41.7L55,52L60,64L56,78L60,90L60,108Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="30" android:startY="36" android:endX="54" android:endY="90"
+                android:startColor="@color/launcher_lit_top" android:endColor="@color/launcher_lit_bottom" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="M58,41.7L96.4,108L60,108L60,90L56,78L60,64L55,52Z">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="60" android:startY="36" android:endX="80" android:endY="90"
+                android:startColor="@color/launcher_shade_top" android:endColor="@color/launcher_shade_bottom" />
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#FFFFFF" android:pathData="M45.2,50L51,40Q54,35 57,40L58,41.7L55,52L52,49L48.5,53Z" />
+    <path android:fillColor="@color/launcher_snow_shade" android:pathData="M58,41.7L62.8,50L60,48.6L57.5,52.5L55,52Z" />
 </vector>

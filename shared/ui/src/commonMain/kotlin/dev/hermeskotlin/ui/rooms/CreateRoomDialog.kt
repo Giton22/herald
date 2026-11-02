@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui.rooms
 
+import dev.hermeskotlin.designsystem.components.handCursor
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -16,13 +18,16 @@ import androidx.compose.ui.text.font.FontWeight
 import dev.hermeskotlin.designsystem.accentSoft
 import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import dev.hermeskotlin.ui.bots.BotAvatar
+import dev.hermeskotlin.ui.CopyableOnDesktop
+import dev.hermeskotlin.ui.isDesktop
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.rememberTextFieldState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.text.input.ImeAction
+import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.toMutableStateList
@@ -77,6 +82,7 @@ fun CreateRoomDialog(
     val selected = remember { mutableListOf<String>().toMutableStateList() }
     val nameText = name.text.toString().trim()
     val canCreate = nameText.isNotEmpty() && selected.size in MIN_MEMBERS..MAX_MEMBERS && busy == null
+    val create = { if (canCreate) onCreate(nameText, bots.filter { it.name in selected }) }
     Dialog(
         visible = visible,
         onDismissRequest = { if (busy == null) onDismiss() },
@@ -85,7 +91,7 @@ fun CreateRoomDialog(
             Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small, enabled = busy == null)
             Button(
                 "Create",
-                onClick = { onCreate(nameText, bots.filter { it.name in selected }) },
+                onClick = create,
                 variant = ButtonVariant.Primary,
                 size = ButtonSize.Small,
                 enabled = canCreate,
@@ -93,7 +99,16 @@ fun CreateRoomDialog(
             )
         },
     ) {
-        TextField(state = name, label = "Room name", placeholder = "Release room", enabled = busy == null)
+        TextField(
+            state = name,
+            label = "Room name",
+            placeholder = "Release room",
+            enabled = busy == null,
+            autofocus = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            // Enter makes the room on the desktop; a phone's Done only closes the keyboard, as it always has.
+            onKeyboardAction = { closeKeyboard -> if (isDesktop) create() else closeKeyboard() },
+        )
         Text(
             "The bots you pick talk things over in the room. It runs on the gateway, so it keeps going " +
                 "with no app open, and the whole conversation is there when you come back.",
@@ -102,7 +117,7 @@ fun CreateRoomDialog(
         )
         SectionLabel("Bots · pick $MIN_MEMBERS to $MAX_MEMBERS")
         Column(
-            Modifier.fillMaxWidth().heightIn(max = 260.dp).verticalScroll(rememberScrollState()),
+            Modifier.fillMaxWidth().heightIn(max = 260.dp).verticalScrollWithBar(),
         ) {
             bots.forEach { bot ->
                 val picked = bot.name in selected
@@ -113,6 +128,7 @@ fun CreateRoomDialog(
                         .heightIn(min = MinTouchTarget)
                         .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
                         .background(if (picked) Theme[colors][accentSoft] else Color.Transparent)
+                        .handCursor(busy == null && !full)
                         .toggleable(value = picked, enabled = busy == null && !full, role = Role.Checkbox) {
                             if (picked) selected.remove(bot.name) else selected.add(bot.name)
                         }
@@ -140,7 +156,7 @@ fun CreateRoomDialog(
             color = Theme[colors][textTertiary],
         )
         if (error != null && busy == null) {
-            Text(error, style = Theme[typography][bodySmall], color = Theme[colors][danger])
+            CopyableOnDesktop { Text(error, style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
         }
     }
 }

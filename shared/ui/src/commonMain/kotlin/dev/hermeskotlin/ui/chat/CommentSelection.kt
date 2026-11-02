@@ -22,20 +22,31 @@ val LocalCommentHost = staticCompositionLocalOf<CommentHost?> { null }
  * marks what the waiting comments on it are about. Without a [source] or a [LocalCommentHost] it's only selectable.
  */
 @Composable
-fun CommentableSelection(source: CommentSource?, content: @Composable () -> Unit) {
+fun CommentableSelection(source: CommentSource?, probe: SelectionProbe? = null, content: @Composable () -> Unit) {
     val host = LocalCommentHost.current
     if (source == null || host == null) {
-        PlatformCommentableSelection(onAction = null, content = content)
+        PlatformCommentableSelection(onAction = null, probe = probe, content = content)
         return
     }
     CompositionLocalProvider(LocalTextHighlights provides host.highlights(source.messageKey)) {
-        PlatformCommentableSelection(onAction = { action, anchor -> host.onSelection(action, source, anchor) }, content = content)
+        PlatformCommentableSelection(onAction = { action, anchor -> host.onSelection(action, source, anchor) }, probe = probe, content = content)
     }
 }
 
-/** A selection container whose menu hands [onAction] the selection in place; plain when [onAction] is null. */
+/** Tells whether something in a selection container is selected now: a right-click then leaves it the text's menu. */
+class SelectionProbe {
+    internal var selected: () -> Boolean = { false }
+
+    val hasSelection: Boolean get() = selected()
+}
+
+/**
+ * A selection container whose menu hands [onAction] the selection in place; plain when [onAction] is null.
+ * [probe], when given, is kept able to tell whether anything is selected.
+ */
 @Composable
 internal expect fun PlatformCommentableSelection(
     onAction: ((SelectionAction, SelectionAnchor) -> Unit)?,
+    probe: SelectionProbe? = null,
     content: @Composable () -> Unit,
 )

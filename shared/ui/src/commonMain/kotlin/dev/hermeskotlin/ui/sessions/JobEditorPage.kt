@@ -1,5 +1,18 @@
 package dev.hermeskotlin.ui.sessions
 
+import dev.hermeskotlin.ui.PageFoot
+
+import dev.hermeskotlin.designsystem.components.handCursor
+import dev.hermeskotlin.ui.CopyableOnDesktop
+import dev.hermeskotlin.ui.Shortcut
+import dev.hermeskotlin.ui.ShortcutHandler
+import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.keysLabel
+import dev.hermeskotlin.designsystem.components.ButtonVariant
+import dev.hermeskotlin.designsystem.components.Tooltip
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.wrapContentWidth
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -18,7 +31,6 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
@@ -26,7 +38,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
-import androidx.compose.foundation.verticalScroll
+import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -99,6 +111,7 @@ internal fun JobEditorPage(
     } else {
         deliveryTargets
     }
+    ShortcutHandler(enabled = !editor.saving) { (it == Shortcut.Save).also { save -> if (save) onSave() } }
     Column(Modifier.fillMaxSize()) {
         SubpageHeader(if (editor.isNew) "New $noun" else "Edit $noun", onBack = onClose)
         Column(
@@ -106,8 +119,11 @@ internal fun JobEditorPage(
                 .weight(1f)
                 .fillMaxWidth()
                 .imePadding()
-                .verticalScroll(rememberScrollState())
-                .padding(start = 16.dp, end = 16.dp, bottom = 96.dp),
+                .verticalScrollWithBar()
+                // A form's fields stay a form's width on a wide desktop page, not the page's; the scrollbar
+                // stays at the pane's edge. wrapContentWidth frees the width fillMaxWidth fixed, so the cap holds.
+                .then(if (isDesktop) Modifier.wrapContentWidth(Alignment.Start).widthIn(max = 672.dp) else Modifier)
+                .padding(start = 16.dp, end = 16.dp, bottom = PageFoot),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             TextField(
@@ -119,6 +135,8 @@ internal fun JobEditorPage(
                 singleLine = false,
                 maxLines = 8,
                 enabled = !editor.saving,
+                // A new job starts at its prompt; an edit leaves the focus for what's being changed.
+                autofocus = editor.isNew,
             )
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextField(
@@ -162,15 +180,31 @@ internal fun JobEditorPage(
                     )
                 }
             }
-            editor.error?.let { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
-            Button(
-                if (editor.isNew) "Schedule $noun" else "Save",
-                onClick = onSave,
-                leadingIcon = Lucide.Check,
-                loading = editor.saving,
-                size = ButtonSize.Large,
-                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
-            )
+            editor.error?.let { CopyableOnDesktop { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger]) } }
+            if (isDesktop) {
+                // A desktop form ends as a desktop dialog does: Cancel, then the main action, at the end of the line.
+                Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                    Button("Cancel", onClick = onClose, variant = ButtonVariant.Ghost, enabled = !editor.saving)
+                    Tooltip(keysLabel("Ctrl+S")) {
+                        Button(
+                            if (editor.isNew) "Schedule $noun" else "Save",
+                            onClick = onSave,
+                            leadingIcon = Lucide.Check,
+                            loading = editor.saving,
+                            modifier = Modifier.widthIn(min = 120.dp),
+                        )
+                    }
+                }
+            } else {
+                Button(
+                    if (editor.isNew) "Schedule $noun" else "Save",
+                    onClick = onSave,
+                    leadingIcon = Lucide.Check,
+                    loading = editor.saving,
+                    size = ButtonSize.Large,
+                    modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                )
+            }
         }
     }
 }
@@ -242,6 +276,7 @@ private fun Choice(
             .clip(shape)
             .background(if (selected) Theme[colors][accentSoft] else Theme[colors][surface])
             .border(if (selected) 1.5.dp else 1.dp, if (selected) Theme[colors][accentText] else Theme[colors][stroke], shape)
+            .handCursor()
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
             .padding(horizontal = horizontalPadding, vertical = 4.dp),
         contentAlignment = Alignment.Center,

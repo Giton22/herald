@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui.chat
 
+import dev.hermeskotlin.designsystem.components.Tooltip
+import dev.hermeskotlin.designsystem.components.handCursor
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -41,7 +43,7 @@ import com.composeunstyled.Text
 import com.composeunstyled.UnstyledButton
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
-import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.rememberHoverIndication
 import dev.hermeskotlin.core.chat.AttachmentKind
 import dev.hermeskotlin.core.chat.OutgoingAttachment
 import dev.hermeskotlin.core.chat.ShownAttachment
@@ -69,18 +71,18 @@ internal fun ComposerTray(attachments: List<OutgoingAttachment>, onRemove: (Stri
         attachments.forEach { attachment ->
             Box {
                 AttachmentTile(attachment.name, attachment.kind, attachment.thumbnail, size = 64.dp)
-                UnstyledButton(
+                // Named on hover on the desktop, as an icon button is.
+                Tooltip("Remove", Modifier.align(Alignment.TopEnd)) { UnstyledButton(
                     onClick = { onRemove(attachment.id) },
                     modifier = Modifier
-                        .align(Alignment.TopEnd)
                         .padding(4.dp)
                         .size(22.dp)
                         .clip(CircleShape)
                         .background(Color.Black.copy(alpha = 0.6f)),
-                    indication = rememberColoredIndication(Color.White),
+                    indication = rememberHoverIndication(Color.White),
                 ) {
                     UnstyledIcon(Lucide.X, contentDescription = "Remove ${attachment.name}", tint = Color.White, modifier = Modifier.size(14.dp))
-                }
+                } }
             }
         }
     }
@@ -102,7 +104,7 @@ internal fun SentAttachments(attachments: List<ShownAttachment>) {
             }
             val viewable = attachment.kind == AttachmentKind.Image && bytes != null
             Box(
-                Modifier.clip(RoundedCornerShape(Theme[radii][radiusMedium])).clickable(enabled = viewable) {
+                Modifier.clip(RoundedCornerShape(Theme[radii][radiusMedium])).handCursor(viewable).clickable(enabled = viewable) {
                     open(ViewerImage(attachment.name, source = attachment.gatewayPath, bytes = attachment.original))
                 },
             ) {

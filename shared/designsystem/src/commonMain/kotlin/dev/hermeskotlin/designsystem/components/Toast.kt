@@ -35,7 +35,7 @@ import com.composables.icons.lucide.X
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
-import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.rememberHoverIndication
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.colors
@@ -94,6 +94,7 @@ fun Toast(
             Box(
                 Modifier
                     .defaultMinSize(minHeight = MinTouchTarget)
+                    .handCursor()
                     .clickable(interaction, indication = null, role = Role.Button, onClick = onAction),
                 contentAlignment = Alignment.Center,
             ) {
@@ -102,7 +103,7 @@ fun Toast(
                         .defaultMinSize(minHeight = 36.dp)
                         .clip(CircleShape)
                         .background(Theme[colors][accent], CircleShape)
-                        .indication(interaction, rememberColoredIndication(Theme[colors][onAccent]))
+                        .indication(interaction, rememberHoverIndication(Theme[colors][onAccent], ring = Theme[colors][onAccent]))
                         .padding(horizontal = 14.dp, vertical = 6.dp),
                     contentAlignment = Alignment.Center,
                 ) {

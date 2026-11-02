@@ -9,14 +9,36 @@ plugins {
 kotlin {
     android {
         namespace = "dev.hermeskotlin.core"
-        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        compileSdk {
+            version = release(libs.versions.android.compileSdk.get().toInt()) {
+                minorApiLevel = libs.versions.android.compileSdkMinor.get().toInt()
+            }
+        }
         minSdk = libs.versions.android.minSdk.get().toInt()
         withHostTest {}
     }
 
     // iOS targets are added here once the Android app is in shape.
 
+    // The desktop app (experimental).
+    jvm()
+
     sourceSets {
+        // What Android and the desktop share: the JDK's crypto, text and time, jsoup and OkHttp.
+        val jvmShared by creating {
+            dependsOn(commonMain.get())
+            dependencies {
+                implementation(libs.ktor.client.okhttp)
+                implementation(libs.jsoup)
+                implementation(libs.markdown.parser)
+            }
+        }
+        androidMain.get().dependsOn(jvmShared)
+        jvmMain.get().dependsOn(jvmShared)
+        jvmMain.dependencies {
+            implementation(libs.sqlite.bundled)
+            implementation(libs.jna.platform)
+        }
         commonMain.dependencies {
             api(libs.kotlinx.coroutines.core)
             api(libs.kotlinx.serialization.json)
@@ -46,6 +68,7 @@ kotlin {
 
 dependencies {
     add("kspAndroid", libs.room.compiler)
+    add("kspJvm", libs.room.compiler)
 }
 
 room {

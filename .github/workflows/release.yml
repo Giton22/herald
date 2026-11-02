@@ -1,5 +1,6 @@
 # Pushing a tag like v0.2.0 tests and builds the signed phone and watch APKs and the Pebble watchapp, and attaches
-# them to a DRAFT release.
+# them to a DRAFT release; the `desktop` job adds the Windows, macOS and Linux installers to it (see there for their
+# optional signing secrets).
 # Publishing the draft (on GitHub) is what makes it the latest release the app offers as an update.
 #
 # Repo secrets (Settings → Secrets and variables → Actions):
@@ -26,10 +27,13 @@ jobs:
       # Pinned to commits, not tags, so a moved tag can't change what runs with the signing key.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # JetBrains Runtime, as everywhere else: Gradle's daemon asks for it (gradle/gradle-daemon-jvm.properties).
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
-          distribution: temurin
+          distribution: jetbrains
           java-version: "25"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
 
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
 
@@ -70,42 +74,181 @@ jobs:
       - name: Draft release
         env:
           GH_TOKEN: ${{ github.token }}
-        # The universal APK keeps the name every release had; one APK per ABI, about a third of its size, goes
-        # beside it after an underscore (herald-1.2.3_arm64-v8a.apk). GitHub lists assets by name and app versions
-        # up to 0.5.1 offer the first APK listed, so the universal one must sort first: "." comes before "_".
-        # The Wear OS app is herald-wear-1.2.3.apk, which sorts after them all and which the app never offers; nor
-        # does it offer the Pebble watchapp, herald-pebble-1.2.3.pbw, which isn't an APK.
+        # The universal APK is kyllene-1.2.3.apk; one APK per ABI, about a third of its size, goes beside it after
+        # an underscore (kyllene-1.2.3_arm64-v8a.apk). GitHub lists assets by name and app versions up to 0.5.1
+        # offer the first APK listed, so the universal one must sort first: "." comes before "_".
+        # The Wear OS app is kyllene-wear-1.2.3.apk, which sorts after them all and which the app never offers
+        # (0.13.0 and newer know it by "-wear-"; older apps can't follow the renamed repo to see this release). Nor
+        # does it offer the Pebble watchapp, kyllene-pebble-1.2.3.pbw, which isn't an APK.
         run: |
           v="${GITHUB_REF_NAME#v}"
           out=androidApp/build/outputs/apk/release
-          cp "$out/androidApp-universal-release.apk" "herald-$v.apk"
-          for abi in arm64-v8a armeabi-v7a x86_64 x86; do cp "$out/androidApp-$abi-release.apk" "herald-${v}_$abi.apk"; done
-          cp wearApp/build/outputs/apk/release/wearApp-release.apk "herald-wear-$v.apk"
-          cp pebbleApp/build/pebbleApp.pbw "herald-pebble-$v.pbw"
-          for file in herald-*.apk herald-pebble-*.pbw; do sha256sum "$file" > "$file.sha256"; done
+          cp "$out/androidApp-universal-release.apk" "kyllene-$v.apk"
+          for abi in arm64-v8a armeabi-v7a x86_64 x86; do cp "$out/androidApp-$abi-release.apk" "kyllene-${v}_$abi.apk"; done
+          cp wearApp/build/outputs/apk/release/wearApp-release.apk "kyllene-wear-$v.apk"
+          cp pebbleApp/build/pebbleApp.pbw "kyllene-pebble-$v.pbw"
+          for file in kyllene-*.apk kyllene-pebble-*.pbw; do sha256sum "$file" > "$file.sha256"; done
           # Above the generated changelog: which APK to take.
           cat > which-apk.md <<EOF
           ### Which APK?
 
           | Your device | Download |
           |---|---|
-          | **Almost any phone or tablet** (64-bit ARM, nearly every phone since 2017) | \`herald-${v}_arm64-v8a.apk\` |
-          | An older or low-cost 32-bit phone | \`herald-${v}_armeabi-v7a.apk\` |
-          | An emulator or Chromebook with an Intel or AMD chip | \`herald-${v}_x86_64.apk\` |
-          | A 32-bit Intel or AMD device | \`herald-${v}_x86.apk\` |
-          | Not sure | \`herald-$v.apk\`: runs on all of them, about 2.7× the size |
+          | **Almost any phone or tablet** (64-bit ARM, nearly every phone since 2017) | \`kyllene-${v}_arm64-v8a.apk\` |
+          | An older or low-cost 32-bit phone | \`kyllene-${v}_armeabi-v7a.apk\` |
+          | An emulator or Chromebook with an Intel or AMD chip | \`kyllene-${v}_x86_64.apk\` |
+          | A 32-bit Intel or AMD device | \`kyllene-${v}_x86.apk\` |
+          | Not sure | \`kyllene-$v.apk\`: runs on all of them, about 2.7× the size |
 
-          Once Herald is installed, its update banner downloads the right one by itself.
+          Once Kyllene is installed, its update banner downloads the right one by itself.
 
-          **Wear OS watch:** \`herald-wear-$v.apk\`. Install it on the watch with \`adb install\` (Developer options → Wireless debugging); it pairs with Herald on the phone by itself. Update it the same way.
+          **Wear OS watch:** \`kyllene-wear-$v.apk\`. Install it on the watch with \`adb install\` (Developer options → Wireless debugging); it pairs with Kyllene on the phone by itself. Update it the same way.
 
-          **Pebble watch:** \`herald-pebble-$v.pbw\`. Open it on the phone, and the Pebble app installs it on the watch. Every Pebble with a microphone: Pebble Time, Time Round, Pebble 2, Pebble 2 Duo, Time 2 and Round 2.
+          **Pebble watch:** \`kyllene-pebble-$v.pbw\`. Open it on the phone, and the Pebble app installs it on the watch. Every Pebble with a microphone: Pebble Time, Time Round, Pebble 2, Pebble 2 Duo, Time 2 and Round 2.
+
+          ### Desktop
+
+          | Your computer | Download |
+          |---|---|
+          | Windows 10 or 11 | \`kyllene-desktop-$v.msi\`: installs for you alone, no administrator needed |
+          | A Mac with Apple silicon | \`kyllene-desktop-$v.dmg\`: drag Kyllene into Applications |
+          | Debian, Ubuntu and the like | \`kyllene-desktop-${v}_amd64.deb\` |
+
+          Once Kyllene is installed, Settings → About offers each new version; on Windows, Install updates it in place.
           EOF
-          gh release create "$GITHUB_REF_NAME" "herald-$v.apk" "herald-$v.apk.sha256" --draft --generate-notes --notes-file which-apk.md --title "$GITHUB_REF_NAME"
-          for abi in arm64-v8a armeabi-v7a x86_64 x86; do gh release upload "$GITHUB_REF_NAME" "herald-${v}_$abi.apk" "herald-${v}_$abi.apk.sha256"; done
-          gh release upload "$GITHUB_REF_NAME" "herald-wear-$v.apk" "herald-wear-$v.apk.sha256"
-          gh release upload "$GITHUB_REF_NAME" "herald-pebble-$v.pbw" "herald-pebble-$v.pbw.sha256"
+          gh release create "$GITHUB_REF_NAME" "kyllene-$v.apk" "kyllene-$v.apk.sha256" --draft --generate-notes --notes-file which-apk.md --title "$GITHUB_REF_NAME"
+          for abi in arm64-v8a armeabi-v7a x86_64 x86; do gh release upload "$GITHUB_REF_NAME" "kyllene-${v}_$abi.apk" "kyllene-${v}_$abi.apk.sha256"; done
+          gh release upload "$GITHUB_REF_NAME" "kyllene-wear-$v.apk" "kyllene-wear-$v.apk.sha256"
+          gh release upload "$GITHUB_REF_NAME" "kyllene-pebble-$v.pbw" "kyllene-pebble-$v.pbw.sha256"
 
       - name: Remove the signing key
         if: always()
         run: rm -f "$RUNNER_TEMP/release.jks" keystore.properties
+
+  # The desktop installers, each built on its own system (jpackage makes only the one it runs on), added to the draft
+  # above as kyllene-desktop-1.2.3.msi, kyllene-desktop-1.2.3.dmg and kyllene-desktop-1.2.3_amd64.deb: the names the
+  # desktop app looks for when it checks for an update.
+  #
+  # Signing is optional; without these secrets the installers are unsigned, and Windows SmartScreen and macOS
+  # Gatekeeper warn before they open.
+  #   WINDOWS_CERT_PFX_BASE64, WINDOWS_CERT_PASSWORD   a code-signing certificate (.pfx), base64-encoded
+  #   MAC_CERT_P12_BASE64, MAC_CERT_PASSWORD           a "Developer ID Application" certificate (.p12), base64-encoded
+  #   MAC_SIGN_IDENTITY                                its name after "Developer ID Application: ", e.g. "Jane Doe (AB12CD34EF)"
+  #   MAC_NOTARY_APPLE_ID, MAC_NOTARY_PASSWORD, MAC_TEAM_ID   for notarisation (an app-specific password)
+  desktop:
+    needs: release
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # The release build type: ProGuard leaves out the library code the app never reaches.
+          - os: windows-latest
+            task: packageReleaseMsi
+          - os: macos-latest
+            task: packageReleaseDmg
+          - os: ubuntu-latest
+            task: packageReleaseDeb
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 45
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      # JetBrains Runtime, which the installer bundles: Kyllene's own title bar needs its window decorations API, and
+      # widgets and plugin pages its Chromium (JCEF). Another JDK gives the OS's title bar and opens those in the
+      # browser. The SDK build has jpackage.
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: jetbrains
+          java-version: "25"
+          java-package: jdk+jcef
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+
+      - name: macOS signing certificate
+        if: runner.os == 'macOS'
+        env:
+          CERT: ${{ secrets.MAC_CERT_P12_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.MAC_CERT_PASSWORD }}
+          IDENTITY: ${{ secrets.MAC_SIGN_IDENTITY }}
+          APPLE_ID: ${{ secrets.MAC_NOTARY_APPLE_ID }}
+          NOTARY_PASSWORD: ${{ secrets.MAC_NOTARY_PASSWORD }}
+          TEAM_ID: ${{ secrets.MAC_TEAM_ID }}
+        run: |
+          if [ -z "$CERT" ]; then echo "::warning::No macOS signing certificate: the DMG is unsigned"; exit 0; fi
+          keychain="$RUNNER_TEMP/signing.keychain-db"
+          password="$(openssl rand -base64 24)"
+          echo "$CERT" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$RUNNER_TEMP/cert.p12" -P "$CERT_PASSWORD" -A -t cert -f pkcs12 -k "$keychain"
+          security set-key-partition-list -S apple-tool:,apple: -k "$password" "$keychain"
+          security list-keychains -d user -s "$keychain" $(security list-keychains -d user | tr -d '"')
+          rm "$RUNNER_TEMP/cert.p12"
+          {
+            echo "compose.desktop.mac.sign=true"
+            echo "compose.desktop.mac.signing.identity=$IDENTITY"
+            echo "compose.desktop.mac.signing.keychain=$keychain"
+          } >> gradle.properties
+          if [ -n "$APPLE_ID" ]; then
+            {
+              echo "compose.desktop.mac.notarization.appleID=$APPLE_ID"
+              echo "compose.desktop.mac.notarization.password=$NOTARY_PASSWORD"
+              echo "compose.desktop.mac.notarization.teamID=$TEAM_ID"
+            } >> gradle.properties
+            echo "NOTARIZE=1" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build the installer
+        # The installer bundles this JDK, not whichever one Gradle's own toolchain settings pick to run on.
+        env:
+          HERALD_PACKAGING_JDK: ${{ env.JAVA_HOME }}
+        run: >
+          ./gradlew --no-daemon :desktopApp:${{ matrix.task }} ${{ env.NOTARIZE && ':desktopApp:notarizeReleaseDmg' || '' }}
+          -PappVersion="${GITHUB_REF_NAME#v}" -PreleasesRepo="$GITHUB_REPOSITORY"
+
+      - name: Sign the MSI
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          CERT: ${{ secrets.WINDOWS_CERT_PFX_BASE64 }}
+          CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+        run: |
+          if (-not $env:CERT) { Write-Output "::warning::No Windows signing certificate: the MSI is unsigned"; exit 0 }
+          $pfx = Join-Path $env:RUNNER_TEMP "cert.pfx"
+          [IO.File]::WriteAllBytes($pfx, [Convert]::FromBase64String($env:CERT))
+          $signtool = Get-ChildItem "${env:ProgramFiles(x86)}\Windows Kits\10\bin" -Recurse -Filter signtool.exe |
+            Where-Object { $_.FullName -like "*\x64\*" } | Sort-Object FullName -Descending | Select-Object -First 1
+          $msi = Get-ChildItem desktopApp/build/compose/binaries/main-release/msi -Filter *.msi | Select-Object -First 1
+          try {
+            & $signtool.FullName sign /f $pfx /p $env:CERT_PASSWORD /fd SHA256 /tr http://timestamp.digicert.com /td SHA256 /d Kyllene $msi.FullName
+            if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+          } finally {
+            Remove-Item $pfx
+          }
+
+      - name: Add to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="${GITHUB_REF_NAME#v}"
+          out=desktopApp/build/compose/binaries/main-release
+          case "${{ runner.os }}" in
+            Windows) cp "$out"/msi/*.msi "kyllene-desktop-$v.msi" ;;
+            macOS) cp "$out"/dmg/*.dmg "kyllene-desktop-$v.dmg" ;;
+            Linux) cp "$out"/deb/*.deb "kyllene-desktop-${v}_amd64.deb" ;;
+          esac
+          for file in kyllene-desktop-*; do
+            if command -v sha256sum > /dev/null; then sha256sum "$file"; else shasum -a 256 "$file"; fi > "$file.sha256"
+          done
+          gh release upload "$GITHUB_REF_NAME" kyllene-desktop-*
+
+      - name: Remove the signing keychain
+        if: always() && runner.os == 'macOS'
+        run: |
+          if [ -f "$RUNNER_TEMP/signing.keychain-db" ]; then security delete-keychain "$RUNNER_TEMP/signing.keychain-db"; fi

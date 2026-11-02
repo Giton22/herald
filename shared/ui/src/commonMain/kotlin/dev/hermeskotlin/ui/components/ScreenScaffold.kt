@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -35,6 +36,7 @@ import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.colors
+import dev.hermeskotlin.designsystem.components.VerticalScrollbar
 import dev.hermeskotlin.designsystem.components.halo
 import dev.hermeskotlin.designsystem.display
 import dev.hermeskotlin.designsystem.strokeStrong
@@ -56,16 +58,19 @@ fun ScreenScaffold(content: @Composable ColumnScope.() -> Unit) {
             .imePadding(),
         contentAlignment = Alignment.TopCenter,
     ) {
+        val scroll = rememberScrollState()
         Column(
             Modifier
                 .widthIn(max = 520.dp)
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .verticalScroll(scroll)
                 // Room at the end for a last button's glow, which reaches about 24dp below it.
                 .padding(start = 22.dp, end = 22.dp, top = 36.dp, bottom = 28.dp),
             verticalArrangement = Arrangement.spacedBy(22.dp),
             content = content,
         )
+        // The desktop's scrollbar, at the window's edge as a page's is.
+        VerticalScrollbar(scroll, Modifier.align(Alignment.TopEnd).fillMaxHeight().padding(vertical = 2.dp, horizontal = 1.dp))
     }
 }
 

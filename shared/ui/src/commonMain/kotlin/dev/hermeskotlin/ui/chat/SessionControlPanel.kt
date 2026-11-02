@@ -1,5 +1,6 @@
 package dev.hermeskotlin.ui.chat
 
+import dev.hermeskotlin.ui.frostedPanel
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
@@ -19,14 +20,13 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.foundation.text.input.rememberTextFieldState
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
+import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -85,7 +85,9 @@ import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.Dialog
+import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.components.MinTouchTarget
+import dev.hermeskotlin.designsystem.components.handCursor
 import dev.hermeskotlin.designsystem.components.SheetHeader
 import dev.hermeskotlin.designsystem.components.TextField
 import dev.hermeskotlin.designsystem.danger
@@ -105,6 +107,7 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
+import dev.hermeskotlin.ui.CopyableOnDesktop
 import dev.hermeskotlin.ui.components.messageTime
 import dev.hermeskotlin.ui.components.relativeTime
 import dev.hermeskotlin.ui.components.uses24HourClock
@@ -203,10 +206,8 @@ private fun Strip(control: SessionControl, hazeState: HazeState, onOpen: () -> U
         Modifier
             .padding(start = 12.dp, end = 12.dp, top = 6.dp)
             .fillMaxWidth()
-            .clip(shape)
-            .hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)
-            .background(Theme[colors][surfaceElevated].copy(alpha = 0.85f))
-            .border(1.dp, Theme[colors][strokeStrong], shape)
+            .frostedPanel(shape, Theme[colors][surfaceElevated].copy(alpha = 0.85f), Theme[colors][strokeStrong], Modifier.hazeBlur(input = HazeInput.Sources(hazeState), style = frosted))
+            .handCursor()
             .clickable(role = Role.Button, onClickLabel = "Open goal and loops", onClick = onOpen)
             .semantics { contentDescription = "$spoken. Open goal and loops" }
             // The whole strip is the touch target, so its rows sit close rather than 48dp apart each.
@@ -393,7 +394,7 @@ internal fun SessionControlSheetView(
         val current = shown ?: return@BottomSheet
         SheetHeader("Goal and loops", "Set with /goal, /loop and /heartbeat")
         Column(
-            Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 10.dp),
+            Modifier.fillMaxWidth().heightIn(max = 560.dp).verticalScrollWithBar().padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 10.dp),
             verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
             current.goal?.let { GoalSection(it, use24Hour, busy, onAction, onConfirm = { confirm = it }) }
@@ -602,15 +603,15 @@ private fun Subgoals(goal: GoalControl, busy: ControlAction?, onAction: (Control
             goal.subgoals.forEach { text ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(text, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], modifier = Modifier.weight(1f))
-                    Box(
-                        Modifier
-                            .size(MinTouchTarget)
-                            .clip(CircleShape)
-                            .clickable(role = Role.Button, onClickLabel = "Remove “$text”", enabled = busy == null) { onConfirm(ConfirmAction.RemoveSubgoal(text)) },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        UnstyledIcon(Lucide.X, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(13.dp))
-                    }
+                    // Named on hover on the desktop, as every icon button is.
+                    IconButton(
+                        Lucide.X,
+                        contentDescription = "Remove sub-goal",
+                        onClick = { onConfirm(ConfirmAction.RemoveSubgoal(text)) },
+                        enabled = busy == null,
+                        tint = Theme[colors][textTertiary],
+                        iconSize = 13.dp,
+                    )
                 }
             }
         }
@@ -741,7 +742,8 @@ private fun Section(header: String, content: @Composable androidx.compose.founda
 /** A quiet line of detail inside a section. */
 @Composable
 private fun Detail(text: String) {
-    Text(text, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+    // A loop's prompt or why it stopped: the desktop selects it to copy.
+    CopyableOnDesktop { Text(text, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary]) }
 }
 
 @Composable

@@ -85,7 +85,7 @@ import com.composables.icons.lucide.X
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
-import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.rememberHoverIndication
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.accentSoft
 import dev.hermeskotlin.designsystem.accentText
@@ -196,16 +196,19 @@ internal fun VoiceScreen(
                     }
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(18.dp), verticalAlignment = Alignment.CenterVertically) {
-                    when {
-                        state.live && state.phase != VoicePhase.Connecting ->
-                            SideButton(Lucide.Mic.takeUnless { state.muted } ?: Lucide.MicOff, "Mute", onMute, on = state.muted, toggle = true)
-                        !state.live && state.phase == VoicePhase.Speaking -> SideButton(Lucide.SkipForward, "Skip the reply", onSkip)
-                        canSendNow(state) -> SideButton(Lucide.ArrowUp, "Send now", onSendNow)
-                        // An empty slot keeps End in the middle.
-                        else -> Spacer(Modifier.size(52.dp))
+                    // Mute on the left in a call and a chained chat alike; an empty slot keeps End in the middle.
+                    if (state.phase != VoicePhase.Connecting) {
+                        SideButton(Lucide.Mic.takeUnless { state.muted } ?: Lucide.MicOff, "Mute", onMute, on = state.muted, toggle = true)
+                    } else {
+                        Spacer(Modifier.size(52.dp))
                     }
                     EndButton(onEnd)
-                    SideButton(Lucide.Keyboard, "Type instead", onType)
+                    // Skip and Send now are only there for a moment, so they stand in for Type instead meanwhile.
+                    when {
+                        !state.live && state.phase == VoicePhase.Speaking -> SideButton(Lucide.SkipForward, "Skip the reply", onSkip)
+                        canSendNow(state) -> SideButton(Lucide.ArrowUp, "Send now", onSendNow)
+                        else -> SideButton(Lucide.Keyboard, "Type instead", onType)
+                    }
                 }
             }
         }
@@ -265,7 +268,7 @@ private fun RingButton(icon: ImageVector, description: String, onClick: () -> Un
                 .clip(CircleShape)
                 .background(Theme[colors][surface])
                 .border(1.dp, Theme[colors][stroke], CircleShape)
-                .indication(interaction, rememberColoredIndication(Theme[colors][textColor])),
+                .indication(interaction, rememberHoverIndication(Theme[colors][textColor])),
             contentAlignment = Alignment.Center,
         ) {
             UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(19.dp))

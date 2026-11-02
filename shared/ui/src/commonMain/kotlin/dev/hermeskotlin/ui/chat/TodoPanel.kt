@@ -1,5 +1,8 @@
 package dev.hermeskotlin.ui.chat
 
+import dev.hermeskotlin.ui.frostedPanel
+import dev.hermeskotlin.designsystem.components.Tooltip
+import dev.hermeskotlin.designsystem.components.handCursor
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloat
@@ -17,7 +20,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import com.composables.icons.lucide.Square
 import com.composeunstyled.UnstyledButton
-import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.rememberHoverIndication
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.accentSoft
 import dev.hermeskotlin.designsystem.accentText
@@ -49,9 +52,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -147,7 +149,7 @@ private fun Panel(todos: TodoList, live: Boolean, hazeState: HazeState) {
     FrostedPanel(hazeState) {
         val current = todos.items.firstOrNull { it.status == TodoStatus.InProgress }
         Row(
-            Modifier.fillMaxWidth().clickable { expanded = !expanded }.padding(horizontal = 14.dp, vertical = 10.dp),
+            Modifier.fillMaxWidth().handCursor().clickable { expanded = !expanded }.padding(horizontal = 14.dp, vertical = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -178,7 +180,7 @@ private fun Panel(todos: TodoList, live: Boolean, hazeState: HazeState) {
         }
         AnimatedVisibility(visible = expanded) {
             Column(
-                Modifier.heightIn(max = 220.dp).verticalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
+                Modifier.heightIn(max = 220.dp).verticalScrollWithBar().padding(start = 14.dp, end = 14.dp, bottom = 10.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 todos.tree().forEach { (item, depth) -> TodoRow(item, depth, live) }
@@ -215,6 +217,7 @@ internal fun ProgressPanel(
             Modifier.then(
                 if (hasDetails) {
                     Modifier
+                        .handCursor()
                         .clickable(onClickLabel = if (expanded) "Hide details" else "Show details") { expanded = !expanded }
                         .semantics { stateDescription = if (expanded) "Details shown" else "Details hidden" }
                 } else {
@@ -226,7 +229,7 @@ internal fun ProgressPanel(
         }
         AnimatedVisibility(visible = expanded && hasDetails) {
             Column(
-                Modifier.heightIn(max = 240.dp).verticalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
+                Modifier.heightIn(max = 240.dp).verticalScrollWithBar().padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
                 statusDetail?.let { DetailLine("Status", it) }
@@ -428,12 +431,12 @@ internal fun runningTime(seconds: Long): String {
 
 /** Stops the task: a small round button, with the full touch size around it. */
 @Composable
-private fun StopButton(onStop: () -> Unit, enabled: Boolean) {
+private fun StopButton(onStop: () -> Unit, enabled: Boolean) = Tooltip("Stop the task") {
     UnstyledButton(
         onClick = onStop,
         enabled = enabled,
         modifier = Modifier.size(MinTouchTarget).clip(CircleShape).alpha(if (enabled) 1f else 0.45f),
-        indication = rememberColoredIndication(Theme[colors][text]),
+        indication = rememberHoverIndication(Theme[colors][text]),
     ) {
         Box(Modifier.size(34.dp).background(Theme[colors][surface3], CircleShape), contentAlignment = Alignment.Center) {
             UnstyledIcon(Lucide.Square, contentDescription = "Stop the task", tint = Theme[colors][text], modifier = Modifier.size(12.dp))
@@ -469,10 +472,7 @@ private fun FrostedPanel(hazeState: HazeState, content: @Composable ColumnScope.
         Modifier
             .padding(start = 12.dp, end = 12.dp, top = 6.dp)
             .fillMaxWidth()
-            .clip(shape)
-            .hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)
-            .background(Theme[colors][surfaceElevated].copy(alpha = 0.85f))
-            .border(1.dp, Theme[colors][strokeStrong], shape),
+            .frostedPanel(shape, Theme[colors][surfaceElevated].copy(alpha = 0.85f), Theme[colors][strokeStrong], Modifier.hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)),
         content = content,
     )
 }

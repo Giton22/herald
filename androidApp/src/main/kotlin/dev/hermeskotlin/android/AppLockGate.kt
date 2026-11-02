@@ -39,7 +39,7 @@ class AppLockGate(private val activity: FragmentActivity, private val timer: App
             }
         })
         val info = BiometricPrompt.PromptInfo.Builder()
-            .setTitle("Unlock Herald")
+            .setTitle("Unlock Kyllene")
             .setAllowedAuthenticators(AUTHENTICATORS)
             .build()
         prompt.authenticate(info)

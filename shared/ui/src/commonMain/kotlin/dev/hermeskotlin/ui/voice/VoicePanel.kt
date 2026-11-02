@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
@@ -59,7 +60,7 @@ import com.composeunstyled.Text
 import com.composeunstyled.UnstyledButton
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
-import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.rememberHoverIndication
 import dev.chrisbanes.haze.HazeInput
 import dev.chrisbanes.haze.HazeState
 import dev.chrisbanes.haze.blur.HazeBlurStyle
@@ -155,14 +156,20 @@ internal fun VoicePanel(
             horizontalArrangement = Arrangement.spacedBy(40.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            when {
-                state.live && state.phase != VoicePhase.Connecting -> RoundButton(
+            // Mute in a call and a chained chat alike; empty slots keep End in the middle.
+            if (state.phase != VoicePhase.Connecting) {
+                RoundButton(
                     if (state.muted) Lucide.MicOff else Lucide.Mic,
                     contentDescription = if (state.muted) "Unmute" else "Mute",
                     fill = if (state.muted) Theme[colors][textColor] else Theme[colors][textColor].copy(alpha = 0.08f),
                     tint = if (state.muted) Theme[colors][background] else Theme[colors][textColor],
                     onClick = onMute,
                 )
+            } else {
+                Spacer(Modifier.size(60.dp))
+            }
+            RoundButton(Lucide.PhoneOff, contentDescription = "End voice chat", fill = Theme[colors][danger], tint = Color.White, onClick = onEnd)
+            when {
                 !state.live && state.phase == VoicePhase.Speaking -> RoundButton(
                     Lucide.SkipForward,
                     contentDescription = "Skip the reply",
@@ -177,8 +184,8 @@ internal fun VoicePanel(
                     tint = Theme[colors][textColor],
                     onClick = onSendNow,
                 )
+                else -> Spacer(Modifier.size(60.dp))
             }
-            RoundButton(Lucide.PhoneOff, contentDescription = "End voice chat", fill = Theme[colors][danger], tint = Color.White, onClick = onEnd)
         }
     }
 }
@@ -235,7 +242,7 @@ private fun RoundButton(icon: ImageVector, contentDescription: String, fill: Col
     UnstyledButton(
         onClick = onClick,
         modifier = Modifier.size(60.dp).clip(CircleShape),
-        indication = rememberColoredIndication(tint),
+        indication = rememberHoverIndication(tint),
     ) {
         Box(Modifier.size(60.dp).background(background, CircleShape), contentAlignment = Alignment.Center) {
             UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(24.dp))

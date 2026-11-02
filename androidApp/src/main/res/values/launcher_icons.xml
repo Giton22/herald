@@ -1,29 +1,101 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The app icons the user can pick in Settings (AppIcons), besides the default brand blue in colors.xml. -->
+<!-- The app icons the user can pick in Settings (AppIcons): the summit at dawn in each accent, and three of them with a pattern in the sky. -->
 <resources>
-    <!-- The accents' light-scheme colors (the design system's AccentPalette), behind the white mark. -->
-    <color name="launcher_violet">#7C3AED</color>
-    <color name="launcher_green">#137538</color>
-    <color name="launcher_orange">#B04700</color>
-    <color name="launcher_pink">#B0327E</color>
-    <color name="launcher_teal">#0C6A84</color>
+    <!--
+        The summit's colors per icon: the night sky (top, bottom), the sun (top, bottom), the lit face, the shaded
+        face, and the snow's shadow. Blue is the default icon; the others follow the design system's accents.
+    -->
+    <color name="launcher_blue_sky_top">#0E1C47</color>
+    <color name="launcher_blue_sky_bottom">#23409F</color>
+    <color name="launcher_blue_sun_top">#FFC877</color>
+    <color name="launcher_blue_sun_bottom">#FF6B3D</color>
+    <color name="launcher_blue_lit_top">#5A90FF</color>
+    <color name="launcher_blue_lit_bottom">#1F5CF2</color>
+    <color name="launcher_blue_shade_top">#1A4FD6</color>
+    <color name="launcher_blue_shade_bottom">#0A35A6</color>
+    <color name="launcher_blue_snow_shade">#CBD7F7</color>
 
-    <!-- The patterns: a background, its shapes' fill and their outline. -->
-    <color name="launcher_hearts">#F0244A</color>
-    <color name="launcher_hearts_shape">#FF5C78</color>
-    <color name="launcher_hearts_line">#2A0010</color>
-    <color name="launcher_marks">#9B4DEB</color>
-    <color name="launcher_marks_shape">#C08CFF</color>
-    <color name="launcher_marks_line">#1E0636</color>
-    <color name="launcher_bubbles">#0F9E94</color>
-    <color name="launcher_bubbles_shape">#45D6CA</color>
-    <color name="launcher_bubbles_line">#00302C</color>
-    <!-- The white mark's outline over a pattern. -->
-    <color name="launcher_mark_outline">#14001E</color>
+    <color name="launcher_violet_sky_top">#1A0F3D</color>
+    <color name="launcher_violet_sky_bottom">#3B2290</color>
+    <color name="launcher_violet_sun_top">#FFC877</color>
+    <color name="launcher_violet_sun_bottom">#FF6B3D</color>
+    <color name="launcher_violet_lit_top">#A27BFF</color>
+    <color name="launcher_violet_lit_bottom">#7C3AED</color>
+    <color name="launcher_violet_shade_top">#6A2BD9</color>
+    <color name="launcher_violet_shade_bottom">#4B1FA6</color>
+    <color name="launcher_violet_snow_shade">#DCCFFA</color>
+
+    <color name="launcher_green_sky_top">#08231A</color>
+    <color name="launcher_green_sky_bottom">#11583A</color>
+    <color name="launcher_green_sun_top">#FFE38A</color>
+    <color name="launcher_green_sun_bottom">#FFB23D</color>
+    <color name="launcher_green_lit_top">#3FCB7A</color>
+    <color name="launcher_green_lit_bottom">#137538</color>
+    <color name="launcher_green_shade_top">#138A48</color>
+    <color name="launcher_green_shade_bottom">#0B5A2E</color>
+    <color name="launcher_green_snow_shade">#CFEBD9</color>
+
+    <color name="launcher_orange_sky_top">#2A0F08</color>
+    <color name="launcher_orange_sky_bottom">#6E2410</color>
+    <color name="launcher_orange_sun_top">#FFE7A8</color>
+    <color name="launcher_orange_sun_bottom">#FFC24D</color>
+    <color name="launcher_orange_lit_top">#FF9A4D</color>
+    <color name="launcher_orange_lit_bottom">#B04700</color>
+    <color name="launcher_orange_shade_top">#C25300</color>
+    <color name="launcher_orange_shade_bottom">#7F3300</color>
+    <color name="launcher_orange_snow_shade">#F6D9C6</color>
+
+    <color name="launcher_pink_sky_top">#2B0820</color>
+    <color name="launcher_pink_sky_bottom">#6A1650</color>
+    <color name="launcher_pink_sun_top">#FFD7A8</color>
+    <color name="launcher_pink_sun_bottom">#FF9A6B</color>
+    <color name="launcher_pink_lit_top">#FF7AC0</color>
+    <color name="launcher_pink_lit_bottom">#B0327E</color>
+    <color name="launcher_pink_shade_top">#C23A8C</color>
+    <color name="launcher_pink_shade_bottom">#7E1F5A</color>
+    <color name="launcher_pink_snow_shade">#F6D3E6</color>
+
+    <color name="launcher_teal_sky_top">#04232B</color>
+    <color name="launcher_teal_sky_bottom">#0C5163</color>
+    <color name="launcher_teal_sun_top">#FFE0A0</color>
+    <color name="launcher_teal_sun_bottom">#FF9E5A</color>
+    <color name="launcher_teal_lit_top">#3FC6DE</color>
+    <color name="launcher_teal_lit_bottom">#0C6A84</color>
+    <color name="launcher_teal_shade_top">#138BA6</color>
+    <color name="launcher_teal_shade_bottom">#08495C</color>
+    <color name="launcher_teal_snow_shade">#CDEAF1</color>
+
+    <!-- The patterns: faint shapes in a theme's sky (its fill and its edge, both see-through), under its summit. -->
+    <color name="launcher_hearts_shape">#24FF7AC0</color>
+    <color name="launcher_hearts_line">#4DFFA3D6</color>
+    <color name="launcher_marks_shape">#26A27BFF</color>
+    <color name="launcher_marks_line">#4DC6AEFF</color>
+    <color name="launcher_bubbles_shape">#243FC6DE</color>
+    <color name="launcher_bubbles_line">#4D8FE3F2</color>
+
+    <!--
+        The summit's shapes in the 108dp adaptive grid; the launcher shows 18..90 of it. The mountain rises past the
+        bottom edge so no mask or motion uncovers its foot; its summit is at 54,35 and the sun sits off its right
+        shoulder, at 71,49.
+    -->
+    <string name="launcher_summit_sun" translatable="false">M60,49a11,11 0,1 0,22 0a11,11 0,1 0,-22 0z</string>
+    <!-- Traced in the sky's colors round the mountain, so a hairline of sky parts it from the sun. -->
+    <string name="launcher_summit_gap" translatable="false">M11.6,108L51,40Q54,35 57,40L96.4,108</string>
+    <string name="launcher_summit_lit" translatable="false">M11.6,108L51,40Q54,35 57,40L58,41.7L55,52L60,64L56,78L60,90L60,108Z</string>
+    <string name="launcher_summit_shade" translatable="false">M58,41.7L96.4,108L60,108L60,90L56,78L60,64L55,52Z</string>
+    <string name="launcher_summit_snow" translatable="false">M45.2,50L51,40Q54,35 57,40L58,41.7L55,52L52,49L48.5,53Z</string>
+    <string name="launcher_summit_snow_shade" translatable="false">M58,41.7L62.8,50L60,48.6L57.5,52.5L55,52Z</string>
+    <!-- One color only (themed icons, the notification): the snowcap and the body part along the snow line. -->
+    <string name="launcher_summit_cap" translatable="false">M45.2,50L51,40Q54,35 57,40L62.8,50L60,48.6L57.5,52.5L55,52L52,49L48.5,53Z</string>
+    <string name="launcher_summit_body" translatable="false">M11.6,108L44.04,52L48.5,55.2L52,51.2L55,54.2L57.5,54.7L60,50.8L63.96,52L96.4,108Z</string>
+    <!-- The body cut off at y 82, for a mark that has to stand inside the icon (the notification). -->
+    <string name="launcher_summit_badge_body" translatable="false">M26.64,82L44.04,52L48.5,55.2L52,51.2L55,54.2L57.5,54.7L60,50.8L63.96,52L81.36,82Z</string>
+    <!-- Right of the right slope, 2.3 out: clips the one-color sun so it doesn't merge into the mountain. -->
+    <string name="launcher_summit_sun_clip" translatable="false">M36.5,0L99.1,108L108,108L108,0Z</string>
 
     <!-- The patterns' shapes, each in a 24-unit box centred on 12,12. -->
     <string name="launcher_heart_path" translatable="false">M12,21.35l-1.45,-1.32C5.4,15.36 2,12.28 2,8.5 2,5.42 4.42,3 7.5,3c1.74,0 3.41,0.81 4.5,2.09C13.09,3.81 14.76,3 16.5,3 19.58,3 22,5.42 22,8.5c0,3.78 -3.4,6.86 -8.55,11.54L12,21.35z</string>
-    <!-- The Herald mark (ic_launcher_foreground.xml) at 0.4 scale. -->
-    <string name="launcher_mark_path" translatable="false">M5.8,2.4a2.2,2.2 0,0 1,2.2 2.2v14.8a2.2,2.2 0,0 1,-2.2 2.2a2.2,2.2 0,0 1,-2.2 -2.2v-14.8a2.2,2.2 0,0 1,2.2 -2.2zM18.2,2.4a2.2,2.2 0,0 1,2.2 2.2v14.8a2.2,2.2 0,0 1,-2.2 2.2a2.2,2.2 0,0 1,-2.2 -2.2v-14.8a2.2,2.2 0,0 1,2.2 -2.2zM5.6,7.6h7.2a2,2 0,0 1,0 4h-7.2a2,2 0,0 1,0 -4zM11.2,12.4h7.2a2,2 0,0 1,0 4h-7.2a2,2 0,0 1,0 -4z</string>
+    <!-- A small peak, the summit's silhouette. -->
+    <string name="launcher_mark_path" translatable="false">M2.5,19.5L10.4,5.6Q12,3 13.6,5.6L21.5,19.5Z</string>
     <string name="launcher_bubble_path" translatable="false">M5,4h14a3,3 0,0 1,3 3v8a3,3 0,0 1,-3 3h-8l-5,4v-4h-1a3,3 0,0 1,-3 -3v-8a3,3 0,0 1,3 -3z</string>
 </resources>

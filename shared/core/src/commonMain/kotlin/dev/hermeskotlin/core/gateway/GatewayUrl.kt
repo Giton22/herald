@@ -31,6 +31,9 @@ value class GatewayUrl private constructor(val value: String) {
     /** Host name only, e.g. `hermes.example.ts.net`. */
     val host: String get() = Url(value).host
 
+    /** The port to reach, explicit or the scheme's own; only a hint for pickers, never a connection. */
+    val port: Int get() = Url(value).port
+
     /**
      * Plain `http://` to a host that isn't on a private network, so the password, session cookie and
      * every message cross the internet readable. A Tailscale address is already encrypted by Tailscale.

@@ -221,6 +221,8 @@ class StreamedSpeechTest {
         transcripts: List<String> = listOf("How was your day?"),
         /** The profile's config, as `GET /api/config` gives it. */
         config: String = """{"ok":true}""",
+        /** Runs as each recording goes to be written down, by its number from 1. */
+        transcribing: suspend (Int) -> Unit = {},
         streams: () -> SpeechStream?,
     ): Setup {
         val spoken = mutableListOf<String>()
@@ -230,6 +232,7 @@ class StreamedSpeechTest {
                 when (request.url.encodedPath) {
                     "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
                     "/api/audio/transcribe" -> {
+                        transcribing(transcribed + 1)
                         val transcript = transcripts[minOf(transcribed++, transcripts.lastIndex)]
                         respond("""{"ok":true,"transcript":"$transcript"}""", HttpStatusCode.OK, json)
                     }
@@ -338,6 +341,56 @@ class StreamedSpeechTest {
         assertEquals("Never mind that, check the weather", setup.socket.submits.value[1]["params"]!!.jsonObject["text"]!!.jsonPrimitive.content)
         // Stopped once, by the prompt itself: a second stop could land after it and stop the new turn.
         assertEquals(1, setup.socket.calls.value.count { it == "session.interrupt" })
+        setup.voice.stopChat()
+    }
+
+    /** Muted, the microphone doesn't listen over the agent at work either: talking then cuts nothing off. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun mutedNobodyCutsIn() = runTest {
+        val recorder = CutsIn()
+        val setup = chat(recorder = recorder, transcripts = listOf("How was your day?", "Never mind that, check the weather")) { null }
+
+        setup.socket.event("message.start")
+        recorder.listening.first { it >= 1 }
+        setup.voice.toggleMute()
+        setup.voice.chat.first { it.muted && !it.bargeIn }
+        recorder.cut.complete(Unit)
+        testScheduler.advanceTimeBy(5_000)
+        testScheduler.runCurrent()
+        assertEquals(1, recorder.listening.value)
+        assertTrue(setup.socket.calls.value.none { "session.interrupt" in it })
+        assertEquals(1, setup.socket.submits.value.size)
+
+        // Unmuted, it listens over the agent again.
+        setup.voice.toggleMute()
+        recorder.listening.first { it >= 2 }
+        setup.voice.stopChat()
+    }
+
+    /** Muted while what was said over the agent is written down: it's dropped, and the agent goes on. */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun aCutInMutedWhileItsWrittenDownIsDropped() = runTest {
+        val recorder = CutsIn()
+        val second = CompletableDeferred<Unit>()
+        val setup = chat(
+            recorder = recorder,
+            transcripts = listOf("How was your day?", "Never mind that, check the weather"),
+            transcribing = { if (it == 2) second.await() },
+        ) { null }
+
+        setup.socket.event("message.start")
+        recorder.listening.first { it >= 1 }
+        recorder.cut.complete(Unit)
+        setup.voice.chat.first { it.phase == VoicePhase.Transcribing }
+        setup.voice.toggleMute()
+        second.complete(Unit)
+        setup.voice.chat.first { it.phase == VoicePhase.Thinking }
+        testScheduler.advanceTimeBy(5_000)
+        testScheduler.runCurrent()
+        assertTrue(setup.socket.calls.value.none { "session.interrupt" in it })
+        assertEquals(1, setup.socket.submits.value.size)
         setup.voice.stopChat()
     }
 

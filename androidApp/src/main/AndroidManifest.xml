@@ -148,7 +148,7 @@
                 <data android:host="bot" />
             </intent-filter>
             <!--
-                The browser sign-in ends at <applicationId>:/signed-in (AndroidLoopbackReceiver): it closes the browser
+                The browser sign-in ends at <applicationId>:/signed-in (LoopbackHttpReceiver): it closes the browser
                 tab and brings Herald back. Named after the app ID, so Herald Dev doesn't catch Herald's.
             -->
             <intent-filter>

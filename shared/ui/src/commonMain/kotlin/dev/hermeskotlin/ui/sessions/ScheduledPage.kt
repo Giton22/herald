@@ -1,5 +1,21 @@
 package dev.hermeskotlin.ui.sessions
 
+import dev.hermeskotlin.ui.PageFoot
+import dev.hermeskotlin.ui.arrowFocus
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
+import androidx.compose.ui.unit.Dp
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.runtime.key
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isMetaPressed
+import com.composables.icons.lucide.AppWindow
+import dev.hermeskotlin.designsystem.rememberHoverIndication
+
+import dev.hermeskotlin.designsystem.components.handCursor
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,11 +34,19 @@ import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import dev.hermeskotlin.designsystem.components.ScrollbarBox
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import dev.hermeskotlin.ui.CopyableOnDesktop
+import dev.hermeskotlin.ui.isDesktop
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -108,6 +132,8 @@ internal fun ScheduledPage(
     onOpenRun: (SessionSummary) -> Unit,
     onSessionExpired: () -> Unit,
     owner: RoutineOwner? = null,
+    /** Opens a run in a window of its own (a desktop's Ctrl+click or menu), where one can open. */
+    onPopOutRun: ((SessionSummary) -> Unit)? = null,
     // Each bot's routines keep their own page state, apart from the full list's.
     viewModel: ScheduledViewModel = koinViewModel(key = owner?.let { "routines-${it.profile}" }),
 ) {
@@ -130,27 +156,79 @@ internal fun ScheduledPage(
             viewModel.dismissMessage()
         }
     }
-    PlatformBackHandler(enabled = visible && job != null && state.editor == null) { viewModel.closeJob() }
-    PlatformBackHandler(enabled = visible && state.editor != null) { viewModel.closeEditor() }
+    // Leaving the editor on the desktop asks before typed changes are lost.
+    val edited = viewModel::editorChanged
+    var leaving by remember { mutableStateOf<(() -> Unit)?>(null) }
+    // Whatever puts the editor away (Escape, Cancel, another job in the list) goes through here.
+    val leaveEditor: (() -> Unit) -> Unit = { then ->
+        when {
+            viewModel.state.value.editor == null -> then()
+            isDesktop && edited() -> leaving = then
+            else -> {
+                viewModel.closeEditor()
+                then()
+            }
+        }
+    }
 
-    Column(Modifier.fillMaxSize()) {
-        if (state.editor != null) {
+    PlatformBackHandler(enabled = visible && job != null && state.editor == null) { viewModel.closeJob() }
+    PlatformBackHandler(enabled = visible && state.editor != null) { leaveEditor {} }
+
+    val editorPane: (@Composable () -> Unit)? = state.editor?.let { editor ->
+        {
             JobEditorPage(
-                state.editor,
+                editor,
                 prompt = viewModel.prompt,
                 schedule = viewModel.schedule,
                 name = viewModel.name,
                 deliveryTargets = state.deliveryTargets,
                 onSetDeliver = viewModel::setDeliver,
                 onSave = viewModel::saveJob,
-                onClose = viewModel::closeEditor,
+                onClose = { leaveEditor {} },
                 routineOf = owner?.label,
             )
-        } else {
-            ScheduledView(state, viewModel, selectedId = selectedId, onBack = onBack, onOpenRun = onOpenRun, owner = owner)
         }
-        state.message?.let { MessageBanner(it, onDismiss = viewModel::dismissMessage, modifier = Modifier.padding(bottom = 96.dp)) }
     }
+    Column(Modifier.fillMaxSize()) {
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+            ScheduledView(
+                state,
+                viewModel,
+                // A run opened from here is the one marked when the page comes back, as the page is put away for it.
+                selectedId = selectedId ?: viewModel.lastOpenedRun,
+                onBack = onBack,
+                onOpenRun = { run ->
+                    viewModel.lastOpenedRun = run.id
+                    onOpenRun(run)
+                },
+                owner = owner,
+                editorPane = editorPane,
+                leaveEditor = leaveEditor,
+                onPopOutRun = onPopOutRun?.let { popOut ->
+                    { run: SessionSummary ->
+                        viewModel.lastOpenedRun = run.id
+                        popOut(run)
+                    }
+                },
+            )
+        }
+        state.message?.let { MessageBanner(it, onDismiss = viewModel::dismissMessage, modifier = Modifier.padding(bottom = PageFoot)) }
+    }
+    Dialog(
+        visible = leaving != null,
+        onDismissRequest = { leaving = null },
+        title = "Discard changes?",
+        message = "What you changed in this ${if (owner != null) "routine" else "job"} isn't saved yet.",
+        actions = {
+            Button("Keep editing", onClick = { leaving = null }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button("Discard", onClick = {
+                val then = leaving
+                leaving = null
+                viewModel.closeEditor()
+                then?.invoke()
+            }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
+        },
+    )
 }
 
 /** What the Scheduled list and a job's page can ask for; [ScheduledViewModel] does it all, previews nothing. */
@@ -176,94 +254,79 @@ internal fun ScheduledView(
     onBack: () -> Unit,
     onOpenRun: (SessionSummary) -> Unit,
     owner: RoutineOwner? = null,
+    /** The open editor, if any: beside the list on a wide desktop page, else the page itself. */
+    editorPane: (@Composable () -> Unit)? = null,
+    /** Runs what leaves the editor (another job picked, a new one started) once it's put away. */
+    leaveEditor: (() -> Unit) -> Unit = { it() },
+    onPopOutRun: ((SessionSummary) -> Unit)? = null,
 ) {
     val job = state.openJob
     val routines = owner != null
-    Column(Modifier.fillMaxSize()) {
-        if (job == null) {
-            val count = state.jobs.size
-            SubpageHeader(
-                owner?.let { "${it.label}'s routines" } ?: "Scheduled",
-                onBack = onBack,
-                subtitle = when {
-                    state.loading || state.error != null || count == 0 -> null
-                    owner != null -> "$count ${if (count == 1) "routine" else "routines"} · each runs as ${owner.label}"
-                    else -> "$count ${if (count == 1) "job" else "jobs"} · each run opens as a chat"
-                },
-            ) {
-                Button(
-                    if (routines) "New routine" else "New job",
-                    onClick = actions::newJob,
-                    size = ButtonSize.Small,
-                    leadingIcon = Lucide.Plus,
-                    modifier = Modifier.heightIn(min = MinTouchTarget),
-                )
-            }
-            Box(Modifier.weight(1f).fillMaxWidth()) {
-                when {
-                    state.loading -> ListSkeleton()
-                    state.error != null -> EmptyState(Lucide.CloudOff, if (routines) "Couldn't load routines" else "Couldn't load scheduled jobs", state.error, error = true) {
-                        Button("Try again", onClick = actions::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+    val noun = if (routines) "routine" else "job"
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // A desktop page wide enough for both lists the jobs on the left and the open one on the right, as a
+        // desktop mail or task app does, so a job is a click away from the next one without a trip back. With no
+        // jobs yet (or none loaded) the one message takes the page.
+        val split = isDesktop && maxWidth >= SPLIT_WIDTH && !state.loading && state.error == null && state.jobs.isNotEmpty()
+        if (split) {
+            Column(Modifier.fillMaxSize()) {
+                JobsHeader(state, actions, owner, onBack, leaveEditor)
+                Row(Modifier.weight(1f).fillMaxWidth()) {
+                    Box(Modifier.width(SPLIT_LIST_WIDTH).fillMaxHeight()) {
+                        // A new job being written isn't the one that was open: nothing in the list is marked.
+                        JobsList(state, actions, owner, openId = job?.id?.takeIf { state.editor?.isNew != true }, leaveEditor = leaveEditor, start = 14.dp, end = 8.dp)
                     }
-                    state.jobs.isEmpty() && owner != null ->
-                        EmptyState(
-                            Lucide.CalendarClock,
-                            "No routines yet",
-                            "Have ${owner.label} do something on a schedule, like a morning briefing. It runs as ${owner.label}, " +
-                                "with its own memory and skills, and can report to its chat.",
-                        ) {
-                            Button("New routine", onClick = actions::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
+                    Box(Modifier.width(1.dp).fillMaxHeight().padding(bottom = PageFoot).background(Theme[colors][stroke]))
+                    Box(Modifier.weight(1f).fillMaxHeight()) {
+                        if (editorPane != null) {
+                            editorPane()
+                        } else if (job == null) {
+                            EmptyState(Lucide.CalendarClock, "Pick a $noun", "Its prompt, where it reports and its runs show here.")
+                        } else {
+                            Column(Modifier.fillMaxSize()) {
+                                // The pane's own head: the job, how it stands, and Edit and Delete beside it.
+                                Row(
+                                    Modifier.fillMaxWidth().padding(start = 20.dp, end = 12.dp, top = 2.dp, bottom = 10.dp),
+                                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                ) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(
+                                            job.displayName,
+                                            style = Theme[typography][body].copy(fontSize = 16.sp, fontWeight = FontWeight.SemiBold),
+                                            color = Theme[colors][text],
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                            modifier = Modifier.semantics { heading() },
+                                        )
+                                        job.statusLine().takeIf { it.isNotEmpty() }?.let {
+                                            Text(it, style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary], maxLines = 1)
+                                        }
+                                    }
+                                    JobActions(noun, state.busy, actions)
+                                }
+                                // Each job's runs scroll from their own top.
+                                key(job.id) {
+                                    JobDetail(job, state, actions, owner, selectedId, onOpenRun, onPopOutRun, Modifier.weight(1f).fillMaxWidth(), start = 20.dp)
+                                }
+                            }
                         }
-                    state.jobs.isEmpty() ->
-                        EmptyState(Lucide.CalendarClock, "No scheduled jobs", "Have the agent do something on a schedule, like a morning briefing. Each run opens as a chat here.") {
-                            Button("New job", onClick = actions::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
-                        }
-                    else -> LazyColumn(
-                        Modifier.fillMaxSize(),
-                        contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 96.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        items(state.jobs, key = { it.id }) { item -> JobRow(item, onClick = { actions.openJob(item.id) }) }
                     }
                 }
+            }
+        } else if (editorPane != null) {
+            editorPane()
+        } else if (job == null) {
+            Column(Modifier.fillMaxSize()) {
+                JobsHeader(state, actions, owner, onBack, leaveEditor)
+                Box(Modifier.weight(1f).fillMaxWidth()) { JobsList(state, actions, owner, openId = null, leaveEditor = leaveEditor) }
             }
         } else {
-            val noun = if (routines) "routine" else "job"
-            SubpageHeader(job.displayName, onBack = actions::closeJob, subtitle = job.statusLine().ifEmpty { null }) {
-                IconButton(Lucide.Pencil, contentDescription = "Edit $noun", onClick = actions::editJob, enabled = !state.busy, tint = Theme[colors][textSecondary])
-                IconButton(Lucide.Trash2, contentDescription = "Delete $noun", onClick = actions::askDelete, enabled = !state.busy, tint = Theme[colors][textSecondary])
-            }
-            LazyColumn(
-                Modifier.weight(1f).fillMaxWidth(),
-                contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 96.dp),
-            ) {
-                item(key = "summary") {
-                    val deliversTo = job.deliver?.takeIf { it.isNotBlank() }?.let { id ->
-                        deliveryLabel(id, state.deliveryTargets, botLabel = owner?.label ?: Routines.taggedBot(job.name))
-                    }
-                    JobSummary(job, deliversTo, busy = state.busy, onRunNow = actions::runNow, onTogglePaused = actions::togglePaused)
+            Column(Modifier.fillMaxSize()) {
+                SubpageHeader(job.displayName, onBack = actions::closeJob, subtitle = job.statusLine().ifEmpty { null }) {
+                    JobActions(noun, state.busy, actions)
                 }
-                item(key = "runs-header") {
-                    Text(
-                        "RUNS",
-                        style = Theme[typography][eyebrow],
-                        color = Theme[colors][textTertiary],
-                        modifier = Modifier.padding(start = 6.dp, top = 20.dp, bottom = 6.dp).semantics {
-                            heading()
-                            contentDescription = "Runs"
-                        },
-                    )
-                }
-                when {
-                    state.runsLoading -> item(key = "runs-loading") { ListSpinner() }
-                    state.runsError != null -> item(key = "runs-error") {
-                        ListNotice("Couldn't load runs. ${state.runsError}", action = "Try again", onAction = actions::refresh)
-                    }
-                    state.runs.isEmpty() -> item(key = "runs-empty") { ListNotice("No runs yet. Each run opens as a chat here.") }
-                    else -> items(state.runs, key = { it.id }) { run ->
-                        RunRow(run, selected = run.id == selectedId, onClick = { onOpenRun(run) })
-                    }
-                }
+                JobDetail(job, state, actions, owner, selectedId, onOpenRun, onPopOutRun, Modifier.weight(1f).fillMaxWidth())
             }
         }
     }
@@ -280,6 +343,161 @@ internal fun ScheduledView(
     )
 }
 
+/** Wide enough for the desktop's jobs list and a job's pane side by side. */
+private val SPLIT_WIDTH = 720.dp
+
+/** The desktop's jobs list beside a job's pane. */
+private val SPLIT_LIST_WIDTH = 320.dp
+
+@Composable
+private fun JobsHeader(state: ScheduledUiState, actions: ScheduledActions, owner: RoutineOwner?, onBack: () -> Unit, leaveEditor: (() -> Unit) -> Unit) {
+    val count = state.jobs.size
+    SubpageHeader(
+        owner?.let { "${it.label}'s routines" } ?: "Scheduled",
+        onBack = onBack,
+        subtitle = when {
+            state.loading || state.error != null || count == 0 -> null
+            owner != null -> "$count ${if (count == 1) "routine" else "routines"} · each runs as ${owner.label}"
+            else -> "$count ${if (count == 1) "job" else "jobs"} · each run opens as a chat"
+        },
+    ) {
+        Button(
+            if (owner != null) "New routine" else "New job",
+            onClick = { leaveEditor(actions::newJob) },
+            size = ButtonSize.Small,
+            leadingIcon = Lucide.Plus,
+            modifier = Modifier.heightIn(min = MinTouchTarget),
+        )
+    }
+}
+
+@Composable
+private fun JobActions(noun: String, busy: Boolean, actions: ScheduledActions) {
+    IconButton(Lucide.Pencil, contentDescription = "Edit $noun", onClick = actions::editJob, enabled = !busy, tint = Theme[colors][textSecondary])
+    IconButton(Lucide.Trash2, contentDescription = "Delete $noun", onClick = actions::askDelete, enabled = !busy, tint = Theme[colors][textSecondary])
+}
+
+/** The jobs, or why there are none; [openId] marks the one open beside the list on the desktop. */
+@Composable
+private fun JobsList(
+    state: ScheduledUiState,
+    actions: ScheduledActions,
+    owner: RoutineOwner?,
+    openId: String?,
+    leaveEditor: (() -> Unit) -> Unit,
+    start: Dp = 14.dp,
+    end: Dp = 14.dp,
+) {
+    val routines = owner != null
+    when {
+        state.loading -> ListSkeleton()
+        state.error != null -> EmptyState(Lucide.CloudOff, if (routines) "Couldn't load routines" else "Couldn't load scheduled jobs", state.error, error = true) {
+            Button("Try again", onClick = actions::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+        }
+        state.jobs.isEmpty() && owner != null ->
+            EmptyState(
+                Lucide.CalendarClock,
+                "No routines yet",
+                "Have ${owner.label} do something on a schedule, like a morning briefing. It runs as ${owner.label}, " +
+                    "with its own memory and skills, and can report to its chat.",
+            ) {
+                Button("New routine", onClick = actions::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
+            }
+        state.jobs.isEmpty() ->
+            EmptyState(Lucide.CalendarClock, "No scheduled jobs", "Have the agent do something on a schedule, like a morning briefing. Each run opens as a chat here.") {
+                Button("New job", onClick = actions::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
+            }
+        else -> {
+            val list = rememberLazyListState()
+            ScrollbarBox(list, Modifier.fillMaxSize(), bottomInset = PageFoot) {
+                LazyColumn(
+                    Modifier.fillMaxSize().arrowFocus(),
+                    state = list,
+                    contentPadding = PaddingValues(start = start, end = end, bottom = PageFoot),
+                    verticalArrangement = Arrangement.spacedBy(if (isDesktop) 6.dp else 8.dp),
+                ) {
+                    items(state.jobs, key = { it.id }) { item ->
+                        // The job page's own actions, from a right-click on the desktop: each opens the job and
+                        // acts on it there, so what it did (a run started, the delete to confirm) is in sight.
+                        // The action waits with the opening, so a "Discard changes?" asked first can't aim it at the
+                        // job still open.
+                        val openThen = { then: () -> Unit ->
+                            leaveEditor {
+                                actions.openJob(item.id)
+                                then()
+                            }
+                        }
+                        val open = { openThen {} }
+                        // While a change is on its way, only Open, as the job page's own buttons wait too.
+                        JobRow(item, selected = item.id == openId, onClick = open, menu = {
+                            val opening = listOf(RowMenuItem("Open", Lucide.CalendarClock, run = open))
+                            if (state.busy) opening else opening + listOf(
+                                RowMenuItem("Run now", Lucide.Zap) { openThen(actions::runNow) },
+                                RowMenuItem(if (item.paused) "Resume" else "Pause", if (item.paused) Lucide.Play else Lucide.Pause) {
+                                    openThen(actions::togglePaused)
+                                },
+                                RowMenuItem("Edit", Lucide.Pencil) { openThen(actions::editJob) },
+                                RowMenuItem("Delete", Lucide.Trash2, destructive = true) { openThen(actions::askDelete) },
+                            )
+                        })
+                    }
+                }
+            }
+        }
+    }
+}
+
+/** A job's summary and its runs, each a chat to open. */
+@Composable
+private fun JobDetail(
+    job: CronJob,
+    state: ScheduledUiState,
+    actions: ScheduledActions,
+    owner: RoutineOwner?,
+    selectedId: String?,
+    onOpenRun: (SessionSummary) -> Unit,
+    onPopOutRun: ((SessionSummary) -> Unit)?,
+    modifier: Modifier,
+    start: Dp = 14.dp,
+) {
+    val runsList = rememberLazyListState()
+    ScrollbarBox(runsList, modifier, bottomInset = PageFoot) {
+        LazyColumn(
+            Modifier.fillMaxSize(),
+            state = runsList,
+            contentPadding = PaddingValues(start = start, end = 14.dp, bottom = PageFoot),
+        ) {
+            item(key = "summary") {
+                val deliversTo = job.deliver?.takeIf { it.isNotBlank() }?.let { id ->
+                    deliveryLabel(id, state.deliveryTargets, botLabel = owner?.label ?: Routines.taggedBot(job.name))
+                }
+                JobSummary(job, deliversTo, busy = state.busy, onRunNow = actions::runNow, onTogglePaused = actions::togglePaused)
+            }
+            item(key = "runs-header") {
+                Text(
+                    "RUNS",
+                    style = Theme[typography][eyebrow],
+                    color = Theme[colors][textTertiary],
+                    modifier = Modifier.padding(start = 6.dp, top = 20.dp, bottom = 6.dp).semantics {
+                        heading()
+                        contentDescription = "Runs"
+                    },
+                )
+            }
+            when {
+                state.runsLoading -> item(key = "runs-loading") { ListSpinner() }
+                state.runsError != null -> item(key = "runs-error") {
+                    ListNotice("Couldn't load runs. ${state.runsError}", action = "Try again", onAction = actions::refresh)
+                }
+                state.runs.isEmpty() -> item(key = "runs-empty") { ListNotice("No runs yet. Each run opens as a chat here.") }
+                else -> items(state.runs, key = { it.id }) { run ->
+                    RunRow(run, selected = run.id == selectedId, onOpen = { onOpenRun(run) }, onPopOut = onPopOutRun?.let { { it(run) } })
+                }
+            }
+        }
+    }
+}
+
 /** How a job stands, for its tile and its "next" column. */
 private enum class JobTone { Ok, Idle, Failed }
 
@@ -292,8 +510,10 @@ private val CronJob.tone: JobTone
 
 /** A ringed card: a tinted tile, the name and schedule, and when it runs next (or that it failed or waits). */
 @Composable
-private fun JobRow(job: CronJob, onClick: () -> Unit) {
+private fun JobRow(job: CronJob, selected: Boolean = false, onClick: () -> Unit, menu: () -> List<RowMenuItem>) {
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
+    var menuOpen by remember { mutableStateOf(false) }
+    RowContextMenu(menuOpen, onDismiss = { menuOpen = false }, items = menu)
     val (tile, tint) = when (job.tone) {
         JobTone.Ok -> Theme[colors][accentSoft] to Theme[colors][accentText]
         JobTone.Idle -> Theme[colors][surface2] to Theme[colors][textTertiary]
@@ -304,10 +524,13 @@ private fun JobRow(job: CronJob, onClick: () -> Unit) {
         Modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(Theme[colors][surface])
-            .border(1.dp, Theme[colors][stroke], shape)
+            .background(Theme[colors][if (selected) surface2 else surface])
+            .border(if (selected) 1.5.dp else 1.dp, if (selected) Theme[colors][accentText].copy(alpha = 0.55f) else Theme[colors][stroke], shape)
+            .handCursor()
             .clickable(onClick = onClick)
-            .padding(14.dp),
+            .semantics { this.selected = selected }
+            .then(if (isDesktop) Modifier.onSecondaryPress { menuOpen = true } else Modifier)
+            .padding(if (isDesktop) 12.dp else 14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -366,7 +589,7 @@ private fun JobSummary(job: CronJob, deliversTo: String?, busy: Boolean, onRunNo
             Text(job.prompt.trim(), style = Theme[typography][bodySmall].copy(fontSize = 14.sp, lineHeight = 21.sp), color = Theme[colors][textSecondary], maxLines = 8, overflow = TextOverflow.Ellipsis)
         }
         job.problem?.let {
-            Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger], maxLines = 3, overflow = TextOverflow.Ellipsis)
+            CopyableOnDesktop { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger], maxLines = 3, overflow = TextOverflow.Ellipsis) }
         }
         deliversTo?.let {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
@@ -389,17 +612,34 @@ private fun JobSummary(job: CronJob, deliversTo: String?, busy: Boolean, onRunNo
 
 /** A run: a disc (a spinner while it runs), when, what it said, and how many messages. */
 @Composable
-private fun RunRow(run: SessionSummary, selected: Boolean, onClick: () -> Unit) {
+private fun RunRow(run: SessionSummary, selected: Boolean, onOpen: () -> Unit, onPopOut: (() -> Unit)?) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    var menuOpen by remember { mutableStateOf(false) }
+    if (isDesktop) {
+        RowContextMenu(menuOpen, onDismiss = { menuOpen = false }, items = {
+            listOfNotNull(
+                RowMenuItem("Open", Lucide.MessageSquare, run = onOpen),
+                onPopOut?.let { RowMenuItem("Open in new window", Lucide.AppWindow, run = it) },
+            )
+        })
+    }
+    // A Ctrl-click (⌘ on a Mac) opens the run in a window of its own, as it does a chat in the sidebar, so the
+    // page stays where it is.
+    val windowInfo = LocalWindowInfo.current
     Row(
         Modifier
             .fillMaxWidth()
-            .heightIn(min = 52.dp)
+            .heightIn(min = if (isDesktop) 44.dp else 52.dp)
             .clip(shape)
             .then(if (selected) Modifier.background(Theme[colors][surface2], shape) else Modifier)
-            .clickable(onClick = onClick)
+            .handCursor()
+            .clickable(interactionSource = null, indication = if (isDesktop) rememberHoverIndication(Theme[colors][textSecondary], shape) else LocalIndication.current) {
+                val keys = windowInfo.keyboardModifiers
+                if (isDesktop && onPopOut != null && (keys.isCtrlPressed || keys.isMetaPressed)) onPopOut() else onOpen()
+            }
+            .then(if (isDesktop) Modifier.onSecondaryPress { menuOpen = true } else Modifier)
             .semantics { this.selected = selected }
-            .padding(horizontal = 8.dp, vertical = 10.dp),
+            .padding(horizontal = 8.dp, vertical = if (isDesktop) 7.dp else 10.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

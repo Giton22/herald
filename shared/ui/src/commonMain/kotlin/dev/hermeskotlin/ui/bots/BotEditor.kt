@@ -1,5 +1,8 @@
 package dev.hermeskotlin.ui.bots
 
+import dev.hermeskotlin.designsystem.components.Tooltip
+import dev.hermeskotlin.designsystem.components.handCursor
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.height
@@ -18,6 +21,12 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.fillMaxHeight
+import dev.hermeskotlin.designsystem.components.VerticalScrollbar
+import androidx.compose.ui.focus.FocusRequester
+import dev.hermeskotlin.ui.isDesktop
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -91,6 +100,20 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
+ * The faces or colours to pick from: one row that scrolls sideways on a phone, and rows that wrap on a desktop,
+ * where a mouse wheel can't scroll sideways.
+ */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun ChoiceRow(content: @Composable () -> Unit) {
+    if (isDesktop) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) { content() }
+    } else {
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) { content() }
+    }
+}
+
+/**
  * Making a bot or changing one, as a page over the app: its face (shape and colour), name, role,
  * what it's for, and optionally the persona it runs with. A new bot's name becomes its profile id; an
  * edit sends only what changed, so a change made on Desktop meanwhile isn't undone.
@@ -156,6 +179,7 @@ fun BotEditor(
         )
     }
 
+    val scroll = rememberScrollState()
     Box(
         Modifier.fillMaxSize().background(Theme[colors][background]).windowInsetsPadding(WindowInsets.safeDrawing),
         contentAlignment = Alignment.TopCenter,
@@ -163,7 +187,7 @@ fun BotEditor(
         Column(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
             SubpageHeader(if (bot == null) "New bot" else "Edit ${bot.label}", onBack = { if (busy == null) onBack() })
             Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, bottom = 32.dp),
+                Modifier.fillMaxSize().verticalScroll(scroll).padding(start = 16.dp, end = 16.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
                 Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
@@ -171,7 +195,7 @@ fun BotEditor(
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     SectionLabel("Face")
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ChoiceRow {
                         BotShape.entries.forEach { option ->
                             val look = Bot(name = profile.ifEmpty { "agent" }, uiMeta = JsonObject(mapOf(BotMeta.KEY to JsonObject(mapOf(
                                 "shape" to JsonPrimitive(option.name.lowercase()),
@@ -182,7 +206,7 @@ fun BotEditor(
                             }
                         }
                     }
-                    Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    ChoiceRow {
                         BOT_SWATCHES.forEach { swatch ->
                             Choice(selected = color == swatch, label = cssHex(swatch), onClick = { color = swatch }) {
                                 Box(Modifier.size(28.dp).background(Color(0xFF000000 or swatch.toLong()), CircleShape))
@@ -191,8 +215,12 @@ fun BotEditor(
                     }
                 }
                 if (bot == null) {
+                    // With a keyboard, a new bot's page opens ready for its name to be typed.
+                    val nameFocus = remember { FocusRequester() }
+                    if (isDesktop) LaunchedEffect(Unit) { nameFocus.requestFocus() }
                     TextField(
                         name,
+                        focusRequester = nameFocus,
                         label = "Name",
                         placeholder = "e.g. Researcher",
                         supportingText = when {
@@ -300,6 +328,8 @@ fun BotEditor(
                 }
             }
         }
+        // The desktop's scrollbar, at the window's edge as a page's is.
+        VerticalScrollbar(scroll, Modifier.align(Alignment.TopEnd).fillMaxHeight().padding(vertical = 2.dp, horizontal = 1.dp))
     }
 }
 
@@ -310,6 +340,7 @@ private fun SettingRow(icon: ImageVector, title: String, value: String, onClick:
         Modifier
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
+            .handCursor()
             .clickable(onClick = onClick)
             .padding(vertical = 12.dp, horizontal = 14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -330,14 +361,18 @@ private fun SettingRow(icon: ImageVector, title: String, value: String, onClick:
 @Composable
 private fun Choice(selected: Boolean, label: String, onClick: () -> Unit, content: @Composable () -> Unit) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
-    Box(
-        Modifier
-            .size(52.dp)
-            .clip(shape)
-            .background(if (selected) Theme[colors][accentSoft] else Theme[colors][surface2], shape)
-            .border(if (selected) 1.5.dp else 1.dp, if (selected) Theme[colors][accentText] else Theme[colors][stroke], shape)
-            .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
-            .semantics { contentDescription = label },
-        contentAlignment = Alignment.Center,
-    ) { content() }
+    // Its name, for a pointer that rests on it.
+    Tooltip(label) {
+        Box(
+            Modifier
+                .size(52.dp)
+                .clip(shape)
+                .background(if (selected) Theme[colors][accentSoft] else Theme[colors][surface2], shape)
+                .border(if (selected) 1.5.dp else 1.dp, if (selected) Theme[colors][accentText] else Theme[colors][stroke], shape)
+                .handCursor()
+                .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
+                .semantics { contentDescription = label },
+            contentAlignment = Alignment.Center,
+        ) { content() }
+    }
 }

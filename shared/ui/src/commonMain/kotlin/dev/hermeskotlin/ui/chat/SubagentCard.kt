@@ -50,7 +50,7 @@ import com.composables.icons.lucide.X
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
-import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.rememberHoverIndication
 import dev.hermeskotlin.core.chat.Subagent
 import dev.hermeskotlin.core.chat.SubagentRow
 import dev.hermeskotlin.core.chat.SubagentStatus
@@ -65,7 +65,10 @@ import dev.hermeskotlin.designsystem.code
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import dev.hermeskotlin.designsystem.components.Spinner
+import dev.hermeskotlin.designsystem.components.Tooltip
 import dev.hermeskotlin.designsystem.components.glow
+import dev.hermeskotlin.designsystem.components.handCursor
+import dev.hermeskotlin.ui.CopyableOnDesktop
 import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.dangerSoft
 import dev.hermeskotlin.designsystem.radii
@@ -138,6 +141,7 @@ private fun SubagentRowView(row: SubagentRow, onStop: (String) -> Unit) {
                 .then(
                     if (hasMore) {
                         Modifier
+                            .handCursor()
                             .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide details" else "Show details") { expanded = !expanded }
                             .semantics { stateDescription = if (expanded) "Details shown" else "Details hidden" }
                     } else {
@@ -214,7 +218,11 @@ private fun SubagentRowView(row: SubagentRow, onStop: (String) -> Unit) {
                 if (row.filesWritten.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                         Text("Files written", style = Theme[typography][caption], color = Theme[colors][textSecondary])
-                        row.filesWritten.forEach { Text(it, style = Theme[typography][code], color = Theme[colors][textSecondary]) }
+                        CopyableOnDesktop {
+                            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                                row.filesWritten.forEach { Text(it, style = Theme[typography][code], color = Theme[colors][textSecondary]) }
+                            }
+                        }
                     }
                 }
             }
@@ -268,11 +276,12 @@ private fun statusIcon(status: SubagentStatus): Pair<ImageVector?, String> = whe
 
 /** A 30dp round stop in a full-size touch target. */
 @Composable
-private fun StopButton(onClick: () -> Unit) {
+private fun StopButton(onClick: () -> Unit) = Tooltip("Stop this subagent") {
     val interaction = remember { MutableInteractionSource() }
     Box(
         Modifier
             .size(MinTouchTarget)
+            .handCursor()
             .clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = "Stop this subagent" },
         contentAlignment = Alignment.Center,
@@ -282,7 +291,7 @@ private fun StopButton(onClick: () -> Unit) {
                 .size(30.dp)
                 .clip(CircleShape)
                 .background(Theme[colors][surface3])
-                .indication(interaction, rememberColoredIndication(Theme[colors][text])),
+                .indication(interaction, rememberHoverIndication(Theme[colors][text])),
             contentAlignment = Alignment.Center,
         ) {
             UnstyledIcon(Lucide.Square, contentDescription = null, tint = Theme[colors][text], modifier = Modifier.size(10.dp))

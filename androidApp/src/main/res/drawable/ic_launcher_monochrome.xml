@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The summit (ic_launcher_foreground.xml) in one color, for themed icons: the snowcap parted from the body along
+    the snow line, and the sun clipped clear of the mountain so the two don't merge.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group>
+        <clip-path android:pathData="@string/launcher_summit_sun_clip" />
+        <path android:fillColor="#FFFFFF" android:pathData="@string/launcher_summit_sun" />
+    </group>
+    <path android:fillColor="#FFFFFF" android:pathData="@string/launcher_summit_cap" />
+    <path android:fillColor="#FFFFFF" android:pathData="@string/launcher_summit_body" />
+</vector>

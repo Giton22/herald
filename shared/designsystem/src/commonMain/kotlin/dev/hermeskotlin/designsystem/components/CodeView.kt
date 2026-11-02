@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -12,16 +13,21 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.text.selection.DisableSelection
+import dev.hermeskotlin.designsystem.LocalDesktopLayout
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -54,17 +60,19 @@ fun CodeView(
     // Colored off the main thread; until then (or for a file too big to color) the lines show plain.
     // The state outlives a change of [text]: each coloring keeps the text it was made from, and one made from
     // other text is never cut into this text's lines (a Source / Formatted switch would cut out of range).
-    val highlight by produceState<Pair<String, AnnotatedString>?>(null, text, language, palette) {
+    // Cut into lines there too, each line keeping only its own spans: a line scrolled in then costs nothing, where
+    // cutting it out of the whole file's coloring would walk every span of the file each time.
+    val highlight by produceState<Pair<String, List<AnnotatedString>>?>(null, text, language, palette) {
         val syntax = CodeHighlighter.language(language)
         value = if (syntax == null || text.length > MAX_HIGHLIGHT_CHARS) {
             null
         } else {
             withContext(Dispatchers.Default) {
-                runCatching { text to highlightedCode(text, CodeHighlighter.spans(text, syntax), palette) }.getOrNull()
+                runCatching { text to coloredLines(highlightedCode(text, CodeHighlighter.spans(text, syntax), palette), splitLines(text)) }.getOrNull()
             }
         }
     }
-    val colored = coloringOf(highlight, text)
+    val colored = highlight?.takeIf { it.first == text }?.second
     val style = Theme[typography][code].copy(color = Theme[colors][textColor])
     val gutterStyle = style.copy(color = Theme[colors][textMuted], textAlign = TextAlign.End)
     val measurer = rememberTextMeasurer()
@@ -79,35 +87,71 @@ fun CodeView(
         state.scrollToItem((target - FOCUS_CONTEXT).coerceAtLeast(0))
     }
     val focusColor = Theme[colors][accentSoft]
-    val horizontal = if (wrap) Modifier else Modifier.horizontalScroll(rememberScrollState())
+    val sideways = rememberScrollState()
+    val horizontal = if (wrap) Modifier else Modifier.horizontalScroll(sideways)
     SelectionContainer(modifier) {
+      Box {
         Box(horizontal) {
             // Scrolled sideways the list needs a fixed width: the longest line's, so rows don't jump as they come in.
             val width = if (wrap) Modifier.fillMaxWidth() else Modifier.width(gutterWidth + charWidth * (longest + 2) + 28.dp)
-            LazyColumn(width, state = state) {
+            // Room under the last line for the sideways bar, so it doesn't sit over it.
+            val underBar = if (!wrap && LocalDesktopLayout.current) 12.dp else 0.dp
+            LazyColumn(width, state = state, contentPadding = PaddingValues(bottom = underBar)) {
                 itemsIndexed(lines, key = { index, _ -> index }) { index, range ->
                     val number = index + 1
                     // A line past the width the list can take (minified code, a log line) wraps within it.
                     val overlong = range.last - range.first + 1 > MAX_LINE_COLUMNS
-                    val lineText = colored?.subSequence(range.first, range.last + 1) ?: AnnotatedString(text.substring(range.first, range.last + 1))
+                    val lineText = colored?.getOrNull(index) ?: AnnotatedString(text.substring(range.first, range.last + 1))
                     Row(
                         Modifier
                             .fillMaxWidth()
                             .then(if (number == focusLine) Modifier.background(focusColor) else Modifier)
                             .padding(end = 12.dp),
                     ) {
-                        BasicText(number.toString(), style = gutterStyle, softWrap = false, modifier = Modifier.width(gutterWidth).padding(start = 8.dp, end = 4.dp))
+                        // Left out of a selection, so copied lines come without their numbers.
+                        DisableSelection {
+                            BasicText(number.toString(), style = gutterStyle, softWrap = false, modifier = Modifier.width(gutterWidth).padding(start = 8.dp, end = 4.dp))
+                        }
                         BasicText(lineText, style = style, softWrap = wrap || overlong, modifier = Modifier.padding(start = 12.dp))
                     }
                 }
             }
         }
+        // The desktop's bars along the file's right and bottom edges, to drag it by; as big as the view, not more.
+        Box(Modifier.matchParentSize()) {
+            VerticalScrollbar(state, Modifier.align(Alignment.TopEnd).fillMaxHeight())
+            if (!wrap) HorizontalScrollbar(sideways, Modifier.align(Alignment.BottomStart).fillMaxWidth())
+        }
+      }
     }
 }
 
 /** [highlight]'s coloring when it was made from [text] itself, else null (the lines show plain until it's redone). */
 internal fun coloringOf(highlight: Pair<String, AnnotatedString>?, text: String): AnnotatedString? =
     highlight?.takeIf { it.first == text }?.second
+
+/**
+ * [colored] cut at [lines], each line with the spans that fall in it: one pass over the spans, each going only to
+ * the lines it covers (found by a binary search on their starts).
+ */
+internal fun coloredLines(colored: AnnotatedString, lines: List<IntRange>): List<AnnotatedString> {
+    val starts = IntArray(lines.size) { lines[it].first }
+    val perLine = arrayOfNulls<MutableList<AnnotatedString.Range<SpanStyle>>>(lines.size)
+    for (span in colored.spanStyles) {
+        var at = starts.binarySearch(span.start).let { if (it >= 0) it else -it - 2 }.coerceAtLeast(0)
+        while (at < lines.size && lines[at].first < span.end) {
+            val line = lines[at]
+            val start = maxOf(span.start, line.first)
+            val end = minOf(span.end, line.last + 1)
+            if (start < end) {
+                (perLine[at] ?: mutableListOf<AnnotatedString.Range<SpanStyle>>().also { perLine[at] = it }) +=
+                    AnnotatedString.Range(span.item, start - line.first, end - line.first)
+            }
+            at++
+        }
+    }
+    return lines.mapIndexed { i, range -> AnnotatedString(colored.text.substring(range.first, range.last + 1), perLine[i].orEmpty()) }
+}
 
 /** Each line's range in [text], its break left out; a trailing break makes no empty last line. */
 internal fun splitLines(text: String): List<IntRange> {

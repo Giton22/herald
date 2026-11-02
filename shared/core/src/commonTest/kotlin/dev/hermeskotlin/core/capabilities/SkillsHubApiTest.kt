@@ -7,6 +7,8 @@ import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockEngineConfig
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.toByteArray
+import io.ktor.client.plugins.HttpTimeoutCapability
+import io.ktor.client.plugins.HttpTimeoutConfig
 import io.ktor.http.HttpMethod
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -21,6 +23,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertIs
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 class SkillsHubApiTest {
@@ -44,6 +47,28 @@ class SkillsHubApiTest {
         assertTrue(query!!.contains("profile=ruby"))
         assertTrue(sources.featured.single().isOfficial)
         assertEquals(setOf("official/creative/ascii-art"), sources.installed.keys)
+    }
+
+    @Test
+    fun aSlowReadMayBeSilentAsLongAsItMayTake() = runTest {
+        val timeouts = mutableMapOf<String, HttpTimeoutConfig?>()
+        val api = SkillsHubApi(createHttpClient(MockEngine { request ->
+            timeouts[request.url.encodedPath] = request.getCapabilityOrNull(HttpTimeoutCapability)
+            respond("{}", HttpStatusCode.OK, json)
+        }))
+
+        api.sources(url, null)
+        api.official(url, null)
+        api.search(url, null, "art")
+        api.preview(url, null, "official/creative/ascii-art")
+        api.scan(url, null, "official/creative/ascii-art")
+
+        assertEquals(5, timeouts.size)
+        for ((path, timeout) in timeouts) {
+            val request = assertNotNull(timeout?.requestTimeoutMillis, path)
+            val socket = assertNotNull(timeout?.socketTimeoutMillis, path)
+            assertTrue(socket >= request, "$path: silence cut off after $socket ms of $request ms")
+        }
     }
 
     @Test

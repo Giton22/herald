@@ -73,10 +73,10 @@ internal fun DesktopRoom.roomMembers(): List<RoomMember> =
 /**
  * A Desktop room's row subtitle: its newest line as "who: what" on one line, the member by its bot's label
  * (the mirror names it by profile, "default"); "Needs you · " first when the room asks for the user, so the
- * dot says why. "Continue on Desktop" while the copy has no lines.
+ * dot says why. "Continue on Hermes Desktop" while the copy has no lines.
  */
 internal fun DesktopRoom.rowSubtitle(faces: BotFaces): String {
-    val line = lines.lastOrNull() ?: return "Continue on Desktop"
+    val line = lines.lastOrNull() ?: return "Continue on Hermes Desktop"
     val who = if (line.fromUser) line.speaker else faces.roomBot(line.speaker).label
     val said = "$who: ${line.text}".replace(WHITESPACE, " ").trim()
     return if (needsYou) "Needs you · $said" else said

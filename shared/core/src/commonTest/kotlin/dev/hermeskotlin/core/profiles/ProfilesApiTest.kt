@@ -6,14 +6,19 @@ import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.sessions.MACHINE_SOURCES
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
+import dev.hermeskotlin.core.storage.KeyValueStore
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import kotlinx.coroutines.flow.collect
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import kotlin.test.assertIs
@@ -97,6 +102,39 @@ class ProfilesApiTest {
         assertEquals("work", store.get(url))
         assertNull(store.get(other))
         store.set(url, null)
+        assertNull(store.get(url))
+    }
+
+    @Test
+    fun storeReportsOnlyCompletedProfileChanges() = runTest {
+        val memory = InMemoryKeyValueStore()
+        var fail = false
+        val storage = object : KeyValueStore by memory {
+            override suspend fun put(key: String, value: String) {
+                check(!fail)
+                memory.put(key, value)
+            }
+            override suspend fun remove(key: String) {
+                check(!fail)
+                memory.remove(key)
+            }
+        }
+        val store = ProfileStore(storage)
+        val changes = mutableListOf<GatewayUrl>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) { store.changes.collect { changes += it } }
+
+        store.set(url, null)
+        store.set(url, "work")
+        store.set(url, "work")
+        assertEquals(listOf(url), changes)
+        fail = true
+        assertFailsWith<IllegalStateException> { store.set(url, "personal") }
+        assertFailsWith<IllegalStateException> { store.set(url, null) }
+        assertEquals("work", store.get(url))
+        assertEquals(listOf(url), changes)
+        fail = false
+        store.set(url, null)
+        assertEquals(listOf(url, url), changes)
         assertNull(store.get(url))
     }
 }

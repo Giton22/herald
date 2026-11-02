@@ -62,6 +62,8 @@ class WatchRings(private val context: Context) {
     @SuppressLint("MissingPermission", "WearRecents")
     fun ring(ring: WatchRing): Boolean {
         if (ring.requestId in _ringing.value) return true
+        // Already ended: its end can overtake the ring itself, so it never starts.
+        if (synchronized(ended) { ring.requestId in ended }) return false
         if (!canRing) return false
         val caller = Person.Builder().setName(ring.title).setImportant(true).build()
         val answer = PendingIntent.getActivity(

@@ -39,6 +39,7 @@ import com.composables.icons.lucide.Contact
 import com.composables.icons.lucide.ExternalLink
 import com.composables.icons.lucide.HeartPulse
 import com.composables.icons.lucide.Hourglass
+import com.composables.icons.lucide.LayoutPanelTop
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MapPin
 import com.composables.icons.lucide.MapPinned
@@ -154,11 +155,11 @@ internal fun quietHoursDetail(settings: AppSettings): String {
 
 /**
  * What Do Not Disturb does to the calls, which ring with no contact behind them: Android holds them back unless
- * Herald's calls may interrupt or anyone may call, but lets one through as a repeat caller (the same chat's name
+ * Kyllene's calls may interrupt or anyone may call, but lets one through as a repeat caller (the same chat's name
  * again within 15 minutes).
  */
 internal const val DND_DETAIL =
-    "Do Not Disturb silences them too, unless you let Herald interrupt it. A second call from one chat within 15 " +
+    "Do Not Disturb silences them too, unless you let Kyllene interrupt it. A second call from one chat within 15 " +
         "minutes gets through, like a repeat caller."
 
 /** Under the switch: what answering a call does. */
@@ -168,7 +169,7 @@ internal const val RINGS_TALK_DETAIL =
 
 /** Under the switch: where the watch rings, and when it can't. */
 internal const val WATCH_RINGS_DETAIL =
-    "Herald on your watch rings as well. On a Wear OS watch, Answer starts a call from the watch, when your gateway " +
+    "Kyllene on your watch rings as well. On a Wear OS watch, Answer starts a call from the watch, when your gateway " +
         "talks live. On a Pebble, Answer shows the question there when Answer on the Pebble is on; else answer on " +
         "your phone."
 
@@ -249,7 +250,7 @@ internal fun PhoneToolsView(
             ) {
                 Text(
                     "Let the agent use this phone: read how it is, or do something on it. Every tool is off until you " +
-                        "turn it on, and anything that changes the phone asks you first: in Herald while it's open, else " +
+                        "turn it on, and anything that changes the phone asks you first: in Kyllene while it's open, else " +
                         "in a notification. A tool you " +
                         "turn off is taken away from the agent at once.",
                     style = Theme[typography][bodySmall],
@@ -381,9 +382,9 @@ internal fun PhoneToolsView(
                                 }
                             }
                             Text(
-                                "A chat you send from a phone uses that phone. Scheduled jobs and chats from Desktop or the " +
+                                "A chat you send from a phone uses that phone. Scheduled jobs and chats from Hermes Desktop or the " +
                                     "dashboard use the first phone in this list with the tool on. A phone you remove comes " +
-                                    "back if Herald on it is still signed in with phone tools on.",
+                                    "back if Kyllene on it is still signed in with phone tools on.",
                                 style = Theme[typography][bodySmall],
                                 color = Theme[colors][textTertiary],
                                 modifier = Modifier.padding(horizontal = 6.dp),
@@ -528,7 +529,7 @@ private fun RemovePhoneDialog(phone: KnownPhone?, onDismiss: () -> Unit, onRemov
         visible = phone != null,
         onDismissRequest = onDismiss,
         title = "Remove ${p.name}?",
-        message = "The agent stops using its phone tools, and calls waiting for it are refused. If Herald on that " +
+        message = "The agent stops using its phone tools, and calls waiting for it are refused. If Kyllene on that " +
             "phone is still signed in with phone tools on, it comes back the next time it connects.",
         actions = {
             Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
@@ -613,6 +614,7 @@ private fun UseRow(use: PhoneToolUse, nowMillis: Long) {
 /** A row that opens a page: [detail] under the title, a chevron at the end. */
 @Composable
 internal fun NavRow(title: String, detail: String, icon: ImageVector, onClick: () -> Unit, detailLines: Int = Int.MAX_VALUE) {
+    if (!settingShown(title, detail)) return
     Row(
         Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 13.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -647,5 +649,6 @@ internal val PhoneTool.icon: ImageVector
         PhoneTool.Calendar -> Lucide.CalendarDays
         PhoneTool.Contacts -> Lucide.Contact
         PhoneTool.Health -> Lucide.HeartPulse
+        PhoneTool.ShowUi -> Lucide.LayoutPanelTop
         PhoneTool.CallMe -> Lucide.PhoneCall
     }

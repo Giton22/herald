@@ -18,6 +18,8 @@ import kotlinx.coroutines.CancellationException
 import dev.hermeskotlin.core.push.PushPluginReply
 import dev.hermeskotlin.core.push.PushSetup
 import dev.hermeskotlin.core.push.PushStatus
+import dev.hermeskotlin.core.profiles.ProfilesApi
+import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.settings.WallpaperStore
@@ -62,6 +64,8 @@ class SettingsViewModel(
     private val connectionCheck: ConnectionCheck,
     private val push: PushSetup,
     private val wallpapers: WallpaperStore,
+    private val profilesApi: ProfilesApi,
+    private val sessionsApi: SessionsApi,
     private val nextPrompt: NextPromptApi,
 ) : ViewModel() {
 
@@ -121,6 +125,11 @@ class SettingsViewModel(
             _gateway.update { it.copy(version = status.status.version) }
         }
     }
+
+    suspend fun callProfiles(gateway: SavedGateway) = profilesApi.roster(gateway.gatewayUrl)
+
+    suspend fun callSessions(gateway: SavedGateway, offset: Int) =
+        sessionsApi.list(gateway.gatewayUrl, offset = offset)
 
     fun update(transform: (AppSettings) -> AppSettings) = store.update(transform)
 

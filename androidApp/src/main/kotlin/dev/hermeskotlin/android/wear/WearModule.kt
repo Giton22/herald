@@ -21,9 +21,10 @@ val wearModule = module {
     single<WatchOutbox> { RoutingOutbox(PhoneOutbox(androidContext()), get()) }
     single { PebbleRequests(get(), get(), get(), get(), get()) }
     single { PebbleRinger(androidContext(), get(), get(), get(), get()) }
-    single { WatchRelay(get(), get(), get(), get(), get(), get(), get(), get(), get()) }
+    single { WatchRelay(get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { WatchCalls(get(), get(), get(), get(), get()) }
     single { WearRequests(get(), get()) }
+    single(createdAtStart = true) { WatchProfileNotifier(androidContext(), get(), get(), get()).also { it.start() } }
     single { WatchRinger(androidContext(), get(), get(), get(), get(), get()) }
     single { WatchAccentSync(androidContext(), get(), get()) }
     // A call for an answer picked up on the phone holds its chat as a call from the watch does.

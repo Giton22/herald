@@ -45,6 +45,13 @@ fun messageTime(epochSeconds: Double?, use24Hour: Boolean, nowMillis: Long = Clo
     return messageTime(localMoment((epochSeconds * 1000).toLong()), localMoment(nowMillis), use24Hour)
 }
 
+/** The whole moment, for a desktop's tooltip over a message's time: "Thursday, Oct 23, 2026, 14:05"; "" without one. */
+fun fullMessageTime(epochSeconds: Double?, use24Hour: Boolean): String {
+    if (epochSeconds == null || epochSeconds <= 0 || !epochSeconds.isFinite()) return ""
+    val at = localMoment((epochSeconds * 1000).toLong())
+    return "${DAY_NAMES[at.dayOfWeek - 1]}, ${MONTHS[at.month - 1]} ${at.day}, ${at.year}, ${clockTime(at, use24Hour)}"
+}
+
 private fun clockTime(at: LocalMoment, use24Hour: Boolean): String {
     val minute = at.minute.toString().padStart(2, '0')
     if (use24Hour) return "${at.hour.toString().padStart(2, '0')}:$minute"

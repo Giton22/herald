@@ -18,6 +18,7 @@ import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.media.MediaApi
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.profiles.ProfileRoster
@@ -40,6 +41,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -74,6 +76,8 @@ data class SessionsUiState(
     val savedCopyAt: Long? = null,
     /** Results for the search box; null while it is empty. */
     val searchResults: List<SessionSummary>? = null,
+    /** The words [searchResults] answer, trimmed; a box typed on since holds results for something else. */
+    val searchedFor: String? = null,
     val searching: Boolean = false,
     /** One-off feedback for a failed row action, cleared by [SessionsViewModel.dismissMessage]. */
     val message: String? = null,
@@ -164,6 +168,8 @@ class SessionsViewModel(
     private val threadsRepo: ThreadsRepository,
     /** The list as last read, shown while the gateway can't be. */
     private val cache: OfflineCache? = null,
+    /** Makes a new project's folder on the gateway's machine. */
+    private val files: MediaApi? = null,
 ) : ViewModel() {
 
     /** Stamps an archive's undo offer, so it runs out on time even if the screen goes and comes back. */
@@ -184,7 +190,7 @@ class SessionsViewModel(
         .flatMapLatest { scope -> scope?.let { (url, profile) -> seenStore.seen(url, profile) } ?: flowOf(null) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    /** How far [session] had been read before it is opened, when it has new messages since; read before [markSeen]. */
+    /** How far [session] had been read before it is opened, when it has new messages since. */
     fun readUpTo(session: SessionSummary): Double? = seen.value?.readUpTo(session)
 
     private val waiting = attention.waiting
@@ -193,17 +199,6 @@ class SessionsViewModel(
 
     fun setAttentionFilter(filter: AttentionFilter) {
         _attentionFilter.value = filter
-    }
-
-    /**
-     * The user has looked at [session] as it is now: its reply is read. A chat the gateway holds as unread is
-     * marked read there too, as Desktop does on opening one, so its other clients clear it as well.
-     */
-    fun markSeen(session: SessionSummary) {
-        val (url, profile) = bound.value ?: return
-        viewModelScope.launch { seenStore.markSeen(url, session, profile) }
-        // Best effort: a failed write leaves the gateway's flag, which this phone's last look already outranks.
-        if (session.unread) viewModelScope.launch { api.setUnread(url, session.id, unread = false, profile = profile) }
     }
 
     private val _user = MutableStateFlow<AuthUser?>(null)
@@ -250,7 +245,7 @@ class SessionsViewModel(
     /** The list is on screen (the sidebar open or docked), or no longer is. */
     fun setVisible(shown: Boolean) {
         visible.value = shown
-        if (shown && _state.value.filter == SessionListFilter.Recent) loadProjects()
+        if (shown && _state.value.filter == SessionListFilter.Recent) loadProjects(force = projectsStale)
     }
 
     val query = TextFieldState()
@@ -272,6 +267,25 @@ class SessionsViewModel(
     init {
         observeServerChanges()
         observeSearch()
+        markCaughtUpSeen()
+    }
+
+    /**
+     * The open chat read to its end: what its row says it holds counts as seen, by the gateway's clock, so a reply
+     * stamped on this phone or activity after its last message doesn't leave it marked new.
+     */
+    private fun markCaughtUpSeen() {
+        viewModelScope.launch {
+            val listed = _state.map { it.sessions + it.projectSessions.orEmpty() }.distinctUntilChanged()
+            combine(bound, seenStore.caughtUp, listed) { scope, caught, rows ->
+                val (url, profile) = scope ?: return@combine null
+                if (caught == null || caught.gateway != url || caught.profile != profile) return@combine null
+                rows.firstOrNull { it.id == caught.sessionId }?.let { Triple(url, profile, it) }
+            }.distinctUntilChanged().collect { found ->
+                val (url, profile, row) = found ?: return@collect
+                seenStore.markSeen(url, row, profile)
+            }
+        }
     }
 
     /** Idempotent: binds to [gateway] and [profile] and loads the first page once. */
@@ -400,6 +414,13 @@ class SessionsViewModel(
     suspend fun projectFolders(dir: String, prefix: String): FolderListing =
         projectsApi.folders(bound.value?.second, dir, prefix)
 
+    /** Makes the folder [name] in [dir] on the gateway's machine; answers why not, or null once it's there. */
+    suspend fun makeProjectFolder(dir: String, name: String): String? {
+        val url = bound.value?.first ?: return "Not connected."
+        val api = files ?: return "This build can't make folders."
+        return api.makeFolder(url, FolderPath.picked(FolderPath.child(dir, name))).errorMessage
+    }
+
     /** [id]'s chip and the picked project renamed to [label]; with [unless], only while they still show that. */
     private fun SessionsUiState.withProjectLabel(id: String, label: String, unless: String? = null): SessionsUiState {
         fun Project.relabeled() = if (this.id == id && (unless == null || this.label == unless)) copy(label = label) else this
@@ -440,6 +461,12 @@ class SessionsViewModel(
     /** A change came in while the projects were being asked for; ask once more when that answer is in. */
     private var projectsAgain = false
 
+    /** A change came in while the list was closed; ask at once when it opens, however recently the last ask was. */
+    private var projectsStale = false
+
+    /** The ask put off until [PROJECTS_EVERY_MS] since the last one is over. */
+    private var projectsLater: Job? = null
+
     /**
      * The project list, again, since no event says a chat moved between projects. The gateway groups the
      * newest sessions each time, so this is asked only while the list shows, at most every
@@ -447,9 +474,22 @@ class SessionsViewModel(
      */
     private fun loadProjects(force: Boolean = false) {
         if (connection.state.value !is ConnectionState.Connected) return
-        if (!force && !visible.value && _state.value.projects.isNotEmpty()) return
+        if (!force && !visible.value && _state.value.projects.isNotEmpty()) {
+            projectsStale = true
+            return
+        }
         val now = getTimeMillis()
-        if (!force && now - projectsAskedAt < PROJECTS_EVERY_MS) return
+        val wait = projectsAskedAt + PROJECTS_EVERY_MS - now
+        if (!force && wait > 0) {
+            // Too soon to ask again, but the change still counts: ask once the wait is over.
+            if (projectsLater?.isActive != true) projectsLater = viewModelScope.launch {
+                delay(wait)
+                if (visible.value) loadProjects(force = true) else projectsStale = true
+            }
+            return
+        }
+        projectsStale = false
+        projectsLater?.cancel()
         if (projectsJob?.isActive == true) {
             projectsAgain = true
             return
@@ -553,9 +593,11 @@ class SessionsViewModel(
      *  leaving it set would bounce the next mount after a fresh sign-in. */
     fun consumeSessionExpired() = _state.update { it.copy(sessionExpired = false) }
 
-    fun rename(session: SessionSummary, title: String) = mutate(
+    /** [onRenamed] runs once the gateway has taken the new title. */
+    fun rename(session: SessionSummary, title: String, onRenamed: () -> Unit = {}) = mutate(
         apply = { list -> list.map { if (it.id == session.id) it.copy(title = title.ifBlank { null }) else it } },
         call = { url, profile -> api.rename(url, session.id, title.trim(), profile) },
+        onSuccess = { onRenamed() },
     )
 
     fun togglePinned(session: SessionSummary) = mutate(
@@ -822,16 +864,17 @@ class SessionsViewModel(
                 .collectLatest { q ->
                     val url = gateway?.gatewayUrl
                     if (q == null || url == null) {
-                        _state.update { it.copy(searchResults = null, searching = false) }
+                        _state.update { it.copy(searchResults = null, searchedFor = null, searching = false) }
                         return@collectLatest
                     }
                     _state.update { it.copy(searching = true) }
                     val result = api.search(url, q, profile = profile)
                     _state.update {
                         when (result) {
-                            is ApiResult.Success -> it.copy(searchResults = result.value, searching = false)
+                            is ApiResult.Success -> it.copy(searchResults = result.value, searchedFor = q, searching = false)
                             else -> it.copy(
                                 searchResults = emptyList(),
+                                searchedFor = q,
                                 searching = false,
                                 message = result.errorMessage,
                                 sessionExpired = result.isExpired,

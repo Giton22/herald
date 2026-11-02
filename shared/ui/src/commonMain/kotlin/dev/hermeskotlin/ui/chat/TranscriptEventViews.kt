@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -33,8 +34,10 @@ import com.composables.icons.lucide.Bot
 import com.composables.icons.lucide.CheckCheck
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.Settings
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.CornerDownRight
+import com.composables.icons.lucide.History
 import com.composables.icons.lucide.Hourglass
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageCircle
@@ -72,6 +75,10 @@ import dev.hermeskotlin.designsystem.warning
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.bots.botLook
 import dev.hermeskotlin.designsystem.components.Spinner
+import dev.hermeskotlin.designsystem.components.HorizontalScrollbar
+import dev.hermeskotlin.designsystem.components.handCursor
+import dev.hermeskotlin.ui.CopyableOnDesktop
+import dev.hermeskotlin.ui.isDesktop
 import dev.hermeskotlin.ui.bots.BotAvatar
 import dev.hermeskotlin.ui.bots.LocalBotFaces
 
@@ -83,6 +90,12 @@ import dev.hermeskotlin.ui.bots.LocalBotFaces
 @Composable
 internal fun TranscriptEventRow(event: TranscriptEvent) {
     when (event) {
+        is TranscriptEvent.SystemMessages -> SystemMessages(event.entries)
+        is TranscriptEvent.Compaction -> FoldedLine(
+            icon = Lucide.History,
+            title = "Earlier messages summarized",
+            body = event.body.takeIf { it.isNotBlank() }?.let { { MarkdownText(it) } },
+        )
         is TranscriptEvent.FromBot -> FromBotNote(event)
         is TranscriptEvent.Delivery -> DeliveryLine(event)
         is TranscriptEvent.Process -> FoldedLine(
@@ -105,6 +118,21 @@ internal fun TranscriptEventRow(event: TranscriptEvent) {
         is TranscriptEvent.Label -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             Text(event.text, style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }
+    }
+}
+
+/** The same disclosure as Reasoning; open, each entry is its own line, its words a tap further. */
+@Composable
+private fun SystemMessages(entries: List<TranscriptEvent>) {
+    var expanded by remember { mutableStateOf(false) }
+    Disclosure(
+        icon = { UnstyledIcon(Lucide.Settings, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp)) },
+        label = "System messages · ${entries.size}",
+        expanded = expanded,
+        onToggle = { expanded = !expanded },
+    ) {
+        // Counted from the newest, as the group is keyed: one opened stays open when an earlier page adds entries above.
+        Column { entries.forEachIndexed { i, entry -> key(entries.size - i) { TranscriptEventRow(entry) } } }
     }
 }
 
@@ -223,11 +251,16 @@ private fun BotSays(bot: Bot?, fallbackName: String, note: String?, words: Strin
                 .clip(shape)
                 .background(tint.copy(alpha = 0.12f), shape)
                 .border(1.dp, tint.copy(alpha = 0.28f), shape)
-                .clickable(enabled = words.isNotBlank(), onClickLabel = if (open) "Show less" else "Show all") { open = !open }
+                // Opened on the desktop, the text is for selecting: only its name line folds it again.
+                .then(if (isDesktop && open) Modifier else Modifier.handCursor(words.isNotBlank()).clickable(enabled = words.isNotBlank(), onClickLabel = if (open) "Show less" else "Show all") { open = !open })
                 .padding(horizontal = 12.dp, vertical = 9.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                if (isDesktop && open) Modifier.handCursor().clickable(onClickLabel = "Show less") { open = false } else Modifier,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 Text(
                     bot?.label ?: fallbackName,
                     style = Theme[typography][bodySmall].copy(fontWeight = FontWeight.SemiBold),
@@ -240,7 +273,7 @@ private fun BotSays(bot: Bot?, fallbackName: String, note: String?, words: Strin
             }
             when {
                 words.isBlank() -> Unit
-                open -> MarkdownText(words)
+                open -> CopyableOnDesktop { MarkdownText(words) }
                 else -> Text(words.toPreview(), style = Theme[typography][bodySmall], color = Theme[colors][text], maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
         }
@@ -271,11 +304,19 @@ private fun ToBot(
                 .clip(shape)
                 .background(Theme[colors][surface], shape)
                 .border(1.dp, edge, shape)
-                .clickable(enabled = words.isNotBlank() || full != null, onClickLabel = if (open) "Show less" else "Show all") { open = !open }
+                // As a bot's own message: opened on the desktop, only the "To" line folds it again.
+                .then(
+                    if (isDesktop && open) Modifier
+                    else Modifier.handCursor(words.isNotBlank() || full != null).clickable(enabled = words.isNotBlank() || full != null, onClickLabel = if (open) "Show less" else "Show all") { open = !open },
+                )
                 .padding(horizontal = 12.dp, vertical = 9.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(
+                if (isDesktop && open) Modifier.handCursor().clickable(onClickLabel = "Show less") { open = false } else Modifier,
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
                 UnstyledIcon(Lucide.Send, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(12.dp))
                 Text("To", style = Theme[typography][caption], color = Theme[colors][textTertiary])
                 if (bot != null) BotAvatar(bot, faces.picture(bot), size = 16.dp)
@@ -292,7 +333,7 @@ private fun ToBot(
             }
             when {
                 open && full != null -> Unit
-                open -> if (failed) Monospace(words) else MarkdownText(words)
+                open -> CopyableOnDesktop { if (failed) Monospace(words) else MarkdownText(words) }
                 words.isNotBlank() -> Text(words.toPreview(), style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 3, overflow = TextOverflow.Ellipsis)
             }
         }
@@ -315,7 +356,7 @@ private fun FoldedLine(icon: ImageVector, title: String, tint: Color = Theme[col
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
-                .then(if (body != null) Modifier.clickable(onClickLabel = if (open) "Hide details" else "Show details") { open = !open } else Modifier)
+                .then(if (body != null) Modifier.handCursor().clickable(onClickLabel = if (open) "Hide details" else "Show details") { open = !open } else Modifier)
                 .heightIn(min = 36.dp)
                 .padding(horizontal = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -332,24 +373,30 @@ private fun FoldedLine(icon: ImageVector, title: String, tint: Color = Theme[col
             )
             if (body != null) Chevron(open)
         }
-        if (open && body != null) Box(Modifier.padding(start = 27.dp)) { body() }
+        // What it holds (output, an error, a routine's words) can be selected and copied on the desktop.
+        if (open && body != null) Box(Modifier.padding(start = 27.dp)) { CopyableOnDesktop(body) }
     }
 }
 
 @Composable
 private fun Monospace(text: String) {
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
-    Text(
-        text,
-        style = Theme[typography][code],
-        color = Theme[colors][textSecondary],
-        modifier = Modifier
-            .fillMaxWidth()
-            .background(Theme[colors][surface], shape)
-            .border(1.dp, Theme[colors][stroke], shape)
-            .horizontalScroll(rememberScrollState())
-            .padding(10.dp),
-    )
+    val sideways = rememberScrollState()
+    Box {
+        Text(
+            text,
+            style = Theme[typography][code],
+            color = Theme[colors][textSecondary],
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(Theme[colors][surface], shape)
+                .border(1.dp, Theme[colors][stroke], shape)
+                .horizontalScroll(sideways)
+                .padding(10.dp),
+        )
+        // The desktop's bar along the bottom, for a line wider than the chat.
+        if (isDesktop) Box(Modifier.matchParentSize()) { HorizontalScrollbar(sideways, Modifier.align(Alignment.BottomStart).fillMaxWidth()) }
+    }
 }
 
 @Composable

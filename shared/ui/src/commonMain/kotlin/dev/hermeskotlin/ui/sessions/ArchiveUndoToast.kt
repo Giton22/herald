@@ -5,12 +5,16 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -27,6 +31,7 @@ import com.composables.icons.lucide.Archive
 import com.composables.icons.lucide.ArchiveRestore
 import com.composables.icons.lucide.Lucide
 import dev.hermeskotlin.designsystem.components.Toast
+import dev.hermeskotlin.ui.chat.AFTER_HOVER_MILLIS
 import kotlinx.coroutines.delay
 import kotlin.time.Clock
 import org.koin.compose.viewmodel.koinViewModel
@@ -47,11 +52,16 @@ fun ArchiveUndoToast(viewModel: SessionsViewModel = koinViewModel()) {
         accessibility?.calculateRecommendedTimeoutMillis(UNDO_MILLIS, containsIcons = true, containsText = true, containsControls = true)
             ?: UNDO_MILLIS
     }
-    LaunchedEffect(undo, timeout) {
-        if (undo == null || timeout == Long.MAX_VALUE) return@LaunchedEffect
+    // Under the pointer it stays, its Undo within reach; once the pointer leaves it has a moment more at least.
+    val hover = remember { MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
+    var wasHovered by remember(undo) { mutableStateOf(false) }
+    if (hovered) wasHovered = true
+    LaunchedEffect(undo, timeout, hovered) {
+        if (undo == null || timeout == Long.MAX_VALUE || hovered) return@LaunchedEffect
         // From when it was first offered: coming back to the screen doesn't start it over.
         val left = timeout - (Clock.System.now().toEpochMilliseconds() - undo.atMillis)
-        if (left > 0) delay(left)
+        delay(left.coerceAtLeast(if (wasHovered) AFTER_HOVER_MILLIS else 0))
         viewModel.dismissUndo()
     }
     Box(
@@ -66,7 +76,7 @@ fun ArchiveUndoToast(viewModel: SessionsViewModel = koinViewModel()) {
             shown?.let {
                 Toast(
                     "${it.message} “${it.session.displayTitle}”",
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier.widthIn(max = MaxToastWidth).fillMaxWidth().hoverable(hover),
                     icon = if (it.session.archived) Lucide.ArchiveRestore else Lucide.Archive,
                     actionLabel = "Undo",
                     onAction = viewModel::undoArchive,
@@ -80,3 +90,6 @@ fun ArchiveUndoToast(viewModel: SessionsViewModel = koinViewModel()) {
 }
 
 private const val UNDO_MILLIS = 5_000L
+
+/** As wide as a phone's screen at most: across a desktop window a toast would cover the composer end to end. */
+internal val MaxToastWidth = 560.dp

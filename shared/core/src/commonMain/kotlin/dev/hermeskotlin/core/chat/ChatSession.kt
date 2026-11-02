@@ -881,6 +881,62 @@ class ChatSession(
     }
 
     /**
+     * Reads the session's reasoning effort once (`config.get reasoning`), since `session.create` and a
+     * lazy `session.resume` leave `reasoning_effort` out of `info`; later changes arrive as `session.info`
+     * events. Best effort: an older gateway or any failure leaves the state as it is.
+     * Before a cold resume's agent is built, the gateway answers with the profile's level even when the
+     * chat kept its own; the build's `session.info` corrects that a few seconds later.
+     */
+    suspend fun refreshReasoning() {
+        val client = connectedClient() ?: return
+        val runtimeId = _state.value.runtimeSessionId ?: return
+        // A pick or session.info that lands while the read is out is newer than the read's answer.
+        val before = _state.value.reasoningRevision
+        val result = try {
+            client.request(
+                "config.get",
+                buildJsonObject {
+                    put("key", "reasoning")
+                    put("session_id", runtimeId)
+                },
+            ) as? JsonObject
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return
+        }
+        val value = result.string("value")
+        if (ReasoningEffort.fromWire(value) != null) {
+            // A re-attach while the read was out made a new runtime session; its own read answers for it.
+            _state.update {
+                if (it.reasoningRevision != before || it.runtimeSessionId != runtimeId) it else it.copy(reasoningEffort = value)
+            }
+        }
+    }
+
+    /**
+     * Reads the profile's default level for a chat with no session yet (`config.get reasoning` without a
+     * `session_id`), so its pill shows that rather than Medium. Best effort, like [refreshReasoning].
+     */
+    private suspend fun refreshProfileReasoning(client: JsonRpcClient) {
+        val result = try {
+            client.request(
+                "config.get",
+                buildJsonObject {
+                    put("key", "reasoning")
+                    profile?.let { put("profile", it) }
+                },
+            ) as? JsonObject
+        } catch (e: CancellationException) {
+            throw e
+        } catch (_: Exception) {
+            return
+        }
+        val value = result.string("value")
+        if (ReasoningEffort.fromWire(value) != null) _state.update { it.copy(profileReasoningEffort = value) }
+    }
+
+    /**
      * Runs one `session.control` action (pause a goal, add a sub-goal, ...) and applies the snapshot it
      * returns at once rather than waiting for the event. A `send` dispatch (a resumed goal's kickoff)
      * goes out as a prompt with its `display` on the bubble, queued behind a running turn. Returns null
@@ -1087,7 +1143,9 @@ class ChatSession(
             ) as? JsonObject
             val applied = result.string("value") ?: value
             settled = applied
-            if (ReasoningEffort.fromWire(applied) != null) _state.update { it.copy(reasoningEffort = applied) }
+            if (ReasoningEffort.fromWire(applied) != null) {
+                _state.update { it.copy(reasoningEffort = applied, reasoningRevision = it.reasoningRevision + 1) }
+            }
             when (applied) {
                 "show" -> "Thinking is shown."
                 "hide" -> "Thinking is hidden."
@@ -1161,7 +1219,10 @@ class ChatSession(
         val index = messages.indexOfFirst { it.key == key }
         if (index < 0) return null
         // Up to the row the next message starts at; the last message keeps every row.
-        val next = messages.drop(index + 1).firstNotNullOfOrNull { message -> storedRowId(message.key) }
+        val next = messages.drop(index + 1).firstNotNullOfOrNull { message ->
+            // A folded group is keyed by its newest row; it starts at its first.
+            storedRowId(((message as? ChatMessage.Event)?.event as? TranscriptEvent.SystemMessages)?.firstKey ?: message.key)
+        }
         val end = next?.let { id -> rows.indexOfFirst { it.id == id } }?.takeIf { it >= 0 } ?: rows.size
         return branchKeeping(rows.take(end).count { it.countsInBranch })
     }
@@ -1476,9 +1537,10 @@ class ChatSession(
     }
 
     /** Sets the reasoning effort ([effort] `none` turns thinking off) for this chat only. */
-    suspend fun setReasoningEffort(effort: String) = setLive({ it.copy(reasoningEffort = effort) }) {
-        configSet("reasoning", JsonPrimitive(effort))
-    }
+    suspend fun setReasoningEffort(effort: String) =
+        setLive({ it.copy(reasoningEffort = effort, reasoningRevision = it.reasoningRevision + 1) }) {
+            configSet("reasoning", JsonPrimitive(effort))
+        }
 
     /** Turns the priority tier on or off for this chat only. */
     suspend fun setFast(fast: Boolean) = setLive({ it.copy(fast = fast) }) {
@@ -1564,7 +1626,10 @@ class ChatSession(
                 _state.update { it.copy(attachment = Attachment.Detached) }
                 return@collectLatest
             }
-            if (!rowExists) return@collectLatest // a new chat attaches on first send
+            if (!rowExists) { // a new chat attaches on first send
+                refreshProfileReasoning(connectionState.client)
+                return@collectLatest
+            }
             // Load what couldn't be read before the link came up; after a drop, attaching catches up.
             // A load still running (showing the saved copy meanwhile) isn't one that failed: it brings the rows itself.
             if (!attachedBefore && !_state.value.historyRead && !historyMutex.isLocked) loadHistory()
@@ -2020,11 +2085,14 @@ class ChatSession(
                 }
             }
         }
-        // session.resume doesn't carry the goal/loop/heartbeat; read them once, events take it from there.
+        // session.resume doesn't carry the goal/loop/heartbeat, nor the reasoning effort before the agent is built;
+        // read them once, events take it from there.
         // After the catch-up: a missed update it replays is older than the read, so it mustn't land after it.
+        val readReasoning = (result["info"] as? JsonObject)?.containsKey("reasoning_effort") != true
         scope.launch {
             if (catchingUp) catchUp(client, runtimeId)
             refreshControl()
+            if (readReasoning) refreshReasoning()
         }
         runtimeId
     }
@@ -2080,6 +2148,10 @@ class ChatSession(
                 inputRequests = it.inputRequests.plusNew(claimUnclaimed(runtimeId)),
                 error = if (movedFrom != null) "The project's folder $movedFrom wasn't found, so this chat runs in $ranIn." else it.error,
             ).withInfo(result["info"] as? JsonObject)
+        }
+        // A level picked before the first send went with the create; otherwise the profile's applies, so read it.
+        if (picks.reasoningEffort == null && (result["info"] as? JsonObject)?.containsKey("reasoning_effort") != true) {
+            scope.launch { refreshReasoning() }
         }
         runtimeId
     }

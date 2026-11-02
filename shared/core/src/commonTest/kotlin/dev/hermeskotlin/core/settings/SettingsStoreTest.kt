@@ -11,6 +11,22 @@ import kotlin.test.assertEquals
 class SettingsStoreTest {
 
     @Test
+    fun callTargetsSurviveLoadingAndSavingAlongsideOtherPreferences() = runTest {
+        val disk = InMemoryKeyValueStore()
+        disk.put("settings.v1", """{"theme":"Dark","callTargets":{"https://home.example":{"profile":"sample_bot","sessionId":"r1","label":"Sample · Planning"}}}""")
+        val settings = SettingsStore(disk, backgroundScope)
+        val restored = settings.settings.filterNotNull().first()
+        assertEquals(ThemeMode.Dark, restored.theme)
+        assertEquals(CallTarget(profile = "sample_bot", sessionId = "r1", label = "Sample · Planning"), restored.callTargets["https://home.example"])
+        settings.update { it.copy(callTargets = it.callTargets + ("https://work.example" to CallTarget(profile = "helper", label = "Helper"))) }
+        advanceUntilIdle()
+        val saved = SettingsStore(disk, backgroundScope).settings.filterNotNull().first()
+        assertEquals(restored.callTargets["https://home.example"], saved.callTargets["https://home.example"])
+        assertEquals(CallTarget(profile = "helper", label = "Helper"), saved.callTargets["https://work.example"])
+        assertEquals(ThemeMode.Dark, saved.theme)
+    }
+
+    @Test
     fun startsWithDefaultsAndRemembersChanges() = runTest {
         val disk = InMemoryKeyValueStore()
         val first = SettingsStore(disk, backgroundScope)

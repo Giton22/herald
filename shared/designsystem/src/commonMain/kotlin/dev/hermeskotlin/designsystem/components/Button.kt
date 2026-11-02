@@ -29,26 +29,33 @@ import com.composeunstyled.Text
 import com.composeunstyled.UnstyledButton
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
-import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.rememberHoverIndication
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.inverse
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
 import dev.hermeskotlin.designsystem.label
 import dev.hermeskotlin.designsystem.onAccent
 import dev.hermeskotlin.designsystem.onInverse
+import dev.hermeskotlin.designsystem.LocalDesktopLayout
 import dev.hermeskotlin.designsystem.strokeStrong
 import dev.hermeskotlin.designsystem.surface3
 import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.typography
 
+/** The pointing hand under the mouse while [enabled], as a link has: what it's over can be clicked. */
+fun Modifier.handCursor(enabled: Boolean = true): Modifier = if (enabled) pointerHoverIcon(PointerIcon.Hand) else this
+
 /** [Inverse] is the text color filled in, for a strong action that isn't the screen's one primary, like Run now. */
 enum class ButtonVariant { Primary, Secondary, Outline, Ghost, Danger, Inverse }
 
-enum class ButtonSize(val height: Dp, val horizontalPadding: Dp, val iconSize: Dp, val fontSize: TextUnit) {
-    Small(36.dp, 14.dp, 15.dp, 13.sp),
-    Medium(44.dp, 18.dp, 16.dp, 14.sp),
-    Large(52.dp, 22.dp, 16.dp, 15.sp),
+/** [desktopHeight] is the height under a mouse, where a button needn't be a thumb's size. */
+enum class ButtonSize(val height: Dp, val horizontalPadding: Dp, val iconSize: Dp, val fontSize: TextUnit, val desktopHeight: Dp) {
+    Small(36.dp, 14.dp, 15.dp, 13.sp, 30.dp),
+    Medium(44.dp, 18.dp, 16.dp, 14.sp, 36.dp),
+    Large(52.dp, 22.dp, 16.dp, 15.sp, 42.dp),
 }
 
 /**
@@ -93,14 +100,16 @@ fun Button(
         onClick = onClick,
         enabled = enabled && !loading,
         modifier = modifier
-            .defaultMinSize(minHeight = size.height)
+            .handCursor(enabled && !loading)
+            .defaultMinSize(minHeight = if (LocalDesktopLayout.current) size.desktopHeight else size.height)
             .alpha(if (enabled) 1f else 0.45f)
             .then(glow)
             .then(outline)
             // Clipped after the glow, so the glow spreads past the pill and the press stays inside it.
             .clip(shape)
             .background(container, shape),
-        indication = rememberColoredIndication(content),
+        // On a filled pill the keyboard's focus ring is in the text color: the accent would vanish on the accent.
+        indication = rememberHoverIndication(content, ring = if (main) content else Theme[colors][accent], shape = shape),
         contentPadding = PaddingValues(horizontal = size.horizontalPadding),
     ) {
         ProvideContentColor(content) {

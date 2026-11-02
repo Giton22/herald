@@ -1,5 +1,8 @@
 package dev.hermeskotlin.ui.sessions
 
+import dev.hermeskotlin.ui.CopyableOnDesktop
+import androidx.compose.ui.geometry.Rect
+
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -7,15 +10,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.rememberTextFieldState
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.ui.platform.LocalInputModeManager
+import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -36,7 +42,7 @@ import dev.hermeskotlin.core.projects.FolderListing
 import dev.hermeskotlin.core.projects.Project
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.colors
-import dev.hermeskotlin.designsystem.components.BottomSheet
+import dev.hermeskotlin.designsystem.components.ActionSheet
 import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
@@ -50,6 +56,7 @@ import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.typography
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.coroutines.cancellation.CancellationException
 
 /** What a new project starts with: blank, or a folder the gateway grouped chats by, to keep as a project. */
@@ -66,11 +73,13 @@ internal fun ProjectActionsSheet(
     onRename: (Project) -> Unit,
     onDelete: (Project) -> Unit,
     onSave: (Project) -> Unit,
+    /** The options button it opened from, on the desktop; null opens it at the pointer. */
+    anchor: Rect? = null,
 ) {
     var shown by remember { mutableStateOf(project) }
     if (project != null) shown = project
     val p = shown ?: return
-    BottomSheet(visible = project != null, onDismiss = onDismiss) {
+    ActionSheet(visible = project != null, onDismiss = onDismiss, anchor = anchor) {
         SheetHeader(p.label, subtitle = p.path)
         val act = { action: (Project) -> Unit -> { onDismiss(); action(p) } }
         if (p.isUserMade) {
@@ -85,7 +94,8 @@ internal fun ProjectActionsSheet(
 /**
  * Makes a project. [draft] opens it (null closes it); [busy] while the gateway is asked, and [error] is why the
  * last try didn't go through, so the form stays open to fix it. [listFolders] lists a folder's subfolders on the
- * gateway's machine, so the folder can be picked instead of typed.
+ * gateway's machine, so the folder can be picked instead of typed; [makeFolder], when the gateway can, makes a new
+ * one in the folder being looked through and answers why it couldn't, or null.
  */
 @Composable
 internal fun NewProjectDialog(
@@ -95,6 +105,7 @@ internal fun NewProjectDialog(
     onDismiss: () -> Unit,
     onCreate: (name: String, folder: String) -> Unit,
     listFolders: suspend (dir: String, prefix: String) -> FolderListing,
+    makeFolder: (suspend (dir: String, name: String) -> String?)? = null,
 ) {
     var shown by remember { mutableStateOf(draft) }
     if (draft != null) shown = draft
@@ -138,10 +149,10 @@ internal fun NewProjectDialog(
         },
     ) {
         if (dir != null) {
-            FolderPicker(dir, onOpen = { browsing = it }, listFolders = listFolders)
+            FolderPicker(dir, onOpen = { browsing = it }, listFolders = listFolders, makeFolder = makeFolder)
             return@Dialog
         }
-        TextField(state = name, label = "Name", placeholder = "Herald", enabled = !busy)
+        TextField(state = name, label = "Name", placeholder = "Kyllene", enabled = !busy, autofocus = true)
         TextField(
             state = folder,
             label = "Folder on the gateway",
@@ -166,20 +177,35 @@ internal fun NewProjectDialog(
 /**
  * The subfolders of [dir] on the gateway's machine: tap one to go in, Up and Home to move about, and a filter
  * that narrows by name (the gateway lists only a page of entries per folder). Dot-folders show only when the
- * filter starts with a dot.
+ * filter starts with a dot. New folder, with [makeFolder], makes one here and goes into it.
  */
 @Composable
 private fun FolderPicker(
     dir: String,
     onOpen: (String) -> Unit,
     listFolders: suspend (dir: String, prefix: String) -> FolderListing,
+    makeFolder: (suspend (dir: String, name: String) -> String?)?,
 ) {
     val filter = rememberTextFieldState()
-    LaunchedEffect(dir) { filter.edit { replace(0, length, "") } }
+    val newName = rememberTextFieldState()
+    var naming by remember(dir) { mutableStateOf(false) }
+    var making by remember(dir) { mutableStateOf(false) }
+    // Which Create is the field's own; closing the field moves it on, so a Create still waiting is dropped.
+    var makeTry by remember(dir) { mutableIntStateOf(0) }
+    var relist by remember(dir) { mutableIntStateOf(0) }
+    var makeError by remember(dir) { mutableStateOf<String?>(null) }
+    val scope = rememberCoroutineScope()
+    val current by rememberUpdatedState(dir)
+    // The gateway makes folders by absolute path only; a relative one is the cwd's when listed.
+    val canMake = makeFolder != null && FolderPath.isAbsolute(dir)
+    LaunchedEffect(dir) {
+        filter.edit { replace(0, length, "") }
+        newName.edit { replace(0, length, "") }
+    }
     val prefix = filter.text.toString()
     var listing by remember(dir) { mutableStateOf<FolderListing?>(null) }
     var failed by remember(dir) { mutableStateOf<String?>(null) }
-    LaunchedEffect(dir, prefix) {
+    LaunchedEffect(dir, prefix, relist) {
         if (prefix.isNotEmpty()) delay(250)
         try {
             listing = listFolders(dir, prefix)
@@ -201,14 +227,62 @@ private fun FolderPicker(
             onClick = { onOpen(FolderPath.HOME) },
             enabled = dir != FolderPath.HOME,
         )
+        if (canMake) {
+            IconButton(Lucide.FolderPlus, contentDescription = "New folder", onClick = {
+                naming = !naming
+                makeError = null
+                if (!naming) {
+                    // Closed: reopened, it starts empty, and a Create still waiting doesn't open its folder.
+                    newName.edit { replace(0, length, "") }
+                    makeTry++
+                    making = false
+                }
+            })
+        }
         TextField(state = filter, modifier = Modifier.weight(1f), placeholder = "Filter", leadingIcon = Lucide.Search)
     }
-    Column(Modifier.fillMaxWidth().heightIn(max = 280.dp).verticalScroll(rememberScrollState())) {
+    if (naming && canMake && makeFolder != null) {
+        val name = newName.text.toString().trim()
+        val valid = FolderPath.isName(name)
+        val make: () -> Unit = {
+            if (valid && !making) {
+                // Set before the launch, so Done and Create in the same frame make it once.
+                making = true
+                val asked = dir
+                val thisTry = ++makeTry
+                scope.launch {
+                    val error = makeFolder(asked, name)
+                    if (thisTry != makeTry) {
+                        // The field was closed while the gateway was asked, but it may have made the folder.
+                        if (error == null && current == asked) relist++
+                        return@launch
+                    }
+                    makeError = error
+                    making = false
+                    // Not if Up, Home or a folder moved the picker on while the gateway was asked.
+                    if (error == null && current == asked) onOpen(FolderPath.child(asked, name))
+                }
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            TextField(
+                state = newName,
+                modifier = Modifier.weight(1f),
+                placeholder = "New folder's name",
+                enabled = !making,
+                keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+                onKeyboardAction = { make() },
+            )
+            Button("Create", onClick = make, size = ButtonSize.Small, enabled = valid, loading = making)
+        }
+        makeError?.let { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
+    }
+    Column(Modifier.fillMaxWidth().heightIn(max = 280.dp).verticalScrollWithBar()) {
         // Narrowed here too, so the last answer matches the filter while the gateway is asked again.
         val folders = listing?.folders.orEmpty()
             .filter { it.startsWith(prefix, ignoreCase = true) && (!it.startsWith(".") || prefix.startsWith(".")) }
         when {
-            failed != null -> Text(failed.orEmpty(), style = Theme[typography][bodySmall], color = Theme[colors][danger])
+            failed != null -> CopyableOnDesktop { Text(failed.orEmpty(), style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
             listing == null -> Spinner(Modifier.padding(12.dp).size(20.dp))
             folders.isEmpty() -> Text("No folders here.", style = Theme[typography][bodySmall], color = secondary)
             else -> folders.forEach { SheetAction(it, Lucide.Folder, onClick = { onOpen(FolderPath.child(dir, it)) }) }
@@ -240,6 +314,12 @@ internal object FolderPath {
 
     fun child(dir: String, name: String): String = "$dir$name/"
 
+    /** Whether [name] can be a folder's own name: not blank, no separator, not `.` or `..`. */
+    fun isName(name: String): Boolean = name.isNotBlank() && '/' !in name && '\\' !in name && name != "." && name != ".."
+
+    /** Whether [dir] starts at a root or home (`/`, `C:/`, `~/`) rather than wherever the gateway runs. */
+    fun isAbsolute(dir: String): Boolean = dir.startsWith("/") || dir.startsWith(HOME) || ROOT.matches(dir.take(3))
+
     /** The folder above [dir], or null at a root (`/`, `C:/`). Above home is `/`. */
     fun parent(dir: String): String? {
         if (dir == HOME) return "/"
@@ -266,7 +346,8 @@ internal fun RenameProjectDialog(project: Project?, onDismiss: () -> Unit, onRen
     val p = shown ?: return
     val name = rememberTextFieldState(p.label)
     // On every open, so a cancelled edit doesn't come back.
-    LaunchedEffect(project != null, p.id) { if (project != null) name.edit { replace(0, length, p.label) } }
+    val inputMode = LocalInputModeManager.current
+    LaunchedEffect(project != null, p.id) { if (project != null) name.resetTo(p.label, inputMode) }
     val nameText = name.text.toString().trim()
     val submit = {
         if (nameText.isNotEmpty()) {
@@ -286,6 +367,7 @@ internal fun RenameProjectDialog(project: Project?, onDismiss: () -> Unit, onRen
         TextField(
             state = name,
             placeholder = p.label,
+            autofocus = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             onKeyboardAction = { submit() },
         )

@@ -16,7 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
-import androidx.compose.foundation.verticalScroll
+import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -52,6 +52,9 @@ import dev.hermeskotlin.designsystem.components.LocalTextHighlights
 import dev.hermeskotlin.designsystem.components.highlightColor
 import dev.hermeskotlin.designsystem.components.withHighlights
 import dev.hermeskotlin.designsystem.components.Spinner
+import dev.hermeskotlin.designsystem.components.HorizontalScrollbar
+import dev.hermeskotlin.designsystem.components.handCursor
+import dev.hermeskotlin.ui.isDesktop
 import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.label
 import dev.hermeskotlin.designsystem.radii
@@ -82,7 +85,7 @@ internal fun ToolRow(tool: ToolActivity, messageKey: String? = null) {
             Modifier
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
-                .then(if (hasDetails) Modifier.clickable { expanded = !expanded } else Modifier),
+                .then(if (hasDetails) Modifier.handCursor().clickable { expanded = !expanded } else Modifier),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.Top,
         ) {
@@ -182,15 +185,17 @@ private fun Block(title: String, content: String, diff: Boolean = false, source:
             Text(title, style = Theme[typography][caption], color = Theme[colors][textSecondary], modifier = Modifier.weight(1f))
             CopyButton(content)
         }
+        val sideways = rememberScrollState()
+        Box {
         Box(
             Modifier
                 .fillMaxWidth()
                 .heightIn(max = 260.dp)
                 .border(1.dp, Theme[colors][stroke], shape)
                 .background(Theme[colors][background], shape)
-                .verticalScroll(rememberScrollState())
+                .verticalScrollWithBar()
                 // Long lines scroll sideways rather than wrapping, so output keeps its columns.
-                .horizontalScroll(rememberScrollState())
+                .horizontalScroll(sideways)
                 .padding(10.dp),
         ) {
             CommentableSelection(source) {
@@ -200,6 +205,9 @@ private fun Block(title: String, content: String, diff: Boolean = false, source:
                     softWrap = false,
                 )
             }
+        }
+        // The desktop's bar along the foot, for the long lines.
+        if (isDesktop) Box(Modifier.matchParentSize()) { HorizontalScrollbar(sideways, Modifier.align(Alignment.BottomStart).fillMaxWidth()) }
         }
     }
 }

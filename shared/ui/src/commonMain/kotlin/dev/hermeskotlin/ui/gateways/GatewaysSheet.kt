@@ -1,13 +1,14 @@
 package dev.hermeskotlin.ui.gateways
 
+import dev.hermeskotlin.designsystem.components.handCursor
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
 import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.sp
@@ -30,6 +31,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.ui.platform.LocalInputModeManager
+import dev.hermeskotlin.ui.sessions.resetTo
+import dev.hermeskotlin.ui.sessions.RowContextMenu
+import dev.hermeskotlin.ui.sessions.RowMenuItem
+import dev.hermeskotlin.ui.sessions.onSecondaryPress
+import dev.hermeskotlin.ui.isDesktop
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -49,12 +56,14 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Server
+import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Star
 import com.composables.icons.lucide.Trash2
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.body
@@ -79,6 +88,7 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.GatewayChoices
+import dev.hermeskotlin.ui.components.rememberClientCertPicker
 
 /**
  * The saved gateways, primary first, the one in use checked. Tapping one switches to it (its sign-in when it
@@ -96,9 +106,11 @@ fun GatewaysSheet(
     onSetPrimary: (SavedGateway) -> Unit,
     onRename: (SavedGateway, String) -> Unit,
     onRemove: (SavedGateway) -> Unit,
+    onSetClientCert: (SavedGateway, String?) -> Unit,
 ) {
     var renameTarget by remember { mutableStateOf<SavedGateway?>(null) }
     var removeTarget by remember { mutableStateOf<SavedGateway?>(null) }
+    var certTarget by remember { mutableStateOf<SavedGateway?>(null) }
     val list = choices.list
 
     BottomSheet(visible = visible, onDismiss = onDismiss) {
@@ -108,7 +120,7 @@ fun GatewaysSheet(
             Modifier
                 .fillMaxWidth()
                 .heightIn(max = 480.dp)
-                .verticalScroll(rememberScrollState())
+                .verticalScrollWithBar()
                 .padding(horizontal = 14.dp, vertical = 2.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
@@ -124,6 +136,7 @@ fun GatewaysSheet(
                     onSetPrimary = { onSetPrimary(gateway) },
                     onRename = { renameTarget = gateway },
                     onRemove = { removeTarget = gateway },
+                    onClientCert = { certTarget = gateway },
                 )
             }
         }
@@ -133,6 +146,7 @@ fun GatewaysSheet(
 
     RenameGatewayDialog(renameTarget, onDismiss = { renameTarget = null }, onRename = onRename)
     RemoveGatewayDialog(removeTarget, onDismiss = { removeTarget = null }, onRemove = { onDismiss(); onRemove(it) })
+    ClientCertDialog(certTarget, onDismiss = { certTarget = null }, onSet = { gateway, alias -> certTarget = null; onSetClientCert(gateway, alias) })
 }
 
 @Composable
@@ -146,8 +160,18 @@ private fun GatewayRow(
     onSetPrimary: () -> Unit,
     onRename: () -> Unit,
     onRemove: () -> Unit,
+    onClientCert: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
+    // The same choices as the ⋮ menu, at the pointer from a right-click on the desktop.
+    var contextOpen by remember { mutableStateOf(false) }
+    RowContextMenu(contextOpen, onDismiss = { contextOpen = false }) {
+        listOfNotNull(
+            RowMenuItem("Make primary", Lucide.Star, run = onSetPrimary).takeIf { !primary },
+            RowMenuItem("Rename", Lucide.Pencil, run = onRename),
+            RowMenuItem("Remove", Lucide.Trash2, destructive = true, run = onRemove),
+        )
+    }
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     Row(
         Modifier
@@ -156,7 +180,9 @@ private fun GatewayRow(
             .clip(shape)
             .background(Theme[colors][if (active) accentSoft else surface2])
             .border(1.dp, Theme[colors][stroke], shape)
+            .handCursor()
             .clickable(onClick = onClick)
+            .then(if (isDesktop) Modifier.onSecondaryPress { contextOpen = true } else Modifier)
             .semantics { selected = active }
             .padding(start = 12.dp, end = 4.dp, top = 8.dp, bottom = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -227,11 +253,13 @@ private fun GatewayRow(
         DropdownMenu(
             expanded = menuOpen,
             onExpandedChange = { menuOpen = it },
-            // The sheet sits at the bottom of the screen; below the row there's no room.
-            above = true,
+            // A phone's sheet sits at the bottom of the screen, with no room below the row; a desktop's is centred.
+            above = !isDesktop,
             items = {
                 if (!primary) MenuAction("Make primary", Lucide.Star, onClick = { menuOpen = false; onSetPrimary() })
                 MenuAction("Rename", Lucide.Pencil, onClick = { menuOpen = false; onRename() })
+                // Client certificates come from Android's system store; the desktop has none to pick from yet.
+                if (!isDesktop) MenuAction("Client certificate", Lucide.ShieldCheck, onClick = { menuOpen = false; onClientCert() })
                 MenuAction("Remove", Lucide.Trash2, onClick = { menuOpen = false; onRemove() })
             },
         ) {
@@ -246,7 +274,9 @@ private fun RenameGatewayDialog(gateway: SavedGateway?, onDismiss: () -> Unit, o
     if (gateway != null) shown = gateway
     val g = shown ?: return
     val name = rememberTextFieldState(g.name.orEmpty())
-    LaunchedEffect(g.url) { name.edit { replace(0, length, g.name.orEmpty()) } }
+    val inputMode = LocalInputModeManager.current
+    // On every open, so a cancelled edit doesn't come back.
+    LaunchedEffect(gateway != null, g.url) { if (gateway != null) name.resetTo(g.name.orEmpty(), inputMode) }
     val submit = {
         onDismiss()
         onRename(g, name.text.toString())
@@ -264,6 +294,7 @@ private fun RenameGatewayDialog(gateway: SavedGateway?, onDismiss: () -> Unit, o
         TextField(
             state = name,
             placeholder = g.url.substringAfter("://"),
+            autofocus = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             onKeyboardAction = { submit() },
         )
@@ -279,10 +310,54 @@ private fun RemoveGatewayDialog(gateway: SavedGateway?, onDismiss: () -> Unit, o
         visible = gateway != null,
         onDismissRequest = onDismiss,
         title = "Remove gateway?",
-        message = "Herald signs out of “${g.label}” and forgets it. Its chats stay on the gateway.",
+        message = "Kyllene signs out of “${g.label}” and forgets it. Its chats stay on the gateway.",
         actions = {
             Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             Button("Remove", onClick = { onDismiss(); onRemove(g) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
         },
     )
+}
+
+/**
+ * The client certificate to present to [gateway], for proxies that ask for one (`ssl_verify_client`).
+ * Picking opens the system store; only the chosen name is kept, the key never leaves the store.
+ */
+@Composable
+private fun ClientCertDialog(gateway: SavedGateway?, onDismiss: () -> Unit, onSet: (SavedGateway, String?) -> Unit) {
+    var shown by remember { mutableStateOf(gateway) }
+    if (gateway != null) shown = gateway
+    val g = shown ?: return
+    val parsed = GatewayUrl.parseOrNull(g.url)
+    val picker = rememberClientCertPicker(parsed?.host, parsed?.port ?: -1, onPicked = { alias ->
+        if (alias != null) {
+            onDismiss()
+            onSet(g, alias)
+        }
+    })
+    Dialog(
+        visible = gateway != null,
+        onDismissRequest = onDismiss,
+        title = "Client certificate",
+        message = "Kyllene presents this certificate to “${g.label}” when its server asks for one. " +
+            "The key stays in the system store; only its name is kept.",
+        actions = {
+            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(if (g.clientCertAlias == null) "Pick…" else "Change…", onClick = picker::pick, size = ButtonSize.Small)
+        },
+    ) {
+        val alias = g.clientCertAlias
+        if (alias != null) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    alias,
+                    style = Theme[typography][code].copy(fontSize = 11.5.sp),
+                    color = Theme[colors][textSecondary],
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Button("Clear", onClick = { onDismiss(); onSet(g, null) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            }
+        }
+    }
 }

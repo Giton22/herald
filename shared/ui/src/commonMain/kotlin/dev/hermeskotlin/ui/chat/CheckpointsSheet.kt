@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui.chat
 
+import dev.hermeskotlin.designsystem.components.ScrollbarBox
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -34,7 +36,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.verticalScroll
+import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -71,6 +73,10 @@ import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.components.messageTime
+import dev.hermeskotlin.designsystem.components.HorizontalScrollbar
+import dev.hermeskotlin.designsystem.components.handCursor
+import dev.hermeskotlin.ui.CopyableOnDesktop
+import dev.hermeskotlin.ui.isDesktop
 import dev.hermeskotlin.ui.components.uses24HourClock
 import kotlin.time.Clock
 import kotlinx.coroutines.CancellationException
@@ -234,8 +240,9 @@ internal fun CheckpointsSheetView(
                 "None yet. Hermes takes one just before the agent first changes a file in this chat's folder. " +
                     "It never snapshots the home folder, so start the chat in a project to get them.",
             )
-            else -> LazyColumn(
+            else -> ScrollbarBox { listState -> LazyColumn(
                 Modifier.fillMaxWidth().heightIn(max = 560.dp),
+                state = listState,
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
@@ -253,7 +260,7 @@ internal fun CheckpointsSheetView(
                         onRestore = { confirm = checkpoint },
                     )
                 }
-            }
+            } }
         }
         if (running && list?.checkpoints?.isNotEmpty() == true) Note("Restoring waits until the reply is done.")
         state.message?.let { Note(it) }
@@ -306,6 +313,7 @@ private fun CheckpointRow(
         Row(
             Modifier
                 .fillMaxWidth()
+                .handCursor()
                 .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide changes" else "Show changes since this checkpoint", onClick = onToggle)
                 .padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -342,7 +350,9 @@ private fun CheckpointRow(
         if (expanded) {
             when {
                 !diffAsked || diff == null -> Well { Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) { Spinner() } }
-                diff.error != null -> Well { Text(diff.error.orEmpty(), style = Theme[typography][bodySmall], color = Theme[colors][danger], modifier = Modifier.padding(14.dp)) }
+                diff.error != null -> Well {
+                    CopyableOnDesktop { Text(diff.error.orEmpty(), style = Theme[typography][bodySmall], color = Theme[colors][danger], modifier = Modifier.padding(14.dp)) }
+                }
                 diff.unchanged -> Well {
                     Text(
                         "The folder is the same as at this checkpoint.",
@@ -376,12 +386,16 @@ private fun DiffText(diff: CheckpointDiff) {
     val removed = Theme[colors][danger]
     val plain = Theme[colors][textSecondary]
     val style = Theme[typography][code].copy(fontSize = 11.5.sp, lineHeight = 18.sp)
+    val sideways = rememberScrollState()
+    // On the desktop the diff can be selected and copied, and a bar along its foot scrolls the long lines.
+    Box {
+    CopyableOnDesktop {
     Column(
         Modifier
             .fillMaxWidth()
             .heightIn(max = 320.dp)
-            .verticalScroll(rememberScrollState())
-            .horizontalScroll(rememberScrollState())
+            .verticalScrollWithBar()
+            .horizontalScroll(sideways)
             .padding(horizontal = 14.dp, vertical = 10.dp),
     ) {
         if (diff.stat.isNotBlank()) Text(diff.stat.trimEnd(), style = style, color = Theme[colors][text])
@@ -394,6 +408,9 @@ private fun DiffText(diff: CheckpointDiff) {
             }
             Text(line, style = style, color = color)
         }
+    }
+    }
+    if (isDesktop) Box(Modifier.matchParentSize()) { HorizontalScrollbar(sideways, Modifier.align(Alignment.BottomStart).fillMaxWidth()) }
     }
 }
 

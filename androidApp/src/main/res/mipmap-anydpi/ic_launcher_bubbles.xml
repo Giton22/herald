@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The outlined app mark over chat bubbles (AppIcons). -->
+<!-- Teal's summit at dawn, with chat bubbles in its sky (AppIcons). -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@drawable/ic_launcher_bg_bubbles" />
-    <foreground android:drawable="@drawable/ic_launcher_foreground_outlined" />
-    <monochrome android:drawable="@drawable/ic_launcher_foreground" />
+    <foreground android:drawable="@drawable/ic_launcher_foreground_teal" />
+    <monochrome android:drawable="@drawable/ic_launcher_monochrome" />
 </adaptive-icon>

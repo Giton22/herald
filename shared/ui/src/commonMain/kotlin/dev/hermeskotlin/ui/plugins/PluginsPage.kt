@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui.plugins
 
+import dev.hermeskotlin.designsystem.components.handCursor
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -11,6 +13,12 @@ import dev.hermeskotlin.designsystem.radiusLarge
 import dev.hermeskotlin.designsystem.surface
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.height
+import dev.hermeskotlin.ui.isDesktop
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -19,6 +27,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import dev.hermeskotlin.designsystem.components.ScrollbarBox
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
@@ -49,6 +59,7 @@ import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.MinTouchTarget
+import dev.hermeskotlin.designsystem.components.Tooltip
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.stroke
@@ -109,29 +120,46 @@ internal fun PluginsView(
                 }
                 plugins == null -> CenteredSpinner()
                 state.openable.isEmpty() -> EmptyState(Lucide.Puzzle, "No plugin pages", "A plugin with a page, like Kanban, shows up here.")
-                else -> LazyColumn(
-                    Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 24.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    // A ringed card each, laid out lazily, so a gateway with many plugins scrolls as lightly as one with two.
-                    items(state.openable, key = { it.name }) { plugin -> PluginRow(plugin) { onOpenPlugin(plugin) } }
+                else -> BoxWithConstraints(Modifier.fillMaxSize()) {
+                    val list = rememberLazyListState()
+                    // A wide desktop page sets the cards side by side, as a desktop's catalogue does; a phone, one a row.
+                    val columns = if (isDesktop) ((maxWidth - 28.dp) / GRID_CELL).toInt().coerceIn(1, 3) else 1
+                    ScrollbarBox(list, Modifier.fillMaxSize(), bottomInset = 24.dp) {
+                        LazyColumn(
+                            Modifier.fillMaxSize(),
+                            state = list,
+                            contentPadding = PaddingValues(start = 14.dp, end = 14.dp, bottom = 24.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            // A ringed card each, laid out lazily, so a gateway with many plugins scrolls as lightly as one with two.
+                            items(state.openable.chunked(columns), key = { row -> row.first().name }) { row ->
+                                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    row.forEach { plugin -> PluginRow(plugin, Modifier.weight(1f).fillMaxHeight()) { onOpenPlugin(plugin) } }
+                                    // The last row's cards keep the others' width.
+                                    repeat(columns - row.size) { Spacer(Modifier.weight(1f)) }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
     }
 }
 
+/** How wide a plugin's card is at the least in the desktop's grid. */
+private val GRID_CELL = 300.dp
+
 /** One plugin: its name and what it does, version and where it comes from, and the way in. */
 @Composable
-private fun PluginRow(plugin: DashboardPlugin, onClick: () -> Unit) {
+private fun PluginRow(plugin: DashboardPlugin, modifier: Modifier = Modifier.fillMaxWidth(), onClick: () -> Unit) {
     Row(
-        Modifier
-            .fillMaxWidth()
+        modifier
             .heightIn(min = MinTouchTarget)
             .clip(RoundedCornerShape(Theme[radii][radiusLarge]))
             .background(Theme[colors][surface])
             .border(1.dp, Theme[colors][stroke], RoundedCornerShape(Theme[radii][radiusLarge]))
+            .handCursor()
             .clickable(onClickLabel = "Open ${plugin.label}") { onClick() }
             .padding(start = 14.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -152,13 +180,16 @@ private fun PluginRow(plugin: DashboardPlugin, onClick: () -> Unit) {
                 overflow = TextOverflow.Ellipsis,
             )
             if (plugin.description.isNotBlank()) {
-                Text(
-                    plugin.description,
-                    style = Theme[typography][bodySmall],
-                    color = Theme[colors][textSecondary],
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+                // Two lines cut most descriptions short; on the desktop, resting the pointer on them shows the rest.
+                Tooltip(plugin.description) {
+                    Text(
+                        plugin.description,
+                        style = Theme[typography][bodySmall],
+                        color = Theme[colors][textSecondary],
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
             Text(
                 listOfNotNull(plugin.version?.takeIf { it.isNotBlank() }?.let { "v$it" }, plugin.source).joinToString(" · "),

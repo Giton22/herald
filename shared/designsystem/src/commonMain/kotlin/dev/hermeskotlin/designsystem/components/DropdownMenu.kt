@@ -54,8 +54,12 @@ import com.composeunstyled.Text
 import com.composeunstyled.UnstyledDropdownMenu
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
-import com.composeunstyled.theme.rememberColoredIndication
+import com.composeunstyled.theme.ThemeToken
+import androidx.compose.ui.text.TextStyle
+import dev.hermeskotlin.designsystem.LocalDesktopLayout
+import dev.hermeskotlin.designsystem.rememberHoverIndication
 import dev.hermeskotlin.designsystem.body
+import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.code
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.radii
@@ -173,20 +177,32 @@ fun DropdownMenu(
 /** One row of a [DropdownMenu]: an icon and a label. The menu closes when it is picked. */
 @Composable
 fun DropdownMenuPanelScope.MenuAction(text: String, icon: ImageVector, onClick: () -> Unit) {
+    val row = MenuRowSize.current()
     MenuItem(
         onClick = onClick,
         // The panel lays rows out at their own width; filling it makes the whole row the target, not just the words.
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp),
-        indication = rememberColoredIndication(Theme[colors][textColor]),
+        modifier = Modifier.fillMaxWidth().heightIn(min = row.height),
+        indication = rememberHoverIndication(Theme[colors][textColor]),
     ) {
         Row(
-            Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            Modifier.padding(horizontal = row.horizontal, vertical = row.vertical),
+            horizontalArrangement = Arrangement.spacedBy(row.gap),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(18.dp))
-            Text(text, style = Theme[typography][body], color = Theme[colors][textColor])
+            UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(row.icon))
+            Text(text, style = Theme[typography][row.style], color = Theme[colors][textColor])
         }
+    }
+}
+
+/** A menu row's measures: a finger's on a phone, a pointer's (compact, as desktop menus are) on a desktop. */
+private class MenuRowSize(val height: Dp, val horizontal: Dp, val vertical: Dp, val gap: Dp, val icon: Dp, val style: ThemeToken<TextStyle>) {
+    companion object {
+        private val Phone = MenuRowSize(48.dp, 16.dp, 12.dp, 12.dp, 18.dp, body)
+        private val Desktop = MenuRowSize(32.dp, 12.dp, 6.dp, 10.dp, 16.dp, bodySmall)
+
+        @Composable
+        fun current() = if (LocalDesktopLayout.current) Desktop else Phone
     }
 }
 
@@ -202,20 +218,21 @@ fun DropdownMenuPanelScope.MenuChoice(
     onClick: () -> Unit,
     count: Int? = null,
 ) {
+    val row = MenuRowSize.current()
     MenuItem(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp).semantics { this.selected = selected },
-        indication = rememberColoredIndication(Theme[colors][textColor]),
+        modifier = Modifier.fillMaxWidth().heightIn(min = row.height).semantics { this.selected = selected },
+        indication = rememberHoverIndication(Theme[colors][textColor]),
     ) {
         Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            Modifier.fillMaxWidth().padding(horizontal = row.horizontal, vertical = row.vertical),
+            horizontalArrangement = Arrangement.spacedBy(row.gap),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(18.dp))
+            UnstyledIcon(icon, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(row.icon))
             Text(
                 text,
-                style = Theme[typography][body].copy(fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal),
+                style = Theme[typography][row.style].copy(fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal),
                 color = Theme[colors][textColor],
                 singleLine = true,
                 overflow = TextOverflow.Ellipsis,

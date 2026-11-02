@@ -52,6 +52,8 @@ internal class LiveConversation(
     private val lock: DeviceLock = DeviceLock.None,
     /** A call the agent placed: what the voice is told to say first, why it called. */
     private val opener: String? = null,
+    /** The session has answered or failed; finishing transport setup alone is not a result. */
+    private val onConnectionResult: suspend () -> Unit = {},
 ) {
     private val transcript = ArrayList<LiveFragment>()
     private var eventSeq = 0
@@ -118,6 +120,7 @@ internal class LiveConversation(
         val poll = launch {
             while (isActive) {
                 val speaking = call.speaking()
+                if (speaking) onConnectionResult()
                 state.update {
                     it.copy(
                         phase = when {
@@ -138,6 +141,7 @@ internal class LiveConversation(
             for (raw in call.events) {
                 when (val event = parseLiveEvent(raw)) {
                     is LiveEvent.Transcript -> {
+                        if (event.fragment.speaker == LiveFragment.Speaker.Assistant) onConnectionResult()
                         transcript += event.fragment
                         if (transcript.size > MAX_FRAGMENTS) transcript.subList(0, transcript.size - KEPT_FRAGMENTS).clear()
                         caption(event.fragment)
@@ -199,12 +203,18 @@ internal class LiveConversation(
                             else -> delegate(event.id, ask.prompt, ask.context)
                         }
                     }
-                    is LiveEvent.Failure -> state.update { it.copy(error = event.message) }
+                    is LiveEvent.Failure -> {
+                        onConnectionResult()
+                        state.update { it.copy(error = event.message) }
+                    }
                     is LiveEvent.Closed -> {
                         ended.complete(if (event.reason == "closed") "The live call ended." else "The live call ended: ${event.reason}")
                         break
                     }
-                    LiveEvent.Started -> started.complete(Unit)
+                    LiveEvent.Started -> {
+                        onConnectionResult()
+                        started.complete(Unit)
+                    }
                     null -> Unit
                 }
             }

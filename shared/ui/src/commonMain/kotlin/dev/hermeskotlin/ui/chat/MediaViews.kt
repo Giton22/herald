@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui.chat
 
+import dev.hermeskotlin.ui.fullScreenDialogProperties
+import dev.hermeskotlin.ui.tapVerb
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -48,13 +50,13 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.File
 import com.composables.icons.lucide.Image
 import com.composables.icons.lucide.ImageOff
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Share2
+import dev.hermeskotlin.ui.shareIcon
+import dev.hermeskotlin.ui.shareLabel
 import com.composables.icons.lucide.X
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
@@ -65,6 +67,7 @@ import dev.hermeskotlin.designsystem.caption
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.components.Spinner
+import dev.hermeskotlin.designsystem.components.handCursor
 import dev.hermeskotlin.designsystem.label
 import dev.hermeskotlin.designsystem.radii
 import dev.hermeskotlin.designsystem.radiusMedium
@@ -130,6 +133,7 @@ private fun ReplyImage(item: ReplyMedia) {
                 .clip(shape)
                 .border(1.dp, Theme[colors][stroke], shape)
                 .background(Theme[colors][surface])
+                .handCursor()
                 .clickable { allowed = true }
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -138,7 +142,7 @@ private fun ReplyImage(item: ReplyMedia) {
             UnstyledIcon(Lucide.Image, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(18.dp))
             Column(Modifier.weight(1f)) {
                 Text("Picture from $remoteHost", style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
-                Text("Tap to load it from that site", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                Text("$tapVerb to load it from that site", style = Theme[typography][caption], color = Theme[colors][textTertiary])
             }
         }
         return
@@ -161,6 +165,7 @@ private fun ReplyImage(item: ReplyMedia) {
             .clip(shape)
             .border(1.dp, Theme[colors][stroke], shape)
             .background(Theme[colors][surface])
+            .handCursor(bitmap != null || failed)
             .clickable(enabled = bitmap != null || failed) {
                 if (bitmap != null) open(ViewerImage(item.name, source = item.source)) else attempt++
             },
@@ -181,7 +186,7 @@ private fun ReplyImage(item: ReplyMedia) {
                 UnstyledIcon(Lucide.ImageOff, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(18.dp))
                 Column {
                     Text("Couldn't load ${item.name}", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
-                    if (failed) Text("Tap to try again", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                    if (failed) Text("$tapVerb to try again", style = Theme[typography][caption], color = Theme[colors][textTertiary])
                 }
             }
             else -> Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) { Spinner() }
@@ -245,7 +250,7 @@ internal fun ReplyFile(item: ReplyMedia, download: (suspend () -> FileDownload)?
             Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
         } else {
             IconButton(Lucide.Download, contentDescription = "Save ${item.name}", onClick = { withBytes { notify(actions.save(it, item.name)) } })
-            IconButton(Lucide.Share2, contentDescription = "Share ${item.name}", onClick = { withBytes { actions.share(it, item.name) } })
+            IconButton(shareIcon, contentDescription = "$shareLabel: ${item.name}", onClick = { withBytes { actions.share(it, item.name) } })
         }
     }
 }
@@ -288,7 +293,7 @@ internal fun ImageViewer(image: ViewerImage, onDismiss: () -> Unit) {
         offset = if (scale == 1f) Offset.Zero else offset + pan
     }
 
-    Dialog(onDismissRequest = onDismiss, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    Dialog(onDismissRequest = onDismiss, properties = fullScreenDialogProperties()) {
         Box(Modifier.fillMaxSize().background(Color.Black)) {
             val decoded = bytes?.let { rememberDecodedImage(it, maxEdge = VIEWER_EDGE) }
             val bitmap = decoded?.bitmap
@@ -344,8 +349,8 @@ internal fun ImageViewer(image: ViewerImage, onDismiss: () -> Unit) {
                     tint = Color.White,
                 )
                 IconButton(
-                    Lucide.Share2,
-                    contentDescription = "Share",
+                    shareIcon,
+                    contentDescription = shareLabel,
                     onClick = { ready?.let { actions.share(it, image.name.withImageExtension(it)) } },
                     enabled = ready != null,
                     tint = Color.White,

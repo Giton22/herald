@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui.bots
 
+import dev.hermeskotlin.designsystem.components.handCursor
+
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,6 +23,8 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.rememberLazyListState
+import dev.hermeskotlin.designsystem.components.VerticalScrollbar
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
@@ -70,7 +74,7 @@ import com.composables.icons.lucide.TriangleAlert
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
-import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.rememberHoverIndication
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.bots.BotTrouble
 import dev.hermeskotlin.core.bots.lastActivity
@@ -120,7 +124,11 @@ import dev.hermeskotlin.ui.rooms.RoomFaces
 import dev.hermeskotlin.ui.rooms.RoomMenuActions
 import dev.hermeskotlin.ui.rooms.roomMembers
 import dev.hermeskotlin.ui.rooms.rowSubtitle
+import dev.hermeskotlin.ui.isDesktop
 import dev.hermeskotlin.ui.sessions.ListNotice
+import dev.hermeskotlin.ui.sessions.RowContextMenu
+import dev.hermeskotlin.ui.sessions.RowMenuItem
+import dev.hermeskotlin.ui.sessions.onSecondaryPress
 import dev.hermeskotlin.ui.sessions.ListSpinner
 import dev.hermeskotlin.ui.sessions.MessageBanner
 
@@ -244,8 +252,10 @@ fun BotsRoster(
                 }
             }
         }
+        val list = rememberLazyListState()
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
+            state = list,
             // Room to scroll the last cards out from under the floating footer.
             contentPadding = PaddingValues(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 96.dp),
         ) {
@@ -285,6 +295,7 @@ fun BotsRoster(
                             .fillMaxWidth()
                             .heightIn(min = MinTouchTarget)
                             .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
+                            .handCursor()
                             .clickable(onClickLabel = if (hiddenOpen) "Collapse hidden bots" else "Show hidden bots") { hiddenOpen = !hiddenOpen }
                             .padding(horizontal = 6.dp),
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -330,13 +341,14 @@ fun BotsRoster(
                     }
                 }
                 if (desktopRooms.isNotEmpty()) {
-                    item(key = "desktop-rooms-label") { SectionHeader("On Desktop", top = 10.dp) {} }
+                    item(key = "desktop-rooms-label") { SectionHeader("On Hermes Desktop", top = 10.dp) {} }
                     items(desktopRooms, key = { "desktop-room:${it.key}" }) { room ->
                         DesktopRoomRow(room, roomFaces, onClick = { onOpenDesktopRoom(room) })
                     }
                 }
             }
         }
+        VerticalScrollbar(list, Modifier.align(Alignment.TopEnd).fillMaxHeight().padding(top = 2.dp, bottom = 96.dp, end = 1.dp))
         state.notice?.let { message ->
             MessageBanner(message, onDismiss = onDismissNotice, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 88.dp))
         }
@@ -435,31 +447,39 @@ private fun BotCard(
         preview != null -> preview.text to false
         else -> (bot.description?.takeIf { it.isNotBlank() } ?: "Say hello") to false
     }
+    var contextMenuOpen by remember { mutableStateOf(false) }
+    val menuItems = {
+        listOfNotNull(
+            RowMenuItem("Check again", Lucide.RefreshCw) { actions.checkAgain(bot) }.takeIf { trouble != null },
+            RowMenuItem(if (pinned) "Unpin" else "Pin to top", if (pinned) Lucide.PinOff else Lucide.Pin) { actions.setPinned(bot, !pinned) },
+            RowMenuItem(if (hidden) "Unhide" else "Hide", if (hidden) Lucide.Eye else Lucide.EyeOff) { actions.setHidden(bot, !hidden) },
+            RowMenuItem("Open recent session", Lucide.History) { actions.openRecent(bot) }.takeIf { recent != null },
+            RowMenuItem("New chat with ${bot.label}", Lucide.MessageSquarePlus) { actions.newChat(bot) },
+            RowMenuItem("Routines", Lucide.CalendarClock) { actions.routines(bot) },
+            RowMenuItem("Start fresh", Lucide.RotateCcw, run = onStartOver).takeIf { bot.canonicalSession != null },
+            RowMenuItem("Edit", Lucide.Pencil) { actions.edit(bot) },
+            RowMenuItem("Duplicate", Lucide.Copy) { actions.duplicate(bot) },
+            // The gateway keeps its primary profile.
+            RowMenuItem("Delete", Lucide.Trash2, destructive = true, run = onDelete).takeIf { bot.name != Bot.DEFAULT },
+        )
+    }
     DropdownMenu(
         expanded = menuOpen,
         onExpandedChange = { menuOpen = it },
         modifier = modifier,
-        items = {
-            fun act(block: () -> Unit) = { menuOpen = false; block() }
-            if (trouble != null) MenuAction("Check again", Lucide.RefreshCw, act { actions.checkAgain(bot) })
-            MenuAction(if (pinned) "Unpin" else "Pin to top", if (pinned) Lucide.PinOff else Lucide.Pin, act { actions.setPinned(bot, !pinned) })
-            MenuAction(if (hidden) "Unhide" else "Hide", if (hidden) Lucide.Eye else Lucide.EyeOff, act { actions.setHidden(bot, !hidden) })
-            if (recent != null) MenuAction("Open recent session", Lucide.History, act { actions.openRecent(bot) })
-            MenuAction("New chat with ${bot.label}", Lucide.MessageSquarePlus, act { actions.newChat(bot) })
-            MenuAction("Routines", Lucide.CalendarClock, act { actions.routines(bot) })
-            if (bot.canonicalSession != null) MenuAction("Start fresh", Lucide.RotateCcw, act(onStartOver))
-            MenuAction("Edit", Lucide.Pencil, act { actions.edit(bot) })
-            MenuAction("Duplicate", Lucide.Copy, act { actions.duplicate(bot) })
-            // The gateway keeps its primary profile.
-            if (bot.name != Bot.DEFAULT) MenuAction("Delete", Lucide.Trash2, act(onDelete))
-        },
+        items = { menuItems().forEach { item -> MenuAction(item.label, item.icon, { menuOpen = false; item.run() }) } },
     ) {
+        // A desktop's way to the same actions: a right-click, with the menu at the pointer.
+        RowContextMenu(contextMenuOpen, onDismiss = { contextMenuOpen = false }, items = menuItems)
         Column(
             Modifier
                 .fillMaxSize()
                 .clip(shape)
                 .background(if (selected) Theme[colors][accentSoft] else Theme[colors][surface])
+                // Lit as under the pointer while its right-click menu is open, so it's clear which bot that is.
+                .then(if (contextMenuOpen) Modifier.background(Theme[colors][text].copy(alpha = 0.08f)) else Modifier)
                 .border(1.dp, if (selected) Theme[colors][accentText].copy(alpha = 0.5f) else Theme[colors][stroke], shape)
+                .handCursor()
                 .combinedClickable(
                     onClick = { actions.open(bot) },
                     onClickLabel = "Open ${bot.label}'s chat",
@@ -469,8 +489,9 @@ private fun BotCard(
                     },
                     onLongClickLabel = "${bot.label} actions",
                     interactionSource = null,
-                    indication = rememberColoredIndication(Theme[colors][text]),
+                    indication = rememberHoverIndication(Theme[colors][text]),
                 )
+                .then(if (isDesktop) Modifier.onSecondaryPress { contextMenuOpen = true } else Modifier)
                 .semantics { this.selected = selected }
                 .alpha(if (hidden) 0.6f else 1f)
                 .padding(14.dp),
@@ -555,6 +576,7 @@ private fun NeedsYouCard(item: NeedsYou, picture: ByteArray?, onClick: () -> Uni
             .heightIn(min = MinTouchTarget)
             .clip(shape)
             .background(Theme[colors][warningSoft])
+            .handCursor()
             .clickable(onClickLabel = if (item is NeedsYou.Routine) "Open ${item.bot.label}'s routines" else "Open ${item.bot.label}'s chat", onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -614,6 +636,7 @@ internal fun StartOverDialog(bot: Bot?, onDismiss: () -> Unit, onConfirm: (Bot) 
 private fun RoomRow(room: Room, faces: BotFaces, unread: Boolean, onClick: () -> Unit, onRename: () -> Unit, onDelete: () -> Unit) {
     val haptics = LocalHapticFeedback.current
     var menuOpen by remember { mutableStateOf(false) }
+    var contextMenuOpen by remember { mutableStateOf(false) }
     DropdownMenu(
         expanded = menuOpen,
         onExpandedChange = { menuOpen = it },
@@ -628,7 +651,7 @@ private fun RoomRow(room: Room, faces: BotFaces, unread: Boolean, onClick: () ->
             room,
             faces,
             unread,
-            Modifier.combinedClickable(
+            Modifier.handCursor().combinedClickable(
                 onClick = onClick,
                 onClickLabel = "Open room ${room.name}",
                 onLongClick = {
@@ -637,9 +660,16 @@ private fun RoomRow(room: Room, faces: BotFaces, unread: Boolean, onClick: () ->
                 },
                 onLongClickLabel = "${room.name} actions",
                 interactionSource = null,
-                indication = rememberColoredIndication(Theme[colors][text]),
-            ),
+                indication = rememberHoverIndication(Theme[colors][text]),
+            ).then(if (isDesktop) Modifier.onSecondaryPress { contextMenuOpen = true } else Modifier),
         )
+        // A desktop's way to the same actions: a right-click, with the menu at the pointer.
+        RowContextMenu(contextMenuOpen, onDismiss = { contextMenuOpen = false }) {
+            listOf(
+                RowMenuItem("Rename", Lucide.Pencil, run = onRename),
+                RowMenuItem("Delete room", Lucide.Trash2, destructive = true, run = onDelete),
+            )
+        }
     }
 }
 
@@ -725,6 +755,6 @@ private fun DesktopRoomRow(room: DesktopRoom, faces: BotFaces, onClick: () -> Un
         room.updatedAt?.div(1000.0),
         faces,
         marked = room.needsYou,
-        clicks = Modifier.clickable(onClickLabel = "Open room ${room.name}") { onClick() },
+        clicks = Modifier.handCursor().clickable(onClickLabel = "Open room ${room.name}") { onClick() },
     )
 }

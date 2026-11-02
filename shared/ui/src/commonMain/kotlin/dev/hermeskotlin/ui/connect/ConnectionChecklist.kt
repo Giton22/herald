@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui.connect
 
+import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.CopyableOnDesktop
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -119,7 +121,8 @@ private fun StageRow(title: String, result: StageResult?, checking: Boolean, pen
                 result is StageResult.Skipped -> result.reason
                 else -> pendingNote
             }
-            Text(detail, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
+            // What went wrong and what to do can be selected and copied on a desktop, for a bug report.
+            CopyableOnDesktop { Text(detail, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary]) }
             if (result is StageResult.Failed) FixHint(result.fix)
         }
     }
@@ -166,7 +169,7 @@ private fun FixHint(fix: String) {
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
         UnstyledIcon(Lucide.Lightbulb, contentDescription = "What to do", tint = Theme[colors][warning], modifier = Modifier.padding(top = 2.dp).size(14.dp))
-        Text(fix, style = Theme[typography][bodySmall].copy(fontSize = 13.sp), color = Theme[colors][textSecondary])
+        CopyableOnDesktop { Text(fix, style = Theme[typography][bodySmall].copy(fontSize = 13.sp), color = Theme[colors][textSecondary]) }
     }
 }
 
@@ -182,7 +185,7 @@ internal fun AddressGuide(modifier: Modifier = Modifier) {
         )
         GuideItem(
             "Tailscale",
-            "Turn on Tailscale on this phone and use the server's Tailscale address, like 100.64.0.1:9119 or its .ts.net name. Works away from home too.",
+            "Turn on Tailscale on this ${if (isDesktop) "computer" else "phone"} and use the server's Tailscale address, like 100.64.0.1:9119 or its .ts.net name. Works away from home too.",
         )
         GuideItem(
             "HTTPS",

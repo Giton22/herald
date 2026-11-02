@@ -755,6 +755,178 @@ class ChatSessionTest {
     }
 
     @Test
+    fun aResumedChatReadsItsReasoningEffortFromTheGateway() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.resume" to """{"session_id":"rt1","running":false,"info":{"model":"m1","provider":"p1"}}""",
+                "config.get" to """{"value":"max","display":"hide"}""",
+            ),
+        )
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        assertEquals("max", chat.state.first { it.reasoningEffort != null }.reasoningEffort)
+        val get = transport.awaitSent { it.isCall("config.get") }
+        assertEquals("reasoning", get.param("key"))
+        assertEquals("rt1", get.param("session_id"))
+    }
+
+    @Test
+    fun aNewChatReadsItsReasoningEffortOnceCreated() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{"model":"m1","provider":"p1"}}""",
+                "config.get" to """{"value":"max","display":"hide"}""",
+                "prompt.submit" to """{"status":"streaming"}""",
+            ),
+        )
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        assertTrue(chat.send("hi"))
+
+        assertEquals("max", chat.state.first { it.reasoningEffort != null }.reasoningEffort)
+        val get = transport.awaitSent { it.isCall("config.get") && it.param("session_id") != null }
+        assertEquals("reasoning", get.param("key"))
+        assertEquals("rt9", get.param("session_id"))
+    }
+
+    @Test
+    fun anEmptyOrFailedReasoningReadLeavesTheEffortUnset() = runTest {
+        val results = mutableMapOf(
+            "session.resume" to """{"session_id":"rt1","running":false,"info":{"model":"m1"}}""",
+            "config.get" to "{}",
+        )
+        val (connection, transport) = setup(backgroundScope, results)
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        transport.awaitSent { it.isCall("config.get") }
+        testScheduler.runCurrent()
+        assertNull(chat.state.value.reasoningEffort)
+
+        results["config.get"] = "error:-32601"
+        chat.refreshReasoning()
+        assertNull(chat.state.value.reasoningEffort)
+    }
+
+    @Test
+    fun aReasoningReadYieldsToAPickThatLandedWhileItWasOut() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.resume" to """{"session_id":"rt1","running":false,"info":{"model":"m1"}}""",
+                "config.get" to SILENT,
+            ),
+        )
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        val read = transport.awaitSent { it.isCall("config.get") }
+
+        chat.setReasoningEffort("high")
+        chat.setReasoningEffort("low")
+        chat.setReasoningEffort("high")
+        transport.push("""{"jsonrpc":"2.0","id":${read["id"]},"result":{"value":"max","display":"hide"}}""")
+        testScheduler.runCurrent()
+
+        assertEquals("high", chat.state.value.reasoningEffort)
+    }
+
+    @Test
+    fun aReasoningReadYieldsToASessionInfoThatLandedWhileItWasOut() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.resume" to """{"session_id":"rt1","running":false,"info":{"model":"m1"}}""",
+                "config.get" to SILENT,
+            ),
+        )
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        val read = transport.awaitSent { it.isCall("config.get") }
+
+        // The agent's build reports the chat's own level while the profile's is still on its way.
+        transport.push(event("session.info", "rt1", """{"model":"m1","reasoning_effort":"high"}"""))
+        chat.state.first { it.reasoningEffort == "high" }
+        transport.push("""{"jsonrpc":"2.0","id":${read["id"]},"result":{"value":"max","display":"hide"}}""")
+        testScheduler.runCurrent()
+
+        assertEquals("high", chat.state.value.reasoningEffort)
+    }
+
+    @Test
+    fun aResumeThatAlreadyNamesTheEffortDoesntReadItAgain() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                // A live or eager session reports its level; "" is the provider default and stays shown as such.
+                "session.resume" to """{"session_id":"rt1","running":false,"info":{"model":"m1","reasoning_effort":""}}""",
+                "session.control.read" to "{}",
+                "config.get" to """{"value":"medium","display":"hide"}""",
+            ),
+        )
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" }
+        transport.awaitSent { it.isCall("session.control.read") }
+        testScheduler.runCurrent()
+
+        assertNull(chat.state.value.reasoningEffort)
+        assertEquals(0, transport.sent.value.count { it.isCall("config.get") })
+    }
+
+    @Test
+    fun aNewChatShowsTheProfilesLevelBeforeItsFirstSend() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "config.get" to """{"value":"max","display":"hide"}""",
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{"model":"m1","provider":"p1"}}""",
+                "prompt.submit" to """{"status":"streaming"}""",
+            ),
+        )
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope, profile = "work")
+        chat.start()
+
+        assertEquals("max", chat.state.first { it.profileReasoningEffort != null }.profileReasoningEffort)
+        assertNull(chat.state.value.reasoningEffort)
+        val get = transport.awaitSent { it.isCall("config.get") }
+        assertEquals("reasoning", get.param("key"))
+        assertEquals("work", get.param("profile"))
+        assertNull(get.param("session_id"))
+
+        // Not the chat's own pick: session.create leaves the level to the profile.
+        assertTrue(chat.send("hi"))
+        assertNull(transport.sent.value.first { it.isCall("session.create") }.param("reasoning_effort"))
+    }
+
+    @Test
+    fun aNewChatWithAPickedEffortDoesntReadIt() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{"model":"m1","provider":"p1"}}""",
+                "config.get" to """{"value":"max","display":"hide"}""",
+                "prompt.submit" to """{"status":"streaming"}""",
+            ),
+        )
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.setReasoningEffort("low")
+
+        assertTrue(chat.send("hi"))
+        testScheduler.runCurrent()
+
+        assertEquals("low", transport.sent.value.first { it.isCall("session.create") }.param("reasoning_effort"))
+        assertEquals("low", chat.state.value.reasoningEffort)
+        assertEquals(0, transport.sent.value.count { it.isCall("config.get") && it.param("session_id") != null })
+    }
+
+    @Test
     fun attachmentsAreUploadedBeforeThePromptAndFilesBecomeReferences() = runTest {
         val (connection, transport) = setup(
             backgroundScope,
@@ -775,7 +947,7 @@ class ChatSessionTest {
         val file = OutgoingAttachment("a3", "notes.txt", "text/plain", "hi".encodeToByteArray())
         assertTrue(chat.send("  summarise  ", listOf(image, pdf, file)))
 
-        val sent = transport.sent.value.mapNotNull { it["method"]?.jsonPrimitive?.contentOrNull }.filter { it != "client.capabilities" && it != "ping" }
+        val sent = transport.sent.value.mapNotNull { it["method"]?.jsonPrimitive?.contentOrNull }.filter { it != "client.capabilities" && it != "ping" && it != "config.get" }
         assertEquals(listOf("session.create", "image.attach_bytes", "pdf.attach", "file.attach", "file.attach", "prompt.submit"), sent)
         val upload = transport.sent.value.first { it.isCall("image.attach_bytes") }
         assertEquals("AQID", upload.param("content_base64"))
@@ -1481,6 +1653,25 @@ class ChatSessionTest {
         assertEquals("stored-2" to "Greeting #2", chat.branchFrom("row-3"))
         assertEquals("4", transport.sent.value.last { it.isCall("session.branch") }.param("count"))
         // From a prompt: the instruction and the prompt.
+        chat.branchFrom("row-2")
+        assertEquals("2", transport.sent.value.last { it.isCall("session.branch") }.param("count"))
+    }
+
+    @Test
+    fun branchingBeforeFoldedSystemMessagesStopsWhereTheyStart() = runTest {
+        history = """{"session_id":"stored-1","messages":[
+            {"id":1,"role":"user","content":"one"},{"id":2,"role":"assistant","content":"First"},
+            {"id":3,"role":"user","content":"[Cron delivery: Monitor]\nAll quiet"},
+            {"id":4,"role":"user","content":"[Cron delivery: Monitor]\nStill quiet"},
+            {"id":5,"role":"user","content":"two"},{"id":6,"role":"assistant","content":"Second"}]}"""
+        val (chat, transport) = resumedChat(
+            backgroundScope,
+            mapOf("session.branch" to """{"session_id":"rt2","stored_session_id":"stored-2","title":"Greeting #2"}"""),
+        )
+        // The group is keyed by its newest row, so an earlier page doesn't move it.
+        assertEquals(listOf("row-1", "row-2", "row-4", "row-5", "row-6"), chat.state.value.messages.map { it.key })
+
+        // Up to "First": the routine rows after it stay out.
         chat.branchFrom("row-2")
         assertEquals("2", transport.sent.value.last { it.isCall("session.branch") }.param("count"))
     }

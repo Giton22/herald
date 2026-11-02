@@ -18,8 +18,9 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import com.composeunstyled.UnstyledButton
-import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.rememberHoverIndication
 import dev.hermeskotlin.designsystem.components.CopyButton
+import dev.hermeskotlin.designsystem.components.handCursor
 import dev.hermeskotlin.designsystem.components.MinTouchTarget
 import dev.hermeskotlin.designsystem.inverse
 import dev.hermeskotlin.designsystem.label
@@ -32,17 +33,17 @@ import dev.hermeskotlin.designsystem.textMuted
 import dev.hermeskotlin.designsystem.warningSoft
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
-import androidx.compose.foundation.verticalScroll
+import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -55,6 +56,27 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.ContentType
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.State
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.onFocusChanged
+import dev.hermeskotlin.ui.LocalFocusHeld
+import dev.hermeskotlin.ui.Shortcut
+import dev.hermeskotlin.ui.ShortcutHandler
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import dev.hermeskotlin.ui.CopyableOnDesktop
+import dev.hermeskotlin.ui.isDesktop
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -126,9 +148,12 @@ internal fun InputRequestPanel(
     // A floating card ringed in the request's own soft tint: amber for what needs care, the accent for a question.
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     val ring = Theme[colors][if (request is InputRequest.Clarify) accentSoft else warningSoft]
+    val focusInside = remember { mutableStateOf(false) }
+    CompositionLocalProvider(LocalFocusInPanel provides focusInside) {
     Box(
         Modifier
             .fillMaxWidth()
+            .onFocusChanged { focusInside.value = it.hasFocus }
             .navigationBarsPadding()
             .padding(start = 12.dp, end = 12.dp, top = 8.dp, bottom = 12.dp)
             .shadow(16.dp, shape, ambientColor = Color.Black.copy(alpha = 0.08f), spotColor = Color.Black.copy(alpha = 0.16f))
@@ -137,7 +162,7 @@ internal fun InputRequestPanel(
             .border(1.dp, ring, shape),
     ) {
         Column(
-            Modifier.heightIn(max = 460.dp).verticalScroll(rememberScrollState()).padding(16.dp),
+            Modifier.heightIn(max = 460.dp).verticalScrollWithBar().padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             val more = (requests.size - 1).takeIf { it > 0 }?.let { "+$it more" }
@@ -151,6 +176,33 @@ internal fun InputRequestPanel(
                 }
             }
         }
+    }
+    }
+}
+
+/** Whether the focus is in the panel, so a question can move it on to its next field. */
+private val LocalFocusInPanel = staticCompositionLocalOf<State<Boolean>> { mutableStateOf(false) }
+
+/** Whether the panel may take the keys: nothing outside it has the focus, as a search or a dialog's field would. */
+@Composable
+private fun keysFree(): () -> Boolean {
+    val held = LocalFocusHeld.current
+    val inside = LocalFocusInPanel.current
+    return { !held.value || inside.value }
+}
+
+/**
+ * On the desktop, focuses [requester] as the panel shows and again as [key] changes, unless the user is typing
+ * somewhere else; a frame or two first, for the composer it took the place of to let the focus go.
+ */
+@Composable
+private fun FocusWhenFree(requester: FocusRequester, key: Any? = Unit) {
+    if (!isDesktop) return
+    val free = keysFree()
+    LaunchedEffect(key) {
+        withFrameNanos {}
+        withFrameNanos {}
+        if (free()) runCatching { requester.requestFocus() }
     }
 }
 
@@ -188,6 +240,7 @@ private fun WiderChoice(title: String, description: String, enabled: Boolean, on
         Modifier
             .heightIn(min = MinTouchTarget)
             .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
+            .handCursor(enabled)
             .clickable(enabled = enabled, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = "$title. $description" }
             .padding(horizontal = 8.dp),
@@ -197,26 +250,56 @@ private fun WiderChoice(title: String, description: String, enabled: Boolean, on
     }
 }
 
+/** A plain Enter (or the keypad's), with no modifier held: Shift+Enter is left to the field for a new line. */
+private fun KeyEvent.isPlainEnter(): Boolean =
+    type == KeyEventType.KeyDown && (key == Key.Enter || key == Key.NumPadEnter) &&
+        !isShiftPressed && !isCtrlPressed && !isAltPressed && !isMetaPressed
+
+/**
+ * The desktop's keys for an approval: an Enter or Esc nothing focused took is [onEnter] or [onEscape], so
+ * typing in a search or a dialog never answers it. Both are kept while it isn't [ready] yet, so an Enter meant
+ * for the composer it replaced answers nothing and an Esc doesn't stop the task.
+ */
+@Composable
+private fun AnswerKeys(ready: Boolean, onEnter: () -> Unit, onEscape: () -> Unit) {
+    if (!isDesktop) return
+    val free = keysFree()
+    ShortcutHandler { shortcut ->
+        when (shortcut) {
+            Shortcut.Enter -> free().also { if (it && ready) onEnter() }
+            Shortcut.Escape -> free().also { if (it && ready) onEscape() }
+            else -> false
+        }
+    }
+}
+
 /** One of the two answers: a full-height pill, the plain one on surface-3 and the strong one in the inverse color. */
 @Composable
-private fun AnswerPill(text: String, strong: Boolean, enabled: Boolean, onClick: () -> Unit, modifier: Modifier) {
+private fun AnswerPill(text: String, strong: Boolean, enabled: Boolean, onClick: () -> Unit, modifier: Modifier, keyHint: String? = null) {
     val fill = Theme[colors][if (strong) inverse else surface3]
     val on = Theme[colors][if (strong) onInverse else textColor]
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
         modifier = modifier
+            .handCursor(enabled)
             .defaultMinSize(minHeight = MinTouchTarget)
             .alpha(if (enabled) 1f else 0.45f)
             .background(fill, CircleShape),
-        indication = rememberColoredIndication(on),
+        indication = rememberHoverIndication(on),
         contentPadding = PaddingValues(horizontal = 12.dp),
     ) {
-        Text(
-            text,
-            style = Theme[typography][label].copy(fontWeight = if (strong) FontWeight.SemiBold else FontWeight.Medium),
-            color = on,
-        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                text,
+                style = Theme[typography][label].copy(fontWeight = if (strong) FontWeight.SemiBold else FontWeight.Medium),
+                color = on,
+            )
+            // The key that answers the same, quieter than the answer; a screen reader is told by the button.
+            if (keyHint != null) {
+                Text(keyHint, style = Theme[typography][caption], color = on.copy(alpha = 0.55f), modifier = Modifier.clearAndSetSemantics {})
+            }
+        }
     }
 }
 
@@ -256,14 +339,18 @@ private fun CommandBlock(command: String) {
                 style = mono.copy(color = Theme[colors][textMuted]),
                 modifier = Modifier.padding(vertical = if (full) 8.dp else 0.dp).clearAndSetSemantics {},
             )
-            BasicText(
-                command,
-                style = mono.copy(color = Theme[colors][textColor]),
-                maxLines = if (full) Int.MAX_VALUE else COMMAND_PREVIEW_LINES,
-                overflow = TextOverflow.Ellipsis,
-                onTextLayout = { if (!full) long = it.hasVisualOverflow },
-                modifier = Modifier.weight(1f).padding(vertical = 8.dp),
-            )
+            // Part of it can be selected to copy on the desktop; Copy takes all of it.
+            Box(Modifier.weight(1f).padding(vertical = 8.dp)) {
+                CopyableOnDesktop {
+                    BasicText(
+                        command,
+                        style = mono.copy(color = Theme[colors][textColor]),
+                        maxLines = if (full) Int.MAX_VALUE else COMMAND_PREVIEW_LINES,
+                        overflow = TextOverflow.Ellipsis,
+                        onTextLayout = { if (!full) long = it.hasVisualOverflow },
+                    )
+                }
+            }
             CopyButton(command, Modifier.size(MinTouchTarget))
         }
         if (long) {
@@ -308,9 +395,13 @@ private fun ApprovalContent(request: InputRequest.Approval, more: String?, conne
     )
     if (request.command.isNotBlank()) CommandBlock(request.command)
     // Allow once is the stronger of the two, so a little wider.
-    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        AnswerPill("Deny", strong = false, enabled = ready, onClick = { choose(ApprovalChoice.Deny) }, modifier = Modifier.weight(1f))
-        AnswerPill("Allow once", strong = true, enabled = ready, onClick = { choose(ApprovalChoice.Once) }, modifier = Modifier.weight(1.3f))
+    AnswerKeys(ready && !confirmAlways, onEnter = { choose(ApprovalChoice.Once) }, onEscape = { choose(ApprovalChoice.Deny) })
+    // A desktop's buttons sit at the end at their own width, as a dialog's do, rather than stretched across the window.
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, if (isDesktop) Alignment.End else Alignment.Start)) {
+        val deny = if (isDesktop) Modifier.widthIn(min = 120.dp) else Modifier.weight(1f)
+        val once = if (isDesktop) Modifier.widthIn(min = 150.dp) else Modifier.weight(1.3f)
+        AnswerPill("Deny", strong = false, enabled = ready, onClick = { choose(ApprovalChoice.Deny) }, modifier = deny, keyHint = "Esc".takeIf { isDesktop })
+        AnswerPill("Allow once", strong = true, enabled = ready, onClick = { choose(ApprovalChoice.Once) }, modifier = once, keyHint = "Enter".takeIf { isDesktop })
     }
     val wider = request.choices.filter { it == ApprovalChoice.Session || it == ApprovalChoice.Always }
     if (wider.isNotEmpty()) {
@@ -375,7 +466,7 @@ private fun ClarifyContent(request: InputRequest.Clarify, more: String?, connect
 
     val counter = if (questions.size > 1) "${index + 1} of ${questions.size}" else more
     Header(Lucide.MessageCircleQuestion, Theme[colors][accentText], Theme[colors][accentSoft], "Hermes asks", counter, onStop)
-    Text(question.question, style = Theme[typography][body], color = Theme[colors][textColor])
+    CopyableOnDesktop { Text(question.question, style = Theme[typography][body], color = Theme[colors][textColor]) }
     if (question.choices.isNotEmpty()) {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             question.choices.forEach { choice ->
@@ -394,12 +485,20 @@ private fun ClarifyContent(request: InputRequest.Clarify, more: String?, connect
             }
         }
     }
+    val canGoOn = (connected || !last) && answerOf(index).isNotEmpty()
+    val goOn: () -> Unit = { if (last) answer(InputAnswers.clarify(request, questions.indices.map(::answerOf))) else index++ }
+    // On the desktop the answer is typed straight away, each question in turn; Enter goes on as Send or
+    // Next does, Shift+Enter starts a new line.
+    val field = remember(request.id) { FocusRequester() }
+    FocusWhenFree(field, index)
     TextField(
         state = drafts[index],
+        modifier = if (isDesktop) Modifier.onPreviewKeyEvent { it.isPlainEnter().also { enter -> if (enter && canGoOn) goOn() } } else Modifier,
         placeholder = if (question.choices.isEmpty()) "Your answer" else "Something else…",
         singleLine = false,
         maxLines = 4,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Default),
+        focusRequester = field,
     )
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Button(
@@ -411,8 +510,8 @@ private fun ClarifyContent(request: InputRequest.Clarify, more: String?, connect
         )
         Button(
             if (last) "Send" else "Next",
-            onClick = { if (last) answer(InputAnswers.clarify(request, questions.indices.map(::answerOf))) else index++ },
-            enabled = (connected || !last) && answerOf(index).isNotEmpty(),
+            onClick = goOn,
+            enabled = canGoOn,
             modifier = Modifier.weight(1f),
         )
     }
@@ -430,6 +529,7 @@ private fun ChoiceRow(choice: String, question: ClarifyQuestion, selected: Boole
             .fillMaxWidth()
             .clip(shape)
             .background(if (selected) Theme[colors][accentSoft] else Theme[colors][input], shape)
+            .handCursor()
             .clickable(role = if (question.multiSelect) Role.Checkbox else Role.RadioButton, onClick = onClick)
             .padding(horizontal = 12.dp, vertical = 10.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -469,8 +569,12 @@ private fun SecretContent(request: InputRequest.Secret, more: String?, connected
     } else {
         Text(request.prompt, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
     }
+    // Typed straight away on the desktop, and sent with Enter.
+    val field = remember(request.id) { FocusRequester() }
+    FocusWhenFree(field)
     TextField(
         state = value,
+        focusRequester = field,
         label = when (kind) {
             InputRequest.Secret.Kind.Sudo -> "Password"
             InputRequest.Secret.Kind.Secret -> request.envVar
@@ -536,8 +640,11 @@ private fun SaveLoginContent(request: InputRequest.VaultSaveLogin, more: String?
         style = Theme[typography][bodySmall],
         color = Theme[colors][textSecondary],
     )
+    val first = remember(request.id) { FocusRequester() }
+    FocusWhenFree(first)
     TextField(
         state = identifier,
+        focusRequester = first,
         label = "Email or username",
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email, autoCorrectEnabled = false, imeAction = ImeAction.Next),
         contentType = ContentType.Username,

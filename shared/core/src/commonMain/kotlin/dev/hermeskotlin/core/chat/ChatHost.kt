@@ -10,7 +10,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
@@ -46,6 +49,17 @@ class ChatHost(
     fun holdSideChat(storedId: String) = _sideChats.update { it + storedId }
 
     fun releaseSideChat(storedId: String) = _sideChats.update { it - storedId }
+
+    private val _retitled = MutableSharedFlow<Pair<String, String?>>(extraBufferCapacity = 8)
+
+    /** Chats renamed from the list, as (stored id, new title), for a window of its own showing one. */
+    val retitled: SharedFlow<Pair<String, String?>> = _retitled.asSharedFlow()
+
+    /** [storedId] was renamed to [title] from the list: the open chat, if it's that one, shows it, and so does any window. */
+    fun retitled(storedId: String, title: String?) {
+        _session.value?.takeIf { it.state.value.storedSessionId == storedId }?.showTitle(title)
+        _retitled.tryEmit(storedId to title)
+    }
 
     private var gateway: GatewayUrl? = null
     private var profile: String? = null

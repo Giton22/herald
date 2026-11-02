@@ -1,5 +1,9 @@
 package dev.hermeskotlin.ui.sessions
 
+import dev.hermeskotlin.ui.PageFoot
+
+import dev.hermeskotlin.designsystem.components.handCursor
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -8,6 +12,9 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.pointerInput
+import dev.hermeskotlin.ui.isDesktop
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
@@ -18,7 +25,9 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.rememberScrollState
+import dev.hermeskotlin.designsystem.components.ScrollbarBox
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
@@ -87,6 +96,7 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.chat.usd
 import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.ReportSkeleton
+import dev.hermeskotlin.ui.tapVerb
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.time.Clock
 
@@ -164,51 +174,80 @@ internal fun InsightsView(
 
 @Composable
 private fun Report(report: UsageReport, days: List<UsageDay>) {
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = 96.dp),
-        verticalArrangement = Arrangement.spacedBy(18.dp),
-    ) {
-        val totals = report.totals
-        val cost = usd(totals.cost)
-        val costCaption = if (totals.actualCost > 0) "billed" else "estimated cost"
-        Column(Modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            // Shrinks to fit rather than wrapping mid-number.
-            BasicText(
-                cost,
-                style = Theme[typography][display].copy(color = Theme[colors][text], fontWeight = FontWeight.SemiBold, letterSpacing = (-0.035).em),
-                maxLines = 1,
-                autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = 44.sp),
-            )
-            Text(costCaption, style = Theme[typography][bodySmall].copy(fontSize = 13.sp), color = Theme[colors][textTertiary])
-        }
-        val tiles = listOf(
-            compactCount(totals.sessions.toLong()) to "sessions",
-            compactCount(totals.input + totals.output) to "tokens in and out",
-            (totals.cachePercent?.let { "$it%" } ?: "—") to "prompt from cache",
-        )
-        // Three across, or one a row once a large font or a narrow page would crush them.
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            if (LocalDensity.current.fontScale > 1.3f || maxWidth / 3 < 96.dp) {
-                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    tiles.forEach { (value, caption) -> Tile(value, caption, Modifier.fillMaxWidth()) }
-                }
-            } else {
-                Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    tiles.forEach { (value, caption) -> Tile(value, caption, Modifier.weight(1f).fillMaxHeight()) }
-                }
+    val scroll = rememberScrollState()
+    ScrollbarBox(scroll, Modifier.fillMaxSize(), bottomInset = PageFoot) { ReportBody(report, days, scroll) }
+}
+
+@Composable
+private fun ReportBody(report: UsageReport, days: List<UsageDay>, scroll: ScrollState) {
+    BoxWithConstraints(Modifier.fillMaxSize().verticalScroll(scroll)) {
+        val padding = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp, bottom = PageFoot)
+        // A wide desktop page reads it as a dashboard: the totals and the chart on the left, what they went on on the
+        // right. A phone, or a narrow window, keeps one column.
+        if (isDesktop && maxWidth >= TWO_COLUMNS_FROM) {
+            Row(padding.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
+                Column(Modifier.weight(1.2f), verticalArrangement = Arrangement.spacedBy(18.dp)) { Summary(report, days) }
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(18.dp)) { Breakdown(report) }
+            }
+        } else {
+            Column(padding.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(18.dp)) {
+                Summary(report, days)
+                Breakdown(report)
             }
         }
-        // A chart of nothing but empty days says nothing.
-        if (days.any { it.tokens > 0 }) DailyChart(report, days)
-        Ranked(
-            "Models",
-            report.byModel.sortedByDescending { it.tokens }.map { displayModelName(it.model) to it.tokens },
-            format = { "${compactCount(it)} tokens" },
-        )
-        // The title says what the chips count.
-        Chips("Tool calls", report.tools.sortedByDescending { it.count }.map { it.tool to it.count.toLong() }, unit = "calls")
-        Chips("Skill uses", report.topSkills.sortedByDescending { it.count }.map { it.skill to it.count.toLong() }, unit = "uses")
     }
+}
+
+private val TWO_COLUMNS_FROM = 720.dp
+
+/** The cost, the headline numbers and the chart. */
+@Composable
+private fun Summary(report: UsageReport, days: List<UsageDay>) {
+    val totals = report.totals
+    val cost = usd(totals.cost)
+    val costCaption = if (totals.actualCost > 0) "billed" else "estimated cost"
+    Column(Modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        // Shrinks to fit rather than wrapping mid-number.
+        BasicText(
+            cost,
+            style = Theme[typography][display].copy(color = Theme[colors][text], fontWeight = FontWeight.SemiBold, letterSpacing = (-0.035).em),
+            maxLines = 1,
+            autoSize = TextAutoSize.StepBased(minFontSize = 24.sp, maxFontSize = 44.sp),
+        )
+        Text(costCaption, style = Theme[typography][bodySmall].copy(fontSize = 13.sp), color = Theme[colors][textTertiary])
+    }
+    val tiles = listOf(
+        compactCount(totals.sessions.toLong()) to if (totals.sessions == 1) "chat" else "chats",
+        compactCount(totals.input + totals.output) to "tokens in and out",
+        (totals.cachePercent?.let { "$it%" } ?: "—") to "prompt from cache",
+    )
+    // Three across, or one a row once a large font or a narrow page would crush them.
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (LocalDensity.current.fontScale > 1.3f || maxWidth / 3 < 96.dp) {
+            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                tiles.forEach { (value, caption) -> Tile(value, caption, Modifier.fillMaxWidth()) }
+            }
+        } else {
+            Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                tiles.forEach { (value, caption) -> Tile(value, caption, Modifier.weight(1f).fillMaxHeight()) }
+            }
+        }
+    }
+    // A chart of nothing but empty days says nothing.
+    if (days.any { it.tokens > 0 }) DailyChart(report, days)
+}
+
+/** What the tokens went on: models, tools and skills. */
+@Composable
+private fun Breakdown(report: UsageReport) {
+    Ranked(
+        "Models",
+        report.byModel.sortedByDescending { it.tokens }.map { displayModelName(it.model) to it.tokens },
+        format = { "${compactCount(it)} tokens" },
+    )
+    // The title says what the chips count.
+    Chips("Tool calls", report.tools.sortedByDescending { it.count }.map { it.tool to it.count.toLong() }, unit = "calls")
+    Chips("Skill uses", report.topSkills.sortedByDescending { it.count }.map { it.skill to it.count.toLong() }, unit = "uses")
 }
 
 /** A headline number with its caption, on a ringed surface. */
@@ -242,6 +281,9 @@ private fun DailyChart(report: UsageReport, days: List<UsageDay>) {
     val peakDay = days.maxBy { it.tokens }
     val peak = peakDay.tokens.coerceAtLeast(1)
     var picked by remember(report) { mutableStateOf<UsageDay?>(null) }
+    // Under a mouse, the day the pointer is on shows its numbers without a click; a click keeps them.
+    var hovered by remember(report) { mutableStateOf<UsageDay?>(null) }
+    val shown = picked ?: hovered
     val gap = if (days.size > 45) 1.dp else 3.dp
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     Column(
@@ -262,16 +304,16 @@ private fun DailyChart(report: UsageReport, days: List<UsageDay>) {
         }
         // Always there, so a pick doesn't push the bars down; it says the bars can be tapped until one is.
         Text(
-            picked?.let { day ->
+            shown?.let { day ->
                 listOf(
                     shortDate(day.day),
                     "${compactCount(day.tokens)} tokens",
                     usd(day.cost),
-                    "${day.sessions} ${if (day.sessions == 1) "session" else "sessions"}",
+                    "${day.sessions} ${if (day.sessions == 1) "chat" else "chats"}",
                 ).joinToString(" · ")
-            } ?: "Tap a day for its numbers.",
+            } ?: if (isDesktop) "Point at a day for its numbers." else "$tapVerb a day for its numbers.",
             style = Theme[typography][bodySmall],
-            color = Theme[colors][if (picked != null) text else textTertiary],
+            color = Theme[colors][if (shown != null) text else textTertiary],
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
         )
         Row(Modifier.fillMaxWidth().height(120.dp), horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.Bottom) {
@@ -279,7 +321,7 @@ private fun DailyChart(report: UsageReport, days: List<UsageDay>) {
                 val fraction = day.tokens.toFloat() / peak
                 // The peak stands out by the others stepping back, which works whatever the accent.
                 val alpha = when {
-                    picked != null -> if (picked == day) 1f else 0.35f
+                    shown != null -> if (shown == day) 1f else 0.35f
                     day == peakDay -> 1f
                     else -> 0.7f
                 }
@@ -288,6 +330,17 @@ private fun DailyChart(report: UsageReport, days: List<UsageDay>) {
                     Modifier
                         .weight(1f)
                         .fillMaxHeight()
+                        .handCursor()
+                        .pointerInput(day) {
+                            awaitPointerEventScope {
+                                while (true) {
+                                    when (awaitPointerEvent().type) {
+                                        PointerEventType.Enter -> hovered = day
+                                        PointerEventType.Exit -> if (hovered == day) hovered = null
+                                    }
+                                }
+                            }
+                        }
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,

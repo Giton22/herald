@@ -365,10 +365,11 @@ class PhoneToolsBridge(
         // Up to the gateway's own deadline, less a margin: the phone may look late (a poll, Doze), and an Allow
         // the agent would never hear of must not change the phone. Measured on the gateway's clock, so a phone
         // clock that's off doesn't matter; an older plugin doesn't say its time, and gets the plain limit.
+        val most = if (tool == PhoneTool.ShowUi) SCREEN_LIMIT_MS else RUN_LIMIT_MS
         val limit = if (request.expires > 0 && request.gatewayNow > 0) {
-            ((request.expires - request.gatewayNow) * 1_000 - DEADLINE_MARGIN_MS).coerceAtMost(RUN_LIMIT_MS)
+            ((request.expires - request.gatewayNow) * 1_000 - DEADLINE_MARGIN_MS).coerceAtMost(most)
         } else {
-            RUN_LIMIT_MS
+            most
         }
         val (result, error) = if (tool == null) {
             null to UNKNOWN_TOOL
@@ -424,7 +425,7 @@ class PhoneToolsBridge(
 
     private suspend fun answer(requestId: String, result: JsonElement?, error: String?, wait: Long = ANSWER_WAIT_MS) {
         try {
-            // A call rung from a push may end while Herald can't reach the gateway: the answer waits for it, trying
+            // A call rung from a push may end while Kyllene can't reach the gateway: the answer waits for it, trying
             // again every few seconds rather than sitting out a long backoff once the network is back.
             if (connection.state.value !is ConnectionState.Connected) {
                 withTimeoutOrNull(wait) {
@@ -485,6 +486,9 @@ class PhoneToolsBridge(
         /** A change waits for the user; the gateway gives up after two minutes. */
         const val RUN_LIMIT_MS = 125_000L
 
+        /** A screen in the chat waits for a tap; the gateway gives up after five minutes. */
+        const val SCREEN_LIMIT_MS = 305_000L
+
         /** Stopped this long before the gateway's deadline, for the answer to get there. */
         const val DEADLINE_MARGIN_MS = 8_000L
 
@@ -500,7 +504,7 @@ class PhoneToolsBridge(
         const val MAX_RECENT = 20
         const val TOO_LONG = "The phone took too long."
         const val SWITCHED_OFF = "The user turned this tool off on the phone."
-        const val UNKNOWN_TOOL = "This version of Herald doesn't have that tool; the user can update Herald."
+        const val UNKNOWN_TOOL = "This version of Kyllene doesn't have that tool; the user can update Kyllene."
         private val WAITS_FOR_USER = setOf(State.NotInstalled, State.Outdated)
         private const val MAX_ANSWERED = 200
         private const val ID_BYTES = 16

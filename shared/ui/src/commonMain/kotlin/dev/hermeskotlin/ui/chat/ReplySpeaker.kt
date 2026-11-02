@@ -2,11 +2,15 @@ package dev.hermeskotlin.ui.chat
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.ImageBitmap
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.ui.bots.AVATAR_EDGE
 import dev.hermeskotlin.ui.bots.BotFaces
+import kotlinx.coroutines.flow.MutableStateFlow
+import org.koin.compose.koinInject
 
 /**
  * The bot answering in a chat, as drawn above each reply: its name and its face. Equal when what's drawn is (the name,
@@ -34,6 +38,24 @@ internal val LocalReplySpeakerPicture = staticCompositionLocalOf<ImageBitmap?> {
 internal fun ProvideReplySpeaker(speaker: ReplySpeaker?, content: @Composable () -> Unit) {
     val picture = speaker?.picture?.let { rememberImageBitmap(it, maxEdge = AVATAR_EDGE) }
     CompositionLocalProvider(LocalReplySpeaker provides speaker, LocalReplySpeakerPicture provides picture, content = content)
+}
+
+/**
+ * The main window's bot roster and launch profile, for a chat in a window of its own (the desktop's), which has no
+ * roster to name its bot from. The main window keeps them current.
+ */
+class ReplySpeakerSource {
+    internal val faces = MutableStateFlow(BotFaces())
+    internal val launchProfile = MutableStateFlow<String?>(null)
+}
+
+/** Provides [target]'s bot to the chat under [content], named from the main window's roster. */
+@Composable
+fun ProvideReplySpeakerFor(target: ChatTarget, content: @Composable () -> Unit) {
+    val source = koinInject<ReplySpeakerSource>()
+    val faces by source.faces.collectAsState()
+    val launch by source.launchProfile.collectAsState()
+    ProvideReplySpeaker(replySpeaker(faces, target.bot?.name, target.profile, launch), content)
 }
 
 /**

@@ -32,7 +32,7 @@ actual fun rememberWallpaperPicker(onPicked: (ByteArray) -> Unit, onError: (Stri
                     val original = context.contentResolver.openInputStream(uri)?.use { it.readAtMost(MAX_PHOTO_BYTES) }
                         ?: error("That photo is too large or can't be read.")
                     // Kept upright and screen-sized, so showing it later is a plain decode.
-                    val bitmap = decodeUpright(original, WALLPAPER_EDGE) ?: error("That file isn't an image Herald can read.")
+                    val bitmap = decodeUpright(original, WALLPAPER_EDGE) ?: error("That file isn't an image Kyllene can read.")
                     bitmap.jpeg(WALLPAPER_QUALITY)
                 }
             }

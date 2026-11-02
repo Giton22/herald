@@ -1,5 +1,51 @@
 package dev.hermeskotlin.ui.chat
 
+import dev.hermeskotlin.ui.imeVisible
+import dev.hermeskotlin.ui.enterSends
+import dev.hermeskotlin.ui.Shortcut
+import dev.hermeskotlin.ui.ShortcutHandler
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import dev.hermeskotlin.ui.clearOfWindowControls
+import dev.hermeskotlin.ui.hasVoice
+import dev.hermeskotlin.ui.windowControlsHeight
+import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.frostedPanel
+import dev.hermeskotlin.ui.tapVerb
+import dev.hermeskotlin.ui.stepChat
+import dev.hermeskotlin.core.bots.MentionQuery
+import dev.hermeskotlin.core.chat.PathRefKind
+import dev.hermeskotlin.core.chat.PathRefQuery
+import dev.hermeskotlin.core.chat.completion
+import dev.hermeskotlin.core.chat.pathRefQuery
+import dev.hermeskotlin.core.chat.screenViews
+import dev.hermeskotlin.core.projects.PathEntry
+import dev.hermeskotlin.core.projects.ProjectsApi
+import kotlin.coroutines.cancellation.CancellationException
+import dev.hermeskotlin.core.media.GatewayFileKind
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.foundation.layout.requiredSize
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.foundation.layout.width
+import org.koin.compose.koinInject
+import com.composables.icons.lucide.File
+import com.composables.icons.lucide.Folder
+import androidx.compose.foundation.text.input.TextFieldState
+import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
+import androidx.compose.foundation.text.input.placeCursorAtEnd
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -7,6 +53,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -77,11 +124,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
+import androidx.compose.foundation.hoverable
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
@@ -90,6 +138,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.animation.animateContentSize
 import androidx.compose.foundation.gestures.animateScrollBy
+import androidx.compose.foundation.gestures.scrollBy
+import dev.hermeskotlin.designsystem.components.ScrollbarBox
 import androidx.compose.foundation.lazy.LazyListLayoutInfo
 import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.runtime.snapshotFlow
@@ -106,24 +156,38 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import dev.hermeskotlin.core.bots.botLook
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.TextFieldLineLimits
 import androidx.compose.foundation.text.selection.LocalTextSelectionColors
+import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import androidx.compose.ui.util.lerp
+import androidx.compose.foundation.layout.offset
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -135,8 +199,10 @@ import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.input.KeyboardCapitalization
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composables.icons.lucide.ArrowDown
@@ -200,12 +266,10 @@ import com.composables.icons.lucide.Wrench
 import com.composables.icons.lucide.X
 import com.composables.icons.lucide.Zap
 import com.composeunstyled.Text
-import com.composeunstyled.TextInput
 import com.composeunstyled.UnstyledButton
 import com.composeunstyled.UnstyledIcon
-import com.composeunstyled.UnstyledTextField
 import com.composeunstyled.theme.Theme
-import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.rememberHoverIndication
 import dev.hermeskotlin.core.chat.Attachment
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.TranscriptEvent
@@ -240,6 +304,8 @@ import dev.hermeskotlin.ui.journey.JourneySheet
 import dev.hermeskotlin.core.pet.PetSprite
 import dev.hermeskotlin.ui.pet.PetSheet
 import dev.hermeskotlin.ui.pet.PetView
+import dev.hermeskotlin.ui.keysLabel
+import androidx.compose.foundation.layout.BoxWithConstraints
 import dev.hermeskotlin.ui.pet.rememberPetState
 import dev.hermeskotlin.ui.voice.DictationState
 import dev.hermeskotlin.ui.voice.ReadAloudState
@@ -266,6 +332,13 @@ import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.Button
+import dev.hermeskotlin.designsystem.components.Tooltip
+import dev.hermeskotlin.designsystem.components.handCursor
+import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import dev.hermeskotlin.ui.CopyableOnDesktop
+import dev.hermeskotlin.designsystem.components.VerticalScrollbar
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.MinTouchTarget
@@ -305,10 +378,13 @@ import dev.hermeskotlin.designsystem.display
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
 import dev.hermeskotlin.ui.LocalAppSettings
+import dev.hermeskotlin.ui.LocalFocusHeld
 import dev.hermeskotlin.ui.KeepScreenOn
 import dev.hermeskotlin.ui.rememberChangingConfigurations
 import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.messageTime
+import dev.hermeskotlin.ui.components.fullMessageTime
+import androidx.compose.ui.text.TextRange
 import dev.hermeskotlin.ui.components.uses24HourClock
 import kotlinx.coroutines.delay
 import androidx.compose.runtime.produceState
@@ -317,19 +393,24 @@ import kotlinx.coroutines.launch
 import org.koin.compose.viewmodel.koinViewModel
 import dev.hermeskotlin.ui.sessions.OtherChatEvent
 import dev.hermeskotlin.ui.sessions.SessionsBadge
+import dev.hermeskotlin.ui.sessions.RowContextMenu
+import dev.hermeskotlin.ui.sessions.RowMenuItem
+import dev.hermeskotlin.ui.sessions.onSecondaryPress
 
 @Composable
 fun ChatScreen(
     target: ChatTarget,
     onOpenSidebar: () -> Unit,
     onNewChat: () -> Unit,
-    /** The open chat's options; null until it exists on the gateway. */
-    onOpenMenu: (() -> Unit)?,
+    /** The open chat's options, given the button's bounds in the window; null until it exists on the gateway. */
+    onOpenMenu: ((Rect?) -> Unit)?,
     /** Opens another stored chat by id and title (`/resume`, `/branch`). */
     onOpenChat: (String, String?) -> Unit,
     /** Switches profile (`/profile`); null is the gateway's launch profile. */
     onSwitchProfile: (String?) -> Unit,
     viewModel: ChatViewModel = koinViewModel(),
+    /** The desktop's keys reach the chat; off while something covers it. */
+    keysEnabled: Boolean = true,
     /** What the Sessions button says about the other chats. */
     sessionsBadge: SessionsBadge = SessionsBadge(),
     /** Something that just happened in another chat, for the banner; null shows none. */
@@ -342,6 +423,12 @@ fun ChatScreen(
     LaunchedEffect(target) { viewModel.open(target) }
     val transcript = viewModel.transcript.collectAsStateWithLifecycle().value
     val state = transcript.state
+    // The same chat reopened with a new position (a notification for it) keeps the last one until the new one is read.
+    val readPosition = viewModel.readPosition.collectAsStateWithLifecycle().value
+        ?.takeIf { it.target.copy(readUpTo = null) == target.copy(readUpTo = null) }
+    val ownsTranscript = transcript.owner?.copy(readUpTo = null) == target.copy(readUpTo = null)
+    // Keep this small lifecycle signal observable through stop/start, when transcript collection is paused.
+    val screenShown = viewModel.screenShown.collectAsState().value
     val picker = viewModel.picker.collectAsStateWithLifecycle().value
     val connection = viewModel.connectionState.collectAsStateWithLifecycle().value
     val connected = connection is ConnectionState.Connected
@@ -355,11 +442,28 @@ fun ChatScreen(
     var processesOpen by remember { mutableStateOf(false) }
     var checkpointsOpen by remember { mutableStateOf(false) }
     var controlOpen by remember { mutableStateOf(false) }
+    var focusComposer by remember { mutableIntStateOf(0) }
     // Cleared (here or on another client) while open, there is nothing left to show.
     val hasControl = state.control != null
     LaunchedEffect(hasControl) { if (!hasControl) controlOpen = false }
     var viewing by remember { mutableStateOf<ViewerImage?>(null) }
     var previewing by remember { mutableStateOf<GatewayFile?>(null) }
+    // On a wide desktop window a file opens in a rail beside the chat, as Hermes Desktop's right panel, which
+    // Ctrl+J puts away and brings back; a picture still opens in the picture viewer.
+    var railShown by remember { mutableStateOf(true) }
+    LaunchedEffect(previewing) { if (previewing != null) railShown = true }
+    // The chat's own width, not the window's: with the sidebar folded away there's room for the rail sooner.
+    var paneWidth by remember { mutableStateOf(0.dp) }
+    val wide = paneWidth >= RAIL_MIN_PANE
+    val docked = previewing?.let { isDesktop && wide && it.kind != GatewayFileKind.Image } == true
+    val railFile = previewing.takeIf { docked && railShown }
+    // Over a sheet or a viewer, typing and shortcuts are the dialog's, not the chat's behind it.
+    val dialogOpen = modelsOpen || attachOpen || petsOpen || journeyOpen || usageOpen || processesOpen ||
+        checkpointsOpen || controlOpen || viewing != null || (previewing != null && !docked)
+    // Esc in the rail is the viewer's own: back a file, then closed.
+    ShortcutHandler(enabled = keysEnabled && docked) { shortcut ->
+        (shortcut == Shortcut.ToggleRail).also { if (it) railShown = !railShown }
+    }
     var notice by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(notice) {
         if (notice != null) {
@@ -369,9 +473,9 @@ fun ChatScreen(
     }
     val attachmentPicker = rememberAttachmentPicker(onPicked = viewModel::addAttachments, onError = viewModel::showAttachmentError)
     val microphone = rememberMicrophonePermission()
-    val startVoiceChat = {
+    val startVoiceChat = { ringback: Boolean ->
         microphone.withMicrophone(onDenied = { notice = "Voice needs the microphone. Allow it in Android's settings." }) {
-            viewModel.startVoiceChat()
+            viewModel.startVoiceChat(ringback)
         }
     }
     val toggleDictation = {
@@ -385,7 +489,7 @@ fun ChatScreen(
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
         if (!changingConfigurations()) viewModel.voice.onBackground()
         viewModel.onScreen(false)
-        // What's on screen now counts as read, so a reply that comes in while away is new.
+        // Preserve the actual reading position and remember a turn still running while away.
         viewModel.markLooked()
     }
     LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.onScreen(true) }
@@ -412,8 +516,11 @@ fun ChatScreen(
                 ChatRequest.OpenCheckpoints -> checkpointsOpen = true
                 // The goal may have been cleared since the menu offered it; an empty sheet would stay up.
                 ChatRequest.OpenControl -> controlOpen = viewModel.state.value.control != null
-                ChatRequest.StartVoice -> startVoiceChat()
-                ChatRequest.StartDictation -> toggleDictation()
+                // `/voice` and the like on the desktop, which has no voice yet: say so, as a silent no-op reads as broken.
+                ChatRequest.StartVoice -> if (hasVoice) startVoiceChat(false) else notice = "Voice chat isn't on the desktop yet."
+                ChatRequest.StartCall -> if (hasVoice) startVoiceChat(true) else notice = "Voice chat isn't on the desktop yet."
+                ChatRequest.StartDictation -> if (hasVoice) toggleDictation() else notice = "Dictation isn't on the desktop yet."
+                ChatRequest.FocusComposer -> focusComposer++
             }
         }
     }
@@ -426,13 +533,40 @@ fun ChatScreen(
     val mentions = remember(mention, faces, target.bot) {
         mention?.let { faces.bots.mentionable(it.query, self = target.bot?.name) }.orEmpty()
     }
+    // On the desktop, `@` also offers the agent's files, as Hermes Desktop's composer does: `@file:` and `@folder:`
+    // references the gateway expands, completed from its machine.
+    val pathRef by remember(viewModel) {
+        derivedStateOf { viewModel.composer.let { pathRefQuery(it.text.toString(), it.selection.end) } }
+    }
+    val projectsApi = koinInject<ProjectsApi>()
+    var pathEntries by remember { mutableStateOf(emptyList<PathEntry>()) }
+    val folderTyped = pathRef?.folder
+    LaunchedEffect(folderTyped, connected, target.profile) {
+        pathEntries = emptyList()
+        if (!isDesktop || folderTyped == null || !connected) return@LaunchedEffect
+        delay(PATH_COMPLETION_DELAY_MS)
+        // Any failure (an error, a timeout, the socket closing) just offers nothing.
+        pathEntries = try {
+            projectsApi.completePath(target.profile, folderTyped)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            emptyList()
+        }
+    }
+    val refs = if (isDesktop) refChoices(mention, pathRef, pathEntries) else emptyList()
+    val density = LocalDensity.current
+    val modelPillBounds = remember { mutableStateOf<Rect?>(null) }
+    Box(Modifier.fillMaxSize().onSizeChanged { paneWidth = with(density) { it.width.toDp() } }) {
+    CompositionLocalProvider(LocalModelPillBounds provides modelPillBounds) {
     ChatView(
         // A bot's chat is titled "Bot Chat" on the gateway; the bot's name says more.
         title = target.bot?.label ?: state.title?.takeIf { it.isNotBlank() } ?: target.title ?: "New chat",
         titleFace = LocalBotFaces.current.let { faces ->
             faces.find(target.bot?.name)?.let { bot -> { BotAvatar(bot, faces.picture(bot), size = 22.dp) } }
         },
-        state = state,
+        state = if (readPosition == null || !ownsTranscript) state.copy(historyLoaded = false) else state,
+        conversationKey = Triple(target.gateway.gatewayUrl, target.profile, target.storedSessionId),
         picker = picker,
         connected = connected,
         connectionLabel = connectionLabel(connection),
@@ -451,6 +585,13 @@ fun ChatScreen(
             val typed = mention ?: return@ChatView
             viewModel.composer.edit { replace(typed.start, typed.end, "@${bot.handle} ") }
         },
+        refs = refs,
+        onRef = { ref ->
+            viewModel.composer.edit {
+                replace(ref.start, ref.end, ref.insert)
+                placeCursorBeforeCharAt(ref.start + ref.insert.length)
+            }
+        },
         sprite = viewModel.pets.sprite.collectAsStateWithLifecycle().value,
         // Re-rolled per conversation, kept while a new chat gets its stored id.
         placeholder = remember(target) { (if (target.storedSessionId == null) NEW_CHAT_PROMPTS else FOLLOW_UP_PROMPTS).random() },
@@ -459,19 +600,24 @@ fun ChatScreen(
         widgetFiles = transcript.widgetFiles,
         editing = viewModel.editing.collectAsStateWithLifecycle().value,
         // Only for the chat it was taken for, not one the screen moved on to (a branch, a fresh start).
-        readUpTo = target.readUpTo?.takeIf { state.storedSessionId == target.storedSessionId },
+        readUpTo = readPosition?.readUpTo?.takeIf { state.storedSessionId == target.storedSessionId },
+        onReadLatest = if (readPosition != null && ownsTranscript && screenShown && connected && state.historyRead && !state.running) {
+            { viewModel.readLatest(target, state) }
+        } else null,
         onOpenSidebar = onOpenSidebar,
         // Already on an untouched new chat: nothing to start over from.
         onNewChat = onNewChat.takeIf { target.storedSessionId != null || state.messages.isNotEmpty() },
         onOpenMenu = onOpenMenu,
         onOpenModels = { modelsOpen = true },
-        onAttach = { attachOpen = true },
+        // A desktop has no camera, and its file dialog picks photos as well: + goes straight to it.
+        onAttach = { if (isDesktop) attachmentPicker.pickFiles() else attachOpen = true },
         onDictate = toggleDictation,
-        onVoiceChat = startVoiceChat,
+        onVoiceChat = { startVoiceChat(false) },
         onOpenPets = { petsOpen = true },
         onOpenControl = viewModel::openControl,
         onViewImage = { viewing = it },
-        onOpenFile = { previewing = it },
+        // The same file again, after Ctrl+J put the rail away, still has to bring it back.
+        onOpenFile = { previewing = it; railShown = true },
         onNotice = { notice = it },
         wallpaper = rememberChatWallpaper(),
         place = target.gateway.label,
@@ -481,7 +627,17 @@ fun ChatScreen(
         onOpenOtherChat = onOpenOtherChat,
         onDismissOtherChat = onDismissOtherChat,
         onNextChat = onNextChat?.let { next -> { if (!next()) notice = "Nothing waiting" } },
+        focusComposer = focusComposer,
+        keysEnabled = keysEnabled && !dialogOpen,
+        attachmentPicker = attachmentPicker.takeIf { isDesktop },
+        rail = railFile?.let { file ->
+            {
+                FileViewer(file, onDismiss = { previewing = null }, load = viewModel::previewFile, download = viewModel::downloadFile, docked = true)
+            }
+        },
     )
+    }
+    }
 
     AttachSheet(visible = attachOpen, onDismiss = { attachOpen = false }, picker = attachmentPicker)
     PetSheet(
@@ -525,9 +681,9 @@ fun ChatScreen(
         onAction = viewModel::runControl,
         onDismiss = { controlOpen = false },
     )
-    // A linked picture opens in the picture viewer, like one the reply delivered.
+    // A linked picture opens in the picture viewer, like one the reply delivered. A file docked in the rail has it.
     GatewayFileViewer(
-        file = previewing,
+        file = previewing.takeIf { !docked },
         onDismiss = { previewing = null },
         load = viewModel::previewFile,
         download = viewModel::downloadFile,
@@ -549,6 +705,9 @@ fun ChatScreen(
         },
         onSelectEffort = { viewModel.setReasoningEffort(it.wire) },
         onFast = viewModel::setFast,
+        // On the desktop it opens over the pill that opened it, as a desktop app's picker drops from its button.
+        // Read in the sheet, so the pill moving doesn't recompose the whole chat.
+        anchor = { modelPillBounds.value.takeIf { isDesktop } },
         // A Bot Chat's model is its bot's (selectModel sets it there), so say what a pick changes.
         note = target.bot?.let { "A model picked here becomes ${it.label}'s own, for all its chats and routines." },
     )
@@ -569,6 +728,8 @@ internal fun ChatView(
     /** Drawn beside the title, e.g. the face of the bot whose chat this is. */
     titleFace: (@Composable () -> Unit)? = null,
     state: ChatState,
+    /** Isolates the transcript's scroll state across gateways, profiles and chats. */
+    conversationKey: Any? = null,
     picker: ModelPickerState,
     connected: Boolean,
     /** Which way the link is down, shown under the title while not [connected]. */
@@ -591,6 +752,9 @@ internal fun ChatView(
     /** Bots matching the `@word` being typed, to pick one to mention. */
     mentions: List<Bot> = emptyList(),
     onMention: (Bot) -> Unit = {},
+    /** `@file:` and `@folder:` references matching what's typed (the desktop's). */
+    refs: List<RefChoice> = emptyList(),
+    onRef: (RefChoice) -> Unit = {},
     sprite: PetSprite?,
     placeholder: String,
     notice: String?,
@@ -600,9 +764,10 @@ internal fun ChatView(
     editing: String? = null,
     /** How far this chat had been read when it was opened (epoch seconds); later messages are marked new. */
     readUpTo: Double? = null,
+    onReadLatest: (() -> Unit)? = null,
     onOpenSidebar: () -> Unit,
     onNewChat: (() -> Unit)?,
-    onOpenMenu: (() -> Unit)?,
+    onOpenMenu: ((Rect?) -> Unit)?,
     onOpenModels: () -> Unit,
     onAttach: () -> Unit,
     onDictate: () -> Unit,
@@ -625,12 +790,25 @@ internal fun ChatView(
     onOpenOtherChat: (OtherChatEvent) -> Unit = {},
     onDismissOtherChat: (OtherChatEvent) -> Unit = {},
     onNextChat: (() -> Unit)? = null,
+    /** Goes up each time the composer should take the keyboard (a chat opened to type in). */
+    focusComposer: Int = 0,
+    /** The desktop's keys reach the chat; off while something covers it. */
+    keysEnabled: Boolean = true,
+    /** Takes files dropped on the chat and pasted into it (the desktop's). */
+    attachmentPicker: AttachmentPicker? = null,
+    /** A panel at the right, beside the conversation: the desktop's file rail. */
+    rail: (@Composable () -> Unit)? = null,
 ) {
+    val canAttach = attachmentPicker != null && connected && attachments.size < OutgoingAttachment.MAX_COUNT
+    var dropping by remember { mutableStateOf(false) }
+    // A chat that stops taking files mid-drag takes its drop target away, which then says nothing more.
+    LaunchedEffect(canAttach) { if (!canAttach) dropping = false }
     Box(
         Modifier
             .fillMaxSize()
             .background(Theme[colors][background])
-            .then(if (wallpaper == null) Modifier.halo() else Modifier),
+            .then(if (wallpaper == null) Modifier.halo() else Modifier)
+            .then(if (canAttach) Modifier.fileDrop(onHover = { dropping = it }) { attachmentPicker?.attachFiles(it) } else Modifier),
         contentAlignment = Alignment.TopCenter,
     ) {
         // A voice chat fills the screen until folded to the panel over the chat; each new one opens full.
@@ -648,9 +826,23 @@ internal fun ChatView(
             val key = readAloud.key ?: return@LaunchedEffect
             if (state.historyLoaded && state.messages.none { it.key == key }) actions.stopReading()
         }
+        // The rail takes the right of the screen; the conversation centres in what's left.
+        if (rail != null) {
+            Box(
+                Modifier
+                    .align(Alignment.TopEnd)
+                    .width(RAIL_WIDTH)
+                    .fillMaxHeight()
+                    .background(Theme[colors][background])
+                    .border(1.dp, Theme[colors][stroke]),
+            ) { rail() }
+        }
         Column(
             Modifier
-                .widthIn(max = 760.dp)
+                .padding(end = if (rail != null) RAIL_WIDTH else 0.dp)
+                // A desktop window's chat takes its whole width, so the bar's buttons sit at its edges and the
+                // scrollbar and the wheel work at the window's side; the reading column inside keeps to READING_WIDTH.
+                .then(if (isDesktop) Modifier else Modifier.widthIn(max = READING_WIDTH))
                 .fillMaxSize()
                 // The insets pad the chat only, so the voice screen can reach under the status bar.
                 .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Top + WindowInsetsSides.Horizontal))
@@ -671,8 +863,72 @@ internal fun ChatView(
             // The composer floats over the conversation, which scrolls on beneath it; its height pads the list.
             var dockHeight by remember { mutableIntStateOf(0) }
             val dockInset = with(LocalDensity.current) { dockHeight.toDp() }
+            // A desktop's empty chat holds the composer up in the middle, under the greeting, as desktop chat apps
+            // open; the first message sends it down to the foot. A phone keeps it under the thumb.
+            var paneHeight by remember { mutableIntStateOf(0) }
+            var paneWidth by remember { mutableIntStateOf(0) }
+            val centred = isDesktop && state.historyLoaded && state.messages.isEmpty() && state.historyError == null
+            // 0 held in the middle, 1 at the foot.
+            val toFoot by animateFloatAsState(if (centred) 0f else 1f, label = "dock")
+            // The composer alone, without a list of suggestions over it: what's held in place, so a slash list opens
+            // up over the greeting like a menu and the box being typed in doesn't move.
+            // The lists' own height, measured as they open and fade out, is taken off: a composer that grows (lines,
+            // attachments) stays centred as a whole.
+            var listsHeight by remember { mutableIntStateOf(0) }
+            val restingDock = (dockHeight - listsHeight).coerceAtLeast(0)
+            val restingTop = (paneHeight - restingDock) * (1f + CENTRED_DOCK_BIAS) / 2f
+            val dockTop = lerp(restingTop + restingDock - dockHeight, (paneHeight - dockHeight).toFloat(), toFoot).coerceAtLeast(0f)
+            // Room under the greeting: down to the resting composer's top wherever it sits.
+            val greetingInset = with(LocalDensity.current) { (paneHeight - lerp(restingTop, (paneHeight - dockHeight).toFloat(), toFoot)).coerceAtLeast(0f).toDp() }
             // Reading back up the chat folds the composer to one line; nearing the end opens it again.
             val composerFold = remember { ComposerFold() }
+            // Ctrl+F: the matches for what's typed, from the newest back, each brought on screen and marked.
+            var findOpen by remember { mutableStateOf(false) }
+            val composerFocus = remember { FocusRequester() }
+            val focusHeld = LocalFocusHeld.current
+            // Closing the find bar hands the keyboard back to the composer rather than to nothing.
+            var findClosed by remember { mutableStateOf(0) }
+            LaunchedEffect(findClosed) {
+                if (findClosed > 0 && isDesktop) runCatching { composerFocus.requestFocus() }
+            }
+            val findQuery = remember { TextFieldState() }
+            val findFocus = remember { FocusRequester() }
+            val findText = findQuery.text.toString()
+            // What the list shows; find and its scrolling count the same rows.
+            val showReasoning = LocalAppSettings.current.showReasoning
+            val listed = remember(state.messages, showReasoning) { state.messages.withoutBlankReplies(showReasoning) }
+            // The matched messages by key, so older history loading above them keeps the one shown; worked out only
+            // while the bar is open, not on every streamed word.
+            val matches = remember(listed.size, listed.lastOrNull()?.key, findText, findOpen) {
+                if (findOpen) findMatches(listed, findText).map { listed[it].key } else emptyList()
+            }
+            var foundKey by remember { mutableStateOf<String?>(null) }
+            LaunchedEffect(findText, findOpen) { foundKey = matches.lastOrNull() }
+            val match = matches.indexOf(foundKey)
+            val found = foundKey.takeIf { findOpen && match >= 0 }
+            LaunchedEffect(found) {
+                val index = listed.indexOfFirst { it.key == found }
+                if (index >= 0) {
+                    composerFold.onNavigate()
+                    composerFold.list?.animateScrollToItem(index)
+                }
+            }
+            if (findOpen) {
+                FindBar(
+                    query = findQuery,
+                    current = match,
+                    total = matches.size,
+                    focus = findFocus,
+                    onStep = { older ->
+                        if (matches.isNotEmpty()) foundKey = matches[stepChat(match, matches.size, forward = !older)]
+                    },
+                    onClose = {
+                        findOpen = false
+                        findClosed++
+                    },
+                    modifier = Modifier.align(Alignment.CenterHorizontally).widthIn(max = READING_WIDTH).padding(horizontal = 16.dp, vertical = 6.dp),
+                )
+            }
             // The list keeps the open composer's height below the last message, so folding it doesn't move the end
             // and undo the fold; only the jump button and the pet follow the composer's real height.
             var composerShrink by remember { mutableIntStateOf(0) }
@@ -680,7 +936,6 @@ internal fun ChatView(
             // What scrolls under the composer is captured here and frosted behind it.
             val hazeState = rememberHazeState()
             // Comments wait in the composer, so the selection menus offer them only while it shows.
-            val composerFocus = remember { FocusRequester() }
             var focusComment by remember { mutableStateOf<Long?>(null) }
             val composerShown = state.inputRequests.isEmpty() && voiceChat.phase == VoicePhase.Off
             // Type on the voice screen ends the call; the composer takes the keyboard once it's back.
@@ -690,6 +945,79 @@ internal fun ChatView(
                 if (!typeAfterVoice || voiceOn) return@LaunchedEffect
                 typeAfterVoice = false
                 if (composerShown) composerFocus.requestFocus()
+            }
+            // Asked for once: a question waiting in the composer's place doesn't take the keyboard when it's answered.
+            LaunchedEffect(focusComposer) {
+                // Not laid out yet (the chat still coming up), the field just isn't focused: nothing to type over.
+                if (focusComposer > 0 && composerShown) runCatching { composerFocus.requestFocus() }
+            }
+            val shortcutScope = rememberCoroutineScope()
+            // The desktop's keys for the chat; a voice chat over it has the screen.
+            ShortcutHandler(enabled = keysEnabled && !voiceFull) { shortcut ->
+                when (shortcut) {
+                    Shortcut.FocusComposer -> composerShown.also { if (it) composerFocus.requestFocus() }
+                    Shortcut.FindInChat -> true.also {
+                        // Again while it's open, the query is selected to type over, as a browser's Ctrl+F does.
+                        if (findOpen) {
+                            findFocus.requestFocus()
+                            findQuery.edit { selection = TextRange(0, length) }
+                        } else {
+                            findOpen = true
+                        }
+                    }
+                    Shortcut.ModelPicker -> true.also { onOpenModels() }
+                    Shortcut.PageUp, Shortcut.PageDown -> {
+                        val list = composerFold.list ?: return@ShortcutHandler false
+                        composerFold.onNavigate()
+                        val page = list.layoutInfo.viewportSize.height * PAGE_SCROLL
+                        shortcutScope.launch { list.animateScrollBy(if (shortcut == Shortcut.PageUp) -page else page) }
+                        true
+                    }
+                    // Text in the composer keeps Ctrl+Home / Ctrl+End for its caret; an empty one leaves them to the chat.
+                    // Any other field with the focus (search, Find) keeps them too.
+                    Shortcut.ScrollTop, Shortcut.ScrollBottom -> {
+                        val list = composerFold.list ?: return@ShortcutHandler false
+                        if (actions.composer.text.isNotEmpty()) return@ShortcutHandler false
+                        if (focusHeld.value && !composerFold.typing) return@ShortcutHandler false
+                        composerFold.onNavigate()
+                        shortcutScope.launch { if (shortcut == Shortcut.ScrollTop) list.scrollToItem(0) else list.animateToEnd() }
+                        true
+                    }
+                    // Esc stops the reply, as its Stop does; with none running it leaves an edit.
+                    Shortcut.Escape -> when {
+                        findOpen -> true.also {
+                            findOpen = false
+                            findClosed++
+                        }
+                        state.running && connected -> true.also { actions.interrupt() }
+                        editing != null -> true.also { actions.cancelEdit() }
+                        else -> false
+                    }
+                    // The quick entry's prompt goes out on its own: what's being typed here, and its files, stay.
+                    is Shortcut.Prompt -> connected.also { if (it) actions.sendPrompt(shortcut.text) }
+                    // A paste with nothing focused: files and pictures attach, text goes in the composer.
+                    Shortcut.Paste -> composerShown.also {
+                        if (it && !(canAttach && attachmentPicker?.pasteAttachments() == true)) {
+                            val text = attachmentPicker?.clipboardText() ?: return@ShortcutHandler false
+                            composerFocus.requestFocus()
+                            actions.composer.edit {
+                                append(text)
+                                placeCursorAtEnd()
+                            }
+                        }
+                    }
+                    // Typing with nothing focused writes in the composer.
+                    is Shortcut.Type -> composerShown.also {
+                        if (it) {
+                            composerFocus.requestFocus()
+                            actions.composer.edit {
+                                append(shortcut.text)
+                                placeCursorAtEnd()
+                            }
+                        }
+                    }
+                    else -> false
+                }
             }
             // A new loader each time the link comes back, so cards that failed offline try again; good ones come from the cache.
             val linkPreviewLoader = remember<suspend (String) -> LinkPreview?>(actions, connected) { { url -> actions.loadLinkPreview(url) } }
@@ -711,7 +1039,7 @@ internal fun ChatView(
                         comments.filter { it.source.messageKey == messageKey }.flatMap { it.highlights }
                 }
             }
-            Box(Modifier.weight(1f).fillMaxWidth()) {
+            Box(Modifier.weight(1f).fillMaxWidth().onSizeChanged { paneHeight = it.height; paneWidth = it.width }) {
                 Box(Modifier.fillMaxSize().hazeSource(hazeState)) {
                     if (wallpaper != null) ChatWallpaper(wallpaper, LocalAppSettings.current.wallpaperStrength, Modifier.fillMaxSize())
                     if (state.historyLoaded && state.messages.isNotEmpty()) {
@@ -723,27 +1051,45 @@ internal fun ChatView(
                             LocalFileLinks provides { link -> GatewayFile.fromLink(link)?.let(onOpenFile) },
                             LocalNotice provides onNotice,
                             LocalSubagents provides SubagentContext(state.subagents, actions::stopSubagent),
+                            LocalAgentScreenChat provides state.storedSessionId,
+                            LocalScreenViews provides LocalAgentScreens.current.let { screens ->
+                                // Worked out again when a tool call changes, not on every token of a reply.
+                                val calls = ScreenViews.calls(state.messages)
+                                val newest = ScreenViews.newest(state.messages)
+                                remember(calls, newest, screens, state.storedSessionId) {
+                                    ScreenViews(screenViews(calls) { screens.took(state.storedSessionId, it) }, newest)
+                                }
+                            },
+                            LocalAgentScreenSend provides actions::sendPrompt,
                             LocalCommentHost provides commentHost,
                         ) {
-                            Messages(
-                                state.messages,
-                                olderMessages = state.olderMessages,
-                                loadingOlder = state.loadingOlder,
-                                bottomInset = listInset,
-                                controlsInset = dockInset,
-                                fold = composerFold,
-                                actions = actions,
-                                connected = connected,
-                                // A saved copy may lack what changed since; edits wait for the gateway's transcript.
-                                canChange = state.canChangeChat(connected && state.savedCopyAt == null),
-                                editing = editing,
-                                readUpTo = readUpTo,
-                                reading = readAloud.key,
-                                // The voice chat and dictation have the speaker and the microphone.
-                                canReadAloud = !voiceOn && !dictation.active,
-                            )
+                            key(conversationKey) {
+                                Messages(
+                                    listed,
+                                    olderMessages = state.olderMessages,
+                                    loadingOlder = state.loadingOlder,
+                                    savedCopy = state.savedCopyAt != null,
+                                    bottomInset = listInset,
+                                    controlsInset = dockInset,
+                                    fold = composerFold,
+                                    actions = actions,
+                                    connected = connected,
+                                    // A saved copy may lack what changed since; edits wait for the gateway's transcript.
+                                    canChange = state.canChangeChat(connected && state.savedCopyAt == null),
+                                    editing = editing,
+                                    readUpTo = readUpTo,
+                                    onReadLatest = onReadLatest,
+                                    reading = readAloud.key,
+                                    // The voice chat and dictation have the speaker and the microphone.
+                                    canReadAloud = hasVoice && !voiceOn && !dictation.active,
+                                    found = found,
+                                )
+                            }
                         }
-                    } else Box(Modifier.fillMaxSize().padding(bottom = dockInset)) {
+                    } else Box(
+                        Modifier.align(Alignment.TopCenter).widthIn(max = READING_WIDTH).fillMaxSize()
+                            .padding(bottom = if (isDesktop) greetingInset else dockInset),
+                    ) {
                         when {
                             !state.historyLoaded -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Spinner() }
                             state.historyError != null ->
@@ -759,6 +1105,7 @@ internal fun ChatView(
                                 canAttach = attachments.size < OutgoingAttachment.MAX_COUNT,
                                 place = place,
                                 profile = profile,
+                                overComposer = centred,
                             )
                         }
                     }
@@ -803,7 +1150,13 @@ internal fun ChatView(
                         StatusPill("Loading earlier messages…")
                     }
                 }
-                Column(Modifier.align(Alignment.BottomCenter).fillMaxWidth().onSizeChanged { dockHeight = it.height }) {
+                Column(
+                    Modifier
+                        .then(if (isDesktop) Modifier.align(Alignment.TopCenter).offset { IntOffset(0, dockTop.roundToInt()) } else Modifier.align(Alignment.BottomCenter))
+                        .widthIn(max = READING_WIDTH)
+                        .fillMaxWidth()
+                        .onSizeChanged { dockHeight = it.height },
+                ) {
                     Dock(
                         hazeState = hazeState,
                         actions = actions,
@@ -820,6 +1173,8 @@ internal fun ChatView(
                         suggestedReply = suggestedReply,
                         mentions = mentions,
                         onMention = onMention,
+                        refs = refs,
+                        onRef = onRef,
                         notice = notice,
                         editing = editing != null,
                         comments = comments,
@@ -828,6 +1183,7 @@ internal fun ChatView(
                         composerFocus = composerFocus,
                         composerFold = composerFold,
                         onComposerShrink = { composerShrink = it },
+                        onListsHeight = { listsHeight = it },
                         onOpenModels = onOpenModels,
                         onAttach = onAttach,
                         onDictate = onDictate,
@@ -835,6 +1191,7 @@ internal fun ChatView(
                         onOpenControl = onOpenControl,
                         voiceFull = voiceFull,
                         onExpandVoice = { voiceFolded = false },
+                        onPasteFiles = { canAttach && keysEnabled && attachmentPicker?.pasteAttachments() == true },
                     )
                 }
                 // The pet sits on the composer's top edge, over the conversation rather than in the dock's height.
@@ -843,7 +1200,12 @@ internal fun ChatView(
                         sprite = sprite,
                         state = rememberPetState(state),
                         onClick = onOpenPets,
-                        modifier = Modifier.align(Alignment.BottomEnd).padding(end = 28.dp, bottom = (dockInset - 6.dp).coerceAtLeast(0.dp)),
+                        // On the desktop the composer may be held up in the middle; the pet sits on it there too.
+                        modifier = Modifier.align(Alignment.BottomEnd).padding(
+                            // At the composer's end, which keeps to the reading width in a wide window.
+                            end = 28.dp + with(LocalDensity.current) { ((paneWidth.toDp() - READING_WIDTH) / 2).coerceAtLeast(0.dp) },
+                            bottom = ((if (isDesktop) with(LocalDensity.current) { (paneHeight - dockTop).toDp() } else dockInset) - 6.dp).coerceAtLeast(0.dp),
+                        ),
                     )
                 }
             }
@@ -871,6 +1233,35 @@ internal fun ChatView(
                 onSendNow = actions::sendVoiceNow,
             )
         }
+        // Files dragged over the chat: it says where they go before they're let go, as a desktop app does.
+        AnimatedVisibility(visible = dropping && canAttach, enter = fadeIn(), exit = fadeOut()) { DropOverlay() }
+    }
+}
+
+/** Over the chat while files are dragged onto it: a dashed frame and a word that they'll be attached. */
+@Composable
+private fun DropOverlay() {
+    val accentColor = Theme[colors][accent]
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Theme[colors][background].copy(alpha = 0.82f))
+            .padding(16.dp)
+            .drawBehind {
+                val corner = 16.dp.toPx()
+                drawRoundRect(
+                    color = accentColor,
+                    cornerRadius = CornerRadius(corner, corner),
+                    style = Stroke(width = 2.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10.dp.toPx(), 8.dp.toPx()))),
+                )
+            },
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            UnstyledIcon(Lucide.Paperclip, contentDescription = null, tint = accentColor, modifier = Modifier.size(28.dp))
+            Text("Drop to attach", style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][textColor])
+            Text("Up to ${OutgoingAttachment.MAX_COUNT} files, 25 MB each.", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+        }
     }
 }
 
@@ -892,6 +1283,8 @@ private fun ColumnScope.Dock(
     suggestedReply: SuggestedReply?,
     mentions: List<Bot>,
     onMention: (Bot) -> Unit,
+    refs: List<RefChoice>,
+    onRef: (RefChoice) -> Unit,
     notice: String?,
     editing: Boolean,
     comments: List<PendingComment>,
@@ -900,6 +1293,8 @@ private fun ColumnScope.Dock(
     composerFocus: FocusRequester,
     composerFold: ComposerFold,
     onComposerShrink: (Int) -> Unit,
+    /** How tall the `/` and `@` lists over the composer stand, as they open and fade out. */
+    onListsHeight: (Int) -> Unit = {},
     onOpenModels: () -> Unit,
     onAttach: () -> Unit,
     onDictate: () -> Unit,
@@ -909,6 +1304,8 @@ private fun ColumnScope.Dock(
     /** The voice chat is open over the whole screen. */
     voiceFull: Boolean,
     onExpandVoice: () -> Unit,
+    /** A paste in the composer: true when it attached files, a picture or a long text (the desktop's). */
+    onPasteFiles: () -> Boolean = { false },
 ) {
     (state.attachment as? Attachment.Failed)?.let {
         Banner(it.message, actionLabel = "Retry", onAction = actions::retry)
@@ -965,20 +1362,51 @@ private fun ColumnScope.Dock(
             )
         }
     } else {
-        AnimatedVisibility(visible = suggestions.isNotEmpty() && connected, enter = fadeIn(), exit = fadeOut()) {
+        // Escape puts a desktop's open list away, as a menu's does, until the typing changes; the chat's own Escape
+        // (stopping a task) waits for the next press.
+        var dismissedAt by remember { mutableStateOf<String?>(null) }
+        val typedNow = actions.composer.text.toString()
+        val listsAway = dismissedAt != null && dismissedAt == typedNow
+        if (dismissedAt != null && !listsAway) dismissedAt = null
+        val slashShown = suggestions.isNotEmpty() && connected && !listsAway
+        // The suggestion Up and Down have marked on the desktop, reset as the list changes with the typing. The `/`
+        // list starts with none, so Enter still sends what's typed; the `@` lists start on the first, which Enter takes.
+        val markedState = remember(suggestions, mentions, refs) { mutableIntStateOf(-1) }
+        var marked by markedState
+        // The pointer marks the row it's on, on the desktop. One lambda per list, so a row's pointer handler, which
+        // keeps the one it started with, writes the mark the list shows.
+        val onMark: ((Int) -> Unit)? = if (isDesktop) remember(markedState) { { i: Int -> markedState.intValue = i } } else null
+        Column(Modifier.onSizeChanged { onListsHeight(it.height) }) {
+        AnimatedVisibility(visible = slashShown, enter = fadeIn(), exit = fadeOut()) {
             // Kept through the fade-out, so the list doesn't empty before it leaves.
             var shown by remember { mutableStateOf(suggestions) }
             if (suggestions.isNotEmpty()) shown = suggestions
-            SlashSuggestions(shown, hazeState, onPick = actions::pickSuggestion)
+            SlashSuggestions(shown, hazeState, marked = marked, onPick = actions::pickSuggestion, onMark = onMark)
         }
-        AnimatedVisibility(visible = mentions.isNotEmpty() && suggestions.isEmpty(), enter = fadeIn(), exit = fadeOut()) {
+        AnimatedVisibility(visible = mentions.isNotEmpty() && suggestions.isEmpty() && !listsAway, enter = fadeIn(), exit = fadeOut()) {
             var shown by remember { mutableStateOf(mentions) }
             if (mentions.isNotEmpty()) shown = mentions
             MentionSuggestions(
                 remember(shown) { shown.map { MentionChoice(it.label, it.handle, it) } },
                 hazeState,
                 onPick = { choice -> choice.bot?.let(onMention) },
+                marked = if (isDesktop) marked.coerceAtLeast(0) else -1,
+                onMark = onMark,
             )
+        }
+        // `@file:` and `@folder:` references: the kinds while `@` is typed, then the gateway's files and folders.
+        AnimatedVisibility(visible = refs.isNotEmpty() && suggestions.isEmpty() && !listsAway, enter = fadeIn(), exit = fadeOut()) {
+            var shown by remember { mutableStateOf(refs) }
+            if (refs.isNotEmpty()) shown = refs
+            MentionSuggestions(
+                remember(shown) { shown.map { MentionChoice(it.label, it.shown, null, it.icon) } },
+                hazeState,
+                onPick = { choice -> shown.firstOrNull { it.shown == choice.handle }?.let(onRef) },
+                // While bots are listed too, the keys walk theirs: only one list shows a mark.
+                marked = if (isDesktop && mentions.isEmpty()) marked.coerceAtLeast(0) else -1,
+                onMark = onMark.takeIf { mentions.isEmpty() },
+            )
+        }
         }
         // Over an empty composer only: once the user types, their own words are the next message.
         val replyShown = suggestedReply != null && connected && !state.running && !editing && actions.composer.text.isEmpty()
@@ -1023,6 +1451,31 @@ private fun ColumnScope.Dock(
             onAttach = onAttach,
             onDictate = onDictate,
             onVoiceChat = onVoiceChat,
+            onKey = { event ->
+                // A bot named so far comes before "A file" / "A folder", which any short @ word offers too.
+                val listed = when {
+                    listsAway -> 0
+                    slashShown -> suggestions.size
+                    suggestions.isNotEmpty() -> 0
+                    mentions.isNotEmpty() -> mentions.size
+                    else -> refs.size
+                }
+                val step = suggestionStep(event)
+                val at = if (slashShown) marked else marked.coerceAtLeast(0)
+                when {
+                    isPasteKey(event) -> !editing && onPasteFiles()
+                    isDesktop && listed > 0 && event.key == Key.Escape && event.type == KeyEventType.KeyDown ->
+                        true.also { dismissedAt = actions.composer.text.toString() }
+                    listed > 0 && step != null -> true.also { marked = moveHighlight(marked, step, listed) }
+                    !isPickKey(event) || listed == 0 -> false
+                    // Enter takes a `/` suggestion only once one is marked; Tab takes the first too.
+                    slashShown -> (marked in suggestions.indices || event.key == Key.Tab).also {
+                        if (it) actions.pickSuggestion(suggestions[at.coerceIn(suggestions.indices)])
+                    }
+                    mentions.isNotEmpty() -> true.also { onMention(mentions[at.coerceIn(mentions.indices)]) }
+                    else -> true.also { onRef(refs[at.coerceIn(refs.indices)]) }
+                }
+            },
         )
     }
 }
@@ -1072,7 +1525,7 @@ internal fun TopBar(
     status: BarStatus?,
     onOpenSidebar: () -> Unit,
     onNewChat: (() -> Unit)?,
-    onOpenMenu: (() -> Unit)?,
+    onOpenMenu: ((Rect?) -> Unit)?,
     /** In place of New chat and the menu, e.g. a room's own buttons. */
     trailing: (@Composable () -> Unit)? = null,
     /** What the Sessions button says about the other chats. */
@@ -1081,7 +1534,7 @@ internal fun TopBar(
     onNextChat: (() -> Unit)? = null,
 ) {
     Row(
-        Modifier.fillMaxWidth().padding(start = 4.dp, end = 10.dp, top = 4.dp, bottom = 8.dp),
+        Modifier.fillMaxWidth().clearOfWindowControls().padding(start = 4.dp, end = 10.dp, top = 4.dp, bottom = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
@@ -1097,21 +1550,37 @@ internal fun TopBar(
                     overflow = TextOverflow.Ellipsis,
                 )
             }
-            if (status != null && status.text.isNotBlank()) StatusLine(status)
+            // A desktop's sidebar already names the gateway, so "Hermes · host" would only say it twice: the line
+            // shows when there's news (working, a question, a lost link).
+            if (status != null && status.text.isNotBlank() && !(isDesktop && status.tone == StatusTone.Ok)) StatusLine(status)
         }
-        // The buttons fill the pill edge to edge, so each keeps its whole 44dp to tap.
+        // The buttons fill the pill edge to edge, so each keeps its whole 44dp to tap. A desktop's are bare toolbar
+        // buttons, set apart from the window's own buttons by a gap, so they don't read as one group with them.
         val shape = RoundedCornerShape(Theme[radii][radiusMedium])
         Row(
-            Modifier
-                .clip(shape)
-                .background(Theme[colors][surface], shape)
-                .border(1.dp, Theme[colors][stroke], shape),
+            if (isDesktop) {
+                Modifier.padding(end = 12.dp)
+            } else {
+                Modifier
+                    .clip(shape)
+                    .background(Theme[colors][surface], shape)
+                    .border(1.dp, Theme[colors][stroke], shape)
+            },
+            horizontalArrangement = Arrangement.spacedBy(if (isDesktop) 2.dp else 0.dp),
         ) {
             if (trailing != null) {
                 trailing()
             } else {
-                BarButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null)
-                BarButton(Lucide.Ellipsis, "Chat options", onClick = { onOpenMenu?.invoke() }, enabled = onOpenMenu != null)
+                BarButton(Lucide.SquarePen, "New chat", onClick = { onNewChat?.invoke() }, enabled = onNewChat != null, keys = "Ctrl+N")
+                // A plain holder: only the click reads it. The desktop's menu hangs from the button.
+                val menuButton = remember { arrayOfNulls<Rect>(1) }
+                BarButton(
+                    Lucide.Ellipsis,
+                    "Chat options",
+                    onClick = { onOpenMenu?.invoke(menuButton[0]) },
+                    enabled = onOpenMenu != null,
+                    modifier = Modifier.onGloballyPositioned { menuButton[0] = it.boundsInWindow() },
+                )
             }
         }
     }
@@ -1148,15 +1617,27 @@ internal fun BarButton(
     onClick: () -> Unit,
     enabled: Boolean = true,
     tint: Color = Theme[colors][textSecondary],
+    /** The keys that do the same, named in the tooltip ("Ctrl+N"). */
+    keys: String? = null,
+    modifier: Modifier = Modifier,
 ) {
-    UnstyledButton(
-        onClick = onClick,
-        enabled = enabled,
-        modifier = Modifier.size(MinTouchTarget).clip(RoundedCornerShape(Theme[radii][radiusSmall])).alpha(if (enabled) 1f else 0.35f),
-        indication = rememberColoredIndication(Theme[colors][textColor]),
-    ) {
-        UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(19.dp))
+    val button = @Composable {
+        UnstyledButton(
+            onClick = onClick,
+            enabled = enabled,
+            // A desktop toolbar's button is pointer-sized, rounded as its other icon buttons are.
+            modifier = modifier
+                .size(if (isDesktop) 32.dp else MinTouchTarget)
+                .handCursor(enabled)
+                .clip(RoundedCornerShape(if (isDesktop) 8.dp else Theme[radii][radiusSmall]))
+                .alpha(if (enabled) 1f else 0.35f),
+            indication = rememberHoverIndication(Theme[colors][textColor]),
+        ) {
+            UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(if (isDesktop) 17.dp else 19.dp))
+        }
     }
+    // With a mouse, the icon's name shows on a rest over it.
+    if (isDesktop) Tooltip(if (keys != null) "$contentDescription (${keysLabel(keys)})" else contentDescription) { button() } else button()
 }
 
 /**
@@ -1173,10 +1654,12 @@ private fun Greeting(
     canAttach: Boolean,
     place: String?,
     profile: String?,
+    /** The composer sits right under it, in the middle: it stands on the composer rather than in its own middle. */
+    overComposer: Boolean = false,
 ) {
     val accentWord = Theme[colors][accentText]
-    Box(Modifier.fillMaxSize().padding(horizontal = 24.dp), contentAlignment = Alignment.CenterStart) {
-        Column(Modifier.fillMaxWidth().padding(bottom = 30.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
+    Box(Modifier.fillMaxSize().padding(horizontal = 24.dp), contentAlignment = if (overComposer) Alignment.BottomStart else Alignment.CenterStart) {
+        Column(Modifier.fillMaxWidth().padding(bottom = if (overComposer) 22.dp else 30.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
             AppMark(52.dp)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
@@ -1208,25 +1691,38 @@ private fun Greeting(
                         enabled = connected && !dictation.transcribing,
                     )
                 }
-                StartPill(Lucide.AudioLines, "Voice chat", onClick = onVoiceChat, enabled = connected)
+                if (hasVoice) StartPill(Lucide.AudioLines, "Voice chat", onClick = onVoiceChat, enabled = connected)
             }
         }
     }
 }
 
-/** The app's mark: the white H on a Herald blue rounded square, with its glow under it unless it's small. */
+/** Where an empty desktop chat holds its composer: a little below the middle, the greeting over it. */
+private const val CENTRED_DOCK_BIAS = 0.2f
+
+/** How wide the conversation and the composer are at most: lines longer than this get hard to read. */
+private val READING_WIDTH = 760.dp
+
+/** The pointer moving onto a list's row [index] marks it, so the keys and the pointer share one highlight. */
+private fun Modifier.marksOnHover(index: Int, onMark: ((Int) -> Unit)?): Modifier =
+    if (onMark == null) this else pointerInput(index, onMark) {
+        awaitPointerEventScope {
+            while (true) if (awaitPointerEvent().type == PointerEventType.Enter) onMark(index)
+        }
+    }
+
+/** The app's mark: the summit at dawn in a rounded square, as on the launcher, with its glow under it unless it's small. */
 @Composable
 internal fun AppMark(size: Dp, glow: Boolean = true) {
     val shape = RoundedCornerShape(size * 0.29f)
-    Box(
-        Modifier
+    Image(
+        HeraldMark,
+        contentDescription = null,
+        modifier = Modifier
             .size(size)
             .then(if (glow) Modifier.glow(shape, bubbleGlow(HeraldBrandBlue)) else Modifier)
-            .background(HeraldBrandBlue, shape),
-        contentAlignment = Alignment.Center,
-    ) {
-        UnstyledIcon(HeraldMark, contentDescription = null, tint = Color.White, modifier = Modifier.size(size * 0.6f))
-    }
+            .clip(shape),
+    )
 }
 
 /** A pill on the empty chat: an accent icon and a label on a ringed surface. */
@@ -1238,11 +1734,12 @@ private fun StartPill(icon: ImageVector, text: String, onClick: () -> Unit, enab
         enabled = enabled,
         modifier = Modifier
             .heightIn(min = MinTouchTarget)
+            .handCursor(enabled)
             .alpha(if (enabled) 1f else 0.4f)
             .clip(shape)
             .background(Theme[colors][surface], shape)
             .border(1.dp, Theme[colors][stroke], shape),
-        indication = rememberColoredIndication(Theme[colors][textColor]),
+        indication = rememberHoverIndication(Theme[colors][textColor]),
         contentPadding = PaddingValues(horizontal = 16.dp),
     ) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -1286,6 +1783,8 @@ private fun Messages(
     /** The conversation goes back further than [messages]; nearing the top loads the page before. */
     olderMessages: Boolean,
     loadingOlder: Boolean,
+    /** Replaced by current history when the gateway answers; its unread position is provisional. */
+    savedCopy: Boolean,
     bottomInset: Dp,
     /** How high the dock really stands, for what floats just above it. */
     controlsInset: Dp,
@@ -1297,10 +1796,13 @@ private fun Messages(
     editing: String?,
     /** How far the chat had been read when it was opened (epoch seconds); later messages are marked new. */
     readUpTo: Double? = null,
+    onReadLatest: (() -> Unit)? = null,
     /** The reply being read aloud, by its key. */
     reading: String? = null,
     /** Replies offer Read aloud. */
     canReadAloud: Boolean = true,
+    /** The message Find in chat is on, by its key, marked with an outline. */
+    found: String? = null,
 ) {
     var confirm by remember { mutableStateOf<Pair<MessageChange, String>?>(null) }
     val lastPrompt = messages.lastOrNull { it is ChatMessage.User }?.key
@@ -1326,6 +1828,12 @@ private fun Messages(
     val awayFromBottom by remember { derivedStateOf { listState.layoutInfo.hiddenBelow() > 600 } }
     // Following while the reader sits right at the end; where they drag to decides whether it carries on.
     var pinned by remember { mutableStateOf(true) }
+    var readerNavigated by remember(readUpTo) { mutableStateOf(false) }
+    // Once the user sends from here, what follows is their own conversation, not news to mark or jump to.
+    var unreadSettled by remember(readUpTo) { mutableStateOf(false) }
+    // The opening jump is done; only then may reaching the end mark the chat read. A saved copy giving way to
+    // current history looks for the unread line again, so it waits for that too.
+    var positioned by remember(readUpTo, savedCopy) { mutableStateOf(readUpTo == null || unreadSettled) }
     LaunchedEffect(listState) {
         snapshotFlow { listState.layoutInfo }.collect { info ->
             when (followStep(pinned, info.hiddenBelow(), listState.isScrollInProgress)) {
@@ -1337,10 +1845,12 @@ private fun Messages(
         }
     }
     // The composer folds by how near the end the list stands; scrolling back up lets go of one opened by a tap.
-    DisposableEffect(listState, fold) {
+    DisposableEffect(listState, fold, readUpTo) {
         fold.list = listState
+        fold.onNavigate = { readerNavigated = true }
         onDispose {
             fold.list = null
+            fold.onNavigate = {}
             fold.heldOpen = false
         }
     }
@@ -1352,9 +1862,16 @@ private fun Messages(
     }
     val readBackTravel = with(LocalDensity.current) { READ_BACK_TRAVEL.toPx() }
     val readBack = remember(readBackTravel, fold) { ReadBackDetector(readBackTravel) { fold.heldOpen = false } }
-    // A prompt just sent is always shown, wherever the reader was.
+    // A prompt just sent here is always shown, wherever the reader was. One sent elsewhere, or a stored one coming
+    // in with history, only pulls a reader who hasn't moved.
     LaunchedEffect(newest?.key) {
-        if (newest is ChatMessage.User) {
+        // A fast submit can acknowledge the local prompt before the screen ever draws it pending.
+        val sentHere = newest is ChatMessage.User && (newest.pending || newest.key.startsWith("local-"))
+        if (sentHere) {
+            unreadSettled = true
+            positioned = true
+        }
+        if (newest is ChatMessage.User && (sentHere || !readerNavigated)) {
             pinned = true
             listState.scrollToItem(messages.lastIndex, LIST_END)
         }
@@ -1367,16 +1884,17 @@ private fun Messages(
     // Where the messages that came since the chat was last read begin. It stays put for the rest of this visit,
     // so reading on doesn't move or remove it under the reader; the next visit starts from the new last look.
     // Older pages load first while every loaded message is still new.
-    var unreadFrom by remember(readUpTo) { mutableStateOf<String?>(null) }
-    var unreadPagesLoaded by remember(readUpTo) { mutableStateOf(0) }
+    // A saved copy may omit older unread messages or contain rows the gateway no longer serves.
+    // Discover the boundary again against current history, without pulling a reader who has taken over.
+    var unreadFrom by remember(readUpTo, savedCopy) { mutableStateOf<String?>(null) }
+    var unreadPagesLoaded by remember(readUpTo, savedCopy) { mutableStateOf(0) }
     // The oldest message when a page was last asked for: a reply streaming in reruns this before the page loads.
-    var unreadPageAskedAt by remember(readUpTo) { mutableStateOf<String?>(null) }
-    // Once the user sends from here, what follows is their own conversation, not news to mark or jump to.
-    var unreadSettled by remember(readUpTo) { mutableStateOf(false) }
-    LaunchedEffect(readUpTo, messages, olderMessages, loadingOlder) {
+    var unreadPageAskedAt by remember(readUpTo, savedCopy) { mutableStateOf<String?>(null) }
+    LaunchedEffect(readUpTo, messages, olderMessages, loadingOlder, savedCopy) {
         if (readUpTo == null || unreadFrom != null || unreadSettled) return@LaunchedEffect
         if (messages.any { it is ChatMessage.User && it.pending }) {
             unreadSettled = true
+            positioned = true
             return@LaunchedEffect
         }
         if (loadingOlder) return@LaunchedEffect
@@ -1390,27 +1908,69 @@ private fun Messages(
                 }
                 return@LaunchedEffect
             }
-            UnreadLineStep.None -> return@LaunchedEffect
+            UnreadLineStep.None -> {
+                if (!savedCopy) unreadSettled = true
+                if (!readerNavigated && messages.isNotEmpty()) {
+                    pinned = true
+                    listState.scrollToItem(messages.lastIndex, LIST_END)
+                }
+                positioned = true
+                return@LaunchedEffect
+            }
             is UnreadLineStep.Above -> step.key
         }
         unreadFrom = key
         val index = messages.indexOfFirst { it.key == key }
-        if (index >= 0) {
+        if (index >= 0 && !readerNavigated) {
             // Opened at the line instead of the end, so reading starts where it was left.
             pinned = false
             listState.scrollToItem(index)
         }
+        positioned = true
+    }
+    val readLatest by rememberUpdatedState(onReadLatest)
+    val messageCount by rememberUpdatedState(messages.size)
+    // Asked again whenever the messages change, not just the tail: a page loaded above, or a row redrawn, can turn
+    // down an ask made while the rendered list and the chat's differed for a frame.
+    LaunchedEffect(listState, positioned, onReadLatest != null, messages) {
+        if (!positioned || onReadLatest == null) return@LaunchedEffect
+        snapshotFlow {
+            listState.layoutInfo.visibleItemsInfo.isNotEmpty() &&
+                listState.layoutInfo.totalItemsCount == messageCount && !listState.canScrollForward
+        }.collect { atEnd -> if (atEnd) readLatest?.invoke() }
     }
     val unservable = remember(messages) { unservableEchoes(messages) }
     val unreadLine = remember(messages, unreadFrom, readUpTo) { unreadLineKey(messages, unreadFrom, readUpTo) }
-    Box(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize().pointerInput(readUpTo) {
+        awaitPointerEventScope {
+            var down: Offset? = null
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val change = event.changes.firstOrNull() ?: continue
+                // The wheel, or a drag on the list, seen before children consume it. A tap on a link or an icon
+                // doesn't move the list, so it leaves the jump to the unread line alone.
+                when (event.type) {
+                    PointerEventType.Scroll -> readerNavigated = true
+                    PointerEventType.Press -> down = change.position
+                    PointerEventType.Release -> if (event.changes.none { it.pressed }) down = null
+                    PointerEventType.Move -> if (change.pressed && down?.let { (change.position - it).getDistance() > viewConfiguration.touchSlop } == true) {
+                        readerNavigated = true
+                    }
+                }
+            }
+        }
+    }) {
+        // The list spans the pane, so the wheel and the scrollbar work at its edges; what's read keeps to the
+        // reading width in the middle. Desktop messages sit a little closer together, as a pointer's eye reads them.
+        val side = 16.dp + ((maxWidth - READING_WIDTH) / 2).coerceAtLeast(0.dp)
         LazyColumn(
             state = listState,
             modifier = Modifier.fillMaxSize().nestedScroll(readBack),
-            contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 12.dp + bottomInset),
-            verticalArrangement = Arrangement.spacedBy(20.dp, Alignment.Bottom),
+            contentPadding = PaddingValues(start = side, end = side, top = 12.dp, bottom = 12.dp + bottomInset),
+            verticalArrangement = Arrangement.spacedBy(if (isDesktop) 16.dp else 20.dp, Alignment.Bottom),
         ) {
-            itemsIndexed(messages, key = { _, it -> it.key }) { index, message ->
+            // By kind, so a row scrolled off is reused for one of its own sort rather than rebuilt (a reply for a reply).
+            itemsIndexed(messages, key = { _, it -> it.key }, contentType = { _, it -> it::class }) { index, message ->
                 // Rows of one exchange with another bot are tied together by a line in that bot's colour.
                 val partner = partners.getOrNull(index)
                 // The "New messages" line breaks the tie: it never runs through it.
@@ -1422,8 +1982,25 @@ private fun Messages(
                 Column {
                     // The line marking where the new messages start sits on top of the first of them.
                     if (divided) UnreadDivider(Modifier.padding(bottom = 20.dp))
+                    // Drawn just outside the message, so marking it doesn't move a line of it.
+                    val foundColor = Theme[colors][accent]
+                    val foundOutline = if (message.key == found) {
+                        Modifier.drawWithContent {
+                            drawContent()
+                            val out = 6.dp.toPx()
+                            drawRoundRect(
+                                foundColor,
+                                topLeft = Offset(-out, -out),
+                                size = Size(size.width + 2 * out, size.height + 2 * out),
+                                cornerRadius = CornerRadius(12.dp.toPx()),
+                                style = Stroke(2.dp.toPx()),
+                            )
+                        }
+                    } else {
+                        Modifier
+                    }
                     Box(
-                        Modifier.drawBehind {
+                        foundOutline.drawBehind {
                             if (rail != null && (linkedAbove || linkedBelow)) {
                                 // In the list's side margin, clear of avatars and text.
                                 val x = -9.dp.toPx()
@@ -1482,6 +2059,18 @@ private fun Messages(
                 }
             }
         }
+        // Clear of the composer floating over the chat's end. Any press on it moves the list, even a click on its track.
+        VerticalScrollbar(
+            listState,
+            Modifier.align(Alignment.TopEnd).fillMaxHeight().padding(top = windowControlsHeight() + 4.dp, bottom = bottomInset + 4.dp, end = 2.dp)
+                .pointerInput(readUpTo) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            if (awaitPointerEvent(PointerEventPass.Initial).type == PointerEventType.Press) readerNavigated = true
+                        }
+                    }
+                },
+        )
         AnimatedVisibility(
             visible = awayFromBottom,
             enter = fadeIn() + scaleIn(),
@@ -1489,21 +2078,25 @@ private fun Messages(
             modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 12.dp + controlsInset),
         ) {
             val shape = RoundedCornerShape(Theme[radii][radiusMedium])
-            UnstyledButton(
+            // A pointer-sized button on the desktop, named on a rest over it.
+            val size = if (isDesktop) 34.dp else 40.dp
+            Tooltip(if (isDesktop && !newBelow) "Jump to latest" else "") { UnstyledButton(
                 onClick = {
+                    readerNavigated = true
                     scope.launch {
                         listState.animateToEnd()
                         pinned = true
                     }
                 },
                 modifier = Modifier
-                    .heightIn(min = 40.dp)
-                    .widthIn(min = 40.dp)
+                    .heightIn(min = size)
+                    .handCursor()
+                    .widthIn(min = size)
                     .clip(shape)
                     .background(if (newBelow) Theme[colors][accent] else Theme[colors][surfaceElevated])
                     .border(1.dp, if (newBelow) Theme[colors][accent] else Theme[colors][strokeStrong], shape)
                     .animateContentSize(),
-                indication = rememberColoredIndication(Theme[colors][textColor]),
+                indication = rememberHoverIndication(Theme[colors][textColor]),
             ) {
                 // Says "New reply" when something arrived below, not only by the arrow.
                 val tint = if (newBelow) Theme[colors][onAccent] else Theme[colors][textColor]
@@ -1520,7 +2113,7 @@ private fun Messages(
                     )
                     if (newBelow) Text("New reply", style = Theme[typography][label], color = tint)
                 }
-            }
+            } }
         }
     }
 }
@@ -1531,6 +2124,9 @@ private val READ_BACK_TRAVEL = 48.dp
 /** Over how much of the chat's end the composer goes from folded to open. */
 private val FOLD_RANGE = 160.dp
 
+/** How much of the conversation's height Page Up and Page Down scroll, keeping a few lines for context. */
+private const val PAGE_SCROLL = 0.85f
+
 /**
  * How far the composer is open. Scroll-linked: fully open with the end of the chat in view, folding over the
  * [FOLD_RANGE] above it and folded beyond; a tap on the folded line holds it open until the reader scrolls back up.
@@ -1540,10 +2136,16 @@ internal class ComposerFold {
     /** The conversation while it's on screen; none (an empty chat) leaves the composer open. */
     var list: LazyListState? by mutableStateOf(null)
 
+    /** Explicit navigation takes precedence over a delayed initial unread jump. */
+    var onNavigate: () -> Unit = {}
+
     /** The list is following the end; a reply growing there never folds the composer between two frames. */
     var following: Boolean by mutableStateOf(true)
 
     var heldOpen: Boolean by mutableStateOf(false)
+
+    /** The composer's text box has the keyboard; read when a key decides whether it's the composer's or the chat's. */
+    var typing: Boolean = false
 
     /** 1 with the end in view, down to 0 once it lies [range] px or more below. */
     fun nearEnd(range: Float): Float {
@@ -1646,12 +2248,13 @@ private const val UNREACHABLE = "Can't reach gateway"
 
 /** The banner over the chat while the gateway can't be reached: where, what's being done about it, and Retry now. */
 @Composable
-private fun OfflineBanner(place: String?, status: String, onRetry: () -> Unit) {
+internal fun OfflineBanner(place: String?, status: String, onRetry: () -> Unit) {
     Row(
         Modifier
             .fillMaxWidth()
             .padding(horizontal = 14.dp)
-            .background(Theme[colors][dangerSoft], RoundedCornerShape(Theme[radii][radiusMedium]))
+            // The tint laid on the chat's page colour: the red wash it had on a plain page, but nothing under it shows through.
+            .background(Theme[colors][dangerSoft].compositeOver(Theme[colors][background]), RoundedCornerShape(Theme[radii][radiusMedium]))
             .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp)
             .semantics(mergeDescendants = true) {},
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1666,7 +2269,7 @@ private fun OfflineBanner(place: String?, status: String, onRetry: () -> Unit) {
                 color = Theme[colors][textColor],
                 modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
             )
-            Text("$status Your draft is kept.", style = Theme[typography][caption], color = Theme[colors][textSecondary])
+            CopyableOnDesktop { Text("$status Your draft is kept.", style = Theme[typography][caption], color = Theme[colors][textSecondary]) }
         }
         RetryChip("Retry now", onClick = onRetry)
     }
@@ -1682,6 +2285,7 @@ private fun RetryChip(text: String, onClick: () -> Unit) {
     Box(
         Modifier
             .heightIn(min = MinTouchTarget)
+            .handCursor()
             .clickable(interaction, indication = null, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -1694,7 +2298,7 @@ private fun RetryChip(text: String, onClick: () -> Unit) {
                 .heightIn(min = 30.dp)
                 .clip(CircleShape)
                 .background(Theme[colors][surface3], CircleShape)
-                .indication(interaction, rememberColoredIndication(Theme[colors][textColor]))
+                .indication(interaction, rememberHoverIndication(Theme[colors][textColor]))
                 .padding(horizontal = 12.dp, vertical = 6.dp),
         )
     }
@@ -1751,7 +2355,7 @@ private fun StatusPill(text: String) {
 
 /** Desktop's turn marker: the prompt in a full-width box with a tinted fill and outline; replies run bare beneath. */
 @Composable
-private fun UserBubble(
+internal fun UserBubble(
     message: ChatMessage.User,
     actions: ChatActions,
     connected: Boolean,
@@ -1766,41 +2370,50 @@ private fun UserBubble(
     val haptics = LocalHapticFeedback.current
     val scope = rememberCoroutineScope()
     var menuOpen by remember { mutableStateOf(false) }
+    var contextMenuOpen by remember { mutableStateOf(false) }
+    val selection = remember { SelectionProbe() }
     // A prompt in doubt always has one: its Edit is there.
     val hasMenu = message.text.isNotBlank() || onEdit != null || onBranch != null || message.check == SendCheck.Unknown
     val review = remember(message.text) { parseReview(message.text) }
     val commentHost = LocalCommentHost.current
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp), horizontalAlignment = Alignment.End) {
-        // A long press opens the prompt's actions just under it; the text itself isn't selectable, Copy is in there.
+    val hover = remember { MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
+    Column(
+        Modifier.fillMaxWidth().then(if (isDesktop) Modifier.hoverable(hover) else Modifier),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+        horizontalAlignment = Alignment.End,
+    ) {
+        // A long press opens the prompt's actions just under it; on a phone the text itself isn't selectable, Copy is in there.
         // The bubble hugs its text, up to most of the row, against the end edge.
         Box(Modifier.fillMaxWidth(USER_BUBBLE_WIDTH), contentAlignment = Alignment.TopEnd) {
+            val menuItems = {
+                listOfNotNull(
+                    RowMenuItem("Copy", Lucide.Copy) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(message.text)) } }
+                        .takeIf { message.text.isNotBlank() },
+                    // From here the comment is on all of the prompt; a desktop selection's menu comments on part of it.
+                    RowMenuItem("Comment", Lucide.MessageSquare) {
+                        commentHost?.onSelection(
+                            SelectionAction.Comment,
+                            CommentSource(message.key, "my message that starts “${openingWords(message.text)}”"),
+                            SelectionAnchor.whole(message.text),
+                        )
+                    }.takeIf { commentHost != null && review == null && message.text.isNotBlank() && !message.pending },
+                    onEdit?.let { RowMenuItem(editLabel, Lucide.Pencil, run = it) },
+                    // A prompt in doubt has only Check and Resend under it; taking it back to edit is here.
+                    RowMenuItem("Edit", Lucide.Pencil) { actions.editMessage(message.key) }
+                        .takeIf { onEdit == null && message.check == SendCheck.Unknown },
+                    onBranch?.let { RowMenuItem("Branch from here", Lucide.GitBranch, run = it) },
+                )
+            }
+            // A right-click's menu opens at the pointer, as a desktop's context menus do.
+            RowContextMenu(contextMenuOpen, onDismiss = { contextMenuOpen = false }, items = menuItems)
             DropdownMenu(
                 expanded = menuOpen,
                 onExpandedChange = { menuOpen = it },
                 items = {
-                    if (message.text.isNotBlank()) {
-                        MenuAction("Copy", Lucide.Copy, onClick = {
-                            menuOpen = false
-                            scope.launch { clipboard.setClipEntry(plainTextClipEntry(message.text)) }
-                        })
+                    for (item in menuItems()) {
+                        MenuAction(item.label, item.icon, onClick = { menuOpen = false; item.run() })
                     }
-                    // The prompt isn't selectable, so its comment is on all of it.
-                    if (commentHost != null && review == null && message.text.isNotBlank() && !message.pending) {
-                        MenuAction("Comment", Lucide.MessageSquare, onClick = {
-                            menuOpen = false
-                            commentHost.onSelection(
-                                SelectionAction.Comment,
-                                CommentSource(message.key, "my message that starts “${openingWords(message.text)}”"),
-                                SelectionAnchor.whole(message.text),
-                            )
-                        })
-                    }
-                    onEdit?.let { MenuAction(editLabel, Lucide.Pencil, onClick = { menuOpen = false; it() }) }
-                    // A prompt in doubt has only Check and Resend under it; taking it back to edit is here.
-                    if (onEdit == null && message.check == SendCheck.Unknown) {
-                        MenuAction("Edit", Lucide.Pencil, onClick = { menuOpen = false; actions.editMessage(message.key) })
-                    }
-                    onBranch?.let { MenuAction("Branch from here", Lucide.GitBranch, onClick = { menuOpen = false; it() }) }
                 },
             ) {
                 // A prompt still on its way, or whose delivery is in doubt, is a soft tint with plain text:
@@ -1820,7 +2433,12 @@ private fun UserBubble(
                             // The prompt being edited is outlined in the text color, which shows on the accent fill.
                             .then(if (editing) Modifier.border(2.dp, Theme[colors][textColor], shape) else Modifier)
                             .then(
-                                if (hasMenu) {
+                                // A desktop's way to the same actions: a right-click, which leaves a drag to select
+                                // the text as it does in a reply. A phone keeps its long-press.
+                                // With part of it selected, the right-click is the selection's: Copy copies that part.
+                                if (hasMenu && isDesktop) {
+                                    Modifier.onSecondaryPress(unless = { selection.hasSelection }) { contextMenuOpen = true }
+                                } else if (hasMenu) {
                                     Modifier.combinedClickable(
                                         onClick = {},
                                         onLongClick = {
@@ -1829,7 +2447,7 @@ private fun UserBubble(
                                         },
                                         onLongClickLabel = "Message actions",
                                         interactionSource = null,
-                                        indication = rememberColoredIndication(onBubble),
+                                        indication = rememberHoverIndication(onBubble),
                                     )
                                 } else Modifier,
                             )
@@ -1839,13 +2457,44 @@ private fun UserBubble(
                         if (message.attachments.isNotEmpty()) SentAttachments(message.attachments)
                         when {
                             review != null -> SentReviewContent(review, onBubble)
+                            // A mouse selects part of a prompt to copy, as it does a reply; a phone's long press is the menu's.
+                            // Marked in the bubble's own text color: the accent selection would vanish on the accent fill.
+                            // Its selection offers Comment, Explain and Ask aside too, as a reply's does.
+                            message.text.isNotEmpty() && isDesktop -> CompositionLocalProvider(
+                                LocalTextSelectionColors provides TextSelectionColors(handleColor = onBubble, backgroundColor = onBubble.copy(alpha = 0.32f)),
+                            ) {
+                                val source = remember(message.key, message.text) {
+                                    CommentSource(message.key, "my message that starts “${openingWords(message.text)}”")
+                                }
+                                // What a waiting comment is about is marked, in the text color too.
+                                CommentableSelection(source.takeIf { !message.pending }, selection) {
+                                    Text(
+                                        AnnotatedString(message.text).withHighlights(LocalTextHighlights.current, onBubble.copy(alpha = 0.24f)),
+                                        style = Theme[typography][body],
+                                        color = onBubble,
+                                    )
+                                }
+                            }
                             message.text.isNotEmpty() -> Text(message.text, style = Theme[typography][body], color = onBubble)
                         }
                     }
                 }
             }
         }
-        if (!message.pending) MessageTimeLabel(message.timestamp)
+        if (!message.pending && isDesktop && message.check == null && hasMenu) {
+            // A desktop shows a prompt's tools beside its time under the pointer, as a reply's: they only fade, and
+            // stand out of the line's height, so nothing moves as the pointer passes. One with the keyboard in it stays.
+            var keysInside by remember { mutableStateOf(false) }
+            val alpha by animateFloatAsState(if (hovered || keysInside) 1f else 0f, label = "prompt actions")
+            Row(Modifier.height(20.dp), horizontalArrangement = Arrangement.spacedBy(4.dp), verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.alpha(alpha).onFocusChanged { keysInside = it.hasFocus }, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
+                    if (message.text.isNotBlank()) CopyButton(message.text, Modifier.requiredSize(30.dp))
+                    onEdit?.let { ReplyAction(Lucide.Pencil, editLabel, it, Modifier.requiredSize(30.dp)) }
+                    onBranch?.let { ReplyAction(Lucide.GitBranch, "Branch from here", it, Modifier.requiredSize(30.dp)) }
+                }
+                MessageTimeLabel(message.timestamp)
+            }
+        } else if (!message.pending) MessageTimeLabel(message.timestamp)
         if (message.queued) {
             Text("Queued · sends after this task", style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }
@@ -1923,7 +2572,7 @@ private fun UnsettledActions(check: SendCheck, key: String, actions: ChatActions
         onDismissRequest = { confirmResend = false },
         title = "Resend this message?",
         message = "Hermes may already have it. If it does, resending makes Hermes get the same request twice and run it again. " +
-            "Tap Check first to be sure.",
+            "$tapVerb Check first to be sure.",
         actions = {
             Button("Cancel", onClick = { confirmResend = false }, variant = ButtonVariant.Ghost)
             Button("Resend", onClick = { confirmResend = false; actions.resend(key) })
@@ -1945,6 +2594,7 @@ private fun DeliveryChip(
     Box(
         Modifier
             .heightIn(min = MinTouchTarget)
+            .handCursor(enabled)
             .clickable(interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
@@ -1957,7 +2607,7 @@ private fun DeliveryChip(
                 .heightIn(min = 28.dp)
                 .clip(pill)
                 .background(Theme[colors][surface2], pill)
-                .indication(interaction, rememberColoredIndication(Theme[colors][textColor]))
+                .indication(interaction, rememberHoverIndication(Theme[colors][textColor]))
                 .padding(horizontal = 10.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(5.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -2043,7 +2693,7 @@ private fun ConfirmChange(
 }
 
 @Composable
-private fun AssistantReply(
+internal fun AssistantReply(
     message: ChatMessage.Assistant,
     onBranch: (() -> Unit)?,
     /** Drops this reply and what follows and sends its prompt again; null when it can't. */
@@ -2067,7 +2717,32 @@ private fun AssistantReply(
     // Pictures image_generate made show where it ran, as on Desktop: the model may never name them.
     val generated = remember(message.tools) { message.tools.mapNotNull { it.generatedImage }.distinctBy { it.source } }
     val (text, media) = remember(message.text, generated, unservable) { extractReplyMedia(message.text, generated + unservable) }
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+    val hover = remember { MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
+    // A desktop's right-click on a reply offers what its icons do, as a prompt's does; with part of it selected,
+    // the right-click is the selection's.
+    val selection = remember { SelectionProbe() }
+    var contextMenuOpen by remember { mutableStateOf(false) }
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    val canMenu = isDesktop && !message.streaming && text.isNotBlank()
+    if (canMenu) {
+        RowContextMenu(contextMenuOpen, onDismiss = { contextMenuOpen = false }) {
+            listOfNotNull(
+                RowMenuItem("Copy", Lucide.Copy) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(text)) } },
+                onRegenerate?.let { RowMenuItem("Regenerate", Lucide.RefreshCw, run = it) },
+                onBranch?.let { RowMenuItem("Branch from here", Lucide.GitBranch, run = it) },
+                if (reading) RowMenuItem("Stop reading", Lucide.Square, run = onStopReading)
+                else onReadAloud?.let { read -> RowMenuItem("Read aloud", Lucide.Volume2) { read(text) } },
+            )
+        }
+    }
+    Column(
+        Modifier.fillMaxWidth()
+            .then(if (isDesktop) Modifier.hoverable(hover) else Modifier)
+            .then(if (canMenu) Modifier.onSecondaryPress(unless = { selection.hasSelection }) { contextMenuOpen = true } else Modifier),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
         ReplyHeader(message.timestamp.takeUnless { message.streaming })
         // What's happening now is said once, above the composer; the reply keeps only what it's made of.
         if (showReasoning) Reasoning(message.reasoning, message.streaming)
@@ -2088,16 +2763,21 @@ private fun AssistantReply(
                 )
             }
             // Not while it streams: the text and its blocks are still changing under the selection.
-            CommentableSelection(source.takeUnless { message.streaming }) {
+            CommentableSelection(source.takeUnless { message.streaming }, selection) {
                 MarkdownText(remember(text) { linkFileUris(text) }, streaming = message.streaming)
             }
+        }
+        // Screens the agent drew, under what it said and whatever the tool-activity setting: they're for the user to answer.
+        val screens = LocalScreenViews.current
+        message.tools.forEach { call ->
+            screens.byCall[call.id]?.let { key(call.id) { AgentScreenCard(it, newest = it.latest.id in screens.newest) } }
         }
         if (settings.showLinkPreviews && !message.streaming) LinkPreviewCards(text)
         if (media.isNotEmpty()) ReplyMediaList(media)
         when (message.outcome) {
             TurnOutcome.Error -> Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 UnstyledIcon(Lucide.CircleAlert, contentDescription = null, tint = Theme[colors][danger], modifier = Modifier.size(16.dp))
-                Text(message.error ?: "The turn failed.", style = Theme[typography][bodySmall], color = Theme[colors][danger])
+                CopyableOnDesktop { Text(message.error ?: "The turn failed.", style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
             }
             TurnOutcome.Interrupted -> Text("Stopped", style = Theme[typography][caption], color = Theme[colors][textTertiary])
             else -> Unit
@@ -2105,24 +2785,58 @@ private fun AssistantReply(
         message.warning?.let { warningText ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.Top) {
                 UnstyledIcon(Lucide.TriangleAlert, contentDescription = null, tint = Theme[colors][warning], modifier = Modifier.padding(top = 2.dp).size(14.dp))
-                Text(warningText, style = Theme[typography][bodySmall], color = Theme[colors][warning])
+                CopyableOnDesktop { Text(warningText, style = Theme[typography][bodySmall], color = Theme[colors][warning]) }
             }
         }
         val usage = message.usage?.takeIf { settings.showUsage && !message.streaming }
         val actionable = !message.streaming && text.isNotBlank()
         // A reply of only code or files has nothing to say.
         val speakable = if (actionable) remember(text) { readAloudText(text).isNotEmpty() } else false
-        if (actionable || usage != null) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
+        if (isDesktop && (actionable || usage != null)) {
+            // A desktop reads a reply's tools from its own start, as desktop chat apps line them up, and shows
+            // them on the newest reply and under the pointer: older replies read without a row of icons each. They
+            // only fade, so nothing moves as the pointer passes; one with the keyboard in it stays shown.
+            var keysInside by remember { mutableStateOf(false) }
+            val shown = last || hovered || keysInside
+            val alpha by animateFloatAsState(if (shown) 1f else 0f, label = "reply actions")
+            Row(
+                Modifier.trimEndTop(end = 0.dp, top = 4.dp).offset(x = (-10).dp).alpha(alpha).onFocusChanged { keysInside = it.hasFocus },
+                horizontalArrangement = Arrangement.spacedBy(2.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (actionable) {
+                    // Pointer-sized, as the icons beside it are.
+                    CopyButton(text, Modifier.size(32.dp))
+                    onRegenerate?.let { ReplyAction(Lucide.RefreshCw, "Regenerate", it, Modifier) }
+                    onBranch?.let { ReplyAction(Lucide.GitBranch, "Branch from here", it, Modifier) }
+                }
                 usage?.let {
                     Text(
                         replyUsage(it.input, it.output),
                         style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
                         color = Theme[colors][textMuted],
-                        modifier = Modifier.semantics { contentDescription = "${compactCount(it.input)} tokens in, ${compactCount(it.output)} out" },
+                        // On one line in a narrow window at the largest text, as on the phone.
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.padding(start = 8.dp).semantics { contentDescription = "${compactCount(it.input)} tokens in, ${compactCount(it.output)} out" },
                     )
                 }
-                Spacer(Modifier.weight(1f))
+            }
+        } else if (actionable || usage != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                // The count takes only what the actions leave: at the largest text it ellipsizes instead of squeezing them out.
+                if (usage != null) {
+                    Text(
+                        replyUsage(usage.input, usage.output),
+                        style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
+                        color = Theme[colors][textMuted],
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "${compactCount(usage.input)} tokens in, ${compactCount(usage.output)} out" },
+                    )
+                } else {
+                    Spacer(Modifier.weight(1f))
+                }
                 if (actionable) {
                     // On the end, under the thumb of the hand holding the phone; Copy, the one used most, sits last.
                     // Copy's padding trimmed off the end lines its icon up with the reply's edge; all of them lose 4dp on top to sit close under it.
@@ -2166,7 +2880,14 @@ internal fun MessageTimeLabel(epochSeconds: Double?, modifier: Modifier = Modifi
     if (!LocalAppSettings.current.showTimestamps || epochSeconds == null) return
     val use24Hour = uses24HourClock()
     val label = remember(epochSeconds, use24Hour) { messageTime(epochSeconds, use24Hour) }
-    if (label.isNotEmpty()) Text(label, style = Theme[typography][caption], color = Theme[colors][textTertiary], modifier = modifier)
+    if (label.isEmpty()) return
+    if (isDesktop) {
+        // The short label ("Mon 14:05") in full under the pointer, as desktop chat apps show it.
+        val full = remember(epochSeconds, use24Hour) { fullMessageTime(epochSeconds, use24Hour) }
+        Tooltip(full, modifier) { Text(label, style = Theme[typography][caption], color = Theme[colors][textTertiary]) }
+    } else {
+        Text(label, style = Theme[typography][caption], color = Theme[colors][textTertiary], modifier = modifier)
+    }
 }
 
 /** A session notice: a centred quiet line between the messages. */
@@ -2178,7 +2899,7 @@ private fun NoticeLine(message: ChatMessage.Notice) {
         verticalAlignment = Alignment.Top,
     ) {
         UnstyledIcon(Lucide.Info, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.padding(top = 2.dp).size(13.dp))
-        Text(message.text, style = Theme[typography][caption], color = Theme[colors][textTertiary])
+        CopyableOnDesktop { Text(message.text, style = Theme[typography][caption], color = Theme[colors][textTertiary]) }
     }
 }
 
@@ -2196,6 +2917,16 @@ private fun UnreadDivider(modifier: Modifier = Modifier) {
         Box(Modifier.weight(1f).height(1.dp).background(line))
     }
 }
+
+/**
+ * With reasoning hidden, a finished reply of nothing but reasoning (a step that only thought, or only commented
+ * on its way) would be a bare header: it isn't listed.
+ */
+internal fun List<ChatMessage>.withoutBlankReplies(showReasoning: Boolean): List<ChatMessage> =
+    if (showReasoning) this else filterNot {
+        it is ChatMessage.Assistant && !it.streaming && it.text.isBlank() && it.tools.isEmpty() && it.error == null &&
+            it.warning == null && it.outcome != TurnOutcome.Error && it.outcome != TurnOutcome.Interrupted
+    }
 
 /**
  * The first message newer than [readUpTo] (epoch seconds) that the person would call new: a reply, a prompt
@@ -2315,8 +3046,28 @@ private fun CommandOutput(message: ChatMessage.Command) {
 
 /** The `/` list over the composer: commands, skills and argument choices, best match first. */
 @Composable
-private fun SlashSuggestions(suggestions: List<SlashSuggestion>, hazeState: HazeState, onPick: (SlashSuggestion) -> Unit) {
+private fun SlashSuggestions(
+    suggestions: List<SlashSuggestion>,
+    hazeState: HazeState,
+    marked: Int,
+    onPick: (SlashSuggestion) -> Unit,
+    onMark: ((Int) -> Unit)? = null,
+) {
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
+    val list = rememberLazyListState()
+    // The marked row kept in sight as Up and Down move past the list's edge; a group's heading counts as an item.
+    LaunchedEffect(marked, suggestions) {
+        if (marked !in suggestions.indices) return@LaunchedEffect
+        if (marked == 0) return@LaunchedEffect list.scrollToItem(0)
+        val headings = (0..marked).count { i -> suggestions[i].group.let { it != null && it != suggestions.getOrNull(i - 1)?.group } }
+        val item = marked + headings
+        val view = list.layoutInfo
+        val row = view.visibleItemsInfo.firstOrNull { it.index == item }
+        when {
+            row == null || row.offset < view.viewportStartOffset -> list.scrollToItem(item)
+            row.offset + row.size > view.viewportEndOffset -> list.scrollBy((row.offset + row.size - view.viewportEndOffset).toFloat())
+        }
+    }
     val page = Theme[colors][background]
     val frosted = remember(page) {
         HazeBlurStyle {
@@ -2325,15 +3076,12 @@ private fun SlashSuggestions(suggestions: List<SlashSuggestion>, hazeState: Haze
             backgroundColor(page)
         }
     }
-    LazyColumn(
+    ScrollbarBox(list, Modifier.padding(start = 12.dp, end = 12.dp, top = 6.dp)) { LazyColumn(
         Modifier
-            .padding(start = 12.dp, end = 12.dp, top = 6.dp)
             .fillMaxWidth()
             .heightIn(max = 280.dp)
-            .clip(shape)
-            .hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)
-            .background(Theme[colors][surfaceElevated].copy(alpha = 0.85f))
-            .border(1.dp, Theme[colors][strokeStrong], shape),
+            .frostedPanel(shape, Theme[colors][surfaceElevated].copy(alpha = 0.85f), Theme[colors][strokeStrong], Modifier.hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)),
+        state = list,
         contentPadding = PaddingValues(vertical = 6.dp),
     ) {
         suggestions.forEachIndexed { index, row ->
@@ -2350,7 +3098,13 @@ private fun SlashSuggestions(suggestions: List<SlashSuggestion>, hazeState: Haze
             }
             item(key = "row-$index-${row.text}") {
                 Row(
-                    Modifier.fillMaxWidth().clickable { onPick(row) }.padding(horizontal = 14.dp, vertical = 8.dp),
+                    Modifier
+                        .fillMaxWidth()
+                        .then(if (index == marked) Modifier.background(Theme[colors][surface2]) else Modifier)
+                        .marksOnHover(index, onMark)
+                        .handCursor()
+                        .clickable(interactionSource = null, indication = if (onMark != null) null else LocalIndication.current) { onPick(row) }
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(10.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -2373,7 +3127,7 @@ private fun SlashSuggestions(suggestions: List<SlashSuggestion>, hazeState: Haze
                 }
             }
         }
-    }
+    } }
 }
 
 /**
@@ -2395,16 +3149,19 @@ internal fun SuggestedReplyChip(text: String, hazeState: HazeState?, onUse: () -
         Modifier
             .padding(start = 12.dp, end = 12.dp, top = 6.dp)
             .fillMaxWidth()
-            .clip(shape)
-            .then(if (hazeState != null) Modifier.hazeBlur(input = HazeInput.Sources(hazeState), style = frosted) else Modifier)
-            .background(Theme[colors][surfaceElevated].copy(alpha = 0.85f))
-            .border(1.dp, Theme[colors][strokeStrong], shape),
+            .frostedPanel(
+                shape,
+                Theme[colors][surfaceElevated].copy(alpha = 0.85f),
+                Theme[colors][strokeStrong],
+                if (hazeState != null) Modifier.hazeBlur(input = HazeInput.Sources(hazeState), style = frosted) else Modifier,
+            ),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Row(
             Modifier
                 .weight(1f)
                 .heightIn(min = MinTouchTarget)
+                .handCursor()
                 .clickable(role = Role.Button, onClickLabel = "Put in the composer", onClick = onUse)
                 .padding(start = 14.dp, top = 8.dp, bottom = 8.dp, end = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -2423,18 +3180,68 @@ internal fun SuggestedReplyChip(text: String, hazeState: HazeState?, onUse: () -
     }
 }
 
-/** One row of the `@` list: who, the handle a pick inserts, and the bot whose face it shows (none for everyone). */
-internal data class MentionChoice(val label: String, val handle: String, val bot: Bot?)
+/**
+ * One row of the `@` list: who, the handle a pick inserts, and the bot whose face it shows; with none, [icon]
+ * (everyone's, by default).
+ */
+internal data class MentionChoice(val label: String, val handle: String, val bot: Bot?, val icon: ImageVector? = null)
+
+/** An `@file:` or `@folder:` reference to put in the composer: [insert] in place of the text from [start] to [end]. */
+internal data class RefChoice(val label: String, val shown: String, val icon: ImageVector, val start: Int, val end: Int, val insert: String)
+
+/**
+ * The `@` list's file references for what's being typed, on the desktop: the reference kinds while a bare `@`
+ * word could still be one, then [entries] of the folder an `@file:` or `@folder:` path is in.
+ */
+internal fun refChoices(mention: MentionQuery?, ref: PathRefQuery?, entries: List<PathEntry>): List<RefChoice> {
+    if (ref != null) {
+        val name = ref.path.substringAfterLast('/')
+        return entries
+            .filter { (it.dir || ref.kind == PathRefKind.File) && it.name.startsWith(name, ignoreCase = true) }
+            .take(MAX_REF_CHOICES)
+            .map { entry ->
+                val insert = ref.completion(entry.name, entry.dir)
+                RefChoice(entry.name, insert.trim().removePrefix("@"), if (entry.dir) Lucide.Folder else Lucide.File, ref.start, ref.end, insert)
+            }
+    }
+    if (mention == null) return emptyList()
+    return PathRefKind.entries
+        .filter { it.prefix.removePrefix("@").startsWith(mention.query, ignoreCase = true) }
+        .map { kind ->
+            val label = if (kind == PathRefKind.File) "A file" else "A folder"
+            RefChoice(label, kind.prefix.removePrefix("@"), if (kind == PathRefKind.File) Lucide.File else Lucide.Folder, mention.start, mention.end, kind.prefix)
+        }
+}
+
+private const val MAX_REF_CHOICES = 8
+
+/** How wide the desktop's file rail is. */
+private val RAIL_WIDTH = 420.dp
+
+/** The narrowest chat that docks a file in the rail: room for the rail and a conversation beside it. */
+private val RAIL_MIN_PANE = 880.dp
+
+/** How long typing in a path rests before the gateway is asked for the folder's entries. */
+private const val PATH_COMPLETION_DELAY_MS = 150L
 
 /**
  * The `@` list over a composer: who to mention, with faces, names and handles. Frosted over [hazeState]'s
  * content when there is one, else on a plain elevated surface.
  */
 @Composable
-internal fun MentionSuggestions(choices: List<MentionChoice>, hazeState: HazeState?, onPick: (MentionChoice) -> Unit) {
+internal fun MentionSuggestions(
+    choices: List<MentionChoice>,
+    hazeState: HazeState?,
+    marked: Int = -1,
+    onPick: (MentionChoice) -> Unit,
+    /** The desktop's pointer marking the row it's on, so it and the keys share one highlight. */
+    onMark: ((Int) -> Unit)? = null,
+) {
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     val page = Theme[colors][background]
     val faces = LocalBotFaces.current
+    val markedRow = remember { BringIntoViewRequester() }
+    LaunchedEffect(marked, choices) { if (marked in choices.indices) runCatching { markedRow.bringIntoView() } }
     val frosted = remember(page) {
         HazeBlurStyle {
             blurEnabled(true)
@@ -2446,15 +3253,31 @@ internal fun MentionSuggestions(choices: List<MentionChoice>, hazeState: HazeSta
         Modifier
             .padding(start = 12.dp, end = 12.dp, top = 6.dp)
             .fillMaxWidth()
-            .clip(shape)
-            .then(if (hazeState != null) Modifier.hazeBlur(input = HazeInput.Sources(hazeState), style = frosted) else Modifier)
-            .background(Theme[colors][surfaceElevated].copy(alpha = if (hazeState != null) 0.85f else 1f))
-            .border(1.dp, Theme[colors][strokeStrong], shape)
+            .frostedPanel(
+                shape,
+                Theme[colors][surfaceElevated].copy(alpha = if (hazeState != null) 0.85f else 1f),
+                Theme[colors][strokeStrong],
+                if (hazeState != null) Modifier.hazeBlur(input = HazeInput.Sources(hazeState), style = frosted) else Modifier,
+            )
+            // As tall as the `/` list at most, so eight file references still leave the chat in sight.
+            .heightIn(max = 280.dp)
+            .verticalScrollWithBar()
             .padding(vertical = 6.dp),
     ) {
-        choices.forEach { choice ->
+        choices.forEachIndexed { index, choice ->
             Row(
-                Modifier.fillMaxWidth().clickable(onClickLabel = "Mention ${choice.label}") { onPick(choice) }.padding(horizontal = 14.dp, vertical = 8.dp),
+                Modifier
+                    .fillMaxWidth()
+                    // The one Enter takes, marked on the desktop, and kept in sight as Up and Down move it.
+                    .then(if (index == marked) Modifier.background(Theme[colors][surface2]).bringIntoViewRequester(markedRow) else Modifier)
+                    .marksOnHover(index, onMark)
+                    .handCursor()
+                    .clickable(
+                        interactionSource = null,
+                        indication = if (onMark != null) null else LocalIndication.current,
+                        onClickLabel = "Mention ${choice.label}",
+                    ) { onPick(choice) }
+                    .padding(horizontal = 14.dp, vertical = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -2462,7 +3285,7 @@ internal fun MentionSuggestions(choices: List<MentionChoice>, hazeState: HazeSta
                     BotAvatar(choice.bot, faces.picture(choice.bot), size = 24.dp)
                 } else {
                     Box(Modifier.size(24.dp), contentAlignment = Alignment.Center) {
-                        UnstyledIcon(Lucide.Users, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(18.dp))
+                        UnstyledIcon(choice.icon ?: Lucide.Users, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(18.dp))
                     }
                 }
                 Text(choice.label, style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][textColor], maxLines = 1)
@@ -2474,7 +3297,7 @@ internal fun MentionSuggestions(choices: List<MentionChoice>, hazeState: HazeSta
 
 /** A tappable one-line header that opens to show more, as the reply's reasoning does. */
 @Composable
-private fun Disclosure(
+internal fun Disclosure(
     icon: @Composable () -> Unit,
     label: String,
     expanded: Boolean,
@@ -2483,7 +3306,7 @@ private fun Disclosure(
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(
-            Modifier.clip(RoundedCornerShape(Theme[radii][radiusMedium])).clickable(onClick = onToggle).padding(vertical = 4.dp, horizontal = 2.dp),
+            Modifier.clip(RoundedCornerShape(Theme[radii][radiusMedium])).handCursor().clickable(onClick = onToggle).padding(vertical = 4.dp, horizontal = 2.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -2518,7 +3341,11 @@ private fun Reasoning(text: String, streaming: Boolean) {
         expanded = expanded,
         onToggle = { expanded = !expanded },
     ) {
-        MarkdownText(text.trim(), streaming = streaming, textStyle = Theme[typography][bodySmall].copy(color = Theme[colors][textSecondary]))
+        val body = @Composable {
+            MarkdownText(text.trim(), streaming = streaming, textStyle = Theme[typography][bodySmall].copy(color = Theme[colors][textSecondary]))
+        }
+        // On the desktop it's text to select and copy like the reply's, with the same right-click menu.
+        if (isDesktop) PlatformCommentableSelection(onAction = null, content = body) else body()
     }
 }
 
@@ -2536,6 +3363,7 @@ private fun Tools(tools: List<ToolActivity>, messageKey: String) {
         Box(
             Modifier
                 .heightIn(min = MinTouchTarget)
+                .handCursor()
                 .clickable(interaction, indication = null) { expanded = !expanded }
                 .semantics {
                     contentDescription = listOfNotNull(ran, took).joinToString(", ")
@@ -2550,7 +3378,7 @@ private fun Tools(tools: List<ToolActivity>, messageKey: String) {
                     .clip(pill)
                     .background(Theme[colors][surface], pill)
                     .border(1.dp, Theme[colors][stroke], pill)
-                    .indication(interaction, rememberColoredIndication(Theme[colors][textSecondary]))
+                    .indication(interaction, rememberHoverIndication(Theme[colors][textSecondary]))
                     .padding(start = 6.dp, end = 12.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -2615,6 +3443,7 @@ private fun LiveStepRow(tool: ToolActivity, messageKey: String) {
             .fillMaxWidth()
             .heightIn(min = 36.dp)
             .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
+            .handCursor()
             .clickable(onClickLabel = if (open) "Hide details" else "Show details") { open = !open },
         horizontalArrangement = Arrangement.spacedBy(10.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -2824,12 +3653,9 @@ private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit, 
                 tint = tint ?: if (icon == null) Theme[colors][danger] else Theme[colors][accentText],
                 modifier = Modifier.size(16.dp),
             )
-            Text(
-                message,
-                style = Theme[typography][bodySmall],
-                color = Theme[colors][textColor],
-                modifier = Modifier.weight(1f).padding(horizontal = 10.dp),
-            )
+            Box(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                CopyableOnDesktop { Text(message, style = Theme[typography][bodySmall], color = Theme[colors][textColor]) }
+            }
             if (actionLabel != null) {
                 Button(actionLabel, onClick = onAction, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             } else {
@@ -2837,6 +3663,41 @@ private fun Banner(message: String, actionLabel: String?, onAction: () -> Unit, 
             }
         }
     }
+}
+
+/**
+ * The composer's editable field: UnstyledTextField and its TextInput, except that the text gets the field's
+ * full width. TextInput's Box measured the text at its own width and put it at the start, so a Hebrew line in
+ * an English UI sat on the left, and a Hebrew paragraph above an English one lined up with it. The body
+ * style already resolves direction per paragraph; at full width each paragraph also goes to its own side.
+ * Split out of [Composer] so a host test can measure it.
+ */
+@Composable
+internal fun ComposerTextInput(
+    state: TextFieldState,
+    modifier: Modifier = Modifier,
+    maxHeightInLines: Int = 8,
+    onTextLayout: (Density.(getResult: () -> TextLayoutResult?) -> Unit)? = null,
+    placeholder: @Composable () -> Unit,
+) {
+    BasicTextField(
+        state = state,
+        textStyle = Theme[typography][body].copy(color = Theme[colors][textColor]),
+        cursorBrush = SolidColor(Theme[colors][accent]),
+        lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = maxHeightInLines),
+        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
+        onTextLayout = onTextLayout,
+        modifier = modifier.semantics(mergeDescendants = true) {},
+        decorator = { innerTextField ->
+            Box(Modifier.fillMaxWidth().pointerHoverIcon(PointerIcon.Text, overrideDescendants = true).clipToBounds()) {
+                if (state.text.isEmpty()) {
+                    Box(Modifier.matchParentSize(), contentAlignment = Alignment.TopStart) { placeholder() }
+                }
+                // The text measures at the width it's given as a minimum; without this it shrinks to its widest line.
+                Box(Modifier.fillMaxWidth(), propagateMinConstraints = true) { innerTextField() }
+            }
+        },
+    )
 }
 
 /**
@@ -2870,6 +3731,8 @@ private fun Composer(
     onVoiceChat: () -> Unit,
     /** A prompt is being edited: it can't go out mid-turn, as the gateway won't cut the chat while a task runs. */
     editing: Boolean,
+    /** The desktop's keys in the field before its own: a paste that attaches, a suggestion picked. */
+    onKey: (KeyEvent) -> Boolean = { false },
 ) {
     // Attachments or comments alone are sendable: the gateway gets Desktop's image prompt or the file references.
     val hasText = actions.composer.text.isNotBlank() || attachments.isNotEmpty() || comments.isNotEmpty()
@@ -2884,11 +3747,13 @@ private fun Composer(
         }
     }
     var focused by remember { mutableStateOf(false) }
+    // Up and Down through this chat's earlier prompts, from the desktop's keyboard.
+    val recall = remember(state.storedSessionId) { PromptRecall() }
     // Back hides the keyboard but leaves the field focused, and a focused field brings the keyboard back on
     // the next relayout (opening a tool card, the menu). Put away means done typing, so let go of the focus.
-    val imeVisible = WindowInsets.isImeVisible
+    val keyboardUp = imeVisible
     val focusManager = LocalFocusManager.current
-    LaunchedEffect(imeVisible) { if (!imeVisible && focused) focusManager.clearFocus() }
+    LaunchedEffect(keyboardUp) { if (!keyboardUp && focused) focusManager.clearFocus() }
     // How open the composer stands, 1 open to 0 folded to a line. It tracks the scroll as it goes, and springs
     // across when a tap, the keyboard or a draft holds it open or lets go.
     val open = remember { Animatable(1f) }
@@ -2899,7 +3764,8 @@ private fun Composer(
     LaunchedEffect(fold, range) {
         snapshotFlow {
             val nearEnd = fold.nearEnd(range)
-            nearEnd to if (fold.heldOpen || focused || busyNow) 1f else nearEnd
+            // A desktop keeps it open: the window has the room, and its chat apps don't fold the box being typed in.
+            nearEnd to if (isDesktop || fold.heldOpen || focused || busyNow) 1f else nearEnd
         }.collectLatest { (nearEnd, target) ->
             // At the end it's open anyway; scrolling up from there folds it again.
             if (nearEnd >= 1f) fold.heldOpen = false
@@ -2909,6 +3775,7 @@ private fun Composer(
     // The open height while folded, so the dock can report how much it gave back.
     val openHeight = remember { IntArray(1) }
     DisposableEffect(Unit) { onDispose { onShrink(0) } }
+    val edge = if (focused) Theme[colors][textTertiary] else Theme[colors][stroke]
     Layout(
         contents = listOf(
             {
@@ -2919,33 +3786,35 @@ private fun Composer(
                         CommentTray(comments, focusComment = focusComment, onFocused = onCommentFocused, onRemove = actions::removeComment)
                     }
                     if (attachments.isNotEmpty()) ComposerTray(attachments, onRemove = actions::removeAttachment)
-                    UnstyledTextField(
+                    ComposerTextInput(
                         state = actions.composer,
-                        textStyle = Theme[typography][body],
-                        textColor = Theme[colors][textColor],
-                        cursorBrush = SolidColor(Theme[colors][accent]),
-                        // UnstyledTextField defaults to unspecified colors, which hides the selection and its handles.
-                        selectionColors = LocalTextSelectionColors.current,
-                        lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 8),
-                        keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-                        modifier = Modifier.fillMaxWidth().heightIn(min = 28.dp).padding(horizontal = 12.dp).focusRequester(focus),
-                    ) {
-                        TextInput(
-                            placeholder = {
-                                Text(
-                                    when {
-                                        !connected -> "Reconnecting to Hermes…"
-                                        comments.isNotEmpty() -> "Anything else? (optional)"
-                                        // Mid-task a message joins the running task, by Queue or Steer.
-                                        state.running -> "Add to this task…"
-                                        else -> placeholder
-                                    },
-                                    style = Theme[typography][body],
-                                    color = Theme[colors][textTertiary],
-                                )
-                            },
-                        )
-                    }
+                        modifier = Modifier.fillMaxWidth().heightIn(min = 28.dp).padding(horizontal = 12.dp).focusRequester(focus)
+                            .onFocusChanged { fold.typing = it.hasFocus }
+                            .then(
+                                if (!enterSends) {
+                                    Modifier
+                                } else {
+                                    Modifier.onPreviewKeyEvent { event ->
+                                        onKey(event) ||
+                                            onComposerKey(composerKey(event) ?: return@onPreviewKeyEvent false, actions, state, recall, connected, editing, attachments, comments)
+                                    }
+                                },
+                            ),
+                        maxHeightInLines = if (isDesktop) 14 else 8,
+                        placeholder = {
+                            Text(
+                                when {
+                                    !connected -> "Reconnecting to Hermes…"
+                                    comments.isNotEmpty() -> "Anything else? (optional)"
+                                    // Mid-task a message joins the running task, by Queue or Steer.
+                                    state.running -> "Add to this task…"
+                                    else -> placeholder
+                                },
+                                style = Theme[typography][body],
+                                color = Theme[colors][textTertiary],
+                            )
+                        },
+                    )
                     // The same test send() makes: with attachments, slash text goes out as a prompt, not a command.
                     val command = attachments.isEmpty() && SlashCommand.parse(actions.composer.text.toString().trim()) != null
                     // A steer can't carry files; send() queues those instead, so say that.
@@ -2974,7 +3843,7 @@ private fun Composer(
                         }
                         if (showMic(dictation)) Snug { DictationButton(dictation, onClick = onDictate, enabled = connected) }
                         // Voice chat waits for the task to end, so while one runs its place goes to the ways to send.
-                        if (!state.running) Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active) }
+                        if (hasVoice && !state.running) Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active) }
                         // Stop is on the live task card above; a message typed meanwhile is queued or steers the task.
                         if (state.running && hasText && !editing) {
                             if (command) {
@@ -3024,11 +3893,8 @@ private fun Composer(
             .onSizeChanged { onShrink((openHeight[0] - it.height).coerceAtLeast(0)) }
             // The dock floats over the chat on a soft shadow.
             .dropShadow(shape, DockShadow)
-            .clip(shape)
             // Nearly solid: the conversation beneath only just shows through, blurred.
-            .hazeBlur(input = HazeInput.Sources(hazeState), style = frosted)
-            .background(Theme[colors][surface].copy(alpha = 0.92f))
-            .border(1.dp, if (focused) Theme[colors][textTertiary] else Theme[colors][stroke], shape)
+            .frostedPanel(shape, Theme[colors][surface].copy(alpha = 0.92f), edge, Modifier.hazeBlur(input = HazeInput.Sources(hazeState), style = frosted))
             .onFocusChanged { focused = it.hasFocus },
     ) { (openMeasurables, lineMeasurables), constraints ->
         val loose = constraints.copy(minHeight = 0)
@@ -3045,6 +3911,37 @@ private fun Composer(
             if (progress < 0.5f) line.placeWithLayer(0, height - line.height) { alpha = (1f - progress / 0.4f).coerceIn(0f, 1f) }
         }
     }
+}
+
+/**
+ * Runs a [ComposerKey]; false leaves the key to the field (Up and Down with nothing to bring back move the cursor).
+ * Enter never starts a line on the desktop, even when there's nothing it may send.
+ */
+private fun onComposerKey(
+    key: ComposerKey,
+    actions: ChatActions,
+    state: ChatState,
+    recall: PromptRecall,
+    connected: Boolean,
+    editing: Boolean,
+    attachments: List<OutgoingAttachment>,
+    comments: List<PendingComment>,
+): Boolean {
+    val text = actions.composer.text.toString()
+    val prompts = { state.messages.filterIsInstance<ChatMessage.User>().map { it.text }.filter { it.isNotBlank() } }
+    when (key) {
+        ComposerKey.Send, ComposerKey.Queue -> {
+            val sendable = text.isNotBlank() || attachments.isNotEmpty() || comments.isNotEmpty()
+            // An edit goes once the reply finishes, as the disabled Send says.
+            if (!sendable || !connected || (state.running && editing)) return true
+            val command = attachments.isEmpty() && SlashCommand.parse(text.trim()) != null
+            actions.send(if (key == ComposerKey.Queue && state.running && !command) RunningSend.Queue else null)
+            recall.reset()
+        }
+        ComposerKey.Older -> actions.composer.setTextAndPlaceCursorAtEnd(recall.older(text, prompts()) ?: return false)
+        ComposerKey.Newer -> actions.composer.setTextAndPlaceCursorAtEnd(recall.newer(text, prompts()) ?: return false)
+    }
+    return true
 }
 
 /**
@@ -3071,7 +3968,7 @@ private fun FoldedComposer(
         AttachButton(onClick = onAttach, enabled = canAttach)
         UnstyledButton(
             onClick = onOpen,
-            modifier = Modifier.weight(1f).heightIn(min = MinTouchTarget).semantics { contentDescription = "Write a message" },
+            modifier = Modifier.weight(1f).heightIn(min = MinTouchTarget).handCursor().semantics { contentDescription = "Write a message" },
             indication = null,
         ) {
             Box(Modifier.fillMaxWidth().padding(horizontal = 4.dp), contentAlignment = Alignment.CenterStart) {
@@ -3086,13 +3983,13 @@ private fun FoldedComposer(
         }
         if (showMic(dictation)) Snug { DictationButton(dictation, onClick = onDictate, enabled = connected) }
         // Stop is on the live task card above, so this stays voice chat, which waits for the task to end.
-        Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active && !state.running) }
+        if (hasVoice) Snug { VoiceChatButton(onClick = onVoiceChat, enabled = connected && !dictation.active && !state.running) }
     }
 }
 
 /** The mic shows with the Dictation setting on, and while a dictation still runs, so it can be finished. */
 @Composable
-private fun showMic(dictation: DictationState): Boolean = LocalAppSettings.current.dictation || dictation.active
+private fun showMic(dictation: DictationState): Boolean = hasVoice && LocalAppSettings.current.dictation || dictation.active
 
 /** Says that a command typed while a task runs goes at once, not into the task. */
 @Composable
@@ -3158,6 +4055,7 @@ private fun RunningSendSegments(mode: RunningSend, attachments: Boolean, enabled
                 Box(
                     Modifier
                         .fillMaxHeight()
+                        .handCursor(usable)
                         .combinedClickable(
                             enabled = usable,
                             onClick = { onSend(way) },
@@ -3172,6 +4070,8 @@ private fun RunningSendSegments(mode: RunningSend, attachments: Boolean, enabled
                             interactionSource = interaction,
                             indication = null,
                         )
+                        // A mouse finds the other ways with a right-click, as it can't feel a long press.
+                        .then(if (isDesktop && others.isNotEmpty()) Modifier.onSecondaryPress { menuOpen = true } else Modifier)
                         .semantics {
                             contentDescription = "${way.label}: ${way.summary}"
                             role = Role.Button
@@ -3188,7 +4088,7 @@ private fun RunningSendSegments(mode: RunningSend, attachments: Boolean, enabled
                             .heightIn(min = 32.dp)
                             .clip(CircleShape)
                             .then(if (on) Modifier.background(Theme[colors][userBubble], CircleShape) else Modifier)
-                            .indication(interaction, rememberColoredIndication(tint))
+                            .indication(interaction, rememberHoverIndication(tint))
                             .padding(horizontal = 10.dp),
                         horizontalArrangement = Arrangement.spacedBy(5.dp),
                         verticalAlignment = Alignment.CenterVertically,
@@ -3224,18 +4124,27 @@ private fun VoiceChatButton(onClick: () -> Unit, enabled: Boolean) =
 @Composable
 private fun DiscButton(icon: ImageVector, contentDescription: String, onClick: () -> Unit, enabled: Boolean, iconSize: Dp) {
     val tint = if (enabled) Theme[colors][textSecondary] else Theme[colors][textTertiary].copy(alpha = 0.5f)
-    DiscTarget(onClick = onClick, enabled = enabled, tint = tint) {
+    DiscTarget(onClick = onClick, enabled = enabled, tint = tint, label = contentDescription) {
         UnstyledIcon(icon, contentDescription = contentDescription, tint = tint, modifier = Modifier.size(iconSize))
     }
 }
 
 /** A grey disc in the full touch target; a press shows on the disc itself, as on Send. [disc] draws over its fill. */
 @Composable
-private fun DiscTarget(onClick: () -> Unit, enabled: Boolean, tint: Color, disc: Modifier = Modifier, content: @Composable () -> Unit) {
+private fun DiscTarget(
+    onClick: () -> Unit,
+    enabled: Boolean,
+    tint: Color,
+    /** Said on hover on the desktop, as the bar's buttons do. */
+    label: String,
+    disc: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) = Tooltip(label) {
     val interaction = remember { MutableInteractionSource() }
     Box(
         Modifier
             .size(MinTouchTarget)
+            .handCursor(enabled)
             .clickable(interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -3245,14 +4154,17 @@ private fun DiscTarget(onClick: () -> Unit, enabled: Boolean, tint: Color, disc:
                 .background(Theme[colors][surface3], CircleShape)
                 .then(disc)
                 .clip(CircleShape)
-                .indication(interaction, rememberColoredIndication(tint)),
+                .indication(interaction, rememberHoverIndication(tint)),
             contentAlignment = Alignment.Center,
         ) { content() }
     }
 }
 
-/** The size the composer's round buttons are drawn at: +, the mic, voice chat and Send. */
-private val ComposerDisc = 36.dp
+/**
+ * The size the composer's round buttons are drawn at: +, the mic, voice chat and Send. Smaller on the desktop, in
+ * its smaller touch target, so the discs keep a gap between them.
+ */
+private val ComposerDisc: Dp get() = if (isDesktop) 30.dp else 36.dp
 
 /**
  * Sets a round button [SNUG_TRIM] narrower on each side, so neighbouring discs sit 8dp apart instead of 12dp;
@@ -3262,7 +4174,8 @@ private val ComposerDisc = 36.dp
 private fun Snug(button: @Composable () -> Unit) {
     Layout(button) { measurables, constraints ->
         val placeable = measurables.first().measure(constraints)
-        val trim = SNUG_TRIM.roundToPx()
+        // The desktop's targets are already tight around their discs.
+        val trim = if (isDesktop) 0 else SNUG_TRIM.roundToPx()
         // In a window too narrow for the button at all, there's nothing to trim.
         layout((placeable.width - 2 * trim).coerceAtLeast(0), placeable.height) { placeable.place(-trim, 0) }
     }
@@ -3285,9 +4198,17 @@ internal enum class SendIcon { Send, Stop }
 internal fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
     val (fill, tint) = sendColors(enabled)
     val interaction = remember { MutableInteractionSource() }
+    // With its key on the desktop, where Enter sends and Esc stops.
+    Tooltip(
+        when (icon) {
+            SendIcon.Send -> "Send (Enter)"
+            SendIcon.Stop -> "Stop the task (Esc)"
+        },
+    ) {
     Box(
         Modifier
             .size(MinTouchTarget)
+            .handCursor(enabled)
             .clickable(interaction, indication = null, enabled = enabled, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
@@ -3306,6 +4227,7 @@ internal fun SendButton(icon: SendIcon, onClick: () -> Unit, enabled: Boolean) {
             )
         }
     }
+    }
 }
 
 /** Send's disc and icon colors: the accent when it can send, a quiet grey when it can't. */
@@ -3323,7 +4245,7 @@ private fun SendDisc(fill: Color, tint: Color, glow: Boolean, interaction: Mutab
             .then(if (glow) Modifier.glow(CircleShape, Shadow(radius = 10.dp, color = fill.copy(alpha = 0.45f), offset = DpOffset(0.dp, 3.dp))) else Modifier)
             .background(fill, CircleShape)
             .clip(CircleShape)
-            .indication(interaction, rememberColoredIndication(tint)),
+            .indication(interaction, rememberHoverIndication(tint)),
         contentAlignment = Alignment.Center,
     ) { content() }
 }
@@ -3350,6 +4272,7 @@ internal fun DictationButton(state: DictationState, onClick: () -> Unit, enabled
         onClick = onClick,
         enabled = enabled,
         tint = tint,
+        label = if (recording) "Finish dictating" else "Dictate",
         disc = if (recording) Modifier.border(2.dp, tint.copy(alpha = 0.25f + 0.75f * state.level), CircleShape) else Modifier,
     ) {
         UnstyledIcon(
@@ -3360,6 +4283,9 @@ internal fun DictationButton(state: DictationState, onClick: () -> Unit, enabled
         )
     }
 }
+
+/** Where the composer's model pill is in the window, for the desktop's model picker to open over. */
+private val LocalModelPillBounds = staticCompositionLocalOf<MutableState<Rect?>?> { null }
 
 /** "✦ Opus 5.5 | Medium ⌄" in a pill, the model and thinking level; opens the model sheet. */
 @Composable
@@ -3377,10 +4303,15 @@ private fun ModelPill(
     val fast = state.fast == true
     val name = displayModelName(model)
     val interaction = remember { MutableInteractionSource() }
+    val bounds = LocalModelPillBounds.current
+    // Gone (no model, a question in the composer's place), the picker opens centred rather than over where it was.
+    if (bounds != null) DisposableEffect(bounds) { onDispose { bounds.value = null } }
     // Drawn 36dp tall; the full touch height around it takes the tap.
-    Box(
-        modifier
+    Tooltip("Change model (${keysLabel("Ctrl+Shift+M")})", modifier) { Box(
+        Modifier
+            .then(if (bounds != null) Modifier.onGloballyPositioned { bounds.value = it.boundsInWindow() } else Modifier)
             .heightIn(min = MinTouchTarget)
+            .handCursor()
             .clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
             .semantics {
                 contentDescription = listOfNotNull(name, effort?.label, "fast mode".takeIf { fast }).joinToString(", ") + ". Change model"
@@ -3390,11 +4321,12 @@ private fun ModelPill(
         Row(
             Modifier
                 .clearAndSetSemantics {}
-                .heightIn(min = 36.dp)
-                .then(if (compact) Modifier.widthIn(min = 36.dp) else Modifier)
+                // As tall as the discs beside it.
+                .heightIn(min = ComposerDisc)
+                .then(if (compact) Modifier.widthIn(min = ComposerDisc) else Modifier)
                 .clip(CircleShape)
                 .background(Theme[colors][surface3], CircleShape)
-                .indication(interaction, rememberColoredIndication(Theme[colors][textSecondary]))
+                .indication(interaction, rememberHoverIndication(Theme[colors][textSecondary]))
                 .padding(horizontal = if (compact) 0.dp else 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(6.dp, Alignment.CenterHorizontally),
@@ -3421,7 +4353,7 @@ private fun ModelPill(
             }
             UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textMuted], modifier = Modifier.size(12.dp))
         }
-    }
+    } }
 }
 
 /**
@@ -3431,5 +4363,10 @@ private fun ModelPill(
 private fun Modifier.trimEndTop(end: Dp, top: Dp) = layout { measurable, constraints ->
     val placeable = measurable.measure(constraints)
     val dy = top.roundToPx()
-    layout(placeable.width - end.roundToPx(), placeable.height - dy) { placeable.placeRelative(0, -dy) }
+    val size = trimmedSize(placeable.width, placeable.height, end.roundToPx(), dy)
+    layout(size.width, size.height) { placeable.placeRelative(0, -dy) }
 }
+
+/** What [trimEndTop] leaves of a [width] by [height] element, never below nothing: the largest text can squeeze one narrower than its trim. */
+internal fun trimmedSize(width: Int, height: Int, end: Int, top: Int): IntSize =
+    IntSize((width - end).coerceAtLeast(0), (height - top).coerceAtLeast(0))

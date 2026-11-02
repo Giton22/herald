@@ -17,14 +17,16 @@ import androidx.compose.ui.draw.clip
 import com.composables.icons.lucide.SquareTerminal
 import com.composeunstyled.UnstyledButton
 import com.composeunstyled.UnstyledIcon
-import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.rememberHoverIndication
 import com.mikepenz.markdown.compose.elements.listDepth
 import com.mikepenz.markdown.compose.elements.MarkdownListItems
+import com.mikepenz.markdown.compose.elements.MarkdownOrderedList
 import dev.hermeskotlin.designsystem.radiusSmall
 import dev.hermeskotlin.designsystem.surface3
 import dev.hermeskotlin.designsystem.textMuted
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.BasicText
+import androidx.compose.foundation.text.selection.DisableSelection
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -41,6 +43,9 @@ import androidx.compose.ui.text.TextLinkStyles
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextDirection
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.composables.icons.lucide.Check
@@ -61,6 +66,8 @@ import com.mikepenz.markdown.compose.elements.MarkdownCodeFence
 import com.mikepenz.markdown.compose.elements.MarkdownParagraph
 import com.mikepenz.markdown.compose.elements.MarkdownText as LibraryMarkdownText
 import dev.hermeskotlin.designsystem.accent
+import dev.hermeskotlin.designsystem.LocalDesktopLayout
+import com.mikepenz.markdown.model.markdownExtendedSpans
 import org.intellij.markdown.ast.ASTNode
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalUriHandler
@@ -152,13 +159,26 @@ internal fun DefaultMarkdownTypography.withTextStyle(style: TextStyle?): Default
  */
 @Composable
 fun MarkdownText(text: String, modifier: Modifier = Modifier, streaming: Boolean = false, textStyle: TextStyle? = null) {
-    val prepared = remember(text) { MathMarkup.prepare(text) }
-    val replyStyle = Theme[typography][body].copy(color = Theme[colors][textColor])
+    val rtl = remember(text) { Bidi.prefersRightToLeft(text) }
+    val prepared = remember(text) {
+        val parsed = Bidi.isolateInlineCode(MathMarkup.prepare(text), rightToLeft = rtl)
+        // An Arabic sentence also needs the dates, amounts, identifiers and URLs inside it kept whole.
+        if (rtl) Bidi.isolateLtrRuns(parsed) else parsed
+    }
+    // An Arabic reply is laid out right to left as a whole (ordered, and start-aligned, from the right);
+    // anything else falls back to Content, so each block follows its own first strong character.
+    val direction = if (rtl) TextDirection.Rtl else TextDirection.Content
+    val replyStyle = Theme[typography][body].copy(color = Theme[colors][textColor], textDirection = direction)
     val compact = compactStyle(replyStyle, textStyle)
     val bodyStyle = compact ?: replyStyle
-    val codeStyle = Theme[typography][code].copy(color = Theme[colors][textColor])
-    val headingStyle = Theme[typography][heading].copy(color = Theme[colors][textColor])
+    val codeStyle = Theme[typography][code].copy(color = Theme[colors][textColor], textDirection = TextDirection.Ltr)
+    val headingStyle = Theme[typography][heading].copy(color = Theme[colors][textColor], textDirection = direction)
     val linkColor = Theme[colors][accentText]
+    val linkStyle = SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)
+    // On a desktop a link under the pointer takes a soft tint, which also tells the right-click menu which link
+    // it is on (see LinkUnderPointer).
+    val desktop = LocalDesktopLayout.current
+    val hoverMark = Theme[colors][accent].copy(alpha = 0.14f)
     val markdownColors = DefaultMarkdownColors(
         text = bodyStyle.color,
         codeBackground = Theme[colors][well],
@@ -181,7 +201,7 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier, streaming: Boolean
         ordered = replyStyle,
         bullet = replyStyle,
         list = replyStyle,
-        textLink = TextLinkStyles(SpanStyle(color = linkColor, textDecoration = TextDecoration.Underline)),
+        textLink = TextLinkStyles(linkStyle, hoveredStyle = if (desktop) linkStyle.copy(background = hoverMark) else null),
         table = replyStyle,
     ).withTextStyle(compact)
     val components = remember {
@@ -189,6 +209,7 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier, streaming: Boolean
             codeFence = { MarkdownCodeFence(it.content, it.node, block = { code, language, style -> CodeBlock(code, language, style) }) },
             codeBlock = { MarkdownCodeBlock(it.content, it.node, block = { code, language, style -> CodeBlock(code, language, style) }) },
             paragraph = { HighlightedParagraph(it.content, it.node) },
+            orderedList = { ListInItsDirection(it.content, it.node) { MarkdownOrderedList(it.content, it.node, depth = it.listDepth) } },
             unorderedList = { DotList(it.content, it.node, it.listDepth) },
             table = { FittedTable(it.content, it.node, it.typography.table) },
         )
@@ -205,7 +226,24 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier, streaming: Boolean
     val parentUris = LocalUriHandler.current
     val fileLinks = LocalFileLinks.current
     val webOnly = remember(parentUris, fileLinks) { WebLinksOnly(parentUris, fileLinks) }
-    CompositionLocalProvider(LocalUriHandler provides webOnly, LocalStreaming provides streaming, LocalMathStyle provides math) {
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    val extendedSpans = if (!desktop) markdownExtendedSpans() else markdownExtendedSpans {
+        rememberLinkHoverSpans(
+            hoverMark,
+            open = webOnly::openUri,
+            copy = { url -> scope.launch { clipboard.setClipEntry(plainTextClipEntry(url)) } },
+        )
+    }
+    // An Arabic reply is laid out from the right as a whole, so headings, quotes and short lines start there;
+    // code, and paragraphs and lists in another direction, set their own.
+    val layout = if (rtl) LayoutDirection.Rtl else LocalLayoutDirection.current
+    CompositionLocalProvider(
+        LocalUriHandler provides webOnly,
+        LocalStreaming provides streaming,
+        LocalMathStyle provides math,
+        LocalLayoutDirection provides layout,
+    ) {
         Markdown(
             content = prepared,
             colors = markdownColors,
@@ -217,6 +255,7 @@ fun MarkdownText(text: String, modifier: Modifier = Modifier, streaming: Boolean
             inlineContent = inlineContent,
             imageTransformer = PictureTransformer,
             components = components,
+            extendedSpans = extendedSpans,
             retainState = true,
             immediate = !streaming,
         )
@@ -323,7 +362,7 @@ private object PictureTransformer : ImageTransformer {
             null, MarkdownPicture.Loading -> null
             is MarkdownPicture.Ready -> ImageData(
                 BitmapPainter(picture.bitmap),
-                modifier = picture.onOpen?.let { Modifier.clickable(onClickLabel = "Open the picture", onClick = it) } ?: Modifier,
+                modifier = picture.onOpen?.let { Modifier.handCursor().clickable(onClickLabel = "Open the picture", onClick = it) } ?: Modifier,
                 contentDescription = null,
             )
             MarkdownPicture.Failed -> ImageData(
@@ -356,22 +395,39 @@ private fun HighlightedParagraph(content: String, node: ASTNode) {
         DisplayFormula(display, math)
         return
     }
+    // Each paragraph reads in the direction most of its words take: an English paragraph that opens with an
+    // Arabic greeting stays left to right, and "409 MB" opening an Arabic one doesn't turn it left to right.
+    // One with no words keeps the reply's direction. The layout follows too, and the paragraph takes the full
+    // width: a short line is otherwise only as wide as its text and sits where the reply around it starts.
+    val rtl = remember(content, node) { Bidi.proseDirection(node.getTextInNode(content)) }
+    val replyStyle = LocalMarkdownTypography.current.paragraph
+    val style = when (rtl) {
+        true -> replyStyle.copy(textDirection = TextDirection.Rtl)
+        false -> replyStyle.copy(textDirection = TextDirection.Ltr)
+        null -> replyStyle
+    }
+    val layout = when (rtl) {
+        true -> LayoutDirection.Rtl
+        false -> LayoutDirection.Ltr
+        null -> LocalLayoutDirection.current
+    }
     val highlights = LocalTextHighlights.current
-    if (highlights.isEmpty()) {
-        MarkdownParagraph(content, node)
-        return
+    CompositionLocalProvider(LocalLayoutDirection provides layout) {
+        if (highlights.isEmpty()) {
+            MarkdownParagraph(content, node, Modifier.fillMaxWidth(), style = style)
+            return@CompositionLocalProvider
+        }
+        val settings = annotatorSettings()
+        val color = highlightColor()
+        val text = remember(content, node, style, settings, highlights, color) {
+            buildAnnotatedString {
+                pushStyle(style.toSpanStyle())
+                buildMarkdownAnnotatedString(content, node, settings)
+                pop()
+            }.withHighlights(highlights, color)
+        }
+        LibraryMarkdownText(text, node, Modifier.fillMaxWidth(), style = style)
     }
-    val style = LocalMarkdownTypography.current.paragraph
-    val settings = annotatorSettings()
-    val color = highlightColor()
-    val text = remember(content, node, style, settings, highlights, color) {
-        buildAnnotatedString {
-            pushStyle(style.toSpanStyle())
-            buildMarkdownAnnotatedString(content, node, settings)
-            pop()
-        }.withHighlights(highlights, color)
-    }
-    LibraryMarkdownText(text, node, style = style)
 }
 
 /** A bullet list whose markers are small accent dots, centered on the first line; nested lists get muted ones. */
@@ -383,9 +439,25 @@ private fun DotList(content: String, node: ASTNode, depth: Int) {
     // Only an sp line height converts to dp; any other falls back to the body's.
     val lineHeight = LocalMarkdownTypography.current.list.lineHeight.takeIf { it.isSp } ?: Theme[typography][body].lineHeight
     val top = with(LocalDensity.current) { ((lineHeight.toDp() - BULLET_DOT) / 2) }
-    MarkdownListItems(content, node, depth, markerModifier = { Modifier.padding(start = 2.dp, end = 10.dp) }) { _, _, _ ->
-        Box(Modifier.padding(top = top).size(BULLET_DOT).background(dot, CircleShape))
+    ListInItsDirection(content, node) {
+        MarkdownListItems(content, node, depth, markerModifier = { Modifier.padding(start = 2.dp, end = 10.dp) }) { _, _, _ ->
+            Box(Modifier.padding(top = top).size(BULLET_DOT).background(dot, CircleShape))
+        }
     }
+}
+
+/**
+ * An Arabic list hangs off the right margin: the marker takes that side and the text follows it. A list with
+ * no words of its own (`1. 2026`) keeps the direction around it.
+ */
+@Composable
+private fun ListInItsDirection(content: String, node: ASTNode, list: @Composable () -> Unit) {
+    val rtl = remember(content, node) { Bidi.proseDirection(node.getTextInNode(content)) }
+    if (rtl == null) {
+        list()
+        return
+    }
+    CompositionLocalProvider(LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr, content = list)
 }
 
 private val BULLET_DOT = 5.dp
@@ -406,7 +478,9 @@ private fun CodeBlock(code: String, language: String?, style: TextStyle) {
         highlightedCode(shown, syntax, palette).withHighlights(highlights, color)
     }
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
-    Column(
+    // Code is laid out left to right even in an Arabic reply: the label and Copy keep their sides, and a long
+    // line scrolls from the left.
+    CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) { Column(
         Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
@@ -414,8 +488,9 @@ private fun CodeBlock(code: String, language: String?, style: TextStyle) {
             .background(Theme[colors][well])
             .border(1.dp, Theme[colors][stroke], shape),
     ) {
-        // A header strip: what the code is, and a Copy pill.
-        Row(
+        // A header strip: what the code is, and a Copy pill. Out of a selection, so copying a reply across the
+        // block takes its code without "kotlin" and "Copy".
+        DisableSelection { Row(
             Modifier.fillMaxWidth().background(Theme[colors][surface2]).padding(start = 12.dp, end = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -428,12 +503,18 @@ private fun CodeBlock(code: String, language: String?, style: TextStyle) {
                 modifier = Modifier.weight(1f),
             )
             CopyPill(code)
+        } }
+        val scroll = rememberScrollState()
+        Box {
+            val sideways = if (wrap) Modifier else Modifier.horizontalScroll(scroll)
+            Box(Modifier.fillMaxWidth().then(sideways).padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 12.dp)) {
+                // Code is always laid out left to right, even under an Arabic paragraph around it.
+                BasicText(text, style = style.copy(textDirection = TextDirection.Ltr), softWrap = wrap)
+            }
+            // In the bottom padding, so a line running past the edge shows it does, to a mouse too.
+            if (!wrap) HorizontalScrollbar(scroll, Modifier.align(Alignment.BottomCenter).fillMaxWidth().padding(horizontal = 6.dp, vertical = 3.dp))
         }
-        val scroll = if (wrap) Modifier else Modifier.horizontalScroll(rememberScrollState())
-        Box(Modifier.fillMaxWidth().then(scroll).padding(start = 12.dp, end = 12.dp, top = 10.dp, bottom = 12.dp)) {
-            BasicText(text, style = style, softWrap = wrap)
-        }
-    }
+    } }
 }
 
 /** Highlighted code, shared by every block on screen and kept as long as it's among the recent ones. */
@@ -500,8 +581,8 @@ private fun CopyPill(text: String) {
     val tint = Theme[colors][textTertiary]
     UnstyledButton(
         onClick = copy,
-        modifier = Modifier.height(40.dp).clip(RoundedCornerShape(Theme[radii][radiusSmall])),
-        indication = rememberColoredIndication(tint),
+        modifier = Modifier.height(40.dp).handCursor().clip(RoundedCornerShape(Theme[radii][radiusSmall])),
+        indication = rememberHoverIndication(tint),
         contentPadding = PaddingValues(horizontal = 4.dp),
     ) {
         Row(

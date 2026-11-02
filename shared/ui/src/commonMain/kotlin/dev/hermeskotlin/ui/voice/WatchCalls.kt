@@ -10,6 +10,7 @@ import dev.hermeskotlin.core.wear.WatchOutbox
 import dev.hermeskotlin.core.wear.WatchRelay
 import dev.hermeskotlin.core.wear.contextPercentOf
 import dev.hermeskotlin.core.wear.modelOf
+import dev.hermeskotlin.wearlink.WatchScope
 import dev.hermeskotlin.wearlink.CallEnd
 import dev.hermeskotlin.wearlink.CallEvents
 import dev.hermeskotlin.wearlink.CallPhase
@@ -41,10 +42,10 @@ import kotlinx.coroutines.withContext
 import kotlin.time.TimeSource
 
 /**
- * Herald's side of a live voice call held by the watch. The watch makes the WebRTC call (its microphone and
+ * Kyllene's side of a live voice call held by the watch. The watch makes the WebRTC call (its microphone and
  * speaker, straight to the voice model); this trades its offer for the model's answer through the gateway and
  * runs the conversation with [LiveConversation], as for a call on the phone: what the model sends on the call's
- * event channel comes from the watch, what Herald sends it goes back for the watch to send. Requests run as
+ * event channel comes from the watch, what Kyllene sends it goes back for the watch to send. Requests run as
  * Hermes turns in the watch's chat. One call at a time; a new one ends the last.
  *
  * Every message is handled on one thread, in the order it came, so a hang-up right after a start finds its call.
@@ -87,7 +88,7 @@ class WatchCalls(
 
     /**
      * The voice model's events of a call as the watch got them, or (empty) that the watch is still there. A call
-     * that's over here (the watch went quiet too long, Herald restarted) is told over, so the watch hangs up too.
+     * that's over here (the watch went quiet too long, Kyllene restarted) is told over, so the watch hangs up too.
      */
     fun events(node: String, events: CallEvents) {
         scope.launch {
@@ -120,14 +121,15 @@ class WatchCalls(
         suspend fun end(error: String?) = tell(last.copy(phase = CallPhase.Ended, answerSdp = null, error = error, thinking = false, working = null))
 
         tell(last)
-        val chat = when (val found = relay.chatForCall(start.chatId)) {
+        val chat = when (val found = relay.chatForCall(start.chatId, start.botProfile, start.defaultRequestId, node, start.scope)) {
             is CallChat.Failed -> return end(found.message)
             is CallChat.Ready -> found
         }
+        last = last.copy(scope = WatchScope(chat.gateway.value, chat.profile))
         if (held.over) return
         when (val status = audio.voiceLiveStatus(chat.gateway, chat.profile)) {
             is ApiResult.Success -> {
-                relay.liveVoiceIs(chat.gateway, status.value.live)
+                relay.liveVoiceIs(chat.gateway, status.value.live, chat.profile)
                 if (!status.value.live) return end(NOT_LIVE)
             }
             else -> return end(liveFailure(status))
@@ -184,6 +186,10 @@ class WatchCalls(
         val error = try {
             conversation.run {
                 held.connect { offer ->
+                    val defaultRequest = start.defaultRequestId
+                    if (defaultRequest != null && !relay.defaultCallCurrent(node, defaultRequest)) {
+                        error("Default Call Target changed. Tap Call again.")
+                    }
                     when (val result = audio.startVoiceLive(chat.gateway, offer, conversation.history(), chat.profile)) {
                         is ApiResult.Success -> result.value.ifBlank { error("GPT-Live sent no answer.") }
                         else -> error(liveFailure(result))
@@ -260,7 +266,7 @@ class WatchCalls(
 
         override fun send(event: String): Boolean = outgoing.trySend(event).isSuccess
 
-        /** What Herald says to the model, gathered a moment so a reply's sentences go to the watch together. */
+        /** What Kyllene says to the model, gathered a moment so a reply's sentences go to the watch together. */
         private suspend fun sendBatches() {
             var seq = 0
             while (true) {
@@ -310,7 +316,7 @@ class WatchCalls(
 
     companion object {
         const val NOT_LIVE = "Live voice isn't set up on your gateway any more. Tap to ask one question at a time."
-        const val CALL_LOST = "Herald on your phone lost the call."
+        const val CALL_LOST = "Kyllene on your phone lost the call."
         private const val UPDATE_EVERY_MS = 250L
         private const val ANSWER_AGAIN_MS = 1_500L
         private const val SEND_GATHER_MS = 60L

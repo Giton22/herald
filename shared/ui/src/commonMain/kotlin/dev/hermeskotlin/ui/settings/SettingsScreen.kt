@@ -1,8 +1,18 @@
 package dev.hermeskotlin.ui.settings
 
+import dev.hermeskotlin.designsystem.components.Tooltip
+import dev.hermeskotlin.designsystem.components.handCursor
+
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -30,6 +40,17 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.ScrollState
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.snapshots.SnapshotStateMap
+import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.platform.LocalWindowInfo
+import com.composables.icons.lucide.Monitor
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.selection.toggleable
@@ -38,6 +59,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -61,10 +83,17 @@ import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.progressBarRangeInfo
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import dev.hermeskotlin.designsystem.accent
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
@@ -80,6 +109,7 @@ import com.composables.icons.lucide.Vibrate
 import com.composables.icons.lucide.ArrowLeftRight
 import com.composables.icons.lucide.Brain
 import com.composables.icons.lucide.Cat
+import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Clock
 import com.composables.icons.lucide.Gauge
 import com.composables.icons.lucide.Globe
@@ -94,6 +124,7 @@ import com.composables.icons.lucide.MessageCircle
 import com.composables.icons.lucide.MessageSquarePlus
 import com.composables.icons.lucide.MessagesSquare
 import com.composables.icons.lucide.Moon
+import com.composables.icons.lucide.Phone
 import com.composables.icons.lucide.RefreshCw
 import com.composables.icons.lucide.Send
 import com.composables.icons.lucide.ShieldAlert
@@ -105,12 +136,14 @@ import com.composables.icons.lucide.Wrench
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
-import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.rememberHoverIndication
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.phone.enabledPhoneTools
 import dev.hermeskotlin.core.plugins.NextPromptApi
 import dev.hermeskotlin.core.push.PushStatus
 import dev.hermeskotlin.core.settings.AppSettings
+import dev.hermeskotlin.core.settings.CallTarget
 import dev.hermeskotlin.core.settings.RunningSend
 import dev.hermeskotlin.core.settings.TextSize
 import dev.hermeskotlin.core.settings.ThemeMode
@@ -127,6 +160,8 @@ import dev.hermeskotlin.designsystem.code
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.BottomSheet
 import dev.hermeskotlin.designsystem.components.Button
+import dev.hermeskotlin.designsystem.components.VerticalScrollbar
+import androidx.compose.foundation.layout.fillMaxHeight
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.MinTouchTarget
@@ -153,8 +188,22 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.title
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.bots.BotFaces
+import dev.hermeskotlin.ui.bots.BotAvatar
 import dev.hermeskotlin.ui.LocalAppVersion
 import dev.hermeskotlin.ui.PlatformBackHandler
+import dev.hermeskotlin.ui.hasVoice
+import dev.hermeskotlin.ui.windowControlsHeight
+import dev.hermeskotlin.ui.CopyableOnDesktop
+import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.PageRowHeight
+import dev.hermeskotlin.ui.tapVerb
+import dev.hermeskotlin.ui.keysLabel
+import dev.hermeskotlin.ui.QuickEntryHotkey
+import dev.hermeskotlin.ui.Shortcut
+import dev.hermeskotlin.ui.zoomAfter
+import com.composables.icons.lucide.AppWindow
+import com.composables.icons.lucide.Keyboard
 import dev.hermeskotlin.ui.chat.AppMark
 import dev.hermeskotlin.ui.chat.label
 import dev.hermeskotlin.ui.chat.summary
@@ -165,11 +214,21 @@ import dev.hermeskotlin.ui.sessions.SubpageHeader
 import dev.hermeskotlin.ui.update.UpdateBanner
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.roundToInt
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.compositionLocalOf
+import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.text.input.ImeAction
+import com.composables.icons.lucide.Search
+import dev.hermeskotlin.designsystem.components.TextField
 
 /** App preferences, the signed-in account and version info, as one page over the home screen. */
 @Composable
 fun SettingsScreen(
     gateway: SavedGateway,
+    botFaces: BotFaces = BotFaces(),
     onBack: () -> Unit,
     onSignOut: () -> Unit,
     onOpenGateways: () -> Unit,
@@ -193,6 +252,7 @@ fun SettingsScreen(
     )
     var checkOpen by remember { mutableStateOf(false) }
     var phoneToolsOpen by remember { mutableStateOf(false) }
+    var callTargetOpen by remember { mutableStateOf(false) }
     var appIconOpen by remember { mutableStateOf(false) }
     var startInstructionOpen by remember { mutableStateOf(false) }
     var connectedDevicesOpen by remember { mutableStateOf(false) }
@@ -200,8 +260,10 @@ fun SettingsScreen(
     val appIcons = key(appIconOpen) { rememberAppIcons() }
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
-    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !connectedDevicesOpen, onBack = onBack)
-    SettingsView(
+    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen && !connectedDevicesOpen, onBack = onBack)
+    // The desktop lists the sections beside the page; they say here where they start.
+    val anchors = remember { mutableStateMapOf<String, Int>() }
+    CompositionLocalProvider(LocalSectionAnchors provides anchors.takeIf { isDesktop }) { SettingsView(
         settings, info, gateway.url, viewModel::update, onBack, onSignOut, onOpenGateways,
         gatewayName = gateway.label,
         onCheckConnection = {
@@ -222,6 +284,8 @@ fun SettingsScreen(
             viewModel.removeWallpaper()
         },
         onOpenPhoneTools = { phoneToolsOpen = true },
+        botFaces = botFaces,
+        onChooseCallTarget = { callTargetOpen = true },
         appIcon = appIcons.current,
         onOpenAppIcon = { appIconOpen = true },
         onOpenStartInstruction = { startInstructionOpen = true },
@@ -229,7 +293,11 @@ fun SettingsScreen(
         suggestions = suggestions,
         onInstallSuggestions = viewModel::installSuggestions,
         onCheckSuggestions = viewModel::checkSuggestions,
-    )
+    ) }
+    if (callTargetOpen) CallTargetPicker(gateway, viewModel, botFaces, onDismiss = { callTargetOpen = false }) { target ->
+        viewModel.update { it.copy(callTargets = it.callTargets + (gateway.url to target)) }
+        callTargetOpen = false
+    }
     if (phoneToolsOpen) PhoneToolsScreen(onBack = { phoneToolsOpen = false })
     if (startInstructionOpen) {
         StartInstructionScreen(
@@ -283,7 +351,8 @@ private fun InversePillButton(text: String, icon: ImageVector, onClick: () -> Un
             .heightIn(min = MinTouchTarget)
             .clip(CircleShape)
             .background(Theme[colors][inverse], CircleShape)
-            .clickable(interaction, rememberColoredIndication(on), enabled = !loading, role = Role.Button, onClick = onClick)
+            .handCursor(!loading)
+            .clickable(interaction, rememberHoverIndication(on), enabled = !loading, role = Role.Button, onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
         verticalAlignment = Alignment.CenterVertically,
@@ -318,6 +387,8 @@ internal fun SettingsView(
     onChooseWallpaper: () -> Unit = {},
     onRemoveWallpaper: () -> Unit = {},
     onOpenPhoneTools: () -> Unit = {},
+    botFaces: BotFaces = BotFaces(),
+    onChooseCallTarget: () -> Unit = {},
     appIcon: AppIcon = AppIcon.Blue,
     onOpenAppIcon: () -> Unit = {},
     onOpenStartInstruction: () -> Unit = {},
@@ -335,13 +406,27 @@ internal fun SettingsView(
             .windowInsetsPadding(WindowInsets.safeDrawing),
         contentAlignment = Alignment.TopCenter,
     ) {
+        val scroll = rememberScrollState()
+        // The desktop's settings are many and a pointer away; a search over their names finds one quicker than scrolling.
+        val search = rememberTextFieldState()
+        val query = if (isDesktop) search.text.toString() else ""
         Column(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
             SubpageHeader("Settings", onBack = onBack)
+            if (isDesktop) {
+                TextField(
+                    state = search,
+                    placeholder = "Search settings",
+                    leadingIcon = Lucide.Search,
+                    clearable = true,
+                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                    modifier = Modifier.padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
+                )
+            }
             Column(
-                Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, bottom = 32.dp),
-                verticalArrangement = Arrangement.spacedBy(22.dp),
-            ) {
-                AccountCard(gatewayName, gatewayUrl, info.userLabel, onCheckConnection)
+                Modifier.fillMaxSize().verticalScroll(scroll).padding(start = 14.dp, end = 14.dp, bottom = 32.dp),
+                verticalArrangement = Arrangement.spacedBy(if (query.isBlank()) 22.dp else 0.dp),
+            ) { SearchableSettings(query) {
+                if (query.isBlank()) AccountCard(gatewayName, gatewayUrl, info.userLabel, onCheckConnection)
 
                 Section("Appearance") {
                     Field("Theme") {
@@ -352,7 +437,7 @@ internal fun SettingsView(
                             optionLabel = { it.name },
                             optionIcon = {
                                 when (it) {
-                                    ThemeMode.System -> Lucide.Smartphone
+                                    ThemeMode.System -> if (isDesktop) Lucide.Monitor else Lucide.Smartphone
                                     ThemeMode.Light -> Lucide.Sun
                                     ThemeMode.Dark -> Lucide.Moon
                                 }
@@ -367,8 +452,9 @@ internal fun SettingsView(
                         )
                     }
                     Divider()
-                    NavRow(title = "App icon", detail = appIcon.label, icon = Lucide.LayoutGrid, onClick = onOpenAppIcon)
-                    Divider()
+                    // The launcher's icon is the phone's; the desktop keeps Herald's own.
+                    if (!isDesktop) NavRow(title = "App icon", detail = appIcon.label, icon = Lucide.LayoutGrid, onClick = onOpenAppIcon)
+                    if (!isDesktop) Divider()
                     SwitchRow(
                         title = "Pure black",
                         detail = "True black backgrounds in dark mode, easier on OLED screens.",
@@ -383,7 +469,7 @@ internal fun SettingsView(
                         onCheckedChange = { on -> onUpdate { it.copy(glow = on) } },
                     )
                     Divider()
-                    Field("Text size", detail = "On top of your phone's own font size.") {
+                    Field("Text size", detail = if (isDesktop) "The text alone, on top of the zoom." else "On top of your phone's own font size.") {
                         TextSizeSlider(settings.textSize, onSelect = { size -> onUpdate { it.copy(textSize = size) } })
                     }
                     Divider()
@@ -410,7 +496,7 @@ internal fun SettingsView(
                             }
                         }
                         if (wallpaperError != null) {
-                            Text(wallpaperError, style = Theme[typography][bodySmall], color = Theme[colors][danger])
+                            CopyableOnDesktop { Text(wallpaperError, style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
                         }
                     }
                     if (hasWallpaper) {
@@ -504,7 +590,7 @@ internal fun SettingsView(
                     Divider()
                     SwitchRow(
                         title = "Show link previews",
-                        detail = "A card for each web link in a finished reply. Herald opens the linked pages and their pictures itself, without your gateway's cookies.",
+                        detail = "A card for each web link in a finished reply. Kyllene opens the linked pages and their pictures itself, without your gateway's cookies.",
                         checked = settings.showLinkPreviews,
                         onCheckedChange = { on -> onUpdate { it.copy(showLinkPreviews = on) } },
                         icon = Lucide.Globe,
@@ -532,7 +618,9 @@ internal fun SettingsView(
                     }
                 }
 
-                Section("Voice") {
+                if (hasVoice) Section("Voice") {
+                    CallTargetRow(settings.callTargets[gatewayUrl] ?: CallTarget(), botFaces, onChooseCallTarget)
+                    Divider()
                     SwitchRow(
                         title = "Dictation",
                         detail = "A mic in the composer to talk instead of type. Off, the model name gets its room.",
@@ -557,13 +645,43 @@ internal fun SettingsView(
                         }
                         Divider()
                     }
-                    Field("Pause before sending", detail = "How long a voice chat waits after you stop talking. Short is Desktop's timing.") {
+                    Field("Pause before sending", detail = "How long a voice chat waits after you stop talking. Short is Hermes Desktop's timing.") {
                         SegmentedControl(
                             options = VoicePause.entries,
                             selected = settings.voicePause,
                             onSelect = { pause -> onUpdate { it.copy(voicePause = pause) } },
                             optionLabel = { it.name },
                         )
+                    }
+                }
+
+                if (isDesktop) Section("Desktop") {
+                    SwitchRow(
+                        title = "Keep running in the tray",
+                        detail = "Closing the window leaves Kyllene in the tray, still telling you of replies and questions. Quit from the tray's menu.",
+                        checked = settings.closeToTray,
+                        onCheckedChange = { on -> onUpdate { it.copy(closeToTray = on) } },
+                        icon = Lucide.AppWindow,
+                    )
+                    Divider()
+                    SwitchRow(
+                        title = "Quick entry",
+                        detail = "${keysLabel("Ctrl+Shift+Space")} from any app opens a small box to ask Hermes, in a new chat or the open one. Windows only for now." +
+                            // Windows gives a hotkey to one app at a time: say so rather than leave it on and silent.
+                            if (settings.quickEntry && QuickEntryHotkey.taken) " Another app has these keys now, so it can't open." else "",
+                        checked = settings.quickEntry,
+                        onCheckedChange = { on -> onUpdate { it.copy(quickEntry = on) } },
+                        icon = Lucide.Keyboard,
+                    )
+                    Divider()
+                    Field("Zoom", detail = "${settings.zoom}%. ${keysLabel("Ctrl+=")} and ${keysLabel("Ctrl+-")} change it anywhere; ${keysLabel("Ctrl+0")} goes back to 100%.") {
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            // The same steps as the keys take.
+                            // Each greys out at its end of the range, and 100% at 100%, rather than doing nothing.
+                            Button("Smaller", onClick = { onUpdate { it.copy(zoom = zoomAfter(Shortcut.ZoomOut, it.zoom) ?: it.zoom) } }, variant = ButtonVariant.Secondary, size = ButtonSize.Small, enabled = zoomAfter(Shortcut.ZoomOut, settings.zoom) != null)
+                            Button("100%", onClick = { onUpdate { it.copy(zoom = 100) } }, variant = ButtonVariant.Secondary, size = ButtonSize.Small, enabled = settings.zoom != 100)
+                            Button("Bigger", onClick = { onUpdate { it.copy(zoom = zoomAfter(Shortcut.ZoomIn, it.zoom) ?: it.zoom) } }, variant = ButtonVariant.Secondary, size = ButtonSize.Small, enabled = zoomAfter(Shortcut.ZoomIn, settings.zoom) != null)
+                        }
                     }
                 }
 
@@ -581,7 +699,7 @@ internal fun SettingsView(
                     }
                     SwitchRow(
                         title = "Approvals and questions",
-                        detail = "When the agent waits on you. Answer right from the notification.",
+                        detail = if (isDesktop) "When the agent waits on you and Kyllene isn't the window in use." else "When the agent waits on you. Answer right from the notification.",
                         checked = settings.notifyRequests,
                         onCheckedChange = { on -> onUpdate { it.copy(notifyRequests = on) } },
                         icon = Lucide.ShieldAlert,
@@ -589,15 +707,15 @@ internal fun SettingsView(
                     Divider()
                     SwitchRow(
                         title = "Finished replies",
-                        detail = "When a turn ends while Herald is in the background. Reply from the notification.",
+                        detail = if (isDesktop) "When a turn ends or fails while Kyllene isn't the window in use. Click it to open the chat." else "When a turn ends while Kyllene is in the background. Reply from the notification.",
                         checked = settings.notifyReplies,
                         onCheckedChange = { on -> onUpdate { it.copy(notifyReplies = on) } },
                         icon = Lucide.MessageCircle,
                     )
                     Divider()
                     SwitchRow(
-                        title = "Notify for other chats while Herald is open",
-                        detail = "Replies and requests in chats other than the one on screen notify even while you're in Herald.",
+                        title = "Notify for other chats while Kyllene is open",
+                        detail = "Replies and requests in chats other than the one on screen notify even while you're in Kyllene.",
                         checked = settings.notifyOtherChatsInApp,
                         onCheckedChange = { on -> onUpdate { it.copy(notifyOtherChatsInApp = on) } },
                         icon = Lucide.BellRing,
@@ -606,7 +724,7 @@ internal fun SettingsView(
                     SwitchRow(
                         title = "Alerts for other chats",
                         detail = "While you're in a chat, a dot on Sessions when another chat replies or waits on you. " +
-                            "Long-press Sessions for the next one.",
+                            if (isDesktop) "${keysLabel("Ctrl+Tab")} goes to the next one." else "Long-press Sessions for the next one.",
                         checked = settings.otherChatsAlerts,
                         onCheckedChange = { on -> onUpdate { it.copy(otherChatsAlerts = on) } },
                         icon = Lucide.PanelLeft,
@@ -621,8 +739,9 @@ internal fun SettingsView(
                             onCheckedChange = { on -> onUpdate { it.copy(otherChatsBanner = on) } },
                             icon = Lucide.PanelTop,
                         )
-                        Divider()
-                        SwitchRow(
+                        // A computer doesn't buzz.
+                        if (!isDesktop) Divider()
+                        if (!isDesktop) SwitchRow(
                             title = "Vibrate when another chat waits",
                             detail = "A short buzz when another chat starts waiting on your approval or answer.",
                             checked = settings.otherChatsVibrate,
@@ -630,8 +749,9 @@ internal fun SettingsView(
                             icon = Lucide.Vibrate,
                         )
                     }
-                    Divider()
-                    SwitchRow(
+                    // The phone's push through ntfy; the desktop has no way to receive it yet.
+                    if (!isDesktop) Divider()
+                    if (!isDesktop) SwitchRow(
                         title = "Notifications anywhere",
                         detail = pushDetail(settings.pushAnywhere, push),
                         checked = settings.pushAnywhere,
@@ -658,7 +778,8 @@ internal fun SettingsView(
                     }
                 }
 
-                Section("Phone") {
+                // Both are the phone's own: its tools and its lock.
+                if (!isDesktop) Section("Phone") {
                     NavRow(
                         title = "Phone tools",
                         detail = phoneToolsSummary(settings),
@@ -674,13 +795,13 @@ internal fun SettingsView(
                     )
                 }
 
-                Section("Privacy") {
+                if (!isDesktop) Section("Privacy") {
                     val canLock = deviceHasScreenLock()
                     SwitchRow(
                         title = "App lock",
                         detail = if (canLock || settings.appLock) {
-                            "Ask for your fingerprint, face or screen lock when Herald opens and after a minute away. " +
-                                "Hides Herald in Recents and blocks screenshots of it. Notification actions keep working."
+                            "Ask for your fingerprint, face or screen lock when Kyllene opens and after a minute away. " +
+                                "Hides Kyllene in Recents and blocks screenshots of it. Notification actions keep working."
                         } else {
                             "Set a screen lock in Android's settings first."
                         },
@@ -708,7 +829,7 @@ internal fun SettingsView(
                         onCheckedChange = { on -> onUpdate { it.copy(checkForUpdates = on) } },
                         icon = Lucide.RefreshCw,
                     )
-                    UpdateBanner(Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+                    if (settingShown("Check for updates")) UpdateBanner(Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
                     Divider()
                     InfoRow("Gateway", info.version?.let { "Hermes $it" } ?: "Checking…")
                     Divider()
@@ -720,12 +841,32 @@ internal fun SettingsView(
                         onClick = { uriHandler.openUri(DISCORD_INVITE) },
                     )
                 }
-            }
+            } }
         }
+        // On the desktop, the sections listed to the left of the page, where the window has room for them. After the
+        // page, so the sections it lists are known as this frame composes, not on the next one. Not while searching:
+        // the search's matches are the list then.
+        val anchors = LocalSectionAnchors.current
+        val roomy = with(LocalDensity.current) { LocalWindowInfo.current.containerSize.width.toDp() } >= 640.dp + SECTION_NAV_WIDTH * 2
+        if (anchors != null && roomy && query.isBlank()) {
+            SectionNav(
+                anchors,
+                scroll,
+                Modifier
+                    .offset(x = -(320.dp + SECTION_NAV_WIDTH / 2))
+                    .width(SECTION_NAV_WIDTH)
+                    .padding(top = SECTION_NAV_TOP, end = 12.dp),
+            )
+        }
+        // Below the window's buttons, which sit over this corner.
+        VerticalScrollbar(
+            scroll,
+            Modifier.align(Alignment.TopEnd).fillMaxHeight().padding(top = windowControlsHeight() + 4.dp, bottom = 4.dp, end = 2.dp),
+        )
     }
 }
 
-/** The Herald community server; the invite never expires. */
+/** The Kyllene community server; the invite never expires. */
 private const val DISCORD_INVITE = "https://discord.gg/wCtyvQ3KcM"
 
 /** The Phone tools row's line: off, or how many tools the agent may use. */
@@ -741,7 +882,7 @@ private fun phoneToolsSummary(settings: AppSettings): String {
 
 /** What Suggested replies does, or where the plugin it needs stands on the gateway. */
 internal fun suggestionsDetail(on: Boolean, plugin: SuggestionsPlugin): String {
-    val what = "After a reply, the message you'd likely send next, over the composer: tap it to edit and send. " +
+    val what = "After a reply, the message you'd likely send next, over the composer: ${tapVerb.lowercase()} it to edit and send. " +
         "It comes from the gateway's Next Prompt plugin, which asks a model once per turn."
     if (!on) return what
     return when (plugin) {
@@ -771,7 +912,7 @@ private fun pushDetail(on: Boolean, push: PushStatus): String {
             "The gateway's herald-push plugin is ${it.installed}; this needs ${it.available}. Update it below."
         } ?: "The gateway's herald-push plugin is too old."
         PushStatus.State.Failed -> "Couldn't set up: ${push.detail ?: "unknown error"}"
-        PushStatus.State.Unknown, PushStatus.State.Off -> "On. Checks with the gateway the next time Herald reaches it."
+        PushStatus.State.Unknown, PushStatus.State.Off -> "On. Checks with the gateway the next time Kyllene reaches it."
     }
 }
 
@@ -820,6 +961,7 @@ private fun PillButton(caption: String, icon: ImageVector, onClick: () -> Unit, 
     Box(
         Modifier
             .heightIn(min = MinTouchTarget)
+            .handCursor()
             .clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
             .semantics { contentDescription = description }
             .padding(horizontal = 4.dp),
@@ -830,7 +972,7 @@ private fun PillButton(caption: String, icon: ImageVector, onClick: () -> Unit, 
                 .heightIn(min = 32.dp)
                 .clip(CircleShape)
                 .background(Theme[colors][surface3], CircleShape)
-                .indication(interaction, rememberColoredIndication(Theme[colors][text]))
+                .indication(interaction, rememberHoverIndication(Theme[colors][text]))
                 .padding(horizontal = 12.dp, vertical = 4.dp)
                 .clearAndSetSemantics { },
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -842,9 +984,52 @@ private fun PillButton(caption: String, icon: ImageVector, onClick: () -> Unit, 
     }
 }
 
+/** Where each [Section] of a page starts in its scroll, for the desktop's list of sections beside the page. */
+internal val LocalSectionAnchors = staticCompositionLocalOf<SnapshotStateMap<String, Int>?> { null }
+
+/** Under this, a section's anchor is only its place in the list: it hasn't been laid out yet. */
+private const val UNPLACED_SECTION = Int.MIN_VALUE / 2
+
+/**
+ * The desktop's settings search: what's typed in it, which each row checks its title and detail against. Empty, all
+ * rows show.
+ */
+internal val LocalSettingsQuery = compositionLocalOf { "" }
+
+/** Whether each [Section] has anything showing for the search, so the page can say when nothing matched. */
+private val LocalSectionsShown = staticCompositionLocalOf<SnapshotStateMap<String, Boolean>?> { null }
+
+/** True when a row saying [texts] is one the settings search keeps. */
+@Composable
+internal fun settingShown(vararg texts: String?): Boolean {
+    val query = LocalSettingsQuery.current.trim()
+    return query.isEmpty() || texts.any { it?.contains(query, ignoreCase = true) == true }
+}
+
 @Composable
 internal fun Section(title: String, content: @Composable ColumnScope.() -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    val anchors = LocalSectionAnchors.current
+    val query = LocalSettingsQuery.current.trim()
+    val searching = query.isNotEmpty()
+    // Searching, a section whose name matches shows whole; any other shows only its rows that match, and none of
+    // itself when none do. Its rows are still laid out then, unseen, so it knows when one comes to match.
+    val whole = !searching || title.contains(query, ignoreCase = true)
+    var empty by remember { mutableStateOf(false) }
+    val hidden = searching && empty
+    val shown = LocalSectionsShown.current
+    SideEffect { shown?.set(title, !hidden) }
+    // Listed in the page's order from its first frame; where each starts is known once it's laid out.
+    if (anchors != null && title !in anchors) anchors[title] = UNPLACED_SECTION - 100 + anchors.size
+    Column(
+        (if (anchors != null) Modifier.onGloballyPositioned { anchors[title] = it.positionInParent().y.roundToInt() } else Modifier)
+            .layout { measurable, constraints ->
+                val placeable = measurable.measure(constraints)
+                if (hidden) layout(placeable.width, 0) {} else layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+            }
+            // Searching, the page sets no gap between sections, as hidden ones would leave theirs.
+            .padding(bottom = if (searching) 22.dp else 0.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
         Text(
             title.uppercase(),
             style = Theme[typography][eyebrow],
@@ -855,18 +1040,116 @@ internal fun Section(title: String, content: @Composable ColumnScope.() -> Unit)
                 contentDescription = title
             },
         )
-        Surface(Modifier.fillMaxWidth()) { Column(content = content) }
+        Surface(Modifier.fillMaxWidth()) {
+            CompositionLocalProvider(LocalSettingsQuery provides if (whole) "" else query) {
+                Column(Modifier.onSizeChanged { empty = it.height == 0 }, content = content)
+            }
+        }
     }
 }
 
+/** The page's list of settings with the desktop's search over it, and a word when the search finds none. */
+@Composable
+private fun SearchableSettings(query: String, content: @Composable () -> Unit) {
+    val shown = remember { mutableStateMapOf<String, Boolean>() }
+    CompositionLocalProvider(LocalSettingsQuery provides query, LocalSectionsShown provides shown) { content() }
+    if (query.isNotBlank() && shown.values.none { it }) {
+        Text(
+            "No settings match “${query.trim()}”.",
+            style = Theme[typography][bodySmall],
+            color = Theme[colors][textTertiary],
+            modifier = Modifier.fillMaxWidth().padding(vertical = 24.dp),
+            textAlign = TextAlign.Center,
+        )
+    }
+}
+
+/**
+ * The desktop's list of a page's sections, beside it as a desktop app's settings have it: the one in view marked,
+ * a click scrolls to one.
+ */
+@Composable
+private fun SectionNav(anchors: Map<String, Int>, scroll: ScrollState, modifier: Modifier = Modifier) {
+    val sections = anchors.entries.sortedBy { it.value }
+    val slack = with(LocalDensity.current) { SECTION_SLACK.roundToPx() }
+    // Worked out as the page scrolls, but the list is redrawn only when the section in view changes.
+    val current by remember(sections, slack) {
+        derivedStateOf {
+            // The last section can't reach the top; at the end of the page, it's the one in view.
+            if (scroll.maxValue > 0 && scroll.value >= scroll.maxValue) sections.lastOrNull()?.key
+            else sections.lastOrNull { it.value > UNPLACED_SECTION && it.value <= scroll.value + slack }?.key ?: sections.firstOrNull()?.key
+        }
+    }
+    val scope = rememberCoroutineScope()
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+        for ((title, y) in sections) {
+            val selected = title == current
+            val shape = RoundedCornerShape(Theme[radii][radiusSmall])
+            val mark = Theme[colors][accent]
+            Text(
+                title,
+                style = Theme[typography][body].let { if (selected) it.copy(fontWeight = FontWeight.SemiBold) else it },
+                color = if (selected) Theme[colors][text] else Theme[colors][textSecondary],
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(shape)
+                    .background(if (selected) Theme[colors][surface2] else Color.Transparent, shape)
+                    // A bar in the accent marks the section in view, so the pointer's tint over another never looks the same.
+                    .drawBehind {
+                        if (selected) {
+                            val bar = 3.dp.toPx()
+                            // At the start of the row, the side its text begins on.
+                            val x = if (layoutDirection == LayoutDirection.Rtl) size.width - bar else 0f
+                            drawRoundRect(mark, topLeft = Offset(x, size.height * 0.25f), size = Size(bar, size.height * 0.5f), cornerRadius = CornerRadius(bar / 2))
+                        }
+                    }
+                    .semantics { this.selected = selected }
+                    .handCursor()
+                    .clickable { scope.launch { scroll.animateScrollTo(y) } }
+                    .padding(horizontal = 12.dp, vertical = 7.dp),
+            )
+        }
+    }
+}
+
+/** How far past a section's top the page may sit and still count it as the one in view. */
+private val SECTION_SLACK = 24.dp
+
+/** How wide the desktop's list of sections is. */
+private val SECTION_NAV_WIDTH = 190.dp
+
+/** Where the list of sections starts: level with the first section, under the page's header. */
+private val SECTION_NAV_TOP = 72.dp
+
 @Composable
 internal fun Divider() {
+    // Searching, the rows that are left stand alone; a rule would mark where hidden ones were.
+    if (LocalSettingsQuery.current.isNotBlank()) return
     Box(Modifier.padding(horizontal = 14.dp).fillMaxWidth().height(1.dp).background(Theme[colors][stroke]))
+}
+
+/** The whole row opens the picker; a bot keeps its face, either session choice uses the phone. */
+@Composable
+private fun CallTargetRow(target: CallTarget, faces: BotFaces, onClick: () -> Unit) {
+    val bot = target.profile?.let { name -> faces.bots.firstOrNull { it.name == name } ?: Bot(name = name, displayName = target.label) }
+    Row(Modifier.fillMaxWidth().clickable(role = Role.Button, onClick = onClick).padding(horizontal = 14.dp, vertical = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
+        if (bot != null) BotAvatar(bot, faces.picture(bot), size = 32.dp)
+        else Box(Modifier.size(32.dp).background(Theme[colors][accent], RoundedCornerShape(Theme[radii][radiusSmall])), contentAlignment = Alignment.Center) {
+            UnstyledIcon(Lucide.Phone, contentDescription = null, tint = Color.White, modifier = Modifier.size(18.dp))
+        }
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text("Default Call target", style = Theme[typography][body], color = Theme[colors][text], maxLines = 2, overflow = TextOverflow.Ellipsis)
+            Text(bot?.label ?: target.label, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("Where your call is routed, when you use call Hermes. Hold the app icon from your app drawer to use it", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+        }
+        UnstyledIcon(Lucide.ChevronRight, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp))
+    }
 }
 
 /** A label with its control underneath, for controls too wide to sit at the end of a row. */
 @Composable
 private fun Field(title: String, detail: String? = null, control: @Composable () -> Unit) {
+    if (!settingShown(title, detail)) return
     Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = Theme[typography][body], color = Theme[colors][text])
@@ -879,9 +1162,11 @@ private fun Field(title: String, detail: String? = null, control: @Composable ()
 /** A setting that's on or off: the whole row toggles. An [icon] sits on a small tile before the title. */
 @Composable
 internal fun SwitchRow(title: String, detail: String?, checked: Boolean, onCheckedChange: (Boolean) -> Unit, icon: ImageVector? = null) {
+    if (!settingShown(title, detail)) return
     Row(
         Modifier
             .fillMaxWidth()
+            .handCursor()
             .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
             .padding(horizontal = 14.dp, vertical = 13.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
@@ -918,21 +1203,25 @@ private fun AccentPicker(selected: AccentPalette, onSelect: (AccentPalette) -> U
         AccentPalette.all.forEach { palette ->
             val isSelected = palette == selected
             val color = if (dark) palette.dark.accent else palette.light.accent
-            Box(
-                Modifier
-                    .size(MinTouchTarget)
-                    .clip(CircleShape)
-                    .selectable(selected = isSelected, role = Role.RadioButton, onClick = { onSelect(palette) })
-                    .semantics { contentDescription = palette.name },
-                contentAlignment = Alignment.Center,
-            ) {
+            // A colour's name, for a pointer that rests on it.
+            Tooltip(palette.name) {
                 Box(
                     Modifier
-                        .size(38.dp)
-                        .border(2.dp, if (isSelected) color else Color.Transparent, CircleShape)
-                        .padding(4.dp)
-                        .background(color, CircleShape),
-                )
+                        .size(MinTouchTarget)
+                        .clip(CircleShape)
+                        .handCursor()
+                        .selectable(selected = isSelected, role = Role.RadioButton, onClick = { onSelect(palette) })
+                        .semantics { contentDescription = palette.name },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Box(
+                        Modifier
+                            .size(38.dp)
+                            .border(2.dp, if (isSelected) color else Color.Transparent, CircleShape)
+                            .padding(4.dp)
+                            .background(color, CircleShape),
+                    )
+                }
             }
         }
     }
@@ -953,6 +1242,23 @@ private fun TextSizeSlider(selected: TextSize, onSelect: (TextSize) -> Unit) {
     val pick = { to: Int -> if (to != current) onPick(sizes[to]) }
     // The "A"s keep one size whatever text size is picked, so the track never moves under the finger.
     val fontScale = LocalDensity.current.fontScale
+    // A keyboard reaches it with Tab and steps it with the arrows, Home and End, as a desktop's sliders go.
+    var keyFocused by remember { mutableStateOf(false) }
+    val keys = if (!isDesktop) Modifier else Modifier
+        .onFocusChanged { keyFocused = it.isFocused }
+        .focusable()
+        .onKeyEvent { event ->
+            if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+            val to = when (event.key) {
+                Key.DirectionLeft, Key.DirectionDown -> current - 1
+                Key.DirectionRight, Key.DirectionUp -> current + 1
+                Key.MoveHome -> 0
+                Key.MoveEnd -> last
+                else -> return@onKeyEvent false
+            }
+            pick(to.coerceIn(0, last))
+            true
+        }
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
             Box(Modifier.width(20.dp).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
@@ -962,6 +1268,8 @@ private fun TextSizeSlider(selected: TextSize, onSelect: (TextSize) -> Unit) {
                 Modifier
                     .weight(1f)
                     .height(MinTouchTarget)
+                    .handCursor()
+                    .then(keys)
                     .semantics {
                         contentDescription = "Text size"
                         stateDescription = selected.name
@@ -1005,7 +1313,9 @@ private fun TextSizeSlider(selected: TextSize, onSelect: (TextSize) -> Unit) {
                         .offset { IntOffset(((maxWidth - SLIDER_THUMB) * fraction).roundToPx(), 0) }
                         .size(SLIDER_THUMB)
                         .dropShadow(CircleShape, Shadow(radius = 8.dp, color = Color.Black.copy(alpha = 0.35f), offset = DpOffset(0.dp, 2.dp)))
-                        .background(Color.White, CircleShape),
+                        .background(Color.White, CircleShape)
+                        // The keyboard's focus shows as a ring in the accent, as a button's does.
+                        .then(if (keyFocused) Modifier.border(2.dp, Theme[colors][accent], CircleShape) else Modifier),
                 )
             }
             Box(Modifier.width(20.dp).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
@@ -1026,16 +1336,19 @@ private val SLIDER_THUMB = 22.dp
 
 @Composable
 internal fun InfoRow(title: String, value: String) {
+    if (!settingShown(title, value)) return
     Column(Modifier.fillMaxWidth().padding(14.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
         Text(title, style = Theme[typography][body], color = Theme[colors][text])
-        Text(value, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary], maxLines = 2, overflow = TextOverflow.Ellipsis)
+        // A desktop's mouse can select and copy it (a version, an address), as a desktop's About panel allows.
+        CopyableOnDesktop { Text(value, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary], maxLines = 2, overflow = TextOverflow.Ellipsis) }
     }
 }
 
 @Composable
 internal fun ActionRow(title: String, icon: ImageVector, onClick: () -> Unit) {
+    if (!settingShown(title)) return
     Row(
-        Modifier.fillMaxWidth().heightIn(min = 56.dp).clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = 8.dp),
+        Modifier.fillMaxWidth().heightIn(min = PageRowHeight).handCursor().clickable(onClick = onClick).padding(horizontal = 14.dp, vertical = if (isDesktop) 6.dp else 8.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {

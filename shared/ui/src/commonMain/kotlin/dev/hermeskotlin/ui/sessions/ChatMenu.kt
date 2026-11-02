@@ -1,11 +1,34 @@
 package dev.hermeskotlin.ui.sessions
 
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.unit.dp
+import com.composables.icons.lucide.CircleAlert
+import com.composables.icons.lucide.FileCheck
+import com.composables.icons.lucide.Lucide
+import dev.hermeskotlin.designsystem.components.Toast
+import dev.hermeskotlin.ui.isDesktop
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import androidx.compose.ui.text.AnnotatedString
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.hermeskotlin.core.chat.ChatMessage
@@ -44,6 +67,8 @@ internal fun ChatMenu(
     onStartFresh: (() -> Unit)? = null,
     /** Opens the stored chat a thread was started fresh into, by id and title. */
     onOpenChat: (String, String) -> Unit = { _, _ -> },
+    /** The desktop's options button, for the menu to hang from; null opens it at the pointer. */
+    anchor: Rect? = null,
     viewModel: SessionsViewModel = koinViewModel(),
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
@@ -55,6 +80,10 @@ internal fun ChatMenu(
     var deleteTarget by remember { mutableStateOf<SessionSummary?>(null) }
     @Suppress("DEPRECATION") val clipboard = LocalClipboardManager.current
     val media = rememberMediaActions()
+    val scope = rememberCoroutineScope()
+    var exported by remember { mutableStateOf<Exported?>(null) }
+    // A phone shares the export instead, so it has nothing to say here.
+    if (isDesktop) ExportedToast(exported, onDismiss = { exported = null })
 
     // The listed row knows pinned/archived; a chat not loaded in the list yet falls back to its id and title.
     val session = sessionId?.let { id ->
@@ -62,12 +91,18 @@ internal fun ChatMenu(
     }
     SessionActionsSheet(
         session = session.takeIf { visible },
+        anchor = anchor,
         onDismiss = onDismiss,
         onTogglePinned = viewModel::togglePinned.takeUnless { botChat },
         onRename = { s: SessionSummary -> renameTarget = s }.takeUnless { botChat },
         onToggleArchived = viewModel::toggleArchived.takeUnless { botChat },
         onDelete = { s: SessionSummary -> deleteTarget = s }.takeUnless { botChat },
-        onExport = { media.share(transcriptMarkdown(title, messages).encodeToByteArray(), transcriptFileName(title, it.id)) },
+        onExport = {
+            val bytes = transcriptMarkdown(title, messages).encodeToByteArray()
+            val name = transcriptFileName(title, it.id)
+            // A desktop exports to a file it picks, as any desktop app's Export does; a phone hands it to the share sheet.
+            if (isDesktop) scope.launch { exported = media.save(bytes, name).takeUnless { r -> r == NOT_SAVED }?.let(::Exported) } else media.share(bytes, name)
+        },
         onCopyId = { clipboard.setText(AnnotatedString(it.id)) },
         onUsage = { onUsage() },
         onProcesses = { onProcesses() },
@@ -96,3 +131,37 @@ internal fun ChatMenu(
         },
     )
 }
+
+/** Where the export went ("Saved to …"), or why it didn't, along the bottom like the archive toast; it goes by itself. */
+@Composable
+private fun ExportedToast(exported: Exported?, onDismiss: () -> Unit) {
+    val message = exported?.text
+    // Kept while the toast fades out, so its text doesn't vanish first.
+    var shown by remember { mutableStateOf(message) }
+    if (message != null) shown = message
+    // Keyed on the export, not its text: saving to the same file again shows the toast its full time again.
+    LaunchedEffect(exported) {
+        if (message == null) return@LaunchedEffect
+        delay(EXPORTED_MILLIS)
+        onDismiss()
+    }
+    Box(Modifier.fillMaxSize().padding(14.dp), contentAlignment = Alignment.BottomCenter) {
+        AnimatedVisibility(
+            visible = message != null,
+            enter = fadeIn() + slideInVertically { it / 2 },
+            exit = fadeOut() + slideOutVertically { it / 2 },
+        ) {
+            shown?.let { text ->
+                val failed = !text.startsWith("Saved")
+                Toast(text, modifier = Modifier.widthIn(max = MaxToastWidth).fillMaxWidth(),icon = if (failed) Lucide.CircleAlert else Lucide.FileCheck, onDismiss = onDismiss)
+            }
+        }
+    }
+}
+
+/** One export's outcome; not a data class, so two exports that say the same are still two. */
+private class Exported(val text: String)
+
+/** What [dev.hermeskotlin.ui.chat.MediaActions.save] says when the Save dialog was cancelled: nothing to tell. */
+private const val NOT_SAVED = "Not saved."
+private const val EXPORTED_MILLIS = 5_000L

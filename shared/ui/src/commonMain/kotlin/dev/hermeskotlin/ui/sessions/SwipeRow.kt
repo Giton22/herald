@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui.sessions
 
+import dev.hermeskotlin.ui.isDesktop
+
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animate
 import androidx.compose.animation.core.spring
@@ -64,6 +66,9 @@ internal enum class SwipeKind { Archive, Pin, Delete }
 /** One side's action on a [SwipeRow]. */
 internal class SwipeAction(val label: String, val icon: ImageVector, val kind: SwipeKind, val onSwipe: () -> Unit)
 
+/** What a screen reader offers for a [SwipeRow]: each side's action, once when both sides do the same (the Inbox's read flip). */
+internal fun readerActions(start: SwipeAction?, end: SwipeAction?): List<SwipeAction> = listOfNotNull(start, end).distinctBy { it.label }
+
 /**
  * A row that can be swiped sideways: [start] shows under it as it moves right, [end] as it moves left (on
  * screen, in either layout direction). Past the threshold the action fills in and ticks; letting go there
@@ -78,7 +83,8 @@ internal fun SwipeRow(
     modifier: Modifier = Modifier,
     content: @Composable (Modifier) -> Unit,
 ) {
-    if (start == null && end == null) {
+    // A desktop's mouse would archive or delete with a missed click's drag; its right-click menu has both.
+    if (isDesktop || start == null && end == null) {
         Box(modifier) { content(Modifier) }
         return
     }
@@ -114,7 +120,7 @@ internal fun SwipeRow(
 
     // On the row's own clickable node, which is the one a screen reader lands on and lists actions for.
     val actions = Modifier.semantics {
-        customActions = listOfNotNull(start, end).map { a -> CustomAccessibilityAction(a.label) { a.onSwipe(); true } }
+        customActions = readerActions(start, end).map { a -> CustomAccessibilityAction(a.label) { a.onSwipe(); true } }
     }
     Box(modifier.onSizeChanged { width = it.width }) {
         if (action != null) {

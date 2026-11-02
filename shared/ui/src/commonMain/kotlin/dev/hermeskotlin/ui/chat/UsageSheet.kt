@@ -16,12 +16,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.foundation.text.TextAutoSize
-import androidx.compose.foundation.verticalScroll
+import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Alignment
@@ -154,7 +153,7 @@ internal fun UsageSheetView(visible: Boolean, state: UsageSheetState, live: Sess
                 // Large text or many files can outgrow the screen; the sheet then scrolls rather than cutting them off.
                 .weight(1f, fill = false)
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .verticalScrollWithBar()
                 .padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 8.dp),
             verticalArrangement = Arrangement.spacedBy(18.dp),
         ) {
@@ -210,28 +209,31 @@ private fun Totals(totals: SessionTotals) {
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Bottom) {
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 WhoseUsage(totals.model?.takeIf { it.isNotBlank() })
+                val unpriced = cost == null || totals.costStatus == "unknown"
                 val amount = when {
                     totals.costStatus == "included" -> "Included"
-                    cost == null || totals.costStatus == "unknown" -> "—"
+                    unpriced -> "Not priced"
                     else -> usd(cost)
                 }
-                // One line, however large the text: it shrinks to fit rather than breaking inside the number.
+                // One line, however large the text: it shrinks to fit rather than breaking inside the number. Words
+                // in place of an amount are smaller and quieter, so they don't read as a figure.
+                val top = if (unpriced) 28.sp else 40.sp
                 BasicText(
                     amount,
                     style = Theme[typography][display].copy(
-                        fontSize = 40.sp,
+                        fontSize = top,
                         lineHeight = 1.05.em,
                         fontWeight = FontWeight.SemiBold,
-                        color = Theme[colors][text],
+                        color = if (unpriced) Theme[colors][textSecondary] else Theme[colors][text],
                     ),
                     maxLines = 1,
-                    autoSize = TextAutoSize.StepBased(minFontSize = 20.sp, maxFontSize = 40.sp),
+                    autoSize = TextAutoSize.StepBased(minFontSize = 20.sp, maxFontSize = top),
                     modifier = Modifier.semantics { contentDescription = "Cost, $amount" },
                 )
                 Text(
                     when {
                         totals.costStatus == "included" -> "Covered by your plan with the provider"
-                        cost == null || totals.costStatus == "unknown" -> "No price known for this model"
+                        unpriced -> "The gateway has no price for this model, so its cost isn't counted"
                         totals.costIsEstimate -> "Estimated from the model's list prices"
                         else -> "As billed by the provider"
                     },

@@ -77,7 +77,12 @@ class SessionsApi(private val client: HttpClient) {
         }
     }.map { it.body<SessionPage>() }
 
-    /** `GET /api/sessions/search` — id prefix and full-text message matches, one row per conversation. */
+    /**
+     * `GET /api/sessions/search` — id prefix and full-text message matches. The gateway merges hits per compression
+     * lineage, but an older gateway (one row per matching message) or two lineages that resolve to the same newest
+     * segment can still repeat an id; the list keys rows by id, so a repeat would crash it. The first one is kept, as
+     * the gateway ranks it first.
+     */
     suspend fun search(url: GatewayUrl, query: String, limit: Int = 30, profile: String? = null): ApiResult<List<SessionSummary>> = apiCall {
         client.get(url.resolve("api/sessions/search")) {
             profile?.let { parameter("profile", it) }
@@ -85,7 +90,9 @@ class SessionsApi(private val client: HttpClient) {
             parameter("limit", limit)
         }
     }.map { response ->
-        response.body<SearchResponse>().results.map { it.copy(snippet = it.snippet?.stripMatchMarkers()) }
+        response.body<SearchResponse>().results
+            .distinctBy { it.id }
+            .map { it.copy(snippet = it.snippet?.stripMatchMarkers()) }
     }
 
     /**
@@ -108,7 +115,7 @@ class SessionsApi(private val client: HttpClient) {
         }
     }.map { it.body<SessionMessagesPage>() }
 
-    /** `GET /api/sessions/{id}` — the stored row, read for its token and cost totals. */
+    /** `GET /api/sessions/{id}` — the stored row, including token/cost totals and the shared read watermark. */
     suspend fun totals(url: GatewayUrl, sessionId: String, profile: String? = null): ApiResult<SessionTotals> = apiCall {
         client.get(url.resolve("api/sessions/${sessionId.encodeURLPathPart()}")) {
             profile?.let { parameter("profile", it) }
@@ -242,7 +249,7 @@ private fun ApiResult<Unit>.inWords(): ApiResult<Unit> {
         "session_busy" -> "The chat is busy right now. Try again in a moment."
         "not_found" -> GONE_MESSAGE
         "permission_denied", "profile_mismatch" -> "The gateway didn't allow this change to the chat."
-        "client_upgrade_required", "mutation_identity_required" -> "The gateway refused the change. Update Herald and try again."
+        "client_upgrade_required", "mutation_identity_required" -> "The gateway refused the change. Update Kyllene and try again."
         "owner_unreachable", "runtime_draining", "storage_unavailable" -> "The gateway can't change the chat right now. Try again in a moment."
         else -> return this
     }

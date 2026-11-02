@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui.pet
 
+import dev.hermeskotlin.designsystem.components.handCursor
+
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -29,6 +31,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalWindowInfo
+import dev.hermeskotlin.ui.isDesktop
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.layout.ContentScale
@@ -122,7 +126,11 @@ fun PetView(sprite: PetSprite, state: PetState, onClick: () -> Unit, modifier: M
     val columns = (sheet.width / sprite.frameW).coerceAtLeast(1)
     val frames = count.coerceIn(1, columns)
     var frame by remember(sprite, row, frames) { mutableIntStateOf(0) }
-    LaunchedEffect(sprite, row, frames) {
+    // A desktop window in the background (or in the tray) holds the pet still: each frame would repaint the
+    // whole window, keeping the CPU and GPU awake for nobody.
+    val still = isDesktop && !LocalWindowInfo.current.isWindowFocused
+    LaunchedEffect(sprite, row, frames, still) {
+        if (still) return@LaunchedEffect
         val step = (sprite.loopMs / frames).coerceAtLeast(MIN_STEP_MS).toLong()
         while (true) {
             delay(step)
@@ -135,6 +143,7 @@ fun PetView(sprite: PetSprite, state: PetState, onClick: () -> Unit, modifier: M
     Canvas(
         modifier
             .size(width.dp, height.dp)
+            .handCursor()
             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, onClick = onClick),
     ) {
         drawImage(
@@ -154,7 +163,7 @@ fun PetSheet(visible: Boolean, controller: PetController, onDismiss: () -> Unit,
     val scope = rememberCoroutineScope()
     LaunchedEffect(visible) { if (visible) controller.loadGallery() }
     BottomSheet(visible = visible, onDismiss = onDismiss) {
-        SheetHeader("Pets", "A pet belongs to the profile, so Desktop shows the same one.")
+        SheetHeader("Pets", "A pet belongs to the profile, so Hermes Desktop shows the same one.")
         val gallery = state.gallery
         when {
             gallery == null && state.loading -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Spinner() }
@@ -195,6 +204,7 @@ private fun PetCell(pet: PetChoice, controller: PetController, active: Boolean, 
             .clip(shape)
             .background(Theme[colors][if (active) accentSoft else surface2], shape)
             .border(if (active) 1.5.dp else 1.dp, Theme[colors][if (active) accentText else stroke], shape)
+            .handCursor(!adopting)
             .clickable(enabled = !adopting, onClick = onClick)
             .semantics { selected = active }
             .padding(8.dp),

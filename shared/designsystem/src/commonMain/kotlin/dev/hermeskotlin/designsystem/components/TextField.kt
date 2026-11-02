@@ -12,7 +12,11 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.ui.draw.clip
+import dev.hermeskotlin.designsystem.rememberHoverIndication
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.KeyboardActionHandler
 import androidx.compose.foundation.text.input.OutputTransformation
@@ -22,10 +26,12 @@ import androidx.compose.foundation.text.selection.LocalTextSelectionColors
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.clearText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.autofill.ContentType
@@ -51,6 +57,7 @@ import com.composeunstyled.UnstyledButton
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.UnstyledTextField
 import com.composeunstyled.theme.Theme
+import dev.hermeskotlin.designsystem.LocalDesktopLayout
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.accentSoft
 import dev.hermeskotlin.designsystem.accentText
@@ -69,10 +76,19 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 
-/** Shows every character as a bullet; the underlying [TextFieldState] keeps the real text. */
+/** Shows every code point as a bullet; the underlying [TextFieldState] keeps the real text. */
 private object PasswordMask : OutputTransformation {
     override fun TextFieldBuffer.transformOutput() {
-        replace(0, length, "•".repeat(length))
+        var index = 0
+        // The buffer shrinks as surrogate pairs become one bullet, so read it live: [index] is the next unmasked char.
+        while (index < length) {
+            val end = if (charAt(index).isHighSurrogate() && index + 1 < length && charAt(index + 1).isLowSurrogate()) index + 2 else index + 1
+            // Each replacement is an editing unit. Keep a code point together, not the whole password, and give it one
+            // bullet: an offset inside a replacement maps back to the whole range, so a cursor that arrow keys, TalkBack or
+            // a selection handle put between two bullets of an emoji would select it, and the next key would replace it.
+            replace(index, end, "•")
+            index++
+        }
     }
 }
 
@@ -99,12 +115,26 @@ fun TextField(
     onKeyboardAction: KeyboardActionHandler? = null,
     /** Lets the caller move focus into the field, e.g. when a search opens. */
     focusRequester: FocusRequester? = null,
+    /** On the desktop, takes the focus as it shows, so a dialog's or page's field is typed in straight away. */
+    autofocus: Boolean = false,
     /** What autofill may offer here, e.g. [ContentType.SmsOtpCode]; null offers nothing. */
     contentType: ContentType? = null,
     /** Something inside the field's end, like the connect screen's Test button. */
     trailing: (@Composable () -> Unit)? = null,
 ) {
     var revealed by remember { mutableStateOf(false) }
+    val desktop = LocalDesktopLayout.current
+    val focusNow = autofocus && desktop
+    val ownRequester = remember { FocusRequester() }
+    val requester = focusRequester ?: ownRequester.takeIf { focusNow }
+    if (focusNow) {
+        LaunchedEffect(Unit) {
+            // A dialog's panel is only put in on the frame after it opens, as the sheet's own focus waits for.
+            withFrameNanos {}
+            withFrameNanos {}
+            runCatching { requester?.requestFocus() }
+        }
+    }
     val interactionSource = remember { MutableInteractionSource() }
     val focused by interactionSource.collectIsFocusedAsState()
     val radius = Theme[radii][radiusMedium]
@@ -139,10 +169,11 @@ fun TextField(
             onKeyboardAction = onKeyboardAction,
             interactionSource = interactionSource,
             modifier = Modifier
-                .then(focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier)
+                .then(requester?.let { Modifier.focusRequester(it) } ?: Modifier)
                 .then(contentType?.let { type -> Modifier.semantics { this.contentType = type } } ?: Modifier)
                 .fillMaxWidth()
-                .defaultMinSize(minHeight = 52.dp)
+                // Under a mouse a desktop field keeps to a desktop's 40dp, as a phone's does to a finger's 52dp.
+                .defaultMinSize(minHeight = if (desktop) 40.dp else 52.dp)
                 // Focused, a soft 4dp ring of the accent sits round the field, outside its edge.
                 .drawBehind {
                     if (focused) {
@@ -159,14 +190,14 @@ fun TextField(
                 .border(if (focused) 1.5.dp else 1.dp, borderColor, shape)
                 // A trailing control brings its own 48dp touch target, so the field keeps to 52dp round it.
                 .padding(
-                    start = 16.dp,
-                    end = if (trailing != null) 6.dp else 16.dp,
+                    start = if (desktop) 12.dp else 16.dp,
+                    end = if (trailing != null) 6.dp else if (desktop) 12.dp else 16.dp,
                     // A field of several lines keeps room above its first line and below its last.
                     top = if (trailing != null) 2.dp else if (singleLine) 6.dp else 12.dp,
                     bottom = if (trailing != null) 2.dp else if (singleLine) 6.dp else 12.dp,
                 ),
         ) {
-            Row(Modifier.defaultMinSize(minHeight = 40.dp), verticalAlignment = Alignment.CenterVertically) {
+            Row(Modifier.defaultMinSize(minHeight = if (desktop && trailing == null) 28.dp else 40.dp), verticalAlignment = Alignment.CenterVertically) {
                 if (leadingIcon != null) {
                     UnstyledIcon(
                         leadingIcon,
@@ -184,8 +215,8 @@ fun TextField(
                 if (clearable && state.text.isNotEmpty()) {
                     UnstyledButton(
                         onClick = { state.clearText() },
-                        modifier = Modifier.padding(start = 8.dp).size(24.dp),
-                        indication = null,
+                        modifier = Modifier.padding(start = 8.dp).size(24.dp).handCursor().clip(CircleShape),
+                        indication = rememberHoverIndication(Theme[colors][textTertiary]),
                     ) {
                         UnstyledIcon(
                             Lucide.X,
@@ -198,8 +229,8 @@ fun TextField(
                 if (password) {
                     UnstyledButton(
                         onClick = { revealed = !revealed },
-                        modifier = Modifier.padding(start = 8.dp).size(24.dp),
-                        indication = null,
+                        modifier = Modifier.padding(start = 8.dp).size(24.dp).handCursor().clip(CircleShape),
+                        indication = rememberHoverIndication(Theme[colors][textTertiary]),
                     ) {
                         UnstyledIcon(
                             if (revealed) Lucide.EyeOff else Lucide.Eye,
@@ -216,12 +247,16 @@ fun TextField(
         }
         val helper = error ?: supportingText
         if (helper != null) {
-            Text(
-                helper,
-                style = Theme[typography][caption],
-                color = if (error != null) Theme[colors][danger] else Theme[colors][textTertiary],
-                modifier = Modifier.padding(start = 4.dp),
-            )
+            val line = @Composable {
+                Text(
+                    helper,
+                    style = Theme[typography][caption],
+                    color = if (error != null) Theme[colors][danger] else Theme[colors][textTertiary],
+                    modifier = Modifier.padding(start = 4.dp),
+                )
+            }
+            // An error can be copied on the desktop, to look it up or pass it on.
+            if (error != null && LocalDesktopLayout.current) SelectionContainer { line() } else line()
         }
     }
 }

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Dev builds only. Exported so `adb shell am start` can open it; it shows A2UI's sample screens, nothing real. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application>
+        <activity
+            android:name=".AgentScreenExamplesActivity"
+            android:exported="true"
+            android:theme="@style/Theme.HermesKotlin" />
+    </application>
+</manifest>

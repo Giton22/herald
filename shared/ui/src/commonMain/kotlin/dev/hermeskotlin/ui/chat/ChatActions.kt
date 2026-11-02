@@ -32,6 +32,12 @@ interface ChatActions {
     /** What Send does while a reply runs, from Settings. */
     val runningSend: StateFlow<RunningSend> get() = DefaultRunningSend
 
+    /**
+     * Sends [text] as a prompt of its own, leaving the composer and its files as they are (the desktop's quick
+     * entry). Mid-turn it steers, or queues when Send would stop the reply.
+     */
+    fun sendPrompt(text: String) {}
+
     fun interrupt()
 
     fun removeAttachment(id: String)

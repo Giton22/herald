@@ -31,6 +31,7 @@ import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.chat.ReplyMedia
 import dev.hermeskotlin.core.media.GatewayFile
 import dev.hermeskotlin.designsystem.accent
+import dev.hermeskotlin.designsystem.components.handCursor
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.colors
@@ -42,6 +43,7 @@ import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.tapVerb
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -98,8 +100,8 @@ internal fun InlineWidget(item: ReplyMedia, file: GatewayFile, files: WidgetFile
         }
         val problem = (loaded as? FileLoad.Failed)?.message ?: failed
         if (problem != null) {
-            Text("$problem Tap to retry.", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary],
-                modifier = Modifier.fillMaxWidth().clickable { attempt++ }.padding(12.dp))
+            Text("$problem $tapVerb to retry.", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary],
+                modifier = Modifier.fillMaxWidth().handCursor().clickable { attempt++ }.padding(12.dp))
         }
     }
 }

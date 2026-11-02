@@ -1,5 +1,8 @@
 package dev.hermeskotlin.ui.chat
 
+import dev.hermeskotlin.ui.PlatformBackHandler
+import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.fullScreenDialogProperties
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -14,6 +17,12 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.selection.DisableSelection
+import dev.hermeskotlin.designsystem.components.HorizontalScrollbar
+import dev.hermeskotlin.designsystem.components.VerticalScrollbar
+import dev.hermeskotlin.ui.CopyableOnDesktop
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
@@ -26,7 +35,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.selection.SelectionContainer
-import androidx.compose.foundation.verticalScroll
+import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -59,7 +68,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
-import androidx.compose.ui.window.DialogProperties
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.BookOpen
 import com.composables.icons.lucide.Braces
@@ -73,7 +81,8 @@ import com.composables.icons.lucide.FileSpreadsheet
 import com.composables.icons.lucide.FileText
 import com.composables.icons.lucide.FileWarning
 import com.composables.icons.lucide.Lucide
-import com.composables.icons.lucide.Share2
+import dev.hermeskotlin.ui.shareIcon
+import dev.hermeskotlin.ui.shareLabel
 import com.composables.icons.lucide.WrapText
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
@@ -163,6 +172,8 @@ internal fun FileViewer(
     onDismiss: () -> Unit,
     load: suspend (GatewayFile) -> FileLoad,
     download: suspend (GatewayFile) -> FileDownload,
+    /** Drawn in place, in the desktop's rail beside the chat, rather than over it. */
+    docked: Boolean = false,
 ) {
     if (file == null) return
     // The files opened from links, the one from the reply first.
@@ -183,7 +194,7 @@ internal fun FileViewer(
             onDismiss()
         }
     }
-    Dialog(onDismissRequest = ::back, properties = DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false)) {
+    val page = @Composable {
         val top = stack.last()
         pages.SaveableStateProvider(pageKey(stack.lastIndex)) {
             FileViewerPage(
@@ -207,6 +218,10 @@ internal fun FileViewer(
             )
         }
     }
+    // Docked, Esc steps back as the dialog's Back does: to the file below, then the rail closes.
+    // On the back stack, so a rail opened after a sidebar page closes before it.
+    PlatformBackHandler(enabled = docked) { back() }
+    if (docked) page() else Dialog(onDismissRequest = ::back, properties = fullScreenDialogProperties()) { page() }
     picture?.let { ImageViewer(it, onDismiss = { picture = null }) }
 }
 
@@ -338,7 +353,7 @@ internal fun FileViewerPage(
                 IconButton(Lucide.Download, contentDescription = "Save ${file.name}", onClick = {
                     withBytes { notice = Notice(actions.save(it, file.name)) }
                 })
-                IconButton(Lucide.Share2, contentDescription = "Share ${file.name}", onClick = { withBytes { actions.share(it, file.name) } })
+                IconButton(shareIcon, contentDescription = "$shareLabel: ${file.name}", onClick = { withBytes { actions.share(it, file.name) } })
             }
         }
 
@@ -519,7 +534,7 @@ private fun FileBody(file: GatewayFile, kind: GatewayFileKind, text: FileText, r
     when {
         // Rendered Markdown reads as a page of its own, not a box on one.
         kind == GatewayFileKind.Markdown && !raw ->
-            Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 8.dp, vertical = 4.dp)) {
+            Column(Modifier.fillMaxSize().verticalScrollWithBar().padding(horizontal = 8.dp, vertical = 4.dp)) {
                 SelectionContainer { MarkdownText(text.text) }
             }
         kind == GatewayFileKind.Table && !raw -> {
@@ -568,9 +583,15 @@ private fun DataTable(table: DelimitedTable, modifier: Modifier) {
     }
     val numberWidth = charWidth * table.rows.size.toString().length + 20.dp
     val lineColor = Theme[colors][stroke]
+    val sideways = rememberScrollState()
+    val list = rememberLazyListState()
     Column(modifier) {
-        Box(Modifier.weight(1f).horizontalScroll(rememberScrollState())) {
-            LazyColumn(Modifier.width(numberWidth + widths.fold(0.dp) { sum, w -> sum + w })) {
+        // On the desktop: bars down the right and along the bottom to move about a big file by, and cells to
+        // select and copy, the row numbers left out.
+        Box(Modifier.weight(1f)) {
+        Box(Modifier.fillMaxSize().horizontalScroll(sideways)) {
+            CopyableOnDesktop {
+            LazyColumn(Modifier.width(numberWidth + widths.fold(0.dp) { sum, w -> sum + w }), state = list) {
                 itemsIndexed(table.rows) { index, row ->
                     val header = index == 0
                     Row(
@@ -578,12 +599,14 @@ private fun DataTable(table: DelimitedTable, modifier: Modifier) {
                             .fillMaxWidth()
                             .background(if (header) Theme[colors][surface2] else if (index % 2 == 0) Theme[colors][surface] else Color.Transparent),
                     ) {
-                        Text(
-                            if (header) "" else index.toString(),
-                            style = Theme[typography][caption],
-                            color = Theme[colors][textTertiary],
-                            modifier = Modifier.width(numberWidth).padding(horizontal = 10.dp, vertical = 8.dp),
-                        )
+                        DisableSelection {
+                            Text(
+                                if (header) "" else index.toString(),
+                                style = Theme[typography][caption],
+                                color = Theme[colors][textTertiary],
+                                modifier = Modifier.width(numberWidth).padding(horizontal = 10.dp, vertical = 8.dp),
+                            )
+                        }
                         widths.forEachIndexed { column, width ->
                             Text(
                                 row.getOrNull(column).orEmpty(),
@@ -597,6 +620,12 @@ private fun DataTable(table: DelimitedTable, modifier: Modifier) {
                     Box(Modifier.fillMaxWidth().height(1.dp).background(lineColor))
                 }
             }
+            }
+        }
+        if (isDesktop) {
+            VerticalScrollbar(list, Modifier.align(Alignment.TopEnd).fillMaxHeight())
+            HorizontalScrollbar(sideways, Modifier.align(Alignment.BottomStart).fillMaxWidth())
+        }
         }
         Text(
             buildString {
@@ -633,7 +662,7 @@ private fun Unavailable(file: GatewayFile, kind: GatewayFileKind, error: String?
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            error ?: "Save it to the phone, or share it to an app that opens it.",
+            error ?: if (isDesktop) "Save it, then open it with an app that can." else "Save it to the phone, or share it to an app that opens it.",
             style = Theme[typography][bodySmall],
             color = Theme[colors][textTertiary],
             textAlign = TextAlign.Center,
@@ -642,7 +671,7 @@ private fun Unavailable(file: GatewayFile, kind: GatewayFileKind, error: String?
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 Button("Save", onClick = onSave, leadingIcon = Lucide.Download, size = ButtonSize.Small)
-                Button("Share", onClick = onShare, leadingIcon = Lucide.Share2, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
+                Button(shareLabel, onClick = onShare, leadingIcon = shareIcon, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
             }
         }
     }

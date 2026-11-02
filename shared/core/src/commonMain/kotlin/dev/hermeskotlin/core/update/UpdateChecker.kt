@@ -14,11 +14,17 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
-/** A release newer than the installed app. [apkUrl] is the APK attached to it, when there is one. */
-data class AppUpdate(val version: String, val pageUrl: String, val apkUrl: String?)
+/**
+ * A release newer than the installed app. [downloadUrl] is the file attached to it for this device (an APK, or a
+ * desktop's installer), when there is one.
+ */
+data class AppUpdate(val version: String, val pageUrl: String, val downloadUrl: String?)
 
 /** The ABIs this device runs, most preferred first (`Build.SUPPORTED_ABIS`). */
 internal expect fun deviceAbis(): List<String>
+
+/** On a desktop, the end of its installer's name (".msi", ".dmg", ".deb"); null on a phone, which takes an APK. */
+internal expect fun desktopInstaller(): String?
 
 /**
  * Looks for a newer release of the app on GitHub, where it is published (`releases/latest`, which
@@ -29,6 +35,7 @@ class UpdateChecker(
     private val client: HttpClient,
     private val store: KeyValueStore,
     private val abis: List<String> = deviceAbis(),
+    private val installer: String? = desktopInstaller(),
 ) {
 
     /** The latest release of [repo] (`owner/name`) when it is newer than [current], unless it was dismissed. */
@@ -50,7 +57,7 @@ class UpdateChecker(
         } catch (e: Exception) {
             null
         } ?: return null
-        val update = parseRelease(release, abis) ?: return null
+        val update = parseRelease(release, abis, installer) ?: return null
         if (!isNewer(update.version, current)) return null
         if (store.get(DISMISSED_KEY) == update.version) return null
         return update
@@ -73,16 +80,24 @@ class UpdateChecker(
 }
 
 /**
- * A release names one APK per ABI (`herald-1.2.3_arm64-v8a.apk`) beside the universal one (`herald-1.2.3.apk`):
+ * A release names one APK per ABI (`kyllene-1.2.3_arm64-v8a.apk`) beside the universal one (`kyllene-1.2.3.apk`):
  * the one for the first of [abis] that has its own wins, then the universal one, then any APK. The watch app's APK
- * (`herald-wear-1.2.3.apk`) is never offered: it installs on the watch, not the phone. It is known by `-wear-` after
- * the app's name, whatever that name is, so releases can rename their APKs (`kyllene-wear-1.2.3.apk`).
+ * (`kyllene-wear-1.2.3.apk`) is never offered: it installs on the watch, not the phone. It is known by `-wear-` after
+ * the app's name, whatever that name is, so older `herald-wear-1.2.3.apk` releases are skipped too.
+ *
+ * A desktop ([installer] set) takes the installer for its system instead (`kyllene-desktop-1.2.3.msi`).
  */
-internal fun parseRelease(release: JsonObject, abis: List<String>): AppUpdate? {
+internal fun parseRelease(release: JsonObject, abis: List<String>, installer: String? = null): AppUpdate? {
     val tag = release.text("tag_name") ?: return null
     val page = release.text("html_url") ?: return null
-    val apks = (release["assets"] as? JsonArray).orEmpty()
-        .mapNotNull { it as? JsonObject }
+    val assets = (release["assets"] as? JsonArray).orEmpty().mapNotNull { it as? JsonObject }
+    if (installer != null) {
+        val file = assets.firstOrNull { asset ->
+            asset.text("name")?.let { it.startsWith(DESKTOP_PREFIX, ignoreCase = true) && it.endsWith(installer, ignoreCase = true) } == true
+        }
+        return AppUpdate(tag.removePrefix("v"), page, file?.text("browser_download_url"))
+    }
+    val apks = assets
         .mapNotNull { asset -> asset.text("name")?.takeIf { it.endsWith(".apk", ignoreCase = true) }?.let { it.dropLast(4) to asset } }
         .filterNot { (name, _) -> WEAR_APK.containsMatchIn(name) }
     val forAbi = abis.firstNotNullOfOrNull { abi -> apks.firstOrNull { (name, _) -> name.endsWith("_$abi") } }
@@ -96,6 +111,9 @@ private val APK_ABIS = listOf("arm64-v8a", "armeabi-v7a", "x86_64", "x86")
 
 /** How release.yml names the Wear OS app's APK: the app's name, then `-wear-` and the version. */
 private val WEAR_APK = Regex("-wear-\\d", RegexOption.IGNORE_CASE)
+
+/** How release.yml names the desktop installers. */
+private const val DESKTOP_PREFIX = "kyllene-desktop-"
 
 /** True when [candidate] is a higher `major.minor.patch` than [current]; a leading `v` and any `-suffix` are ignored. */
 internal fun isNewer(candidate: String, current: String): Boolean {

@@ -20,6 +20,9 @@ import dev.hermeskotlin.core.sessions.SessionSummary
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.debounce
@@ -79,6 +82,9 @@ class ScheduledViewModel(
     val name = TextFieldState()
     val prompt = TextFieldState()
     val schedule = TextFieldState()
+
+    /** The run last opened from the page, marked when it comes back (a desktop puts the page away for the run). */
+    var lastOpenedRun by mutableStateOf<String?>(null)
 
     private val _state = MutableStateFlow(ScheduledUiState())
     val state: StateFlow<ScheduledUiState> = _state.asStateFlow()
@@ -165,6 +171,7 @@ class ScheduledViewModel(
         editorGeneration++
         // A bot's routine reports to the bot by default, which reads it and answers there.
         _state.update { it.copy(editor = JobEditor(deliver = if (owner != null) Routines.BOT_CHAT_DELIVERY else LOCAL_DELIVERY.id)) }
+        opened = formNow()
         loadDeliveryTargets()
     }
 
@@ -176,13 +183,23 @@ class ScheduledViewModel(
         schedule.setTextAndPlaceCursorAtEnd(job.editableSchedule)
         editorGeneration++
         _state.update { it.copy(editor = JobEditor(jobId = job.id, deliver = job.deliver ?: LOCAL_DELIVERY.id)) }
+        opened = formNow()
         loadDeliveryTargets()
     }
 
     fun closeEditor() {
         editorGeneration++
+        opened = null
         _state.update { it.copy(editor = null) }
     }
+
+    /** What the form opened with; kept here, as the form outlives the page put away for a chat. */
+    private var opened: List<String?>? = null
+
+    private fun formNow() = listOf(prompt.text.toString(), schedule.text.toString(), name.text.toString(), _state.value.editor?.deliver)
+
+    /** Whether the open form holds changes that leaving it would drop. */
+    fun editorChanged(): Boolean = opened?.let { it != formNow() } ?: false
 
     fun setDeliver(target: String) = _state.update { state -> state.copy(editor = state.editor?.copy(deliver = target, error = null)) }
 

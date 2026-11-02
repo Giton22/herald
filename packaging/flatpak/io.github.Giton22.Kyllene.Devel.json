@@ -1,0 +1,93 @@
+{
+  "app-id": "io.github.Giton22.Kyllene.Devel",
+  "branch": "devel",
+  "runtime": "org.freedesktop.Platform",
+  "runtime-version": "26.08",
+  "sdk": "org.freedesktop.Sdk",
+  "command": "kyllene",
+  "finish-args": [
+    "--share=network",
+    "--share=ipc",
+    "--socket=x11",
+    "--device=dri"
+  ],
+  "modules": [
+    {
+      "name": "kyllene",
+      "buildsystem": "simple",
+      "build-options": {
+        "env": {
+          "JAVA_HOME": "/run/build/kyllene/jdk",
+          "HERALD_PACKAGING_JDK": "/run/build/kyllene/jdk",
+          "GRADLE_USER_HOME": "/run/build/kyllene/gradle-home"
+        }
+      },
+      "build-commands": [
+        "./gradle/bin/gradle --offline --no-daemon --max-workers=2 --no-configuration-cache -I packaging/flatpak/offline.init.gradle :desktopApp:createReleaseDistributable",
+        "python3 packaging/flatpak/stage.py desktopApp/build/compose/binaries/main-release/app/Kyllene /app jdk/bin/java",
+        "install -Dm644 packaging/flatpak/fonts.conf /app/etc/fonts/local.conf",
+        "install -Dm644 packaging/flatpak/io.github.Giton22.Kyllene.Devel.desktop /app/share/applications/io.github.Giton22.Kyllene.Devel.desktop",
+        "install -Dm644 packaging/flatpak/io.github.Giton22.Kyllene.Devel.metainfo.xml /app/share/metainfo/io.github.Giton22.Kyllene.Devel.metainfo.xml",
+        "install -Dm644 desktopApp/icons/herald.png /app/share/icons/hicolor/512x512/apps/io.github.Giton22.Kyllene.Devel.png",
+        "install -d /app/share/kyllene",
+        "git rev-parse HEAD > /app/share/kyllene/source-revision",
+        "install -Dm644 packaging/flatpak/gradle-sources.json /app/share/kyllene/build-inputs.json",
+        "find offline-repository -name \"*.pom\" -exec cp --parents -t /app/share/kyllene {} +",
+        "install -Dm644 LICENSE /app/share/licenses/kyllene/LICENSE"
+      ],
+      "sources": [
+        {
+          "type": "git",
+          "url": "https://github.com/Giton22/kyllene.git",
+          "commit": "5fc9c998c022416dd1bb1e16e1dff847c1715cb2"
+        },
+        {
+          "type": "archive",
+          "url": "https://services.gradle.org/distributions/gradle-9.8.0-bin.zip",
+          "sha256": "bafd5ce9cfaea0fbccfdc8439a1ac42fbd4cd9c89dc9a988228d8a2639a58e6c",
+          "dest": "gradle"
+        },
+        {
+          "type": "archive",
+          "url": "https://cache-redirector.jetbrains.com/intellij-jbr/jbrsdk_jcef-25.0.4.1-linux-x64-b508.40.tar.gz",
+          "sha512": "e6980e9c2ede24c068a84c95ccd5a05a1250a28d729d9f423a8df48ddcc66e035a2708dc213e1fa39ccbf8c85a317fd4eff7ac9d241b82d912426d26b31feb7d",
+          "dest": "jdk"
+        },
+        "gradle-sources.json",
+        {
+          "type": "file",
+          "path": "fonts.conf",
+          "dest": "packaging/flatpak"
+        },
+        {
+          "type": "file",
+          "path": "stage.py",
+          "dest": "packaging/flatpak"
+        },
+        {
+          "type": "file",
+          "path": "offline.init.gradle",
+          "dest": "packaging/flatpak"
+        },
+        {
+          "type": "file",
+          "path": "io.github.Giton22.Kyllene.Devel.desktop",
+          "dest": "packaging/flatpak"
+        },
+        {
+          "type": "file",
+          "path": "io.github.Giton22.Kyllene.Devel.metainfo.xml",
+          "dest": "packaging/flatpak"
+        },
+        {
+          "type": "file",
+          "path": "gradle-sources.json",
+          "dest": "packaging/flatpak"
+        }
+      ],
+      "only-arches": [
+        "x86_64"
+      ]
+    }
+  ]
+}

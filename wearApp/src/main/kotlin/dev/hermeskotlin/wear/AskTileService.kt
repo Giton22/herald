@@ -16,7 +16,7 @@ import androidx.wear.tiles.TileService
 import com.google.common.util.concurrent.ListenableFuture
 
 /**
- * The "Ask Hermes" tile: a mic that opens Herald listening, and the first lines of the last reply. Updated when
+ * The "Call Hermes" tile: a call action using the phone’s default target, and the first lines of the last reply. Updated when
  * a reply comes in ([WatchLink] asks for it).
  */
 class AskTileService : TileService() {
@@ -39,7 +39,7 @@ class AskTileService : TileService() {
                 .addIdToImageMapping(
                     MIC,
                     ResourceBuilders.ImageResource.Builder()
-                        .setAndroidResourceByResId(ResourceBuilders.AndroidImageResourceByResId.Builder().setResourceId(R.drawable.ic_mic).build())
+                        .setAndroidResourceByResId(ResourceBuilders.AndroidImageResourceByResId.Builder().setResourceId(R.drawable.ic_call).build())
                         .build(),
                 )
                 .build(),
@@ -55,7 +55,7 @@ class AskTileService : TileService() {
                         ActionBuilders.AndroidActivity.Builder()
                             .setPackageName(packageName)
                             .setClassName(MainActivity::class.java.name)
-                            .addKeyToExtraMapping(MainActivity.EXTRA_LISTEN, ActionBuilders.AndroidBooleanExtra.Builder().setValue(true).build())
+                            .addKeyToExtraMapping(MainActivity.EXTRA_CALL, ActionBuilders.AndroidBooleanExtra.Builder().setValue(true).build())
                             .build(),
                     )
                     .build(),
@@ -73,7 +73,7 @@ class AskTileService : TileService() {
                             .setCorner(ModifiersBuilders.Corner.Builder().setRadius(dp(MIC_BUTTON / 2)).build())
                             .build(),
                     )
-                    .setSemantics(ModifiersBuilders.Semantics.Builder().setContentDescription("Ask Hermes").build())
+                    .setSemantics(ModifiersBuilders.Semantics.Builder().setContentDescription("Call Hermes").build())
                     .build(),
             )
             .addContent(
@@ -85,7 +85,7 @@ class AskTileService : TileService() {
                     .build(),
             )
             .build()
-        // A soft ring round the mic, as the app's orb has.
+        // A soft ring round the call action, as the app's orb has.
         val ring = LayoutElementBuilders.Box.Builder()
             .setWidth(dp(RING))
             .setHeight(dp(RING))
@@ -103,12 +103,12 @@ class AskTileService : TileService() {
             .build()
         val column = LayoutElementBuilders.Column.Builder()
             .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
-            .addContent(text("Herald", LABEL_SIZE, MUTED, maxLines = 1))
+            .addContent(text("Kyllene", LABEL_SIZE, MUTED, maxLines = 1))
             .addContent(spacer(6f))
             .addContent(ring)
             .addContent(spacer(8f))
             // Two lines: a third would run into the round edge.
-            .addContent(text(last ?: "Ask Hermes anything", BODY_SIZE, if (last != null) TEXT else MUTED, maxLines = 2))
+            .addContent(text(last ?: "Start a call", BODY_SIZE, if (last != null) TEXT else MUTED, maxLines = 2))
             .build()
         return LayoutElementBuilders.Box.Builder()
             .setWidth(expand())
@@ -133,7 +133,7 @@ class AskTileService : TileService() {
     private fun <T : Any> done(value: T): ListenableFuture<T> = CallbackToFutureAdapter.getFuture { it.set(value) }
 
     private companion object {
-        const val RESOURCES_VERSION = "1"
+        const val RESOURCES_VERSION = "2"
         const val MIC = "mic"
         const val MIC_BUTTON = 52f
         const val RING = 70f

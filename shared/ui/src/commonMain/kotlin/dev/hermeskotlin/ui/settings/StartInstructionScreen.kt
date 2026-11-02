@@ -1,5 +1,6 @@
 package dev.hermeskotlin.ui.settings
 
+import dev.hermeskotlin.ui.isDesktop
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -13,10 +14,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.windowInsetsPadding
-import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
-import androidx.compose.foundation.verticalScroll
+import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
@@ -67,11 +67,11 @@ internal fun StartInstructionView(text: String, onChange: (String) -> Unit, onBa
         Column(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
             SubpageHeader("Starting instruction", onBack = onBack)
             Column(
-                Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, bottom = 16.dp),
+                Modifier.weight(1f).verticalScrollWithBar().padding(start = 14.dp, end = 14.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
                 Text(
-                    "Each new chat you start in Herald tells the agent this first. It stays out of the chat, here and on " +
+                    "Each new chat you start in Kyllene tells the agent this first. It stays out of the chat, here and on " +
                         "your other Hermes apps. Chats already going keep what they started with. Leave it empty for none.",
                     style = Theme[typography][bodySmall],
                     color = Theme[colors][textTertiary],
@@ -84,6 +84,7 @@ internal fun StartInstructionView(text: String, onChange: (String) -> Unit, onBa
                     singleLine = false,
                     maxLines = 12,
                     clearable = true,
+                    autofocus = true,
                 )
                 Text(
                     "Suggestions",
@@ -92,7 +93,7 @@ internal fun StartInstructionView(text: String, onChange: (String) -> Unit, onBa
                     modifier = Modifier.padding(horizontal = 4.dp),
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    SUGGESTIONS.forEach { suggestion ->
+                    (if (isDesktop) DESKTOP_SUGGESTIONS else SUGGESTIONS).forEach { suggestion ->
                         Button(
                             suggestion,
                             onClick = { field.setTextAndPlaceCursorAtEnd(suggestion) },
@@ -109,4 +110,10 @@ internal fun StartInstructionView(text: String, onChange: (String) -> Unit, onBa
 private val SUGGESTIONS = listOf(
     "I'm on my phone: keep replies short and skip long tables.",
     "I'm on my phone, often on the go. Answer in a few sentences unless I ask for more.",
+)
+
+/** On a computer the screen has room: the suggestions are about how to answer, not about a small screen. */
+private val DESKTOP_SUGGESTIONS = listOf(
+    "I'm on my computer: full answers are fine, and use tables and code blocks where they help.",
+    "Be direct. Lead with the answer, then the detail.",
 )

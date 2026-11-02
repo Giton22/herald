@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="128" height="128" viewBox="18 18 72 72">
+  <defs>
+    <clipPath id="tile"><rect x="18" y="18" width="72" height="72" rx="21"/></clipPath>
+    <linearGradient id="sky" gradientUnits="userSpaceOnUse" x1="0" y1="18" x2="0" y2="90"><stop offset="0" stop-color="#0E1C47"/><stop offset="1" stop-color="#23409F"/></linearGradient>
+    <linearGradient id="sun" gradientUnits="userSpaceOnUse" x1="0" y1="38" x2="0" y2="60"><stop offset="0" stop-color="#FFC877"/><stop offset="1" stop-color="#FF6B3D"/></linearGradient>
+    <linearGradient id="lit" gradientUnits="userSpaceOnUse" x1="30" y1="36" x2="54" y2="90"><stop offset="0" stop-color="#5A90FF"/><stop offset="1" stop-color="#1F5CF2"/></linearGradient>
+    <linearGradient id="shade" gradientUnits="userSpaceOnUse" x1="60" y1="36" x2="80" y2="90"><stop offset="0" stop-color="#1A4FD6"/><stop offset="1" stop-color="#0A35A6"/></linearGradient>
+  </defs>
+  <g clip-path="url(#tile)">
+    <rect width="108" height="108" fill="url(#sky)"/>
+    <path fill="url(#sun)" d="M60,49a11,11 0,1 0,22 0a11,11 0,1 0,-22 0z"/>
+    <path fill="none" stroke="url(#sky)" stroke-width="4" stroke-linejoin="round" d="M11.6,108L51,40Q54,35 57,40L96.4,108"/>
+    <path fill="url(#lit)" d="M11.6,108L51,40Q54,35 57,40L58,41.7L55,52L60,64L56,78L60,90L60,108Z"/>
+    <path fill="url(#shade)" d="M58,41.7L96.4,108L60,108L60,90L56,78L60,64L55,52Z"/>
+    <path fill="#FFFFFF" d="M45.2,50L51,40Q54,35 57,40L58,41.7L55,52L52,49L48.5,53Z"/>
+    <path fill="#CBD7F7" d="M58,41.7L62.8,50L60,48.6L57.5,52.5L55,52Z"/>
+  </g>
+</svg>

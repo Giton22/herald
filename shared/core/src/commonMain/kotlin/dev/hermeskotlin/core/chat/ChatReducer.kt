@@ -26,7 +26,8 @@ fun ChatState.reduce(event: GatewayEvent, now: Double? = null): ChatState {
         "session.usage" -> copy(usage = SessionUsage.parse(payload?.get("usage") as? JsonObject) ?: usage)
         "message.delta" -> appendText(payload.string("text"))
         "message.interim" ->
-            // Commentary next to tool calls; when already streamed it is in the text already.
+            // Text next to tool calls; when already streamed it is in the text already. The event doesn't say whether
+            // it's Codex commentary (which a loaded chat shows in Reasoning) or a step's own text, so it stays text.
             if (payload.boolean("already_streamed") == true) this else appendText(payload.string("text")?.let { "$it\n\n" })
         "reasoning.delta", "reasoning.available" -> payload.string("text")?.let { chunk ->
             withOpenReply { it.copy(reasoning = it.reasoning + chunk) }
@@ -44,6 +45,7 @@ fun ChatState.reduce(event: GatewayEvent, now: Double? = null): ChatState {
                 detail = payload.string("context") ?: payload.string("preview"),
                 running = true,
                 input = ToolDetails.input(payload?.get("args"), payload.string("args_text")),
+                agentScreen = AgentScreen.from(payload.string("name") ?: "", payload?.get("args")),
             ).let { if (it.name == DELEGATE_TOOL) it.copy(tasks = delegatedTasks(payload?.get("args"), null)) else it }
             withOpenReply { reply -> reply.copy(tools = reply.tools.filterNot { it.id == id } + tool) }
                 .copy(running = true, thinkingFrame = null)
@@ -69,6 +71,7 @@ fun ChatState.reduce(event: GatewayEvent, now: Double? = null): ChatState {
                         ),
                         delegationIds = if (it.name != DELEGATE_TOOL) it.delegationIds else delegationIds(payload?.get("result") ?: payload?.get("result_text")),
                         generatedImage = if (it.name != IMAGE_GENERATE_TOOL) null else GeneratedImage.from(payload?.get("result")),
+                        agentScreen = it.agentScreen ?: AgentScreen.from(it.name, payload?.get("args")),
                     )
                 })
             }
@@ -183,6 +186,7 @@ internal fun ChatState.withInfo(info: JsonObject?): ChatState {
         provider = info.string("provider")?.takeIf { it.isNotBlank() } ?: provider,
         // "" means the profile default, which is worth showing as such rather than as a stale pick.
         reasoningEffort = info.string("reasoning_effort")?.let { it.ifBlank { null } } ?: reasoningEffort.takeIf { "reasoning_effort" !in info },
+        reasoningRevision = if ("reasoning_effort" in info) reasoningRevision + 1 else reasoningRevision,
         fast = info.boolean("fast") ?: fast,
         yolo = info.boolean("yolo") ?: yolo,
         usage = SessionUsage.parse(info["usage"] as? JsonObject) ?: usage,
@@ -311,6 +315,13 @@ fun historyToMessages(rows: List<SessionMessage>, liveSessionId: String? = null,
     rows.forEachIndexed { index, row ->
         if (row.isHidden) return@forEachIndexed
         val key = row.id?.let { "row-$it" } ?: "h$index"
+        if ((row.role == "user" || row.role == "assistant") && row.displayKind != "failed_turn") {
+            TranscriptRows.compaction(row.text)?.let { checkpoint ->
+                messages += ChatMessage.Event(key, checkpoint, timestamp = row.timestamp)
+                replyingTo = null
+                return@forEachIndexed
+            }
+        }
         when (row.role) {
             "user" -> {
                 // Background subagents reporting back: written for the agent, so a line here, and their results go to their card.
@@ -355,7 +366,8 @@ fun historyToMessages(rows: List<SessionMessage>, liveSessionId: String? = null,
                     return@forEachIndexed
                 }
                 // A bot that chose to say nothing shows nothing.
-                val text = row.text.trim().takeUnless(TranscriptRows::isSilence).orEmpty()
+                val silent = TranscriptRows.isSilence(row.text.trim())
+                val text = if (silent) "" else row.text.trim()
                 row.storedToolCalls.filter { it.name == MESSAGE_AGENT_TOOL }.forEach { call ->
                     messageTarget(call.arguments)?.let { messagedSinceUser += it.lowercase() }
                 }
@@ -373,9 +385,10 @@ fun historyToMessages(rows: List<SessionMessage>, liveSessionId: String? = null,
                         tasks = if (call.name == DELEGATE_TOOL) delegatedTasks(call.arguments, result) else emptyList(),
                         delegationIds = if (call.name == DELEGATE_TOOL) delegationIds(result) else emptyList(),
                         generatedImage = if (storedToolName(call.name, call.arguments) == IMAGE_GENERATE_TOOL) GeneratedImage.from(result) else null,
+                        agentScreen = AgentScreen.from(call.name, call.arguments),
                     )
                 }
-                val reasoning = row.reasoning.orEmpty()
+                val reasoning = row.reasoningText
                 val previous = (messages.lastOrNull() as? ChatMessage.Assistant)?.takeUnless { before ->
                     val at = row.timestamp
                     val ended = before.timestamp
@@ -389,7 +402,7 @@ fun historyToMessages(rows: List<SessionMessage>, liveSessionId: String? = null,
                         // The reply is dated by its last step, when it finished.
                         timestamp = row.timestamp ?: previous.timestamp,
                     )
-                } else if (text.isNotEmpty() || tools.isNotEmpty()) {
+                } else if (text.isNotEmpty() || (reasoning.isNotEmpty() && !silent) || tools.isNotEmpty()) {
                     messages += ChatMessage.Assistant(
                         key,
                         text = text,
@@ -402,7 +415,7 @@ fun historyToMessages(rows: List<SessionMessage>, liveSessionId: String? = null,
             }
         }
     }
-    return messages
+    return groupSystemMessages(messages)
 }
 
 /** Bot Mode's tool for messaging another bot. */

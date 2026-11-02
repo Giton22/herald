@@ -9,6 +9,9 @@ import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.inbox.Follow
 import dev.hermeskotlin.core.inbox.InboxApi
+import dev.hermeskotlin.core.inbox.InboxGroups
+import dev.hermeskotlin.core.inbox.InboxNotices
+import dev.hermeskotlin.core.chat.DraftStart
 import dev.hermeskotlin.core.inbox.InboxRun
 import dev.hermeskotlin.core.inbox.InboxStore
 import dev.hermeskotlin.core.network.createHttpClient
@@ -35,6 +38,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
@@ -52,6 +56,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -111,6 +116,16 @@ class InboxViewModelTest {
     private val disk = InMemoryKeyValueStore()
     private val store = InboxStore(disk, dispatcher)
 
+    /** The notifications taken down, as (gateway, keys) per call. */
+    private class Notices : InboxNotices {
+        val read = mutableListOf<Pair<String, Set<String>>>()
+        override fun runsRead(gatewayUrl: String, keys: Collection<String>) {
+            read += gatewayUrl to keys.toSet()
+        }
+    }
+
+    private val notices = Notices()
+
     private suspend fun TestScope.viewModel(socket: PluginGateway): InboxViewModel {
         val config = MockEngineConfig()
         config.dispatcher = dispatcher
@@ -128,7 +143,7 @@ class InboxViewModelTest {
         settings.update { it.copy(pushAnywhere = true) }
         val pushApi = PushApi(connection)
         val push = PushSetup(pushApi, Keys, connection, GatewayRepository(InMemoryKeyValueStore()), settings, backgroundScope) { "Test" }
-        return InboxViewModel(InboxApi(pushApi, Keys), store, CronApi(client), push, connection, settings)
+        return InboxViewModel(InboxApi(pushApi, Keys), store, CronApi(client), push, connection, settings, notices)
     }
 
     private fun run(job: String, at: Long) =
@@ -353,5 +368,292 @@ class InboxViewModelTest {
         vm.setVisible(false)
         vm.setVisible(false)
         assertEquals(asked + 1, socket.sent("inbox").size)
+    }
+
+    private fun runsJsonWithSession(vararg runs: Pair<InboxRun, String?>) = runs.joinToString(",", "[", "]") { (it, session) ->
+        """{"bot":"${it.bot}","job":"${it.job}","run":"${it.run}","label":"${it.job}","status":"ok","at":${it.at},"text":"${it.text}"""" +
+            (session?.let { s -> ""","session":"$s"""" } ?: "") + "}"
+    }
+
+    @Test
+    fun aFolderMarkedReadCountsEveryRunOfItsJobOlderPagesTooAndNoOther() = runTest(dispatcher) {
+        // A full page, so there are older ones to page in.
+        val first = (0 until InboxApi.PAGE).map { if (it % 2 == 0) run("a", 10_000L - it) else run("b", 10_000L - it) }
+        val older = run("a", 100)
+        val socket = PluginGateway(CoroutineScope(dispatcher)) { arg ->
+            when {
+                arg.startsWith("inbox") && body(arg)["before"] == null -> """{"ok":true,"runs":${runsJson(*first.toTypedArray())}}"""
+                arg.startsWith("inbox") -> """{"ok":true,"runs":${runsJson(older)}}"""
+                else -> """{"ok":true,"jobs":{},"failures":false,"default":"quiet"}"""
+            }
+        }
+        store.bind(one.gatewayUrl.value, now = 0)
+        val vm = viewModel(socket)
+        vm.bind(one)
+        vm.loadMore()
+        assertTrue(vm.state.value.runs.any { it.key == older.key })
+        vm.markFolderRead(InboxFilter.Job("default", "a"))
+        val ofA = vm.state.value.runs.filter { it.job == "a" }
+        assertTrue(ofA.none(vm.state.value::isUnread))
+        assertTrue(older.key in vm.state.value.read)
+        assertTrue(vm.state.value.runs.filter { it.job == "b" }.all(vm.state.value::isUnread))
+        // Their notifications go with them.
+        assertEquals(ofA.map { it.key }.toSet(), notices.read.single().second)
+        assertEquals(one.gatewayUrl.value, notices.read.single().first)
+    }
+
+    @Test
+    fun aGroupFolderMarkedReadCountsTheRunsOfEveryJobInIt() = runTest(dispatcher) {
+        val socket = PluginGateway(CoroutineScope(dispatcher)) { arg ->
+            if (arg.startsWith("inbox")) """{"ok":true,"runs":${runsJson(run("a", 50), run("b", 40), run("c", 30))}}"""
+            else """{"ok":true,"jobs":{},"failures":false,"default":"quiet"}"""
+        }
+        store.bind(one.gatewayUrl.value, now = 0)
+        val vm = viewModel(socket)
+        vm.bind(one)
+        vm.addGroup("Home")
+        vm.assignGroup(InboxFilter.Job("default", "a"), "Home")
+        vm.assignGroup(InboxFilter.Job("default", "b"), "Home")
+        vm.markFolderRead(InboxFilter.Group("Home"))
+        assertEquals(setOf("c"), vm.state.value.runs.filter(vm.state.value::isUnread).map { it.job }.toSet())
+        // "Other", the jobs in no group, is a folder too.
+        vm.markFolderRead(InboxFilter.Group(null))
+        assertEquals(0, vm.state.value.unread)
+    }
+
+    @Test
+    fun askingAboutAReportAttachesTheWholeOfItNotTheListsStart() = runTest(dispatcher) {
+        val listed = run("a", 50).copy(bot = "work")
+        val socket = PluginGateway(CoroutineScope(dispatcher)) { arg ->
+            when {
+                arg.startsWith("inbox") -> """{"ok":true,"runs":${runsJson(listed)}}"""
+                arg.startsWith("read") -> """{"ok":true,"run":{"bot":"work","job":"a","run":"${listed.run}","label":"a","at":50,"text":"The whole report"}}"""
+                else -> """{"ok":true,"jobs":{},"failures":false,"default":"quiet"}"""
+            }
+        }
+        store.bind(one.gatewayUrl.value, now = 0)
+        val vm = viewModel(socket)
+        vm.bind(one)
+        vm.ask(vm.state.value.runs.single())
+        val event = vm.events.first() as InboxEvent.OpenChat
+        assertEquals("work", event.chat.profile)
+        assertEquals(one.gatewayUrl.value, event.chat.gatewayUrl)
+        assertNull(event.chat.storedSessionId)
+        val draft = event.chat.draft!!
+        assertEquals("The whole report", draft.attachments.single().bytes.decodeToString())
+        assertNull(draft.text)
+        assertEquals(DraftStart.Typing, draft.start)
+        assertFalse(vm.state.value.isUnread(listed))
+    }
+
+    @Test
+    fun askingOfflineSaysSoAndOpensNothing() = runTest(dispatcher) {
+        val socket = PluginGateway(CoroutineScope(dispatcher)) { arg ->
+            if (arg.startsWith("inbox")) """{"ok":true,"runs":${runsJson(run("a", 50))}}"""
+            else """{"ok":false,"error":"boom"}"""
+        }
+        store.bind(one.gatewayUrl.value, now = 0)
+        val vm = viewModel(socket)
+        vm.bind(one)
+        vm.ask(vm.state.value.runs.single())
+        assertNotNull(vm.state.value.message)
+        assertNull(vm.state.value.fetching)
+        assertTrue(vm.state.value.isUnread(vm.state.value.runs.single()))
+        assertTrue(vm.events.let { flow -> withTimeoutOrNull(10) { flow.first() } } == null)
+    }
+
+    @Test
+    fun continuingOpensTheRunsOwnChatInItsProfile() = runTest(dispatcher) {
+        val socket = PluginGateway(CoroutineScope(dispatcher)) { arg ->
+            if (arg.startsWith("inbox")) """{"ok":true,"runs":${runsJsonWithSession(run("a", 50) to "20261012_000050_abc", run("b", 40) to null)}}"""
+            else """{"ok":true,"jobs":{},"failures":false,"default":"quiet"}"""
+        }
+        store.bind(one.gatewayUrl.value, now = 0)
+        val vm = viewModel(socket)
+        vm.bind(one)
+        val (a, b) = vm.state.value.runs
+        assertEquals("20261012_000050_abc", a.session)
+        // No chat known: nothing to continue.
+        vm.continueChat(b)
+        vm.continueChat(a)
+        val chat = (vm.events.first() as InboxEvent.OpenChat).chat
+        assertEquals("20261012_000050_abc", chat.storedSessionId)
+        assertEquals("default", chat.profile)
+        assertNull(chat.draft)
+    }
+
+    @Test
+    fun aRunWhoseChatTheGatewayDeletedNoLongerOffersToContinueIt() = runTest(dispatcher) {
+        var session = "\"20261012_000050_abc\""
+        val socket = PluginGateway(CoroutineScope(dispatcher)) { arg ->
+            val a = run("a", 50)
+            when {
+                arg.startsWith("inbox") -> """{"ok":true,"runs":${runsJsonWithSession(a to "20261012_000050_abc")}}"""
+                // Plugin 0.7.2's read: the run's chat, or null once the gateway let the session go.
+                arg.startsWith("read") -> """{"ok":true,"run":{"job":"a","run":"${a.run}","at":50,"text":"All","session":$session}}"""
+                else -> """{"ok":true,"jobs":{},"failures":false,"default":"quiet"}"""
+            }
+        }
+        store.bind(one.gatewayUrl.value, now = 0)
+        val vm = viewModel(socket)
+        vm.bind(one)
+        assertEquals("20261012_000050_abc", vm.state.value.runs.single().session)
+        session = "null"
+        vm.open(vm.state.value.runs.single())
+        assertNull(vm.state.value.open!!.session)
+        assertNull(store.state.value.runs.single().session)
+    }
+
+    @Test
+    fun askingAboutAReportTheGatewayCutShortSaysSoInTheFile() = runTest(dispatcher) {
+        val socket = PluginGateway(CoroutineScope(dispatcher)) { arg ->
+            when {
+                arg.startsWith("inbox") -> """{"ok":true,"runs":${runsJson(run("a", 50))}}"""
+                arg.startsWith("read") -> """{"ok":true,"run":{"job":"a","run":"${run("a", 50).run}","at":50,"text":"The first 48 KB","truncated":true}}"""
+                else -> """{"ok":true,"jobs":{},"failures":false,"default":"quiet"}"""
+            }
+        }
+        store.bind(one.gatewayUrl.value, now = 0)
+        val vm = viewModel(socket)
+        vm.bind(one)
+        vm.ask(vm.state.value.runs.single())
+        val file = (vm.events.first() as InboxEvent.OpenChat).chat.draft!!.attachments.single()
+        assertEquals("$TRUNCATED_NOTE\n\nThe first 48 KB", file.bytes.decodeToString())
+    }
+
+    @Test
+    fun aSwipedRowFlipsBetweenReadAndUnreadAndItsNotificationGoes() = runTest(dispatcher) {
+        val socket = PluginGateway(CoroutineScope(dispatcher)) { arg ->
+            if (arg.startsWith("inbox")) """{"ok":true,"runs":${runsJson(run("a", 50))}}"""
+            else """{"ok":true,"jobs":{},"failures":false,"default":"quiet"}"""
+        }
+        store.bind(one.gatewayUrl.value, now = 0)
+        val vm = viewModel(socket)
+        vm.bind(one)
+        val a = vm.state.value.runs.single()
+        vm.setRead(a, read = true)
+        assertFalse(vm.state.value.isUnread(a))
+        assertEquals(setOf(a.key), notices.read.single().second)
+        vm.setRead(a, read = false)
+        assertTrue(vm.state.value.isUnread(a))
+    }
+
+    @Test
+    fun openingOrMarkingEverythingReadTakesTheirNotificationsDown() = runTest(dispatcher) {
+        val socket = PluginGateway(CoroutineScope(dispatcher)) { arg ->
+            when {
+                arg.startsWith("inbox") -> """{"ok":true,"runs":${runsJson(run("a", 50), run("b", 40))}}"""
+                arg.startsWith("read") -> """{"ok":false,"error":"no such run"}"""
+                else -> """{"ok":true,"jobs":{},"failures":false,"default":"quiet"}"""
+            }
+        }
+        store.bind(one.gatewayUrl.value, now = 0)
+        val vm = viewModel(socket)
+        vm.bind(one)
+        val (a, b) = vm.state.value.runs
+        vm.open(a)
+        assertEquals(setOf(a.key), notices.read.last().second)
+        vm.closeRun()
+        vm.markAllRead()
+        assertEquals(setOf(a.key, b.key), notices.read.last().second)
+    }
+
+    @Test
+    fun aReportAskedAboutAsTheAppMovesToAnotherGatewayIsDropped() = runTest(dispatcher) {
+        val held = CompletableDeferred<Unit>()
+        val socket = PluginGateway(CoroutineScope(dispatcher)) { arg ->
+            when {
+                arg.startsWith("inbox") -> """{"ok":true,"runs":${runsJson(run("a", 50))}}"""
+                arg.startsWith("read") -> {
+                    held.await()
+                    """{"ok":true,"run":{"job":"a","run":"${run("a", 50).run}","at":50,"text":"All"}}"""
+                }
+                else -> """{"ok":true,"jobs":{},"failures":false,"default":"quiet"}"""
+            }
+        }
+        store.bind(one.gatewayUrl.value, now = 0)
+        val vm = viewModel(socket)
+        vm.bind(one)
+        vm.ask(vm.state.value.runs.single())
+        assertNotNull(vm.state.value.fetching)
+        // A second tap while it is fetched asks nothing more.
+        vm.ask(vm.state.value.runs.single())
+        assertEquals(1, socket.sent("read").size)
+        vm.bind(two)
+        held.complete(Unit)
+        assertNull(vm.state.value.fetching)
+        assertTrue(vm.events.let { flow -> withTimeoutOrNull(10) { flow.first() } } == null)
+    }
+
+    @Test
+    fun askingWhileTheReportIsStillOpeningWaitsForThatReadRatherThanASecond() = runTest(dispatcher) {
+        val held = CompletableDeferred<Unit>()
+        val socket = PluginGateway(CoroutineScope(dispatcher)) { arg ->
+            when {
+                arg.startsWith("inbox") -> """{"ok":true,"runs":${runsJson(run("a", 50))}}"""
+                arg.startsWith("read") -> {
+                    held.await()
+                    """{"ok":true,"run":{"job":"a","run":"${run("a", 50).run}","at":50,"text":"The whole report"}}"""
+                }
+                else -> """{"ok":true,"jobs":{},"failures":false,"default":"quiet"}"""
+            }
+        }
+        store.bind(one.gatewayUrl.value, now = 0)
+        val vm = viewModel(socket)
+        vm.bind(one)
+        val a = vm.state.value.runs.single()
+        vm.open(a)
+        assertTrue(vm.state.value.openLoading)
+        vm.ask(a)
+        held.complete(Unit)
+        val draft = (vm.events.first() as InboxEvent.OpenChat).chat.draft!!
+        assertEquals("The whole report", draft.attachments.single().bytes.decodeToString())
+        assertEquals(1, socket.sent("read").size)
+    }
+
+    @Test
+    fun copyingAReportTheGatewayCutShortSaysItIsCut() = runTest(dispatcher) {
+        val socket = PluginGateway(CoroutineScope(dispatcher)) { arg ->
+            when {
+                arg.startsWith("inbox") -> """{"ok":true,"runs":${runsJson(run("a", 50))}}"""
+                arg.startsWith("read") -> """{"ok":true,"run":{"job":"a","run":"${run("a", 50).run}","at":50,"text":"The first 48 KB","truncated":true}}"""
+                else -> """{"ok":true,"jobs":{},"failures":false,"default":"quiet"}"""
+            }
+        }
+        store.bind(one.gatewayUrl.value, now = 0)
+        val vm = viewModel(socket)
+        vm.bind(one)
+        vm.copy(vm.state.value.runs.single())
+        assertEquals("The first 48 KB", (vm.events.first() as InboxEvent.Copy).text)
+        assertTrue(vm.state.value.message!!.contains("48 KB"), vm.state.value.message)
+    }
+
+    @Test
+    fun theFetchSaysWhetherItIsForAskingOrCopying() = runTest(dispatcher) {
+        var held = CompletableDeferred<Unit>()
+        val socket = PluginGateway(CoroutineScope(dispatcher)) { arg ->
+            when {
+                arg.startsWith("inbox") -> """{"ok":true,"runs":${runsJson(run("a", 50))}}"""
+                arg.startsWith("read") -> {
+                    held.await()
+                    """{"ok":true,"run":{"job":"a","run":"${run("a", 50).run}","at":50,"text":"All"}}"""
+                }
+                else -> """{"ok":true,"jobs":{},"failures":false,"default":"quiet"}"""
+            }
+        }
+        store.bind(one.gatewayUrl.value, now = 0)
+        val vm = viewModel(socket)
+        vm.bind(one)
+        val a = vm.state.value.runs.single()
+        vm.copy(a)
+        assertEquals(ReportFetch(a.key, ask = false), vm.state.value.fetching)
+        held.complete(Unit)
+        vm.events.first()
+        held = CompletableDeferred()
+        vm.ask(a)
+        assertEquals(ReportFetch(a.key, ask = true), vm.state.value.fetching)
+        held.complete(Unit)
+        vm.events.first()
+        assertNull(vm.state.value.fetching)
     }
 }

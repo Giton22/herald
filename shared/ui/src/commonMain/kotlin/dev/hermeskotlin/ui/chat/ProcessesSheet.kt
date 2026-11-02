@@ -1,5 +1,11 @@
 package dev.hermeskotlin.ui.chat
 
+import dev.hermeskotlin.designsystem.components.ScrollbarBox
+import dev.hermeskotlin.designsystem.components.handCursor
+import dev.hermeskotlin.ui.isDesktop
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.runtime.snapshotFlow
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -57,7 +63,7 @@ import com.composables.icons.lucide.X
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
-import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.rememberHoverIndication
 import dev.hermeskotlin.core.chat.BackgroundProcess
 import dev.hermeskotlin.core.chat.ChatSession
 import dev.hermeskotlin.designsystem.accentText
@@ -197,8 +203,9 @@ internal fun ProcessesSheetView(
             processes == null -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Spinner() }
             processes.isEmpty() ->
                 Note("Nothing running. Dev servers, builds and watchers the agent starts in the background show up here.")
-            else -> LazyColumn(
+            else -> ScrollbarBox { listState -> LazyColumn(
                 Modifier.fillMaxWidth().heightIn(max = 560.dp),
+                state = listState,
                 contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
@@ -233,7 +240,7 @@ internal fun ProcessesSheetView(
                         )
                     }
                 }
-            }
+            } }
         }
         state.message?.let { Note(it) }
     }
@@ -276,6 +283,7 @@ private fun RunningCard(process: BackgroundProcess, expanded: Boolean, stopping:
         Row(
             Modifier
                 .fillMaxWidth()
+                .handCursor()
                 .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide output" else "Show output", onClick = onToggle)
                 .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -302,6 +310,7 @@ private fun StopButton(stopping: Boolean, onClick: () -> Unit) {
         Modifier
             .sizeIn(minWidth = MinTouchTarget, minHeight = MinTouchTarget)
             .semantics { if (stopping) disabled() }
+            .handCursor(!stopping)
             .clickable(interaction, indication = null, role = Role.Button) { if (!stopping) onClick() },
         contentAlignment = Alignment.Center,
     ) {
@@ -310,7 +319,7 @@ private fun StopButton(stopping: Boolean, onClick: () -> Unit) {
                 .heightIn(min = 32.dp)
                 .clip(CircleShape)
                 .background(Theme[colors][dangerSoft])
-                .indication(interaction, rememberColoredIndication(tint))
+                .indication(interaction, rememberHoverIndication(tint))
                 .padding(horizontal = 12.dp),
             horizontalArrangement = Arrangement.spacedBy(6.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -344,6 +353,7 @@ private fun FinishedRow(process: BackgroundProcess, expanded: Boolean, onToggle:
                 .fillMaxWidth()
                 .heightIn(min = 48.dp)
                 .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
+                .handCursor()
                 .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide output" else "Show output", onClick = onToggle)
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -422,6 +432,22 @@ private fun Output(process: BackgroundProcess) {
     val line = Theme[colors][stroke]
     val dim = Theme[colors][textSecondary]
     val bright = Theme[colors][text]
+    // On the desktop the log scrolls the usual way, with a bar, and keeps to the newest line as lines arrive
+    // unless the user scrolled up to read; its text can be selected and copied.
+    val scroll = rememberScrollState()
+    if (isDesktop) LaunchedEffect(scroll) {
+        var follow = true
+        var lastMax = -1
+        snapshotFlow { scroll.value to scroll.maxValue }.collect { (at, max) ->
+            if (max != lastMax) {
+                lastMax = max
+                if (follow) scroll.scrollTo(max)
+            } else {
+                follow = at >= max - FOLLOW_SLACK_PX
+            }
+        }
+    }
+    val log = @Composable {
     Text(
         if (lines == null) {
             AnnotatedString("No output yet.")
@@ -440,10 +466,15 @@ private fun Output(process: BackgroundProcess) {
             .heightIn(max = 240.dp)
             .background(Theme[colors][well])
             .drawBehind { drawLine(line, Offset(0f, 0f), Offset(size.width, 0f), 1.dp.toPx()) }
-            .verticalScroll(rememberScrollState(), reverseScrolling = true)
+            .verticalScroll(scroll, reverseScrolling = !isDesktop)
             .padding(horizontal = 14.dp, vertical = 10.dp),
     )
+    }
+    if (isDesktop) ScrollbarBox(scroll) { SelectionContainer { log() } } else log()
 }
+
+/** How near the end a scrolled log still counts as at it, so it goes on following. */
+private const val FOLLOW_SLACK_PX = 4
 
 /** A line of text across a chat sheet, for its empty, off and error states. */
 @Composable

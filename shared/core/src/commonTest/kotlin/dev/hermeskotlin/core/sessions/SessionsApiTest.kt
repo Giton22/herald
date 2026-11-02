@@ -261,6 +261,25 @@ class SessionsApiTest {
     }
 
     @Test
+    fun searchDeduplicatesRowsWithTheSameSessionId() = runTest {
+        val api = api {
+            respond(
+                """{"results":[
+                   {"session_id":"s2","id":"s2","title":"Deploy","snippet":"first >>>deploy<<< match",
+                    "role":"user","last_active":null,"session_started":1.0,"message_count":2},
+                   {"session_id":"s2","id":"s2","title":"Deploy","snippet":"second >>>deploy<<< match",
+                    "role":"user","last_active":null,"session_started":1.0,"message_count":2}]}""",
+                HttpStatusCode.OK, json,
+            )
+        }
+
+        val results = assertIs<ApiResult.Success<List<SessionSummary>>>(api.search(url, "deploy")).value
+
+        assertEquals(listOf("s2"), results.map { it.id })
+        assertEquals("first deploy match", results.single().snippet)
+    }
+
+    @Test
     fun messagesExtractTextFromStringsPartsAndToolCalls() = runTest {
         val api = api {
             respond(

@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The summit at dawn (ic_launcher_foreground.xml) in Teal. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <path android:pathData="@string/launcher_summit_sun">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="0" android:startY="38" android:endX="0" android:endY="60"
+                android:startColor="@color/launcher_teal_sun_top" android:endColor="@color/launcher_teal_sun_bottom" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="@string/launcher_summit_gap" android:strokeWidth="4" android:strokeLineJoin="round">
+        <aapt:attr name="android:strokeColor">
+            <gradient android:type="linear" android:startX="0" android:startY="18" android:endX="0" android:endY="90"
+                android:startColor="@color/launcher_teal_sky_top" android:endColor="@color/launcher_teal_sky_bottom" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="@string/launcher_summit_lit">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="30" android:startY="36" android:endX="54" android:endY="90"
+                android:startColor="@color/launcher_teal_lit_top" android:endColor="@color/launcher_teal_lit_bottom" />
+        </aapt:attr>
+    </path>
+    <path android:pathData="@string/launcher_summit_shade">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="60" android:startY="36" android:endX="80" android:endY="90"
+                android:startColor="@color/launcher_teal_shade_top" android:endColor="@color/launcher_teal_shade_bottom" />
+        </aapt:attr>
+    </path>
+    <path android:fillColor="#FFFFFF" android:pathData="@string/launcher_summit_snow" />
+    <path android:fillColor="@color/launcher_teal_snow_shade" android:pathData="@string/launcher_summit_snow_shade" />
+</vector>

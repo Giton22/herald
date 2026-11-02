@@ -17,8 +17,10 @@ import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -54,6 +56,7 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.components.ScreenHeader
 import dev.hermeskotlin.ui.components.ScreenScaffold
+import dev.hermeskotlin.ui.isDesktop
 import org.koin.compose.viewmodel.koinViewModel
 
 @Composable
@@ -124,9 +127,13 @@ internal fun SignInView(
         if (notice != null) StatusDot(Status.Warning, notice)
 
         if (methods.password) {
+            // With a keyboard, the page opens ready for the username to be typed.
+            val usernameFocus = remember { FocusRequester() }
+            if (isDesktop) LaunchedEffect(Unit) { usernameFocus.requestFocus() }
             Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
                 TextField(
                     state = username,
+                    focusRequester = usernameFocus,
                     label = "Username",
                     enabled = !state.signingIn,
                     keyboardOptions = KeyboardOptions(autoCorrectEnabled = false, imeAction = ImeAction.Next),
@@ -169,7 +176,7 @@ internal fun SignInView(
                 )
                 if (state.waitingForBrowser) {
                     Text(
-                        "Finish signing in on the page that opened. Herald comes back by itself when you're done.",
+                        "Finish signing in on the page that opened. Kyllene comes back by itself when you're done.",
                         style = Theme[typography][bodySmall],
                         color = Theme[colors][textSecondary],
                     )

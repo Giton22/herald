@@ -15,6 +15,7 @@ import dev.hermeskotlin.designsystem.components.Status
 import dev.hermeskotlin.designsystem.components.StatusDot
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.CopyableOnDesktop
 import kotlin.time.Clock
 import kotlinx.coroutines.delay
 
@@ -44,7 +45,7 @@ fun ConnectionLine(state: ConnectionState, detailed: Boolean = false) {
             is ConnectionState.Failed -> StatusDot(Status.Error, "Connection refused")
         }
         if (detailed && reason != null) {
-            Text(reason, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
+            CopyableOnDesktop { Text(reason, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary]) }
         }
     }
 }

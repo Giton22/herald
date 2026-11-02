@@ -1,13 +1,16 @@
 package dev.hermeskotlin.ui.chat
 
+import dev.hermeskotlin.designsystem.components.Tooltip
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
+import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.indication
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -23,6 +26,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
@@ -55,13 +59,14 @@ import com.composables.icons.lucide.X
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
-import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.rememberHoverIndication
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.accentSoft
 import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
+import dev.hermeskotlin.ui.keysLabel
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.components.MinTouchTarget
@@ -78,7 +83,10 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
 import dev.hermeskotlin.designsystem.warningSoft
+import dev.hermeskotlin.designsystem.components.handCursor
+import dev.hermeskotlin.ui.isDesktop
 import dev.hermeskotlin.ui.sessions.OtherChatEvent
+import dev.hermeskotlin.ui.sessions.onSecondaryPress
 import dev.hermeskotlin.ui.sessions.SessionsBadge
 import kotlinx.coroutines.delay
 import kotlin.math.abs
@@ -90,11 +98,20 @@ import kotlin.time.Clock
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-internal fun SessionsButton(badge: SessionsBadge, onClick: () -> Unit, onNext: (() -> Unit)?) {
+internal fun SessionsButton(badge: SessionsBadge, onClick: () -> Unit, onNext: (() -> Unit)?) = Tooltip(
+    // A desktop's way to the long press is a right-click, which the tooltip names.
+    when {
+        !isDesktop -> badge.description
+        onNext != null && !badge.none -> "${badge.description} (${keysLabel("Ctrl+B")}) · Right-click for the next"
+        else -> "${badge.description} (${keysLabel("Ctrl+B")})"
+    },
+) {
     val haptics = LocalHapticFeedback.current
     Box(
         Modifier
-            .size(MinTouchTarget)
+            .size(if (isDesktop) 32.dp else MinTouchTarget)
+            .handCursor()
+            .then(if (isDesktop && onNext != null) Modifier.onSecondaryPress { onNext() } else Modifier)
             .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
             .combinedClickable(
                 onClick = onClick,
@@ -108,7 +125,7 @@ internal fun SessionsButton(badge: SessionsBadge, onClick: () -> Unit, onNext: (
                 onLongClickLabel = if (onNext != null) "Next chat needing you" else null,
                 role = Role.Button,
                 interactionSource = null,
-                indication = rememberColoredIndication(Theme[colors][textColor]),
+                indication = rememberHoverIndication(Theme[colors][textColor]),
             )
             .semantics { contentDescription = badge.description },
         contentAlignment = Alignment.Center,
@@ -150,10 +167,15 @@ internal fun OtherChatBanner(
         accessibility?.calculateRecommendedTimeoutMillis(base, containsIcons = true, containsText = true, containsControls = true)
             ?: base
     }
-    LaunchedEffect(event.chatId, event.atMillis, timeout) {
-        if (timeout == Long.MAX_VALUE) return@LaunchedEffect
+    // Under the pointer it stays, being read; once the pointer leaves it has a moment more at least.
+    val hover = remember { MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
+    var wasHovered by remember(event.chatId, event.atMillis) { mutableStateOf(false) }
+    if (hovered) wasHovered = true
+    LaunchedEffect(event.chatId, event.atMillis, timeout, hovered) {
+        if (timeout == Long.MAX_VALUE || hovered) return@LaunchedEffect
         val left = timeout - (Clock.System.now().toEpochMilliseconds() - event.atMillis)
-        if (left > 0) delay(left)
+        delay(left.coerceAtLeast(if (wasHovered) AFTER_HOVER_MILLIS else 0))
         onDismiss()
     }
     var offset by remember(event.chatId, event.atMillis) { mutableFloatStateOf(0f) }
@@ -167,6 +189,7 @@ internal fun OtherChatBanner(
             // A floating card, not a bar across a tablet or an unfolded phone.
             .widthIn(max = 480.dp)
             .fillMaxWidth()
+            .hoverable(hover)
             .graphicsLayer {
                 translationX = offset
                 alpha = 1f - (abs(offset) / (dismissAt * 2)).coerceIn(0f, 0.8f)
@@ -183,6 +206,7 @@ internal fun OtherChatBanner(
             .background(Theme[colors][surface])
             .border(1.dp, Theme[colors][strokeStrong], shape)
             // The whole card opens the chat; Open stays for those who look for a button.
+            .handCursor()
             .clickable(onClickLabel = "Open", role = Role.Button, onClick = onOpen)
             .padding(start = 14.dp, top = 6.dp, bottom = 6.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -231,6 +255,7 @@ internal fun OtherChatBanner(
         Box(
             Modifier
                 .defaultMinSize(minHeight = MinTouchTarget)
+                .handCursor()
                 .clickable(openInteraction, indication = null, role = Role.Button, onClick = onOpen),
             contentAlignment = Alignment.Center,
         ) {
@@ -239,7 +264,7 @@ internal fun OtherChatBanner(
                     .defaultMinSize(minHeight = 36.dp)
                     .clip(CircleShape)
                     .background(Theme[colors][accent], CircleShape)
-                    .indication(openInteraction, rememberColoredIndication(Theme[colors][onAccent]))
+                    .indication(openInteraction, rememberHoverIndication(Theme[colors][onAccent]))
                     .padding(horizontal = 14.dp, vertical = 6.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -254,3 +279,6 @@ private const val BANNER_MILLIS = 5_000L
 
 /** With a preview to read. */
 private const val PREVIEW_BANNER_MILLIS = 7_000L
+
+/** How long a toast the pointer held stays once it leaves, though its own time ran out. */
+internal const val AFTER_HOVER_MILLIS = 2_000L

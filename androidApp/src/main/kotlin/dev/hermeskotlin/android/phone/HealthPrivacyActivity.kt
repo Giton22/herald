@@ -15,6 +15,6 @@ class HealthPrivacyActivity : Activity() {
     }
 
     private companion object {
-        const val PRIVACY = "https://github.com/Giton22/herald#privacy"
+        const val PRIVACY = "https://github.com/Giton22/kyllene#privacy"
     }
 }

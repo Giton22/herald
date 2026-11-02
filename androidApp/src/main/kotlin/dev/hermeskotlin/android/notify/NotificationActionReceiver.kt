@@ -10,6 +10,8 @@ import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.InputAnswers
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.chat.SessionWatcher
+import dev.hermeskotlin.core.inbox.InboxStore
+import dev.hermeskotlin.core.inbox.markNoticeRead
 import dev.hermeskotlin.core.push.PushSetup
 import dev.hermeskotlin.core.wear.WatchRelay
 import kotlinx.coroutines.CoroutineScope
@@ -30,6 +32,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
     private val watcher: SessionWatcher by inject()
     private val relay: WatchRelay by inject()
     private val answers: RequestAnswers by inject()
+    private val inbox: InboxStore by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -61,6 +64,12 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 }
             }
             ACTION_DECLINE_CALL -> intent.getStringExtra(EXTRA_REQUEST_ID)?.let(notifications::decline)
+            ACTION_INBOX_READ -> {
+                // The run this notification showed, of the gateway that sent it: not whichever the app is on now.
+                val key = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_INBOX) ?: return
+                val gateway = intent.getStringExtra(ChatNotifications.EXTRA_INBOX_GATEWAY) ?: return
+                if (inbox.markNoticeRead(gateway, key)) notifications.runsRead(gateway, listOf(key))
+            }
             ACTION_BOT_CLEARED -> intent.getStringExtra(EXTRA_BOT)?.let(notifications::forgetBot)
             ACTION_ROOM_CLEARED -> intent.getStringExtra(ChatNotifications.EXTRA_OPEN_ROOM)?.let(notifications::forgetRoom)
             ACTION_BOT_REPLY -> {
@@ -72,7 +81,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 // The bot's answer comes back as its next notification.
                 val sent = scope.async { runCatching { bots.sendToBot(bot, storedId, text) }.isSuccess }
                 if (withTimeoutOrNull(RECEIVER_BUDGET_MS) { sent.await() } == false) {
-                    notifications.postFailure(bot, ChatNotifications.BOT_ID, "Couldn't send it. Open Herald to try again.")
+                    notifications.postFailure(bot, ChatNotifications.BOT_ID, "Couldn't send it. Open Kyllene to try again.")
                 }
             }
             ACTION_REPLY -> {
@@ -85,13 +94,13 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 if (chat == null) {
                     // A chat followed without being open takes the reply straight to its live session.
                     if (storedId !in watcher.chats.value) {
-                        notifications.postFailure(storedId, ChatNotifications.REPLY_ID, "That chat isn't open anymore. Open Herald to reply.")
+                        notifications.postFailure(storedId, ChatNotifications.REPLY_ID, "That chat isn't open anymore. Open Kyllene to reply.")
                         return
                     }
                     awaitConnection()
                     val sent = scope.async { watcher.reply(storedId, text) }
                     if (withTimeoutOrNull(RECEIVER_BUDGET_MS) { sent.await() } == false) {
-                        notifications.postFailure(storedId, ChatNotifications.REPLY_ID, "Couldn't send it. Open Herald to send it again.")
+                        notifications.postFailure(storedId, ChatNotifications.REPLY_ID, "Couldn't send it. Open Kyllene to send it again.")
                     }
                     return
                 }
@@ -99,7 +108,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 // The send itself outlives this receiver's few seconds; only the verdict is waited for.
                 val sent = scope.async { chat.send(text) }
                 if (withTimeoutOrNull(RECEIVER_BUDGET_MS) { sent.await() } == false) {
-                    notifications.postFailure(storedId, ChatNotifications.REPLY_ID, chat.state.value.error ?: "Open Herald to send it again.")
+                    notifications.postFailure(storedId, ChatNotifications.REPLY_ID, chat.state.value.error ?: "Open Kyllene to send it again.")
                 }
             }
         }
@@ -107,7 +116,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
 
     private suspend fun answer(requestId: String, result: (InputRequest) -> kotlinx.serialization.json.JsonObject?) {
         if (answers.answer(requestId, result) == RequestAnswers.Outcome.NotConnected) {
-            notifications.postFailure(requestId, ChatNotifications.REQUEST_ID, "Not connected to the gateway. Open Herald to answer.")
+            notifications.postFailure(requestId, ChatNotifications.REQUEST_ID, "Not connected to the gateway. Open Kyllene to answer.")
         }
     }
 
@@ -122,6 +131,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         const val ACTION_BOT_CLEARED = "dev.hermeskotlin.action.BOT_CLEARED"
         const val ACTION_ROOM_CLEARED = "dev.hermeskotlin.action.ROOM_CLEARED"
         const val ACTION_DECLINE_CALL = "dev.hermeskotlin.action.DECLINE_CALL"
+        const val ACTION_INBOX_READ = "dev.hermeskotlin.action.INBOX_READ"
         const val EXTRA_BOT = "bot"
 
         const val EXTRA_REQUEST_ID = "request_id"

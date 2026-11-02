@@ -23,7 +23,7 @@ class DesktopRoomRowsTest {
         assertEquals("Main: Hey there", room(member("default", "Hey\n  there")).rowSubtitle(faces))
         assertEquals("Side: ok", room(member("side", "ok")).rowSubtitle(faces))
         assertEquals("You: hi", room(DesktopLine(fromUser = true, speaker = "You", text = "hi")).rowSubtitle(faces))
-        assertEquals("Continue on Desktop", room().rowSubtitle(faces))
+        assertEquals("Continue on Hermes Desktop", room().rowSubtitle(faces))
     }
 
     @Test

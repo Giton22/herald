@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui.rooms
 
+import dev.hermeskotlin.designsystem.components.ScrollbarBox
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -39,7 +41,17 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import dev.hermeskotlin.ui.chat.ComposerKey
+import dev.hermeskotlin.ui.chat.composerKey
+import dev.hermeskotlin.ui.chat.isPickKey
+import dev.hermeskotlin.ui.chat.moveHighlight
+import dev.hermeskotlin.ui.chat.suggestionStep
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.bots.mentionQuery
 import dev.hermeskotlin.core.rooms.mentionable
@@ -57,6 +69,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.text.input.placeCursorAtEnd
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
@@ -86,6 +101,10 @@ import dev.hermeskotlin.ui.chat.rememberAttachmentPicker
 import dev.hermeskotlin.ui.chat.AttachSheet
 import dev.hermeskotlin.ui.chat.ComposerTray
 import dev.hermeskotlin.ui.chat.SentAttachments
+import dev.hermeskotlin.ui.LocalFocusHeld
+import dev.hermeskotlin.ui.Shortcut
+import dev.hermeskotlin.ui.ShortcutHandler
+import dev.hermeskotlin.ui.isDesktop
 import com.composables.icons.lucide.Paperclip
 import dev.hermeskotlin.core.chat.linkFileUris
 import dev.hermeskotlin.core.gateway.GatewayUrl
@@ -151,10 +170,12 @@ fun RoomScreen(
     onOpenSidebar: () -> Unit,
     onBack: () -> Unit,
     onOpenFile: (String?, GatewayFile) -> Unit = { _, _ -> },
+    /** Off while a page covers the room (Settings, the bot editor, a plugin), so its keys don't type in it unseen. */
+    keysEnabled: Boolean = true,
 ) {
     val open by viewModel.opened.collectAsStateWithLifecycle()
     val room = open ?: return
-    RoomView(room, viewModel, LocalBotFaces.current, onOpenSidebar = onOpenSidebar, onBack = onBack, onOpenFile = onOpenFile)
+    RoomView(room, viewModel, LocalBotFaces.current, onOpenSidebar = onOpenSidebar, onBack = onBack, onOpenFile = onOpenFile, keysEnabled = keysEnabled)
 }
 
 /** What an open room can ask for; [RoomsViewModel] does it all, previews nothing. */
@@ -176,7 +197,15 @@ interface RoomActions {
 
 /** An open room's layout, apart from the view model, so previews can draw it from sample data. */
 @Composable
-internal fun RoomView(room: OpenRoom, viewModel: RoomActions, faces: BotFaces, onOpenSidebar: () -> Unit, onBack: () -> Unit, onOpenFile: (String?, GatewayFile) -> Unit = { _, _ -> }) {
+internal fun RoomView(
+    room: OpenRoom,
+    viewModel: RoomActions,
+    faces: BotFaces,
+    onOpenSidebar: () -> Unit,
+    onBack: () -> Unit,
+    onOpenFile: (String?, GatewayFile) -> Unit = { _, _ -> },
+    keysEnabled: Boolean = true,
+) {
     var ask by remember { mutableStateOf<RoomAsk?>(null) }
     RoomAskDialogs(ask, onDismiss = { ask = null }, onRename = viewModel::renameRoom, onDelete = viewModel::deleteRoom)
     Box(
@@ -240,8 +269,9 @@ internal fun RoomView(room: OpenRoom, viewModel: RoomActions, faces: BotFaces, o
                     )
                 }
             }
-            RoomMentions(room, viewModel, faces)
-            RoomComposer(room, viewModel)
+            val mentions = rememberRoomMentions(room, viewModel, faces)
+            RoomMentions(room, mentions)
+            RoomComposer(room, viewModel, mentions, keysEnabled)
         }
         room.notice?.let { message ->
             MessageBanner(message, onDismiss = viewModel::dismissRoomNotice, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp))
@@ -302,7 +332,7 @@ private fun Transcript(room: OpenRoom, faces: BotFaces, onLoadEarlier: () -> Uni
 
 /** The transcript's lines, keyed by seq. */
 @Composable
-private fun TranscriptList(lines: List<RoomLine>, listState: LazyListState, faces: BotFaces, onOpenFile: (String?, GatewayFile) -> Unit) {
+private fun TranscriptList(lines: List<RoomLine>, listState: LazyListState, faces: BotFaces, onOpenFile: (String?, GatewayFile) -> Unit) = ScrollbarBox(listState, Modifier.fillMaxSize()) {
     LazyColumn(
         state = listState,
         modifier = Modifier.fillMaxSize(),
@@ -480,7 +510,7 @@ private fun PendingActions(room: OpenRoom, onApprove: (RoomPendingAction, String
  * typed meanwhile).
  */
 @Composable
-private fun RoomComposer(room: OpenRoom, viewModel: RoomActions) {
+private fun RoomComposer(room: OpenRoom, viewModel: RoomActions, mentions: RoomMentionList, keysEnabled: Boolean) {
     val hasText = viewModel.composer.text.isNotBlank() || room.attachments.isNotEmpty()
     var attachOpen by remember(room.draftKey) { mutableStateOf(false) }
     // A file read belongs to this opening, even if another room opens while it finishes.
@@ -495,6 +525,33 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomActions) {
         subtitle = RoomAttachment.LIMITS)
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     var focused by remember { mutableStateOf(false) }
+    val focus = remember { FocusRequester() }
+    // The desktop's keys, as the chat's composer has them: an opened room takes the keyboard unless something else
+    // holds it, Ctrl+L comes back to it, and typing or a paste with nothing focused lands in it.
+    val focusHeld = LocalFocusHeld.current
+    LaunchedEffect(room.draftKey) {
+        if (!isDesktop || !keysEnabled) return@LaunchedEffect
+        withFrameNanos {}
+        if (!focusHeld.value) focus.requestFocus()
+    }
+    ShortcutHandler(enabled = isDesktop && keysEnabled && !room.attachmentRetry) { shortcut ->
+        fun write(text: String) {
+            focus.requestFocus()
+            viewModel.composer.edit {
+                append(text)
+                placeCursorAtEnd()
+            }
+        }
+        when (shortcut) {
+            Shortcut.FocusComposer -> true.also { focus.requestFocus() }
+            is Shortcut.Type -> true.also { write(shortcut.text) }
+            Shortcut.Paste -> when {
+                room.attachmentsSupported && picker.pasteAttachments() -> true
+                else -> picker.clipboardText()?.let { write(it) } != null
+            }
+            else -> false
+        }
+    }
     Column(
         Modifier
             .fillMaxWidth()
@@ -520,7 +577,19 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomActions) {
             selectionColors = LocalTextSelectionColors.current,
             lineLimits = TextFieldLineLimits.MultiLine(maxHeightInLines = 8),
             keyboardOptions = KeyboardOptions(capitalization = KeyboardCapitalization.Sentences),
-            modifier = Modifier.fillMaxWidth().heightIn(min = 28.dp).padding(horizontal = 12.dp),
+            modifier = Modifier.fillMaxWidth().heightIn(min = 28.dp).padding(horizontal = 12.dp).focusRequester(focus).then(
+                // The desktop's keys, as the chat's composer has them: Enter sends, Shift+Enter starts a line,
+                // and with the `@` list up, Up and Down mark a member and Enter or Tab takes it.
+                if (!isDesktop) {
+                    Modifier
+                } else {
+                    Modifier.onPreviewKeyEvent { event ->
+                        mentions.onKey(event) || (composerKey(event) == ComposerKey.Send).also { send ->
+                            if (send && hasText && !room.sending) viewModel.send()
+                        }
+                    }
+                },
+            ),
         ) {
             TextInput(
                 placeholder = {
@@ -530,7 +599,8 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomActions) {
         }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
             BarButton(Lucide.Paperclip, "Add photos or files", onClick = {
-                if (room.attachmentsSupported) attachOpen = true
+                // A desktop has no camera, and its file dialog picks photos as well: it opens straight away.
+                if (room.attachmentsSupported) { if (isDesktop) picker.pickFiles() else attachOpen = true }
                 else viewModel.attachmentError("This gateway doesn't support room attachments. Update Hermes to use them.", room.draftKey)
             }, enabled = !room.sending && !room.attachmentRetry && room.attachments.size < RoomAttachment.MAX_COUNT)
             // Who answers first, by the gateway's own @ rule: everyone, unless the message names someone.
@@ -573,26 +643,48 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomActions) {
  * A pick puts the member's room handle in, which is what the gateway matches (not the chat's `@hermes`).
  */
 @Composable
-private fun RoomMentions(room: OpenRoom, viewModel: RoomActions, faces: BotFaces) {
-    val members = room.room.members
-    val mention by remember(viewModel) {
-        derivedStateOf { viewModel.composer.let { mentionQuery(it.text.toString(), it.selection.end) } }
-    }
-    val choices = remember(mention, members, faces) {
-        val typed = mention ?: return@remember emptyList()
-        val everyone = MentionChoice("Everyone", "all", bot = null).takeIf { mentionsEveryone(typed.query) }
-        listOfNotNull(everyone) + members.mentionable(typed.query).mapNotNull { member ->
-            member.handle?.let { MentionChoice(member.label, it, faces.roomBot(member.profile ?: member.memberId)) }
-        }
-    }
+private fun RoomMentions(room: OpenRoom, mentions: RoomMentionList) {
+    val choices = mentions.choices
     AnimatedVisibility(visible = !room.attachmentRetry && choices.isNotEmpty(), enter = fadeIn(), exit = fadeOut()) {
         // Kept through the fade-out, so the list doesn't empty before it leaves.
         var shown by remember { mutableStateOf(choices) }
         if (choices.isNotEmpty()) shown = choices
-        MentionSuggestions(shown, hazeState = null) { choice ->
-            if (room.attachmentRetry) return@MentionSuggestions
-            val typed = mention ?: return@MentionSuggestions
-            viewModel.composer.edit { replace(typed.start, typed.end, "@${choice.handle} ") }
+        MentionSuggestions(shown, hazeState = null, marked = if (isDesktop) mentions.marked.coerceAtLeast(0) else -1, onPick = mentions::pick)
+    }
+}
+
+/** The members what's typed after `@` can mean, the one Up and Down have marked on the desktop, and the pick. */
+@Stable
+private class RoomMentionList(val choices: List<MentionChoice>, private val pickAt: (MentionChoice) -> Unit) {
+    var marked by mutableIntStateOf(-1)
+
+    fun pick(choice: MentionChoice) = pickAt(choice)
+
+    /** The desktop's keys in the composer while the list shows: Up and Down mark, Enter or Tab takes the marked one. */
+    fun onKey(event: KeyEvent): Boolean {
+        if (choices.isEmpty()) return false
+        suggestionStep(event)?.let { step -> return true.also { marked = moveHighlight(marked, step, choices.size) } }
+        if (!isPickKey(event)) return false
+        pick(choices[marked.coerceIn(choices.indices)])
+        return true
+    }
+}
+
+@Composable
+private fun rememberRoomMentions(room: OpenRoom, viewModel: RoomActions, faces: BotFaces): RoomMentionList {
+    val members = room.room.members
+    val mention by remember(viewModel) {
+        derivedStateOf { viewModel.composer.let { mentionQuery(it.text.toString(), it.selection.end) } }
+    }
+    val retry = room.attachmentRetry
+    return remember(mention, members, faces, retry) {
+        val typed = mention
+        val everyone = MentionChoice("Everyone", "all", bot = null).takeIf { typed != null && mentionsEveryone(typed.query) }
+        val choices = if (typed == null || retry) emptyList() else listOfNotNull(everyone) + members.mentionable(typed.query).mapNotNull { member ->
+            member.handle?.let { MentionChoice(member.label, it, faces.roomBot(member.profile ?: member.memberId)) }
+        }
+        RoomMentionList(choices) { choice ->
+            if (!retry && typed != null) viewModel.composer.edit { replace(typed.start, typed.end, "@${choice.handle} ") }
         }
     }
 }
@@ -629,7 +721,7 @@ internal data class RoomFileLink(val gateway: GatewayUrl, val room: String, val 
 
     companion object {
         /** No request goes out without an owner: another profile's file at the same path is not this one. */
-        const val NO_OWNER = "Herald can't tell which of this gateway's bots owns this file."
+        const val NO_OWNER = "Kyllene can't tell which of this gateway's bots owns this file."
 
         private const val HOSTED = "hosted:"
         private const val DESKTOP = "desktop:"

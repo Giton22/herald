@@ -67,7 +67,7 @@ internal class SoundTool(private val context: Context, private val confirmations
             throw PhoneToolException("A silent or vibrating ringer can't have a $streamName volume above 0. Set one or the other.")
         }
         if ((dnd != null || ringer != null) && !notifications.isNotificationPolicyAccessGranted) {
-            throw PhoneToolException("Herald isn't allowed to change Do Not Disturb. The user can allow it in Settings → Phone tools.")
+            throw PhoneToolException("Kyllene isn't allowed to change Do Not Disturb. The user can allow it in Settings → Phone tools.")
         }
         if (dnd == NotificationManager.INTERRUPTION_FILTER_ALL &&
             notifications.currentInterruptionFilter != NotificationManager.INTERRUPTION_FILTER_ALL && !ownsDnd()
@@ -112,8 +112,8 @@ internal class SoundTool(private val context: Context, private val confirmations
     }
 
     /**
-     * Whether Herald may turn Do Not Disturb off. From Android 15 an app turns on and off only its own mode, so
-     * only one Herald turned on; before that, any.
+     * Whether Kyllene may turn Do Not Disturb off. From Android 15 an app turns on and off only its own mode, so
+     * only one Kyllene turned on; before that, any.
      */
     private fun ownsDnd(): Boolean {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.VANILLA_ICE_CREAM) return true

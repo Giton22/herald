@@ -1,17 +1,28 @@
 package dev.hermeskotlin.wear
 
+import android.app.role.RoleManager
 import android.content.Context
+import android.content.Intent
 import android.media.AudioManager
 import android.os.SystemClock
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
+import androidx.compose.foundation.basicMarquee
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -20,19 +31,26 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
@@ -40,6 +58,7 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.Font
 import androidx.compose.ui.text.font.FontFamily
@@ -74,9 +93,9 @@ import androidx.wear.compose.navigation.composable
 import androidx.wear.compose.navigation.rememberSwipeDismissableNavController
 import dev.hermeskotlin.wearlink.ReplyPhase
 import dev.hermeskotlin.wearlink.WatchAccent
-import dev.hermeskotlin.wearlink.WatchChat
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
+import kotlin.math.sqrt
 
 /** Herald's typeface, as on the phone. */
 private val Geist = FontFamily(
@@ -133,6 +152,10 @@ fun HeraldWatchApp(
     MaterialTheme(colorScheme = watchColors(accent)) {
         AppScaffold(timeText = { EdgeStatus(link, store) }) {
             val nav = rememberSwipeDismissableNavController()
+            val profileReset by link.profileReset.collectAsState()
+            LaunchedEffect(profileReset) {
+                if (profileReset > 0) nav.popBackStack(TALK, inclusive = false)
+            }
             SwipeDismissableNavHost(navController = nav, startDestination = TALK) {
                 composable(TALK) {
                     TalkScreen(
@@ -252,7 +275,7 @@ private fun TalkScreen(
 
     if (inCall) {
         ScreenScaffold(modifier = Modifier.halo(mood, MaterialTheme.colorScheme.primaryContainer)) {
-            CallScreen(call, mood, onMute = link::toggleMute, onEnd = link::endCall)
+            CallScreen(call, mood, title = chat.title ?: if (chat.id == null) "New chat" else "Chat", onMute = link::toggleMute, onEnd = link::endCall)
         }
         return
     }
@@ -302,18 +325,20 @@ private fun TalkScreen(
  * the voice is heard, and the words land in the chat. Placed by fractions of the screen, as the system's is.
  */
 @Composable
-private fun CallScreen(call: WatchCallState, mood: OrbMood, onMute: () -> Unit, onEnd: () -> Unit) {
+private fun CallScreen(call: WatchCallState, mood: OrbMood, title: String, onMute: () -> Unit, onEnd: () -> Unit) {
     val context = LocalContext.current
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val w = maxWidth
         val h = maxHeight
         val side = w * 0.27f
         Text(
-            "Hermes",
+            title,
             style = geist(20, FontWeight.SemiBold),
             textAlign = TextAlign.Center,
             maxLines = 1,
-            modifier = Modifier.align(Alignment.TopCenter).offset(y = h * 0.21f - 14.dp),
+            softWrap = false,
+            modifier = Modifier.align(Alignment.TopCenter).offset(y = h * 0.21f - 14.dp)
+                .widthIn(max = w * 0.7f).basicMarquee(iterations = Int.MAX_VALUE),
         )
         CallButton(
             icon = if (call.muted) R.drawable.ic_mic_off else R.drawable.ic_mic,
@@ -487,6 +512,7 @@ internal fun callCaption(call: WatchCallState): String = when (call.stage) {
 /** What's going on, under the orb. */
 private fun caption(mood: OrbMood, turn: WatchTurn?, mic: Listening, phone: PhoneState): String? = when {
     mic.recording -> "Listening… tap when done"
+    mic.waiting -> "Checking your phone…"
     mood == OrbMood.Speaking -> "Tap to stop"
     turn != null && turn.update.phase == ReplyPhase.Failed -> turn.update.error ?: "Something went wrong."
     turn != null && turn.running -> activityLine(turn.update.phase, turn.update.activity)
@@ -586,21 +612,51 @@ private fun Modifier.halo(mood: OrbMood, accent: Color): Modifier = drawBehind {
     drawRect(Brush.radialGradient(listOf(orbTint(mood, accent).copy(alpha = strength), Color.Transparent), center = center, radius = size.width * 0.8f))
 }
 
+// The small hang-up EdgeButton's ellipse and round shoulders, mirrored for the top edge.
+private val CallTabsShape = GenericShape { size, _ ->
+    val crown = size.height * (72.2f / 112f)
+    val shoulder = size.height - crown
+    val halfWidth = sqrt(crown * (size.width / 2 - size.height * (3f / 56f)))
+    val center = size.width / 2
+    moveTo(center + halfWidth - shoulder, size.height)
+    arcTo(Rect(center + halfWidth - 2 * shoulder, crown - shoulder, center + halfWidth, size.height), 90f, -90f, false)
+    arcTo(Rect(center - halfWidth, 0f, center + halfWidth, 2 * crown), 0f, -180f, false)
+    arcTo(Rect(center - halfWidth, crown - shoulder, center - halfWidth + 2 * shoulder, size.height), 180f, -90f, false)
+    close()
+}
+
 @Composable
 private fun ChatsScreen(link: WatchLink, store: WatchStore, onPicked: () -> Unit, onSettings: () -> Unit) {
     val list by link.chats.collectAsState()
     val chat by store.chat.collectAsState()
-    val listState = rememberTransformingLazyColumnState()
+    var showBots by rememberSaveable { mutableStateOf(store.chat.value.botProfile != null) }
+    val chatsState = rememberTransformingLazyColumnState()
+    val botsState = rememberTransformingLazyColumnState()
+    val listState = if (showBots) botsState else chatsState
     LaunchedEffect(Unit) { link.refreshChats() }
 
     ScreenScaffold(scrollState = listState, modifier = Modifier.halo(OrbMood.Idle, MaterialTheme.colorScheme.primaryContainer)) { contentPadding ->
-        TransformingLazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
-            item {
-                Text("Chats", modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp), style = geist(17, FontWeight.SemiBold), textAlign = TextAlign.Center)
+        TransformingLazyColumn(state = listState, contentPadding = PaddingValues(bottom = contentPadding.calculateBottomPadding()), modifier = Modifier.fillMaxSize()) {
+            item(key = "picker") {
+                BoxWithConstraints(Modifier.fillMaxWidth().height(56.dp).clip(CallTabsShape)) {
+                    val tabSize = if (maxWidth < 210.dp) 12 else 14
+                    Row(Modifier.fillMaxSize()) {
+                        listOf("Chats", "Bots").forEachIndexed { index, title ->
+                            val picked = showBots == (index == 1)
+                            if (index != 0) Box(Modifier.width(1.dp).fillMaxHeight().background(Color.Black))
+                            Box(Modifier.weight(1f).fillMaxHeight().background(if (picked) MaterialTheme.colorScheme.primaryContainer else Surface2)
+                                .clickable(role = Role.Tab) { showBots = index == 1 }.semantics { selected = picked }
+                                .padding(start = if (index == 0) 42.dp else 0.dp, end = if (index == 1) 42.dp else 0.dp, bottom = 8.dp),
+                                contentAlignment = Alignment.BottomCenter) {
+                                Text(title, color = if (picked) MaterialTheme.colorScheme.onPrimaryContainer else Text1, style = geist(tabSize, FontWeight.Medium), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            }
+                        }
+                    }
+                }
             }
             // Settings at the top, beside New chat: under a long list of chats they'd be a long way down.
-            item {
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (!showBots) item {
+                Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                     Button(
                         onClick = {
                             link.newChat()
@@ -622,23 +678,104 @@ private fun ChatsScreen(link: WatchLink, store: WatchStore, onPicked: () -> Unit
                 }
             }
             val current = list
-            val error = current?.error
+            val error = if (showBots) current?.botError else current?.error
             when {
                 current == null -> item {
                     Box(Modifier.fillMaxWidth().padding(12.dp), contentAlignment = Alignment.Center) { CircularProgressIndicator(Modifier.size(24.dp)) }
                 }
-                error != null -> item { Notice(error, onClick = link::refreshChats) }
-                current.chats.isEmpty() -> item {
-                    Text("No chats yet.", modifier = Modifier.fillMaxWidth().padding(12.dp), style = geist(13, color = Muted), textAlign = TextAlign.Center)
+                error != null -> item { Box(Modifier.padding(horizontal = 12.dp)) { Notice(error, onClick = link::refreshChats) } }
+                showBots && current.bots.isEmpty() || !showBots && current.chats.isEmpty() -> item {
+                    Text(if (showBots) "No bots yet." else "No chats yet.", modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), style = geist(13, color = Muted), textAlign = TextAlign.Center)
+                }
+                showBots -> current.bots.forEach { row ->
+                    item(key = "bot:${row.profile}") {
+                        ChatRow(row.title, row.activityAt, picked = row.profile == chat.botProfile) {
+                            link.pickBot(row)
+                            onPicked()
+                        }
+                    }
                 }
                 else -> current.chats.forEach { row ->
                     item(key = row.id) {
-                        ChatRow(row, picked = row.id == chat.id) {
+                        ChatRow(row.title, row.activityAt, picked = row.id == chat.id && chat.botProfile == null) {
                             link.pickChat(row)
                             onPicked()
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/**
+ * The assistant's screen, when Android calls Herald through the assistant role: the orb and what it's doing,
+ * nothing else. The talk screen in [MainActivity] keeps the chats and the settings; this one is a glance over
+ * the watch face, so it closes when the user swipes it away. Without [showsLast] (a locked watch) it shows no
+ * turn it didn't ask itself: the session window is shown over the lock screen.
+ */
+@Composable
+fun AssistPanel(
+    link: WatchLink,
+    store: WatchStore,
+    speech: SpeechOut,
+    listening: Listening,
+    showsLast: Boolean,
+    onOrb: () -> Unit,
+    onNotice: () -> Unit,
+) {
+    val accent by store.accent.collectAsState()
+    val lastTurn by link.turn.collectAsState()
+    val turn = lastTurn.takeIf { showsLast }
+    val phone by link.phone.collectAsState()
+    val chat by store.chat.collectAsState()
+    val speaking by speech.speaking.collectAsState()
+    MaterialTheme(colorScheme = watchColors(accent)) {
+        val mood = when {
+            listening.recording -> OrbMood.Listening
+            listening.waiting -> OrbMood.Waiting
+            turn?.update?.phase == ReplyPhase.WaitingOnPhone -> OrbMood.Waiting
+            turn?.running == true -> OrbMood.Working
+            speaking -> OrbMood.Speaking
+            turn?.update?.phase == ReplyPhase.Failed || listening.error != null -> OrbMood.Failed
+            else -> OrbMood.Idle
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .halo(mood, MaterialTheme.colorScheme.primaryContainer)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            HeraldOrb(
+                mood = mood,
+                level = listening.level,
+                context = chat.contextPercent?.takeIf { showsLast }?.let { it / 100f },
+                modifier = Modifier
+                    .size(84.dp)
+                    .clip(CircleShape)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        role = Role.Button,
+                        onClick = onOrb,
+                    )
+                    .semantics {
+                        contentDescription = when {
+                            listening.recording -> "Done talking"
+                            listening.waiting -> "Cancel"
+                            else -> "Talk to Hermes"
+                        }
+                    },
+            )
+            Spacer(Modifier.height(6.dp))
+            Caption(caption(mood, turn, listening, phone), mood)
+            listening.error?.let { Notice(it, onClick = onNotice) }
+            if (!listening.recording && !listening.waiting) {
+                turn?.said?.let { Said(it) }
+                turn?.update?.text?.takeIf { it.isNotBlank() }?.let { Reply(it) }
             }
         }
     }
@@ -650,6 +787,25 @@ private fun SettingsScreen(link: WatchLink, store: WatchStore) {
     val speak by store.speak.collectAsState()
     val live by store.live.collectAsState()
     val liveVoice by link.liveVoice.collectAsState()
+    // The assistant role belongs to the system, so it is asked rather than remembered: it can be taken away in
+    // Settings at any time. A watch without the role (some builds drop it) simply doesn't show the row.
+    val context = LocalContext.current
+    val roles = remember(context) { context.getSystemService(RoleManager::class.java) }
+    val canBeAssistant = remember(roles) { roles?.isRoleAvailable(RoleManager.ROLE_ASSISTANT) == true }
+    var isAssistant by remember { mutableStateOf(roles?.isRoleHeld(RoleManager.ROLE_ASSISTANT) == true) }
+    // Wear's own "Digital assistant app" screen is where the role is picked there: some builds refuse the
+    // role request itself ("Role is not requestable"). The system picker stays the fallback for the ones that
+    // have no such screen.
+    val assistantRequest = remember(context, roles) {
+        Intent(Settings.ACTION_VOICE_INPUT_SETTINGS).takeIf { context.packageManager.resolveActivity(it, 0) != null }
+            ?: roles?.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT)
+    }
+    // The picker closing with nothing picked is that refusal, so the row says so instead of doing nothing again.
+    var refused by remember { mutableStateOf(false) }
+    val askAssistant = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        isAssistant = roles?.isRoleHeld(RoleManager.ROLE_ASSISTANT) == true
+        refused = !isAssistant && assistantRequest?.action != Settings.ACTION_VOICE_INPUT_SETTINGS
+    }
     val listState = rememberTransformingLazyColumnState()
     ScreenScaffold(scrollState = listState, modifier = Modifier.halo(OrbMood.Idle, MaterialTheme.colorScheme.primaryContainer)) { contentPadding ->
         TransformingLazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
@@ -661,6 +817,29 @@ private fun SettingsScreen(link: WatchLink, store: WatchStore) {
                 item { VoiceSwitch("Talk live", "As a voice call", live, store::setLive) }
             }
             item { VoiceSwitch("Read aloud", "Every reply", speak, store::setSpeak) }
+            // Not a switch: the system's picker decides it, and it can be taken away there too.
+            if (canBeAssistant && assistantRequest != null) {
+                item {
+                    Button(
+                        onClick = { askAssistant.launch(assistantRequest) },
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Surface2, contentColor = Text1, secondaryContentColor = Muted),
+                        label = { Text("Assistant", style = geist(14, FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        secondaryLabel = {
+                            Text(
+                                when {
+                                    isAssistant -> "Kyllene answers the button"
+                                    refused -> "Not set. Tap to try again"
+                                    else -> "Set Kyllene as assistant"
+                                },
+                                style = geist(12, color = Text2),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
+                    )
+                }
+            }
         }
     }
 }
@@ -678,18 +857,18 @@ private fun VoiceSwitch(label: String, detail: String, checked: Boolean, onChang
 
 /** One chat: its title and how long ago it was active; the one the watch talks in has an accent dot. */
 @Composable
-private fun ChatRow(chat: WatchChat, picked: Boolean, onClick: () -> Unit) {
+private fun ChatRow(title: String, activityAt: Double?, picked: Boolean, onClick: () -> Unit) {
     Button(
         onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp),
         colors = ButtonDefaults.buttonColors(containerColor = Surface2, contentColor = Text1, secondaryContentColor = Muted),
         icon = if (picked) {
             { Box(Modifier.size(8.dp).background(MaterialTheme.colorScheme.primary, CircleShape)) }
         } else {
             null
         },
-        secondaryLabel = ago(chat.activityAt)?.let { { Text(it, style = geist(12, color = Muted)) } },
-        label = { Text(chat.title, style = geist(14, FontWeight.Medium), maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        secondaryLabel = ago(activityAt)?.let { { Text(it, style = geist(12, color = Muted)) } },
+        label = { Text(title, style = geist(14, FontWeight.Medium), maxLines = 2, overflow = TextOverflow.Ellipsis) },
     )
 }
 
@@ -709,8 +888,8 @@ internal fun ago(epochSeconds: Double?, nowMillis: Long = System.currentTimeMill
 private fun phoneProblem(phone: PhoneState): String? = when (phone) {
     PhoneState.NotConnected -> WatchLink.NOT_CONNECTED
     PhoneState.NoHerald -> WatchLink.NO_HERALD
-    PhoneState.SignedOut -> "Sign in to Herald on your phone first."
-    PhoneState.Unreachable -> "Herald can't reach your gateway. Check it on your phone."
+    PhoneState.SignedOut -> "Sign in to Kyllene on your phone first."
+    PhoneState.Unreachable -> "Kyllene can't reach your gateway. Check it on your phone."
     PhoneState.Unknown, PhoneState.Ready, PhoneState.Reconnecting -> null
 }
 

@@ -22,6 +22,13 @@ class AppLinkTest {
     }
 
     @Test
+    fun theDesktopsOwnSchemeReadsTheSame() {
+        assertEquals(AppLink.Session("s1"), AppLink.parse("herald://session/s1"))
+        assertEquals(AppLink.NewChat, AppLink.parse("Herald://new-chat"))
+        assertNull(AppLink.parse("heraldx://new-chat"))
+    }
+
+    @Test
     fun toleratesTrailingSlashesQueriesAndCase() {
         assertEquals(AppLink.NewChat, AppLink.parse("hermes://new-chat/"))
         assertEquals(AppLink.NewChat, AppLink.parse("HERMES://New-Chat?from=widget"))

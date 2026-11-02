@@ -7,8 +7,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
+import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,6 +35,7 @@ import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.title as titleStyle
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.CopyableOnDesktop
 
 /**
  * An empty, error or no-results state: the icon on a tile, a title, what to know, and an optional action,
@@ -57,7 +57,7 @@ fun EmptyState(
             Modifier
                 .widthIn(max = 520.dp)
                 .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
+                .verticalScrollWithBar()
                 .heightIn(min = maxHeight)
                 .padding(horizontal = 28.dp, vertical = 32.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
@@ -78,7 +78,8 @@ fun EmptyState(
             }
             Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(title, style = Theme[typography][titleStyle], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
-                Text(body, style = Theme[typography][bodyStyle], color = Theme[colors][textTertiary])
+                // An error's reason or a command to run: the desktop selects it to copy.
+                CopyableOnDesktop { Text(body, style = Theme[typography][bodyStyle], color = Theme[colors][textTertiary]) }
             }
             if (action != null) action()
         }

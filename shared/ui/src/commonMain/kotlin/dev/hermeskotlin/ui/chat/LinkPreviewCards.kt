@@ -15,22 +15,36 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalClipboard
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.composables.icons.lucide.ExternalLink
 import com.composables.icons.lucide.Globe
+import com.composables.icons.lucide.Link
 import com.composables.icons.lucide.Lucide
+import dev.hermeskotlin.designsystem.components.plainTextClipEntry
+import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.sessions.RowContextMenu
+import dev.hermeskotlin.ui.sessions.RowMenuItem
+import dev.hermeskotlin.ui.sessions.onSecondaryPress
+import kotlinx.coroutines.launch
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.media.LinkPreview
 import dev.hermeskotlin.core.media.replyWebLinks
 import dev.hermeskotlin.designsystem.bodySmall
+import dev.hermeskotlin.designsystem.components.handCursor
 import dev.hermeskotlin.designsystem.caption
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.radii
@@ -66,9 +80,22 @@ private fun LinkPreviewCard(card: LinkPreview) {
     val uris = LocalUriHandler.current
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
     val bitmap = card.image?.let { rememberDecodedImage(it, maxEdge = 320).bitmap }
+    val clipboard = LocalClipboard.current
+    val scope = rememberCoroutineScope()
+    var menuOpen by remember { mutableStateOf(false) }
+    val open = { runCatching { uris.openUri(card.url) }; Unit }
+    // A right-click offers the link itself, as a browser's does.
+    RowContextMenu(menuOpen, onDismiss = { menuOpen = false }) {
+        listOf(
+            RowMenuItem("Open link", Lucide.ExternalLink, run = open),
+            RowMenuItem("Copy link", Lucide.Link) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(card.url)) } },
+        )
+    }
     Row(
         Modifier.fillMaxWidth().clip(shape).border(1.dp, Theme[colors][stroke], shape)
-            .background(Theme[colors][surface]).clickable { runCatching { uris.openUri(card.url) } }.padding(12.dp),
+            .background(Theme[colors][surface])
+            .then(if (isDesktop) Modifier.onSecondaryPress { menuOpen = true } else Modifier)
+            .handCursor().clickable(onClick = open).padding(12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(Modifier.size(80.dp).clip(shape)) {

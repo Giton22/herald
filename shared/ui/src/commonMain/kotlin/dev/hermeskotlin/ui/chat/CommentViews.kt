@@ -62,6 +62,7 @@ import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.isDesktop
 
 /**
  * The comments waiting for the next send, numbered like their order in the message, each with its note.
@@ -97,7 +98,8 @@ private fun PendingCommentCard(number: Int, comment: PendingComment, focus: Bool
     }
     Row(
         Modifier
-            .width(230.dp)
+            // A desktop's composer is wide: room for more of the quote.
+            .width(if (isDesktop) 300.dp else 230.dp)
             .background(Theme[colors][surface2], shape)
             .padding(start = 12.dp, top = 10.dp, bottom = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -124,7 +126,8 @@ private fun PendingCommentCard(number: Int, comment: PendingComment, focus: Bool
             ) {
                 TextInput(
                     placeholder = {
-                        Text("Your comment, or leave it to just point this out", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+                        // Short enough for the card's one line: a longer one wrapped and was cut off.
+                        Text("Add a note (optional)", maxLines = 1, overflow = TextOverflow.Ellipsis, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
                     },
                 )
             }

@@ -1,6 +1,7 @@
 package dev.hermeskotlin.ui.chat
 
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.ImageBitmap
 import dev.hermeskotlin.core.chat.OutgoingAttachment
 
@@ -11,7 +12,32 @@ interface AttachmentPicker {
     fun takePhoto()
 
     fun pickFiles()
+
+    /** Files dropped on the chat, by path or `file:` URI (the desktop's). */
+    fun attachFiles(paths: List<String>) {}
+
+    /**
+     * Attaches what a paste into the chat brings that isn't text for the composer: copied files, a picture, or text
+     * past [LARGE_PASTE] characters, as Hermes Desktop does, as a file. False leaves the paste to the composer.
+     */
+    fun pasteAttachments(): Boolean = false
+
+    /** The clipboard's text, for a paste with nothing focused; null where there's none (or no desktop). */
+    fun clipboardText(): String? = null
 }
+
+/** Past this many characters a paste goes along as `pasted.txt` instead of filling the composer. */
+const val LARGE_PASTE = 3_000
+
+/** A paste of [text] as the file a large one goes as. */
+fun pastedTextAttachment(text: String, id: String): OutgoingAttachment =
+    OutgoingAttachment(id, "pasted.txt", "text/plain", text.encodeToByteArray())
+
+/**
+ * Where files dropped from the desktop land: [onFiles] gets their paths, and [onHover] whether files are being
+ * dragged over it now. Nothing on a phone.
+ */
+expect fun Modifier.fileDrop(onHover: (Boolean) -> Unit = {}, onFiles: (List<String>) -> Unit): Modifier
 
 /**
  * Pickers that read what the person chose into [OutgoingAttachment]s (photos scaled down for upload,

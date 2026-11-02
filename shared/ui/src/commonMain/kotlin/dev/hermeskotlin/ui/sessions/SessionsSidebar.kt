@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui.sessions
 
+import dev.hermeskotlin.designsystem.components.Tooltip
+import dev.hermeskotlin.designsystem.components.handCursor
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -21,12 +23,23 @@ import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.em
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronUp
+import com.composables.icons.lucide.ChevronsUpDown
 import com.composables.icons.lucide.Folder
 import com.composables.icons.lucide.Folders
 import com.composables.icons.lucide.House
 import com.composeunstyled.AnchorAlignment
 import dev.hermeskotlin.designsystem.components.DropdownMenu
 import dev.hermeskotlin.designsystem.components.MenuChoice
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import com.composables.icons.lucide.AppWindow
+import dev.hermeskotlin.ui.clearOfWindowControls
+import dev.hermeskotlin.ui.CopyableOnDesktop
+import dev.hermeskotlin.ui.arrowFocus
+import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.keysLabel
 import com.composables.icons.lucide.MessageCircle
 import com.composables.icons.lucide.MessageCircleQuestion
 import com.composables.icons.lucide.MessageSquare
@@ -70,11 +83,19 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.input.KeyboardActionHandler
 import androidx.compose.foundation.text.input.clearText
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.foundation.text.input.rememberTextFieldState
+import androidx.compose.foundation.text.input.selectAll
+import androidx.compose.ui.input.InputMode
+import androidx.compose.ui.input.InputModeManager
+import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
@@ -86,16 +107,38 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.layout.positionInParent
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.Layout
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.rememberUpdatedState
+import dev.hermeskotlin.ui.MainPageSlot
+import androidx.compose.ui.semantics.selected
+import dev.hermeskotlin.designsystem.components.verticalScrollWithBar
+import androidx.compose.foundation.text.input.placeCursorAtEnd
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import dev.hermeskotlin.core.settings.SettingsStore
 import org.koin.compose.koinInject
+import dev.hermeskotlin.designsystem.components.LocalOpenModals
+import androidx.compose.runtime.mutableIntStateOf
+import dev.hermeskotlin.core.chat.ChatHost
 import com.composables.icons.lucide.Inbox
 import dev.hermeskotlin.core.inbox.InboxLink
 import dev.hermeskotlin.core.inbox.InboxStore
 import dev.hermeskotlin.ui.inbox.InboxPage
+import dev.hermeskotlin.ui.inbox.ReportChat
+import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -152,7 +195,8 @@ import com.composables.icons.lucide.X
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
-import com.composeunstyled.theme.rememberColoredIndication
+import dev.hermeskotlin.designsystem.rememberHoverIndication
+import androidx.compose.foundation.LocalIndication
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.bots.SidebarMode
 import dev.hermeskotlin.core.connection.ConnectionState
@@ -179,8 +223,12 @@ import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
 import dev.hermeskotlin.designsystem.colors
+import dev.hermeskotlin.designsystem.components.ActionSheet
+import dev.hermeskotlin.designsystem.components.ContextMenu
+import dev.hermeskotlin.designsystem.components.MenuRow
 import dev.hermeskotlin.designsystem.components.BottomSheet
 import dev.hermeskotlin.designsystem.components.Button
+import dev.hermeskotlin.designsystem.components.VerticalScrollbar
 import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.Dialog
@@ -207,13 +255,41 @@ import dev.hermeskotlin.designsystem.title as titleStyle
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.designsystem.warning
 import dev.hermeskotlin.ui.PlatformBackHandler
+import dev.hermeskotlin.ui.Shortcut
+import dev.hermeskotlin.ui.ShortcutHandler
+import dev.hermeskotlin.ui.SidebarPage
+import dev.hermeskotlin.ui.LocalShortcuts
+import dev.hermeskotlin.ui.RowClick
+import dev.hermeskotlin.ui.rowClick
+import dev.hermeskotlin.ui.chat.ChatTarget
+import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.input.pointer.isAltPressed
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.isShiftPressed
+import dev.hermeskotlin.ui.stepChat
 import dev.hermeskotlin.ui.components.ConnectionLine
 import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.ListSkeleton
 import dev.hermeskotlin.ui.components.relativeTime
 import dev.hermeskotlin.ui.components.savedCopyLabel
+import dev.hermeskotlin.ui.update.RenameBanner
 import dev.hermeskotlin.ui.update.UpdateBanner
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import androidx.compose.foundation.lazy.LazyItemScope
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.withFrameNanos
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.isAltPressed
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.isMetaPressed
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.utf16CodePoint
+import dev.hermeskotlin.ui.macKeys
+import kotlin.time.Clock
 import dev.hermeskotlin.core.rooms.Room
 import dev.hermeskotlin.core.plugins.DashboardPlugin
 import dev.hermeskotlin.core.rooms.DesktopRoom
@@ -265,6 +341,10 @@ fun SessionsSidebar(
     /** A tapped Inbox notification the app passed on: the Inbox opens, at its run; [onInboxLinkTaken] once it has. */
     inboxLink: InboxLink? = null,
     onInboxLinkTaken: (InboxLink) -> Unit = {},
+    /** Opens a chat about an Inbox report: the run's own, or a new one in its profile with the report attached. */
+    onOpenReportChat: (ReportChat) -> Unit = {},
+    /** Where the pages show beside the docked sidebar on a desktop; null keeps them in the sidebar. */
+    mainPage: MainPageSlot? = null,
     viewModel: SessionsViewModel = koinViewModel(),
     bots: BotsViewModel = koinViewModel(),
     rooms: RoomsViewModel = koinViewModel(),
@@ -287,7 +367,6 @@ fun SessionsSidebar(
         viewModel.setVisible(visible)
         rooms.setVisible(visible)
     }
-    LaunchedEffect(selectedId) { bots.setOpenSession(selectedId) }
     val connection by viewModel.connectionState.collectAsStateWithLifecycle()
     val user by viewModel.user.collectAsStateWithLifecycle()
     val roster by viewModel.roster.collectAsStateWithLifecycle()
@@ -302,6 +381,8 @@ fun SessionsSidebar(
     var profilesOpen by remember { mutableStateOf(false) }
 
     var searchOpen by remember { mutableStateOf(false) }
+    var searchFocusAsks by remember { mutableIntStateOf(0) }
+    val searchList = remember { ListFocus() }
     var scheduledOpen by remember { mutableStateOf(false) }
     var inboxOpen by remember { mutableStateOf(false) }
     // A tapped Inbox notification, passed on by the app once it opened the drawer: the Inbox, at that run. The
@@ -315,11 +396,21 @@ fun SessionsSidebar(
     }
     // The badge is this gateway's Inbox: the store is bound here too, so it counts before the Inbox is opened.
     val inboxStore = koinInject<InboxStore>()
+    val chatHost = koinInject<ChatHost>()
     LaunchedEffect(gateway) { inboxStore.bind(gateway.gatewayUrl.value) }
     val inboxKept = inboxStore.state.collectAsStateWithLifecycle().value
     val inboxUnread = if (inboxStore.bound == gateway.gatewayUrl.value) inboxKept.unread else 0
     var capabilitiesOpen by remember { mutableStateOf(false) }
     var configOpen by remember { mutableStateOf(false) }
+    // A desktop reads Hermes's config a little after it starts, so Config opens on it rather than on a wait for the
+    // gateway. The page's own view model, shared through this screen's store; opening it then only refreshes.
+    if (isDesktop) {
+        val config: ConfigViewModel = koinViewModel()
+        LaunchedEffect(gateway, profile) {
+            delay(CONFIG_PREFETCH_DELAY)
+            config.bind(gateway, profile)
+        }
+    }
     var pluginsOpen by remember { mutableStateOf(false) }
     var insightsOpen by remember { mutableStateOf(false) }
     /** The bot whose routines are showing. */
@@ -339,6 +430,11 @@ fun SessionsSidebar(
     }
     val deleteSwipe = { s: SessionSummary -> SwipeAction("Delete", Lucide.Trash2, SwipeKind.Delete) { deleteTarget = s } }
     var projectActions by remember { mutableStateOf<Project?>(null) }
+    // The button a desktop menu was opened from, for it to hang from; null for a right-click, which opens it at the pointer.
+    var projectAnchor by remember { mutableStateOf<Rect?>(null) }
+    var accountAnchor by remember { mutableStateOf<Rect?>(null) }
+    // Where the desktop's account row is; a plain holder, read only when it's clicked.
+    val accountRow = remember { arrayOfNulls<Rect>(1) }
     var renameProject by remember { mutableStateOf<Project?>(null) }
     var deleteProject by remember { mutableStateOf<Project?>(null) }
     var newProject by remember { mutableStateOf<ProjectDraft?>(null) }
@@ -357,19 +453,31 @@ fun SessionsSidebar(
         viewModel.query.clearText()
     }
 
-    // Back steps out of search or the Scheduled / Archived pages before it closes the drawer.
-    PlatformBackHandler(enabled = visible && (searchOpen || scheduledOpen || inboxOpen || routinesOf != null || capabilitiesOpen || configOpen || insightsOpen || state.filter != SessionListFilter.Recent)) {
+    // The pages open beside a docked sidebar on the desktop, where it stays the list: any one opened puts the last away.
+    val pageInMain = mainPage?.enabled == true
+    fun closePages() {
+        scheduledOpen = false
+        inboxOpen = false
+        if (routinesOf != null) {
+            routinesOf = null
+            // What was fixed there shows on the roster at once.
+            bots.refreshRoutines()
+        }
+        capabilitiesOpen = false
+        configOpen = false
+        pluginsOpen = false
+        insightsOpen = false
+    }
+    val pageOpen = scheduledOpen || inboxOpen || routinesOf != null || capabilitiesOpen || configOpen || pluginsOpen || insightsOpen
+
+    // Back steps out of search or the Scheduled / Archived pages before it closes the drawer. On the desktop the
+    // sidebar stays put and a filter is picked like a tab, so Escape leaves it for the chat (stopping a reply).
+    // A page beside a docked sidebar is put away by Escape even with the sidebar folded away.
+    val filterBacks = !isDesktop && state.filter != SessionListFilter.Recent
+    PlatformBackHandler(enabled = visible && (searchOpen || pageOpen || filterBacks) || pageInMain && pageOpen) {
         when {
-            searchOpen -> closeSearch()
-            scheduledOpen -> scheduledOpen = false
-            inboxOpen -> inboxOpen = false
-            routinesOf != null -> {
-                routinesOf = null
-                bots.refreshRoutines()
-            }
-            capabilitiesOpen -> capabilitiesOpen = false
-            configOpen -> configOpen = false
-            insightsOpen -> insightsOpen = false
+            searchOpen && visible -> closeSearch()
+            pageOpen -> closePages()
             else -> viewModel.setFilter(SessionListFilter.Recent)
         }
     }
@@ -400,20 +508,182 @@ fun SessionsSidebar(
     }
     // The thread rows as the section shows them; moving one goes past its neighbour here, not in the whole list.
     val shownThreads = sections.threads.filter { attentionFilter.keeps(statuses[it.session.id]) }
-    val open: (SessionSummary) -> Unit = {
-        // Taken before the chat counts as read, so it can show where the new messages start.
+    val openHere: (SessionSummary) -> Unit = {
+        // The viewport decides when the new messages have actually been read.
         val readUpTo = viewModel.readUpTo(it)
-        viewModel.markSeen(it)
         onOpenSession(it, readUpTo)
         if (searchOpen) closeSearch()
     }
-    // The open chat is being read, so whatever it has said is seen.
-    val openSession = state.sessions.firstOrNull { it.id == selectedId }
-    LaunchedEffect(openSession) { openSession?.let(viewModel::markSeen) }
     val rowActions: (SessionSummary) -> Unit = { actionTarget = it }
+    // A click with keys held, on the desktop: pin, archive, or the chat in a window of its own.
+    val windowInfo = LocalWindowInfo.current
+    val shortcutBus = LocalShortcuts.current
+    // The chat in a window of its own; where no window can open (a phone), it opens as a plain click does.
+    val popOut: (SessionSummary) -> Unit = { s ->
+        // Opening a window preserves the unread boundary too.
+        val readUpTo = viewModel.readUpTo(s)
+        val popped = shortcutBus.fire(Shortcut.PopOut(ChatTarget(gateway, s.id, s.displayTitle, profile = profile, readUpTo = readUpTo)))
+        if (!popped) openHere(s) else if (s.id == selectedId) onNewChat(null)
+    }
+    // A chat a window of its own shows comes forward there, so no chat runs in two windows at once.
+    val windowed by chatHost.sideChats.collectAsStateWithLifecycle()
+    val open: (SessionSummary) -> Unit = { s -> if (isDesktop && s.id in windowed) popOut(s) else openHere(s) }
+    val click: (SessionSummary) -> Unit = click@{ s ->
+        if (!isDesktop) return@click open(s)
+        val keys = windowInfo.keyboardModifiers
+        when (rowClick(shift = keys.isShiftPressed, primary = keys.isCtrlPressed || keys.isMetaPressed, alt = keys.isAltPressed)) {
+            RowClick.Open -> open(s)
+            RowClick.Pin -> viewModel.togglePinned(s)
+            RowClick.Archive -> viewModel.toggleArchived(s)
+            RowClick.NewWindow -> popOut(s)
+        }
+    }
+    // The desktop's keys for the list: search, and stepping through the chats in the order they're listed.
+    val listed = shownThreads.map { it.session } + sections.others.filter { attentionFilter.keeps(statuses[it.id]) }
+    val modals = LocalOpenModals.current
+    ShortcutHandler { shortcut ->
+        when (shortcut) {
+            // Left to the app too, which shows the sidebar if it's put away.
+            Shortcut.SearchChats -> false.also {
+                if (mode != SidebarMode.Chats) bots.setMode(SidebarMode.Chats)
+                searchOpen = true
+                searchFocusAsks++
+            }
+            // Not behind a dialog or sheet: the chat it's about would change under it. Taken then, so nothing else steps.
+            Shortcut.NextChat, Shortcut.PreviousChat -> modals.any || listed.isNotEmpty().also {
+                if (it) open(listed[stepChat(listed.indexOfFirst { s -> s.id == selectedId }, listed.size, forward = shortcut == Shortcut.NextChat)])
+            }
+            is Shortcut.OpenChatAt -> modals.any || listed.getOrNull(shortcut.index)?.let(open) != null
+            is Shortcut.OpenListed -> state.sessions.firstOrNull { it.id == shortcut.id }?.let(open) != null
+            // A page from the palette, in place of whatever the sidebar shows. Left to the app too, as search is.
+            is Shortcut.Go -> false.also {
+                if (searchOpen) closeSearch()
+                scheduledOpen = false
+                inboxOpen = false
+                routinesOf = null
+                capabilitiesOpen = false
+                configOpen = false
+                pluginsOpen = false
+                insightsOpen = false
+                if (state.filter != SessionListFilter.Recent) viewModel.setFilter(SessionListFilter.Recent)
+                when (shortcut.page) {
+                    SidebarPage.Chats -> bots.setMode(SidebarMode.Chats)
+                    SidebarPage.Bots -> bots.setMode(SidebarMode.Bots)
+                    SidebarPage.Inbox -> inboxOpen = true
+                    SidebarPage.Scheduled -> scheduledOpen = true
+                    SidebarPage.Archived -> {
+                        bots.setMode(SidebarMode.Chats)
+                        viewModel.setFilter(SessionListFilter.Archived)
+                    }
+                    SidebarPage.Capabilities -> capabilitiesOpen = true
+                    SidebarPage.Config -> configOpen = true
+                    SidebarPage.Plugins -> pluginsOpen = true
+                    SidebarPage.Insights -> insightsOpen = true
+                }
+            }
+            else -> false
+        }
+    }
     val openAccount = {
         accountOpen = true
         viewModel.refreshProfiles()
+    }
+    // A right-click on a chat, on the desktop: its actions in a menu at the pointer, as the long-press sheet has them.
+    val rowMenu: ((SessionSummary) -> List<RowMenuItem>)? = if (!isDesktop) null else { s ->
+        listOfNotNull(
+            RowMenuItem("Open in new window", Lucide.AppWindow) { popOut(s) }.takeIf { !s.archived },
+            RowMenuItem(if (s.pinned) "Unpin" else "Pin", if (s.pinned) Lucide.PinOff else Lucide.Pin) { viewModel.togglePinned(s) }
+                .takeIf { !s.archived },
+            RowMenuItem("Rename", Lucide.Pencil, key = Key.F2) { renameTarget = s },
+            RowMenuItem("Make a thread", Lucide.Hash) { viewModel.makeThread(s) }
+                .takeIf { !s.archived && threads.none { t -> t.holds(s) } },
+            RowMenuItem(if (s.archived) "Unarchive" else "Archive", if (s.archived) Lucide.ArchiveRestore else Lucide.Archive) {
+                viewModel.toggleArchived(s)
+            },
+            RowMenuItem("Delete", Lucide.Trash2, destructive = true, key = Key.Delete) { deleteTarget = s },
+        )
+    }
+
+    val pageKey = when {
+        inboxOpen -> "inbox"
+        scheduledOpen -> "scheduled"
+        routinesOf != null -> "routines:${routinesOf?.name}"
+        capabilitiesOpen -> "capabilities"
+        configOpen -> "config"
+        pluginsOpen -> "plugins"
+        insightsOpen -> "insights"
+        else -> null
+    }
+    // Beside the sidebar, a page stays live while the sidebar is folded away.
+    val pageVisible = visible || pageInMain
+    val pageView: @Composable () -> Unit = {
+        val bot = routinesOf
+        when {
+            inboxOpen -> InboxPage(
+                gateway = gateway,
+                visible = pageVisible,
+                onBack = { inboxOpen = false },
+                onOpenSettings = onOpenSettings,
+                openKey = inboxOpenKey,
+                onOpenedKey = { inboxOpenKey = null },
+                onOpenChat = onOpenReportChat,
+            )
+            scheduledOpen -> ScheduledPage(
+                gateway = gateway,
+                visible = pageVisible,
+                selectedId = selectedId,
+                onBack = { scheduledOpen = false },
+                onOpenRun = open,
+                onSessionExpired = onSessionExpired,
+                onPopOutRun = popOut.takeIf { isDesktop },
+            )
+            bot != null -> ScheduledPage(
+                gateway = gateway,
+                visible = pageVisible,
+                selectedId = selectedId,
+                onBack = { closePages() },
+                // A run is a session of the bot's own profile.
+                onOpenRun = { run -> onOpenBotSession(bot, run.id, run.title?.takeIf { it.isNotBlank() } ?: bot.label) },
+                onSessionExpired = onSessionExpired,
+                owner = RoutineOwner(bot.name, bot.label),
+            )
+            capabilitiesOpen -> CapabilitiesPage(
+                gateway = gateway,
+                profile = profile,
+                onBack = { capabilitiesOpen = false },
+                onSessionExpired = onSessionExpired,
+            )
+            configOpen -> ConfigPage(
+                gateway = gateway,
+                profile = profile,
+                onBack = { configOpen = false },
+                onSessionExpired = onSessionExpired,
+                visible = pageVisible,
+            )
+            pluginsOpen -> PluginsPage(
+                gateway = gateway,
+                profile = profile,
+                onBack = { pluginsOpen = false },
+                onSessionExpired = onSessionExpired,
+                onOpenPlugin = onOpenPlugin,
+            )
+            insightsOpen -> InsightsPage(
+                gateway = gateway,
+                profile = profile,
+                onBack = { insightsOpen = false },
+                onSessionExpired = onSessionExpired,
+            )
+        }
+    }
+    if (pageInMain && mainPage != null) {
+        val latest by rememberUpdatedState(pageView)
+        DisposableEffect(pageKey) {
+            val key = pageKey
+            // Scheduled and Config lay a list beside what's open in it, so they take a wider page.
+            val wide = key == "scheduled" || key == "config" || key?.startsWith("routines:") == true
+            if (key != null) mainPage.show(key, { latest() }, close = { closePages() }, wide = wide)
+            onDispose { if (key != null) mainPage.clear(key) }
+        }
     }
 
     Box(
@@ -422,72 +692,19 @@ fun SessionsSidebar(
             .halo()
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start)),
     ) {
-        if (inboxOpen && !searchOpen) {
-            InboxPage(
-                gateway = gateway,
-                visible = visible,
-                onBack = { inboxOpen = false },
-                onOpenSettings = onOpenSettings,
-                openKey = inboxOpenKey,
-                onOpenedKey = { inboxOpenKey = null },
-            )
-        } else if (scheduledOpen && !searchOpen) {
-            ScheduledPage(
-                gateway = gateway,
-                visible = visible,
-                selectedId = selectedId,
-                onBack = { scheduledOpen = false },
-                onOpenRun = open,
-                onSessionExpired = onSessionExpired,
-            )
-        } else if (routinesOf != null && !searchOpen) routinesOf?.let { bot ->
-            ScheduledPage(
-                gateway = gateway,
-                visible = visible,
-                selectedId = selectedId,
-                onBack = {
-                    routinesOf = null
-                    // What was fixed there shows on the roster at once.
-                    bots.refreshRoutines()
-                },
-                // A run is a session of the bot's own profile.
-                onOpenRun = { run -> onOpenBotSession(bot, run.id, run.title?.takeIf { it.isNotBlank() } ?: bot.label) },
-                onSessionExpired = onSessionExpired,
-                owner = RoutineOwner(bot.name, bot.label),
-            )
-        } else if (capabilitiesOpen && !searchOpen) {
-            CapabilitiesPage(
-                gateway = gateway,
-                profile = profile,
-                onBack = { capabilitiesOpen = false },
-                onSessionExpired = onSessionExpired,
-            )
-        } else if (configOpen && !searchOpen) {
-            ConfigPage(
-                gateway = gateway,
-                profile = profile,
-                onBack = { configOpen = false },
-                onSessionExpired = onSessionExpired,
-                visible = visible,
-            )
-        } else if (pluginsOpen && !searchOpen) {
-            PluginsPage(
-                gateway = gateway,
-                profile = profile,
-                onBack = { pluginsOpen = false },
-                onSessionExpired = onSessionExpired,
-                onOpenPlugin = onOpenPlugin,
-            )
-        } else if (insightsOpen && !searchOpen) {
-            InsightsPage(
-                gateway = gateway,
-                profile = profile,
-                onBack = { insightsOpen = false },
-                onSessionExpired = onSessionExpired,
-            )
-        } else Column(Modifier.fillMaxSize()) {
+        if (pageKey != null && !pageInMain && !searchOpen) pageView() else Column(Modifier.fillMaxSize()) {
             when {
-                searchOpen -> SearchHeader(viewModel, onClose = ::closeSearch)
+                searchOpen -> SearchHeader(viewModel, focusAsks = searchFocusAsks, list = searchList, onClose = ::closeSearch, onSubmit = {
+                    // Only results for the words in the box now: none while a search is on its way or still to start.
+                    // An empty box shows the recent chats, so Enter opens the first of them.
+                    val typed = viewModel.query.text.toString().trim()
+                    val shown = when {
+                        typed.isEmpty() -> sections.others
+                        state.searching || state.searchedFor != typed -> null
+                        else -> state.searchResults
+                    }
+                    shown?.firstOrNull()?.let(open)
+                })
                 state.filter != SessionListFilter.Recent -> SubpageHeader(
                     title = state.filter.label,
                     onBack = { viewModel.setFilter(SessionListFilter.Recent) },
@@ -495,7 +712,10 @@ fun SessionsSidebar(
                 else -> MainHeader(
                     gatewayLabel = gateway.label,
                     connection = connection,
-                    onAccount = openAccount,
+                    onAccount = {
+                        accountAnchor = null
+                        openAccount()
+                    },
                     onSettings = onOpenSettings,
                     onSearch = { searchOpen = true }.takeIf { mode == SidebarMode.Chats },
                 )
@@ -509,7 +729,17 @@ fun SessionsSidebar(
                     optionLabel = { if (it == SidebarMode.Bots && needsYou.isNotEmpty()) "${it.name} · ${needsYou.size}" else it.name },
                     modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
                 )
+                RenameBanner(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp))
                 UpdateBanner(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp))
+                // A desktop starts a chat from the top of its sidebar, as desktop chat apps do; the footer
+                // keeps the account. A phone keeps the pill under the thumb.
+                if (isDesktop) {
+                    NavTile(
+                        NavLink(Lucide.SquarePen, "New chat", keys = "Ctrl+N") { onNewChat(state.project?.path) },
+                        // In line with the pages listed under it, which sit in the list's own 8dp margin.
+                        Modifier.fillMaxWidth().padding(horizontal = 14.dp),
+                    )
+                }
             }
 
             Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -579,28 +809,42 @@ fun SessionsSidebar(
                             },
                         )
                     }
-                    searchOpen && searchResults == null -> Unit
+                    // On a desktop, the recent chats stay in view until a word is typed, so search (opened from
+                    // the keyboard as often as not) never shows a blank list. A phone keeps the field alone.
+                    searchOpen && searchResults == null && !isDesktop -> Unit
+                    searchOpen && searchResults == null -> SessionList(
+                        sections.others, selectedId, click, rowActions,
+                        menu = rowMenu,
+                        swipeRight = pinSwipe,
+                        swipeLeft = archiveSwipe,
+                        statuses = statuses,
+                        drafts = drafts,
+                        focus = searchList,
+                    )
                     searchResults != null -> when {
                         state.searching && searchResults.isEmpty() -> CenteredSpinner()
                         searchResults.isEmpty() -> EmptyState(Lucide.SearchX, "No matches", "Search looks at titles, session ids and message text.")
                         else -> SessionList(
-                            searchResults, selectedId, open, rowActions,
+                            searchResults, selectedId, click, rowActions,
+                            menu = rowMenu,
                             swipeRight = pinSwipe,
                             swipeLeft = archiveSwipe,
                             showSnippets = true,
                             statuses = statuses,
                             drafts = drafts,
+                            focus = searchList,
                         )
                     }
                     state.filter == SessionListFilter.Recent -> SessionList(
                         sessions = sections.others.filter { attentionFilter.keeps(statuses[it.id]) },
                         selectedId = selectedId,
-                        onOpen = open,
+                        onOpen = click,
                         onActions = rowActions,
+                        menu = rowMenu,
                         swipeRight = pinSwipe,
                         swipeLeft = archiveSwipe,
                         threads = shownThreads,
-                        onOpenThread = { open(it.session) },
+                        onOpenThread = { click(it.session) },
                         onThreadActions = { threadActions = it },
                         reorderingThreads = reorderingThreads && attentionFilter == AttentionFilter.All,
                         onReordered = { ids ->
@@ -631,7 +875,10 @@ fun SessionsSidebar(
                                         asDropdown = projectsAsDropdown,
                                         onSelect = viewModel::selectProject,
                                         onNew = if (state.canMakeProjects) ({ newProject = ProjectDraft() }) else null,
-                                        onOptions = { projectActions = it },
+                                        onOptions = { project, button ->
+                                            projectAnchor = button
+                                            projectActions = project
+                                        },
                                     )
                                 }
                             }
@@ -669,14 +916,18 @@ fun SessionsSidebar(
                     ) {
                         item(key = "nav") {
                             NavGrid(
-                                listOf(
-                                    NavLink(Lucide.Inbox, "Inbox", badge = inboxUnread) { inboxOpen = true },
-                                    NavLink(Lucide.CalendarClock, "Scheduled") { scheduledOpen = true },
-                                    NavLink(Lucide.ChartColumn, "Insights") { insightsOpen = true },
-                                    NavLink(Lucide.Blocks, "Capabilities") { capabilitiesOpen = true },
-                                    NavLink(Lucide.Puzzle, "Plugins") { pluginsOpen = true },
-                                    NavLink(Lucide.SlidersHorizontal, "Config") { configOpen = true },
-                                    NavLink(Lucide.Archive, "Archived") { viewModel.setFilter(SessionListFilter.Archived) },
+                                // The Inbox goes by a phone's push registration (Notifications anywhere), which
+                                // a desktop has none of, so it would only ever say it can't load.
+                                listOfNotNull(
+                                    NavLink(Lucide.Inbox, "Inbox", badge = inboxUnread) { inboxOpen = true }.takeIf { !isDesktop },
+                                    NavLink(Lucide.CalendarClock, "Scheduled", selected = pageInMain && scheduledOpen) { closePages(); scheduledOpen = true },
+                                    NavLink(Lucide.ChartColumn, "Insights", selected = pageInMain && insightsOpen) { closePages(); insightsOpen = true },
+                                    NavLink(Lucide.Blocks, "Capabilities", selected = pageInMain && capabilitiesOpen) { closePages(); capabilitiesOpen = true },
+                                    NavLink(Lucide.Puzzle, "Plugins", selected = pageInMain && pluginsOpen) { closePages(); pluginsOpen = true },
+                                    NavLink(Lucide.SlidersHorizontal, "Config", selected = pageInMain && configOpen) { closePages(); configOpen = true },
+                                    NavLink(Lucide.Archive, "Archived", selected = isDesktop && state.filter == SessionListFilter.Archived) {
+                                        viewModel.setFilter(SessionListFilter.Archived)
+                                    },
                                 ),
                             )
                         }
@@ -692,6 +943,7 @@ fun SessionsSidebar(
                         selectedId = selectedId,
                         onOpen = open,
                         onActions = rowActions,
+                        menu = rowMenu,
                         swipeRight = archiveSwipe,
                         swipeLeft = deleteSwipe,
                         canLoadMore = state.canLoadMore,
@@ -712,7 +964,11 @@ fun SessionsSidebar(
                 if (searchOpen) closeSearch()
                 onNewChat(state.project?.path.takeIf { state.filter == SessionListFilter.Recent })
             },
-            onAccount = openAccount,
+            onAccount = {
+                accountAnchor = accountRow[0]
+                openAccount()
+            },
+            onAccountBounds = { accountRow[0] = it },
             modifier = Modifier.align(Alignment.BottomCenter),
         )
     }
@@ -740,14 +996,22 @@ fun SessionsSidebar(
             reorderingThreads = true
         },
         onRemove = { viewModel.removeThread(it.thread) },
+        onNewWindow = { row: ThreadRow -> popOut(row.session) }.takeIf { isDesktop },
     )
     RenameThreadDialog(renameThread, onDismiss = { renameThread = null }, onRename = viewModel::renameThread)
     StartThreadFreshDialog(freshThread, onDismiss = { freshThread = null }) { thread ->
         viewModel.startFresh(thread) { fresh -> onOpenSession(SessionSummary(fresh.sessionId, title = fresh.title, pinned = true), null) }
     }
-    RenameDialog(renameTarget, onDismiss = { renameTarget = null }, onRename = viewModel::rename)
+    RenameDialog(renameTarget, onDismiss = { renameTarget = null }, onRename = { session, title ->
+        // On the desktop the chat itself shows the new name too, open here or in a window of its own, once the
+        // gateway has it: a refused rename goes back in the list, and so stays the old name there.
+        viewModel.rename(session, title) {
+            if (isDesktop) chatHost.retitled(session.id, title.trim().ifBlank { null })
+        }
+    })
     ProjectActionsSheet(
         project = projectActions,
+        anchor = projectAnchor,
         onDismiss = { projectActions = null },
         onRename = { renameProject = it },
         onDelete = { deleteProject = it },
@@ -773,6 +1037,7 @@ fun SessionsSidebar(
             }
         },
         listFolders = viewModel::projectFolders,
+        makeFolder = viewModel::makeProjectFolder,
     )
     DeleteDialog(
         deleteTarget,
@@ -786,6 +1051,7 @@ fun SessionsSidebar(
     val activeProfile = roster?.let { r -> r.profiles.find { it.name == (profile ?: r.launch) } }
     AccountSheet(
         visible = accountOpen,
+        anchor = accountAnchor.takeIf { isDesktop },
         gateway = gateway,
         userLabel = user?.label,
         profileLabel = activeProfile?.label ?: profile,
@@ -844,6 +1110,7 @@ internal fun SessionsSidebarSample(
     ) {
         Column(Modifier.fillMaxSize()) {
             MainHeader(gatewayLabel = "homelab", connection = null, onAccount = {}, onSettings = {}, onSearch = {})
+            RenameBanner(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp))
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 val index = remember(projects) { ProjectIndex(projects) }
                 val sections = threadSections(threads, sessions, sessions, selectedProject, index)
@@ -993,45 +1260,58 @@ private fun MainHeader(
 ) {
     Column {
         Row(
-            Modifier.fillMaxWidth().padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 4.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+            Modifier.fillMaxWidth().clearOfWindowControls().padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 4.dp),
+            horizontalArrangement = Arrangement.spacedBy(if (isDesktop) 4.dp else 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             AppMark(30.dp, glow = false)
-            Column(
-                Modifier
-                    .weight(1f)
-                    .heightIn(min = MinTouchTarget)
-                    .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
-                    .clickable(onClickLabel = "Account and gateways", role = Role.Button, onClick = onAccount)
-                    .semantics(mergeDescendants = true) { stateDescription = connectionWord(connection) },
-                verticalArrangement = Arrangement.Center,
-            ) {
-                Text(
-                    "Herald",
-                    style = Theme[typography][heading].copy(fontSize = 17.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.02).em),
-                    color = Theme[colors][text],
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Box(Modifier.size(6.dp).background(connectionDot(connection), CircleShape))
+            // On the desktop this strip is the window's title bar: only the name and gateway are a button, as wide
+            // as they are, and the rest of the strip drags the window (a double-click maximises it). The Box takes
+            // what Settings leaves, so a long gateway name can't push Settings off the strip.
+            Box(Modifier.weight(1f)) {
+                Column(
+                    Modifier
+                        .then(if (isDesktop) Modifier.widthIn(max = 200.dp) else Modifier.fillMaxWidth())
+                        .heightIn(min = MinTouchTarget)
+                        .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
+                        .handCursor()
+                        .clickable(
+                            onClickLabel = "Account and gateways",
+                            role = Role.Button,
+                            interactionSource = null,
+                            indication = if (isDesktop) rememberHoverIndication(Theme[colors][text]) else LocalIndication.current,
+                            onClick = onAccount,
+                        )
+                        .then(if (isDesktop) Modifier.padding(horizontal = 6.dp) else Modifier)
+                        .semantics(mergeDescendants = true) { stateDescription = connectionWord(connection) },
+                    verticalArrangement = Arrangement.Center,
+                ) {
                     Text(
-                        gatewayLabel,
-                        style = Theme[typography][caption].copy(fontSize = 12.sp),
-                        color = Theme[colors][textTertiary],
+                        "Kyllene",
+                        style = Theme[typography][heading].copy(fontSize = 17.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.02).em),
+                        color = Theme[colors][text],
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f, fill = false),
                     )
-                    UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(12.dp))
+                    Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(6.dp).background(connectionDot(connection), CircleShape))
+                        Text(
+                            gatewayLabel,
+                            style = Theme[typography][caption].copy(fontSize = 12.sp),
+                            color = Theme[colors][textTertiary],
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f, fill = false),
+                        )
+                        UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(12.dp))
+                    }
                 }
             }
-            IconButton(Lucide.Settings, contentDescription = "Settings", onClick = onSettings, tint = Theme[colors][textSecondary])
+            IconButton(Lucide.Settings, contentDescription = if (isDesktop) "Settings (${keysLabel("Ctrl+,")})" else "Settings", onClick = onSettings, tint = Theme[colors][textSecondary])
         }
         // Search looks through chats; the bot roster is short enough to read. The header keeps its height
         // without the pill, so switching sides doesn't move the switch under the finger.
-        if (onSearch != null) SearchPill(onSearch) else Spacer(Modifier.height(MinTouchTarget))
+        if (onSearch != null) SearchPill(onSearch) else Spacer(Modifier.height(maxOf(MinTouchTarget, SEARCH_PILL_HEIGHT)))
     }
 }
 
@@ -1051,7 +1331,10 @@ internal fun connectionWord(connection: ConnectionState?): String = when (connec
     is ConnectionState.Connecting, ConnectionState.Idle -> "Connecting"
 }
 
-/** A 40dp pill that opens search, in a full-height touch target. */
+/** How tall the search pill is drawn; the touch target around it can be taller. */
+private val SEARCH_PILL_HEIGHT = 40.dp
+
+/** A pill that opens search, in a full-height touch target. */
 @Composable
 private fun SearchPill(onClick: () -> Unit) {
     val interaction = remember { MutableInteractionSource() }
@@ -1061,23 +1344,26 @@ private fun SearchPill(onClick: () -> Unit) {
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
             .padding(horizontal = 14.dp)
+            .handCursor()
             .clickable(interaction, indication = null, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .heightIn(min = 40.dp)
+                .heightIn(min = SEARCH_PILL_HEIGHT)
                 .clip(shape)
                 .background(Theme[colors][surface2], shape)
                 .border(1.dp, Theme[colors][stroke], shape)
-                .indication(interaction, rememberColoredIndication(Theme[colors][text]))
+                .indication(interaction, rememberHoverIndication(Theme[colors][text]))
                 .padding(horizontal = 14.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             UnstyledIcon(Lucide.Search, contentDescription = null, tint = Theme[colors][textMuted], modifier = Modifier.size(15.dp))
-            Text("Search chats", style = Theme[typography][body].copy(fontSize = 14.sp), color = Theme[colors][textMuted], maxLines = 1)
+            Text("Search chats", style = Theme[typography][body].copy(fontSize = 14.sp), color = Theme[colors][textMuted], maxLines = 1, modifier = Modifier.weight(1f))
+            // Its keys, as New chat names Ctrl+N.
+            if (isDesktop) Text(keysLabel("Ctrl+Shift+F"), style = Theme[typography][caption], color = Theme[colors][textMuted], maxLines = 1)
         }
     }
 }
@@ -1088,9 +1374,45 @@ internal fun SubpageHeader(title: String, onBack: () -> Unit, subtitle: String? 
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         // A narrow page, such as one in the sidebar, takes the smaller title style.
         val style = Theme[typography][if (maxWidth < 360.dp) titleStyle else display]
+        // A desktop page beside the sidebar heads itself as a desktop window's toolbar does: Back, the title and
+        // the actions on one line, so the page starts higher up.
+        if (isDesktop && maxWidth >= 360.dp) {
+            Column(Modifier.fillMaxWidth().padding(bottom = 12.dp)) {
+                Row(
+                    Modifier.fillMaxWidth().clearOfWindowControls().padding(start = 4.dp, end = 8.dp, top = 6.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    IconButton(Lucide.ArrowLeft, contentDescription = "Back", onClick = onBack, tint = Theme[colors][textSecondary])
+                    Text(
+                        title,
+                        style = Theme[typography][titleStyle],
+                        color = Theme[colors][text],
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        // A long title (a job's name) is cut short rather than the buttons after it.
+                        modifier = Modifier.weight(1f).semantics { heading() },
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        content = actions,
+                    )
+                }
+                if (subtitle != null) {
+                    Text(
+                        subtitle,
+                        style = Theme[typography][bodySmall].copy(fontSize = 13.5.sp),
+                        color = Theme[colors][textTertiary],
+                        modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = 4.dp),
+                    )
+                }
+            }
+            return@BoxWithConstraints
+        }
         Column(Modifier.fillMaxWidth().padding(bottom = 14.dp)) {
             Row(
-                Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 4.dp),
+                Modifier.fillMaxWidth().clearOfWindowControls().padding(start = 4.dp, end = 8.dp, top = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -1125,9 +1447,11 @@ internal fun SubpageHeader(title: String, onBack: () -> Unit, subtitle: String? 
 }
 
 @Composable
-private fun SearchHeader(viewModel: SessionsViewModel, onClose: () -> Unit) {
+private fun SearchHeader(viewModel: SessionsViewModel, focusAsks: Int, list: ListFocus, onClose: () -> Unit, onSubmit: () -> Unit) {
     val focus = remember { FocusRequester() }
-    LaunchedEffect(Unit) { focus.requestFocus() }
+    val focusManager = LocalFocusManager.current
+    // Each time it's asked for again (the search key, with the search already open) the field takes the focus back.
+    LaunchedEffect(focusAsks) { focus.requestFocus() }
     Row(
         Modifier.fillMaxWidth().padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -1139,19 +1463,50 @@ private fun SearchHeader(viewModel: SessionsViewModel, onClose: () -> Unit) {
             leadingIcon = Lucide.Search,
             clearable = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+            // On a desktop Enter opens the top match and Down steps from the field into the list. A phone's Search
+            // key only puts the keyboard away, so the results can be looked through first.
+            onKeyboardAction = if (isDesktop) KeyboardActionHandler { onSubmit() } else null,
             focusRequester = focus,
-            modifier = Modifier.weight(1f),
+            modifier = Modifier.weight(1f).onPreviewKeyEvent { event ->
+                (isDesktop && event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown).also { down ->
+                    if (down && !list.focusFirst()) focusManager.moveFocus(FocusDirection.Down)
+                }
+            },
         )
         IconButton(Lucide.X, contentDescription = "Close search", onClick = onClose, tint = Theme[colors][text])
     }
 }
 
-/** One of the sidebar's pages, as a tile in [NavGrid]. */
-internal class NavLink(val icon: ImageVector, val label: String, val badge: Int = 0, val onClick: () -> Unit)
+/** Lets the search field hand the focus to the first chat the list under it shows. */
+private class ListFocus {
+    var first: (() -> Boolean)? = null
 
-/** The sidebar's pages as tiles, two to a row. */
+    fun focusFirst(): Boolean = first?.invoke() ?: false
+}
+
+/** How tall a page's row in the sidebar is under a mouse. */
+private val DESKTOP_NAV_ROW = 32.dp
+
+/** One of the sidebar's pages, as a tile in [NavGrid]. */
+internal class NavLink(
+    val icon: ImageVector,
+    val label: String,
+    val badge: Int = 0,
+    val selected: Boolean = false,
+    /** Its keys, shown at the row's end on the desktop as a menu shows them. */
+    val keys: String? = null,
+    val onClick: () -> Unit,
+)
+
+/** The sidebar's pages as tiles, two to a row; on the desktop one under another, as a desktop sidebar lists its places. */
 @Composable
 private fun NavGrid(links: List<NavLink>) {
+    if (isDesktop) {
+        Column(Modifier.padding(start = 6.dp, end = 6.dp, bottom = 10.dp)) {
+            links.forEach { NavTile(it, Modifier.fillMaxWidth()) }
+        }
+        return
+    }
     Column(Modifier.padding(start = 6.dp, end = 6.dp, bottom = 10.dp)) {
         links.chunked(2).forEach { pair ->
             // A tile whose label wraps keeps its neighbour the same height.
@@ -1163,24 +1518,31 @@ private fun NavGrid(links: List<NavLink>) {
     }
 }
 
-/** A 44dp tile, an accent icon and its label, inside a full-height touch target. */
+/**
+ * A 44dp tile, an accent icon and its label, inside a full-height touch target. On the desktop a flat row, as a
+ * desktop sidebar lists its places: filled only under the mouse.
+ */
 @Composable
 private fun NavTile(link: NavLink, modifier: Modifier = Modifier) {
     val interaction = remember { MutableInteractionSource() }
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    val shape = RoundedCornerShape(Theme[radii][if (isDesktop) radiusSmall else radiusMedium])
     Box(
         modifier
-            .heightIn(min = MinTouchTarget)
-            .clickable(interaction, indication = null, role = Role.Button, onClick = link.onClick),
+            .heightIn(min = if (isDesktop) DESKTOP_NAV_ROW else MinTouchTarget)
+            .handCursor()
+            .clickable(interaction, indication = null, role = Role.Button, onClick = link.onClick)
+            .semantics { selected = link.selected },
         contentAlignment = Alignment.Center,
     ) {
         Row(
             Modifier
-                .fillMaxSize()
-                .padding(vertical = 2.dp)
+                // A phone's tile fills its grid cell; a desktop row is as tall as its own line, outside a grid too.
+                .then(if (isDesktop) Modifier.fillMaxWidth().heightIn(min = DESKTOP_NAV_ROW) else Modifier.fillMaxSize())
+                .padding(vertical = if (isDesktop) 1.dp else 2.dp)
                 .clip(shape)
-                .background(Theme[colors][surface2], shape)
-                .indication(interaction, rememberColoredIndication(Theme[colors][text]))
+                // On the desktop the page that's open beside the sidebar stays marked, as a chat row does.
+                .background(if (isDesktop && !link.selected) Color.Transparent else Theme[colors][surface2], shape)
+                .indication(interaction, rememberHoverIndication(Theme[colors][text]))
                 .padding(horizontal = 12.dp, vertical = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(10.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -1193,8 +1555,11 @@ private fun NavTile(link: NavLink, modifier: Modifier = Modifier) {
                 // Large text wraps rather than cutting the name off; the tile grows.
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                modifier = Modifier.weight(1f, fill = false),
+                modifier = Modifier.weight(1f, fill = isDesktop && link.keys != null),
             )
+            if (isDesktop && link.keys != null) {
+                Text(keysLabel(link.keys), style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
+            }
             if (link.badge > 0) {
                 Text(
                     if (link.badge > 99) "99+" else link.badge.toString(),
@@ -1224,6 +1589,8 @@ private fun BottomBar(
     onNewChat: () -> Unit,
     onAccount: () -> Unit,
     modifier: Modifier = Modifier,
+    /** Where the desktop's account row is, for its menu to open over it. */
+    onAccountBounds: (Rect) -> Unit = {},
 ) {
     val ground = Theme[colors][sidebarColor]
     Column(modifier.fillMaxWidth()) {
@@ -1231,6 +1598,10 @@ private fun BottomBar(
         // Opaque under the banner too, so no row shows around it.
         Column(Modifier.fillMaxWidth().background(ground)) {
             if (message != null) MessageBanner(message, onDismiss = onDismissMessage, modifier = Modifier.padding(top = 4.dp, bottom = 8.dp))
+            if (isDesktop) {
+                AccountRow(userLabel, connection, onClick = onAccount, modifier = Modifier.onGloballyPositioned { onAccountBounds(it.boundsInWindow()) })
+                return@Column
+            }
             Row(
                 Modifier.fillMaxWidth().padding(start = 14.dp, end = 14.dp, top = 4.dp, bottom = 8.dp),
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -1252,17 +1623,18 @@ private fun NewChatPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
     Box(
         modifier
             .heightIn(min = MinTouchTarget)
+            .handCursor()
             .clickable(interaction, indication = null, role = Role.Button, onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Row(
             Modifier
                 .fillMaxWidth()
-                .heightIn(min = 46.dp)
+                .heightIn(min = if (isDesktop) MinTouchTarget else 46.dp)
                 .glow(shape, Shadow(radius = 14.dp, color = fill.copy(alpha = 0.4f), offset = DpOffset(0.dp, 4.dp)))
                 .clip(shape)
                 .background(fill, shape)
-                .indication(interaction, rememberColoredIndication(Theme[colors][onAccent]))
+                .indication(interaction, rememberHoverIndication(Theme[colors][onAccent]))
                 .padding(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
             verticalAlignment = Alignment.CenterVertically,
@@ -1274,6 +1646,15 @@ private fun NewChatPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
                 color = Theme[colors][onAccent],
                 maxLines = 1,
             )
+            // The desktop shows its shortcut, as a desktop menu does.
+            if (isDesktop) {
+                Text(
+                    keysLabel("Ctrl+N"),
+                    style = Theme[typography][caption],
+                    color = Theme[colors][onAccent].copy(alpha = 0.7f),
+                    maxLines = 1,
+                )
+            }
         }
     }
 }
@@ -1283,12 +1664,17 @@ private fun NewChatPill(onClick: () -> Unit, modifier: Modifier = Modifier) {
  * the header that also shows it is gone in search and on subpages.
  */
 @Composable
-private fun Avatar(userLabel: String?, connection: ConnectionState?, onClick: () -> Unit) {
+private fun Avatar(userLabel: String?, connection: ConnectionState?, onClick: () -> Unit) = Tooltip(
+    // Who's signed in, and the link when it's down, named on hover as the icon buttons beside it are.
+    listOfNotNull(userLabel?.takeIf { it.isNotBlank() } ?: "Account", connection?.takeIf { it !is ConnectionState.Connected }?.let(::connectionWord))
+        .joinToString(" · "),
+) {
     val initials = userLabel?.initials()
     val interaction = remember { MutableInteractionSource() }
     Box(
         Modifier
             .size(MinTouchTarget)
+            .handCursor()
             .clickable(interaction, indication = null, role = Role.Button, onClickLabel = "Account", onClick = onClick)
             .semantics {
                 contentDescription = "Account"
@@ -1298,10 +1684,11 @@ private fun Avatar(userLabel: String?, connection: ConnectionState?, onClick: ()
     ) {
         Box(
             Modifier
-                .size(46.dp)
+                // As big as the New chat pill beside it.
+                .size(if (isDesktop) MinTouchTarget else 46.dp)
                 .clip(CircleShape)
                 .background(Theme[colors][surface3])
-                .indication(interaction, rememberColoredIndication(Theme[colors][text]))
+                .indication(interaction, rememberHoverIndication(Theme[colors][text]))
                 .clearAndSetSemantics { },
             contentAlignment = Alignment.Center,
         ) {
@@ -1324,6 +1711,47 @@ private fun Avatar(userLabel: String?, connection: ConnectionState?, onClick: ()
     }
 }
 
+/**
+ * The desktop's footer: who's signed in, their initials and the link's state, one row that opens the account
+ * menu, as desktop apps keep the account at the sidebar's foot.
+ */
+@Composable
+private fun AccountRow(userLabel: String?, connection: ConnectionState?, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val interaction = remember { MutableInteractionSource() }
+    val shape = RoundedCornerShape(Theme[radii][radiusSmall])
+    val name = userLabel?.takeIf { it.isNotBlank() } ?: "Account"
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .padding(start = 8.dp, end = 8.dp, top = 2.dp, bottom = 8.dp)
+            .then(modifier)
+            .clip(shape)
+            .handCursor()
+            .clickable(interaction, indication = rememberHoverIndication(Theme[colors][text]), role = Role.Button, onClickLabel = "Account", onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 6.dp)
+            .semantics(mergeDescendants = true) { stateDescription = connectionWord(connection) },
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(28.dp).background(Theme[colors][surface3], CircleShape), contentAlignment = Alignment.Center) {
+            val initials = userLabel?.initials()
+            if (initials.isNullOrEmpty()) {
+                UnstyledIcon(Lucide.CircleUser, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(16.dp))
+            } else {
+                Text(initials, style = Theme[typography][label].copy(fontSize = 11.5.sp, fontWeight = FontWeight.SemiBold), color = Theme[colors][textSecondary])
+            }
+        }
+        Column(Modifier.weight(1f)) {
+            Text(name, style = Theme[typography][label].copy(fontSize = 13.5.sp, fontWeight = FontWeight.Medium), color = Theme[colors][text], maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Row(horizontalArrangement = Arrangement.spacedBy(5.dp), verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(6.dp).background(connectionDot(connection), CircleShape))
+                Text(connectionWord(connection), style = Theme[typography][caption].copy(fontSize = 11.5.sp), color = Theme[colors][textTertiary], maxLines = 1)
+            }
+        }
+        UnstyledIcon(Lucide.ChevronsUpDown, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
+    }
+}
+
 private fun String.initials(): String =
     substringBefore('@').split(' ', '.', '_', '-').filter { it.isNotBlank() }.take(2)
         .joinToString("") { it.first().uppercase() }
@@ -1334,6 +1762,8 @@ private fun SessionList(
     selectedId: String?,
     onOpen: (SessionSummary) -> Unit,
     onActions: (SessionSummary) -> Unit,
+    /** A chat's actions for its right-click menu, on the desktop; null, rows have none. */
+    menu: ((SessionSummary) -> List<RowMenuItem>)? = null,
     /** What a right swipe on a chat's row does; null, the row doesn't swipe right. */
     swipeRight: (SessionSummary) -> SwipeAction? = { null },
     /** What a left swipe on a chat's row does; null, the row doesn't swipe left. */
@@ -1368,6 +1798,8 @@ private fun SessionList(
     /** Folds or unfolds the Threads section; null, its label is plain text. */
     onToggleThreads: (() -> Unit)? = null,
     /** Filters and the loading, error or empty notices, shown above the unpinned chats. */
+    /** Given a way to focus the first chat listed, for a field above the list. */
+    focus: ListFocus? = null,
     status: LazyListScope.() -> Unit = {},
     header: LazyListScope.() -> Unit = {},
 ) {
@@ -1381,16 +1813,58 @@ private fun SessionList(
     }
     LaunchedEffect(nearEnd, canLoadMore, sessions.size) { if (nearEnd && canLoadMore) onLoadMore() }
 
-    LazyColumn(
-        state = listState,
-        modifier = Modifier.fillMaxSize(),
-        // Room to scroll the last rows out from under the floating footer.
-        contentPadding = PaddingValues(start = 8.dp, end = 8.dp, bottom = 96.dp),
-    ) {
+    // A desktop's type-ahead: letters typed while a chat has the focus move it to the next chat whose title starts so.
+    val positions = remember { HashMap<Any, Int>() }
+    val requesters = remember { HashMap<String, FocusRequester>() }
+    val typeAhead = remember { TypeAhead() }
+    val scope = rememberCoroutineScope()
+    val inputMode = LocalInputModeManager.current
+    // Brings a chat's row into view and gives it the focus, ringed as keys moved it there.
+    val focusRow: (String, Int) -> Unit = { id, above ->
+        scope.launch {
+            if (listState.layoutInfo.visibleItemsInfo.none { it.key == id }) {
+                positions[id]?.let { listState.scrollToItem((it - above).coerceAtLeast(0)) }
+                withFrameNanos { }
+            }
+            requesters[id]?.let { row ->
+                inputMode.requestInputMode(InputMode.Keyboard)
+                runCatching { row.requestFocus() }
+            }
+        }
+    }
+    val jump: (KeyEvent) -> Boolean = jump@{ event ->
+        // The character a letter types comes after its key-down; the list keeps it, or the window's typing would
+        // take it on to the composer.
+        if (event.type == KeyEventType.Unknown) return@jump TypeAhead.isLetter(event)
+        // The chats as listed: one in a folded section isn't there to go to.
+        val listed = sessions.filter { it.id in positions }.sortedBy { positions[it.id] }
+        val target = typeAhead.next(event, listed) ?: return@jump false
+        focusRow(target.id, 3)
+        true
+    }
+    if (focus != null) {
+        val listed by rememberUpdatedState(sessions)
+        DisposableEffect(focus) {
+            val first = first@{
+                val top = listed.filter { it.id in positions }.minByOrNull { positions.getValue(it.id) } ?: return@first false
+                focusRow(top.id, 0)
+                true
+            }
+            focus.first = first
+            onDispose { if (focus.first === first) focus.first = null }
+        }
+    }
+
+    val rows: LazyListScope.() -> Unit = rows@{
         header()
         // Pinned chats stay on top, marked with a pin.
         val (pinned, rest) = sessions.partition { it.pinned }
         val row: @Composable (SessionSummary) -> Unit = { session ->
+            val focus = remember(session.id) { FocusRequester() }
+            DisposableEffect(session.id) {
+                requesters[session.id] = focus
+                onDispose { if (requesters[session.id] === focus) requesters.remove(session.id) }
+            }
             SwipeRow(
                 start = swipeRight(session),
                 end = swipeLeft(session),
@@ -1406,7 +1880,8 @@ private fun SessionList(
                     projectLabel = if (sectioned && session.pinned) projectIndex.labelFor(session, shownProject) else null,
                     onClick = { onOpen(session) },
                     onActions = { onActions(session) },
-                    modifier = swipeActions,
+                    menu = menu?.let { items -> { items(session) } },
+                    modifier = swipeActions.focusRequester(focus),
                 )
             }
         }
@@ -1440,6 +1915,8 @@ private fun SessionList(
                             thread = true,
                             onClick = { onOpenThread(row) },
                             onActions = { onThreadActions(row) },
+                            // On a desktop the thread's actions are a menu at the pointer: a right-click opens it.
+                            modifier = if (isDesktop) Modifier.onSecondaryPress { onThreadActions(row) } else Modifier,
                         )
                     }
                 }
@@ -1462,12 +1939,93 @@ private fun SessionList(
             status()
             items(rest, key = { it.id }, contentType = { SessionRowType }) { row(it) }
             if (loadingMore) item(key = "loading-more") { ListSpinner() }
-            return@LazyColumn
+            return@rows
         }
         items(pinned + rest, key = { it.id }, contentType = { SessionRowType }) { row(it) }
         if (loadingMore) item(key = "loading-more") { ListSpinner() }
     }
+    Box(Modifier.fillMaxSize()) {
+        LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize().arrowFocus().then(if (isDesktop) Modifier.onKeyEvent(jump) else Modifier),
+            // Room to scroll the last rows out from under the floating footer.
+            contentPadding = PaddingValues(start = 8.dp, end = 8.dp, bottom = 96.dp),
+            content = {
+                positions.clear()
+                PositionsScope(this, positions).rows()
+            },
+        )
+        VerticalScrollbar(listState, Modifier.align(Alignment.TopEnd).fillMaxHeight().padding(top = 2.dp, bottom = 96.dp, end = 1.dp))
+    }
 }
+
+/**
+ * Notes where each keyed item lands in the list, so a row out of view can be scrolled to by its key. Everything
+ * else is the list's own scope.
+ */
+private class PositionsScope(private val list: LazyListScope, private val positions: MutableMap<Any, Int>) : LazyListScope by list {
+    private var next = 0
+
+    override fun item(key: Any?, contentType: Any?, content: @Composable LazyItemScope.() -> Unit) {
+        if (key != null) positions[key] = next
+        next++
+        list.item(key, contentType, content)
+    }
+
+    override fun items(
+        count: Int,
+        key: ((index: Int) -> Any)?,
+        contentType: (index: Int) -> Any?,
+        itemContent: @Composable LazyItemScope.(index: Int) -> Unit,
+    ) {
+        if (key != null) for (i in 0 until count) positions[key(i)] = next + i
+        next += count
+        list.items(count, key, contentType, itemContent)
+    }
+}
+
+/**
+ * What a list's type-ahead has typed: letters typed within a second of each other add up to a title's start; the
+ * same letter again steps to the next title that starts with it, as a desktop's lists do.
+ */
+internal class TypeAhead {
+    private var typed = ""
+    private var at = 0L
+    private var last: String? = null
+
+    /** The chat [event] moves to among [sessions], in their order; null when it isn't a letter to look for. */
+    fun next(event: KeyEvent, sessions: List<SessionSummary>, now: Long = Clock.System.now().toEpochMilliseconds()): SessionSummary? {
+        if (event.type != KeyEventType.KeyDown || !isLetter(event)) return null
+        return next(event.utf16CodePoint.toChar(), sessions, now)
+    }
+
+    internal fun next(letter: Char, sessions: List<SessionSummary>, now: Long): SessionSummary? {
+        typed = if (now - at > TYPE_AHEAD_PAUSE_MS) letter.toString() else typed + letter
+        at = now
+        val title = { s: SessionSummary -> s.title.orEmpty().trim() }
+        // The same letter over and over steps through the chats it starts; anything longer finds its first match.
+        val repeat = typed.length > 1 && typed.all { it.equals(typed[0], ignoreCase = true) }
+        val prefix = if (repeat) typed.substring(0, 1) else typed
+        val matches = sessions.filter { title(it).startsWith(prefix, ignoreCase = true) }
+        if (matches.isEmpty()) return null
+        val from = if (repeat || typed.length == 1) matches.indexOfFirst { it.id == last } else -1
+        return matches[(from + 1) % matches.size].also { last = it.id }
+    }
+
+    companion object {
+        /** Whether [event] types a character type-ahead looks for: not a control, a bare space or a shortcut. */
+        fun isLetter(event: KeyEvent): Boolean {
+            if (event.isCtrlPressed || event.isAltPressed || event.isMetaPressed) return false
+            val code = event.utf16CodePoint
+            return code > ' '.code && code != 0x7f && code <= 0xffff
+        }
+    }
+}
+
+private const val TYPE_AHEAD_PAUSE_MS = 1_000L
+
+/** How long after the sidebar shows a desktop reads Hermes's config: past the start's own reads. */
+private const val CONFIG_PREFETCH_DELAY = 4_000L
 
 // Thread, pinned and other rows are all a SessionRow, so folding a section lets the list reuse their slots.
 private const val SessionRowType = "session-row"
@@ -1519,20 +2077,19 @@ private fun ThreadReorder(rows: List<ThreadRow>, projectLabel: (ThreadRow) -> St
                     Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
                         UnstyledIcon(Lucide.Hash, contentDescription = null, tint = Theme[colors][textMuted], modifier = Modifier.size(14.dp))
                     }
-                    Row(Modifier.weight(1f), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+                    TitleAndProject(projectLabel(row), Modifier.weight(1f)) {
                         Text(
                             row.thread.name,
                             style = Theme[typography][body].copy(fontSize = 14.5.sp, lineHeight = 19.sp),
                             color = Theme[colors][text],
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f, fill = false),
                         )
-                        projectLabel(row)?.let { ProjectTag(it) }
                     }
                     Box(
                         Modifier
                             .size(MinTouchTarget)
+                            .handCursor()
                             .pointerInput(id) {
                                 detectDragGestures(
                                     onDragStart = {
@@ -1581,19 +2138,22 @@ internal fun ThreadActionsSheet(
     onMove: (ChatThread, ChatThread) -> Unit,
     onReorder: () -> Unit,
     onRemove: (ThreadRow) -> Unit,
+    /** Opens the thread's chat in a window of its own, as a chat's menu does; null where there are no windows. */
+    onNewWindow: ((ThreadRow) -> Unit)? = null,
 ) {
     // Keep the last row, and the section as it was then, while the sheet animates out: a move that lands
     // meanwhile mustn't add or drop items.
     var kept by remember { mutableStateOf(row to shown) }
     if (row != null) kept = row to shown
-    BottomSheet(visible = row != null, onDismiss = onDismiss) {
+    ActionSheet(visible = row != null, onDismiss = onDismiss) {
         val (r, order) = kept
-        r ?: return@BottomSheet
+        r ?: return@ActionSheet
         val at = order.indexOfFirst { it.id == r.thread.id }
         val above = order.getOrNull(at - 1)?.takeIf { at >= 0 }
         val below = order.getOrNull(at + 1)?.takeIf { at >= 0 }
         SheetHeader(r.thread.name, "Thread")
         fun act(block: (ThreadRow) -> Unit) = { onDismiss(); block(r) }
+        onNewWindow?.let { SheetAction("Open in new window", Lucide.AppWindow, act(it)) }
         SheetAction("Start fresh", Lucide.RotateCcw, act(onStartFresh))
         SheetAction("Rename thread", Lucide.Pencil, act(onRename))
         above?.let { other -> SheetAction("Move up", Lucide.ArrowUp, act { onMove(it.thread, other) }) }
@@ -1611,7 +2171,8 @@ internal fun RenameThreadDialog(thread: ChatThread?, onDismiss: () -> Unit, onRe
     val t = shown ?: return
     val name = rememberTextFieldState(t.name)
     // On every open, so a cancelled edit doesn't come back.
-    LaunchedEffect(thread != null, t.id) { if (thread != null) name.edit { replace(0, length, t.name) } }
+    val inputMode = LocalInputModeManager.current
+    LaunchedEffect(thread != null, t.id) { if (thread != null) name.resetTo(t.name, inputMode) }
     val blank = name.text.isBlank()
     val submit = {
         if (!blank) {
@@ -1632,6 +2193,7 @@ internal fun RenameThreadDialog(thread: ChatThread?, onDismiss: () -> Unit, onRe
         TextField(
             state = name,
             placeholder = t.name,
+            autofocus = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             onKeyboardAction = { submit() },
         )
@@ -1679,6 +2241,7 @@ private fun SectionToggle(title: String, count: Int, collapsed: Boolean, rows: S
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
             .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
+            .handCursor()
             .clickable(onClickLabel = if (collapsed) "Show $rows" else "Hide $rows", role = Role.Button, onClick = onToggle)
             .semantics(mergeDescendants = true) {
                 heading()
@@ -1778,10 +2341,93 @@ internal fun SessionRow(
     thread: Boolean = false,
     onClick: () -> Unit,
     onActions: () -> Unit,
+    /** The row's right-click menu, on the desktop; null, a right-click does nothing. */
+    menu: (() -> List<RowMenuItem>)? = null,
     /** Goes on the row's clickable node, as [SwipeRow]'s screen-reader actions must. */
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(Theme[radii][radiusMedium])
+    if (menu == null) return SessionRowContent(session, selected, showSnippet, status, draft, projectLabel, thread, onClick, onActions, modifier)
+    var menuOpen by remember { mutableStateOf(false) }
+    SessionRowContent(
+        session, selected, showSnippet, status, draft, projectLabel, thread, onClick, onActions,
+        modifier.onSecondaryPress { menuOpen = true }.menuKeys(menu),
+        menuOpen = menuOpen,
+    )
+    RowContextMenu(menuOpen, onDismiss = { menuOpen = false }, items = menu)
+}
+
+/**
+ * A chat's action in its row's right-click menu; [destructive] ones are in the danger color. [key] does it too while
+ * the row has the focus (F2, Delete), named at the menu row's end.
+ */
+internal class RowMenuItem(
+    val label: String,
+    val icon: ImageVector,
+    val destructive: Boolean = false,
+    val key: Key? = null,
+    val run: () -> Unit,
+)
+
+/** A right-click menu of [items], at the pointer; picking one closes it, then runs it. */
+@Composable
+internal fun RowContextMenu(visible: Boolean, onDismiss: () -> Unit, items: () -> List<RowMenuItem>) {
+    ContextMenu(visible, onDismiss) {
+        for (item in items()) {
+            MenuRow(item.label, item.icon, onClick = { onDismiss(); item.run() }, destructive = item.destructive, keys = item.key?.let(::keyName))
+        }
+    }
+}
+
+private fun keyName(key: Key): String? = when (key) {
+    Key.F2 -> "F2"
+    Key.Delete -> if (macKeys) "⌫" else "Del"
+    else -> null
+}
+
+/** A focused row's [RowMenuItem.key]s, pressed alone. */
+private fun Modifier.menuKeys(menu: () -> List<RowMenuItem>): Modifier = onKeyEvent { event ->
+    if (event.type != KeyEventType.KeyDown || event.isCtrlPressed || event.isAltPressed || event.isMetaPressed || event.isShiftPressed) {
+        return@onKeyEvent false
+    }
+    // A Mac deletes with Backspace, which its keyboards label Delete.
+    val pressed = if (macKeys && event.key == Key.Backspace) Key.Delete else event.key
+    val item = menu().firstOrNull { it.key == pressed } ?: return@onKeyEvent false
+    item.run()
+    true
+}
+
+/**
+ * A right-button press, which opens a context menu on the desktop. Keyed on [onPress], so it acts on the row as
+ * it is now; one [unless] says no to goes on to what's under it, such as a selection's own menu.
+ */
+internal fun Modifier.onSecondaryPress(unless: () -> Boolean = { false }, onPress: () -> Unit): Modifier = pointerInput(onPress) {
+    awaitEachGesture {
+        val event = awaitPointerEvent(PointerEventPass.Initial)
+        if (event.type == PointerEventType.Press && event.buttons.isSecondaryPressed && !unless()) {
+            event.changes.forEach { it.consume() }
+            onPress()
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+private fun SessionRowContent(
+    session: SessionSummary,
+    selected: Boolean,
+    showSnippet: Boolean,
+    status: RowStatus?,
+    draft: Boolean,
+    projectLabel: String?,
+    thread: Boolean,
+    onClick: () -> Unit,
+    onActions: () -> Unit,
+    modifier: Modifier,
+    /** Its right-click menu is open: it stays lit as under the pointer, so it's clear which chat the menu is for. */
+    menuOpen: Boolean = false,
+) {
+    // A desktop row is cut to a mouse's scale, as desktop sidebars list their items; a phone's to a thumb's.
+    val shape = RoundedCornerShape(Theme[radii][if (isDesktop) radiusSmall else radiusMedium])
     val tone = rowTone(status, draft)
     val line = rowStatusLine(status, draft)
     val toneColor = Theme[colors][
@@ -1797,16 +2443,23 @@ internal fun SessionRow(
             .fillMaxWidth()
             .heightIn(min = MinTouchTarget)
             .clip(shape)
-            .then(if (selected) Modifier.background(Theme[colors][surface2], shape) else Modifier)
+            .then(
+                when {
+                    selected -> Modifier.background(Theme[colors][surface2], shape)
+                    menuOpen -> Modifier.background(Theme[colors][text].copy(alpha = 0.08f), shape)
+                    else -> Modifier
+                },
+            )
+            .handCursor()
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = onActions,
                 onLongClickLabel = "Session actions",
                 interactionSource = null,
-                indication = rememberColoredIndication(Theme[colors][text]),
+                indication = rememberHoverIndication(Theme[colors][text]),
             )
-            .padding(horizontal = 10.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(horizontal = 10.dp, vertical = if (isDesktop) 5.dp else 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(if (isDesktop) 10.dp else 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         val marked = thread || session.pinned
@@ -1814,7 +2467,7 @@ internal fun SessionRow(
         val markLabel = if (thread) "Thread" else "Pinned"
         val pinOnly = marked && tone == RowTone.Idle
         if (pinOnly) {
-            Box(Modifier.size(28.dp), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(if (isDesktop) DESKTOP_DISC else 28.dp), contentAlignment = Alignment.Center) {
                 UnstyledIcon(mark, contentDescription = markLabel, tint = Theme[colors][textMuted], modifier = Modifier.size(14.dp))
             }
         } else {
@@ -1822,19 +2475,19 @@ internal fun SessionRow(
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    session.displayTitle,
-                    style = Theme[typography][body].copy(
-                        fontSize = 14.5.sp,
-                        lineHeight = 19.sp,
-                        fontWeight = if (selected || tone != RowTone.Idle && tone != RowTone.Draft) FontWeight.Medium else FontWeight.Normal,
-                    ),
-                    color = Theme[colors][text],
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                projectLabel?.let { ProjectTag(it) }
+                TitleAndProject(projectLabel, Modifier.weight(1f, fill = false)) {
+                    Text(
+                        session.displayTitle,
+                        style = Theme[typography][body].copy(
+                            fontSize = if (isDesktop) 14.sp else 14.5.sp,
+                            lineHeight = 19.sp,
+                            fontWeight = if (selected || tone != RowTone.Idle && tone != RowTone.Draft) FontWeight.Medium else FontWeight.Normal,
+                        ),
+                        color = Theme[colors][text],
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 if (marked && !pinOnly) {
                     UnstyledIcon(mark, contentDescription = markLabel, tint = Theme[colors][textMuted], modifier = Modifier.size(12.dp))
                 }
@@ -1880,8 +2533,37 @@ private fun ProjectTag(label: String) {
     )
 }
 
+/**
+ * A row's [title] with its project after it. The title has first claim on the room: the project name is cut
+ * down to [PROJECT_TAG_MIN_WIDTH] before the title is cut short at all.
+ */
+@Composable
+private fun TitleAndProject(label: String?, modifier: Modifier = Modifier, title: @Composable () -> Unit) {
+    if (label == null) {
+        Box(modifier) { title() }
+        return
+    }
+    Layout(contents = listOf(title, { ProjectTag(label) }), modifier = modifier) { (titles, tags), constraints ->
+        val gap = 6.dp.roundToPx()
+        val tag = tags.first()
+        val wanted = minOf(tag.maxIntrinsicWidth(Constraints.Infinity), PROJECT_TAG_MAX_WIDTH.roundToPx())
+        val kept = minOf(wanted, PROJECT_TAG_MIN_WIDTH.roundToPx())
+        val t = titles.first().measure(Constraints(maxWidth = (constraints.maxWidth - gap - kept).coerceAtLeast(0)))
+        val p = tag.measure(Constraints(maxWidth = minOf(wanted, (constraints.maxWidth - t.width - gap).coerceAtLeast(0))))
+        val height = maxOf(t.height, p.height)
+        val width = (t.width + gap + p.width).coerceAtLeast(constraints.minWidth)
+        layout(width, height) {
+            t.placeRelative(0, (height - t.height) / 2)
+            p.placeRelative(t.width + gap, (height - p.height) / 2)
+        }
+    }
+}
+
 /** The most room a row's project name takes beside the title. */
 private val PROJECT_TAG_MAX_WIDTH = 112.dp
+
+/** As little of a row's project name as is kept when the title needs the room ("· herm…"). */
+private val PROJECT_TAG_MIN_WIDTH = 48.dp
 
 /** A 28dp disc tinted for [tone], its icon spinning while a turn runs. The row says the same in words. */
 @Composable
@@ -1891,9 +2573,9 @@ private fun StatusDisc(tone: RowTone, color: Color) {
         RowTone.Running, RowTone.Reply -> Theme[colors][accentSoft]
         RowTone.Draft, RowTone.Idle -> Theme[colors][surface2]
     }
-    Box(Modifier.size(28.dp).background(fill, CircleShape).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
+    Box(Modifier.size(if (isDesktop) DESKTOP_DISC else 28.dp).background(fill, CircleShape).clearAndSetSemantics { }, contentAlignment = Alignment.Center) {
         when (tone) {
-            RowTone.Running -> Spinner(Modifier.size(13.dp), color = color)
+            RowTone.Running -> Spinner(Modifier.size(if (isDesktop) 11.dp else 13.dp), color = color)
             else -> UnstyledIcon(
                 when (tone) {
                     RowTone.Approval -> Lucide.ShieldAlert
@@ -1904,11 +2586,14 @@ private fun StatusDisc(tone: RowTone, color: Color) {
                 },
                 contentDescription = null,
                 tint = color,
-                modifier = Modifier.size(14.dp),
+                modifier = Modifier.size(if (isDesktop) 12.dp else 14.dp),
             )
         }
     }
 }
+
+/** A chat row's status disc on the desktop, where rows are packed to a mouse's scale. */
+private val DESKTOP_DISC = 22.dp
 
 @Composable
 internal fun ListSpinner() {
@@ -1948,7 +2633,8 @@ private fun ProjectFilters(
     onSelect: (Project?) -> Unit,
     /** Null when the gateway can't make projects. */
     onNew: (() -> Unit)? = null,
-    onOptions: (Project) -> Unit = {},
+    /** With the options button's bounds in the window, or null from a right-click on the chip. */
+    onOptions: (Project, Rect?) -> Unit = { _, _ -> },
 ) {
     if (asDropdown) ProjectDropdown(projects, selected, onSelect, onNew, onOptions)
     else ProjectChips(projects, selected, onSelect, onNew, onOptions)
@@ -1965,7 +2651,7 @@ private fun ProjectChips(
     onSelect: (Project?) -> Unit,
     /** Null when the gateway can't make projects. */
     onNew: (() -> Unit)? = null,
-    onOptions: (Project) -> Unit = {},
+    onOptions: (Project, Rect?) -> Unit = { _, _ -> },
 ) {
     Row(Modifier.fillMaxWidth().padding(end = 4.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         val scroll = rememberScrollState()
@@ -1994,6 +2680,9 @@ private fun ProjectChips(
                     count = project.sessionCount,
                     selected = isPicked,
                     onClick = { onSelect(project) },
+                    // On the desktop its options come straight from the chip too, with a right-click.
+                    onLongClick = { onOptions(project, null) }.takeIf { isDesktop && project.hasOptions(onNew != null) },
+                    onLongClickLabel = "${project.label} options",
                     modifier = if (isPicked) {
                         Modifier.onPlaced { picked = it.positionInParent().x.let { x -> x..(x + it.size.width) } }
                     } else {
@@ -2013,12 +2702,22 @@ private fun ProjectChips(
  * gateway only grouped chats by) and New project, at the end of the projects' row.
  */
 @Composable
-private fun ProjectActions(selected: Project?, onNew: (() -> Unit)?, onOptions: (Project) -> Unit, showNew: Boolean = true) {
-    if (selected != null && !selected.isNoProject && (selected.isUserMade || (selected.path != null && onNew != null))) {
-        IconButton(Lucide.Ellipsis, contentDescription = "${selected.label} options", onClick = { onOptions(selected) })
+private fun ProjectActions(selected: Project?, onNew: (() -> Unit)?, onOptions: (Project, Rect?) -> Unit, showNew: Boolean = true) {
+    if (selected != null && selected.hasOptions(onNew != null)) {
+        // A plain holder: only the click reads it.
+        val bounds = remember { arrayOfNulls<Rect>(1) }
+        IconButton(
+            Lucide.Ellipsis,
+            contentDescription = "${selected.label} options",
+            onClick = { onOptions(selected, bounds[0]) },
+            modifier = Modifier.onGloballyPositioned { bounds[0] = it.boundsInWindow() },
+        )
     }
     if (onNew != null && showNew) IconButton(Lucide.FolderPlus, contentDescription = "New project", onClick = onNew)
 }
+
+/** Whether a project has options to show: one the user made, or a folder that can be saved as one when [canMake]. */
+private fun Project.hasOptions(canMake: Boolean): Boolean = !isNoProject && (isUserMade || (path != null && canMake))
 
 /**
  * Tallest the projects menu gets before it scrolls, so many projects are a menu, not a wall: the 4dp top padding
@@ -2039,7 +2738,7 @@ private fun ProjectDropdown(
     onSelect: (Project?) -> Unit,
     /** Null when the gateway can't make projects. */
     onNew: (() -> Unit)? = null,
-    onOptions: (Project) -> Unit = {},
+    onOptions: (Project, Rect?) -> Unit = { _, _ -> },
 ) {
     Row(Modifier.fillMaxWidth().padding(start = 6.dp, end = 4.dp, top = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         if (projects.isEmpty()) {
@@ -2085,6 +2784,7 @@ private fun RowScope.ProjectMenuButton(projects: List<Project>, selected: Projec
             Box(
                 Modifier
                     .heightIn(min = MinTouchTarget)
+                    .handCursor()
                     .clickable(interaction, indication = null, role = Role.DropdownList, onClickLabel = "Choose a project") { open = !open }
                     // The name and count are read from the pill's text; the state says whether the menu shows.
                     .semantics { stateDescription = if (open) "Expanded" else "Collapsed" },
@@ -2096,7 +2796,7 @@ private fun RowScope.ProjectMenuButton(projects: List<Project>, selected: Projec
                         .clip(shape)
                         .border(1.dp, Theme[colors][stroke], shape)
                         .background(Theme[colors][surface2], shape)
-                        .indication(interaction, rememberColoredIndication(content))
+                        .indication(interaction, rememberHoverIndication(content))
                         .padding(start = 12.dp, end = 8.dp, top = 4.dp, bottom = 4.dp),
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -2141,7 +2841,7 @@ private fun projectIcon(project: Project?): ImageVector = when {
 @Composable
 internal fun ListNotice(text: String, action: String? = null, onAction: () -> Unit = {}) {
     Column(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(text, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+        CopyableOnDesktop { Text(text, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary]) }
         if (action != null) Button(action, onClick = onAction, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
     }
 }
@@ -2167,12 +2867,14 @@ internal fun SessionActionsSheet(
     onStartFresh: ((SessionSummary) -> Unit)? = null,
     /** Makes the chat a thread; null when it can't be one (a thread's chat already, or archived). */
     onMakeThread: ((SessionSummary) -> Unit)? = null,
+    /** The button it opened from, on the desktop; null opens it at the pointer, as a right-click's menu. */
+    anchor: Rect? = null,
 ) {
     // Keep the last target while the sheet animates out.
     var shown by remember { mutableStateOf(session) }
     if (session != null) shown = session
-    BottomSheet(visible = session != null, onDismiss = onDismiss) {
-        val s = shown ?: return@BottomSheet
+    ActionSheet(visible = session != null, onDismiss = onDismiss, anchor = anchor) {
+        val s = shown ?: return@ActionSheet
         val age = when (val ago = relativeTime(s.activityAt)) {
             "" -> null
             "now" -> "Active just now"
@@ -2203,8 +2905,10 @@ internal fun RenameDialog(session: SessionSummary?, onDismiss: () -> Unit, onRen
     if (session != null) shown = session
     val s = shown ?: return
     val title = rememberTextFieldState(s.title.orEmpty())
-    // On every open, so a cancelled edit doesn't come back.
-    LaunchedEffect(session != null, s.id) { if (session != null) title.edit { replace(0, length, s.title.orEmpty()) } }
+    // On every open, so a cancelled edit doesn't come back. A desktop selects the name, as its rename boxes do,
+    // so typing replaces it.
+    val inputMode = LocalInputModeManager.current
+    LaunchedEffect(session != null, s.id) { if (session != null) title.resetTo(s.title.orEmpty(), inputMode) }
     val submit = {
         onDismiss()
         onRename(s, title.text.toString())
@@ -2212,7 +2916,7 @@ internal fun RenameDialog(session: SessionSummary?, onDismiss: () -> Unit, onRen
     Dialog(
         visible = session != null,
         onDismissRequest = onDismiss,
-        title = "Rename session",
+        title = "Rename chat",
         message = "Leave empty to clear the title.",
         actions = {
             Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
@@ -2222,9 +2926,23 @@ internal fun RenameDialog(session: SessionSummary?, onDismiss: () -> Unit, onRen
         TextField(
             state = title,
             placeholder = s.displayTitle,
+            autofocus = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             onKeyboardAction = { submit() },
         )
+    }
+}
+
+/**
+ * Puts [name] back in a rename box. A desktop selects it, as its rename boxes do, so typing replaces it: as from
+ * the keyboard, since a selection made in touch mode (a click puts a desktop in it) shows a phone's drag handles.
+ * A phone puts the cursor after it, wherever an earlier edit left it.
+ */
+internal fun TextFieldState.resetTo(name: String, inputMode: InputModeManager) {
+    if (isDesktop) inputMode.requestInputMode(InputMode.Keyboard)
+    edit {
+        replace(0, length, name)
+        if (isDesktop) selectAll() else placeCursorAtEnd()
     }
 }
 
@@ -2236,8 +2954,8 @@ internal fun DeleteDialog(session: SessionSummary?, onDismiss: () -> Unit, onDel
     Dialog(
         visible = session != null,
         onDismissRequest = onDismiss,
-        title = "Delete session?",
-        message = "“${s.displayTitle}” and its transcript are removed from the gateway. This can't be undone.",
+        title = "Delete chat?",
+        message = "“${s.displayTitle}” and its messages are removed from the gateway. This can't be undone.",
         actions = {
             Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             Button(
@@ -2265,10 +2983,15 @@ private fun AccountSheet(
     onSignOut: () -> Unit,
     onOpenGateways: () -> Unit,
     onOpenSettings: () -> Unit,
+    /** The desktop's account row: the menu opens over it. */
+    anchor: Rect? = null,
 ) {
-    BottomSheet(visible = visible, onDismiss = onDismiss) {
+    ActionSheet(visible = visible, onDismiss = onDismiss, anchor = anchor) {
         SheetHeader(userLabel ?: "Signed in", gateway.url)
-        Box(Modifier.padding(horizontal = 20.dp, vertical = 8.dp)) { ConnectionLine(connection, detailed = true) }
+        // In line with the rows: a desktop's menu is narrower than a phone's sheet.
+        Box(Modifier.padding(horizontal = if (isDesktop) 12.dp else 20.dp, vertical = if (isDesktop) 6.dp else 8.dp)) {
+            ConnectionLine(connection, detailed = true)
+        }
         if (profileLabel != null) {
             SheetAction("Profile: $profileLabel", Lucide.Bot, onClick = { onDismiss(); onOpenProfiles() })
         }
@@ -2283,11 +3006,11 @@ private fun AccountSheet(
 }
 
 /**
- * Desktop's profile picker: the gateway's profiles, default first, the active one checked. Each is its
+ * The gateway's profiles, default first, the active one checked. Each is its
  * own agent, so switching changes the chats listed and starts from where that profile left off.
  */
 @Composable
-private fun ProfileSheet(
+internal fun ProfileSheet(
     visible: Boolean,
     profiles: List<Profile>,
     selected: String?,
@@ -2296,8 +3019,26 @@ private fun ProfileSheet(
 ) {
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         SheetHeader("Profiles", "Each profile is its own agent, with its own chats, memory and model.")
-        profiles.forEach { profile ->
-            ProfileRow(profile, checked = profile.name == selected, onClick = { onSelect(profile) })
+        // A long list scrolls under the header; a short one keeps the sheet sized to its content. It opens with the
+        // active profile in sight, wherever it is in the list: two frames on, as the desktop's panel is only laid out
+        // after the frame it opens on.
+        val activeRow = remember { BringIntoViewRequester() }
+        LaunchedEffect(visible) {
+            if (!visible) return@LaunchedEffect
+            withFrameNanos {}
+            withFrameNanos {}
+            runCatching { activeRow.bringIntoView() }
+        }
+        Column(Modifier.weight(1f, fill = false).verticalScrollWithBar()) {
+            profiles.forEach { profile ->
+                val checked = profile.name == selected
+                ProfileRow(
+                    profile,
+                    checked = checked,
+                    onClick = { onSelect(profile) },
+                    modifier = if (checked) Modifier.bringIntoViewRequester(activeRow) else Modifier,
+                )
+            }
         }
         if (profiles.size < 2) {
             Text(
@@ -2311,12 +3052,13 @@ private fun ProfileSheet(
 }
 
 @Composable
-private fun ProfileRow(profile: Profile, checked: Boolean, onClick: () -> Unit) {
+private fun ProfileRow(profile: Profile, checked: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val detail = profile.description?.trim()?.takeIf { it.isNotEmpty() } ?: profile.model?.let(::displayModelName)
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .heightIn(min = 56.dp)
+            .handCursor()
             .clickable(onClick = onClick)
             .padding(horizontal = 20.dp, vertical = 8.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),

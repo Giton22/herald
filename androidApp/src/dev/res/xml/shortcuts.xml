@@ -26,17 +26,12 @@
             android:targetPackage="dev.herald.android.dev" />
     </shortcut>
     <shortcut
-        android:enabled="true"
+        android:enabled="false"
         android:icon="@mipmap/ic_shortcut_call"
+        android:shortcutDisabledMessage="@string/shortcut_voice_chat_moved"
         android:shortcutId="voice_chat"
         android:shortcutLongLabel="@string/shortcut_voice_chat"
-        android:shortcutShortLabel="@string/shortcut_voice_chat">
-        <intent
-            android:action="android.intent.action.VIEW"
-            android:data="hermes://voice-chat"
-            android:targetClass="dev.hermeskotlin.android.HeraldActivity"
-            android:targetPackage="dev.herald.android.dev" />
-    </shortcut>
+        android:shortcutShortLabel="@string/shortcut_voice_chat" />
     <share-target android:targetClass="dev.hermeskotlin.android.HeraldActivity">
         <data android:mimeType="*/*" />
         <category android:name="dev.hermeskotlin.category.BOT_SHARE" />

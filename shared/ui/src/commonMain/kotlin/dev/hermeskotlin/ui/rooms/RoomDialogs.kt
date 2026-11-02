@@ -1,13 +1,15 @@
 package dev.hermeskotlin.ui.rooms
 
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.input.rememberTextFieldState
-import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.text.input.ImeAction
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Trash2
@@ -19,6 +21,8 @@ import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.Dialog
 import dev.hermeskotlin.designsystem.components.MenuAction
 import dev.hermeskotlin.designsystem.components.TextField
+import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.sessions.resetTo
 
 /** A room's actions, the same wherever its menu opens: its row in the sidebar or its own top bar. */
 @Composable
@@ -50,26 +54,35 @@ internal fun RoomAskDialogs(ask: RoomAsk?, onDismiss: () -> Unit, onRename: (Roo
 private fun RenameRoomDialog(room: Room, visible: Boolean, onDismiss: () -> Unit, onRename: (Room, String) -> Unit) {
     val name = rememberTextFieldState(room.name)
     // The dialog stays composed between asks: each rename starts from the room's name as it is now.
+    val inputMode = LocalInputModeManager.current
     LaunchedEffect(room.roomId, room.name, visible) {
-        if (visible) name.setTextAndPlaceCursorAtEnd(room.name)
+        if (visible) name.resetTo(room.name, inputMode)
     }
     val newName = name.text.toString().trim()
+    val ready = newName.isNotEmpty() && newName != room.name
+    val submit = {
+        if (ready) {
+            onDismiss()
+            onRename(room, newName)
+        }
+    }
     Dialog(
         visible = visible,
         onDismissRequest = onDismiss,
         title = "Rename room",
         actions = {
             Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button(
-                "Rename",
-                onClick = { onDismiss(); onRename(room, newName) },
-                variant = ButtonVariant.Primary,
-                size = ButtonSize.Small,
-                enabled = newName.isNotEmpty() && newName != room.name,
-            )
+            Button("Rename", onClick = submit, variant = ButtonVariant.Primary, size = ButtonSize.Small, enabled = ready)
         },
     ) {
-        TextField(state = name, label = "Room name")
+        TextField(
+            state = name,
+            label = "Room name",
+            autofocus = true,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
+            // Enter renames on the desktop; a phone's Done only closes the keyboard, as it always has.
+            onKeyboardAction = { closeKeyboard -> if (isDesktop) submit() else closeKeyboard() },
+        )
     }
 }
 

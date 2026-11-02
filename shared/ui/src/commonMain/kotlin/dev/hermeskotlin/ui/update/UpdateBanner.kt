@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,6 +55,17 @@ class UpdateOffer(val update: AppUpdate?, val onDismiss: () -> Unit)
 val LocalUpdateOffer = compositionLocalOf { UpdateOffer(null) {} }
 
 /**
+ * A desktop's way to install a release itself: fetch the installer and run it. False when it couldn't, and the
+ * banner then opens the download in the browser instead.
+ */
+fun interface UpdateInstaller {
+    suspend fun install(update: AppUpdate): Boolean
+}
+
+/** Null on a phone, which downloads its APK through the browser. */
+val LocalUpdateInstaller = staticCompositionLocalOf<UpdateInstaller?> { null }
+
+/**
  * Checks once per launch for a newer release of [repo] than [version] (both come from the build;
  * a local build has no repo and never checks), unless [enabled] is off in Settings.
  */
@@ -72,12 +84,17 @@ fun rememberUpdateOffer(repo: String?, version: String?, enabled: Boolean): Upda
     }
 }
 
-/** A card offering the new release: download the APK (or open the release page), or not now. */
+/**
+ * A card offering the new release: download the APK, install it (a desktop), or open the release page; or not now.
+ */
 @Composable
 fun UpdateBanner(modifier: Modifier = Modifier) {
     val offer = LocalUpdateOffer.current
     val update = offer.update ?: return
     val uriHandler = LocalUriHandler.current
+    val installer = LocalUpdateInstaller.current?.takeIf { update.downloadUrl != null }
+    val scope = rememberCoroutineScope()
+    var installing by remember(update) { mutableStateOf(false) }
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
     val tint = Theme[colors][accent]
     Column(
@@ -102,8 +119,24 @@ fun UpdateBanner(modifier: Modifier = Modifier) {
             }
         }
         Button(
-            if (update.apkUrl != null) "Download" else "Open release",
-            onClick = { uriHandler.openUri(update.apkUrl ?: update.pageUrl) },
+            when {
+                installing -> "Downloading…"
+                installer != null -> "Install"
+                update.downloadUrl != null -> "Download"
+                else -> "Open release"
+            },
+            onClick = {
+                if (installer == null) {
+                    uriHandler.openUri(update.downloadUrl ?: update.pageUrl)
+                } else if (!installing) {
+                    installing = true
+                    scope.launch {
+                        if (!installer.install(update)) uriHandler.openUri(update.downloadUrl ?: update.pageUrl)
+                        installing = false
+                    }
+                }
+            },
+            loading = installing,
             size = ButtonSize.Small,
             leadingIcon = Lucide.Download,
         )

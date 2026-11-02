@@ -47,6 +47,14 @@ class MessageTimeTest {
     }
 
     @Test
+    fun theFullTimeNamesTheDayTheDateAndTheClock() {
+        val label = fullMessageTime(1_759_759_500.0, use24Hour = true)
+        // The zone moves the day and the hour, never the shape.
+        assertTrue(Regex("""^[A-Z][a-z]+day, [A-Z][a-z]{2} \d{1,2}, \d{4}, \d{2}:\d{2}$""").matches(label), label)
+        assertEquals("", fullMessageTime(null, use24Hour = true))
+    }
+
+    @Test
     fun dayHeadingsNameTheDay() {
         assertEquals("Today", dayHeading(daysBefore(0, 8, 0), now))
         assertEquals("Yesterday", dayHeading(daysBefore(1, 8, 0, dayOfWeek = 7), now))

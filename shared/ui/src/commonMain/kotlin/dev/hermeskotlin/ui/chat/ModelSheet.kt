@@ -8,6 +8,7 @@ import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -16,9 +17,11 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import dev.hermeskotlin.designsystem.components.ScrollbarBox
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.input.TextFieldState
@@ -32,6 +35,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -80,6 +93,7 @@ import dev.hermeskotlin.designsystem.components.Chip
 import dev.hermeskotlin.designsystem.components.Dialog
 import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.components.Spinner
+import dev.hermeskotlin.designsystem.components.handCursor
 import dev.hermeskotlin.designsystem.components.Switch
 import dev.hermeskotlin.designsystem.components.TextField
 import dev.hermeskotlin.designsystem.danger
@@ -111,6 +125,8 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.LocalAppSettings
+import dev.hermeskotlin.ui.arrowFocus
+import dev.hermeskotlin.ui.isDesktop
 import org.koin.compose.koinInject
 
 /** What the composer shows and the sheet marks: the chat's own pick, else the profile default. */
@@ -127,10 +143,11 @@ internal data class ModelSelection(val model: String?, val provider: String?, va
     }
 }
 
-/** The effort a chat runs at, for labels: its own level, else what the gateway defaults to. */
+/** The effort a chat runs at, for labels: its own level, else the profile's, else what the gateway defaults to. */
 internal fun ChatState.effort(option: ModelOption?): ReasoningEffort? {
     if (option != null && !option.reasoning) return null
-    return ReasoningEffort.fromWire(reasoningEffort) ?: ReasoningEffort.Default.takeIf { option != null }
+    return ReasoningEffort.fromWire(reasoningEffort)
+        ?: (ReasoningEffort.fromWire(profileReasoningEffort) ?: ReasoningEffort.Default).takeIf { option != null }
 }
 
 /**
@@ -154,7 +171,14 @@ internal fun ModelSheet(
     /** What the search box and the scope start with, for previews. */
     initialQuery: String = "",
     initialScope: PickerScope? = null,
+    /** On the desktop, the button it opens from, in window coordinates: it opens over it as a popover. */
+    anchor: () -> Rect? = { null },
 ) {
+    // Taken once per opening: the pill moving under an open popover (the composer folding) doesn't drag it along.
+    // Kept while it closes, so it fades out as the popover it was, not as a centred sheet over a dimmed window.
+    val lastAnchor = remember { arrayOfNulls<Rect>(1) }
+    val anchorRect = remember(visible) { if (visible) anchor() else lastAnchor[0] }
+    lastAnchor[0] = anchorRect
     val query = rememberTextFieldState(initialQuery)
     var scope by remember { mutableStateOf(initialScope) }
     var opened by remember { mutableStateOf(false) }
@@ -180,7 +204,7 @@ internal fun ModelSheet(
         }
     }
 
-    BottomSheet(visible = visible, onDismiss = onDismiss) {
+    BottomSheet(visible = visible, onDismiss = onDismiss, anchor = anchorRect) {
         Row(
             Modifier.fillMaxWidth().padding(start = 20.dp, end = 20.dp, bottom = if (note != null) 4.dp else 12.dp),
             verticalAlignment = Alignment.Bottom,
@@ -233,17 +257,11 @@ internal fun ModelSheet(
             // Seven or eight levels don't fit across a phone as a segmented control, so they scroll as chips:
             // bring the chat's level into view, with its neighbour peeking.
             LaunchedEffect(visible, current, efforts) {
-                if (visible) chips.scrollToItem((efforts.indexOf(current) - 1).coerceAtLeast(0))
+                // A desktop wraps the chips, so there's nothing to scroll.
+                if (visible && !isDesktop) chips.scrollToItem((efforts.indexOf(current) - 1).coerceAtLeast(0))
             }
-            LazyRow(
-                state = chips,
-                modifier = Modifier.fillMaxWidth(),
-                contentPadding = PaddingValues(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                items(efforts, key = { it.wire }) { effort ->
-                    Chip(effort.label, selected = effort == current, onClick = { onSelectEffort(effort) })
-                }
+            ChipRow(efforts, state = chips, key = { it.wire }) { effort ->
+                Chip(effort.label, selected = effort == current, onClick = { onSelectEffort(effort) })
             }
         }
         if (option?.fast == true && !modelOnly) {
@@ -287,7 +305,7 @@ internal fun ModelSheet(
  * them or one provider's; a search looks through every model in the chosen provider, or all of them.
  */
 @Composable
-private fun ModelList(
+private fun ColumnScope.ModelList(
     catalog: ModelCatalog,
     selection: ModelSelection,
     query: TextFieldState,
@@ -310,13 +328,30 @@ private fun ModelList(
     val providerNames = remember(catalog) { catalog.providers.associate { it.slug to displayProviderName(it.slug, it.name) } }
     val allCount = remember(catalog) { catalog.pickerModels().size }
 
-    if (catalog.providers.sumOf { it.models.size } > SEARCH_THRESHOLD) {
+    val searchable = catalog.providers.sumOf { it.models.size } > SEARCH_THRESHOLD
+    val focus = remember { FocusRequester() }
+    val focusManager = LocalFocusManager.current
+    if (searchable) {
+        // With a keyboard, the picker opens ready for a model's name to be typed, and Enter takes the best match.
+        if (isDesktop) LaunchedEffect(Unit) { focus.requestFocus() }
         TextField(
             state = query,
             placeholder = "Search models or providers",
             leadingIcon = Lucide.Search,
             clearable = true,
-            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp),
+            focusRequester = focus,
+            modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 12.dp).onPreviewKeyEvent { event ->
+                if (!isDesktop) return@onPreviewKeyEvent false
+                // Down steps from the search into the list, to pick with the arrows and Enter.
+                if (event.type == KeyEventType.KeyDown && event.key == Key.DirectionDown) {
+                    focusManager.moveFocus(FocusDirection.Down)
+                    return@onPreviewKeyEvent true
+                }
+                val enter = event.type == KeyEventType.KeyDown && (event.key == Key.Enter || event.key == Key.NumPadEnter)
+                val best = sections.firstNotNullOfOrNull { it.models.firstOrNull() }.takeIf { enter && needle.isNotEmpty() }
+                best?.let { onPick(it.preferred(selection.provider, selection.model, starred, recent)) }
+                best != null
+            },
         )
     }
     val scopes = buildList {
@@ -325,22 +360,19 @@ private fun ModelList(
         if (catalog.providers.size > 1) catalog.providers.forEach { add(PickerScope.Provider(it.slug) to providerNames.getValue(it.slug)) }
     }
     if (scopes.size > 1) {
-        LazyRow(
-            modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
-            contentPadding = PaddingValues(horizontal = 20.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-        ) {
-            items(scopes) { (option, title) ->
-                Chip(
-                    title,
-                    selected = option == scope,
-                    onClick = {
-                        // Your models aren't searched, so going back to them leaves the search.
-                        if (option == PickerScope.Yours) query.clearText()
-                        onChoose(option)
-                    },
-                )
-            }
+        // Down from a chip goes on to the models, Up back to the search.
+        ChipRow(scopes, Modifier.padding(top = 12.dp).arrowFocus()) { (option, title) ->
+            Chip(
+                title,
+                selected = option == scope,
+                onClick = {
+                    // Your models aren't searched, so going back to them leaves the search.
+                    if (option == PickerScope.Yours) query.clearText()
+                    onChoose(option)
+                    // The keys stay in the search: a click on a chip doesn't leave typing going nowhere.
+                    if (isDesktop && searchable) runCatching { focus.requestFocus() }
+                },
+            )
         }
     }
 
@@ -348,41 +380,74 @@ private fun ModelList(
     // A new search or scope starts at the top, where its best matches are.
     LaunchedEffect(needle, scope) { list.scrollToItem(0) }
     val repeatedNames = remember(sections) { sections.flatMap { it.models }.groupingBy { it.name }.eachCount().filterValues { it > 1 }.keys }
-    LazyColumn(Modifier.fillMaxWidth().heightIn(max = 440.dp).padding(top = 4.dp), state = list) {
-        sections.forEachIndexed { index, section ->
-            section.title?.let { title -> item(key = "h$index") { SectionLabel(title) } }
-            items(section.models, key = { "$index-${it.variants.first().starKey}" }) { row ->
-                val pick = row.preferred(selection.provider, selection.model, starred, recent)
-                ModelRow(
-                    row = row,
-                    selection = selection,
-                    starred = row.isStarred(starred),
-                    // Which provider a model comes from matters once there's more than one, unless one is chosen.
-                    providerNames = providerNames.takeIf { catalog.providers.size > 1 && scope !is PickerScope.Provider },
-                    // Two rows with the same name need their ids to tell them apart.
-                    showId = row.name in repeatedNames,
-                    onClick = { onPick(pick) },
-                    onPickVariant = onPick,
-                    onToggleStar = {
-                        // Stay where you are: a first star shouldn't swap the list you're browsing for yours.
-                        if (chosen == null) onChoose(scope)
-                        onSettings { it.copy(starredModels = it.starredModels.toggleStar(row, pick)) }
-                    },
-                )
+    // A desktop's popover can have less room than the list wants: the list gives way, not what's above it.
+    ScrollbarBox(list, Modifier.fillMaxWidth().then(if (isDesktop) Modifier.weight(1f, fill = false) else Modifier).padding(top = 4.dp)) {
+        LazyColumn(Modifier.fillMaxWidth().heightIn(max = 440.dp).arrowFocus(), state = list) {
+            sections.forEachIndexed { index, section ->
+                section.title?.let { title -> item(key = "h$index") { SectionLabel(title) } }
+                items(section.models, key = { "$index-${it.variants.first().starKey}" }) { row ->
+                    val pick = row.preferred(selection.provider, selection.model, starred, recent)
+                    ModelRow(
+                        row = row,
+                        selection = selection,
+                        starred = row.isStarred(starred),
+                        // Which provider a model comes from matters once there's more than one, unless one is chosen.
+                        providerNames = providerNames.takeIf { catalog.providers.size > 1 && scope !is PickerScope.Provider },
+                        // Two rows with the same name need their ids to tell them apart.
+                        showId = row.name in repeatedNames,
+                        onClick = { onPick(pick) },
+                        onPickVariant = onPick,
+                        onToggleStar = {
+                            // Stay where you are: a first star shouldn't swap the list you're browsing for yours.
+                            if (chosen == null) onChoose(scope)
+                            onSettings { it.copy(starredModels = it.starredModels.toggleStar(row, pick)) }
+                        },
+                    )
+                }
+            }
+            if (scope == PickerScope.Yours) {
+                item(key = "all") { BrowseAllRow(allCount, onClick = { onChoose(PickerScope.All) }) }
+            }
+            if (sections.isEmpty()) {
+                item(key = "empty") {
+                    Text(
+                        if (needle.isEmpty()) "The gateway offers no models." else "No models match \"$needle\".",
+                        style = Theme[typography][bodySmall],
+                        color = Theme[colors][textTertiary],
+                        modifier = Modifier.padding(20.dp),
+                    )
+                }
             }
         }
-        if (scope == PickerScope.Yours) {
-            item(key = "all") { BrowseAllRow(allCount, onClick = { onChoose(PickerScope.All) }) }
-        }
-        if (sections.isEmpty()) {
-            item(key = "empty") {
-                Text(
-                    if (needle.isEmpty()) "The gateway offers no models." else "No models match \"$needle\".",
-                    style = Theme[typography][bodySmall],
-                    color = Theme[colors][textTertiary],
-                    modifier = Modifier.padding(20.dp),
-                )
-            }
+    }
+}
+
+/**
+ * Chips in a line: on a phone the line scrolls across under a finger. A desktop's wheel only scrolls down, so there
+ * the chips wrap onto more lines and none is ever out of reach.
+ */
+@Composable
+private fun <T> ChipRow(
+    items: List<T>,
+    modifier: Modifier = Modifier,
+    state: LazyListState = rememberLazyListState(),
+    key: ((T) -> Any)? = null,
+    chip: @Composable (T) -> Unit,
+) {
+    if (isDesktop) {
+        FlowRow(
+            modifier.fillMaxWidth().padding(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) { items.forEach { chip(it) } }
+    } else {
+        LazyRow(
+            state = state,
+            modifier = modifier.fillMaxWidth(),
+            contentPadding = PaddingValues(horizontal = 20.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            items(items, key = key) { chip(it) }
         }
     }
 }
@@ -419,6 +484,7 @@ private fun FastModeCard(on: Boolean, onFast: (Boolean) -> Unit, modifier: Modif
             .fillMaxWidth()
             .clip(shape)
             .background(Theme[colors][surface2])
+            .handCursor()
             .toggleable(value = on, role = Role.Switch, onValueChange = onFast)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
@@ -462,6 +528,7 @@ private fun ModelRow(
             .padding(horizontal = 8.dp)
             .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
             .background(if (selected) Theme[colors][accentSoft] else Color.Transparent)
+            .handCursor()
             .combinedClickable(
                 onClick = onClick,
                 onLongClick = {
@@ -517,7 +584,7 @@ private fun ModelRow(
                 }
             }
             if (single == null) {
-                Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                val pills: @Composable () -> Unit = {
                     row.variants.forEach { variant ->
                         ProviderPill(
                             text = listOfNotNull(providerNames?.get(variant.provider) ?: displayProviderName(variant.provider), variant.price).joinToString(" · "),
@@ -525,6 +592,12 @@ private fun ModelRow(
                             onClick = { onPickVariant(variant) },
                         )
                     }
+                }
+                // As the chips above: a desktop's wheel can't scroll a line sideways, so there the pills wrap.
+                if (isDesktop) {
+                    FlowRow(Modifier.padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) { pills() }
+                } else {
+                    Row(Modifier.horizontalScroll(rememberScrollState()).padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(6.dp)) { pills() }
                 }
             }
         }
@@ -549,6 +622,7 @@ private fun ProviderPill(text: String, selected: Boolean, onClick: () -> Unit) {
             .height(26.dp)
             .background(if (selected) Theme[colors][accentSoft] else Color.Transparent, shape)
             .border(1.dp, if (selected) Color.Transparent else Theme[colors][stroke], shape)
+            .handCursor()
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 8.dp),
         contentAlignment = Alignment.Center,
@@ -586,6 +660,7 @@ private fun BrowseAllRow(count: Int, onClick: () -> Unit) {
             .padding(horizontal = 8.dp)
             .heightIn(min = 48.dp)
             .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
+            .handCursor()
             .clickable(role = Role.Button, onClick = onClick)
             .padding(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
