@@ -20,6 +20,15 @@ internal class PatientClipboard(private val system: Clipboard) : Clipboard {
         patiently { system.setClipEntry(clipEntry) }
     }
 
+    /**
+     * What a right-click on a text field asks whether there's text to paste. Not given, it threw Kotlin's "An
+     * operation is not implemented", and the window showed Java's error box for it. Asking doesn't open the
+     * clipboard, so another app holding it doesn't get in the way here.
+     */
+    @Suppress("DEPRECATION", "OVERRIDE_DEPRECATION")
+    override val nativeClipboard: Any
+        get() = system.nativeClipboard
+
     private suspend fun <T> patiently(block: suspend () -> T): T? {
         repeat(TRIES) { attempt ->
             try {

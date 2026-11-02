@@ -22,6 +22,8 @@ import dev.hermeskotlin.core.models.ModelsApi
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.pet.PetApi
 import dev.hermeskotlin.core.profiles.ProfilesApi
+import dev.hermeskotlin.core.sessions.CaughtUp
+import dev.hermeskotlin.core.sessions.SeenStore
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.slash.SlashApi
@@ -36,6 +38,10 @@ import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.core.voice.VoiceRecorder
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.MockEngineConfig
+import io.ktor.client.engine.mock.MockRequestHandleScope
+import io.ktor.client.request.HttpRequestData
+import io.ktor.client.request.HttpResponseData
+import io.ktor.http.HttpMethod
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
@@ -49,6 +55,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.serialization.json.Json
@@ -118,12 +125,16 @@ class ChatViewModelTest {
     /** The connection of the last [viewModel]; [GatewayConnection.start] connects it to a [ReadyGateway]. */
     private lateinit var connection: GatewayConnection
 
-    private fun viewModel(drafts: DraftStore = DraftStore(InMemoryKeyValueStore()), fileReads: MutableList<Pair<String, String?>>? = null): Pair<ChatViewModel, ChatHost> {
+    private fun viewModel(drafts: DraftStore = DraftStore(InMemoryKeyValueStore()), fileReads: MutableList<Pair<String, String?>>? = null,
+        seenStore: SeenStore? = null,
+        readState: suspend MockRequestHandleScope.(HttpRequestData) -> HttpResponseData? = { null },
+    ): Pair<ChatViewModel, ChatHost> {
         val cookies = PersistentCookiesStorage(InMemoryKeyValueStore())
         // On the test dispatcher, so no request is still finishing on another thread when a test ends.
         val engine = MockEngineConfig()
         engine.dispatcher = dispatcher
         engine.addHandler { request ->
+            readState(request)?.let { return@addHandler it }
             if (request.url.encodedPath.startsWith("/api/fs/")) {
                 fileReads?.add(request.url.host to request.url.parameters["profile"])
                 if (request.url.encodedPath.endsWith("read-text")) respond("""{"text":"<p>widget</p>","byte_size":13,"truncated":false,"binary":false}""", HttpStatusCode.OK, json)
@@ -146,6 +157,7 @@ class ChatViewModelTest {
             },
             NoDeviceDictation,
             { _, _ -> null },
+            seen = seenStore,
         )
         viewModels.put("chat", vm)
         return vm to chatHost
@@ -517,4 +529,314 @@ class ChatViewModelTest {
 
         assertNotSame(first, assertNotNull(host.session.value))
     }
+    @Test
+    fun sharedReadPositionsAreUsedForRegularAndBotChats() = runTest(dispatcher) {
+        for (bot in listOf(false, true)) {
+            val reads = mutableListOf<String?>()
+            val (vm, _) = viewModel(readState = { request ->
+                if (request.url.encodedPath == "/api/sessions/s1") {
+                    reads += request.url.parameters["profile"]
+                    respond("""{"id":"s1","last_read_at":1200.0}""", HttpStatusCode.OK, json)
+                } else null
+            })
+            connection.start(gateway.gatewayUrl)
+            connection.state.first { it is ConnectionState.Connected }
+            val target = ChatTarget(gateway, "s1", "Chat", profile = "scribe".takeIf { bot },
+                bot = BotIdentity("scribe", "Scribe").takeIf { bot }, readUpTo = 1000.0)
+            vm.open(target)
+            runCurrent()
+
+            assertEquals(1200.0, assertNotNull(vm.readPosition.value).readUpTo)
+            assertEquals(listOf("scribe".takeIf { bot }), reads)
+        }
+    }
+
+    @Test
+    fun untrackedAndUnavailableReadStateKeepTheLocalFallback() = runTest(dispatcher) {
+        for (body in listOf("{}", """{"last_read_at":null}""", """{"last_read_at":0}""", """{"last_read_at":-1}""")) {
+            val (vm, _) = viewModel(readState = { request ->
+                if (request.url.encodedPath == "/api/sessions/s1") respond(body, HttpStatusCode.OK, json) else null
+            })
+            connection.start(gateway.gatewayUrl)
+            connection.state.first { it is ConnectionState.Connected }
+            vm.open(ChatTarget(gateway, "s1", "Chat", readUpTo = 1000.0))
+            runCurrent()
+            assertEquals(1000.0, assertNotNull(vm.readPosition.value).readUpTo, body)
+        }
+        val (vm, _) = viewModel(readState = { request ->
+            if (request.url.encodedPath == "/api/sessions/s1") respond("{}", HttpStatusCode.ServiceUnavailable, json) else null
+        })
+        connection.start(gateway.gatewayUrl)
+        connection.state.first { it is ConnectionState.Connected }
+        vm.open(ChatTarget(gateway, "s1", "Chat", readUpTo = 1000.0))
+        runCurrent()
+        assertEquals(1000.0, assertNotNull(vm.readPosition.value).readUpTo)
+    }
+
+    @Test
+    fun aLateReadPositionDoesNotCrossGatewayOrProfile() = runTest(dispatcher) {
+        val pending = CompletableDeferred<Unit>()
+        val (vm, _) = viewModel(readState = { request ->
+            if (request.url.encodedPath == "/api/sessions/s1") {
+                if (request.url.host == gateway.gatewayUrl.host) pending.await()
+                respond("""{"last_read_at":1200.0}""", HttpStatusCode.OK, json)
+            } else null
+        })
+        connection.start(gateway.gatewayUrl)
+        connection.state.first { it is ConnectionState.Connected }
+        vm.open(ChatTarget(gateway, "s1", "First", profile = "first"))
+        runCurrent()
+        val next = ChatTarget(SavedGateway("https://other.example.test"), "s1", "Second", profile = "second", readUpTo = 900.0)
+        vm.open(next)
+        runCurrent()
+        pending.complete(Unit)
+        runCurrent()
+
+        assertEquals(next, assertNotNull(vm.readPosition.value).target)
+        assertEquals(1200.0, vm.readPosition.value?.readUpTo)
+    }
+
+    @Test
+    fun aReadStateTimeoutKeepsTheLocalBoundaryAndDoesNotJumpLater() = runTest(dispatcher) {
+        val pending = CompletableDeferred<Unit>()
+        val (vm, _) = viewModel(readState = { request ->
+            if (request.url.encodedPath == "/api/sessions/s1") {
+                pending.await()
+                respond("""{"last_read_at":1500}""", HttpStatusCode.OK, json)
+            } else null
+        })
+        val target = ChatTarget(gateway, "s1", "Chat", readUpTo = 1000.0)
+        vm.open(target)
+        runCurrent()
+        assertNull(vm.readPosition.value)
+        advanceTimeBy(5_001)
+        runCurrent()
+        assertEquals(1000.0, assertNotNull(vm.readPosition.value).readUpTo)
+        pending.complete(Unit)
+        runCurrent()
+        vm.open(target)
+        assertEquals(1000.0, vm.readPosition.value?.readUpTo)
+    }
+
+    @Test
+    fun sharedReadStateDoesNotDependOnTheSocketAlreadyBeingConnected() = runTest(dispatcher) {
+        var reads = 0
+        val (vm, _) = viewModel(readState = { request ->
+            if (request.url.encodedPath == "/api/sessions/s1") {
+                reads++
+                respond("""{"last_read_at":1500}""", HttpStatusCode.OK, json)
+            } else null
+        })
+        val target = ChatTarget(gateway, "s1", "Chat", readUpTo = 1000.0)
+        vm.open(target)
+        runCurrent()
+        assertEquals(1500.0, vm.readPosition.value?.readUpTo)
+        vm.open(target)
+        runCurrent()
+        assertEquals(1, reads)
+    }
+
+    @Test
+    fun onlyReachingTheLatestMessagesMarksRegularAndBotChatsRead() = runTest(dispatcher) {
+        for (bot in listOf(false, true)) {
+            val writes = mutableListOf<Pair<String, String?>>()
+            val seen = SeenStore(InMemoryKeyValueStore()) { 1000.0 }
+            val (vm, host) = viewModel(seenStore = seen, readState = { request ->
+                when {
+                    request.url.encodedPath.endsWith("/messages") -> respond(
+                        """{"session_id":"s1","messages":[{"id":1,"role":"user","content":"Hello","timestamp":1100},{"id":2,"role":"assistant","content":"Reply","timestamp":1300}]}""",
+                        HttpStatusCode.OK, json,
+                    )
+                    request.url.encodedPath.endsWith("/mutation-snapshot") -> respond("""{"detail":"Not Found"}""", HttpStatusCode.NotFound, json)
+                    request.method == HttpMethod.Patch -> {
+                        writes += request.url.encodedPath to (request.body as io.ktor.http.content.TextContent).text
+                        // A failed shared write keeps the actual local look and is not blindly retried.
+                        respond("{}", if (bot) HttpStatusCode.ServiceUnavailable else HttpStatusCode.OK, json)
+                    }
+                    request.url.encodedPath == "/api/sessions/s1" -> respond("""{"last_read_at":1200}""", HttpStatusCode.OK, json)
+                    else -> null
+                }
+            })
+            connection.start(gateway.gatewayUrl)
+            connection.state.first { it is ConnectionState.Connected }
+            val profile = "scribe".takeIf { bot }
+            val target = ChatTarget(gateway, "s1", "Chat", profile = profile, bot = BotIdentity("scribe", "Scribe").takeIf { bot })
+            vm.open(target)
+            runCurrent()
+            vm.markLooked()
+            runCurrent()
+            assertTrue(writes.isEmpty())
+            assertEquals(1000.0, seen.lastLook(gateway.gatewayUrl, "s1", profile))
+
+            val loaded = assertNotNull(host.session.value).state.value
+            assertTrue(loaded.historyLoaded, loaded.toString())
+            assertTrue(loaded.historyRead, loaded.toString())
+            assertTrue(!loaded.running, loaded.toString())
+            assertEquals(2, loaded.messages.size, loaded.toString())
+            assertEquals(target, vm.readPosition.value?.target)
+            vm.readLatest(target, loaded.copy(messages = loaded.messages.dropLast(1)))
+            runCurrent()
+            assertTrue(writes.isEmpty())
+            assertEquals(1000.0, seen.lastLook(gateway.gatewayUrl, "s1", profile))
+            vm.onScreen(false)
+            vm.readLatest(target, loaded)
+            runCurrent()
+            assertTrue(writes.isEmpty())
+            vm.onScreen(true)
+            vm.readLatest(target, loaded.copy(storedSessionId = "other"))
+            runCurrent()
+            assertTrue(writes.isEmpty())
+            vm.readLatest(target, loaded)
+            vm.readLatest(target, loaded)
+            runCurrent()
+            assertEquals(1, writes.size)
+            assertEquals("/api/sessions/s1", writes.single().first)
+            val body = Json.parseToJsonElement(writes.single().second!!).jsonObject
+            assertEquals("false", body["unread"].toString())
+            assertEquals(profile, body["profile"]?.let { (it as kotlinx.serialization.json.JsonPrimitive).content })
+            assertEquals(1300.0, seen.lastLook(gateway.gatewayUrl, "s1", profile))
+            vm.readLatest(target.copy(profile = "other"), loaded)
+            runCurrent()
+            assertEquals(1, writes.size)
+        }
+    }
+
+    /** A chat with a prompt at 1100 and a reply at 1300; the detail route answers [detail], PATCHes go to [writes]. */
+    private fun readableChat(seen: SeenStore, detail: String, writes: MutableList<String>, pending: () -> CompletableDeferred<Unit>? = { null }) =
+        viewModel(seenStore = seen, readState = { request ->
+            when {
+                request.url.encodedPath.endsWith("/messages") -> respond(
+                    """{"session_id":"s1","messages":[{"id":1,"role":"user","content":"Hello","timestamp":1100},{"id":2,"role":"assistant","content":"Reply","timestamp":1300}]}""",
+                    HttpStatusCode.OK, json,
+                )
+                request.url.encodedPath.endsWith("/mutation-snapshot") -> respond("""{"detail":"No such API endpoint"}""", HttpStatusCode.NotFound, json)
+                request.method == HttpMethod.Patch -> {
+                    writes += request.url.encodedPath
+                    respond("{}", HttpStatusCode.OK, json)
+                }
+                request.url.encodedPath == "/api/sessions/s1" -> {
+                    pending()?.await()
+                    respond(detail, HttpStatusCode.OK, json)
+                }
+                else -> null
+            }
+        })
+
+    @Test
+    fun aChatTheListFoundReadOpensAtItsEnd() = runTest(dispatcher) {
+        // Never opened here, from a messaging platform, on a gateway without read tracking: nothing marks it new.
+        val seen = SeenStore(InMemoryKeyValueStore()) { 1000.0 }
+        val (vm, _) = readableChat(seen, "{}", mutableListOf())
+        connection.start(gateway.gatewayUrl)
+        connection.state.first { it is ConnectionState.Connected }
+        vm.open(ChatTarget(gateway, "s1", "Chat"))
+        runCurrent()
+
+        assertNull(assertNotNull(vm.readPosition.value).readUpTo)
+    }
+
+    @Test
+    fun aGatewayWithoutReadTrackingIsNotWrittenTo() = runTest(dispatcher) {
+        val seen = SeenStore(InMemoryKeyValueStore()) { 1000.0 }
+        val writes = mutableListOf<String>()
+        val (vm, host) = readableChat(seen, """{"id":"s1"}""", writes)
+        connection.start(gateway.gatewayUrl)
+        connection.state.first { it is ConnectionState.Connected }
+        val target = ChatTarget(gateway, "s1", "Chat")
+        vm.open(target)
+        runCurrent()
+        vm.readLatest(target, assertNotNull(host.session.value).state.value)
+        runCurrent()
+
+        assertTrue(writes.isEmpty(), writes.toString())
+        // Read here all the same.
+        assertEquals(1300.0, seen.lastLook(gateway.gatewayUrl, "s1"))
+    }
+
+    @Test
+    fun aChatReadToItsEndIsCaughtUpUntilTheUserLeaves() = runTest(dispatcher) {
+        val seen = SeenStore(InMemoryKeyValueStore()) { 1000.0 }
+        val (vm, host) = readableChat(seen, """{"last_read_at":1200}""", mutableListOf())
+        connection.start(gateway.gatewayUrl)
+        connection.state.first { it is ConnectionState.Connected }
+        val target = ChatTarget(gateway, "s1", "Chat", profile = "scribe")
+        vm.open(target)
+        runCurrent()
+        assertNull(seen.caughtUp.value)
+        vm.readLatest(target, assertNotNull(host.session.value).state.value)
+        runCurrent()
+        assertEquals(CaughtUp(gateway.gatewayUrl, "scribe", "s1"), seen.caughtUp.value)
+
+        // Something in the chat's place (a room) is enough, without the app leaving the screen.
+        vm.onScreen(false)
+        assertNull(seen.caughtUp.value)
+        vm.markLooked()
+        runCurrent()
+        assertNull(seen.caughtUp.value)
+        // Shown again on the same end: caught up again without another write.
+        vm.onScreen(true)
+        vm.readLatest(target, assertNotNull(host.session.value).state.value)
+        assertEquals(CaughtUp(gateway.gatewayUrl, "scribe", "s1"), seen.caughtUp.value)
+        // Another chat opened lets go of it.
+        vm.open(ChatTarget(gateway, "s2", "Other", profile = "scribe"))
+        runCurrent()
+        assertNull(seen.caughtUp.value)
+    }
+
+    @Test
+    fun theSameChatReopenedAfterSigningInWaitsForItsReadStateBeforeReading() = runTest(dispatcher) {
+        val seen = SeenStore(InMemoryKeyValueStore()) { 1000.0 }
+        val writes = mutableListOf<String>()
+        var pending: CompletableDeferred<Unit>? = null
+        val (vm, host) = readableChat(seen, """{"last_read_at":1200}""", writes) { pending }
+        connection.start(gateway.gatewayUrl)
+        connection.state.first { it is ConnectionState.Connected }
+        val target = ChatTarget(gateway, "s1", "Chat")
+        vm.open(target)
+        runCurrent()
+        val first = assertNotNull(host.session.value).state.value
+        vm.readLatest(target, first)
+        runCurrent()
+        assertEquals(1, writes.size)
+
+        // Signed in again on the same chat: until the gateway answers again, reaching the end records nothing.
+        host.close()
+        pending = CompletableDeferred()
+        vm.open(target)
+        runCurrent()
+        vm.readLatest(target, assertNotNull(host.session.value).state.value)
+        runCurrent()
+        assertEquals(1, writes.size)
+        assertNull(seen.caughtUp.value)
+        pending.complete(Unit)
+    }
+
+    @Test
+    fun theSameChatReopenedKeepsItsTranscriptWhileTheNewPositionIsRead() = runTest(dispatcher) {
+        val seen = SeenStore(InMemoryKeyValueStore()) { 1000.0 }
+        var pending: CompletableDeferred<Unit>? = null
+        val (vm, _) = viewModel(seenStore = seen, readState = { request ->
+            if (request.url.encodedPath == "/api/sessions/s1") {
+                pending?.await()
+                respond("""{"last_read_at":1200}""", HttpStatusCode.OK, json)
+            } else null
+        })
+        connection.start(gateway.gatewayUrl)
+        connection.state.first { it is ConnectionState.Connected }
+        val target = ChatTarget(gateway, "s1", "Chat", readUpTo = 1000.0)
+        vm.open(target)
+        runCurrent()
+        assertEquals(1200.0, vm.readPosition.value?.readUpTo)
+
+        // A notification for it: the old position stays (the screen keeps its list) until the new one comes.
+        pending = CompletableDeferred()
+        val again = target.copy(readUpTo = 1100.0)
+        vm.open(again)
+        runCurrent()
+        assertEquals(target, vm.readPosition.value?.target)
+        pending.complete(Unit)
+        runCurrent()
+        assertEquals(again, vm.readPosition.value?.target)
+    }
+
 }

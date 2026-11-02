@@ -15,9 +15,10 @@ internal class WebRtcMicrophone : Microphone {
             module = native
             val device = MediaDevices.getDefaultAudioCaptureDevice() ?: error("No default microphone")
             native.setRecordingDevice(device)
+            // WebRTC's "bytes per sample" is per frame of all channels (2 × channels for 16-bit PCM).
             native.setAudioSink { bytes, samples, bytesPerSample, channels, rate, _, _ ->
-                if (bytesPerSample != 2 || channels !in 1..2 || rate !in 8_000..192_000 || samples <= 0 ||
-                    bytes.size > 8192 || samples.toLong() * channels * bytesPerSample != bytes.size.toLong()) {
+                if (channels !in 1..2 || bytesPerSample != channels * 2 || rate !in 8_000..192_000 || samples <= 0 ||
+                    bytes.size > 8192 || samples.toLong() * bytesPerSample != bytes.size.toLong()) {
                     onFailure(IllegalStateException("The microphone returned an unsupported audio format."))
                 } else {
                     // The native callback may reuse its buffer before the coroutine consumes it.
