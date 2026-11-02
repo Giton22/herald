@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from pathlib import Path
 import unittest
 
@@ -6,6 +7,16 @@ SCRIPT = Path(__file__).resolve().parents[1] / 'generate-sources.py'
 
 
 class SourcesTest(unittest.TestCase):
+    def test_hand_kept_inputs_are_in_the_generated_inputs(self):
+        # A regeneration that skipped extra-sources.json would drop them and break the offline build again.
+        folder = SCRIPT.parent
+        extra = json.loads((folder / 'extra-sources.json').read_text())
+        generated = json.loads((folder / 'gradle-sources.json').read_text())
+        self.assertTrue(extra)
+        for row in extra:
+            self.assertIn(row, generated)
+        self.assertIn("with_name('extra-sources.json')", SCRIPT.read_text())
+
     def test_conflicting_downloads_cannot_overwrite_the_same_destination(self):
         self.assertTrue(SCRIPT.is_file(), 'Dependency generator is not implemented')
         spec = importlib.util.spec_from_file_location('sources', SCRIPT)
