@@ -4921,50 +4921,50 @@
   },
   {
     "type": "file",
-    "url": "https://repo.maven.apache.org/maven2/com/github/hypfvieh/dbus-java-core/5.2.0/dbus-java-core-5.2.0.jar",
-    "sha512": "f774fb5c55312ef13f9c31d5115330d318ab93a484e8b52a06b16f60b6e226a67a1732d3bb565397ecd6fe94e8bbe19b16b04df37b68d6aaf466832427445275",
-    "dest": "offline-repository/com/github/hypfvieh/dbus-java-core/5.2.0",
-    "dest-filename": "dbus-java-core-5.2.0.jar",
+    "url": "https://repo.maven.apache.org/maven2/com/github/hypfvieh/dbus-java-core/5.2.2/dbus-java-core-5.2.2.jar",
+    "sha512": "4d2b5932a9b0beee15e405a818578e5a050222283be0aec6efe695c23456520f6db6957b71b83e8015b8e21cb7a3ffb43bf4aec1b9aba215ba3734e43e9e9edb",
+    "dest": "offline-repository/com/github/hypfvieh/dbus-java-core/5.2.2",
+    "dest-filename": "dbus-java-core-5.2.2.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://repo.maven.apache.org/maven2/com/github/hypfvieh/dbus-java-core/5.2.0/dbus-java-core-5.2.0.pom",
-    "sha512": "f36b2cc09392300347d168423e4d6af9a605fb4849814a96338c121f8ad67b7826bde35f753b71144bb0fcf171d061fc64c718c5f0731c42b505e05741f47a4d",
-    "dest": "offline-repository/com/github/hypfvieh/dbus-java-core/5.2.0",
-    "dest-filename": "dbus-java-core-5.2.0.pom",
+    "url": "https://repo.maven.apache.org/maven2/com/github/hypfvieh/dbus-java-core/5.2.2/dbus-java-core-5.2.2.pom",
+    "sha512": "3fc42424d945f479b5e2d7656d34f26d6eb0d3e70b23ca9139d984f24ac4615b3bb8d8b386bef11b0bf567d21c896d59b2fdd672ffc41070caa746a87f11d756",
+    "dest": "offline-repository/com/github/hypfvieh/dbus-java-core/5.2.2",
+    "dest-filename": "dbus-java-core-5.2.2.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://repo.maven.apache.org/maven2/com/github/hypfvieh/dbus-java-parent/5.2.0/dbus-java-parent-5.2.0.pom",
-    "sha512": "a7c89a9ac5c62bef0a3e96dad4d2fb36380498c5eb2b49806c8bc99866a75af01933d54b4b56caebbc9d6a2d74c7ca9e8d04dcd3b6e5b82f5ed47924f223fa6f",
-    "dest": "offline-repository/com/github/hypfvieh/dbus-java-parent/5.2.0",
-    "dest-filename": "dbus-java-parent-5.2.0.pom",
+    "url": "https://repo.maven.apache.org/maven2/com/github/hypfvieh/dbus-java-parent/5.2.2/dbus-java-parent-5.2.2.pom",
+    "sha512": "cf8651fc5ee45551b7b473a511a27a92941172b94a15a17e4dc557de9e6198eabe4b8a1225c273e9dc694da26b08b75588628c8d1a545a77a5e0be0d3458551f",
+    "dest": "offline-repository/com/github/hypfvieh/dbus-java-parent/5.2.2",
+    "dest-filename": "dbus-java-parent-5.2.2.pom",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://repo.maven.apache.org/maven2/com/github/hypfvieh/dbus-java-transport-native-unixsocket/5.2.0/dbus-java-transport-native-unixsocket-5.2.0.jar",
-    "sha512": "65f952e1f9789a1765b5c62d1a144019434ae8d9dd86fb894b1231735a383cd3be4226fa9f7b4c3363277676437a96f1f7264b7ad421ce2d5355e8c66f676f2f",
-    "dest": "offline-repository/com/github/hypfvieh/dbus-java-transport-native-unixsocket/5.2.0",
-    "dest-filename": "dbus-java-transport-native-unixsocket-5.2.0.jar",
+    "url": "https://repo.maven.apache.org/maven2/com/github/hypfvieh/dbus-java-transport-junixsocket/5.2.2/dbus-java-transport-junixsocket-5.2.2.jar",
+    "sha512": "84c1045fbed95350caebfc3304d4fd68fb1e65919205fa4920c11cf83ae6d40d987d307126da05e8138fd7225b02fbe5b4a54f5067f31bce06252a5f1e655d4a",
+    "dest": "offline-repository/com/github/hypfvieh/dbus-java-transport-junixsocket/5.2.2",
+    "dest-filename": "dbus-java-transport-junixsocket-5.2.2.jar",
     "only-arches": [
       "x86_64"
     ]
   },
   {
     "type": "file",
-    "url": "https://repo.maven.apache.org/maven2/com/github/hypfvieh/dbus-java-transport-native-unixsocket/5.2.0/dbus-java-transport-native-unixsocket-5.2.0.pom",
-    "sha512": "e1a7b87c86b7c23aed5a8f5b4c75d3f3694bd050dd7a06c3604e6dbdae1295c1d651b42fa4be9645382a7f1c5f5007693eb35a16d84dd36416d228a8d2b26464",
-    "dest": "offline-repository/com/github/hypfvieh/dbus-java-transport-native-unixsocket/5.2.0",
-    "dest-filename": "dbus-java-transport-native-unixsocket-5.2.0.pom",
+    "url": "https://repo.maven.apache.org/maven2/com/github/hypfvieh/dbus-java-transport-junixsocket/5.2.2/dbus-java-transport-junixsocket-5.2.2.pom",
+    "sha512": "dcdd361915da18363deaaeec27c35312dc19f922df1fd3c11a93412cfa05141fe077846f7069c20c764b4cb1e5db30ddc38ca742f21de25a6f51aaeecf32c553",
+    "dest": "offline-repository/com/github/hypfvieh/dbus-java-transport-junixsocket/5.2.2",
+    "dest-filename": "dbus-java-transport-junixsocket-5.2.2.pom",
     "only-arches": [
       "x86_64"
     ]
@@ -5371,6 +5371,26 @@
   },
   {
     "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_annotations/2.30.0/error_prone_annotations-2.30.0.jar",
+    "sha512": "61956e255b8e26b574dd04a89c9e91652981d3121508fb1de39af155165892de694954aaced670b975a600edf19e0077eceae5d3e0a7cc4eef0cfe301521e201",
+    "dest": "offline-repository/com/google/errorprone/error_prone_annotations/2.30.0",
+    "dest-filename": "error_prone_annotations-2.30.0.jar",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_annotations/2.30.0/error_prone_annotations-2.30.0.pom",
+    "sha512": "02ce374b7f83915a0483549e7d8fdd9f735f8293e8f0dc5a42fa358ba2a270a74729815606fe769f881ac4dfcec24303c8d22bdecd701520e9c756ae0edff820",
+    "dest": "offline-repository/com/google/errorprone/error_prone_annotations/2.30.0",
+    "dest-filename": "error_prone_annotations-2.30.0.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
     "url": "https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_annotations/2.36.0/error_prone_annotations-2.36.0.jar",
     "sha512": "bd6f5650902526d3db06aa1cc7bd36723658166acfabb823aca27d0b2c3814e83ae24a8217ce915c3e194c2c696a102580b4c21ef5dba61f7610bcb8d580f566",
     "dest": "offline-repository/com/google/errorprone/error_prone_annotations/2.36.0",
@@ -5405,6 +5425,16 @@
     "sha512": "7b96228ab69845b1bd9b5dc2bb61b7da2b76d157b6e2ce1b3b052c35cdbacce2acf21a09cd1cf24721ac3129519088d8ddd72b60caf082af48eac30c0ff53601",
     "dest": "offline-repository/com/google/errorprone/error_prone_parent/2.27.0",
     "dest-filename": "error_prone_parent-2.27.0.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/com/google/errorprone/error_prone_parent/2.30.0/error_prone_parent-2.30.0.pom",
+    "sha512": "8da4d1308a13a954f121af724fa4e3d3ed9215f23dd6a46f271674c746d7d992c0ec979383b27cab001dc9b1223563fb6aa44954917b0a355fcc75d19abab1c4",
+    "dest": "offline-repository/com/google/errorprone/error_prone_parent/2.30.0",
+    "dest-filename": "error_prone_parent-2.30.0.pom",
     "only-arches": [
       "x86_64"
     ]
@@ -5825,6 +5855,156 @@
     "sha512": "a0c68932f595f942ec006234824c9fb8a5d55b0bff1b82b35cac2e2c5703435d786ab5cdce7f75a3c140984b64fc284f33567d97bcdbe32234f0c19a8dcc89cf",
     "dest": "offline-repository/com/jetbrains/jbr-api/1.5.0",
     "dest-filename": "jbr-api-1.5.0.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/com/kohlschutter/compiler-annotations/1.7.4/compiler-annotations-1.7.4.jar",
+    "sha512": "9e99c7bfff3bbae013f765e103628780978f1174ab315dc4d5ef67dd8e60d3dc6cc91c8e9762275978ec3d5da4911b983fd228847d79552d16b1bb4bff38e048",
+    "dest": "offline-repository/com/kohlschutter/compiler-annotations/1.7.4",
+    "dest-filename": "compiler-annotations-1.7.4.jar",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/com/kohlschutter/compiler-annotations/1.7.4/compiler-annotations-1.7.4.pom",
+    "sha512": "9a43ec9834db1d56c9416dc58af977a30bb69d1c39dc46b793e9e8ba05ba86561044be78ec739bae016e4d2f9cb3394443f07d08e495092a6e272232f6935e3a",
+    "dest": "offline-repository/com/kohlschutter/compiler-annotations/1.7.4",
+    "dest-filename": "compiler-annotations-1.7.4.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/com/kohlschutter/junixsocket/junixsocket/2.10.1/junixsocket-2.10.1.pom",
+    "sha512": "b57e30613040420d42027610f0ec1fa501884bf6396e2d4e86d62e4e28fad8bb5b792f0d90ada622530f10598c587f19025d3543d8dc84615b6ac7c3d17fbf7c",
+    "dest": "offline-repository/com/kohlschutter/junixsocket/junixsocket/2.10.1",
+    "dest-filename": "junixsocket-2.10.1.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/com/kohlschutter/junixsocket/junixsocket/2.11.1/junixsocket-2.11.1.pom",
+    "sha512": "32e737be14c148180e909ad2fc6a7c52a789dbba709f3c98fac130e3572d735d4530912fbcc975807641894d42051c8acde63913f9477a73f98f8c7f891d353b",
+    "dest": "offline-repository/com/kohlschutter/junixsocket/junixsocket/2.11.1",
+    "dest-filename": "junixsocket-2.11.1.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/com/kohlschutter/junixsocket/junixsocket-common/2.11.1/junixsocket-common-2.11.1.jar",
+    "sha512": "03729d673dc33bc2e45e9cf04b1df68de9f836efbcbada2670a53baa24816dea5fa10d45fb27288e7637d9df449c62effd939079b466109a1a6e8985ebea6d8a",
+    "dest": "offline-repository/com/kohlschutter/junixsocket/junixsocket-common/2.11.1",
+    "dest-filename": "junixsocket-common-2.11.1.jar",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/com/kohlschutter/junixsocket/junixsocket-common/2.11.1/junixsocket-common-2.11.1.pom",
+    "sha512": "479cd977437a809bb9bbd67ffab5e021c52f2005f33e03d3c238f8260031d4e104a6f22981235be40cd86c5f79feb77b721ab322e4547883ab3b35e63fefa20a",
+    "dest": "offline-repository/com/kohlschutter/junixsocket/junixsocket-common/2.11.1",
+    "dest-filename": "junixsocket-common-2.11.1.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/com/kohlschutter/junixsocket/junixsocket-core/2.10.1/junixsocket-core-2.10.1.pom",
+    "sha512": "453e71076541f1644951e3801aba046be4c3ed2dfa99396c72b1503d527b18823a6218db1ad4f18aa83cefcd2d6b60d4f886ba13b59f489b2d78233f9f931088",
+    "dest": "offline-repository/com/kohlschutter/junixsocket/junixsocket-core/2.10.1",
+    "dest-filename": "junixsocket-core-2.10.1.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/com/kohlschutter/junixsocket/junixsocket-native-common/2.10.1/junixsocket-native-common-2.10.1.jar",
+    "sha512": "b172030b44c5401e9672808931cb795830d5d1dd5acdf5ad44182def7c3ab39100e56e583258c6b177f463ddd71b9c1748668c4a064ec2e40cb19abd5853bf0e",
+    "dest": "offline-repository/com/kohlschutter/junixsocket/junixsocket-native-common/2.10.1",
+    "dest-filename": "junixsocket-native-common-2.10.1.jar",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/com/kohlschutter/junixsocket/junixsocket-native-common/2.10.1/junixsocket-native-common-2.10.1.pom",
+    "sha512": "d0ffc43b8c9833f793c590d918eed5a20584424f92cd383b61501b9086662a6394beba8d6145db212e8a7a6f5c3d60249c65549ebbb3147bccc9de401c4af9ff",
+    "dest": "offline-repository/com/kohlschutter/junixsocket/junixsocket-native-common/2.10.1",
+    "dest-filename": "junixsocket-native-common-2.10.1.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/com/kohlschutter/junixsocket/junixsocket-native-common/2.11.1/junixsocket-native-common-2.11.1.jar",
+    "sha512": "9c00b58c796d166b0a2dda310cc66818facc2a91a9ebd72bcb60fb73792b6ba9375210685653b13251812e9ac165da0db20fdf3be1e2bf98363f980906de3b76",
+    "dest": "offline-repository/com/kohlschutter/junixsocket/junixsocket-native-common/2.11.1",
+    "dest-filename": "junixsocket-native-common-2.11.1.jar",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/com/kohlschutter/junixsocket/junixsocket-native-common/2.11.1/junixsocket-native-common-2.11.1.pom",
+    "sha512": "c64940a2677b77cdc3aa23a6439df4a2ccfa51ab15c533615aec9edd58997d8b3c47d3b0830b875eb3c606ebb9f8b1de7d43397c7ffda9ed2a503d6a83ab8ff4",
+    "dest": "offline-repository/com/kohlschutter/junixsocket/junixsocket-native-common/2.11.1",
+    "dest-filename": "junixsocket-native-common-2.11.1.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/com/kohlschutter/kohlschutter-parent/1.7.4/kohlschutter-parent-1.7.4.pom",
+    "sha512": "de28f8334466f867f497d1c68561781a5ae02db8e48e1baa8db217923ced20925cb66e8ad7f77dfed8d63f4d1aed78930fdd40f85c4a64f454eee8f3e9ad2cb6",
+    "dest": "offline-repository/com/kohlschutter/kohlschutter-parent/1.7.4",
+    "dest-filename": "kohlschutter-parent-1.7.4.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/com/kohlschutter/kohlschutter-parent/1.8.7/kohlschutter-parent-1.8.7.pom",
+    "sha512": "de307869d10d70e7c25e8a582f91017b8fe0b8726089027f58aba74bbc7c15e04d6709903adeaa463286a938067d6c452964deae88ab3a7aa4754d479e17f305",
+    "dest": "offline-repository/com/kohlschutter/kohlschutter-parent/1.8.7",
+    "dest-filename": "kohlschutter-parent-1.8.7.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/com/kohlschutter/kohlschutter-parent-multirelease/1.7.4/kohlschutter-parent-multirelease-1.7.4.pom",
+    "sha512": "ef2cf5e85528a9a4c64c9ec7b782478cf13abb9980103a98e5a84f6bfd6f02bee549cfb3269344f45ca74f9392078355e594455457bfe69609d4e9b49e6906ba",
+    "dest": "offline-repository/com/kohlschutter/kohlschutter-parent-multirelease/1.7.4",
+    "dest-filename": "kohlschutter-parent-multirelease-1.7.4.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/com/kohlschutter/kohlschutter-parent-multirelease/1.8.7/kohlschutter-parent-multirelease-1.8.7.pom",
+    "sha512": "d24c4a9ad3e3f68595e586376f24e9a948c989ff60286f0f6592302c269cd434ee6c343fff7be474e1be5b6e5b072721bc55cb434cf0d4c39ff69d275b42d95d",
+    "dest": "offline-repository/com/kohlschutter/kohlschutter-parent-multirelease/1.8.7",
+    "dest-filename": "kohlschutter-parent-multirelease-1.8.7.pom",
     "only-arches": [
       "x86_64"
     ]
@@ -8565,6 +8745,26 @@
     "sha512": "b33f5cf3404c4f9f5cbb69a43dcde2d6f06d6cb3d00444dbce879a1bf14f0be4e3093f21be1aa85104cf45ae86ba69374949e35ed567f82f6ede5812140628de",
     "dest": "offline-repository/org/eclipse/ee4j/project/1.0.7",
     "dest-filename": "project-1.0.7.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/eclipse/jdt/org.eclipse.jdt.annotation/2.3.0/org.eclipse.jdt.annotation-2.3.0.jar",
+    "sha512": "4046b8b77af47e983be7ba8f39b8b0b9f2e96c66fa65e812c36aef4f04e00a8b8f0a1ef1cb975655b547e990111b0630c2b7ea5a5abcddbda0712dc5b7a6f892",
+    "dest": "offline-repository/org/eclipse/jdt/org.eclipse.jdt.annotation/2.3.0",
+    "dest-filename": "org.eclipse.jdt.annotation-2.3.0.jar",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/eclipse/jdt/org.eclipse.jdt.annotation/2.3.0/org.eclipse.jdt.annotation-2.3.0.pom",
+    "sha512": "30052cb02d48f3433e15b9d976afd18728238c1e33b69a7993d918dd168c2f3adc79d30979d2eb5e4b136f631e31bc94b9c679d47dc2e2c86220751b9ae74e7a",
+    "dest": "offline-repository/org/eclipse/jdt/org.eclipse.jdt.annotation/2.3.0",
+    "dest-filename": "org.eclipse.jdt.annotation-2.3.0.pom",
     "only-arches": [
       "x86_64"
     ]
@@ -13131,6 +13331,16 @@
   },
   {
     "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/junit/junit-bom/5.11.0/junit-bom-5.11.0.pom",
+    "sha512": "ba5473c3ba56865065c3da2c5d79b6f7c50105bc72e8d9d80fed50f6223d18cfcc1a5da921d2c7157f0f2720d96ba3a9ab7a75731ee97cfbd80c293d9e3a3ef5",
+    "dest": "offline-repository/org/junit/junit-bom/5.11.0",
+    "dest-filename": "junit-bom-5.11.0.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
     "url": "https://repo.maven.apache.org/maven2/org/junit/junit-bom/5.11.0-M2/junit-bom-5.11.0-M2.pom",
     "sha512": "f6769b85ee9f2bf480b61cf13e0be657f686c54cf3c293675e99126d1cb4866e45a5b344e28ba18554f806f9bae343d4c00b29ab2e58264698d6aed80856131f",
     "dest": "offline-repository/org/junit/junit-bom/5.11.0-M2",
@@ -13145,6 +13355,16 @@
     "sha512": "ec795b2f32982c1af8dccef57553aa9d959c13ee829aebd6459ba22b4ef434aeb4184aa89f63ad2f0d8c45d59cd020a15cd976ddb4bf20f1044b492a406e029e",
     "dest": "offline-repository/org/junit/junit-bom/5.13.4",
     "dest-filename": "junit-bom-5.13.4.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/junit/junit-bom/5.14.4/junit-bom-5.14.4.pom",
+    "sha512": "f67ed3eefc040e64eea675272704320fb449a2d696651ec2fded42f5914711b2a15e947427b42ac53a3750f5066b44987425644baaf8e2eb832f04711d03bc54",
+    "dest": "offline-repository/org/junit/junit-bom/5.14.4",
+    "dest-filename": "junit-bom-5.14.4.pom",
     "only-arches": [
       "x86_64"
     ]
