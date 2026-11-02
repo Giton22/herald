@@ -863,8 +863,8 @@ class ChatViewModel(
      * [OutgoingAttachment.MAX_BYTES]: the pickers hold to that, a long paste or a drop may not.
      */
     fun addAttachments(picked: List<OutgoingAttachment>) {
-        val tooLarge = picked.firstOrNull { it.bytes.size > OutgoingAttachment.MAX_BYTES }
-        val fitting = picked.filter { it.bytes.size <= OutgoingAttachment.MAX_BYTES }
+        val tooLarge = picked.firstOrNull { it.size > OutgoingAttachment.MAX_BYTES }
+        val fitting = picked.filter { it.size <= OutgoingAttachment.MAX_BYTES }
         val room = OutgoingAttachment.MAX_COUNT - _attachments.value.size
         when {
             tooLarge != null -> showAttachmentError("${tooLarge.name} is larger than ${OutgoingAttachment.MAX_SIZE}.")

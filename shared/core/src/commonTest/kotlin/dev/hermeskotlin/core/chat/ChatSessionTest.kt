@@ -18,11 +18,17 @@ import dev.hermeskotlin.core.rpc.param
 import dev.hermeskotlin.core.sessions.SessionMessage
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.slash.SlashCommand
+import io.ktor.client.engine.mock.respond
+import io.ktor.client.engine.mock.toByteArray
+import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
+import io.ktor.http.headersOf
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.async
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
@@ -962,29 +968,420 @@ class ChatSessionTest {
     }
 
     @Test
-    fun aFileOverTheLimitIsTurnedDownAndTheLinkStaysUp() = runTest {
+    fun aFileOverWhatTheGatewayTakesIsTurnedDownAndTheLinkStaysUp() = runTest {
         val (connection, transport) = setup(
             backgroundScope,
-            mapOf(
-                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
-                "image.attach_bytes" to """{"attached":true,"path":"/tmp/upload_1.jpg"}""",
-            ),
+            mapOf("session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}"""),
         )
         connection.state.first { it is ConnectionState.Connected }
         val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
         chat.start()
 
-        // #340: a 12.8 MB PDF is 17 MB base64, past what the socket carries in one message.
         val image = OutgoingAttachment("a1", "cat.jpg", "image/jpeg", byteArrayOf(1))
-        val big = OutgoingAttachment("a2", "report.pdf", "application/pdf", ByteArray(12_806_962))
-        assertFalse(chat.send("summarise", listOf(image, big)))
+        val huge = streamed("dump.bin", "application/octet-stream", OutgoingAttachment.MAX_BYTES + 1L)
+        assertFalse(chat.send("summarise", listOf(image, huge)))
 
-        assertEquals("report.pdf is larger than 12 MB, too large to send.", chat.state.value.error)
+        assertEquals("dump.bin is larger than 100 MB, too large to send.", chat.state.value.error)
         // Turned down before anything went, the image beside it included.
         val uploads = listOf("image.attach_bytes", "pdf.attach", "file.attach", "prompt.submit", "session.create")
         assertTrue(transport.sent.value.none { frame -> uploads.any { frame.isCall(it) } })
         assertTrue(chat.state.value.messages.isEmpty())
         assertIs<ConnectionState.Connected>(connection.state.value)
+    }
+
+    /** A file of [size] bytes read as it's sent, in chunks, each byte its offset mod 251. */
+    private fun streamed(name: String, mime: String, size: Long, opened: MutableList<Unit>? = null) =
+        OutgoingAttachment("s-$name", name, mime, ByteArray(0), source = AttachmentSource(size) {
+            opened?.add(Unit)
+            object : AttachmentReader {
+                var offset = 0L
+                override suspend fun read(buffer: ByteArray): Int {
+                    if (offset >= size) return -1
+                    val n = minOf(buffer.size.toLong(), size - offset, 70_000L).toInt()
+                    for (i in 0 until n) buffer[i] = ((offset + i) % 251).toByte()
+                    offset += n
+                    return n
+                }
+                override fun close() {}
+            }
+        })
+
+    /** What the gateway's file routes got: the upload's form and body length, and each delete. */
+    private class FileRoutes {
+        var uploadPath: String? = null
+        var uploadLength = 0L
+        var uploadBody = ByteArray(0)
+        val deleted = mutableListOf<String>()
+        /** Runs once the upload's body has been read whole, before the gateway answers it. */
+        var uploaded: () -> Unit = {}
+        /** What the upload is answered with. */
+        var uploadStatus = HttpStatusCode.OK
+        /** The folders listed (the uploads folder, to clear old ones). */
+        val listed = mutableListOf<String>()
+    }
+
+    /**
+     * Answers the managed-file routes the way hermes_cli/web_routers/files.py does, with [home] as the
+     * default folder and [uploads] as the listing of its uploads folder. [listingHtml]: a gateway from
+     * before the routes, whose web app answers the listing with its page.
+     */
+    private fun answerFileRoutes(
+        routes: FileRoutes,
+        listing: HttpStatusCode = HttpStatusCode.OK,
+        home: String = "/home/u",
+        uploads: String = """{"entries":[]}""",
+        listingHtml: Boolean = false,
+    ) {
+        gateway.http = { request ->
+            when {
+                request.url.encodedPath == "/api/files" && request.method.value == "GET" && listingHtml ->
+                    respond("<!doctype html><html></html>", HttpStatusCode.OK, headersOf(HttpHeaders.ContentType, "text/html"))
+                request.url.encodedPath == "/api/files" && request.method.value == "GET" && request.url.parameters["path"] != null -> {
+                    routes.listed += request.url.parameters["path"]!!
+                    json(uploads)
+                }
+                request.url.encodedPath == "/api/files" && request.method.value == "GET" ->
+                    if (listing == HttpStatusCode.OK) json("""{"path":${HermesJson.encodeToString(home)},"parent":null,"entries":[],"root":null,"locked_root":null,"can_change_path":true}""")
+                    else json("""{"detail":"No such API endpoint: /api/files"}""", listing)
+                request.url.encodedPath == "/api/files/upload-stream" -> {
+                    val body = (request.body as io.ktor.http.content.OutgoingContent).toByteArray()
+                    routes.uploadBody = body
+                    routes.uploadLength = request.body.contentLength ?: -1
+                    val text = body.decodeToString(0, minOf(body.size, 2_000))
+                    routes.uploadPath = Regex("name=\"path\"\r\n\r\n([^\r]+)\r\n").find(text)?.groupValues?.get(1)
+                    routes.uploaded()
+                    if (routes.uploadStatus != HttpStatusCode.OK) json("""{"detail":"Upload failed"}""", routes.uploadStatus)
+                    else json("""{"ok":true,"entry":{},"path":${HermesJson.encodeToString(routes.uploadPath)},"root":null,"locked_root":null,"can_change_path":true}""")
+                }
+                request.url.encodedPath == "/api/files" && request.method.value == "DELETE" -> {
+                    val body = HermesJson.parseToJsonElement((request.body as io.ktor.http.content.OutgoingContent).toByteArray().decodeToString()).jsonObject
+                    routes.deleted += body["path"]!!.jsonPrimitive.content
+                    json("""{"ok":true}""")
+                }
+                else -> error("unexpected ${request.method.value} ${request.url}")
+            }
+        }
+    }
+
+    @Test
+    fun aLargePdfGoesUpOverHttpAndIsAttachedByItsPath() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
+                "pdf.attach" to """{"attached":true,"pages":[{"path":"/tmp/page-1.png"}],"pages_attached":1}""",
+                "prompt.submit" to """{"status":"streaming"}""",
+            ),
+        )
+        val routes = FileRoutes()
+        answerFileRoutes(routes)
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        // #340: the reporter's 12.8 MB PDF, 17 MB base64, past what one socket message carries.
+        val pdf = OutgoingAttachment("a1", "report.pdf", "application/pdf", ByteArray(12_806_962) { 7 })
+        assertTrue(chat.send("summarise", listOf(pdf)))
+
+        val staged = assertNotNull(routes.uploadPath)
+        assertTrue(Regex("""/home/u/\.kyllene-uploads/[0-9a-f]+/report\.pdf""").matches(staged), staged)
+        assertTrue(routes.uploadLength > 12_806_962)
+        assertEquals(routes.uploadLength, routes.uploadBody.size.toLong())
+        val attach = transport.sent.value.single { it.isCall("pdf.attach") }
+        assertEquals(staged, attach.param("path"))
+        assertNull(attach.param("content_base64"))
+        // The pages are made, so the upload goes; nothing went inline.
+        assertEquals(listOf(staged.substringBeforeLast('/')), routes.deleted)
+        assertTrue(transport.sent.value.any { it.isCall("prompt.submit") })
+        assertIs<ConnectionState.Connected>(connection.state.value)
+    }
+
+    @Test
+    fun aLargeFileIsStreamedUpAndBecomesAReference() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
+                "file.attach" to """{"attached":true,"name":"logs.tar","path":"/work/attachments/logs.tar","ref_path":"attachments/logs.tar","ref_text":"@file:attachments/logs.tar","uploaded":true}""",
+                "prompt.submit" to """{"status":"streaming"}""",
+            ),
+        )
+        val routes = FileRoutes()
+        answerFileRoutes(routes)
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        // The bubble says how far the upload has gone, and every whole percent of it is shown on the way.
+        val percents = mutableListOf<Int>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            chat.state.collect { state ->
+                state.messages.filterIsInstance<ChatMessage.User>().lastOrNull()?.upload?.let {
+                    if (percents.lastOrNull() != it.percent) percents += it.percent
+                }
+            }
+        }
+        var whileUploading: UploadProgress? = null
+        routes.uploaded = { whileUploading = chat.state.value.messages.filterIsInstance<ChatMessage.User>().last().upload }
+
+        val size = 30_000_000L
+        assertTrue(chat.send("look", listOf(streamed("logs.tar", "application/x-tar", size))))
+        assertEquals(UploadProgress("logs.tar", size, size), whileUploading)
+        // Seen from another thread some steps may merge, but it only goes up, from 0 to 100.
+        assertEquals(0, percents.first())
+        assertEquals(100, percents.last())
+        assertEquals(percents.sorted().distinct(), percents)
+        // Once it's up, the line goes.
+        assertNull(chat.state.value.messages.filterIsInstance<ChatMessage.User>().last().upload)
+
+        // The whole file went, byte for byte, between the form's head and tail.
+        val body = routes.uploadBody
+        val start = body.indexOfSequence("\r\n\r\n".encodeToByteArray(), body.indexOfSequence("filename=".encodeToByteArray())) + 4
+        assertEquals(0.toByte(), body[start])
+        assertEquals((size - 1).rem(251).toByte(), body[(start + size - 1).toInt()])
+        val file = transport.sent.value.single { it.isCall("file.attach") }
+        assertEquals(routes.uploadPath, file.param("path"))
+        assertEquals("logs.tar", file.param("name"))
+        assertNull(file.param("data_url"))
+        assertEquals("@file:attachments/logs.tar\n\nlook", transport.sent.value.single { it.isCall("prompt.submit") }.param("text"))
+        // Copied into the workspace, so the upload goes.
+        assertEquals(1, routes.deleted.size)
+    }
+
+    @Test
+    fun aLargeFileTheGatewayUsesInPlaceStays() = runTest {
+        val routes = FileRoutes()
+        val (connection, _) = setup(
+            backgroundScope,
+            mapOf("session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""", "prompt.submit" to """{"status":"streaming"}"""),
+        )
+        // The gateway user's home is the session's workspace: file.attach takes the upload where it is,
+        // and says so. Its resolved path needn't be spelled as the one sent (a symlink, a short name).
+        gateway.answer = { call ->
+            when (call.method) {
+                "session.create" -> """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}"""
+                "file.attach" -> """{"attached":true,"name":"logs.tar","path":"/real${call.param("path")}","ref_path":"x","ref_text":"@file:x","uploaded":false}"""
+                else -> "{}"
+            }
+        }
+        answerFileRoutes(routes)
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        assertTrue(chat.send("look", listOf(streamed("logs.tar", "application/x-tar", 13_000_000L))))
+
+        assertEquals(emptyList(), routes.deleted)
+    }
+
+    @Test
+    fun aLargePdfTheGatewayCantRenderGoesAsAFile() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
+                "pdf.attach" to "error:5028",
+                "file.attach" to """{"attached":true,"name":"r.pdf","path":"/work/attachments/r.pdf","ref_path":"attachments/r.pdf","ref_text":"@file:attachments/r.pdf","uploaded":true}""",
+                "prompt.submit" to """{"status":"streaming"}""",
+            ),
+        )
+        val routes = FileRoutes()
+        answerFileRoutes(routes)
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        assertTrue(chat.send("", listOf(streamed("r.pdf", "application/pdf", 20_000_000L))))
+
+        assertEquals(routes.uploadPath, transport.sent.value.single { it.isCall("file.attach") }.param("path"))
+        assertEquals(1, routes.deleted.size)
+    }
+
+    @Test
+    fun aGatewayWithoutTheUploadSaysToUpdateHermes() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf("session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}"""),
+        )
+        answerFileRoutes(FileRoutes(), listing = HttpStatusCode.NotFound)
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        assertFalse(chat.send("summarise", listOf(streamed("report.pdf", "application/pdf", 12_806_962L))))
+
+        assertEquals(
+            "report.pdf is larger than 12 MB, the most this gateway takes. Update Hermes to send files up to 100 MB.",
+            chat.state.value.error,
+        )
+        assertTrue(transport.sent.value.none { it.isCall("pdf.attach") || it.isCall("file.attach") || it.isCall("prompt.submit") })
+        assertIs<ConnectionState.Connected>(connection.state.value)
+    }
+
+    @Test
+    fun aFailureAfterTheUploadRemovesItAndTakesBackTheImagesQueued() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
+                "image.attach_bytes" to """{"attached":true,"path":"/tmp/upload_1.jpg"}""",
+                "file.attach" to "error:5000",
+            ),
+        )
+        val routes = FileRoutes()
+        answerFileRoutes(routes)
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        val photo = OutgoingAttachment("a1", "cat.jpg", "image/jpeg", byteArrayOf(1))
+        assertFalse(chat.send("look", listOf(photo, streamed("logs.tar", "application/x-tar", 13_000_000L))))
+
+        assertEquals(listOf(routes.uploadPath!!.substringBeforeLast('/')), routes.deleted)
+        assertEquals("/tmp/upload_1.jpg", transport.awaitSent { it.isCall("image.detach") }.param("path"))
+        assertTrue(transport.sent.value.none { it.isCall("prompt.submit") })
+    }
+
+    @Test
+    fun anUploadTheGatewayTurnsDownIsRemovedToo() = runTest {
+        val (connection, _) = setup(backgroundScope, mapOf("session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}"""))
+        // It may have kept the file before failing; the folder made for it goes either way.
+        val routes = FileRoutes().apply { uploadStatus = HttpStatusCode.Conflict }
+        answerFileRoutes(routes)
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        assertFalse(chat.send("look", listOf(streamed("logs.tar", "application/x-tar", 13_000_000L))))
+
+        assertEquals("Couldn't upload logs.tar: Upload failed", chat.state.value.error)
+        assertEquals(listOf(routes.uploadPath!!.substringBeforeLast('/')), routes.deleted)
+    }
+
+    @Test
+    fun aFileThatChangesAsItsSentIsTurnedDown() = runTest {
+        val (connection, transport) = setup(backgroundScope, mapOf("session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}"""))
+        val routes = FileRoutes()
+        answerFileRoutes(routes)
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        // Picked at 13 MB; only 12.5 MB is there by the time it's read.
+        val shrunk = OutgoingAttachment("s", "logs.tar", "application/x-tar", ByteArray(0), source = AttachmentSource(13_000_000L) {
+            streamed("logs.tar", "application/x-tar", 12_500_000L).source!!.open()
+        })
+        assertFalse(chat.send("look", listOf(shrunk)))
+
+        assertEquals("logs.tar changed while it was being sent. Attach it again.", chat.state.value.error)
+        assertEquals(1, routes.deleted.size)
+        assertTrue(transport.sent.value.none { it.isCall("file.attach") || it.isCall("prompt.submit") })
+    }
+
+    @Test
+    fun aGatewayAnsweringTheListingWithItsPageSaysToUpdateHermes() = runTest {
+        val (connection, _) = setup(backgroundScope, mapOf("session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}"""))
+        answerFileRoutes(FileRoutes(), listingHtml = true)
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        assertFalse(chat.send("look", listOf(streamed("logs.tar", "application/x-tar", 13_000_000L))))
+
+        assertEquals(AttachmentUploads.tooLargeHere(streamed("logs.tar", "", 1)), chat.state.value.error)
+    }
+
+    @Test
+    fun aWindowsGatewaysUploadGoesUnderItsOwnSeparators() = runTest {
+        val (connection, _) = setup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
+                "file.attach" to """{"attached":true,"name":"logs.tar","path":"C:\\w\\attachments\\logs.tar","ref_path":"attachments/logs.tar","ref_text":"@file:attachments/logs.tar","uploaded":true}""",
+                "prompt.submit" to """{"status":"streaming"}""",
+            ),
+        )
+        val routes = FileRoutes()
+        answerFileRoutes(routes, home = "C:\\Users\\u\\")
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        assertTrue(chat.send("look", listOf(streamed("logs.tar", "application/x-tar", 13_000_000L))))
+
+        val staged = assertNotNull(routes.uploadPath)
+        assertTrue(Regex("""C:\\Users\\u\\\.kyllene-uploads\\[0-9a-f]+\\logs\.tar""").matches(staged), staged)
+        assertEquals(listOf(staged.substringBeforeLast('\\')), routes.deleted)
+    }
+
+    @Test
+    fun uploadsOlderThanAWeekAreClearedOnceARun() = runTest {
+        val now = kotlin.time.Clock.System.now().epochSeconds
+        val (connection, _) = setup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
+                // Used in place, so neither upload is removed once attached.
+                "file.attach" to """{"attached":true,"name":"logs.tar","path":"/home/u/x","ref_path":"x","ref_text":"@file:x","uploaded":false}""",
+                "prompt.submit" to """{"status":"streaming"}""",
+            ),
+        )
+        val routes = FileRoutes()
+        answerFileRoutes(
+            routes,
+            uploads = """{"entries":[
+                {"name":"old","path":"/home/u/.kyllene-uploads/old","is_directory":true,"size":null,"mtime":${now - 8 * 86_400}},
+                {"name":"new","path":"/home/u/.kyllene-uploads/new","is_directory":true,"size":null,"mtime":${now - 86_400}},
+                {"name":"stray.txt","path":"/home/u/.kyllene-uploads/stray.txt","is_directory":false,"size":1,"mtime":1}
+            ]}""",
+        )
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        assertTrue(chat.send("one", listOf(streamed("a.tar", "application/x-tar", 13_000_000L))))
+        assertTrue(chat.send("two", listOf(streamed("b.tar", "application/x-tar", 13_000_000L))))
+
+        assertEquals(listOf("/home/u/.kyllene-uploads"), routes.listed)
+        assertEquals(listOf("/home/u/.kyllene-uploads/old"), routes.deleted)
+    }
+
+    @Test
+    fun aSecondSendWaitsForTheFirstsUpload() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
+                "file.attach" to """{"attached":true,"name":"logs.tar","path":"/w/logs.tar","ref_path":"logs.tar","ref_text":"@file:logs.tar","uploaded":true}""",
+                "prompt.submit" to """{"status":"streaming"}""",
+            ),
+        )
+        val routes = FileRoutes()
+        answerFileRoutes(routes)
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        // Sent while the file is going up: it would otherwise go first, and take what the first queued.
+        var second: kotlinx.coroutines.Deferred<Boolean>? = null
+        routes.uploaded = {
+            if (second == null) second = backgroundScope.async(UnconfinedTestDispatcher(testScheduler)) { chat.send("meanwhile") }
+        }
+
+        assertTrue(chat.send("look", listOf(streamed("logs.tar", "application/x-tar", 13_000_000L))))
+        assertTrue(assertNotNull(second).await())
+
+        val submits = transport.sent.value.filter { it.isCall("prompt.submit") }
+        assertEquals(listOf("@file:logs.tar\n\nlook", "meanwhile"), submits.map { it.param("text") })
+        // Sent while nothing ran, it waits for the turn the first one started instead of steering it.
+        assertNull(submits[0].param("queued"))
+        assertEquals("true", submits[1].param("queued"))
+    }
+
+    private fun ByteArray.indexOfSequence(needle: ByteArray, from: Int = 0): Int {
+        outer@ for (i in from..size - needle.size) {
+            for (j in needle.indices) if (this[i + j] != needle[j]) continue@outer
+            return i
+        }
+        return -1
     }
 
     @Test

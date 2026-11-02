@@ -2495,6 +2495,16 @@ internal fun UserBubble(
                 MessageTimeLabel(message.timestamp)
             }
         } else if (!message.pending) MessageTimeLabel(message.timestamp)
+        // A large file over a slow link takes minutes; how far it has gone shows it isn't stuck.
+        message.upload?.let {
+            Text(
+                "Uploading ${it.name} · ${it.percent}%",
+                style = Theme[typography][caption],
+                color = Theme[colors][textTertiary],
+                maxLines = 1,
+                overflow = TextOverflow.MiddleEllipsis,
+            )
+        }
         if (message.queued) {
             Text("Queued · sends after this task", style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }
