@@ -38,6 +38,12 @@ kotlin {
         jvmMain.dependencies {
             implementation(libs.sqlite.bundled)
             implementation(libs.jna.platform)
+            implementation(libs.dbus.core)
+            if (System.getProperty("os.name").startsWith("Linux")) {
+                implementation(libs.dbus.unix)
+                implementation(libs.junixsocket.common)
+                runtimeOnly(libs.junixsocket.native)
+            }
         }
         commonMain.dependencies {
             api(libs.kotlinx.coroutines.core)
