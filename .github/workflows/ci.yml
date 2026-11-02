@@ -55,6 +55,25 @@ jobs:
           echo "$apk keeps $count org.jni_zero classes"
           [ "$count" -gt 0 ] || { echo "::error::R8 renamed or removed org.jni_zero; check androidApp/proguard-rules.pro"; exit 1; }
 
+      - name: R8 kept TeX macro reflection entry points
+        run: |
+          apk=androidApp/build/outputs/apk/dev/androidApp-dev.apk
+          analyzer="$ANDROID_HOME/cmdline-tools/latest/bin/apkanalyzer"
+          [ -f "$apk" ] || { echo "::error::No dev APK at $apk"; exit 1; }
+          [ -x "$analyzer" ] || { echo "::error::Android SDK apkanalyzer is unavailable"; exit 1; }
+          smali=$(mktemp)
+          trap 'rm -f "$smali"' EXIT
+          "$analyzer" dex code --class org.scilab.forge.jlatexmath.NewCommandMacro "$apk" > "$smali"
+          grep -Fxq '.class public Lorg/scilab/forge/jlatexmath/NewCommandMacro;' "$smali" || {
+            echo '::error::R8 changed the TeX macro class name'; exit 1;
+          }
+          grep -Fxq '.method public constructor <init>()V' "$smali" || {
+            echo '::error::R8 removed the public TeX macro constructor'; exit 1;
+          }
+          grep -Eq '^\.method public executeMacro\(L[^;]+;\[Ljava/lang/String;\)Ljava/lang/String;$' "$smali" || {
+            echo '::error::R8 changed the TeX macro method'; exit 1;
+          }
+
       - name: Lint report
         if: failure()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

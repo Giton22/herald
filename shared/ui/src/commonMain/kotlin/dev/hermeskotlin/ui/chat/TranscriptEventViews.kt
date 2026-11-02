@@ -17,6 +17,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -33,8 +34,10 @@ import com.composables.icons.lucide.Bot
 import com.composables.icons.lucide.CheckCheck
 import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.Settings
 import com.composables.icons.lucide.CircleAlert
 import com.composables.icons.lucide.CornerDownRight
+import com.composables.icons.lucide.History
 import com.composables.icons.lucide.Hourglass
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageCircle
@@ -87,6 +90,12 @@ import dev.hermeskotlin.ui.bots.LocalBotFaces
 @Composable
 internal fun TranscriptEventRow(event: TranscriptEvent) {
     when (event) {
+        is TranscriptEvent.SystemMessages -> SystemMessages(event.entries)
+        is TranscriptEvent.Compaction -> FoldedLine(
+            icon = Lucide.History,
+            title = "Earlier messages summarized",
+            body = event.body.takeIf { it.isNotBlank() }?.let { { MarkdownText(it) } },
+        )
         is TranscriptEvent.FromBot -> FromBotNote(event)
         is TranscriptEvent.Delivery -> DeliveryLine(event)
         is TranscriptEvent.Process -> FoldedLine(
@@ -109,6 +118,21 @@ internal fun TranscriptEventRow(event: TranscriptEvent) {
         is TranscriptEvent.Label -> Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
             Text(event.text, style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }
+    }
+}
+
+/** The same disclosure as Reasoning; open, each entry is its own line, its words a tap further. */
+@Composable
+private fun SystemMessages(entries: List<TranscriptEvent>) {
+    var expanded by remember { mutableStateOf(false) }
+    Disclosure(
+        icon = { UnstyledIcon(Lucide.Settings, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp)) },
+        label = "System messages · ${entries.size}",
+        expanded = expanded,
+        onToggle = { expanded = !expanded },
+    ) {
+        // Counted from the newest, as the group is keyed: one opened stays open when an earlier page adds entries above.
+        Column { entries.forEachIndexed { i, entry -> key(entries.size - i) { TranscriptEventRow(entry) } } }
     }
 }
 

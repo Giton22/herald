@@ -84,6 +84,26 @@ Output:
     }
 
     @Test
+    fun onlyKnownRoutineEnvelopesEscapeInternalNotificationFiltering() {
+        listOf(
+            "[Cronjob \"Backup Watch\" output — scheduled job, not the user. Review it, act on anything that needs action, and summarize for the chat.]\r\n\r\nScan complete.",
+            "[Cron delivery: Вестник]\nResults\r\n```text\r\nready\r\n```",
+            "[Cron delivery: Empty]",
+        ).forEach { text ->
+            assertFalse(TranscriptRows.isNoise(text, "internal_notification"), text)
+            assertIs<TranscriptEvent.Routine>(TranscriptRows.classify(text, "internal_notification")?.single())
+        }
+        listOf(
+            "A cron finished", "Please explain [Cron delivery: Backup]",
+            "> [Cron delivery: Backup]\nQuoted output",
+            "```text\n[Cron delivery: Backup]\n```",
+            "[Cronjob Backup output — malformed]", "[Cron delivery: ]\nMissing name",
+            "[System: cron finished]", "[Background process p1 heartbeat #3 — cron check]",
+            "[IMPORTANT: Background process p1 completed normally (exit code 0).\nCommand: scan\nOutput:\nready]",
+        ).forEach { assertTrue(TranscriptRows.isNoise(it, "internal_notification"), it) }
+    }
+
+    @Test
     fun noiseAndSilence() {
         assertTrue(TranscriptRows.isNoise("[System: compacted]", null))
         assertTrue(TranscriptRows.isNoise("[Background process p1 heartbeat #3 — still running", null))
