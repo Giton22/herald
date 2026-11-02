@@ -1,17 +1,28 @@
 # Separate from Android CI: keep this workflow's checks advisory in branch rules.
 name: Linux (advisory)
 
+# Only what the desktop app or its package is built from; an Android-only change skips the ~30 min run.
 on:
   push:
     branches: [master]
+    paths: &paths
+      - "shared/**"
+      - "desktopApp/**"
+      - "packaging/flatpak/**"
+      - "gradle/**"
+      - "*.gradle.kts"
+      - "gradle.properties"
+      - ".github/workflows/linux.yml"
   pull_request:
+    paths: *paths
 
 permissions:
   contents: read
 
+# A newer push to a PR replaces its run; every master commit keeps its own result.
 concurrency:
   group: linux-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   linux:
@@ -21,6 +32,8 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
+          # The Flatpak build clones this checkout; a shallow one can't be cloned reliably.
+          fetch-depth: 0
       - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
         with:
           distribution: jetbrains
@@ -28,6 +41,8 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
       - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
       - name: JVM tests
         run: >
           ./gradlew --no-daemon --max-workers=2
@@ -51,12 +66,15 @@ jobs:
           SH
           chmod +x "$RUNNER_TEMP/fontconfig-sdk/fc-list"
           PATH="$RUNNER_TEMP/fontconfig-sdk:$PATH" python3 -m unittest discover -s packaging/flatpak/tests -v
+      # From this checkout, not GitHub: a PR's merge ref moves whenever master does, which would fail the
+      # builder's commit check mid-run. A clone carries only committed files, never untracked ones.
       - name: Select tested source
-        run: >
-          python3 packaging/flatpak/prepare-ci.py
-          packaging/flatpak/io.github.Giton22.Kyllene.Devel.json
-          --repository "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
-          --ref "$GITHUB_REF" --commit "$GITHUB_SHA"
+        run: |
+          git update-ref refs/heads/flatpak-ci-tested "$GITHUB_SHA"
+          python3 packaging/flatpak/prepare-ci.py \
+            packaging/flatpak/io.github.Giton22.Kyllene.Devel.json \
+            --repository "file://$GITHUB_WORKSPACE" \
+            --ref flatpak-ci-tested --commit "$GITHUB_SHA"
       - name: Build offline and bundle
         run: |
           flatpak-builder --user --repo=build/flatpak-repo build/flatpak packaging/flatpak/ci.json
@@ -66,3 +84,4 @@ jobs:
           name: kyllene-flatpak-x86_64
           path: build/kyllene.flatpak
           if-no-files-found: error
+          retention-days: 14

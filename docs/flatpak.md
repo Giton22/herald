@@ -47,9 +47,10 @@ formats pass startup and rendering checks with the selected Skia/runtime version
 ## Advisory CI
 
 The separate Linux workflow runs JVM/packaging tests and exports an x86_64 bundle.
-It builds the public Git revision tested by the workflow, including a pull
-request's merge ref, with the same locked build inputs. It never packages a
-recursive copy of the runner workspace. Only the bundle is uploaded. The
+It runs only when the desktop app's sources, the build or this packaging change.
+It builds the exact commit tested by the workflow (a pull request's merge commit)
+from a Git clone of the checkout, with the same locked build inputs, so committed
+files only: never untracked files in the runner workspace. Only the bundle is uploaded. The
 font-filter contract uses the selected SDK's fontconfig, independent of the
 runner host's fontconfig version. CI uses the native `flatpak-builder` package;
 the Builder application needs a desktop host-command service unavailable there.
