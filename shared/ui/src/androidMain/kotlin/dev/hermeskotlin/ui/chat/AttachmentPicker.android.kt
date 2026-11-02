@@ -163,7 +163,7 @@ private fun readAttachment(context: Context, uri: Uri, budget: Long): OutgoingAt
         val thumbnail = upright.scaledTo(THUMBNAIL_EDGE).jpeg(THUMBNAIL_QUALITY)
         return OutgoingAttachment(id, name.withExtension("jpg"), "image/jpeg", upload, thumbnail)
     }
-    if (size != null && size > OutgoingAttachment.MAX_BYTES) error("$name is larger than 25 MB.")
+    if (size != null && size > OutgoingAttachment.MAX_BYTES) error("$name is larger than ${OutgoingAttachment.MAX_SIZE}.")
     if (size != null && size > budget) error("That's more than 50 MB of attachments at once.")
     // The reported size can be missing or wrong, so the read itself stops at the limit.
     val limit = minOf(OutgoingAttachment.MAX_BYTES.toLong(), budget)

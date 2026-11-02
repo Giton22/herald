@@ -31,8 +31,14 @@ class OutgoingAttachment(
     internal fun base64(): String = Base64.encode(bytes)
 
     companion object {
-        /** `image.attach_bytes` refuses more; other uploads are kept to the same size. */
-        const val MAX_BYTES = 25 * 1024 * 1024
+        /**
+         * The most one file can be. It goes to the gateway base64 (4/3 its size) inside one WebSocket message,
+         * which can't pass [dev.hermeskotlin.core.rpc.JsonRpcClient.MAX_FRAME_BYTES]: 12 MB is 16 MB on the wire.
+         */
+        const val MAX_BYTES = 12_000_000
+
+        /** [MAX_BYTES] as the app says it, in megabytes of a million bytes like the system's file sizes. */
+        val MAX_SIZE = "${MAX_BYTES / 1_000_000} MB"
 
         /** Per prompt, like a sensible composer tray. */
         const val MAX_COUNT = 10

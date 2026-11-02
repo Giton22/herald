@@ -1260,7 +1260,7 @@ private fun DropOverlay() {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             UnstyledIcon(Lucide.Paperclip, contentDescription = null, tint = accentColor, modifier = Modifier.size(28.dp))
             Text("Drop to attach", style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][textColor])
-            Text("Up to ${OutgoingAttachment.MAX_COUNT} files, 25 MB each.", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+            Text("Up to ${OutgoingAttachment.MAX_COUNT} files, ${OutgoingAttachment.MAX_SIZE} each.", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
         }
     }
 }

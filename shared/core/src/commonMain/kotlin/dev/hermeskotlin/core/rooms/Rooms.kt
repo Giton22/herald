@@ -28,7 +28,11 @@ data class RoomAttachment(
 ) {
     companion object {
         const val MAX_COUNT = 8
-        const val MAX_BYTES = 15_000_000
+        /**
+         * The gateway takes 15 MB, but a file goes up base64 in one WebSocket message, so it's held to what
+         * the socket carries ([dev.hermeskotlin.core.chat.OutgoingAttachment.MAX_BYTES]).
+         */
+        const val MAX_BYTES = dev.hermeskotlin.core.chat.OutgoingAttachment.MAX_BYTES
         const val MAX_TOTAL_BYTES = 25_000_000
 
         /** The limits as the composer states them; the gateway counts megabytes in millions of bytes. */

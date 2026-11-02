@@ -145,7 +145,7 @@ private fun readAttachment(file: File, budget: Long): OutgoingAttachment {
         if (size > MAX_PHOTO_BYTES) error("$name is larger than 50 MB.")
         return imageAttachment(name, file.readBytes(), budget)
     }
-    if (size > OutgoingAttachment.MAX_BYTES) error("$name is larger than 25 MB.")
+    if (size > OutgoingAttachment.MAX_BYTES) error("$name is larger than ${OutgoingAttachment.MAX_SIZE}.")
     if (size > budget) error("That's more than 50 MB of attachments at once.")
     val bytes = file.readBytes()
     val thumbnail = if (mime.startsWith("image/")) decodeScaled(bytes, THUMBNAIL_EDGE)?.jpeg(THUMBNAIL_QUALITY) else null
