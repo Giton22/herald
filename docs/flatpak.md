@@ -37,8 +37,8 @@ content in the installed sandbox. Review native dependencies alongside JVM ones.
 The package uses XWayland under KDE Wayland. The entry point selects X11 for
 child runtimes, preventing Chromium from choosing an unavailable Wayland socket.
 Native Wayland is not qualified.
-Voice and Linux credential encryption are separate work. Do not use personal
-credentials until secure storage is qualified. A successful build alone does not
+Voice remains separate work. Qualify secure storage on the target desktop before
+using personal credentials. A successful build alone does not
 qualify login, clipboard, window movement, portals or embedded content.
 
 The package keeps Compose's app image and generated runtime. Its shell entry point
@@ -52,9 +52,8 @@ formats pass startup and rendering checks with the selected Skia/runtime version
 
 ### Secret portal adapter
 
-The JVM core includes a Linux `org.freedesktop.portal.Secret` adapter for a later
-storage integration. This alone does not encrypt existing desktop settings or
-migrate credentials. It uses FileKit's dbus-java binding with the FD-capable
+The JVM core uses a Linux `org.freedesktop.portal.Secret` adapter to retrieve the
+key material for encrypted desktop settings. It uses FileKit's dbus-java binding with the FD-capable
 junixsocket transport, replacing its native Unix transport at the FileKit edge.
 Requests subscribe before dispatch, accept only the portal owner's matching
 response, and send `Request.Close` on cancellation or timeout. Missing services,
@@ -69,3 +68,38 @@ builds analyze those two JARs as ProGuard libraries and package their original b
 preserving multi-release classes and JNI resources while optimizing the application.
 The Linux runtime includes `jdk.security.auth` for D-Bus EXTERNAL authentication.
 Other desktop platforms retain FileKit's existing transport provider.
+
+### Encrypted Linux settings
+
+Linux Flatpak startup unlocks storage before settings, authentication and cache
+consumers are created. A failed unlock offers Retry and Quit; no plaintext or
+empty-store fallback is used. Unlock the desktop keyring and check Secret portal
+availability before retrying. A corrupt file or lost key requires a known-good
+backup and its original application identity; a replacement key cannot recover it.
+Ordinary non-Flatpak Linux keeps its existing plaintext store; it needs a separate
+Secret Service integration before credentials there are encrypted. Windows and
+macOS stores are unchanged. Missing metadata with a Flatpak runtime hint, present
+invalid metadata or read errors fail closed; environment hints never supply a key
+identity. No portal failure can select the legacy store after Flatpak selection.
+
+The app derives an application-scoped AES-256 key with HKDF-SHA256. Its versioned
+AES-GCM envelope authenticates the application identity and optional portal token,
+with a new random nonce on each write. Token rotation and values commit together.
+`settings.secure` is authoritative: invalid content there is never imported as
+plaintext. A fresh profile imports only its own `settings.json`, preserving the
+existing offline-cache key. It verifies and syncs the encrypted replacement before
+removing unchanged legacy data. Interrupted cleanup can resume using an encrypted
+migration digest; conflicting legacy data or an unfinished `settings.json.part`
+stops startup for manual resolution. Atomic replacement and parent-directory sync
+are required. A per-profile file lock serializes version checks and replacement;
+a stale writer must reopen. Failed or uncertain writes do not permit further unsafe mutations.
+
+Back up the complete profile before upgrades. The file's format has a version: a
+`settings.secure` written by a newer Kyllene stops an older one at startup, with
+Quit as the only choice, instead of being read wrongly or replaced. Go back to that
+version or newer, or restore the backup taken before the upgrade. Other Flatpak identities are never
+searched or imported. Removing old plaintext does not securely erase disk blocks
+or backups. Encryption does not protect an unlocked process or prevent a same-user
+attacker replacing the entire profile. Run the Linux storage and migration tests
+with `./gradlew :shared:core:jvmTest --tests '*Linux*StoreTest' --tests '*LinuxStorage*Test'`
+and startup contracts with `./gradlew :desktopApp:jvmTest --tests '*StorageStartupTest'`.
