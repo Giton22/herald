@@ -13,6 +13,7 @@ import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.DragData
 import androidx.compose.ui.draganddrop.dragData
 import dev.hermeskotlin.core.chat.OutgoingAttachment
+import dev.hermeskotlin.core.chat.streamedSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -146,6 +147,10 @@ private fun readAttachment(file: File, budget: Long): OutgoingAttachment {
         return imageAttachment(name, file.readBytes(), budget)
     }
     if (size > OutgoingAttachment.MAX_BYTES) error("$name is larger than ${OutgoingAttachment.MAX_SIZE}.")
+    // Too large for one socket message: read as it goes up, never held here (the pick's budget is for what is).
+    if (size > OutgoingAttachment.MAX_INLINE_BYTES) {
+        return OutgoingAttachment(newId(), name, mime, ByteArray(0), source = streamedSource(size) { file.inputStream() })
+    }
     if (size > budget) error("That's more than 50 MB of attachments at once.")
     val bytes = file.readBytes()
     val thumbnail = if (mime.startsWith("image/")) decodeScaled(bytes, THUMBNAIL_EDGE)?.jpeg(THUMBNAIL_QUALITY) else null
