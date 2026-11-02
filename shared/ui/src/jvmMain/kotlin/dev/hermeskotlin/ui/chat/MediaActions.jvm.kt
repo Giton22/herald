@@ -14,14 +14,18 @@ import java.nio.file.Files
 @Composable
 actual fun rememberMediaActions(): MediaActions = remember {
     object : MediaActions {
-        override suspend fun save(bytes: ByteArray, name: String): String {
+        override suspend fun save(bytes: ByteArray, name: String): String =
+            saveOutcome(bytes, name)?.text ?: getString(Res.string.desktop_save_cancelled)
+
+        override suspend fun saveOutcome(bytes: ByteArray, name: String): SaveOutcome? {
             val title = getString(Res.string.desktop_save_title)
-            val file = fromDialog { saveFile(title, name) }.getOrElse { return getString(Res.string.desktop_save_dialog_failed) }
-                ?: return getString(Res.string.desktop_save_cancelled)
+            val file = fromDialog { saveFile(title, name) }
+                .getOrElse { return SaveOutcome(getString(Res.string.desktop_save_dialog_failed), saved = false) }
+                ?: return null
             val written = withContext(Dispatchers.IO) { runCatching { file.writeBytes(bytes) } }
             return written.fold(
-                { getString(Res.string.desktop_saved_to, file.path) },
-                { getString(Res.string.desktop_save_failed, it.message.toString()) },
+                { SaveOutcome(getString(Res.string.desktop_saved_to, file.path), saved = true) },
+                { SaveOutcome(getString(Res.string.desktop_save_failed, it.message.toString()), saved = false) },
             )
         }
 
