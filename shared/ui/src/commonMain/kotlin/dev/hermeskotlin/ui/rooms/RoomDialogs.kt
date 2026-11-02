@@ -23,12 +23,14 @@ import dev.hermeskotlin.designsystem.components.MenuAction
 import dev.hermeskotlin.designsystem.components.TextField
 import dev.hermeskotlin.ui.isDesktop
 import dev.hermeskotlin.ui.sessions.resetTo
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /** A room's actions, the same wherever its menu opens: its row in the sidebar or its own top bar. */
 @Composable
 internal fun DropdownMenuPanelScope.RoomMenuActions(onRename: () -> Unit, onDelete: () -> Unit) {
-    MenuAction("Rename", Lucide.Pencil, onRename)
-    MenuAction("Delete room", Lucide.Trash2, onDelete)
+    MenuAction(stringResource(Res.string.rooms_rename), Lucide.Pencil, onRename)
+    MenuAction(stringResource(Res.string.rooms_delete_room), Lucide.Trash2, onDelete)
 }
 
 /** What a room's menu has open: nothing, its rename, or the delete to confirm. */
@@ -69,15 +71,15 @@ private fun RenameRoomDialog(room: Room, visible: Boolean, onDismiss: () -> Unit
     Dialog(
         visible = visible,
         onDismissRequest = onDismiss,
-        title = "Rename room",
+        title = stringResource(Res.string.rooms_rename_room),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Rename", onClick = submit, variant = ButtonVariant.Primary, size = ButtonSize.Small, enabled = ready)
+            Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(stringResource(Res.string.rooms_rename), onClick = submit, variant = ButtonVariant.Primary, size = ButtonSize.Small, enabled = ready)
         },
     ) {
         TextField(
             state = name,
-            label = "Room name",
+            label = stringResource(Res.string.rooms_room_name),
             autofocus = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             // Enter renames on the desktop; a phone's Done only closes the keyboard, as it always has.
@@ -91,12 +93,11 @@ private fun DeleteRoomDialog(room: Room, visible: Boolean, onDismiss: () -> Unit
     Dialog(
         visible = visible,
         onDismissRequest = onDismiss,
-        title = "Delete “${room.name}”?",
-        message = "The room stops and is deleted from the gateway with its conversation, for every app. " +
-            "The bots in it stay. This can't be undone.",
+        title = stringResource(Res.string.rooms_delete_title, room.name),
+        message = stringResource(Res.string.rooms_delete_detail),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Delete", onClick = { onDismiss(); onDelete(room) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
+            Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(stringResource(Res.string.rooms_delete), onClick = { onDismiss(); onDelete(room) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
         },
     )
 }
