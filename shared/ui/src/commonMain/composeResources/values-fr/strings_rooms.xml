@@ -104,7 +104,7 @@
     <string name="bots_open_chat_of">Ouvrir la conversation de %1$s</string>
     <string name="bots_open_routines_of">Ouvrir les routines de %1$s</string>
     <string name="bots_actions_of">Actions pour %1$s</string>
-    <string name="bots_pinned">Épinglés</string>
+    <string name="bots_pinned">Épinglé</string>
     <string name="bots_needs_attention">Demande de l’attention</string>
     <string name="bots_unread">Non lu</string>
     <string name="bots_needs_you">%1$s a besoin de vous</string>
@@ -128,7 +128,7 @@
     <string name="bots_title">Titre</string>
     <string name="bots_title_example">Ce qu’il est, p. ex. Analyste de recherche</string>
     <string name="bots_description">Description</string>
-    <string name="bots_description_placeholder">Pour quoi ce bot doit-il vous aider ?</string>
+    <string name="bots_description_placeholder">En quoi ce bot doit-il vous aider ?</string>
     <string name="bots_persona">Persona (SOUL.md)</string>
     <string name="bots_persona_placeholder">Facultatif. Si vide, il est rédigé à partir du nom, du titre et de la description.</string>
     <string name="bots_persona_detail">Comment le bot se voit et travaille, lu au début de chaque conversation.</string>

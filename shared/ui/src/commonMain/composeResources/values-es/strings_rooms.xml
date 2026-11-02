@@ -34,8 +34,8 @@
     <string name="rooms_needs_approval">%1$s necesita tu aprobación</string>
     <string name="rooms_member_needs_approval">Un miembro necesita tu aprobación</string>
     <string name="rooms_approve_once">Aprobar una vez</string>
-    <string name="rooms_turn_failed">El turno de %1$s no salió</string>
-    <string name="rooms_member_turn_failed">El turno de un miembro no salió</string>
+    <string name="rooms_turn_failed">El turno de %1$s falló</string>
+    <string name="rooms_member_turn_failed">El turno de un miembro falló</string>
     <string name="rooms_retry">Reintentar</string>
     <string name="rooms_attachment_limits">Hasta %1$d archivos, %2$d MB cada uno, %3$d MB por mensaje</string>
     <string name="rooms_send_again">Envía de nuevo para confirmar el mensaje anterior.</string>
@@ -89,7 +89,7 @@
     <string name="bots_delete">Eliminar</string>
     <string name="bots_thinking">Pensando…</string>
     <string name="bots_working">Trabajando…</string>
-    <string name="bots_routine_failed">La rutina “%1$s” no salió</string>
+    <string name="bots_routine_failed">La rutina “%1$s” falló</string>
     <string name="bots_say_hello">Saluda</string>
     <string name="bots_unpin">Desfijar</string>
     <string name="bots_pin">Fijar arriba</string>
@@ -104,7 +104,7 @@
     <string name="bots_open_chat_of">Abrir el chat de %1$s</string>
     <string name="bots_open_routines_of">Abrir las rutinas de %1$s</string>
     <string name="bots_actions_of">Acciones de %1$s</string>
-    <string name="bots_pinned">Fijados</string>
+    <string name="bots_pinned">Fijado</string>
     <string name="bots_needs_attention">Necesita atención</string>
     <string name="bots_unread">Sin leer</string>
     <string name="bots_needs_you">%1$s te necesita</string>

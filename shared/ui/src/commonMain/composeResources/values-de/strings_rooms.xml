@@ -34,8 +34,8 @@
     <string name="rooms_needs_approval">%1$s braucht deine Freigabe</string>
     <string name="rooms_member_needs_approval">Ein Mitglied braucht deine Freigabe</string>
     <string name="rooms_approve_once">Einmal freigeben</string>
-    <string name="rooms_turn_failed">Der Zug von %1$s ist nicht durchgegangen</string>
-    <string name="rooms_member_turn_failed">Der Zug eines Mitglieds ist nicht durchgegangen</string>
+    <string name="rooms_turn_failed">Die Runde von %1$s ist fehlgeschlagen</string>
+    <string name="rooms_member_turn_failed">Die Runde eines Mitglieds ist fehlgeschlagen</string>
     <string name="rooms_retry">Wiederholen</string>
     <string name="rooms_attachment_limits">Bis zu %1$d Dateien, je %2$d MB, %3$d MB pro Nachricht</string>
     <string name="rooms_send_again">Sende erneut, um die vorige Nachricht zu bestätigen.</string>
@@ -89,9 +89,9 @@
     <string name="bots_delete">Löschen</string>
     <string name="bots_thinking">Denkt nach…</string>
     <string name="bots_working">Arbeitet…</string>
-    <string name="bots_routine_failed">Routine „%1$s“ ist nicht durchgegangen</string>
+    <string name="bots_routine_failed">Routine „%1$s“ ist fehlgeschlagen</string>
     <string name="bots_say_hello">Sag Hallo</string>
-    <string name="bots_unpin">Lösen</string>
+    <string name="bots_unpin">Nicht mehr anheften</string>
     <string name="bots_pin">Oben anheften</string>
     <string name="bots_unhide">Einblenden</string>
     <string name="bots_hide">Ausblenden</string>

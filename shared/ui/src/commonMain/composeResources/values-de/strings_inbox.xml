@@ -83,11 +83,11 @@
     <string name="inbox_kept_on_computer">Auf diesem Computer gespeichert</string>
     <string name="inbox_new_group">Neue Gruppe</string>
     <string name="inbox_opens_on">Der Posteingang öffnet mit</string>
-    <string name="inbox_layout_folders">Ordnern</string>
-    <string name="inbox_layout_one_list">Einer Liste</string>
+    <string name="inbox_layout_folders">Ordner</string>
+    <string name="inbox_layout_one_list">Eine Liste</string>
     <string name="inbox_folders_are">Ordner sind</string>
     <string name="inbox_chips_show">Chips zeigen</string>
-    <string name="inbox_mode_each_job">Jeden Job</string>
+    <string name="inbox_mode_each_job">Je Job</string>
     <string name="inbox_mode_my_groups">Meine Gruppen</string>
     <string name="inbox_groups_hint">Leg mit dem Ordner-Knopf oben eine Gruppe an und ordne ihr Jobs zu. Bis dahin zeigen die Chips jeden Job.</string>
     <string name="inbox_groups">Gruppen</string>
@@ -122,7 +122,7 @@
     <string name="inbox_all_jobs">Alle Jobs</string>
     <string name="inbox_all_jobs_detail">Stellt alle Jobs auf einmal ein, auch später angelegte. Stille Jobs tauchen nie auf. Einzelne Jobs schaltest du unten aus.</string>
     <string name="inbox_all_off">Alle aus</string>
-    <string name="inbox_all_in_inbox">Alle in Posteingang</string>
+    <string name="inbox_all_in_inbox">Alle im Posteingang</string>
     <string name="inbox_all_notify">Alle melden</string>
     <string name="inbox_failures">Sag mir, wenn ein Job fehlschlägt</string>
     <string name="inbox_failures_detail">Eine Benachrichtigung für jeden fehlgeschlagenen Lauf, auch von Jobs, denen du nicht folgst.</string>
@@ -157,7 +157,7 @@
     <string name="assistant_open_app">Kyllene öffnen</string>
     <string name="assistant_listening">Hört zu…</string>
     <string name="assistant_transcribing">Schreibt mit, was du gesagt hast…</string>
-    <string name="assistant_connecting">Verbinde mit Hermes…</string>
+    <string name="assistant_connecting">Verbindung mit Hermes…</string>
     <string name="assistant_ask_circled">Frag nach dem Eingekreisten</string>
     <string name="assistant_ask_follow_up">Stell eine Rückfrage</string>
     <string name="assistant_ask_screen">Frag nach deinem Bildschirm</string>

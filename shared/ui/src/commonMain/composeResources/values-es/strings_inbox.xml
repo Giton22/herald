@@ -4,7 +4,7 @@
     <string name="inbox_title">Bandeja de entrada</string>
     <string name="inbox_all">Todo</string>
     <string name="inbox_other">Otros</string>
-    <string name="inbox_failed">Fallidos</string>
+    <string name="inbox_failed">Fallidas</string>
     <string name="inbox_failed_at">Falló · %1$s</string>
     <string name="inbox_from_jobs">De las tareas que sigues</string>
     <plurals name="inbox_unread_from_jobs">
