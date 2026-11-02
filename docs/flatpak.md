@@ -163,7 +163,8 @@ Desktop file previews draw PDF pages inside the existing viewer, with its scroll
 and zoom controls. Password-protected or damaged documents show an explanation;
 Save remains available. PDFBox runs in one child of the bundled Java runtime per
 open document. Closing the viewer, cancellation, or a 15-second operation deadline
-retires that child. Input is limited to 64 MiB and 500 pages; each rendered page is
+retires that child. A later render after a cancelled zoom or scroll starts a fresh
+child for the same document; closing the viewer is permanent. Input is limited to 64 MiB and 500 pages; each rendered page is
 limited to eight million pixels and 16,384 pixels on either side. The child has a
 256 MiB Java heap limit, so complex documents can exceed its limits sooner.
 

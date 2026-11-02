@@ -19,8 +19,6 @@ import org.apache.pdfbox.pdmodel.PDPage
 import org.apache.pdfbox.pdmodel.encryption.AccessPermission
 import org.apache.pdfbox.pdmodel.encryption.StandardProtectionPolicy
 import java.io.ByteArrayOutputStream
-import java.io.DataInputStream
-import java.io.DataOutputStream
 import java.io.File
 import java.net.URLClassLoader
 import java.util.concurrent.TimeUnit
@@ -169,8 +167,9 @@ class DesktopPdfTest {
     @Test
     fun cancellationDuringRenderRetiresTheWorker() = runBlocking {
         lateinit var process: Process
+        var launches = 0
         val pages = assertIs<PdfOpen.Ready>(openDesktopPdf(pdf()) {
-            fixture("ready").also { process = it }
+            fixture(if (launches++ == 0) "ready" else "draw").also { process = it }
         }).pages
         pages.use {
             val rendering = async { it.render(0, 100, 200) }
@@ -179,6 +178,8 @@ class DesktopPdfTest {
             withTimeout(5_000) { rendering.cancelAndJoin() }
             assertTrue(rendering.isCancelled)
             assertTrue(process.waitFor(3, TimeUnit.SECONDS))
+            assertNotNull(it.render(0, 100, 200), "A new zoom target must still render after cancellation")
+            assertEquals(2, launches)
         }
     }
 
@@ -198,6 +199,39 @@ class DesktopPdfTest {
                 assertNull(withTimeout(5_000) { rendering.await() })
                 assertTrue(process.waitFor(3, TimeUnit.SECONDS))
             }
+        }
+    }
+
+    @Test
+    fun closeDuringReplacementStartupCannotPublishALiveWorker() = runBlocking {
+        var launches = 0
+        val replacement = CompletableDeferred<Process>()
+        val release = java.util.concurrent.CountDownLatch(1)
+        lateinit var process: Process
+        val pages = assertIs<PdfOpen.Ready>(openDesktopPdf(pdf(), timeoutMillis = 300) {
+            fixture("ready").also {
+                process = it
+                if (++launches == 2) {
+                    replacement.complete(it)
+                    release.await(3, TimeUnit.SECONDS)
+                }
+            }
+        }).pages
+        try {
+            assertNull(pages.render(0, 100, 200))
+            assertTrue(process.waitFor(3, TimeUnit.SECONDS))
+            val rendering = async { pages.render(0, 100, 200) }
+            val next = withTimeout(5_000) { replacement.await() }
+            pages.close()
+            release.countDown()
+            assertNull(withTimeout(5_000) { rendering.await() })
+            assertTrue(next.waitFor(3, TimeUnit.SECONDS))
+            assertNull(pages.render(0, 100, 200))
+            assertEquals(2, launches)
+        } finally {
+            release.countDown()
+            pages.close()
+            process.destroyForcibly()
         }
     }
 
@@ -267,30 +301,5 @@ class DesktopPdfTest {
         offsets.forEach { body.append("%010d 00000 n \n".format(it)) }
         body.append("trailer\n<< /Size ${objects.size + 1} /Root 1 0 R >>\nstartxref\n$xref\n%%EOF\n")
         return body.toString().toByteArray(Charsets.US_ASCII)
-    }
-}
-
-/** A real child that deliberately stops making progress or returns an invalid protocol message. */
-internal object PdfWorkerFixture {
-    @JvmStatic
-    fun main(args: Array<String>) {
-        val input = DataInputStream(System.`in`)
-        val output = DataOutputStream(System.out)
-        val size = input.readInt()
-        input.readNBytes(size)
-        if (args[0] == "early-exit") return
-        if (args[0] == "hang-open") Thread.sleep(60_000)
-        output.writeInt(PdfWire.READY)
-        output.writeInt(if (args[0] == "huge-count") Int.MAX_VALUE else 1)
-        output.writeFloat(if (args[0] == "bad-aspect") Float.NaN else 0.5f)
-        output.flush()
-        repeat(3) { input.readInt() }
-        System.err.close()
-        if (args[0] == "wrong-dimensions") {
-            output.writeInt(Int.MAX_VALUE)
-            output.writeInt(Int.MAX_VALUE)
-            output.flush()
-        }
-        Thread.sleep(60_000)
     }
 }
