@@ -22,7 +22,6 @@ import dev.hermeskotlin.ui.hasVoice
 import dev.hermeskotlin.ui.windowControlsHeight
 import dev.hermeskotlin.ui.isDesktop
 import dev.hermeskotlin.ui.frostedPanel
-import dev.hermeskotlin.ui.tapVerb
 import dev.hermeskotlin.ui.stepChat
 import dev.hermeskotlin.core.bots.MentionQuery
 import dev.hermeskotlin.core.chat.PathRefKind

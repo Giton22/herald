@@ -767,7 +767,7 @@ class ChatViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _picker.update { it.copy(loading = false, error = e.message ?: "Couldn't load the models.") }
+                _picker.update { it.copy(loading = false, error = e.message.orEmpty()) }
             }
         }
     }
@@ -797,7 +797,7 @@ class ChatViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                chat.showModel(null, null, error = "Couldn't change ${bot.label}'s model. ${e.message.orEmpty()}".trim())
+                chat.showModel(null, null, error = getString(Res.string.chat_model_bot_change_failed, bot.label, e.message.orEmpty()).trim())
             }
         }
     }

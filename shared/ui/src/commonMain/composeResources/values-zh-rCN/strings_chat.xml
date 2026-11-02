@@ -446,6 +446,7 @@
     <string name="chat_notice_call_not_started">通话未开始：Kyllene 无法连接网关。</string>
     <string name="chat_notice_too_many_files">每条消息最多 %1$d 个附件。</string>
     <string name="chat_model_bot_note">在这里选择的模型会成为 %1$s 的模型，用于它所有的对话和例程。</string>
+    <string name="chat_model_bot_change_failed">无法更改 %1$s 的模型。%2$s</string>
     <string name="chat_drop_title">拖放到此处以附加</string>
     <string name="chat_drop_limits">最多 %1$d 个文件，每个 %2$d MB。</string>
     <string name="chat_send_again">再次发送</string>

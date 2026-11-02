@@ -283,7 +283,7 @@ internal fun ModelSheet(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 UnstyledIcon(Lucide.CloudOff, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(24.dp))
-                Text(picker.error ?: stringResource(Res.string.chat_model_load_failed), style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
+                Text(picker.error?.ifEmpty { null } ?: stringResource(Res.string.chat_model_load_failed), style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
                 Button(stringResource(Res.string.chat_try_again), onClick = onRefresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
             }
             else -> ModelList(

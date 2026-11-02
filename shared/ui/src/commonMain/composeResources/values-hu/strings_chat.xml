@@ -169,8 +169,8 @@
     <string name="chat_checkpoints_title">Ellenőrzőpontok</string>
     <string name="chat_checkpoints_subtitle">Pillanatképek a csevegés mappájáról</string>
     <plurals name="chat_checkpoints_count">
-        <item quantity="one">%1$d pillanatkép, még mielőtt az ügynök fájlokat módosított</item>
-        <item quantity="other">%1$d pillanatkép, még mielőtt az ügynök fájlokat módosított</item>
+        <item quantity="one">%1$d pillanatkép, amely még azelőtt készült, hogy az ügynök fájlokat módosított</item>
+        <item quantity="other">%1$d pillanatkép, amelyek még azelőtt készültek, hogy az ügynök fájlokat módosított</item>
     </plurals>
     <string name="chat_checkpoints_read_failed">Nem sikerült beolvasni az ellenőrzőpontokat.</string>
     <string name="chat_checkpoints_off">Az ellenőrzőpontok ki vannak kapcsolva a Gatewayen. Kapcsold be őket a profil config.yaml fájljában a checkpoints.enabled beállítással; a régebbi Hermes-verziók csak a vezérlőpult környezetében lévő HERMES_TUI_CHECKPOINTS=1 értéket olvassák.</string>
@@ -194,7 +194,7 @@
     <string name="chat_processes_finished">Befejezett</string>
     <string name="chat_process_hide_output">Kimenet elrejtése</string>
     <string name="chat_process_show_output">Kimenet megjelenítése</string>
-    <string name="chat_process_stopping">Leállítás</string>
+    <string name="chat_process_stopping">Leállítás folyamatban</string>
     <string name="chat_process_no_output">Még nincs kimenet.</string>
     <string name="chat_process_running">Fut</string>
     <string name="chat_process_stopped">Leállítva</string>
@@ -459,6 +459,7 @@
     <string name="chat_notice_call_not_started">A hívás nem indult el: a Kyllene nem érte el a Gatewayt.</string>
     <string name="chat_notice_too_many_files">Üzenetenként legfeljebb %1$d melléklet.</string>
     <string name="chat_model_bot_note">Az itt választott modell lesz %1$s modellje, minden csevegésében és rutinjában.</string>
+    <string name="chat_model_bot_change_failed">Nem sikerült módosítani %1$s modelljét. %2$s</string>
     <string name="chat_drop_title">Engedd el a csatoláshoz</string>
     <string name="chat_drop_limits">Legfeljebb %1$d fájl, egyenként %2$d MB.</string>
     <string name="chat_send_again">Küldés újra</string>

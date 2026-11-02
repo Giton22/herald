@@ -488,6 +488,7 @@
     <string name="chat_notice_call_not_started">The call didn’t start: Kyllene couldn’t reach the gateway.</string>
     <string name="chat_notice_too_many_files">Up to %1$d attachments per message.</string>
     <string name="chat_model_bot_note">A model picked here becomes %1$s’s own, for all its chats and routines.</string>
+    <string name="chat_model_bot_change_failed">Couldn’t change %1$s’s model. %2$s</string>
     <string name="chat_drop_title">Drop to attach</string>
     <string name="chat_drop_limits">Up to %1$d files, %2$d MB each.</string>
     <string name="chat_send_again">Send again</string>

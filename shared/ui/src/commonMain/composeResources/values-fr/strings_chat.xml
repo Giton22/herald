@@ -127,7 +127,7 @@
 
     <string name="chat_screen_waiting">En attente de votre réponse</string>
     <string name="chat_screen_opening">Ouverture…</string>
-    <string name="chat_screen_tap_answers">Une touche répond dans la conversation</string>
+    <string name="chat_screen_tap_answers">Un appui répond dans la conversation</string>
     <string name="chat_screen_click_answers">Un clic répond dans la conversation</string>
 
     <string name="chat_tool_failed">Échec</string>
@@ -346,7 +346,7 @@
         <item quantity="one">%1$d exécution sur %2$d</item>
         <item quantity="other">%1$d exécutions sur %2$d</item>
     </plurals>
-    <string name="chat_loop_due_now">maintenant</string>
+    <string name="chat_loop_due_now">prévue maintenant</string>
     <string name="chat_loop_next">prochaine %1$s</string>
     <string name="chat_loop_due_now_detail">Prévue maintenant</string>
     <string name="chat_loop_next_run">Prochaine exécution %1$s</string>
@@ -459,6 +459,7 @@
     <string name="chat_notice_call_not_started">L’appel n’a pas démarré : Kyllene n’a pas pu joindre le Gateway.</string>
     <string name="chat_notice_too_many_files">Jusqu’à %1$d pièces jointes par message.</string>
     <string name="chat_model_bot_note">Un modèle choisi ici devient celui de %1$s, pour toutes ses conversations et routines.</string>
+    <string name="chat_model_bot_change_failed">Impossible de changer le modèle de %1$s. %2$s</string>
     <string name="chat_drop_title">Déposer pour joindre</string>
     <string name="chat_drop_limits">Jusqu’à %1$d fichiers, %2$d Mo chacun.</string>
     <string name="chat_send_again">Renvoyer</string>

@@ -169,8 +169,8 @@
     <string name="chat_checkpoints_title">Checkpoints</string>
     <string name="chat_checkpoints_subtitle">Schnappschüsse des Ordners dieses Chats</string>
     <plurals name="chat_checkpoints_count">
-        <item quantity="one">%1$d Schnappschuss, bevor der Agent Dateien geändert hat</item>
-        <item quantity="other">%1$d Schnappschüsse, bevor der Agent Dateien geändert hat</item>
+        <item quantity="one">%1$d Schnappschuss, erstellt bevor der Agent Dateien geändert hat</item>
+        <item quantity="other">%1$d Schnappschüsse, erstellt bevor der Agent Dateien geändert hat</item>
     </plurals>
     <string name="chat_checkpoints_read_failed">Die Checkpoints ließen sich nicht lesen.</string>
     <string name="chat_checkpoints_off">Checkpoints sind auf dem Gateway aus. Schalte sie mit checkpoints.enabled in der config.yaml des Profils ein; ältere Hermes-Versionen lesen nur HERMES_TUI_CHECKPOINTS=1 in der Umgebung des Dashboards.</string>
@@ -459,6 +459,7 @@
     <string name="chat_notice_call_not_started">Der Anruf hat nicht begonnen: Kyllene hat das Gateway nicht erreicht.</string>
     <string name="chat_notice_too_many_files">Bis zu %1$d Anhänge pro Nachricht.</string>
     <string name="chat_model_bot_note">Ein hier gewähltes Modell wird das von %1$s, für alle seine Chats und Routinen.</string>
+    <string name="chat_model_bot_change_failed">Das Modell von %1$s ließ sich nicht ändern. %2$s</string>
     <string name="chat_drop_title">Zum Anhängen ablegen</string>
     <string name="chat_drop_limits">Bis zu %1$d Dateien, je %2$d MB.</string>
     <string name="chat_send_again">Erneut senden</string>
@@ -487,8 +488,8 @@
     <string name="chat_check_delivery">Zustellung prüfen</string>
     <string name="chat_resend">Erneut senden</string>
     <string name="chat_resend_title">Diese Nachricht erneut senden?</string>
-    <string name="chat_resend_message_tap">Vielleicht hat Hermes sie schon. Dann bekommt Hermes dieselbe Anfrage zweimal und führt sie erneut aus. Tippe zuerst auf Prüfen, um sicherzugehen.</string>
-    <string name="chat_resend_message_click">Vielleicht hat Hermes sie schon. Dann bekommt Hermes dieselbe Anfrage zweimal und führt sie erneut aus. Klicke zuerst auf Prüfen, um sicherzugehen.</string>
+    <string name="chat_resend_message_tap">Vielleicht hat Hermes sie schon. Wenn ja, bekommt Hermes beim erneuten Senden dieselbe Anfrage zweimal und führt sie erneut aus. Tippe zuerst auf Prüfen, um sicherzugehen.</string>
+    <string name="chat_resend_message_click">Vielleicht hat Hermes sie schon. Wenn ja, bekommt Hermes beim erneuten Senden dieselbe Anfrage zweimal und führt sie erneut aus. Klicke zuerst auf Prüfen, um sicherzugehen.</string>
     <string name="chat_change_branch_title">Hier abzweigen?</string>
     <string name="chat_change_regenerate_title">Diese Antwort neu erzeugen?</string>
     <string name="chat_change_edit_title">Diese Nachricht bearbeiten?</string>

@@ -346,9 +346,9 @@
         <item quantity="one">%1$d de %2$d execução</item>
         <item quantity="other">%1$d de %2$d execuções</item>
     </plurals>
-    <string name="chat_loop_due_now">na hora agora</string>
+    <string name="chat_loop_due_now">prevista para agora</string>
     <string name="chat_loop_next">próxima %1$s</string>
-    <string name="chat_loop_due_now_detail">Na hora agora</string>
+    <string name="chat_loop_due_now_detail">Prevista para agora</string>
     <string name="chat_loop_next_run">Próxima execução %1$s</string>
     <string name="chat_loop_self_paced">No próprio ritmo</string>
     <string name="chat_loop_until">Até: %1$s</string>
@@ -459,6 +459,7 @@
     <string name="chat_notice_call_not_started">A chamada não começou: o Kyllene não conseguiu acessar o Gateway.</string>
     <string name="chat_notice_too_many_files">Até %1$d anexos por mensagem.</string>
     <string name="chat_model_bot_note">Um modelo escolhido aqui passa a ser o de %1$s, em todas as conversas e rotinas dele.</string>
+    <string name="chat_model_bot_change_failed">Não foi possível trocar o modelo de %1$s. %2$s</string>
     <string name="chat_drop_title">Solte para anexar</string>
     <string name="chat_drop_limits">Até %1$d arquivos, %2$d MB cada.</string>
     <string name="chat_send_again">Enviar de novo</string>
