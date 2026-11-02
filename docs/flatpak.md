@@ -134,6 +134,29 @@ failures. Installed output, physical audio quality and live-provider behavior
 require separate qualification. This backend does not enable the desktop voice
 UI or live calls; those need their own capability and lifecycle integration.
 
+### Live transport backend
+
+The internal Linux WebRTC transport reuses the existing offer/answer callback and
+`oai-events` channel. The gateway retains provider credentials; this adapter does
+not add a provider client or change the signaling payload. SDP is preserved,
+including trailing CRLF. Incoming text events and outgoing buffering are bounded;
+unsupported or overflowing events end the connection instead of silently losing
+part of the conversation.
+
+Each instance owns one connection. Setup cancellation requests native retirement
+even while an answer callback is still returning, and a late answer cannot reach
+the retired peer. This retires native resources without claiming that arbitrary
+non-cancellable callback code can be forced to finish. Native callbacks schedule
+one owned cleanup operation; channel, peer, factory and device releases share the
+same completion path. Explicit owner close waits for that release.
+
+This stage uses dummy audio and no captured track, with recording and playout off.
+The desktop live-call binding and voice controls remain disabled. Real capture,
+rendering, echo cancellation and capability/UI integration are separate work.
+Local peer SDP/event exchange and cleanup do not qualify provider compatibility,
+physical audio quality or interruption. Unit tests cover the transport boundary;
+optimized installed-runtime and media/provider checks require separate validation.
+
 ## Advisory CI
 
 The separate Linux workflow runs JVM/packaging tests and exports an x86_64 bundle.
