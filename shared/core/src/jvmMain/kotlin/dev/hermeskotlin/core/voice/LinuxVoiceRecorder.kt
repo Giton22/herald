@@ -3,6 +3,7 @@ package dev.hermeskotlin.core.voice
 import java.io.ByteArrayOutputStream
 import java.util.concurrent.atomic.AtomicReference
 import kotlin.math.sqrt
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
@@ -22,7 +23,15 @@ internal interface Microphone : AutoCloseable {
 internal class LinuxVoiceRecorder(private val microphone: () -> Microphone) : VoiceRecorder {
     private val current = AtomicReference<Session?>()
 
-    override suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit, onSpeech: () -> Unit): Recording {
+    // Off the caller's thread, as Android records on IO: the caller is the UI's, and any stall there longer than the
+    // frame buffer would fail the recording.
+    override suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit, onSpeech: () -> Unit): Recording =
+        withContext(Dispatchers.Default) { recordHere(activity, onLevel, onSpeech) }
+
+    private suspend fun recordHere(activity: VoiceActivity, onLevel: (Float) -> Unit, onSpeech: () -> Unit): Recording {
+        // A recording cancelled just now may not have released its device yet (closing it takes a moment): a new one
+        // waits for that instead of failing. One that's really still running fails after the wait.
+        current.get()?.let { previous -> withTimeoutOrNull(3_000) { previous.released.await() } }
         val session = Session()
         check(current.compareAndSet(null, session)) { "A recording is already in progress." }
         var device: Microphone? = null
@@ -38,7 +47,8 @@ internal class LinuxVoiceRecorder(private val microphone: () -> Microphone) : Vo
             var samples = 0L
             while (true) {
                 currentCoroutineContext().ensureActive()
-                val next = withTimeoutOrNull(2_000) { session.frames.receiveCatching() }
+                // As long as Android waits for a silent microphone, which PulseAudio can be while it starts.
+                val next = withTimeoutOrNull(5_000) { session.frames.receiveCatching() }
                     ?: error("The microphone stopped delivering audio.")
                 if (next.isClosed) {
                     next.exceptionOrNull()?.let { throw it }
@@ -76,8 +86,12 @@ internal class LinuxVoiceRecorder(private val microphone: () -> Microphone) : Vo
             } catch (cleanup: Throwable) { cleanupFailure = cleanup }
             try { onLevel(0f) } catch (cleanup: Throwable) {
                 if (cleanupFailure == null) cleanupFailure = cleanup else cleanupFailure.addSuppressed(cleanup)
-            } finally { current.compareAndSet(session, null) }
-            cleanupFailure?.let { if (failure == null) throw it else failure.addSuppressed(it) }
+            } finally {
+                current.compareAndSet(session, null)
+                session.released.complete(Unit)
+            }
+            // A device that won't stop doesn't cost the user what they already said; the next start reports it.
+            cleanupFailure?.let { failure?.addSuppressed(it) }
         }
     }
 
@@ -96,8 +110,11 @@ internal class LinuxVoiceRecorder(private val microphone: () -> Microphone) : Vo
     private class Session {
         private enum class End { Completed, Finished }
         private val terminal = AtomicReference<Any?>()
-        val frames = Channel<PcmFrame>(32)
+        // About 2.5 s of 10 ms frames: a GC pause or a busy dispatcher mustn't end the recording.
+        val frames = Channel<PcmFrame>(256)
         val finished: Boolean get() = terminal.get() == End.Finished
+        /** Completes once this session's device is closed and it's no longer [current]. */
+        val released = CompletableDeferred<Unit>()
         fun frame(frame: PcmFrame) {
             if (terminal.get() == null && frames.trySend(frame).isFailure) fail(IllegalStateException("The microphone couldn't keep up."))
         }

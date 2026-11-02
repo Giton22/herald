@@ -5,6 +5,7 @@ import java.nio.ByteOrder
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
@@ -42,7 +43,7 @@ class LinuxVoiceRecorderTest {
         assertTrue(run.microphone.closed)
     }
 
-    @Test fun anotherTapCannotTakeOverAnActiveRecorder() = checkRecording {
+    @Test fun anotherTapCannotTakeOverAnActiveRecorder() = checkRecording(6_000) {
         val run = begin()
         run.microphone.ready.await()
         assertFailsWith<IllegalStateException> { run.recorder.record(VoiceActivity()) }
@@ -75,17 +76,73 @@ class LinuxVoiceRecorderTest {
     }
 
     @Test fun callbackOverflowFailsInsteadOfGrowingAnUnboundedQueue() = checkRecording {
-        val microphone = FakeMicrophone(burst = 100)
+        val microphone = FakeMicrophone(burst = 300)
         val recorder = LinuxVoiceRecorder { microphone }
         assertFailsWith<IllegalStateException> { recorder.record(VoiceActivity()) }
         assertTrue(microphone.closed)
     }
 
     @Test fun overflowAtTheActivityLimitCannotReturnAPartialSuccess() = checkRecording {
+        val microphone = FakeMicrophone(burst = 300)
+        val recorder = LinuxVoiceRecorder { microphone }
+        assertFailsWith<IllegalStateException> { recorder.record(VoiceActivity(maxMs = 2_570)) }
+        assertTrue(microphone.closed)
+    }
+
+    @Test fun aShortStallOnTheCallersThreadDoesntEndTheRecording() = checkRecording {
+        // A second of frames arriving while nothing reads them, as during a long layout or a GC pause.
         val microphone = FakeMicrophone(burst = 100)
         val recorder = LinuxVoiceRecorder { microphone }
-        assertFailsWith<IllegalStateException> { recorder.record(VoiceActivity(maxMs = 310)) }
+        val job = async { recorder.record(VoiceActivity()) }
+        microphone.ready.await()
+        recorder.finish()
+        assertEquals(44 + 100 * 320, job.await().bytes.size)
+    }
+
+    @Test fun theRecordingDoesntRunOnTheCallersThread() = checkRecording {
+        val caller = java.util.concurrent.Executors.newSingleThreadExecutor { Thread(it, "fixture-ui") }
+        try {
+            val threads = Channel<String>(Channel.UNLIMITED)
+            val microphone = FakeMicrophone()
+            val recorder = LinuxVoiceRecorder { microphone }
+            val job = async(caller.asCoroutineDispatcher()) {
+                recorder.record(VoiceActivity(), onLevel = { threads.trySend(Thread.currentThread().name) })
+            }
+            microphone.ready.await()
+            microphone.frame(PcmFrame(pcm(400), 16_000, 1))
+            assertTrue(threads.receive() != "fixture-ui")
+            recorder.finish()
+            job.await()
+        } finally { caller.shutdown() }
+    }
+
+    @Test fun aDeviceThatWontStopDoesntCostTheFinishedRecording() = checkRecording {
+        val microphone = FakeMicrophone(closeFailure = IllegalStateException("The microphone couldn't stop."))
+        val recorder = LinuxVoiceRecorder { microphone }
+        val levels = Channel<Float>(Channel.UNLIMITED)
+        val job = async { recorder.record(VoiceActivity(), onLevel = { levels.trySend(it) }) }
+        microphone.ready.await()
+        microphone.frame(PcmFrame(pcm(400), 16_000, 1))
+        levels.receive()
+        recorder.finish()
+        assertContentEquals(pcm(400), job.await().bytes.copyOfRange(44, 44 + 320))
         assertTrue(microphone.closed)
+    }
+
+    @Test fun startingRightAfterCancellingWaitsForTheDeviceToClose() = checkRecording {
+        val slow = FakeMicrophone(closeDelayMillis = 500)
+        val next = FakeMicrophone()
+        val devices = ArrayDeque(listOf(slow, next))
+        val recorder = LinuxVoiceRecorder { devices.removeFirst() }
+        val old = async { recorder.record(VoiceActivity()) }
+        slow.ready.await()
+        old.cancel()
+        // As the voice screen does: cancel the old job without waiting, then start again.
+        val again = async { recorder.record(VoiceActivity()) }
+        next.ready.await()
+        assertTrue(slow.closed)
+        recorder.finish()
+        again.await()
     }
 
     @Test fun cleanupFailurePreservesTheOriginalStartupFailure() = checkRecording {
@@ -115,7 +172,7 @@ class LinuxVoiceRecorderTest {
         assertTrue(first.closed && second.closed)
     }
 
-    @Test fun aStalledDeviceFailsAndCloses() = checkRecording(5_000) {
+    @Test fun aStalledDeviceFailsAndCloses() = checkRecording(8_000) {
         val microphone = FakeMicrophone()
         val recorder = LinuxVoiceRecorder { microphone }
         val result = async { runCatching { recorder.record(VoiceActivity()) } }
@@ -183,11 +240,12 @@ class LinuxVoiceRecorderTest {
         private val burst: Int = 0,
         private val startFailure: Throwable? = null,
         private val closeFailure: Throwable? = null,
+        private val closeDelayMillis: Long = 0,
     ) : Microphone {
         val ready = CompletableDeferred<Unit>()
         lateinit var frame: (PcmFrame) -> Unit
         lateinit var fail: (Throwable) -> Unit
-        var closed = false
+        @Volatile var closed = false
         override fun start(onFrame: (PcmFrame) -> Unit, onFailure: (Throwable) -> Unit) {
             startFailure?.let { throw it }
             frame = onFrame
@@ -195,7 +253,11 @@ class LinuxVoiceRecorderTest {
             repeat(burst) { onFrame(PcmFrame(pcm(0), 16_000, 1)) }
             ready.complete(Unit)
         }
-        override fun close() { closed = true; closeFailure?.let { throw it } }
+        override fun close() {
+            Thread.sleep(closeDelayMillis)
+            closed = true
+            closeFailure?.let { throw it }
+        }
     }
 
     companion object {
