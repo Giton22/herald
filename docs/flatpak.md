@@ -103,3 +103,18 @@ or backups. Encryption does not protect an unlocked process or prevent a same-us
 attacker replacing the entire profile. Run the Linux storage and migration tests
 with `./gradlew :shared:core:jvmTest --tests '*Linux*StoreTest' --tests '*LinuxStorage*Test'`
 and startup contracts with `./gradlew :desktopApp:jvmTest --tests '*StorageStartupTest'`.
+
+## Advisory CI
+
+The separate Linux workflow runs JVM/packaging tests and exports an x86_64 bundle.
+It runs only when the desktop app's sources, the build or this packaging change.
+It builds the exact commit tested by the workflow (a pull request's merge commit)
+from a Git clone of the checkout, with the same locked build inputs, so committed
+files only: never untracked files in the runner workspace. Only the bundle is uploaded. The
+font-filter contract uses the selected SDK's fontconfig, independent of the
+runner host's fontconfig version. CI uses the native `flatpak-builder` package;
+the Builder application needs a desktop host-command service unavailable there.
+
+Keep these Linux checks non-required in branch rules. Failures stay visibly
+failed; Android checks and release publication remain independent. A built CI
+bundle still needs installed-sandbox and Bazzite acceptance before publication.
