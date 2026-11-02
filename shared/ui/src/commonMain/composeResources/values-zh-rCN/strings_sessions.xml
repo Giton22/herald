@@ -14,7 +14,7 @@
     <string name="sessions_nav_insights">统计</string>
     <string name="sessions_nav_capabilities">能力</string>
     <string name="sessions_nav_plugins">插件</string>
-    <string name="sessions_nav_config">配置</string>
+    <string name="sessions_nav_config">配置文件</string>
     <string name="sessions_nav_archived">已归档</string>
     <plurals name="sessions_unread_count">
         <item quantity="other">%1$d 条未读</item>
