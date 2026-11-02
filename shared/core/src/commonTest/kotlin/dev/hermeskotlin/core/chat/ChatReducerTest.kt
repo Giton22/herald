@@ -3,6 +3,7 @@ package dev.hermeskotlin.core.chat
 import dev.hermeskotlin.core.network.HermesJson
 import dev.hermeskotlin.core.rpc.GatewayEvent
 import dev.hermeskotlin.core.sessions.SessionMessage
+import kotlinx.serialization.json.JsonPrimitive
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -10,6 +11,30 @@ import kotlin.test.assertIs
 import kotlin.test.assertTrue
 
 class ChatReducerTest {
+
+    @Test
+    fun reopenedPdfReferenceRemainsOnePdfAttachment() {
+        for ((reference, name) in mapOf(
+            "`attachments/annual report.pdf`" to "annual report.pdf",
+            "\"attachments/annual `report.pdf\"" to "annual `report.pdf",
+            "'attachments/annual `\"report.pdf'" to "annual `\"report.pdf",
+            "attachments/report.pdf" to "report.pdf",
+        )) {
+            val footer = "\n\n--- Attached Context ---\n\n📄 @file:$reference (3 tokens)\n```\nExtracted text\n```"
+            for (text in listOf(
+                "@file:$reference\n\nWhat's on page 61?",
+                "What's on page 61?$footer",
+                "@file:$reference\n\nWhat's on page 61?$footer",
+            )) {
+                val row = SessionMessage(role = "user", content = JsonPrimitive(text))
+                val message = assertIs<ChatMessage.User>(historyToMessages(listOf(row)).single())
+                assertEquals("What's on page 61?", message.text)
+                assertEquals(1, message.attachments.size)
+                assertEquals(name, message.attachments.single().name)
+                assertEquals(AttachmentKind.Pdf, message.attachments.single().kind)
+            }
+        }
+    }
 
     @Test
     fun historyCombinesProjectedReasoningAndCommentaryAfterCacheRoundTrip() {

@@ -205,7 +205,7 @@ class ChatSession(
         val trimmed = text.trim()
         if (trimmed.isEmpty() && attachments.isEmpty()) return SendOutcome.NotSent
         // Desktop's fallback, so an image-only prompt still asks something.
-        val visible = trimmed.ifEmpty { if (attachments.any { it.kind != AttachmentKind.File }) IMAGE_ONLY_PROMPT else "" }
+        val visible = trimmed.ifEmpty { if (attachments.any { it.kind == AttachmentKind.Image }) IMAGE_ONLY_PROMPT else "" }
         val key = "local-${_state.value.keySeq}"
         _state.update {
             it.copy(
@@ -223,7 +223,7 @@ class ChatSession(
         }
         // Counted before submitting: the turn's message.start can arrive before the prompt.submit reply.
         ownTurnsPending++
-        // Images and PDF pages queued on the session: if the prompt never goes out they would ride along
+        // Images queued on the session: if the prompt never goes out they would ride along
         // with the next one, so a failed send takes them back.
         val queuedImages = mutableListOf<String>()
         var uploadClient: JsonRpcClient? = null
@@ -537,7 +537,7 @@ class ChatSession(
     }
 
     /**
-     * Uploads one attachment to [runtimeId]. Images and PDF pages are queued for the next turn; a file
+     * Uploads one attachment to [runtimeId]. Images are queued for the next turn; a PDF or other file
      * comes back as the `@file:` reference to put in the prompt, which this returns.
      */
     private suspend fun upload(
@@ -574,23 +574,7 @@ class ChatSession(
                 result.string("path")?.let(queuedImages::add)
                 null
             }
-            AttachmentKind.Pdf -> try {
-                val result = client.request(
-                    "pdf.attach",
-                    buildJsonObject {
-                        put("session_id", runtimeId)
-                        put("content_base64", attachment.base64())
-                        put("filename", attachment.name)
-                    },
-                    timeoutMs = UPLOAD_TIMEOUT_MS,
-                ) as? JsonObject
-                result?.get("pages").asObjectList().mapNotNullTo(queuedImages) { it.string("path") }
-                null
-            } catch (e: RpcException) {
-                // 5028: the gateway can't render PDFs (no poppler); the agent can still read the file.
-                if (e.code == PDF_RENDER_UNAVAILABLE) asFile() else throw e
-            }
-            AttachmentKind.File -> asFile()
+            AttachmentKind.Pdf, AttachmentKind.File -> asFile()
         }
     }
 
@@ -2195,7 +2179,6 @@ class ChatSession(
         /** Uploads of several MB over a phone link take a while. */
         const val UPLOAD_TIMEOUT_MS = 120_000L
 
-        const val PDF_RENDER_UNAVAILABLE = 5028
 
         /** The gateway's "busy": a turn is running, so nothing was cut. */
         const val BUSY = 4009

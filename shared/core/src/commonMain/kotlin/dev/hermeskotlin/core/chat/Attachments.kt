@@ -7,8 +7,8 @@ enum class AttachmentKind { Image, Pdf, File }
 
 /**
  * A file picked on this device, waiting to go out with the next prompt. Images are queued on the
- * session (`image.attach_bytes`), PDFs are rendered to page images (`pdf.attach`), and anything else
- * lands in the session workspace as an `@file:` reference in the prompt text (`file.attach`).
+ * session (`image.attach_bytes`); PDFs and other files land in the session workspace as an `@file:`
+ * reference in the prompt text (`file.attach`).
  */
 class OutgoingAttachment(
     val id: String,
@@ -60,10 +60,10 @@ internal const val IMAGE_ONLY_PROMPT = "What do you see in this image?"
 private val CONTEXT_FOOTER = Regex("""(?:^|\n)--- (?:Context Warnings|Attached Context) ---\s*\n""")
 
 /** An `@file:` reference anywhere in a line, as the attached-context block lists them. */
-private val INLINE_FILE_REF = Regex("""@file:(?:"([^"\n]+)"|(\S+))""")
+private val INLINE_FILE_REF = Regex("""@file:(?:(["'`])([^\r\n]+?)\1|(\S+))""")
 
 /** A whole line `@file:<path>` or `@image:<path>`; paths with spaces are quoted. */
-private val REF_LINE = Regex("""^@(file|image):(?:"([^"]+)"|(\S+))\s*$""")
+private val REF_LINE = Regex("""^@(file|image):(?:(["'`])([^\r\n]+?)\2|(\S+))\s*$""")
 
 /**
  * Pulls the attachment reference lines out of a stored prompt: `@file:` lines that clients put in
@@ -78,7 +78,7 @@ internal fun splitAttachmentRefs(text: String, keyPrefix: String): Pair<List<Sho
     val body = if (footer == null) text else text.substring(0, footer.range.first)
     footer?.let { match ->
         INLINE_FILE_REF.findAll(text.substring(match.range.first)).forEach { ref ->
-            val path = ref.groupValues[1].ifEmpty { ref.groupValues[2] }
+            val path = ref.groupValues[2].ifEmpty { ref.groupValues[3] }
             val name = path.substringAfterLast('/')
             if (attachments.none { it.name == name }) {
                 val kind = if (name.endsWith(".pdf", ignoreCase = true)) AttachmentKind.Pdf else AttachmentKind.File
@@ -88,7 +88,7 @@ internal fun splitAttachmentRefs(text: String, keyPrefix: String): Pair<List<Sho
     }
     val kept = body.lines().filter { line ->
         val match = REF_LINE.matchEntire(line.trim()) ?: return@filter true
-        val path = match.groupValues[2].ifEmpty { match.groupValues[3] }
+        val path = match.groupValues[3].ifEmpty { match.groupValues[4] }
         val name = path.substringAfterLast('/')
         if (attachments.any { it.name == name && it.kind != AttachmentKind.Image }) return@filter false
         attachments += when {
@@ -103,7 +103,7 @@ internal fun splitAttachmentRefs(text: String, keyPrefix: String): Pair<List<Sho
     if (footer != null) {
         text.lines().asReversed().map { it.trim() }.takeWhile { it.isEmpty() || REF_LINE.matches(it) }.asReversed().forEach { line ->
             val match = REF_LINE.matchEntire(line)?.takeIf { it.groupValues[1] == "image" } ?: return@forEach
-            val path = match.groupValues[2].ifEmpty { match.groupValues[3] }
+            val path = match.groupValues[3].ifEmpty { match.groupValues[4] }
             attachments += ShownAttachment("$keyPrefix-i${attachments.size}", path.substringAfterLast('/'), AttachmentKind.Image, gatewayPath = path)
         }
     }

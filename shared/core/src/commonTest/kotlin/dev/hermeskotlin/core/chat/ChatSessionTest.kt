@@ -933,11 +933,14 @@ class ChatSessionTest {
             mapOf(
                 "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
                 "image.attach_bytes" to """{"attached":true,"path":"/tmp/upload_1.jpg"}""",
-                "pdf.attach" to "error:5028",
-                "file.attach" to """{"attached":true,"name":"x","path":"p","ref_path":"r","ref_text":"@file:attachments/notes.txt","uploaded":true}""",
                 "prompt.submit" to """{"status":"streaming"}""",
             ),
         )
+        val answer = gateway.answer
+        gateway.answer = { call ->
+            if (call.method == "file.attach") """{"attached":true,"ref_text":"@file:attachments/${call.param("name")}"}"""
+            else answer(call)
+        }
         connection.state.first { it is ConnectionState.Connected }
         val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
         chat.start()
@@ -948,16 +951,62 @@ class ChatSessionTest {
         assertTrue(chat.send("  summarise  ", listOf(image, pdf, file)))
 
         val sent = transport.sent.value.mapNotNull { it["method"]?.jsonPrimitive?.contentOrNull }.filter { it != "client.capabilities" && it != "ping" && it != "config.get" }
-        assertEquals(listOf("session.create", "image.attach_bytes", "pdf.attach", "file.attach", "file.attach", "prompt.submit"), sent)
+        assertEquals(listOf("session.create", "image.attach_bytes", "file.attach", "file.attach", "prompt.submit"), sent)
         val upload = transport.sent.value.first { it.isCall("image.attach_bytes") }
         assertEquals("AQID", upload.param("content_base64"))
         assertEquals("rt9", upload.param("session_id"))
-        // The PDF fell back to a plain file once the gateway said it can't render pages.
         assertEquals("data:application/pdf;base64,BA==", transport.sent.value.first { it.isCall("file.attach") }.param("data_url"))
         val submit = transport.sent.value.first { it.isCall("prompt.submit") }
-        assertEquals("@file:attachments/notes.txt\n\n@file:attachments/notes.txt\n\nsummarise", submit.param("text"))
+        assertEquals("@file:attachments/spec.pdf\n\n@file:attachments/notes.txt\n\nsummarise", submit.param("text"))
         val user = assertIs<ChatMessage.User>(chat.state.value.messages.single())
         assertEquals(listOf("cat.jpg", "spec.pdf", "notes.txt"), user.attachments.map { it.name })
+    }
+
+    @Test
+    fun aPdfWithoutTextUploadsTheOriginalAndSubmitsOnlyItsFileReference() = runTest {
+        val (connection, transport) = setup(backgroundScope, mapOf(
+            "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
+            "file.attach" to """{"attached":true,"ref_text":"@file:attachments/report.pdf"}""",
+            "prompt.submit" to """{"status":"streaming"}""",
+        ))
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        assertTrue(chat.send("", listOf(
+            OutgoingAttachment("pdf", "report.pdf", "application/pdf", byteArrayOf(4)),
+        )))
+
+        val upload = assertNotNull(transport.sent.value.singleOrNull { it.isCall("file.attach") })
+        assertEquals("rt9", upload.param("session_id"))
+        assertEquals("report.pdf", upload.param("name"))
+        assertEquals("data:application/pdf;base64,BA==", upload.param("data_url"))
+        assertFalse(transport.sent.value.any { it.isCall("pdf.attach") })
+        val submit = transport.sent.value.single { it.isCall("prompt.submit") }
+        assertEquals("@file:attachments/report.pdf", submit.param("text"))
+        val user = assertIs<ChatMessage.User>(chat.state.value.messages.single())
+        assertEquals(AttachmentKind.Pdf, user.attachments.single().kind)
+        assertEquals("", user.text)
+    }
+
+    @Test
+    fun aRejectedPdfUploadDoesNotSubmitAPrompt() = runTest {
+        for (response in listOf("error:5028", "error:-32601", """{"attached":false}""", """{"attached":true}""")) {
+            val (connection, transport) = setup(backgroundScope, mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
+                "file.attach" to response,
+                "prompt.submit" to """{"status":"streaming"}""",
+            ))
+            connection.state.first { it is ConnectionState.Connected }
+            val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+            chat.start()
+
+            assertFalse(chat.send("Read this", listOf(
+                OutgoingAttachment("pdf", "report.pdf", "application/pdf", byteArrayOf(4)),
+            )), response)
+            assertFalse(transport.sent.value.any { it.isCall("prompt.submit") }, response)
+            assertTrue(chat.state.value.messages.isEmpty(), response)
+        }
     }
 
     @Test
