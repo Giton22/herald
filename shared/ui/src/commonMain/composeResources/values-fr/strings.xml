@@ -48,6 +48,10 @@
     <string name="accent_pink">Rose</string>
     <string name="accent_teal">Turquoise</string>
     <string name="settings_app_icon">Icône de l’app</string>
+    <string name="settings_language">Langue</string>
+    <string name="settings_language_system">Langue du système</string>
+    <string name="settings_language_system_detail">Suit le système : %1$s</string>
+    <string name="settings_language_hint">Ce qui n’est pas encore traduit dans l’app reste en anglais.</string>
     <string name="settings_pure_black">Noir pur</string>
     <string name="settings_pure_black_detail">Des fonds vraiment noirs en mode sombre, plus doux pour les écrans OLED.</string>
     <string name="settings_glow">Halo</string>

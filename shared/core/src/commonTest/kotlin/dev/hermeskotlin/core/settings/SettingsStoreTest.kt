@@ -77,6 +77,25 @@ class SettingsStoreTest {
     }
 
     @Test
+    fun languageFollowsTheSystemUntilPickedAndBackAgain() = runTest {
+        val disk = InMemoryKeyValueStore()
+        // Settings saved before the option existed follow the system.
+        disk.put("settings.v1", """{"theme":"Dark"}""")
+        val first = SettingsStore(disk, backgroundScope)
+        assertEquals(null, first.settings.filterNotNull().first().language)
+
+        first.update { it.copy(language = "pt-BR") }
+        advanceUntilIdle()
+        val picked = SettingsStore(disk, backgroundScope)
+        assertEquals("pt-BR", picked.settings.filterNotNull().first().language)
+
+        // System default again: the tag goes, rather than staying as a stale choice.
+        picked.update { it.copy(language = null) }
+        advanceUntilIdle()
+        assertEquals(null, SettingsStore(disk, backgroundScope).settings.filterNotNull().first().language)
+    }
+
+    @Test
     fun glowIsOnUnlessTurnedOff() = runTest {
         val disk = InMemoryKeyValueStore()
         // Settings saved before the option existed keep the glow.

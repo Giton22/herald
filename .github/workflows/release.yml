@@ -113,10 +113,10 @@ jobs:
           | Windows 10 or 11 | \`kyllene-desktop-$v.msi\`: installs for you alone, no administrator needed |
           | A Mac with Apple silicon | \`kyllene-desktop-$v.dmg\`: drag Kyllene into Applications |
           | Debian, Ubuntu and the like | \`kyllene-desktop-${v}_amd64.deb\` |
-          | Any Linux with Flatpak (x86_64) | \`kyllene-desktop-${v}_x86_64.flatpak\`: \`flatpak install --user kyllene-desktop-${v}_x86_64.flatpak\` |
+          | Any Linux with Flatpak (x86_64) | \`flatpak install --user https://kyllene.app/kyllene.flatpakref\`, or the file \`kyllene-desktop-${v}_x86_64.flatpak\` |
 
           Once Kyllene is installed, Settings → About offers each new version; on Windows, Install updates it in place.
-          The Flatpak doesn't check: to update it, install the next release's \`.flatpak\` the same way, and your sign-in and settings stay.
+          The Flatpak updates like any other, with \`flatpak update\` or your software centre, from either install.
           EOF
           gh release create "$GITHUB_REF_NAME" "kyllene-$v.apk" "kyllene-$v.apk.sha256" --draft --generate-notes --notes-file which-apk.md --title "$GITHUB_REF_NAME"
           for abi in arm64-v8a armeabi-v7a x86_64 x86; do gh release upload "$GITHUB_REF_NAME" "kyllene-${v}_$abi.apk" "kyllene-${v}_$abi.apk.sha256"; done
@@ -258,7 +258,10 @@ jobs:
   # The stable Flatpak, app.kyllene.Kyllene, added to the draft as kyllene-desktop-1.2.3_x86_64.flatpak for a manual
   # install. It is built offline from this tag's commit, like the Linux workflow's Devel build, and installing it
   # fetches the Freedesktop runtime from Flathub. It never checks GitHub for updates (no -PreleasesRepo): a Flatpak
-  # takes new versions from its remote, and a bundle has none, so the next release's bundle is installed over it.
+  # takes new versions from its remote. The bundle's commit is signed and names our repository
+  # (https://flatpak.kyllene.app/repo/, see flatpak-repo.yml) as that remote, so `flatpak update` reaches it.
+  #   FLATPAK_GPG_PRIVATE_KEY   the repository's signing key (ASCII-armoured, no passphrase); its public half is
+  #                             packaging/flatpak/kyllene-repo.asc. Without it the bundle has no remote and never updates.
   flatpak:
     needs: release
     runs-on: ubuntu-24.04
@@ -285,11 +288,31 @@ jobs:
             --repository "file://$GITHUB_WORKSPACE" \
             --ref flatpak-release --commit "$GITHUB_SHA" --release "${GITHUB_REF_NAME#v}"
 
-      - name: Build offline and bundle
+      - name: Build offline
+        run: flatpak-builder --user --repo=build/flatpak-repo build/flatpak packaging/flatpak/release.json
+
+      - name: Sign and bundle
+        env:
+          GPG_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
         run: |
-          flatpak-builder --user --repo=build/flatpak-repo build/flatpak packaging/flatpak/release.json
-          flatpak build-bundle --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo \
+          remote=""
+          if [ -n "$GPG_KEY" ]; then
+            export GNUPGHOME="$RUNNER_TEMP/gnupg"
+            mkdir -m 700 "$GNUPGHOME"
+            printf '%s\n' "$GPG_KEY" | gpg --batch --import
+            key="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')"
+            flatpak build-sign --arch=x86_64 --gpg-sign="$key" --gpg-homedir="$GNUPGHOME" build/flatpak-repo app.kyllene.Kyllene stable
+            gpg --dearmor < packaging/flatpak/kyllene-repo.asc > "$RUNNER_TEMP/kyllene-repo.gpg"
+            remote="--repo-url=https://flatpak.kyllene.app/repo/ --gpg-keys=$RUNNER_TEMP/kyllene-repo.gpg"
+          else
+            echo "::warning::No FLATPAK_GPG_PRIVATE_KEY: the Flatpak bundle has no repository and won't update"
+          fi
+          flatpak build-bundle $remote --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo \
             build/flatpak-repo build/kyllene.flatpak app.kyllene.Kyllene stable
+
+      - name: Remove the signing key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/gnupg"
 
       # As in the Linux workflow: its own bus, and an unlocked keyring answering the Secret portal.
       - name: Installed sandbox smoke
