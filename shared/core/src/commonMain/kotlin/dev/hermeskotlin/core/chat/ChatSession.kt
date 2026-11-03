@@ -95,6 +95,15 @@ class ChatSession(
     private val attachMutex = Mutex()
 
     /**
+     * The socket [ChatState.runtimeSessionId] was attached on. Runtime ids belong to the
+     * socket: after a reconnect or a relogin the cached id must not go out on the new
+     * socket (the gateway has no subscription for it there and refuses the send as a
+     * stranger's). Written wherever the id is (re-)attached, read by [ensureAttached].
+     */
+    @kotlin.concurrent.Volatile
+    private var attachedClient: JsonRpcClient? = null
+
+    /**
      * Prompts this client submitted whose turn hasn't started yet. A `message.start` beyond them is a
      * turn another client (Desktop, CLI, a messaging platform) started: the gateway sends no event with
      * that prompt, so the transcript is refetched to show it.
@@ -1998,8 +2007,11 @@ class ChatSession(
     }
 
     private suspend fun ensureAttached(client: JsonRpcClient): String {
-        _state.value.runtimeSessionId?.let { return it }
-        return if (rowExists) attach(client) else create(client)
+        // The cached id belongs to the socket it was attached on; a new socket re-attaches
+        // (under the attach mutex, so a send racing a reconnect waits for the re-attach)
+        // instead of firing the stale id where the gateway has no subscription for it.
+        _state.value.runtimeSessionId?.takeIf { attachedClient === client }?.let { return it }
+        return if (rowExists) attach(client, reconnected = attachedClient != null) else create(client)
     }
 
     /**
@@ -2094,6 +2106,7 @@ class ChatSession(
             refreshControl()
             if (readReasoning) refreshReasoning()
         }
+        attachedClient = client
         runtimeId
     }
 
@@ -2153,6 +2166,7 @@ class ChatSession(
         if (picks.reasoningEffort == null && (result["info"] as? JsonObject)?.containsKey("reasoning_effort") != true) {
             scope.launch { refreshReasoning() }
         }
+        attachedClient = client
         runtimeId
     }
 
