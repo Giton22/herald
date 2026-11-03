@@ -333,7 +333,7 @@ private fun TalkScreen(
         edgeButton = {
             if (chat.id != null || chat.botProfile != null) {
                 EdgeButton(onClick = onHistory, buttonSize = EdgeButtonSize.Medium) {
-                    Text("View More", fontFamily = Geist, fontSize = 14.sp, maxLines = 1)
+                    Text("View chat", fontFamily = Geist, fontSize = 14.sp, maxLines = 1)
                 }
             }
         },
