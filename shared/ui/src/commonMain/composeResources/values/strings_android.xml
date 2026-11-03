@@ -21,8 +21,7 @@
     <string name="android_attach_read_failed">Couldn’t read a file.</string>
     <!-- %1$s: the file's name -->
     <string name="android_attach_photo_too_large">%1$s is larger than 50 MB.</string>
-    <string name="android_attach_file_too_large">%1$s is larger than 25 MB.</string>
-    <string name="android_attach_too_large">%1$s is too large to attach.</string>
+    <string name="android_attach_file_too_large">%1$s is larger than %2$d MB.</string>
     <string name="android_attach_unreadable">Couldn’t read %1$s.</string>
     <string name="android_attach_not_image">Couldn’t read %1$s as an image.</string>
     <string name="android_attach_too_much">That’s more than 50 MB of attachments at once.</string>

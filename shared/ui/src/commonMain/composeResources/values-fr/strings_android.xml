@@ -14,8 +14,7 @@
     <string name="android_attach_not_allowed">L’application qui l’a partagé ne laisse pas Kyllene lire le fichier.</string>
     <string name="android_attach_read_failed">Impossible de lire un fichier.</string>
     <string name="android_attach_photo_too_large">%1$s dépasse 50 Mo.</string>
-    <string name="android_attach_file_too_large">%1$s dépasse 25 Mo.</string>
-    <string name="android_attach_too_large">%1$s est trop volumineux pour être joint.</string>
+    <string name="android_attach_file_too_large">%1$s dépasse %2$d Mo.</string>
     <string name="android_attach_unreadable">Impossible de lire %1$s.</string>
     <string name="android_attach_not_image">Impossible de lire %1$s comme image.</string>
     <string name="android_attach_too_much">Cela fait plus de 50 Mo de pièces jointes à la fois.</string>

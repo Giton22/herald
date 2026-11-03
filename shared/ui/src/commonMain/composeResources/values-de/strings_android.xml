@@ -14,8 +14,7 @@
     <string name="android_attach_not_allowed">Die App, die es geteilt hat, lässt Kyllene die Datei nicht lesen.</string>
     <string name="android_attach_read_failed">Eine Datei konnte nicht gelesen werden.</string>
     <string name="android_attach_photo_too_large">%1$s ist größer als 50 MB.</string>
-    <string name="android_attach_file_too_large">%1$s ist größer als 25 MB.</string>
-    <string name="android_attach_too_large">%1$s ist zu groß zum Anhängen.</string>
+    <string name="android_attach_file_too_large">%1$s ist größer als %2$d MB.</string>
     <string name="android_attach_unreadable">%1$s konnte nicht gelesen werden.</string>
     <string name="android_attach_not_image">%1$s konnte nicht als Bild gelesen werden.</string>
     <string name="android_attach_too_much">Das sind mehr als 50 MB Anhänge auf einmal.</string>

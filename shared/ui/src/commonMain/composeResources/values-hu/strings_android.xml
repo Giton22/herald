@@ -14,8 +14,7 @@
     <string name="android_attach_not_allowed">A megosztó alkalmazás nem engedte, hogy a Kyllene beolvassa a fájlt.</string>
     <string name="android_attach_read_failed">Nem sikerült beolvasni egy fájlt.</string>
     <string name="android_attach_photo_too_large">%1$s nagyobb 50 MB-nál.</string>
-    <string name="android_attach_file_too_large">%1$s nagyobb 25 MB-nál.</string>
-    <string name="android_attach_too_large">%1$s túl nagy a csatoláshoz.</string>
+    <string name="android_attach_file_too_large">%1$s nagyobb, mint %2$d MB.</string>
     <string name="android_attach_unreadable">Nem sikerült beolvasni: %1$s.</string>
     <string name="android_attach_not_image">Nem sikerült képként beolvasni: %1$s.</string>
     <string name="android_attach_too_much">Ez egyszerre több mint 50 MB melléklet.</string>

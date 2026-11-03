@@ -14,8 +14,7 @@
     <string name="android_attach_not_allowed">分享它的应用不允许 Kyllene 读取该文件。</string>
     <string name="android_attach_read_failed">无法读取文件。</string>
     <string name="android_attach_photo_too_large">%1$s 超过 50 MB。</string>
-    <string name="android_attach_file_too_large">%1$s 超过 25 MB。</string>
-    <string name="android_attach_too_large">%1$s 太大，无法附加。</string>
+    <string name="android_attach_file_too_large">%1$s 超过 %2$d MB。</string>
     <string name="android_attach_unreadable">无法读取 %1$s。</string>
     <string name="android_attach_not_image">无法将 %1$s 读取为图片。</string>
     <string name="android_attach_too_much">一次附加的文件超过了 50 MB。</string>
