@@ -31,6 +31,8 @@ jobs:
           :shared:wearlink:jvmTest :desktopApp:jvmTest :desktopApp:compileKotlinJvm
       - name: Lightweight packaging contracts
         run: |
+          # Without Pillow the installed-smoke tests skip, and no other job runs them.
+          sudo apt-get update && sudo apt-get install -y python3-pil
           # The SDK's fontconfig test remains in the package job; no SDK download on this path.
           cd packaging/flatpak/tests
           tests=()
