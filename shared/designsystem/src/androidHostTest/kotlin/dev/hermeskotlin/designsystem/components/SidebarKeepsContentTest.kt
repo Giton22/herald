@@ -62,13 +62,17 @@ class SidebarKeepsContentTest {
     private var width by mutableStateOf(NARROW)
     private lateinit var scope: CoroutineScope
 
-    private fun show(direction: LayoutDirection = LayoutDirection.Ltr, content: @androidx.compose.runtime.Composable () -> Unit) {
+    private fun show(
+        direction: LayoutDirection = LayoutDirection.Ltr,
+        sidebar: @androidx.compose.runtime.Composable () -> Unit = {},
+        content: @androidx.compose.runtime.Composable () -> Unit,
+    ) {
         composeRule.setContent {
             scope = rememberCoroutineScope()
             HermesTheme(ColorScheme.Light) {
                 CompositionLocalProvider(LocalLayoutDirection provides direction) {
                     Box(Modifier.width(width)) {
-                        SidebarLayout(state, sidebar = {}, dockedBreakpoint = BREAKPOINT, content = content)
+                        SidebarLayout(state, sidebar = sidebar, dockedBreakpoint = BREAKPOINT, content = content)
                     }
                 }
             }
@@ -102,6 +106,27 @@ class SidebarKeepsContentTest {
         // Folded again: a drawer once more.
         resize(NARROW)
         composeRule.onNodeWithTag(SAVED).assertTextEquals("1")
+        composeRule.onNodeWithTag(KEPT).assertTextEquals("1")
+    }
+
+    @Test
+    fun theSidebarKeepsWhatItRemembersAsItDocksAndUndocks() {
+        show(sidebar = {
+            var kept by remember { mutableIntStateOf(0) }
+            BasicText("$kept", Modifier.testTag(KEPT).clickable { kept++ })
+        }) {
+            Box(Modifier.fillMaxSize().testTag(CONTENT).clickable { error("the chat took a tap meant for the drawer") })
+        }
+        // Open as a drawer, over the chat: a tap there reaches the sidebar, not the chat under it.
+        composeRule.runOnIdle { scope.launch { state.open() } }
+        composeRule.waitForIdle()
+        composeRule.onNodeWithTag(KEPT).performClick()
+        composeRule.onNodeWithTag(KEPT).assertTextEquals("1")
+
+        resize(WIDE)
+        composeRule.onNodeWithTag(KEPT).assertTextEquals("1")
+
+        resize(NARROW)
         composeRule.onNodeWithTag(KEPT).assertTextEquals("1")
     }
 

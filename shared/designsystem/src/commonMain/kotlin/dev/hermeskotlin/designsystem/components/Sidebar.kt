@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
+import androidx.compose.ui.zIndex
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.designsystem.LocalDesktopLayout
 import dev.hermeskotlin.designsystem.colors
@@ -159,8 +160,9 @@ fun SidebarLayout(
         val widthPx = with(density) { width.toPx() }
         val scope = rememberCoroutineScope()
         val dragState = rememberDraggableState { delta -> state.dragBy(delta / widthPx) }
-        // One layout for both, the content first in it: crossing the docking point (unfolding, a window resized) then
-        // keeps the content where it was, and with it all it remembers, as a tool group the reader opened.
+        // One layout for both, the sidebar and the content each in one place in it: crossing the docking point
+        // (unfolding, a window resized) then keeps both where they were, and with them all they remember, as a tool
+        // group the reader opened or the list's scroll. The sidebar comes first, so the keyboard reaches it first.
         Box(
             Modifier
                 .fillMaxSize()
@@ -180,6 +182,48 @@ fun SidebarLayout(
                     },
                 ),
         ) {
+            val edge = Theme[colors][stroke]
+            val (frame, inner) = if (docked) {
+                // Revealed from its end as it slides open, at its full width throughout.
+                Modifier
+                    .width(outer * p)
+                    .fillMaxHeight()
+                    .clipToBounds()
+                    .background(Theme[colors][sidebarColor]) to
+                    Modifier.requiredWidth(outer).fillMaxHeight().align(Alignment.CenterEnd)
+            } else {
+                Modifier
+                    .requiredWidth(width)
+                    .fillMaxHeight()
+                    .align(Alignment.CenterStart)
+                    // Over the chat and its dim.
+                    .zIndex(2f)
+                    .offset { IntOffset((-widthPx * (1f - p)).roundToInt(), 0) }
+                    // A sheet over the chat, its outer corners rounded.
+                    .clip(DrawerShape)
+                    .background(Theme[colors][sidebarColor], DrawerShape)
+                    // The dim alone doesn't show the edge when both are black (pure black theme): a hairline
+                    // along the end and its corners only, none along the screen's own edges.
+                    .drawWithContent {
+                        drawContent()
+                        val r = DRAWER_RADIUS.toPx()
+                        val s = 1.dp.toPx()
+                        val w = size.width - s / 2
+                        val h = size.height
+                        val path = Path().apply {
+                            moveTo(w - r, s / 2)
+                            arcTo(Rect(w - 2 * r, s / 2, w, 2 * r), -90f, 90f, false)
+                            lineTo(w, h - r)
+                            arcTo(Rect(w - 2 * r, h - 2 * r, w, h - s / 2), 0f, 90f, false)
+                        }
+                        drawPath(path, edge, style = Stroke(s))
+                    } to
+                    Modifier.fillMaxSize()
+            }
+            Box(frame.then(hidden)) {
+                Box(inner) { sidebar() }
+            }
+
             val place = if (docked) {
                 // Beside the sidebar, by as much as it covers right now, so the content doesn't jump as it slides open
                 // or shut; and the start inset it covers isn't padded by again.
@@ -194,16 +238,6 @@ fun SidebarLayout(
             Box(Modifier.fillMaxSize().then(place)) { content() }
 
             if (docked) {
-                Box(
-                    Modifier
-                        .width(outer * p)
-                        .fillMaxHeight()
-                        .clipToBounds()
-                        .background(Theme[colors][sidebarColor])
-                        .then(hidden),
-                ) {
-                    Box(Modifier.requiredWidth(outer).fillMaxHeight().align(Alignment.CenterEnd)) { sidebar() }
-                }
                 if (p > 0f) {
                     Box(Modifier.offset(x = outer * p).width(DIVIDER_WIDTH).fillMaxHeight().background(Theme[colors][stroke]))
                 }
@@ -232,46 +266,15 @@ fun SidebarLayout(
                             .clearAndSetSemantics { },
                     )
                 }
-            } else {
+            } else if (p > 0f) {
                 // The dim covers the whole screen behind the drawer, so its rounded corners show dimmed ground too.
-                if (p > 0f) {
-                    Box(
-                        Modifier
-                            .fillMaxSize()
-                            .background(Color.Black.copy(alpha = 0.4f * p))
-                            .pointerInput(Unit) { detectTapGestures { scope.launch { state.close() } } },
-                    )
-                }
-                val edge = Theme[colors][stroke]
                 Box(
                     Modifier
-                        .requiredWidth(width)
-                        .fillMaxHeight()
-                        .align(Alignment.CenterStart)
-                        .offset { IntOffset((-widthPx * (1f - p)).roundToInt(), 0) }
-                        // A sheet over the chat, its outer corners rounded.
-                        .clip(DrawerShape)
-                        .background(Theme[colors][sidebarColor], DrawerShape)
-                        // The dim alone doesn't show the edge when both are black (pure black theme): a hairline
-                        // along the end and its corners only, none along the screen's own edges.
-                        .drawWithContent {
-                            drawContent()
-                            val r = DRAWER_RADIUS.toPx()
-                            val s = 1.dp.toPx()
-                            val w = size.width - s / 2
-                            val h = size.height
-                            val path = Path().apply {
-                                moveTo(w - r, s / 2)
-                                arcTo(Rect(w - 2 * r, s / 2, w, 2 * r), -90f, 90f, false)
-                                lineTo(w, h - r)
-                                arcTo(Rect(w - 2 * r, h - 2 * r, w, h - s / 2), 0f, 90f, false)
-                            }
-                            drawPath(path, edge, style = Stroke(s))
-                        }
-                        .then(hidden),
-                ) {
-                    sidebar()
-                }
+                        .fillMaxSize()
+                        .zIndex(1f)
+                        .background(Color.Black.copy(alpha = 0.4f * p))
+                        .pointerInput(Unit) { detectTapGestures { scope.launch { state.close() } } },
+                )
             }
         }
     }
