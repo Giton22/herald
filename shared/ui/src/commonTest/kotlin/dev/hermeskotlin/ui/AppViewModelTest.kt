@@ -831,4 +831,135 @@ class AppViewModelTest {
         assertTrue(app.openReportChat(ReportChat(home.gatewayUrl.value, "work", "Sales", storedSessionId = "r2"), launch = "default"))
         assertEquals("work", assertIs<Route.Chat>(app.route.value).target.profile)
     }
+
+    private fun AppViewModel.target() = assertIs<Route.Chat>(route.value).target
+
+    @Test
+    fun aNewChatStartsInTheProjectTheLastOneWasStartedIn() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        val app = viewModel()
+        assertNull(app.awaitChat(home).target.cwd)
+
+        // Started from a project in the list: that's the one the next new chat starts in.
+        app.newChat(cwd = "/srv/site")
+        assertEquals("/srv/site", app.target().cwd)
+        app.newChat()
+        assertEquals("/srv/site", app.target().cwd)
+
+        // Home picked on the greeting: the next one has no project either.
+        app.pickProject(null)
+        assertNull(app.target().cwd)
+        app.newChat()
+        assertNull(app.target().cwd)
+
+        // Turned off, a new chat starts with no project whatever was used last.
+        app.pickProject("/srv/site")
+        callSettings.update { it.copy(useLastProject = false) }
+        app.newChat()
+        assertNull(app.target().cwd)
+    }
+
+    @Test
+    fun theLastProjectIsKeptPerProfile() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        val app = viewModel()
+        app.awaitChat(home)
+        app.newChat(cwd = "/srv/site")
+
+        app.switchProfile("work", fresh = true)
+        val work = app.route.first { it is Route.Chat && it.target.profile == "work" } as Route.Chat
+        assertNull(work.target.cwd)
+        app.pickProject("/srv/work")
+
+        app.switchProfile(null, fresh = true)
+        assertEquals("/srv/site", (app.route.first { it is Route.Chat && it.target.profile == null } as Route.Chat).target.cwd)
+        app.switchProfile("work", fresh = true)
+        assertEquals("/srv/work", (app.route.first { it is Route.Chat && it.target.profile == "work" } as Route.Chat).target.cwd)
+    }
+
+    @Test
+    fun pickingAProjectMovesOnlyAnUntouchedNewChat() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        val app = viewModel()
+        app.awaitChat(home)
+        app.newChat(ComposeDraft(text = "Shared text"))
+        val fresh = app.target()
+
+        app.pickProject("/srv/site")
+        val moved = app.target()
+        assertEquals("/srv/site", moved.cwd)
+        // The same new chat, its shared text already in the composer, so not given a second time.
+        assertEquals(fresh.nonce, moved.nonce)
+        assertNull(moved.draft)
+
+        app.openSession("s1", "Planning")
+        val stored = app.route.value
+        app.pickProject("/srv/other")
+        assertSame(stored, app.route.value)
+    }
+
+    @Test
+    fun aNewChatFromHomeInTheListForgetsTheLastProject() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        val app = viewModel()
+        app.awaitChat(home)
+        app.newChat(cwd = "/srv/site")
+
+        // The list's new chat while Home is selected: Home is a pick too, not "whatever was used last".
+        app.newChat(cwd = null, picked = true)
+        assertNull(app.target().cwd)
+        app.newChat()
+        assertNull(app.target().cwd)
+    }
+
+    @Test
+    fun theFirstChatAtLaunchWaitsForTheLastProject() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        gateways.save(home)
+        signedIn(home)
+        store.put("settings.v1", """{"lastProjects":{"${home.gatewayUrl.value}":"/srv/site"}}""")
+        val loaded = CompletableDeferred<Unit>()
+        val delayed = object : KeyValueStore by store {
+            override suspend fun get(key: String): String? {
+                if (key == "settings.v1") loaded.await()
+                return store.get(key)
+            }
+        }
+        val app = viewModel(SettingsStore(delayed, backgroundScope))
+        runCurrent()
+        // The new chat doesn't wait for the settings…
+        val opened = app.awaitChat(home).target
+        assertNull(opened.cwd)
+        loaded.complete(Unit)
+        runCurrent()
+
+        // …and moves to the last project once they're read, still the same new chat.
+        val moved = app.target()
+        assertEquals("/srv/site", moved.cwd)
+        assertEquals(opened.nonce, moved.nonce)
+    }
+
+    @Test
+    fun aFreshSwitchOpensANewChatInsteadOfTheLastOne() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        lastChats.set(home.gatewayUrl, LastChat("w1", "Weekly"), "work")
+        val app = viewModel()
+        app.awaitChat(home)
+
+        // From the account sheet: back to the profile's last chat.
+        app.switchProfile("work")
+        assertEquals("w1", (app.route.first { it is Route.Chat && it.target.profile == "work" } as Route.Chat).target.storedSessionId)
+
+        app.switchProfile(null)
+        app.route.first { it is Route.Chat && it.target.profile == null }
+        // From the greeting's place menu: a new chat there, as the New chat button would open.
+        app.switchProfile("work", fresh = true)
+        val work = (app.route.first { it is Route.Chat && it.target.profile == "work" } as Route.Chat).target
+        assertNull(work.storedSessionId)
+    }
 }
