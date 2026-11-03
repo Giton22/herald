@@ -1,0 +1,39 @@
+# Shared by PR feedback and exact-tag release qualification.
+name: Linux checks
+on:
+  workflow_call:
+    secrets:
+      GRADLE_ENCRYPTION_KEY:
+        required: false
+permissions:
+  contents: read
+jobs:
+  checks:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: jetbrains
+          java-version: "25"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-encryption-key: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+      - name: JVM tests
+        run: >
+          ./gradlew --no-daemon --max-workers=4
+          :shared:core:jvmTest :shared:designsystem:jvmTest :shared:ui:jvmTest
+          :shared:wearlink:jvmTest :desktopApp:jvmTest :desktopApp:compileKotlinJvm
+      - name: Lightweight packaging contracts
+        run: |
+          # The SDK's fontconfig test remains in the package job; no SDK download on this path.
+          tests=()
+          for test in packaging/flatpak/tests/test_*.py; do
+            [ "$test" = packaging/flatpak/tests/test_fonts.py ] || tests+=("$test")
+          done
+          python3 -m unittest "${tests[@]}" -v
