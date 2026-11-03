@@ -82,7 +82,10 @@ class HermesApplication : Application() {
             return
         }
         scope.launch(Dispatchers.Main) {
-            settings.settings.filterNotNull().map { it.language }.distinctUntilChanged().collect { applyAppLanguage(this@HermesApplication, it) }
+            settings.settings.filterNotNull().map { it.language }.distinctUntilChanged().collect {
+                applyAppLanguage(this@HermesApplication, it)
+                renameChannels()
+            }
         }
     }
 
@@ -90,11 +93,11 @@ class HermesApplication : Application() {
         super.onConfigurationChanged(newConfig)
         // A change of the phone's own language resets the process's; the picked one goes back over it.
         if (!systemKeepsAppLanguage) get<SettingsStore>().settings.value?.let { applyAppLanguage(this, it.language) }
+        renameChannels()
     }
 
     /** A new language: the notification channels take its names, as Settings › Notifications lists them. */
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
+    private fun renameChannels() {
         GlobalContext.getOrNull()?.run {
             get<ChatNotifications>().createChannels()
             get<PhoneConfirmations>().createChannel()
