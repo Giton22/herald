@@ -15,6 +15,9 @@ import dev.hermeskotlin.wearlink.CallStart
 import dev.hermeskotlin.wearlink.CallUpdate
 import dev.hermeskotlin.wearlink.ChatList
 import dev.hermeskotlin.wearlink.ChatListRequest
+import dev.hermeskotlin.wearlink.HistoryRequest
+import dev.hermeskotlin.wearlink.HistoryPage
+import dev.hermeskotlin.wearlink.HistoryPager
 import dev.hermeskotlin.wearlink.PhoneStatus
 import dev.hermeskotlin.wearlink.PhoneStatusRequest
 import dev.hermeskotlin.wearlink.RecordedAsk
@@ -140,6 +143,75 @@ class WatchLink(
     private val _chats = MutableStateFlow<ChatList?>(null)
     val chats: StateFlow<ChatList?> = _chats.asStateFlow()
 
+    private val historyPager = HistoryPager()
+    private val _history = MutableStateFlow<HistoryPage?>(null)
+    val history: StateFlow<HistoryPage?> = _history.asStateFlow()
+    private val _historyLoading = MutableStateFlow(false)
+    val historyLoading: StateFlow<Boolean> = _historyLoading.asStateFlow()
+    private var historyJob: Job? = null
+    private var historySupported = false
+    private var historyOperation: String? = null
+
+    private fun clearHistory() {
+        historyOperation = null
+        historyJob?.cancel()
+        historyPager.reset()
+        _history.value = null
+        _historyLoading.value = false
+    }
+
+    private fun matchHistorySelection() {
+        val choice = store.chat.value
+        if (historyPager.select(choice.scope, choice.id, choice.botProfile)) clearHistory()
+    }
+
+    /** Reloads the saved transcript; no ask, call or speech request is sent. */
+    fun readHistory(older: Boolean = false) {
+        matchHistorySelection()
+        if (_historyLoading.value) return
+        historyJob?.cancel()
+        val operation = UUID.randomUUID().toString()
+        historyOperation = operation
+        historyJob = scope.launch(main) {
+            _historyLoading.value = true
+            try {
+                if (!synchronizeProfile()) {
+                    _history.value = _history.value?.copy(error = "Couldn't reach your phone. Try Refresh.")
+                    return@launch
+                }
+                val choice = store.chat.value
+                val owner = choice.scope ?: return@launch
+                val browsing = store.phoneScope ?: return@launch
+                val offset = if (older) _history.value?.nextOffset ?: return@launch else 0
+                val request = HistoryRequest(UUID.randomUUID().toString(), owner, browsing, choice.id, choice.botProfile, offset)
+                historyPager.begin(request)
+                _history.value = historyPager.page
+                if (!historySupported) {
+                    receiveHistory(HistoryPage(request, error = "Update Kyllene on your phone to read conversations."))
+                    return@launch
+                }
+                val problem = send(WearPaths.HISTORY, WearJson.encode(request)) { historyPager.loading && store.chat.value == choice }
+                if (problem != null) receiveHistory(HistoryPage(request, error = problem))
+                else {
+                    delay(30_000)
+                    receiveHistory(HistoryPage(request, error = "The phone didn't answer. Try again."))
+                }
+            } finally {
+                if (historyOperation == operation) _historyLoading.value = false
+            }
+        }
+    }
+
+    private fun receiveHistory(page: HistoryPage) {
+        val choice = store.chat.value
+        if (!profileChecked || page.request.scope != choice.scope || page.request.browserScope != store.phoneScope ||
+            page.request.botProfile != choice.botProfile || page.request.chatId != choice.id) return
+        if (historyPager.accept(page)) {
+            _history.value = historyPager.page
+            _historyLoading.value = false
+        }
+    }
+
     private val _phone = MutableStateFlow(PhoneState.Unknown)
     val phone: StateFlow<PhoneState> = _phone.asStateFlow()
 
@@ -193,6 +265,7 @@ class WatchLink(
     }
 
     private fun resetProfile(next: WatchScope?) {
+        clearHistory()
         stop()
         endCall()
         dismissCall()
@@ -288,6 +361,7 @@ class WatchLink(
             }
             if (result.error == null) {
                 store.setChat(result.chatId, result.title, result.botProfile, result.scope)
+                matchHistorySelection()
                 resolvedDefault = id
             }
             result
@@ -375,6 +449,7 @@ class WatchLink(
     fun answerRing(requestId: String): WatchRing? {
         val ring = rings.stop(requestId) ?: return null
         store.setChat(ring.chatId, ring.title, scope = store.phoneScope?.let { WatchScope(it.gateway) })
+        matchHistorySelection()
         scope.launch {
             // Again if it didn't go: else the phone rings on through the call.
             repeat(ANSWER_TRIES) {
@@ -447,6 +522,7 @@ class WatchLink(
         callUpdateSeq = update.seq
         _phone.value = PhoneState.Ready
         update.chatId?.let { store.adoptChat(it, update.title ?: store.chat.value.title, update.scope) }
+        matchHistorySelection()
         store.setStats(update.model, update.contextPercent)
         if (update.phase == CallPhase.Ended) {
             finishCall(now.id, update.error)
@@ -491,6 +567,7 @@ class WatchLink(
     }
 
     fun newChat() {
+        clearHistory()
         cancelDefault()
         speech.stop()
         // A call talks in its chat: another one hangs it up.
@@ -503,6 +580,7 @@ class WatchLink(
     }
 
     fun pickChat(chat: WatchChat) {
+        clearHistory()
         cancelDefault()
         speech.stop()
         if (chat.id != store.chat.value.id || store.chat.value.botProfile != null || _chats.value?.scope != store.chat.value.scope) endCall()
@@ -514,6 +592,7 @@ class WatchLink(
     }
 
     fun pickBot(bot: WatchBot) {
+        clearHistory()
         cancelDefault()
         speech.stop()
         if (bot.profile != store.chat.value.botProfile || _chats.value?.scope?.copy(profile = bot.profile) != store.chat.value.scope) endCall()
@@ -552,11 +631,13 @@ class WatchLink(
                 if (phoneNode != sourceNode) {
                     phoneNode = sourceNode
                     profileChecked = false
+                    clearHistory()
                     HeraldWatch.of(context).callDisplay.bindPhone(sourceNode)
                 }
             }
             when (path) {
                 WearPaths.PROFILE_CHANGED -> {
+                    clearHistory()
                     profileChecked = false
                     statusRequest?.second?.complete(false)
                     statusRequest = null
@@ -565,6 +646,7 @@ class WatchLink(
                 WearPaths.DEFAULT_CALL -> WearJson.decode<DefaultCallTarget>(data)?.let { target ->
                     defaultRequest?.takeIf { it.first == target.requestId }?.second?.complete(target)
                 }
+                WearPaths.HISTORY -> WearJson.decode<HistoryPage>(data)?.let(::receiveHistory)
                 WearPaths.REPLY -> WearJson.decode<ReplyUpdate>(data)?.let(::onReply)
                 WearPaths.CHATS -> WearJson.decode<ChatList>(data)?.let {
                     if (!profileChecked) return@let
@@ -599,6 +681,7 @@ class WatchLink(
                     else if (!valid && (store.phoneScope != null || store.chat.value.id != null || store.chat.value.botProfile != null || store.chat.value.scope != null || _chats.value != null)) resetProfile(null)
                     profileChecked = valid
                     botChats = status.botChats
+                    historySupported = status.history
                     if (status.botProfile == store.chat.value.botProfile && (store.chat.value.scope == null || status.scope == store.chat.value.scope)) status.liveVoice?.let { _liveVoice.value = it }
                     _phone.value = when {
                         !status.signedIn -> PhoneState.SignedOut
@@ -642,6 +725,7 @@ class WatchLink(
         if (!taken) return
         _phone.value = PhoneState.Ready
         update.chatId?.let { store.adoptChat(it, update.title ?: store.chat.value.title, update.scope) }
+        matchHistorySelection()
         store.setStats(update.model, update.contextPercent)
         if (update.phase == ReplyPhase.Done) {
             if (update.text.isNotBlank()) {

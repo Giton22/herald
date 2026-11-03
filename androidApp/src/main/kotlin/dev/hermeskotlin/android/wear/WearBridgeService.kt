@@ -11,6 +11,7 @@ import dev.hermeskotlin.ui.voice.WatchCalls
 import dev.hermeskotlin.ui.voice.watchAccent
 import dev.hermeskotlin.wearlink.CallEnd
 import dev.hermeskotlin.wearlink.CallEvents
+import dev.hermeskotlin.wearlink.HistoryRequest
 import dev.hermeskotlin.wearlink.ChatListRequest
 import dev.hermeskotlin.wearlink.CallStart
 import dev.hermeskotlin.wearlink.RecordedAsk
@@ -67,6 +68,7 @@ class WearBridgeService : WearableListenerService() {
             WearPaths.CALL_END -> WearJson.decode<CallEnd>(event.data)?.let(calls::end)
             WearPaths.RING_END -> WearJson.decode<RingEnd>(event.data)?.let { ringer.endedOnWatch(node, it) }
             WearPaths.RING_ON -> WearJson.decode<RingOn>(event.data)?.let(ringer::ringsOn)
+            WearPaths.HISTORY -> WearJson.decode<HistoryRequest>(event.data)?.let { relay.history(node, it); keepUp() }
             WearPaths.CHATS -> { relay.chats(node, WearJson.decode<ChatListRequest>(event.data)?.requestId); keepUp() }
             WearPaths.STATUS -> {
                 val request = WearJson.decode<PhoneStatusRequest>(event.data)

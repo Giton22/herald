@@ -25,6 +25,7 @@ import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.voice.AudioApi
 import dev.hermeskotlin.core.voice.speakableText
 import dev.hermeskotlin.core.voice.speechChunks
+import dev.hermeskotlin.wearlink.HistoryRequest
 import dev.hermeskotlin.wearlink.ChatList
 import dev.hermeskotlin.wearlink.PhoneStatus
 import dev.hermeskotlin.wearlink.ReplyPhase
@@ -248,7 +249,7 @@ class WatchRelay(
         val profile = gateway?.let { if (owner != null && owner.gateway == it.value) owner.profile else botProfile ?: profiles.get(it) }
         val live = if (gateway == null) false else liveVoices.load()[gateway to profile]?.on
         return PhoneStatus(signedIn, signedIn && reachable, failed = signedIn && state is ConnectionState.Failed,
-            liveVoice = live, botChats = true, botProfile = botProfile, defaultCalls = true, profileSync = true,
+            liveVoice = live, botChats = true, history = true, botProfile = botProfile, defaultCalls = true, profileSync = true,
             activeScope = gateway?.let { WatchScope(it.value, profiles.get(it)) },
             scope = gateway?.let { WatchScope(it.value, profile) }) to gateway
     }
@@ -436,6 +437,23 @@ class WatchRelay(
         scope.launch {
             try {
                 outbox.sendSafely(node, WearPaths.CHATS, WearJson.encode(readChats().copy(requestId = requestId)))
+            } finally {
+                lists.updateAndFetch { (it - 1).coerceAtLeast(0) }
+                refreshBusy()
+            }
+        }
+    }
+
+    /** A stored page is independent of the active ask/call and never resumes its runtime. */
+    fun history(node: String, request: HistoryRequest) {
+        lists.incrementAndFetch()
+        refreshBusy()
+        scope.launch {
+            try {
+                val page = WatchTranscriptReader(gateways, auth, profiles, connection, sessions, bots).read(request)
+                val bytes = WearJson.encode(page)
+                if (bytes.size > 80_000) outbox.streamSafely(node, WearPaths.HISTORY, bytes)
+                else outbox.sendSafely(node, WearPaths.HISTORY, bytes)
             } finally {
                 lists.updateAndFetch { (it - 1).coerceAtLeast(0) }
                 refreshBusy()

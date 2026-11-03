@@ -23,6 +23,9 @@ object WearPaths {
     /** Watch → phone: an optional [ChatListRequest] for the recent chats. Phone → watch: a [ChatList]. */
     const val CHATS = "/herald/chats"
 
+    /** Read-only stored conversation pages; large replies use a channel on the same path. */
+    const val HISTORY = "/herald/history"
+
     /** Watch → phone: an optional [PhoneStatusRequest] asking how the phone stands. Phone → watch: a [PhoneStatus]. */
     const val STATUS = "/herald/status"
 
@@ -286,6 +289,7 @@ data class PhoneStatus(
     val liveVoice: Boolean? = null,
     /** Older phones can't route a bot request; the watch must never send it as an ordinary chat. */
     val botChats: Boolean = false,
+    val history: Boolean = false,
     val botProfile: String? = null,
     val defaultCalls: Boolean = false,
     val requestId: String? = null,

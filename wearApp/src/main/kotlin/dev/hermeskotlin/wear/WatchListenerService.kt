@@ -7,6 +7,7 @@ import com.google.android.gms.wearable.MessageEvent
 import com.google.android.gms.wearable.Wearable
 import com.google.android.gms.wearable.WearableListenerService
 import dev.hermeskotlin.wearlink.WearPaths
+import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
@@ -26,18 +27,30 @@ class WatchListenerService : WearableListenerService() {
     }
 
     override fun onChannelOpened(channel: ChannelClient.Channel) {
-        if (WearPaths.parseSpeech(channel.path) == null) return
+        if (channel.path != WearPaths.HISTORY && WearPaths.parseSpeech(channel.path) == null) return
         val channels = Wearable.getChannelClient(this)
         app.scope.launch {
             val bytes = try {
                 val input = channels.getInputStream(channel).await()
-                withContext(Dispatchers.IO) { input.use { it.readBytes() } }
+                withContext(Dispatchers.IO) { input.use { if (channel.path == WearPaths.HISTORY) run {
+                    val output = ByteArrayOutputStream()
+                    val buffer = ByteArray(8192)
+                    var count = it.read(buffer)
+                    while (count >= 0 && output.size() + count <= 4_000_000) {
+                        output.write(buffer, 0, count)
+                        count = it.read(buffer)
+                    }
+                    if (count < 0) output.toByteArray() else null
+                } else it.readBytes() } }
             } catch (_: Exception) {
                 null
             } finally {
                 runCatching { channels.close(channel) }
             }
-            bytes?.let { app.link.onSpeech(channel.path, it, channel.nodeId) }
+            bytes?.let {
+                if (channel.path == WearPaths.HISTORY) app.link.onMessage(channel.path, it, channel.nodeId)
+                else app.link.onSpeech(channel.path, it, channel.nodeId)
+            }
         }
     }
 }
