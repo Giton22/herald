@@ -68,7 +68,11 @@ class WatchTranscriptReaderTest {
     fun botBrowsingReconnectsAndUsesCanonicalStoredTipWithoutCreatingOrResuming() = runTest {
         val s = setup()
         s.gateway.connection.stop()
-        s.gateway.answer = { if (it.method == "profiles.list") """{"profiles":[{"name":"helper","canonical_session":{"id":"root","resolved_id":"tip"}}]}""" else error("Unexpected ${it.method}") }
+        s.gateway.answer = { when (it.method) {
+            "profiles.list" -> """{"profiles":[{"name":"helper","canonical_session":{"id":"root","resolved_id":"tip"}}]}"""
+            "client.capabilities" -> "{}"
+            else -> error("Unexpected ${it.method}")
+        } }
         var received: HttpRequestData? = null
         s.gateway.http = { req -> received = req; json("""{"session_id":"tip","messages":[]}""") }
         val page = s.reader.read(request("helper"))
