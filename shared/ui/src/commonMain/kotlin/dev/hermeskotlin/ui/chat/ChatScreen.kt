@@ -3420,7 +3420,7 @@ internal fun Disclosure(
 
 /** The reply's reasoning, folded; live progress is the dock's to show. Opened, it stays open when the activity is made again. */
 @Composable
-private fun Reasoning(text: String, streaming: Boolean) {
+internal fun Reasoning(text: String, streaming: Boolean) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     Disclosure(
         icon = { UnstyledIcon(Lucide.Brain, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp)) },
@@ -3504,10 +3504,11 @@ internal fun Tools(tools: List<ToolActivity>, messageKey: String) {
 
 /**
  * A running reply's finished steps, newest last: a check (or a cross) in a soft circle, what was done, and
- * how long it took. The step in hand is on the live task card instead. Only the last few show.
+ * how long it took. The step in hand is on the live task card instead. Only the last few show. One opened stays
+ * open when the activity is made again, as on unfolding a foldable.
  */
 @Composable
-private fun LiveSteps(tools: List<ToolActivity>, messageKey: String) {
+internal fun LiveSteps(tools: List<ToolActivity>, messageKey: String) {
     val done = tools.filterNot { it.running }
     if (done.isEmpty()) return
     val shown = done.takeLast(LIVE_STEPS_SHOWN)
@@ -3529,7 +3530,7 @@ private fun LiveSteps(tools: List<ToolActivity>, messageKey: String) {
 @Composable
 private fun LiveStepRow(tool: ToolActivity, messageKey: String) {
     val step = remember(tool) { toolDone(tool) }
-    var open by remember(tool.id) { mutableStateOf(false) }
+    var open by rememberSaveable(tool.id) { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
