@@ -1,0 +1,355 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_expanded">Kibontva</string>
+    <string name="app_collapsed">Összecsukva</string>
+    <string name="app_save">Mentés</string>
+    <string name="app_try_again">Újra</string>
+    <string name="app_done">Kész</string>
+
+    <string name="app_palette_title">Parancspaletta</string>
+    <string name="app_palette_placeholder">Csevegések, oldalak és műveletek keresése</string>
+    <string name="app_palette_nothing">Nincs találat</string>
+    <string name="app_palette_search">Keresés</string>
+    <string name="app_palette_search_all">„%1$s” keresése minden csevegésben</string>
+    <string name="app_palette_go_to">Ugrás</string>
+    <string name="app_palette_this_chat">Ez a csevegés</string>
+    <string name="app_palette_pinned">Kitűzve</string>
+    <string name="app_palette_help">Súgó</string>
+    <string name="app_page_chats">Csevegések</string>
+    <string name="app_page_bots">Botok</string>
+    <string name="app_page_inbox">Beérkezett</string>
+    <string name="app_page_scheduled">Ütemezett</string>
+    <string name="app_page_archived">Archivált csevegések</string>
+    <string name="app_page_capabilities">Képességek</string>
+    <string name="app_page_config">Konfiguráció</string>
+    <string name="app_page_insights">Statisztika</string>
+    <string name="app_new_chat">Új csevegés</string>
+    <string name="app_search_chats">Csevegések keresése</string>
+    <string name="app_pick_model">Modell választása</string>
+    <string name="app_find_in_chat">Keresés a csevegésben</string>
+    <string name="app_new_window">Megnyitás új ablakban</string>
+    <string name="app_chat_options">Csevegés beállításai</string>
+    <string name="app_usage">Használat</string>
+    <string name="app_processes">Folyamatok</string>
+    <string name="app_checkpoints">Mentési pontok</string>
+    <string name="app_theme_light">Világos téma</string>
+    <string name="app_theme_dark">Sötét téma</string>
+    <string name="app_theme_system">Rendszertéma</string>
+    <string name="app_keyboard_shortcuts">Billentyűparancsok</string>
+    <string name="app_keys_composer">Beviteli mező</string>
+    <string name="app_keys_app">Alkalmazás</string>
+    <string name="app_keys_send">Küldés</string>
+    <string name="app_keys_new_line">Új sor</string>
+    <string name="app_keys_queue">Sorba állítás a futó válasz után</string>
+    <string name="app_keys_earlier_prompts">Korábbi promptok</string>
+    <string name="app_keys_stop">Válasz leállítása</string>
+    <string name="app_keys_focus_composer">Ugrás a beviteli mezőre</string>
+    <string name="app_keys_next_chat">Következő csevegés</string>
+    <string name="app_keys_previous_chat">Előző csevegés</string>
+    <string name="app_keys_chat_in_list">A lista 1–9. csevegése</string>
+    <string name="app_keys_find_in_chat">Keresés ebben a csevegésben</string>
+    <string name="app_keys_toggle_file">A megnyitott fájl elrejtése vagy megjelenítése</string>
+    <string name="app_keys_files_in_prompt">Fájlok és mappák a promptban</string>
+    <string name="app_keys_chat_new_window">Csevegés megnyitása új ablakban</string>
+    <string name="app_keys_pin">Csevegés kitűzése vagy levétele</string>
+    <string name="app_keys_archive">Csevegés archiválása</string>
+    <string name="app_keys_scroll_page">Görgetés egy oldallal</string>
+    <string name="app_keys_first_latest">Első vagy legújabb üzenet</string>
+    <string name="app_keys_step_chats">Előző vagy következő csevegés</string>
+    <string name="app_keys_sidebar">Oldalsáv megjelenítése vagy elrejtése</string>
+    <string name="app_keys_zoom">Nagyítás / kicsinyítés / alaphelyzet</string>
+    <string name="app_keys_save">Feladat vagy config.yaml mentése</string>
+    <string name="app_keys_close_window">Ablak bezárása</string>
+    <string name="app_keys_quick_entry">Gyors bevitel bárhonnan</string>
+    <string name="app_keys_these">Ezek a billentyűparancsok</string>
+    <string name="app_loading">Betöltés</string>
+    <string name="app_clear">Törlés</string>
+    <string name="app_show_password">Jelszó megjelenítése</string>
+    <string name="app_hide_password">Jelszó elrejtése</string>
+    <string name="app_dismiss">Bezárás</string>
+    <string name="app_copy">Másolás</string>
+    <string name="app_copied">Másolva</string>
+    <string name="app_open_picture">Kép megnyitása</string>
+    <string name="app_picture_failed">A kép nem töltődött be</string>
+    <string name="app_not_connected">Nincs kapcsolat</string>
+    <string name="app_reconnecting">Újrakapcsolódás…</string>
+    <string name="app_connected">Kapcsolódva</string>
+    <string name="app_offline_retrying">Offline · újrapróbálás %1$d mp múlva</string>
+    <string name="app_session_expired">Lejárt a munkamenet</string>
+    <string name="app_connection_refused">A kapcsolat elutasítva</string>
+    <string name="app_sign_in_again">A munkameneted lejárt. Jelentkezz be újra.</string>
+    <string name="app_chat_fallback_title">Csevegés</string>
+    <string name="app_untitled_session">Névtelen munkamenet</string>
+    <string name="app_share_bot_gone">%1$s csevegése nem nyílt meg, ezért a megosztás új csevegésbe került.</string>
+    <string name="app_call_opening">Hívás megnyitása…</string>
+    <string name="app_call_failed">Nem sikerült elindítani a hívást</string>
+    <string name="app_ok">OK</string>
+    <string name="app_call_invalid_target">Válassz érvényes alapértelmezett hívási célt a Beállításokban.</string>
+    <string name="app_call_bot_unavailable">Ez a bot nem érhető el. Válassz alapértelmezett hívási célt a Beállításokban.</string>
+    <string name="app_call_open_failed">Nem sikerült megnyitni az alapértelmezett hívási célt. %1$s</string>
+    <string name="app_call_bot_unreachable">Nem sikerült elérni a botot. Próbáld újra, amikor van kapcsolat.</string>
+    <string name="app_call_open_retry">Nem sikerült megnyitni az alapértelmezett hívási célt. Próbáld újra.</string>
+    <string name="app_bot_model_note">%1$s ezt használja minden csevegésben, a bot csevegésében és a rutinokban is.</string>
+    <string name="app_bot_capabilities">%1$s képességei</string>
+    <string name="app_bot_capabilities_note">A változások %1$s új csevegéseire érvényesek. Ha a bot csevegése nem veszi át valamelyiket, a „Kezdés elölről” új csevegést ad neki mindazzal, ami itt be van állítva.</string>
+    <string name="app_bot_config">%1$s konfigurációja</string>
+    <string name="app_bot_config_note">%1$s saját beállításai, a profilja config.yaml fájljában. A legtöbb a következő csevegéstől érvényes.</string>
+
+    <string name="app_suggestions_no_reason">A Gateway nem telepítette.</string>
+    <string name="app_suggestions_not_listed">Telepítve, de a Gateway még nem listázza. Indítsd újra a Gateway-t, és ellenőrizd újra.</string>
+
+    <string name="time_today">Ma</string>
+    <string name="time_yesterday">Tegnap</string>
+    <string name="time_yesterday_at">Tegnap %1$s</string>
+    <string name="time_weekday_at">%1$s %2$s</string>
+    <string name="time_month_day">%1$s %2$s.</string>
+    <string name="time_with_year">%2$s. %1$s</string>
+    <string name="time_with_clock">%1$s, %2$s</string>
+    <string name="time_full">%2$s, %1$s, %3$s</string>
+    <string name="time_am">de.</string>
+    <string name="time_pm">du.</string>
+    <string-array name="time_months_short">
+        <item>jan.</item>
+        <item>febr.</item>
+        <item>márc.</item>
+        <item>ápr.</item>
+        <item>máj.</item>
+        <item>jún.</item>
+        <item>júl.</item>
+        <item>aug.</item>
+        <item>szept.</item>
+        <item>okt.</item>
+        <item>nov.</item>
+        <item>dec.</item>
+    </string-array>
+    <string-array name="time_weekdays_short">
+        <item>H</item>
+        <item>K</item>
+        <item>Sze</item>
+        <item>Cs</item>
+        <item>P</item>
+        <item>Szo</item>
+        <item>V</item>
+    </string-array>
+    <string-array name="time_weekdays">
+        <item>hétfő</item>
+        <item>kedd</item>
+        <item>szerda</item>
+        <item>csütörtök</item>
+        <item>péntek</item>
+        <item>szombat</item>
+        <item>vasárnap</item>
+    </string-array>
+    <string name="time_saved_just_now">Mentett másolat · az imént</string>
+    <string name="time_saved_ago">Mentett másolat · %1$s ezelőtt</string>
+
+    <string name="journey_title">Út</string>
+    <string name="journey_detail">%1$s és %2$s, amelyeket a profil ügynöke elsajátított.</string>
+    <plurals name="journey_skills">
+        <item quantity="one">%1$d készség</item>
+        <item quantity="other">%1$d készség</item>
+    </plurals>
+    <plurals name="journey_memories">
+        <item quantity="one">%1$d emlék</item>
+        <item quantity="other">%1$d emlék</item>
+    </plurals>
+    <string name="journey_error">Nem sikerült betölteni az utat.</string>
+    <string name="journey_empty">Még semmit nem tanult. Az ügynök által írt készségek és megőrzött emlékek itt jelennek meg.</string>
+    <string name="journey_undated">Dátum nélkül</string>
+    <string name="journey_month_year">%2$s. %1$s</string>
+    <string-array name="journey_months">
+        <item>január</item>
+        <item>február</item>
+        <item>március</item>
+        <item>április</item>
+        <item>május</item>
+        <item>június</item>
+        <item>július</item>
+        <item>augusztus</item>
+        <item>szeptember</item>
+        <item>október</item>
+        <item>november</item>
+        <item>december</item>
+    </string-array>
+    <string name="journey_pinned">Kitűzve</string>
+    <string name="journey_back">Vissza az úthoz</string>
+    <string name="journey_unreadable">Ezt az elemet nem sikerült beolvasni.</string>
+    <string name="journey_memory">Emlék</string>
+    <string name="journey_skill">Készség</string>
+    <plurals name="journey_used">
+        <item quantity="one">egyszer használva</item>
+        <item quantity="other">%1$d alkalommal használva</item>
+    </plurals>
+    <string name="journey_archived">archiválva</string>
+
+    <string name="pet_title">Kedvencek</string>
+    <string name="pet_detail">A kedvenc a profilhoz tartozik, így a Hermes Desktop ugyanazt mutatja.</string>
+    <string name="pet_empty">A Gateway nem kínál kedvenceket.</string>
+    <string name="pet_hide">Kedvenc elrakása</string>
+    <string name="pet_error_load">Nem sikerült betölteni a kedvenceket.</string>
+    <string name="pet_error_adopt">Nem sikerült örökbe fogadni: %1$s.</string>
+
+    <string name="plugins_title">Bővítmények</string>
+    <string name="plugins_detail">A Gateway vezérlőpultjának saját oldallal rendelkező bővítményei, például a Kanban. Az alkalmazásban nyílnak meg.</string>
+    <string name="plugins_error">Nem sikerült betölteni a bővítményeket</string>
+    <string name="plugins_empty">Nincs bővítményoldal</string>
+    <string name="plugins_empty_detail">Egy saját oldallal rendelkező bővítmény, például a Kanban, itt jelenik meg.</string>
+    <string name="plugins_open">%1$s megnyitása</string>
+
+    <string name="update_renamed">A Herald mostantól Kyllene</string>
+    <string name="update_renamed_detail">Ugyanaz az alkalmazás új névvel és ikonnal. A bejelentkezésed, a csevegéseid és a beállításaid megmaradnak.</string>
+    <string name="update_got_it">Értem</string>
+
+    <string name="gateways_title">Gateway-ek</string>
+    <string name="gateways_detail">Minden Gateway egy külön Hermes, saját profilokkal és csevegésekkel.</string>
+    <string name="gateways_make_primary">Legyen az elsődleges</string>
+    <string name="gateways_rename">Átnevezés</string>
+    <string name="gateways_primary">Elsődleges</string>
+    <string name="gateways_signed_out">Kijelentkezve</string>
+    <string name="gateways_signed_out_after">· Kijelentkezve</string>
+    <string name="gateways_client_cert">Klienstanúsítvány</string>
+    <string name="gateways_more_for">Továbbiak: %1$s</string>
+    <string name="gateways_rename_title">Gateway átnevezése</string>
+    <string name="gateways_rename_detail">Hagyd üresen, hogy a cím látsszon.</string>
+    <string name="gateways_remove_title">Eltávolítod a Gateway-t?</string>
+    <string name="gateways_remove_detail">A Kyllene kijelentkezik innen: „%1$s”, és elfelejti. A csevegései a Gateway-en maradnak.</string>
+    <string name="gateways_client_cert_detail">A Kyllene ezt a tanúsítványt mutatja be ennek: „%1$s”, amikor a szerver kéri. A kulcs a rendszer tárolójában marad; csak a neve van elmentve.</string>
+    <string name="gateways_pick">Kiválasztás…</string>
+    <string name="gateways_change">Módosítás…</string>
+    <string name="gateways_clear">Törlés</string>
+
+    <string name="connect_welcome">Üdv a Kyllene-ben</string>
+    <string name="connect_welcome_detail">Csatlakozz a Hermes Agent Gateway-edhez. Semmi sem megy el, amíg be nem jelentkezel.</string>
+    <string name="connect_add_gateway">Gateway hozzáadása</string>
+    <string name="connect_add_gateway_detail">Csatlakozz egy másik Hermes Agent Gateway-hez. A mentettekben bejelentkezve maradsz.</string>
+    <string name="connect_address">Gateway címe</string>
+    <string name="connect_address_detail">Ahol a hermes dashboard fut: LAN, Tailscale vagy HTTPS.</string>
+    <string name="connect_url_required">A Gateway URL-je kötelező.</string>
+    <string name="connect_url_scheme">A Gateway URL-jének http:// vagy https:// előtaggal kell kezdődnie, nem ezzel: %1$s</string>
+    <string name="connect_url_invalid">A Gateway URL-je érvénytelen: %1$s</string>
+    <string name="connect_url_no_host">A Gateway URL-jéből hiányzik a gazdagép.</string>
+    <string name="connect_start_dashboard">Ha a vezérlőpult még nem fut, futtasd ezt a szerveren:</string>
+    <string name="connect_exposed">Ez a cím nem privát, és nem https://, így a jelszavad és a csevegéseid titkosítatlanul mennének át az interneten. Használj https://-t, Tailscale-t vagy a saját hálózatodat.</string>
+    <string name="connect_which_address">Melyik címet használjam?</string>
+    <string name="connect_behind_access">Cloudflare Access mögött van?</string>
+    <string name="connect_need_cert">Klienstanúsítvány kell?</string>
+    <string name="connect_continue">Tovább a bejelentkezéshez</string>
+    <string name="connect_back_to_gateway">Vissza a Gateway-emhez</string>
+    <string name="connect_test">Teszt</string>
+    <string name="connect_testing">Tesztelés…</string>
+    <string name="connect_test_connection">Kapcsolat tesztelése</string>
+    <string name="connect_testing_connection">A kapcsolat tesztelése</string>
+    <string name="connect_access_hint">Ha a Cloudflare Access védi ezt a címet, hozz létre egy szolgáltatási tokent a Cloudflare Zero Trustban (Access → Service credentials), és adj hozzá egy Service Auth szabályt az Access alkalmazásban.</string>
+    <string name="connect_access_saved">Ehhez a címhez van mentett szolgáltatási token</string>
+    <string name="connect_forget">Elfelejtés</string>
+    <string name="connect_access_keep">Hagyd üresen a mezőket a további használathoz, vagy írj be új tokent a cseréhez.</string>
+    <string name="connect_client_id">Client ID</string>
+    <string name="connect_client_secret">Client Secret</string>
+    <string name="connect_client_secret_detail">Titkosítva tárolva ezen a telefonon, és csak erre a címre küldve.</string>
+    <string name="connect_client_secret_detail_desktop">Titkosítva tárolva ezen a számítógépen, és csak erre a címre küldve.</string>
+    <string name="connect_access_half_filled">Add meg a Client ID-t és a Client Secretet is, vagy egyiket se.</string>
+    <string name="connect_cert_demanded">Ez a szerver klienstanúsítványt kér, mielőtt válaszolna. Válaszd ki azt, amelyet adott, és teszteld újra.</string>
+    <string name="connect_cert_hint">Ha a cím előtti proxy klienstanúsítványt kér, válaszd ki itt, hogy a teszt, a bejelentkezés és a csevegés is bemutassa.</string>
+    <string name="connect_cert_kept">A kulcs a rendszer tárolójában marad; Gateway-enként csak a neve van elmentve.</string>
+    <string name="connect_pick_cert">Tanúsítvány kiválasztása</string>
+    <string name="connect_reachable">A Hermes elérhető</string>
+    <string name="connect_reachable_version">A Hermes %1$s elérhető</string>
+    <string name="connect_tested_next">Következik a bejelentkezés, majd a csevegés tesztje</string>
+    <string name="connect_agent_gateway">Ügynök-Gateway</string>
+    <string name="connect_running">Fut</string>
+    <string name="connect_stopped">Leállítva</string>
+    <string name="connect_sign_in_not_required">Nem szükséges</string>
+    <string name="connect_sign_in_password_or_browser">Jelszó vagy böngésző</string>
+    <string name="connect_sign_in_password">Felhasználónév és jelszó</string>
+    <string name="connect_sign_in_browser">Böngészőben (SSO)</string>
+    <string name="connect_sign_in_unsupported">Nem támogatott</string>
+    <string name="connect_profiles">Profilok</string>
+    <string name="connect_no_sign_in">Nincs az alkalmazás által használható bejelentkezés</string>
+    <string name="connect_no_sign_in_detail">Ez a vezérlőpult sem felhasználónév–jelszó szolgáltatót, sem böngészős bejelentkezést nem kínál. Frissítsd a Hermest, vagy állítsd be a felhasználónév–jelszó szolgáltatót a szerveren.</string>
+    <string name="connect_auth_off">A bejelentkezési védelem ki van kapcsolva</string>
+    <string name="connect_auth_off_detail">A vezérlőpult csak a loopbacken figyel, így más eszközök nem tudnak csevegni. Indítsd --host 0.0.0.0 kapcsolóval, és állíts be jelszószolgáltatót.</string>
+    <string name="connect_guide_local">Ugyanaz a Wi-Fi vagy helyi hálózat</string>
+    <string name="connect_guide_local_detail">Használd a szerver helyi címét és portját, például 192.168.1.20:9119. Indítsd a vezérlőpultot --host 0.0.0.0 kapcsolóval, hogy más eszközök elérjék.</string>
+    <string name="connect_guide_tailscale_detail">Kapcsold be a Tailscale-t ezen a telefonon, és használd a szerver Tailscale-címét, például 100.64.0.1:9119-et vagy a .ts.net nevét. Otthonon kívül is működik.</string>
+    <string name="connect_guide_tailscale_detail_desktop">Kapcsold be a Tailscale-t ezen a számítógépen, és használd a szerver Tailscale-címét, például 100.64.0.1:9119-et vagy a .ts.net nevét. Otthonon kívül is működik.</string>
+    <string name="connect_guide_https_detail">Használd a https:// címedet, ha a vezérlőpult tanúsítvánnyal rendelkező proxy mögött van. A proxynak a WebSocket-frissítéseket is át kell engednie a /api/ws útvonalon.</string>
+
+    <string name="signin_title">Bejelentkezés</string>
+    <string name="signin_detail_browser">Jelentkezz be ide: %1$s a böngészőben, azzal a fiókkal, amelyet a vezérlőpultja használ.</string>
+    <string name="signin_detail_both">Használd a vezérlőpult felhasználónevét és jelszavát, amelyet itt állítottak be: %1$s, vagy jelentkezz be a böngészőben.</string>
+    <string name="signin_detail_password">Használd a vezérlőpult felhasználónevét és jelszavát, amelyet itt állítottak be: %1$s.</string>
+    <string name="signin_username">Felhasználónév</string>
+    <string name="signin_password">Jelszó</string>
+    <string name="signin_signing_in">Bejelentkezés…</string>
+    <string name="signin_with_browser">Bejelentkezés böngészővel</string>
+    <string name="signin_waiting_browser">Várakozás a böngészőre…</string>
+    <string name="signin_finish_in_browser">Fejezd be a bejelentkezést a megnyílt oldalon. A Kyllene magától visszatér, ha végeztél.</string>
+    <string name="signin_different_gateway">Másik Gateway használata</string>
+    <string name="signin_gateway_chip">Gateway: %1$s</string>
+    <string name="signin_or">vagy</string>
+    <string name="signin_error_missing">Add meg a felhasználónevet és a jelszót.</string>
+    <string name="signin_error_wrong">Hibás felhasználónév vagy jelszó.</string>
+    <string name="signin_error_rejected">A bejelentkezést elutasították.</string>
+    <string name="signin_error_rate_limited">Túl sok próbálkozás. Várj egy kicsit, és próbáld újra.</string>
+    <string name="signin_error_unreachable">Nem sikerült elérni a Gateway-t: %1$s</string>
+
+    <string name="check_stage_server">Szerver elérése</string>
+    <string name="check_stage_sign_in">Bejelentkezés</string>
+    <string name="check_stage_live">Élő kapcsolat</string>
+    <string name="check_not_checked_yet">Még nincs ellenőrizve.</string>
+    <string name="check_step">%1$d. lépés / %2$d</string>
+    <string name="check_disc">%1$s, %2$s</string>
+    <string name="check_state_checking">Ellenőrzés</string>
+    <string name="check_state_passed">Sikeres</string>
+    <string name="check_state_failed">Sikertelen</string>
+    <string name="check_state_skipped">Kihagyva</string>
+    <string name="check_state_not_checked">Nincs ellenőrizve</string>
+    <string name="check_what_to_do">Mit tegyél</string>
+    <string name="check_server_answers">A Hermes %1$s válaszol itt: %2$s.</string>
+    <string name="check_signed_in_as">Bejelentkezve mint %1$s.</string>
+    <string name="check_live_ready">A csevegés kapcsolata megnyílt, és a Gateway jelezte, hogy kész.</string>
+    <string name="check_needs_server">Előbb el kell érni a szervert.</string>
+    <string name="check_needs_sign_in">Előbb be kell jelentkezni.</string>
+    <string name="check_sign_in_expired">Ez a telefon nincs bejelentkezve a Gateway-re, vagy lejárt a bejelentkezés.</string>
+    <string name="check_sign_in_rate_limited">A Gateway korlátozza a bejelentkezési kísérleteket.</string>
+    <string name="check_sign_in_unavailable">A bejelentkezés ellenőrzése nem jutott el: %1$s</string>
+    <string name="check_sign_in_refused">A Gateway elutasította a bejelentkezés ellenőrzését: %1$s</string>
+    <string name="check_ticket_expired">A Gateway nem adott csevegési jegyet: lejárt a bejelentkezés.</string>
+    <string name="check_ticket_unavailable">Nem sikerült csevegési jegyet kérni: %1$s</string>
+    <string name="check_requests_rate_limited">A Gateway korlátozza a kéréseket.</string>
+    <string name="check_ticket_refused">A Gateway nem adott csevegési jegyet: %1$s</string>
+    <string name="check_never_ready">A csevegés kapcsolata megnyílt, de a Gateway sosem jelezte, hogy kész.</string>
+    <string name="check_no_chat_endpoint">Ennek a vezérlőpultnak nincs csevegési végpontja (/api/ws).</string>
+    <string name="check_chat_guarded">A Gateway elutasította a csevegés kapcsolatát (Host/Origin védelem).</string>
+    <string name="check_chat_login_redirect">A csevegés kapcsolatát egy bejelentkezési oldalra irányították (HTTP %1$s).</string>
+    <string name="check_chat_refused">A csevegés kapcsolata elutasítva (HTTP %1$s).</string>
+    <string name="check_ticket_rejected">A Gateway visszautasította a csevegési jegyet.</string>
+    <string name="check_chat_cert_required">A szerver klienstanúsítványt kért a csevegés kapcsolata közben: %1$s</string>
+    <string name="check_chat_failed">A csevegés kapcsolata sikertelen: %1$s</string>
+    <string name="check_server_cert_required">Nem sikerült elérni ezt: %1$s; a szerver klienstanúsítványt kért (%2$s).</string>
+    <string name="check_not_hermes">Valami válaszolt itt: %1$s, de nem egy Hermes-vezérlőpult.</string>
+    <string name="check_not_hermes_status">Valami válaszolt itt: %1$s (HTTP %2$s), de nem egy Hermes-vezérlőpult.</string>
+    <string name="check_access_token_refused">A Cloudflare Access elutasította ennek a Gateway-nek a szolgáltatási tokenjét (HTTP %1$s).</string>
+    <string name="check_access_blocked">A Cloudflare Access megállította a kérést, mielőtt elérte volna a Hermest (HTTP %1$s).</string>
+    <string name="check_unreachable">Nem sikerült elérni ezt: %1$s; %2$s</string>
+    <string name="check_fix_sign_in_again">Jelentkezz be újra.</string>
+    <string name="check_fix_sign_in_password_or_browser">Jelentkezz be újra a vezérlőpult jelszavával vagy a böngészőben.</string>
+    <string name="check_fix_wait_a_minute">Várj egy percet, és próbáld újra.</string>
+    <string name="check_fix_sign_in_or_update">Jelentkezz be újra; ha továbbra sem megy, frissítsd a Hermest.</string>
+    <string name="check_fix_update_hermes_try_again">Frissítsd a Hermest, és próbáld újra.</string>
+    <string name="check_fix_update_hermes">Frissítsd a Hermest a szerveren.</string>
+    <string name="check_fix_agent_running">Ellenőrizd, hogy az ügynök Gateway-e fut-e a szerveren. Proxy mögött engedélyezd a WebSocket-frissítéseket a /api/ws útvonalon.</string>
+    <string name="check_fix_exact_address">Pontosan azt a címet használd, amelyre a vezérlőpult be van állítva, és ellenőrizd, hogy a beágyazott csevegés be van-e kapcsolva.</string>
+    <string name="check_fix_access_token_or_proxy">Cloudflare Access mögött adj hozzá szolgáltatási tokent ehhez a Gateway-hez. Ellenkező esetben ellenőrizd, hogy a proxy továbbítja-e a /api/ws útvonalat.</string>
+    <string name="check_fix_allow_upgrades">Proxy mögött engedélyezd a WebSocket-frissítéseket a /api/ws útvonalon.</string>
+    <string name="check_fix_allow_upgrades_or_retry">Proxy mögött engedélyezd a WebSocket-frissítéseket a /api/ws útvonalon; egyébként próbáld újra.</string>
+    <string name="check_fix_client_cert">Rendeld a Gateway-hez azt a klienstanúsítványt, amelyet ez a szerver kér (az álnevét a rendszer tárolójában), és ellenőrizd újra.</string>
+    <string name="check_fix_dashboard_port">Használd a vezérlőpult saját portját, alapértelmezés szerint 9119. Proxy mögött ellenőrizd, hogy továbbít-e a vezérlőpultra.</string>
+    <string name="check_fix_check_access_token">Ellenőrizd a Client ID-t és a Client Secretet, és hogy az Access alkalmazásnak van-e ezt a tokent tartalmazó Service Auth szabálya.</string>
+    <string name="check_fix_add_access_token">Adj hozzá Cloudflare Access szolgáltatási tokent ehhez a Gateway-hez, és adj az Access alkalmazásnak egy ezt tartalmazó Service Auth szabályt.</string>
+    <string name="check_fix_loopback">Ez a cím erre a telefonra mutat, nem a szerverre. Használd a szerver helyi vagy Tailscale-címét.</string>
+    <string name="check_fix_tailscale">Kapcsold be a Tailscale-t ezen a telefonon, és ellenőrizd, hogy a szerver online van-e ugyanabban a tailnetben.</string>
+    <string name="check_fix_https">Ellenőrizd, hogy a domain a szerverre mutat-e, a tanúsítvány érvényes-e, és a proxy továbbít-e a vezérlőpultra.</string>
+    <string name="check_fix_local_network">Csatlakozz ugyanarra a Wi-Fi-re vagy hálózatra, mint a szerver, és indítsd a vezérlőpultot --host 0.0.0.0 kapcsolóval, hogy más eszközök elérjék.</string>
+    <string name="check_fix_reachable">Ellenőrizd a címet és a portot, és hogy a szerver elérhető-e erről a telefonról.</string>
+</resources>
