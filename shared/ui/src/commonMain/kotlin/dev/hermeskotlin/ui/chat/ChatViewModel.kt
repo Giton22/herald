@@ -538,13 +538,15 @@ class ChatViewModel(
                 typed != null -> typed
                 else -> drafts.get(target.gateway.gatewayUrl, target.storedSessionId, target.profile)
             }
-            if (this@ChatViewModel.target != target) return@launch
+            val now = this@ChatViewModel.target
+            if (now == null || !now.sameChatAs(target)) return@launch
             val shared = target.draft?.text?.takeIf { it.isNotBlank() && !clean }
             when {
                 shared != null -> composer.setTextAndPlaceCursorAtEnd(listOfNotNull(saved?.takeIf { it.isNotBlank() }, shared).joinToString("\n"))
                 saved != null && composer.text.isEmpty() -> composer.setTextAndPlaceCursorAtEnd(saved)
             }
-            draftOf = target
+            // The new chat may have moved to another project meanwhile; the draft is the one now open.
+            draftOf = now
         }
     }
 
@@ -559,6 +561,34 @@ class ChatViewModel(
             seen.markLooked(target.gateway.gatewayUrl, id, at, target.profile, running = state.running)
         }
     }
+
+    /**
+     * [target] is the open new chat moved to another project before anything was sent in it: it keeps its session,
+     * and with it the model picked and what's typed and attached, and its first send starts in the new folder.
+     * False when it's another chat, or this one has begun on the gateway.
+     */
+    private fun moveNewChat(target: ChatTarget): Boolean {
+        val open = this.target ?: return false
+        val chat = session.value ?: return false
+        if (open.storedSessionId != null || target.storedSessionId != null) return false
+        if (open.copy(cwd = target.cwd, draft = target.draft, readUpTo = target.readUpTo) != target) return false
+        if (chat !== host.session.value || !chat.startIn(target.cwd)) return false
+        this.target = target
+        if (draftOf == open) draftOf = target
+        widgetSession.value = chat to target
+        // A new chat's position is its end either way; it stays known, so the greeting doesn't blink to a spinner.
+        _readPosition.value = _readPosition.value?.takeIf { it.target == open }?.copy(target = target) ?: ChatReadPosition(target, target.readUpTo)
+        return true
+    }
+
+    /**
+     * The same chat as [other], whatever its read position. A new chat stays itself when it moves to another project,
+     * which also drops the draft it came with (already in the composer).
+     */
+    private fun ChatTarget.sameChatAs(other: ChatTarget): Boolean =
+        if (storedSessionId == null && other.storedSessionId == null) {
+            copy(cwd = null, draft = null, readUpTo = null) == other.copy(cwd = null, draft = null, readUpTo = null)
+        } else copy(readUpTo = null) == other.copy(readUpTo = null)
 
     /** Opens [target]'s chat in the host, with the transcript's file callbacks bound to that target. */
     private fun bind(target: ChatTarget) {
@@ -579,6 +609,7 @@ class ChatViewModel(
             if (session.value !== host.session.value) bind(target)
             return
         }
+        if (moveNewChat(target)) return
         markLooked()
         // An edit belongs to its chat; what was typed before it is that chat's draft.
         cancelEdit()
@@ -610,7 +641,7 @@ class ChatViewModel(
     private fun sendWhenConnected(target: ChatTarget) {
         viewModelScope.launch {
             val ready = withTimeoutOrNull(VOICE_CONNECT_WAIT_MS) { connectionState.first { it is ConnectionState.Connected } }
-            if (this@ChatViewModel.target != target) return@launch
+            if (this@ChatViewModel.target?.sameChatAs(target) != true) return@launch
             if (ready != null) send() else showNotice(ComposerNotice.PromptNotSent)
         }
     }
@@ -634,7 +665,7 @@ class ChatViewModel(
                 combine(connectionState, shown) { state, shown -> state.takeIf { it !is ConnectionState.Connected || shown } }
                     .first { it is ConnectionState.Connected || it is ConnectionState.Failed || it is ConnectionState.SessionExpired }
             }
-            if (this@ChatViewModel.target?.copy(readUpTo = null) != target.copy(readUpTo = null)) return@launch
+            if (this@ChatViewModel.target?.sameChatAs(target) != true) return@launch
             when {
                 ready is ConnectionState.Connected -> _requests.send(ChatRequest.StartCall)
                 ready is ConnectionState.Failed || (ready == null && connectionState.value !is ConnectionState.Connected) ->

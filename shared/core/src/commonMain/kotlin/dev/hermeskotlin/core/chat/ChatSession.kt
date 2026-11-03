@@ -73,8 +73,8 @@ class ChatSession(
     private val risks: ToolRiskStore? = null,
     /** Dates what this device sends and sees finish; live events carry no time of their own. */
     private val clock: Clock = Clock.System,
-    /** For a new chat: the working folder it starts in (a project's), or null for the profile's default. */
-    private val cwd: String? = null,
+    /** For a new chat: the working folder it starts in (a project's), or null for the profile's default. See [startIn]. */
+    private var cwd: String? = null,
     /** The device's copy of the transcript, shown while the gateway can't be read. */
     private val cache: OfflineCache? = null,
     /** `/btw` and `/bg` cards from when this chat was last open ([ChatHost] keeps them across a switch). */
@@ -1688,6 +1688,20 @@ class ChatSession(
 
     /** Shows a title set elsewhere (a REST rename) without waiting for the gateway to echo it. */
     fun showTitle(title: String?) = _state.update { it.copy(title = title) }
+
+    /**
+     * Moves a chat the gateway hasn't made yet to [folder] (a project's; null: the profile's default), so its first
+     * send starts there, with the model and text picked for it kept. False, leaving it, once it's being made or is.
+     */
+    fun startIn(folder: String?): Boolean {
+        if (!unstarted) return false
+        cwd = folder
+        return true
+    }
+
+    /** Not made on the gateway yet, nor being made: [startIn] can still move it. */
+    val unstarted: Boolean
+        get() = _state.value.let { !rowExists && it.storedSessionId == null && it.attachment == Attachment.Detached }
 
     /**
      * Shows a model set elsewhere (a Bot Chat's bot's own, which the chat follows) without asking the
