@@ -5,6 +5,9 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import com.composeunstyled.theme.Theme
+import dev.hermeskotlin.designsystem.colors
+import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.core.phone.PhoneTool
 import dev.hermeskotlin.core.phone.enabledPhoneTools
 import dev.hermeskotlin.core.phone.requiresPhoneToolPermission
@@ -17,6 +20,7 @@ internal fun PhoneToolPermissionRow(tool: PhoneTool, settings: AppSettings, onPe
     Box(Modifier.padding(start = 46.dp)) {
         SwitchRow(
             title = title,
+            titleColor = Theme[colors][textSecondary],
             detail = null,
             checked = settings.requiresPhoneToolPermission(tool),
             enabled = tool in settings.enabledPhoneTools(),

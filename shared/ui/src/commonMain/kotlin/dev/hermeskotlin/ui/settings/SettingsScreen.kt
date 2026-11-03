@@ -1250,7 +1250,7 @@ private fun Field(title: String, detail: String? = null, control: @Composable ()
 
 /** A setting that's on or off: the whole row toggles. An [icon] sits on a small tile before the title. */
 @Composable
-internal fun SwitchRow(title: String, detail: String?, checked: Boolean, onCheckedChange: (Boolean) -> Unit, icon: ImageVector? = null, enabled: Boolean = true) {
+internal fun SwitchRow(title: String, detail: String?, checked: Boolean, onCheckedChange: (Boolean) -> Unit, icon: ImageVector? = null, enabled: Boolean = true, titleColor: Color? = null) {
     if (!settingShown(title, detail)) return
     Row(
         Modifier
@@ -1264,7 +1264,7 @@ internal fun SwitchRow(title: String, detail: String?, checked: Boolean, onCheck
     ) {
         if (icon != null) IconTile(icon)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(1.dp)) {
-            Text(title, style = Theme[typography][body], color = Theme[colors][text])
+            Text(title, style = Theme[typography][body], color = titleColor ?: Theme[colors][text])
             if (detail != null) Text(detail, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
         }
         Switch(checked)
