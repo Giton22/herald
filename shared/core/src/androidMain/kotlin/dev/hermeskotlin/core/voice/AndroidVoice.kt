@@ -263,7 +263,8 @@ class AndroidSpeechPlayer(private val context: Context) : SpeechPlayer {
 
     private val lock = Any()
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    private var chatAudioOwner: Any? = null
+    /** Each chained chat with call routing open. The chat, a phone call and the assistant panel share this player. */
+    private val chatAudioOwners = mutableSetOf<Any>()
     private var restoreChatAudio: (() -> Unit)? = null
 
     /** Held ([hold]): what plays now is paused, and what's ready meanwhile waits to start. */
@@ -276,8 +277,8 @@ class AndroidSpeechPlayer(private val context: Context) : SpeechPlayer {
      * A chained chat on the phone's own speaker uses call routing, so the phone's echo cancelling keeps the voice out
      * of the microphone. Headphones, earbuds or another speaker keep their usual route: call routing would move
      * earbuds without a call profile to the phone's speaker and drop the others to call quality. A route that won't
-     * take leaves the chat on its usual one, never on the earpiece. The returned close action is safe to call again or
-     * after a newer chat.
+     * take leaves the chat on its usual one, never on the earpiece. The returned close action is safe to call again;
+     * the route goes back once every chat that opened it has closed.
      */
     @Suppress("DEPRECATION")
     override fun chainedChatAudio(): () -> Unit = synchronized(lock) {
@@ -305,18 +306,22 @@ class AndroidSpeechPlayer(private val context: Context) : SpeechPlayer {
             }
             restoreChatAudio = restore
         }
-        chatAudioOwner = owner
+        chatAudioOwners += owner
         return@synchronized {
             synchronized(lock) {
-                // An old chat's finally must not restore over the one that replaced it.
-                if (chatAudioOwner === owner) {
-                    chatAudioOwner = null
+                // An old chat's finally must not restore under a newer one, here or in another controller.
+                if (chatAudioOwners.remove(owner) && chatAudioOwners.isEmpty()) {
                     val restore = restoreChatAudio
                     restoreChatAudio = null
                     restore?.invoke()
                 }
             }
         }
+    }
+
+    /** Call audio while a chained chat has call routing open, assistant audio otherwise. */
+    private fun speechUsage() = synchronized(lock) {
+        if (chatAudioOwners.isNotEmpty()) AudioAttributes.USAGE_VOICE_COMMUNICATION else AudioAttributes.USAGE_ASSISTANT
     }
 
     override fun hold(on: Boolean): Boolean {
@@ -339,7 +344,7 @@ class AndroidSpeechPlayer(private val context: Context) : SpeechPlayer {
         val track = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
-                    .setUsage(synchronized(lock) { if (chatAudioOwner != null) AudioAttributes.USAGE_VOICE_COMMUNICATION else AudioAttributes.USAGE_ASSISTANT })
+                    .setUsage(speechUsage())
                     .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                     .build(),
             )
@@ -443,7 +448,7 @@ class AndroidSpeechPlayer(private val context: Context) : SpeechPlayer {
             suspendCancellableCoroutine { continuation ->
                 player.setAudioAttributes(
                     AudioAttributes.Builder()
-                        .setUsage(synchronized(lock) { if (chatAudioOwner != null) AudioAttributes.USAGE_VOICE_COMMUNICATION else AudioAttributes.USAGE_ASSISTANT })
+                        .setUsage(speechUsage())
                         .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
                         .build(),
                 )

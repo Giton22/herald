@@ -77,6 +77,21 @@ class AndroidChainedAudioTest {
         assertEquals(AudioManager.MODE_NORMAL, manager.mode)
     }
 
+    /** The chat, a phone call and the assistant panel share the player: one chat ending leaves the other's route. */
+    @Test
+    fun aChatThatEndsFirstLeavesTheOtherChatsRoute() {
+        shadowOf(manager).setAvailableCommunicationDevices(listOf(speaker))
+        val player = AndroidSpeechPlayer(context)
+        manager.mode = AudioManager.MODE_NORMAL
+        val first = player.chainedChatAudio()
+        val second = player.chainedChatAudio()
+        second()
+        assertEquals(AudioManager.MODE_IN_COMMUNICATION, manager.mode)
+        assertEquals(speaker, manager.communicationDevice)
+        first()
+        assertEquals(AudioManager.MODE_NORMAL, manager.mode)
+    }
+
     @Test
     fun theModeBeforeTheChatComesBack() {
         shadowOf(manager).setAvailableCommunicationDevices(listOf(speaker))
