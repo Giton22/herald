@@ -62,6 +62,16 @@ class SelectionTest(unittest.TestCase):
             self.assertNotEqual(result.returncode, 0)
             self.assertFalse(output.exists())
 
+    def test_contract_tests_cannot_skip_silently_and_android_only_prs_skip_linux(self):
+        checks = (ROOT / '.github/workflows/linux-checks.yml').read_text()
+        linux = (ROOT / '.github/workflows/linux.yml').read_text()
+        # No other job runs test_installed_smoke.py, and it skips without Pillow.
+        self.assertIn('python3-pil', checks)
+        repository = linux.split('  repository:\n', 1)[1].split('\n  linux:\n')[0]
+        self.assertIn('unittest test_repo_smoke', repository)
+        self.assertIn('! grep -q skipped', repository)
+        self.assertIn('  pull_request:\n    paths: *paths\n', linux)
+
     def test_release_attachment_waits_for_both_builds_and_uses_the_qualified_artifact(self):
         workflow = (ROOT / '.github/workflows/release.yml').read_text()
         build, attach = workflow.split('  flatpak:\n', 1)[1].split('  flatpak-attach:\n')
