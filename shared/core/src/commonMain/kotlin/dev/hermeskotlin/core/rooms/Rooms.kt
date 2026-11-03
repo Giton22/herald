@@ -34,9 +34,6 @@ data class RoomAttachment(
          */
         const val MAX_BYTES = dev.hermeskotlin.core.chat.OutgoingAttachment.MAX_INLINE_BYTES
         const val MAX_TOTAL_BYTES = 25_000_000
-
-        /** The limits as the composer states them; the gateway counts megabytes in millions of bytes. */
-        val LIMITS = "Up to $MAX_COUNT files, ${MAX_BYTES / 1_000_000} MB each, ${MAX_TOTAL_BYTES / 1_000_000} MB per message"
     }
 }
 
@@ -163,8 +160,19 @@ sealed interface RoomLine {
         val attachments: List<RoomAttachment> = emptyList(),
     ) : RoomLine
 
-    /** A line the gateway wrote: a failure, a stop, a rename. */
-    data class System(override val seq: Int, val text: String) : RoomLine
+    /** A line the gateway wrote: a failure, a stop, a rename. The screen puts [note] into words. */
+    data class System(override val seq: Int, val note: RoomNote) : RoomLine
+}
+
+/** What a [RoomLine.System] reports. A [member] is the roster's name for it, or null when the roster doesn't know the id. */
+sealed interface RoomNote {
+    /** [error] is the gateway's reason, verbatim; null when it gave none. */
+    data class TurnFailed(val member: String?, val error: String?) : RoomNote
+    data class TurnStopped(val reason: String?) : RoomNote
+    /** A member chose to say nothing (its turn settled with `passed`). */
+    data class Passed(val member: String?) : RoomNote
+    data object StopRequested : RoomNote
+    data class Renamed(val name: String) : RoomNote
 }
 
 /** A payload string, or null when the key is absent or not a string. */
@@ -200,7 +208,8 @@ internal fun JsonObject.payloadInt(key: String): Int? = (this[key] as? JsonPrimi
  * turn.deferred / room.activity / authority events are bookkeeping, not something to read.
  */
 fun roomLine(event: RoomEvent, members: List<RoomMember>): RoomLine? {
-    fun member(memberId: String?): String = members.firstOrNull { it.memberId == memberId }?.label ?: "A member"
+    // Null for an id the roster doesn't know: the screen names it, in the app's language.
+    fun member(memberId: String?): String? = members.firstOrNull { it.memberId == memberId }?.label
     val createdAt = event.createdAt.takeIf { it > 0 }
     return when (event.kind) {
         "message.user" -> event.messageText.orEmpty().takeIf { it.isNotBlank() || event.messageAttachments.isNotEmpty() }
@@ -218,19 +227,16 @@ fun roomLine(event: RoomEvent, members: List<RoomMember>): RoomLine? {
                 createdAt = createdAt,
             )
         }
-        "turn.failed" -> {
-            val error = event.payload.payloadText("error") ?: "something went wrong"
-            RoomLine.System(event.seq, "${member(event.payload.payloadText("member_id"))} couldn't take their turn: $error")
-        }
-        "turn.cancelled" -> {
-            val reason = event.payload.payloadText("reason")
-            RoomLine.System(event.seq, "Turn stopped${if (reason.isNullOrBlank()) "." else ": $reason"}")
-        }
+        "turn.failed" -> RoomLine.System(
+            event.seq,
+            RoomNote.TurnFailed(member(event.payload.payloadText("member_id")), event.payload.payloadText("error")?.takeIf { it.isNotBlank() }),
+        )
+        "turn.cancelled" -> RoomLine.System(event.seq, RoomNote.TurnStopped(event.payload.payloadText("reason")?.takeIf { it.isNotBlank() }))
         // A member that chose to say nothing (its turn settles with `passed`): quiet, but not silent.
-        "turn.settled" -> RoomLine.System(event.seq, "${member(event.payload.payloadText("member_id"))} had nothing to add.")
+        "turn.settled" -> RoomLine.System(event.seq, RoomNote.Passed(member(event.payload.payloadText("member_id"))))
             .takeIf { (event.payload["passed"] as? JsonPrimitive)?.booleanOrNull == true }
-        "room.stop_requested" -> RoomLine.System(event.seq, "Stopping the room was asked for.")
-        "room.renamed" -> event.payload.payloadText("name")?.let { RoomLine.System(event.seq, "Renamed to \u201c$it\u201d.") }
+        "room.stop_requested" -> RoomLine.System(event.seq, RoomNote.StopRequested)
+        "room.renamed" -> event.payload.payloadText("name")?.let { RoomLine.System(event.seq, RoomNote.Renamed(it)) }
         else -> null
     }
 }
