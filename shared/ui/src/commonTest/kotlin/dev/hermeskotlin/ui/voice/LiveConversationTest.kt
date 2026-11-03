@@ -49,6 +49,7 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import dev.hermeskotlin.ui.JvmOnly
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -282,6 +283,7 @@ class LiveConversationTest {
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Test
+    @JvmOnly
     fun ringbackStopsOnEarlySpeechHangupAndConnectionFailureButManualCallsStayQuiet() = runTest {
         for (ending in listOf("speech", "hangup", "failure", "manual", "playback", "fallback", "error")) {
             val player = RingbackPlayer(fails = ending == "playback")
@@ -695,6 +697,7 @@ class LiveConversationTest {
     }
 
     @Test
+    @JvmOnly
     fun aYesSaidOnceThePhoneLockedIsntTaken() = runTest {
         var locked = false
         lateinit var recorder: Saying
@@ -826,6 +829,7 @@ class LiveConversationTest {
     }
 
     @Test
+    @JvmOnly
     fun theVendorEndingTheCallSaysWhy() = runTest {
         val client = http("gpt-live", mutableListOf())
         val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> Socket() }, backgroundScope)
@@ -843,6 +847,7 @@ class LiveConversationTest {
     }
 
     @Test
+    @JvmOnly
     fun aRefusedCallSaysWhatTheVendorSaid() = runTest {
         // The gateway's 502 when OpenAI turns the session down, as a phone saw it.
         val body = """{"detail":"GPT-Live session creation failed (429): {\n    \"error\": {\n        \"message\": \"You have no credits remaining.\",\n        \"code\": \"credit_balance_exhausted\"\n    }\n}"}"""

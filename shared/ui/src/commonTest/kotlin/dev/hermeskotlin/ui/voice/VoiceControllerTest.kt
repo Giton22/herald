@@ -37,6 +37,7 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlin.concurrent.atomics.AtomicReference
 import kotlin.concurrent.atomics.ExperimentalAtomicApi
+import dev.hermeskotlin.ui.JvmOnly
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -222,6 +223,7 @@ class VoiceControllerTest {
     }
 
     @Test
+    @JvmOnly
     fun finishingBeforeTheMicrophoneOpensDoesntRecord() = runTest {
         val recorder = StartingRecorder()
         val voice = VoiceController(audio("unused", Requests()), recorder, FakePlayer(), backgroundScope, backgroundScope)
@@ -234,6 +236,7 @@ class VoiceControllerTest {
     }
 
     @Test
+    @JvmOnly
     fun finishingWhileTheMicrophoneStartsEndsTheRecording() = runTest {
         val recorder = StartingRecorder()
         val voice = VoiceController(audio("unused", Requests()), recorder, FakePlayer(), backgroundScope, backgroundScope)
@@ -246,6 +249,7 @@ class VoiceControllerTest {
     }
 
     @Test
+    @JvmOnly
     fun stoppingWhileTheRecognizersAreTriedDoesntStartAGatewayRecording() = runTest {
         val recorder = FakeRecorder()
         val trying = CompletableDeferred<Unit>()
@@ -315,6 +319,7 @@ class VoiceControllerTest {
     }
 
     @Test
+    @JvmOnly
     fun aDeviceDictationThatHeardNothingSaysSo() = runTest {
         val voice = VoiceController(
             audio("unused", Requests()), FakeRecorder(), FakePlayer(), backgroundScope, backgroundScope,
