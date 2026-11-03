@@ -1,13 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
     Words only the desktop window’s own versions of shared pieces use (shared/ui/src/jvmMain): its file dialogs,
-    its text menu and what it can’t do yet. desktop_ keeps them apart from the phone’s.
+    saving and what it can’t do yet. desktop_ keeps them apart from the phone’s.
 -->
 <resources>
-    <!-- The right-click menu on a link. -->
-    <string name="desktop_open_link">Open link</string>
-    <string name="desktop_copy_link">Copy link</string>
-
     <!-- Attaching files from the system’s Open dialog, a drop or a paste. -->
     <string name="desktop_attach_photos">Attach photos</string>
     <string name="desktop_attach_files">Attach files</string>
@@ -29,9 +25,4 @@
     <!-- What the desktop app can’t show or do. -->
     <string name="desktop_pdf_unsupported">PDFs don’t open in the desktop app yet. Save gets the file.</string>
     <string name="desktop_widgets_unsupported">Widgets don’t show in this build of the desktop app.</string>
-    <string name="desktop_phone_tools_need_phone">Phone tools work from Kyllene on an Android phone.</string>
-
-    <!-- Picking a chat background. -->
-    <string name="desktop_wallpaper_title">Chat background</string>
-    <string name="desktop_wallpaper_unreadable">Couldn’t read that picture.</string>
 </resources>

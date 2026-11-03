@@ -25,29 +25,4 @@
     <string name="android_save_needs_android_10">保存需要 Android 10。请改用分享。</string>
     <string name="android_save_failed">无法保存 %1$s。</string>
     <string name="android_saved_to">已保存到 %1$s</string>
-
-    <string name="android_plugin_close">关闭页面</string>
-    <string name="android_plugin_failed">无法打开页面。</string>
-    <string name="android_plugin_retry">重试</string>
-
-    <string name="android_wallpaper_too_large">这张照片太大或无法读取。</string>
-    <string name="android_wallpaper_not_image">这个文件不是 Kyllene 能读取的图片。</string>
-    <string name="android_wallpaper_failed">无法读取这张照片。</string>
-
-    <string name="android_access_notifications">请开启 Kyllene 的通知：更改会在那里询问你。</string>
-    <string name="android_access_dnd">允许 Kyllene 更改勿扰模式。</string>
-    <string name="android_access_usage">授予 Kyllene 使用情况访问权限，以查看你使用哪些应用。</string>
-    <string name="android_access_location">允许 Kyllene 使用这部手机的位置。</string>
-    <string name="android_access_precise">允许精确位置：Android 只有用它才会监测地点。</string>
-    <string name="android_access_background">始终允许位置：Kyllene 关闭时也会监测地点。请选择“始终允许”。</string>
-    <string name="android_access_calendar">允许 Kyllene 使用你的日历。</string>
-    <string name="android_access_contacts">允许 Kyllene 读取你的联系人。</string>
-    <string name="android_access_health_update">请更新 Health Connect，数据来自那里。</string>
-    <string name="android_access_health_install">请安装 Health Connect，数据来自那里。</string>
-    <string name="android_access_health_none">这部手机没有 Health Connect。</string>
-    <string name="android_access_health_read">允许 Kyllene 在 Health Connect 中读取步数、睡眠或心率。</string>
-    <string name="android_access_closed_optional">Kyllene 关闭时也可以（可选）</string>
-    <string name="android_access_health_more_optional">还有步数、睡眠或心率（可选）</string>
-    <string name="android_access_call_notifications">请开启 Kyllene 的通知：通话会在那里响铃。</string>
-    <string name="android_access_full_screen">允许全屏通知，让通话显示在锁屏上。</string>
 </resources>

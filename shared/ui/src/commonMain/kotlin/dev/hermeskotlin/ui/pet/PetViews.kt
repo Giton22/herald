@@ -79,6 +79,8 @@ import dev.hermeskotlin.ui.chat.rememberImageBitmap
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The pose for [chat], Desktop's way: a brief wave when a turn finishes (a slump when it fails), then
@@ -163,11 +165,11 @@ fun PetSheet(visible: Boolean, controller: PetController, onDismiss: () -> Unit,
     val scope = rememberCoroutineScope()
     LaunchedEffect(visible) { if (visible) controller.loadGallery() }
     BottomSheet(visible = visible, onDismiss = onDismiss) {
-        SheetHeader("Pets", "A pet belongs to the profile, so Hermes Desktop shows the same one.")
+        SheetHeader(stringResource(Res.string.pet_title), stringResource(Res.string.pet_detail))
         val gallery = state.gallery
         when {
             gallery == null && state.loading -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Spinner() }
-            gallery != null && gallery.pets.isEmpty() -> Note("The gateway has no pets to offer.")
+            gallery != null && gallery.pets.isEmpty() -> Note(stringResource(Res.string.pet_empty))
             gallery != null -> LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = 96.dp),
                 modifier = Modifier.fillMaxWidth().heightIn(max = 440.dp).padding(horizontal = 14.dp),
@@ -189,7 +191,7 @@ fun PetSheet(visible: Boolean, controller: PetController, onDismiss: () -> Unit,
         }
         state.error?.let { Note(it, error = true) }
         if (gallery?.enabled == true) {
-            SheetAction("Put the pet away", Lucide.EyeOff, onClick = { scope.launch { runCatching { controller.hide() } } })
+            SheetAction(stringResource(Res.string.pet_hide), Lucide.EyeOff, onClick = { scope.launch { runCatching { controller.hide() } } })
         }
     }
 }

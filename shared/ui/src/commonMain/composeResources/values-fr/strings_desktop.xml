@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="desktop_open_link">Ouvrir le lien</string>
-    <string name="desktop_copy_link">Copier le lien</string>
 
     <string name="desktop_attach_photos">Joindre des photos</string>
     <string name="desktop_attach_files">Joindre des fichiers</string>
@@ -21,8 +19,4 @@
 
     <string name="desktop_pdf_unsupported">Les PDF ne s’ouvrent pas encore dans l’application de bureau. Vous pouvez enregistrer le fichier.</string>
     <string name="desktop_widgets_unsupported">Les widgets ne s’affichent pas dans cette version de l’application de bureau.</string>
-    <string name="desktop_phone_tools_need_phone">Les outils du téléphone fonctionnent avec Kyllene sur un téléphone Android.</string>
-
-    <string name="desktop_wallpaper_title">Fond de conversation</string>
-    <string name="desktop_wallpaper_unreadable">Impossible de lire cette image.</string>
 </resources>

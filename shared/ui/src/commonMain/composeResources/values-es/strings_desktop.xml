@@ -1,7 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="desktop_open_link">Abrir enlace</string>
-    <string name="desktop_copy_link">Copiar enlace</string>
 
     <string name="desktop_attach_photos">Adjuntar fotos</string>
     <string name="desktop_attach_files">Adjuntar archivos</string>
@@ -21,8 +19,4 @@
 
     <string name="desktop_pdf_unsupported">Los PDF aún no se abren en la aplicación de escritorio. Puedes guardar el archivo.</string>
     <string name="desktop_widgets_unsupported">Los widgets no se muestran en esta versión de la aplicación de escritorio.</string>
-    <string name="desktop_phone_tools_need_phone">Las herramientas del teléfono funcionan con Kyllene en un teléfono Android.</string>
-
-    <string name="desktop_wallpaper_title">Fondo del chat</string>
-    <string name="desktop_wallpaper_unreadable">No se pudo leer esa imagen.</string>
 </resources>

@@ -16,20 +16,81 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.withTimeout
 
 /** The three things a working gateway needs, checked one at a time and in this order. */
-enum class CheckStage(val label: String) {
-    Server("Server access"),
-    SignIn("Sign-in"),
-    Live("Live connection"),
+enum class CheckStage { Server, SignIn, Live }
+
+/**
+ * One line the check shows: [kind] says which, [args] fill it in (an address, a version, the gateway's or the
+ * system's own message, shown as it is). The app turns it into words in its own language.
+ */
+data class CheckNote(val kind: Kind, val args: List<String> = emptyList()) {
+    enum class Kind {
+        // Passed: the server answers (version, address), signed in (who), the live connection is ready.
+        ServerAnswers,
+        SignedInAs,
+        LiveReady,
+
+        // Skipped: waiting on an earlier stage.
+        NeedsServer,
+        NeedsSignIn,
+
+        // Problems.
+        SignInExpired,
+        SignInRateLimited,
+        SignInUnavailable,
+        SignInRefused,
+        TicketExpired,
+        TicketUnavailable,
+        RequestsRateLimited,
+        TicketRefused,
+        NeverReady,
+        NoChatEndpoint,
+        ChatGuarded,
+        ChatLoginRedirect,
+        ChatRefused,
+        TicketRejected,
+        ChatCertRequired,
+        ChatFailed,
+        ServerCertRequired,
+        NotHermes,
+        NotHermesStatus,
+        AccessTokenRefused,
+        AccessBlocked,
+        Unreachable,
+
+        // Fixes.
+        FixSignInAgain,
+        FixSignInPasswordOrBrowser,
+        FixWaitAMinute,
+        FixSignInOrUpdate,
+        FixUpdateHermesTryAgain,
+        FixUpdateHermes,
+        FixAgentRunning,
+        FixExactAddress,
+        FixAccessTokenOrProxy,
+        FixAllowUpgrades,
+        FixAllowUpgradesOrRetry,
+        FixClientCert,
+        FixDashboardPort,
+        FixCheckAccessToken,
+        FixAddAccessToken,
+        FixLoopback,
+        FixTailscale,
+        FixHttps,
+        FixLocalNetwork,
+        FixReachable,
+    }
 }
 
+private fun note(kind: CheckNote.Kind, vararg args: String) = CheckNote(kind, args.toList())
+
 sealed interface StageResult {
-    data class Passed(val detail: String) : StageResult
+    data class Passed(val detail: CheckNote) : StageResult
 
     /** What went wrong, and the specific thing to do about it. */
-    data class Failed(val problem: String, val fix: String) : StageResult
+    data class Failed(val problem: CheckNote, val fix: CheckNote) : StageResult
 
     /** Not run, because an earlier stage failed or this one needs a sign-in first. */
-    data class Skipped(val reason: String) : StageResult
+    data class Skipped(val reason: CheckNote) : StageResult
 }
 
 data class ConnectionReport(val results: Map<CheckStage, StageResult>) {
@@ -63,29 +124,29 @@ class ConnectionCheck(
             return ConnectionReport(results.toMap())
         }
         val signIn = signIn(url).also { record(CheckStage.SignIn, it) }
-        record(CheckStage.Live, if (signIn is StageResult.Passed) live(url) else StageResult.Skipped("Needs a sign-in first."))
+        record(CheckStage.Live, if (signIn is StageResult.Passed) live(url) else StageResult.Skipped(note(CheckNote.Kind.NeedsSignIn)))
         return ConnectionReport(results.toMap())
     }
 
     suspend fun server(url: GatewayUrl): StageResult = probe.probe(url).toStageResult()
 
     suspend fun signIn(url: GatewayUrl): StageResult = when (val result = auth.me(url)) {
-        is ApiResult.Success -> StageResult.Passed("Signed in as ${result.value.label}.")
+        is ApiResult.Success -> StageResult.Passed(note(CheckNote.Kind.SignedInAs, result.value.label))
         ApiResult.SessionExpired, ApiResult.InvalidCredentials ->
-            StageResult.Failed("This phone isn't signed in to the gateway, or the sign-in expired.", "Sign in again, with the dashboard password or in the browser.")
-        ApiResult.RateLimited -> StageResult.Failed("The gateway is limiting sign-in attempts.", "Wait a minute, then try again.")
-        is ApiResult.Unavailable -> StageResult.Failed("The sign-in check didn't get through: ${result.message}", reachFix(url))
-        is ApiResult.Failed -> StageResult.Failed("The gateway turned the sign-in check down: ${result.message}", "Sign in again; if it keeps failing, update Hermes.")
+            StageResult.Failed(note(CheckNote.Kind.SignInExpired), note(CheckNote.Kind.FixSignInPasswordOrBrowser))
+        ApiResult.RateLimited -> StageResult.Failed(note(CheckNote.Kind.SignInRateLimited), note(CheckNote.Kind.FixWaitAMinute))
+        is ApiResult.Unavailable -> StageResult.Failed(note(CheckNote.Kind.SignInUnavailable, result.message), reachFix(url))
+        is ApiResult.Failed -> StageResult.Failed(note(CheckNote.Kind.SignInRefused, result.message), note(CheckNote.Kind.FixSignInOrUpdate))
     }
 
     suspend fun live(url: GatewayUrl): StageResult {
         val ticket = when (val result = auth.mintWsTicket(url)) {
             is ApiResult.Success -> result.value.ticket
             ApiResult.SessionExpired, ApiResult.InvalidCredentials ->
-                return StageResult.Failed("The gateway wouldn't issue a chat ticket: the sign-in expired.", "Sign in again.")
-            is ApiResult.Unavailable -> return StageResult.Failed("Couldn't ask for a chat ticket: ${result.message}", reachFix(url))
-            ApiResult.RateLimited -> return StageResult.Failed("The gateway is limiting requests.", "Wait a minute, then try again.")
-            is ApiResult.Failed -> return StageResult.Failed("The gateway wouldn't issue a chat ticket: ${result.message}", "Update Hermes, then try again.")
+                return StageResult.Failed(note(CheckNote.Kind.TicketExpired), note(CheckNote.Kind.FixSignInAgain))
+            is ApiResult.Unavailable -> return StageResult.Failed(note(CheckNote.Kind.TicketUnavailable, result.message), reachFix(url))
+            ApiResult.RateLimited -> return StageResult.Failed(note(CheckNote.Kind.RequestsRateLimited), note(CheckNote.Kind.FixWaitAMinute))
+            is ApiResult.Failed -> return StageResult.Failed(note(CheckNote.Kind.TicketRefused, result.message), note(CheckNote.Kind.FixUpdateHermesTryAgain))
         }
         var transport: RpcTransport? = null
         return try {
@@ -99,12 +160,9 @@ class ConnectionCheck(
                     pump.cancel()
                 }
             }
-            StageResult.Passed("The chat connection opened and the gateway said it's ready.")
+            StageResult.Passed(note(CheckNote.Kind.LiveReady))
         } catch (e: TimeoutCancellationException) {
-            StageResult.Failed(
-                "The chat connection opened, but the gateway never said it was ready.",
-                "Check that the agent gateway is running on the server. Behind a proxy, allow WebSocket upgrades on /api/ws.",
-            )
+            StageResult.Failed(note(CheckNote.Kind.NeverReady), note(CheckNote.Kind.FixAgentRunning))
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
@@ -116,29 +174,20 @@ class ConnectionCheck(
 
     private fun liveFailure(e: Exception): StageResult.Failed = when {
         e is HandshakeRejectedException && e.status == 404 ->
-            StageResult.Failed("This dashboard has no chat endpoint (/api/ws).", "Update Hermes on the server.")
+            StageResult.Failed(note(CheckNote.Kind.NoChatEndpoint), note(CheckNote.Kind.FixUpdateHermes))
         e is HandshakeRejectedException && e.status == 403 || e is TransportClosedException && e.code == GatewayCloseCodes.REQUEST_GUARD ->
-            StageResult.Failed(
-                "The gateway refused the chat connection (Host/Origin guard).",
-                "Use the exact address the dashboard is configured for, and check that embedded chat is enabled.",
-            )
+            StageResult.Failed(note(CheckNote.Kind.ChatGuarded), note(CheckNote.Kind.FixExactAddress))
         e is HandshakeRejectedException && e.status in 300..399 ->
-            StageResult.Failed(
-                "The chat connection was sent to a login page (HTTP ${e.status}).",
-                "Behind Cloudflare Access, add a service token for this gateway. Otherwise check that the proxy forwards /api/ws.",
-            )
+            StageResult.Failed(note(CheckNote.Kind.ChatLoginRedirect, e.status.toString()), note(CheckNote.Kind.FixAccessTokenOrProxy))
         e is HandshakeRejectedException ->
-            StageResult.Failed("The chat connection was refused (HTTP ${e.status}).", "Behind a proxy, allow WebSocket upgrades on /api/ws.")
+            StageResult.Failed(note(CheckNote.Kind.ChatRefused, e.status.toString()), note(CheckNote.Kind.FixAllowUpgrades))
         e is TransportClosedException && e.code == GatewayCloseCodes.TICKET_REJECTED ->
-            StageResult.Failed("The gateway rejected the chat ticket.", "Sign in again.")
+            StageResult.Failed(note(CheckNote.Kind.TicketRejected), note(CheckNote.Kind.FixSignInAgain))
         isClientCertDemand(e) ->
-            StageResult.Failed(
-                "The server asked for a client certificate during the chat connection: ${e.message ?: e::class.simpleName}",
-                clientCertFix,
-            )
+            StageResult.Failed(note(CheckNote.Kind.ChatCertRequired, e.message ?: e::class.simpleName.orEmpty()), CLIENT_CERT_FIX)
         else -> StageResult.Failed(
-            "The chat connection failed: ${e.message ?: e::class.simpleName}",
-            "Behind a proxy, allow WebSocket upgrades on /api/ws; otherwise try again.",
+            note(CheckNote.Kind.ChatFailed, e.message ?: e::class.simpleName.orEmpty()),
+            note(CheckNote.Kind.FixAllowUpgradesOrRetry),
         )
     }
 
@@ -149,23 +198,18 @@ class ConnectionCheck(
 
 /** The server-access stage as the probe found it. */
 fun ProbeResult.toStageResult(): StageResult = when (this) {
-    is ProbeResult.Reachable -> StageResult.Passed("Hermes ${status.version} answers at $url.")
-    is ProbeResult.ClientCertRequired -> StageResult.Failed(
-        "Can't reach $url: the server asked for a client certificate ($reason).",
-        clientCertFix,
-    )
+    is ProbeResult.Reachable -> StageResult.Passed(note(CheckNote.Kind.ServerAnswers, status.version.toString(), url.toString()))
+    is ProbeResult.ClientCertRequired -> StageResult.Failed(note(CheckNote.Kind.ServerCertRequired, url.toString(), reason), CLIENT_CERT_FIX)
     is ProbeResult.NotHermes -> StageResult.Failed(
-        "Something answered at $url" + (httpStatus?.let { " (HTTP $it)" } ?: "") + ", but not a Hermes dashboard.",
-        "Use the dashboard's own port, 9119 by default. Behind a proxy, check that it forwards to the dashboard.",
+        httpStatus?.let { note(CheckNote.Kind.NotHermesStatus, url.toString(), it.toString()) } ?: note(CheckNote.Kind.NotHermes, url.toString()),
+        note(CheckNote.Kind.FixDashboardPort),
     )
-    is ProbeResult.AccessBlocked -> if (tokenSent) StageResult.Failed(
-        "Cloudflare Access turned down this gateway's service token (HTTP $httpStatus).",
-        "Check the Client ID and Client Secret, and that the Access application has a Service Auth policy that includes this token.",
-    ) else StageResult.Failed(
-        "Cloudflare Access stopped the request before it reached Hermes (HTTP $httpStatus).",
-        "Add a Cloudflare Access service token for this gateway, and give the Access application a Service Auth policy that includes it.",
-    )
-    is ProbeResult.Unreachable -> StageResult.Failed("Can't reach $url: $reason", reachFix(url))
+    is ProbeResult.AccessBlocked -> if (tokenSent) {
+        StageResult.Failed(note(CheckNote.Kind.AccessTokenRefused, httpStatus.toString()), note(CheckNote.Kind.FixCheckAccessToken))
+    } else {
+        StageResult.Failed(note(CheckNote.Kind.AccessBlocked, httpStatus.toString()), note(CheckNote.Kind.FixAddAccessToken))
+    }
+    is ProbeResult.Unreachable -> StageResult.Failed(note(CheckNote.Kind.Unreachable, url.toString(), reason), reachFix(url))
 }
 
 /**
@@ -178,22 +222,23 @@ fun ProbeResult.serverOnlyResults(): Map<CheckStage, StageResult> {
     return mapOf(CheckStage.Server to server, CheckStage.SignIn to NEEDS_SERVER, CheckStage.Live to NEEDS_SERVER)
 }
 
-private val NEEDS_SERVER = StageResult.Skipped("Needs server access first.")
+private val NEEDS_SERVER = StageResult.Skipped(note(CheckNote.Kind.NeedsServer))
 
 /** What to do when the server wants a client certificate before it talks. */
-private const val clientCertFix =
-    "Attach the client certificate this server asks for to the gateway (its system-store alias), then check again."
+private val CLIENT_CERT_FIX = note(CheckNote.Kind.FixClientCert)
 
 /** What to do when nothing answers, by the kind of address: this phone, Tailscale, HTTPS, or the local network. */
-fun reachFix(url: GatewayUrl): String {
+fun reachFix(url: GatewayUrl): CheckNote {
     val host = url.host.lowercase().trim('[', ']')
     val loopback = host == "localhost" || host.endsWith(".localhost") || host.startsWith("127.") || host == "::1"
     val tailscale = host.endsWith(".ts.net") || host.split('.').let { o -> o.size == 4 && o[0] == "100" && (o[1].toIntOrNull() ?: 0) in 64..127 }
-    return when {
-        loopback -> "This address points at this phone, not the server. Use the server's local network or Tailscale address instead."
-        tailscale -> "Turn on Tailscale on this phone, and check that the server is online in the same tailnet."
-        Url(url.value).protocol == URLProtocol.HTTPS -> "Check that the domain points to the server, its certificate is valid, and the proxy forwards to the dashboard."
-        isPrivateHost(host) -> "Join the same Wi-Fi or network as the server, and start the dashboard with --host 0.0.0.0 so other devices can reach it."
-        else -> "Check the address and port, and that the server is reachable from this phone."
-    }
+    return note(
+        when {
+            loopback -> CheckNote.Kind.FixLoopback
+            tailscale -> CheckNote.Kind.FixTailscale
+            Url(url.value).protocol == URLProtocol.HTTPS -> CheckNote.Kind.FixHttps
+            isPrivateHost(host) -> CheckNote.Kind.FixLocalNetwork
+            else -> CheckNote.Kind.FixReachable
+        },
+    )
 }

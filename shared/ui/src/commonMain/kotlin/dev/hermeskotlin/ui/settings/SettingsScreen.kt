@@ -629,7 +629,10 @@ internal fun SettingsView(
                         onCheckedChange = { on -> onUpdate { it.copy(suggestedReplies = on) } },
                         icon = Lucide.Lightbulb,
                     )
-                    if (settings.suggestedReplies && (suggestions == SuggestionsPlugin.Missing || suggestions is SuggestionsPlugin.Failed)) {
+                    if (
+                        settings.suggestedReplies &&
+                        (suggestions == SuggestionsPlugin.Missing || suggestions is SuggestionsPlugin.Failed || suggestions == SuggestionsPlugin.NotListed)
+                    ) {
                         var asked by remember { mutableStateOf(false) }
                         Divider()
                         ActionRow(stringResource(Res.string.settings_suggestions_install_row), Lucide.Download) { asked = true }
@@ -936,8 +939,11 @@ internal sealed interface SuggestionsLine {
     data object Installing : SuggestionsLine
     data object NeedsRestart : SuggestionsLine
 
-    /** [message] is why the install failed. */
-    data class Failed(val message: String) : SuggestionsLine
+    /** [message] is why the install failed, as the gateway said it; null when it didn't. */
+    data class Failed(val message: String?) : SuggestionsLine
+
+    /** Installed, but the gateway doesn't list it yet. */
+    data object NotListed : SuggestionsLine
 
     /** [have] is the version on the gateway; [need] the one this Kyllene asks for. */
     data class Outdated(val have: String?, val need: String) : SuggestionsLine
@@ -951,6 +957,7 @@ internal fun suggestionsLine(on: Boolean, plugin: SuggestionsPlugin): Suggestion
         SuggestionsPlugin.Installing -> SuggestionsLine.Installing
         SuggestionsPlugin.NeedsRestart -> SuggestionsLine.NeedsRestart
         is SuggestionsPlugin.Failed -> SuggestionsLine.Failed(plugin.message)
+        SuggestionsPlugin.NotListed -> SuggestionsLine.NotListed
         is SuggestionsPlugin.Installed -> if (plugin.outdated) {
             SuggestionsLine.Outdated(plugin.version, NextPromptApi.PLUGIN_VERSION)
         } else {
@@ -970,7 +977,10 @@ private fun suggestionsDetail(on: Boolean, plugin: SuggestionsPlugin): String =
         SuggestionsLine.Missing -> stringResource(Res.string.settings_suggestions_missing)
         SuggestionsLine.Installing -> stringResource(Res.string.settings_suggestions_installing)
         SuggestionsLine.NeedsRestart -> stringResource(Res.string.settings_suggestions_needs_restart)
-        is SuggestionsLine.Failed -> stringResource(Res.string.settings_suggestions_failed, line.message)
+        is SuggestionsLine.Failed ->
+            stringResource(Res.string.settings_suggestions_failed, line.message ?: stringResource(Res.string.app_suggestions_no_reason))
+        // Installed: not under "wasn't installed", which would say both.
+        SuggestionsLine.NotListed -> stringResource(Res.string.app_suggestions_not_listed)
         is SuggestionsLine.Outdated -> stringResource(Res.string.settings_suggestions_outdated, line.have.orEmpty(), line.need)
     }
 

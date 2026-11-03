@@ -80,7 +80,9 @@ import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.resources.*
 import kotlin.math.PI
+import org.jetbrains.compose.resources.stringResource
 import kotlin.math.sin
 import kotlin.math.sqrt
 
@@ -123,13 +125,14 @@ internal fun VoicePanel(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // The orb opens the voice chat over the whole screen again.
+        val voiceChat = stringResource(Res.string.voice_chat)
         Orb(
             state,
             Modifier
                 .size(112.dp)
                 .clip(CircleShape)
-                .clickable(role = Role.Button, onClickLabel = "Show voice chat full screen", onClick = onExpand)
-                .semantics { contentDescription = "Voice chat" },
+                .clickable(role = Role.Button, onClickLabel = stringResource(Res.string.voice_expand), onClick = onExpand)
+                .semantics { contentDescription = voiceChat },
         )
         Text(
             label(state),
@@ -140,7 +143,7 @@ internal fun VoicePanel(
         )
         val caption = state.caption
         Text(
-            caption?.let { if (state.captionIsVoice) it else "“$it”" } ?: hint(state),
+            caption?.let { if (state.captionIsVoice) it else stringResource(Res.string.voice_quoted, it) } ?: hintText(state),
             style = Theme[typography][bodySmall],
             color = if (caption != null) Theme[colors][textSecondary] else Theme[colors][textTertiary],
             textAlign = TextAlign.Center,
@@ -160,7 +163,7 @@ internal fun VoicePanel(
             if (state.phase != VoicePhase.Connecting) {
                 RoundButton(
                     if (state.muted) Lucide.MicOff else Lucide.Mic,
-                    contentDescription = if (state.muted) "Unmute" else "Mute",
+                    contentDescription = stringResource(if (state.muted) Res.string.voice_unmute else Res.string.voice_mute),
                     fill = if (state.muted) Theme[colors][textColor] else Theme[colors][textColor].copy(alpha = 0.08f),
                     tint = if (state.muted) Theme[colors][background] else Theme[colors][textColor],
                     onClick = onMute,
@@ -168,18 +171,18 @@ internal fun VoicePanel(
             } else {
                 Spacer(Modifier.size(60.dp))
             }
-            RoundButton(Lucide.PhoneOff, contentDescription = "End voice chat", fill = Theme[colors][danger], tint = Color.White, onClick = onEnd)
+            RoundButton(Lucide.PhoneOff, contentDescription = stringResource(Res.string.voice_end_chat), fill = Theme[colors][danger], tint = Color.White, onClick = onEnd)
             when {
                 !state.live && state.phase == VoicePhase.Speaking -> RoundButton(
                     Lucide.SkipForward,
-                    contentDescription = "Skip the reply",
+                    contentDescription = stringResource(Res.string.voice_skip_reply),
                     fill = Theme[colors][textColor].copy(alpha = 0.08f),
                     tint = Theme[colors][textColor],
                     onClick = onSkip,
                 )
                 canSendNow(state) -> RoundButton(
                     Lucide.ArrowUp,
-                    contentDescription = "Send now",
+                    contentDescription = stringResource(Res.string.voice_send_now),
                     fill = Theme[colors][textColor].copy(alpha = 0.08f),
                     tint = Theme[colors][textColor],
                     onClick = onSendNow,
@@ -190,28 +193,46 @@ internal fun VoicePanel(
     }
 }
 
-internal fun label(state: VoiceChatState) = when (state.phase) {
-    VoicePhase.Connecting -> "Connecting…"
-    VoicePhase.Listening -> if (state.muted) "Muted" else if (state.hearing) "Hearing you…" else "Listening…"
-    VoicePhase.Transcribing -> "Catching that…"
-    VoicePhase.Thinking -> "Thinking…"
-    VoicePhase.Speaking -> "Speaking…"
+@Composable
+internal fun label(state: VoiceChatState): String = when (state.phase) {
+    VoicePhase.Connecting -> stringResource(Res.string.voice_connecting)
+    VoicePhase.Listening -> stringResource(
+        if (state.muted) Res.string.voice_muted else if (state.hearing) Res.string.voice_hearing else Res.string.voice_listening,
+    )
+    VoicePhase.Transcribing -> stringResource(Res.string.voice_transcribing)
+    VoicePhase.Thinking -> stringResource(Res.string.voice_thinking)
+    VoicePhase.Speaking -> stringResource(Res.string.voice_speaking)
     VoicePhase.Off -> ""
 }
 
 /** The chained chat has heard you: what's said so far can go now, without waiting for the pause. */
 internal fun canSendNow(state: VoiceChatState) = !state.live && state.phase == VoicePhase.Listening && state.hearing
 
-/** What to do now, while there are no words to show. */
+/** What to do now, while there are no words to show; [hintText] words it. */
+internal enum class VoiceHint { Unmute, Connecting, Working, TalkOver, Skip, SendNow, JustTalk }
+
 internal fun hint(state: VoiceChatState) = when {
-    state.muted -> "Tap the microphone to talk again"
-    state.phase == VoicePhase.Connecting -> "Setting up the call"
-    state.phase == VoicePhase.Thinking -> "Hermes is on it"
-    (state.live || state.bargeIn) && state.phase == VoicePhase.Speaking -> "Talk over it to cut in"
-    state.phase == VoicePhase.Speaking -> "Tap skip to talk again"
-    canSendNow(state) -> "Pause when you're done, or tap send"
-    else -> "Just talk · say “stop” to end"
+    state.muted -> VoiceHint.Unmute
+    state.phase == VoicePhase.Connecting -> VoiceHint.Connecting
+    state.phase == VoicePhase.Thinking -> VoiceHint.Working
+    (state.live || state.bargeIn) && state.phase == VoicePhase.Speaking -> VoiceHint.TalkOver
+    state.phase == VoicePhase.Speaking -> VoiceHint.Skip
+    canSendNow(state) -> VoiceHint.SendNow
+    else -> VoiceHint.JustTalk
 }
+
+@Composable
+internal fun hintText(state: VoiceChatState): String = stringResource(
+    when (hint(state)) {
+        VoiceHint.Unmute -> Res.string.voice_hint_unmute
+        VoiceHint.Connecting -> Res.string.voice_hint_connecting
+        VoiceHint.Working -> Res.string.voice_hint_working
+        VoiceHint.TalkOver -> Res.string.voice_hint_talk_over
+        VoiceHint.Skip -> Res.string.voice_hint_skip
+        VoiceHint.SendNow -> Res.string.voice_hint_send_now
+        VoiceHint.JustTalk -> Res.string.voice_hint_just_talk
+    },
+)
 
 /** The tool Hermes is running for the request. */
 @Composable

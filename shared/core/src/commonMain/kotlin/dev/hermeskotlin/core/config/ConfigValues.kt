@@ -11,19 +11,38 @@ import kotlinx.serialization.json.booleanOrNull
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.doubleOrNull
 
+/** What a setting's row says it's set to. The app words the ones that aren't the value's own text. */
+sealed interface ConfigSummary {
+    /** The value as it is: its text, or its list joined. */
+    data class Text(val text: String) : ConfigSummary
+
+    data object NotSet : ConfigSummary
+
+    /** An empty list or map. */
+    data object None : ConfigSummary
+    data object On : ConfigSummary
+    data object Off : ConfigSummary
+
+    /** A map of [count] entries. */
+    data class Entries(val count: Int) : ConfigSummary
+}
+
 /** What a setting's row says it's set to: its text, its list joined, "Not set" for nothing. */
-fun ConfigEntry.summary(): String {
+fun ConfigEntry.summary(): ConfigSummary {
     val value = value
     return when {
-        value == null || value is JsonNull -> NOT_SET
-        control == ConfigControl.Fallbacks -> fallbackLines(value).joinToString(", ").ifEmpty { "None" }
-        value is JsonArray -> value.joinToString(", ") { (it as? JsonPrimitive)?.contentOrNull ?: it.toString() }.ifEmpty { "None" }
-        value is JsonObject -> if (value.isEmpty()) "None" else "${value.size} ${if (value.size == 1) "entry" else "entries"}"
-        value is JsonPrimitive && value.booleanOrNull != null -> if (value.booleanOrNull == true) "On" else "Off"
-        value is JsonPrimitive -> value.content.ifEmpty { NOT_SET }
-        else -> value.toString()
+        value == null || value is JsonNull -> ConfigSummary.NotSet
+        control == ConfigControl.Fallbacks -> joined(fallbackLines(value))
+        value is JsonArray -> joined(value.map { (it as? JsonPrimitive)?.contentOrNull ?: it.toString() })
+        value is JsonObject -> if (value.isEmpty()) ConfigSummary.None else ConfigSummary.Entries(value.size)
+        value is JsonPrimitive && value.booleanOrNull != null -> if (value.booleanOrNull == true) ConfigSummary.On else ConfigSummary.Off
+        value is JsonPrimitive -> if (value.content.isEmpty()) ConfigSummary.NotSet else ConfigSummary.Text(value.content)
+        else -> ConfigSummary.Text(value.toString())
     }
 }
+
+private fun joined(items: List<String>): ConfigSummary =
+    items.joinToString(", ").let { if (it.isEmpty()) ConfigSummary.None else ConfigSummary.Text(it) }
 
 /** The text a setting's editor opens with: one item per line for lists, indented JSON for anything structured. */
 fun ConfigEntry.editText(): String {
@@ -116,5 +135,3 @@ private fun fallbackEntry(line: String, unused: MutableList<JsonElement>): JsonE
 }
 
 private val prettyJson = Json(HermesJson) { prettyPrint = true }
-
-const val NOT_SET = "Not set"

@@ -37,6 +37,8 @@ import dev.hermeskotlin.core.settings.ThemeMode
 import dev.hermeskotlin.designsystem.AccentPalette
 import dev.hermeskotlin.designsystem.LocalAccentPalette
 import dev.hermeskotlin.designsystem.LocalDesktopLayout
+import dev.hermeskotlin.designsystem.LocalDesignWords
+import dev.hermeskotlin.ui.components.rememberDesignWords
 import dev.hermeskotlin.designsystem.PureBlack
 import dev.hermeskotlin.designsystem.hermesTheme
 import dev.hermeskotlin.designsystem.components.LocalCodeWrap
@@ -120,6 +122,11 @@ import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import dev.hermeskotlin.ui.components.CommandPalette
+import dev.hermeskotlin.ui.components.ProvideAppWords
+import dev.hermeskotlin.ui.components.TimeWords
+import dev.hermeskotlin.ui.components.rememberTimeWords
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /** The current [AppSettings], for screens that change how they draw. */
 val LocalAppSettings = compositionLocalOf { AppSettings() }
@@ -147,6 +154,8 @@ fun App(
 ) {
     // Nothing is drawn until the stored settings are read, so the first frame has the right theme.
     val settingsStore = koinInject<SettingsStore>()
+    // The words dates and times are built from, in the app's language, for code that runs outside composition.
+    TimeWords.current = rememberTimeWords()
     val settings = settingsStore.settings.collectAsStateWithLifecycle().value ?: return
     val dark = isDark(settings)
     LaunchedEffect(dark) { onDarkTheme(dark) }
@@ -184,6 +193,7 @@ fun App(
             LocalRenameOffer provides rememberRenameOffer(),
             LocalDensity provides Density(density.density, density.fontScale * settings.textSize.scale),
             LocalDesktopLayout provides isDesktop,
+            LocalDesignWords provides rememberDesignWords(),
         ) {
             // The screens leave composition rather than sit under the cover, so their sheets and dialogs
             // (windows of their own) can't show over it. View models and drafts outlive this.
@@ -288,9 +298,19 @@ fun HeraldTheme(content: @Composable () -> Unit) {
             LocalDensity provides Density(density.density, density.fontScale * settings.textSize.scale),
             LocalOpenModals provides modals,
         ) {
-            PlatformTextContextMenu(content)
+            ProvideAppWords { PlatformTextContextMenu(content) }
         }
     } }
+}
+
+/** Why a call didn't start, in the app's language; the gateway's or the error's own words as they are. */
+@Composable
+private fun callErrorText(error: CallError): String = when (error) {
+    CallError.InvalidTarget -> stringResource(Res.string.app_call_invalid_target)
+    CallError.BotUnavailable -> stringResource(Res.string.app_call_bot_unavailable)
+    is CallError.OpenFailed -> stringResource(Res.string.app_call_open_failed, error.detail).trim()
+    CallError.BotUnreachable -> stringResource(Res.string.app_call_bot_unreachable)
+    is CallError.Failed -> error.message ?: stringResource(Res.string.app_call_open_retry)
 }
 
 @Composable
@@ -321,7 +341,10 @@ private fun Routes() {
 
         is Route.SignIn -> SignInScreen(
             gateway = r.gateway,
-            notice = r.notice,
+            notice = when (r.notice) {
+                SignInNotice.SessionExpired -> stringResource(Res.string.app_sign_in_again)
+                null -> null
+            },
             onSignedIn = { app.onSignedIn(r.gateway) },
             // With nothing else saved, the sheet would only offer "Add a gateway".
             onChangeGateway = {
@@ -339,9 +362,9 @@ private fun Routes() {
     val dismissCall = if (openingCall) app::cancelPendingCall else app::dismissCallError
     Dialog(
         visible = openingCall || callError != null, onDismissRequest = dismissCall,
-        title = if (openingCall) "Opening call…" else "Couldn't start call",
-        message = if (openingCall) null else callError,
-        actions = { Button(if (openingCall) "Cancel" else "OK", onClick = dismissCall) },
+        title = stringResource(if (openingCall) Res.string.app_call_opening else Res.string.app_call_failed),
+        message = if (openingCall) null else callError?.let { callErrorText(it) },
+        actions = { Button(stringResource(if (openingCall) Res.string.common_cancel else Res.string.app_ok), onClick = dismissCall) },
         content = {
             PlatformBackHandler(enabled = openingCall) { app.cancelPendingCall() }
             if (openingCall) Spinner()
@@ -369,6 +392,7 @@ private class BotEditing(val bot: Bot?)
 private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Unit) {
     val chat: ChatViewModel = koinViewModel()
     val chatState by chat.state.collectAsStateWithLifecycle()
+    val untitled = stringResource(Res.string.app_untitled_session)
     val sidebar = rememberSidebarState()
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
@@ -724,7 +748,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                                 menuOpen = true
                             }
                         },
-                        onOpenChat = { id, title -> app.openSession(id, title ?: "Untitled session") },
+                        onOpenChat = { id, title -> app.openSession(id, title ?: untitled) },
                         onSwitchProfile = app::switchProfile,
                         viewModel = chat,
                         // Not while a page or the chat's menu covers it: typing there mustn't land in the composer.
@@ -815,7 +839,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
         visible = menuOpen && openSessionId != null,
         anchor = menuAnchor.takeIf { isDesktop },
         sessionId = openSessionId,
-        title = route.target.bot?.label ?: chatState.title?.takeIf { it.isNotBlank() } ?: route.target.title ?: "Untitled session",
+        title = route.target.bot?.label ?: chatState.title?.takeIf { it.isNotBlank() } ?: route.target.title ?: untitled,
         messages = chatState.messages,
         onDismiss = { menuOpen = false },
         onRenamed = chat::showTitle,
@@ -871,7 +895,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                 onSelectEffort = {},
                 onFast = {},
                 modelOnly = true,
-                note = "${bot.label} runs this in all its chats, its Bot Chat and routines included.",
+                note = stringResource(Res.string.app_bot_model_note, bot.label),
             )
             ModelConfirmDialog(
                 modelPicker.confirm,
@@ -890,9 +914,9 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                             profileLabel = bot.label,
                             onBack = { capabilitiesOpen = false },
                             onSessionExpired = app::onSessionExpired,
-                            title = "${bot.label}'s capabilities",
+                            title = stringResource(Res.string.app_bot_capabilities, bot.label),
                             // Hermes fixes a chat's tools when it starts (#124211).
-                            note = "Changes apply to ${bot.label}'s new chats. If its Bot Chat doesn't pick one up, Start fresh gives it a new chat with everything set here.",
+                            note = stringResource(Res.string.app_bot_capabilities_note, bot.label),
                             viewModel = koinViewModel(key = "capabilities-${bot.name}"),
                         )
                     }
@@ -907,8 +931,8 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                             profile = bot.name,
                             onBack = { configOpen = false },
                             onSessionExpired = app::onSessionExpired,
-                            title = "${bot.label}'s config",
-                            note = "${bot.label}'s own settings, saved to its profile's config.yaml. Most apply from its next chat.",
+                            title = stringResource(Res.string.app_bot_config, bot.label),
+                            note = stringResource(Res.string.app_bot_config_note, bot.label),
                             viewModel = koinViewModel(key = "config-${bot.name}"),
                         )
                     }
