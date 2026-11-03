@@ -20,6 +20,44 @@ version, with its own `.desktop` file and metainfo. The bundle names Flathub as 
 runtime's repository, so installing it fetches the Freedesktop runtime. Installing
 the next release's bundle replaces it in place and keeps the app's data.
 
+### Our repository
+
+Kyllene's own Flatpak repository, `https://flatpak.kyllene.app/repo/`, delivers
+updates. Users install from it once:
+
+```sh
+flatpak install --user https://kyllene.app/kyllene.flatpakref
+```
+
+and `flatpak update` or a software centre takes each release from then on. A release
+bundle's commit is signed and names this repository as its remote, so a bundle
+installed by hand updates from it too.
+
+- **Publishing:** publishing a GitHub release (never a draft or a pre-release) runs
+  `flatpak-repo.yml`. It downloads the release's bundle, and `publish-repo.sh` signs
+  it into an empty repository. The upload adds that repository's objects to the R2
+  bucket behind `flatpak.kyllene.app`, then replaces its refs and summary. Objects
+  are named by their hash and never change, so earlier releases' objects stay, and an
+  update downloads only what changed. Only GitHub's latest release is published,
+  because Flatpak refuses a commit older than the installed one, so an older tag
+  would stop every update. The workflow waits up to an hour for the release job to
+  attach the bundle. To publish the latest release again, run the workflow by hand
+  with its tag.
+- **Signing key:** the public half is `packaging/flatpak/kyllene-repo.asc`.
+  `website/kyllene.flatpakref` and `website/kyllene.flatpakrepo` carry the same key
+  (`test_repo_files.py` checks this). The private half is the
+  `FLATPAK_GPG_PRIVATE_KEY` secret, which both the release and the publish workflows
+  use. Replacing the key breaks updates for every existing install, so keep a backup
+  of it outside GitHub.
+- **Storage:** the R2 bucket `kyllene-flatpak` (or the `FLATPAK_R2_BUCKET`
+  variable), with the custom domain `flatpak.kyllene.app` and an Object Read & Write
+  token in the `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` secrets.
+- **Tests:** the Linux workflow runs `tests/repo_smoke.sh` on every Flatpak build. It
+  publishes three releases to a local server with a throwaway key, and checks that:
+  - a bundle install and a `.flatpakref` install both update with `flatpak update`;
+  - a commit signed with another key is refused, even when the summary is signed
+    with ours.
+
 Install `org.flatpak.Builder`, `org.freedesktop.Sdk//26.08` and its matching
 runtime in the user installation. From the repository root, build and install:
 
@@ -80,7 +118,7 @@ explicitly. Run `./gradlew :shared:core:jvmTest --tests '*LinuxSecretPortalTest'
 
 The Linux Secret transport pins matching junixsocket Java/native libraries. Release
 builds analyze those two JARs as ProGuard libraries and package their original bytes,
-preserving multi-release classes and JNI resources while optimizing the application.
+preserving multi-release classes and JNI resources while shrinking the application.
 The Linux runtime includes `jdk.security.auth` for D-Bus EXTERNAL authentication.
 Other desktop platforms retain FileKit's existing transport provider.
 

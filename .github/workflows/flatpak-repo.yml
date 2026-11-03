@@ -1,0 +1,116 @@
+# Publishing a release puts its Flatpak into our repository, https://flatpak.kyllene.app/repo/, where `flatpak update`
+# and software centres find it (kyllene.app/kyllene.flatpakref installs from it). A draft or a pre-release is never
+# published there. The repository is static files in a Cloudflare R2 bucket served on that domain.
+#
+# Repo secrets:
+#   FLATPAK_GPG_PRIVATE_KEY                 the repository's signing key (see release.yml's flatpak job)
+#   R2_ACCOUNT_ID, R2_ACCESS_KEY_ID, R2_SECRET_ACCESS_KEY   an R2 token with Object Read & Write on the bucket
+# Repo variable (optional): FLATPAK_R2_BUCKET, the bucket's name; kyllene-flatpak when unset.
+name: Flatpak repository
+
+on:
+  release:
+    types: [published]
+  # To publish a release again, e.g. after the bucket was emptied.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag (v1.2.3)"
+        required: true
+
+permissions:
+  contents: read
+
+# One upload at a time: two releases' summaries must not interleave.
+concurrency:
+  group: flatpak-repo
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.event_name == 'workflow_dispatch' || !github.event.release.prerelease
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      TAG: ${{ github.event.release.tag_name || inputs.tag }}
+      BUCKET: ${{ vars.FLATPAK_R2_BUCKET || 'kyllene-flatpak' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install Flatpak tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak ostree
+
+      # Only the latest release: the repository's stable ref is replaced, and Flatpak refuses an older commit than
+      # the one installed, so publishing an older tag (a backport) would stop every update until the next release.
+      - name: Download the release's bundle
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "$TAG" in v[0-9]*.[0-9]*.[0-9]*) ;; *) echo "::error::Not a release tag: $TAG"; exit 1 ;; esac
+          latest="$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)"
+          if [ "$TAG" != "$latest" ]; then
+            echo "::error::$TAG isn't the latest release ($latest); only the latest goes into the Flatpak repository"
+            exit 1
+          fi
+          # release.yml's flatpak job may still be building when the draft is published: wait up to an hour for it.
+          for _ in $(seq 60); do
+            gh release view "$TAG" --json assets --jq '.assets[].name' | grep -q '_x86_64\.flatpak\.sha256$' && break
+            sleep 60
+          done
+          gh release download "$TAG" --pattern "kyllene-desktop-*_x86_64.flatpak*" --dir build
+          cd build && sha256sum -c ./*.sha256
+
+      - name: Sign into a repository
+        env:
+          GPG_KEY: ${{ secrets.FLATPAK_GPG_PRIVATE_KEY }}
+        run: |
+          if [ -z "$GPG_KEY" ]; then echo "::error::FLATPAK_GPG_PRIVATE_KEY is not set"; exit 1; fi
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          mkdir -m 700 "$GNUPGHOME"
+          printf '%s\n' "$GPG_KEY" | gpg --batch --import
+          key="$(gpg --list-secret-keys --with-colons | awk -F: '/^fpr/ { print $10; exit }')"
+          # The key must be the one users trust: the public half in the .flatpakref and the bundles.
+          test "$key" = "$(gpg --show-keys --with-colons packaging/flatpak/kyllene-repo.asc | awk -F: '/^fpr/ { print $10; exit }')"
+          sh packaging/flatpak/publish-repo.sh build/kyllene-desktop-*_x86_64.flatpak build/repo "$GNUPGHOME" "$key"
+
+      - name: Remove the signing key
+        if: always()
+        run: rm -rf "$RUNNER_TEMP/gnupg"
+
+      # Objects first, which never change once written (their name is their hash), then the refs and summary that
+      # point at them, so a client never sees a ref to an object that isn't there yet. The bucket keeps earlier
+      # releases' objects, so one that updates from any of them downloads only what changed. The summary goes last:
+      # its content-addressed parts (summaries/), then each file just before its signature, which leaves only the
+      # moment between those two uploads for a client to fetch a pair that doesn't match; it tries again next time.
+      - name: Upload to R2
+        env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.R2_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.R2_SECRET_ACCESS_KEY }}
+          AWS_DEFAULT_REGION: auto
+          AWS_REQUEST_CHECKSUM_CALCULATION: when_required
+          AWS_RESPONSE_CHECKSUM_VALIDATION: when_required
+          ACCOUNT: ${{ secrets.R2_ACCOUNT_ID }}
+        run: |
+          if [ -z "$ACCOUNT" ] || [ -z "$AWS_ACCESS_KEY_ID" ]; then echo "::error::The R2 secrets are not set"; exit 1; fi
+          s3() { aws s3 "$@" --endpoint-url "https://$ACCOUNT.r2.cloudflarestorage.com" --only-show-errors; }
+          s3 sync build/repo/objects "s3://$BUCKET/repo/objects" --size-only \
+            --cache-control "public, max-age=31536000, immutable"
+          if [ -d build/repo/deltas ]; then
+            s3 sync build/repo/deltas "s3://$BUCKET/repo/deltas" --size-only --cache-control "public, max-age=31536000, immutable"
+          fi
+          s3 sync build/repo "s3://$BUCKET/repo" --cache-control "no-cache" \
+            --exclude "objects/*" --exclude "deltas/*" --exclude "summary*"
+          for file in summary summary.sig summary.idx summary.idx.sig; do
+            [ ! -f "build/repo/$file" ] || s3 cp "build/repo/$file" "s3://$BUCKET/repo/$file" --cache-control "no-cache"
+          done
+
+      - name: Check the published repository
+        run: |
+          flatpak remote-add --user --gpg-import=<(gpg --dearmor < packaging/flatpak/kyllene-repo.asc) \
+            kyllene https://flatpak.kyllene.app/repo/
+          flatpak remote-ls --user --app kyllene
+          flatpak remote-info --user kyllene app.kyllene.Kyllene//stable
