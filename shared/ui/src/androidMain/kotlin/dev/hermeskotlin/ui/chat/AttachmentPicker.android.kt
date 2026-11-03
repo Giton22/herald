@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
 import dev.hermeskotlin.core.chat.OutgoingAttachment
+import dev.hermeskotlin.core.chat.streamedSource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -163,15 +164,57 @@ private fun readAttachment(context: Context, uri: Uri, budget: Long): OutgoingAt
         val thumbnail = upright.scaledTo(THUMBNAIL_EDGE).jpeg(THUMBNAIL_QUALITY)
         return OutgoingAttachment(id, name.withExtension("jpg"), "image/jpeg", upload, thumbnail)
     }
-    if (size != null && size > OutgoingAttachment.MAX_BYTES) error("$name is larger than 25 MB.")
+    if (size != null && size > OutgoingAttachment.MAX_BYTES) error("$name is larger than ${OutgoingAttachment.MAX_SIZE}.")
+    // Too large for one socket message: read as it goes up, never held here (the pick's budget is for what is).
+    if (size != null && size > OutgoingAttachment.MAX_INLINE_BYTES) {
+        val source = streamedSource(size) { resolver.openInputStream(uri) ?: error("Couldn't read $name.") }
+        return OutgoingAttachment(id, name, mime, ByteArray(0), source = source)
+    }
     if (size != null && size > budget) error("That's more than 50 MB of attachments at once.")
     // The reported size can be missing or wrong, so the read itself stops at the limit.
-    val limit = minOf(OutgoingAttachment.MAX_BYTES.toLong(), budget)
-    val bytes = resolver.openInputStream(uri)?.use { it.readAtMost(limit) ?: error("$name is too large to attach.") }
-        ?: error("Couldn't read $name.")
+    val stream = resolver.openInputStream(uri) ?: error("Couldn't read $name.")
+    val bytes = stream.use { it.readAtMost(OutgoingAttachment.MAX_INLINE_BYTES.toLong()) } ?: run {
+        // Past one socket message, with no size said up front: copied aside to learn it, then sent from there.
+        val spooled = spool(context, uri, name)
+        return OutgoingAttachment(id, name, mime, ByteArray(0), source = streamedSource(spooled.length()) { spooled.inputStream() })
+    }
+    if (bytes.size > budget) error("That's more than 50 MB of attachments at once.")
     val thumbnail = if (mime.startsWith("image/")) decodeUpright(bytes, THUMBNAIL_EDGE)?.jpeg(THUMBNAIL_QUALITY) else null
     return OutgoingAttachment(id, name, mime, bytes, thumbnail)
 }
+
+/**
+ * Copies [uri] into the app's cache, up to [OutgoingAttachment.MAX_BYTES], for a file whose size its
+ * provider doesn't say. Copies over a day old go first: one is only needed until its prompt is sent.
+ */
+private fun spool(context: Context, uri: Uri, name: String): File {
+    val folder = File(context.cacheDir, SPOOL_FOLDER).apply { mkdirs() }
+    val dayAgo = System.currentTimeMillis() - 24 * 60 * 60 * 1000L
+    folder.listFiles()?.filter { it.lastModified() < dayAgo }?.forEach { it.delete() }
+    val file = File.createTempFile("att-", ".bin", folder)
+    try {
+        val stream = context.contentResolver.openInputStream(uri) ?: error("Couldn't read $name.")
+        var copied = 0L
+        stream.use { input ->
+            file.outputStream().use { output ->
+                val buffer = ByteArray(64 * 1024)
+                while (true) {
+                    val read = input.read(buffer)
+                    if (read < 0) break
+                    copied += read
+                    if (copied > OutgoingAttachment.MAX_BYTES) error("$name is larger than ${OutgoingAttachment.MAX_SIZE}.")
+                    output.write(buffer, 0, read)
+                }
+            }
+        }
+        return file
+    } catch (e: Throwable) {
+        file.delete()
+        throw e
+    }
+}
+
+private const val SPOOL_FOLDER = "outgoing-attachments"
 
 /** The whole stream, or null once it passes [limit] bytes. */
 internal fun InputStream.readAtMost(limit: Long): ByteArray? {

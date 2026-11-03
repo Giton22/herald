@@ -153,6 +153,15 @@ class PushApi(private val connection: GatewayConnection) {
      * a restart). With [force] an existing copy is replaced, which is how an old version is brought up to date.
      */
     suspend fun install(force: Boolean = false, profile: String? = null, enabled: Boolean = true) {
+        // A gateway that can't set the plugin up may answer with a whole log; every row that shows it gets it short.
+        try {
+            doInstall(force, profile, enabled)
+        } catch (e: RpcException) {
+            throw RpcException(e.code, briefError(e.message), e.reason)
+        }
+    }
+
+    private suspend fun doInstall(force: Boolean, profile: String?, enabled: Boolean) {
         client().request(
             "plugins.manage",
             buildJsonObject {
@@ -226,7 +235,7 @@ class PushApi(private val connection: GatewayConnection) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                failures += "gateway: ${e.message}"
+                failures += "gateway: ${briefError(e.message)}"
             }
             info = info()
             if (info == null || !info.ok || !info.versionAtLeast(PLUGIN_VERSION)) {
@@ -250,7 +259,7 @@ class PushApi(private val connection: GatewayConnection) {
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    failures += "${copy.profile}: ${e.message}"
+                    failures += "${copy.profile}: ${briefError(e.message)}"
                 }
             }
         }
@@ -262,7 +271,7 @@ class PushApi(private val connection: GatewayConnection) {
         // Only after a look that saw every profile; else they look again, and say again which they couldn't.
         if (update && copies.isNotEmpty() && scannedBots?.rpc === rpc) scannedBots = ScannedBots(rpc, pending.toList(), emptyList())
         if (changed) _updates.update { it + 1 }
-        val detail = (failures + updateFailure?.second.orEmpty()).distinct().takeIf { it.isNotEmpty() }?.joinToString("\n")
+        val detail = mergeFailures(failures + updateFailure?.second.orEmpty()).takeIf { it.isNotEmpty() }?.joinToString("\n")
         if (detail != null && (info == null || !info.ok || !info.versionAtLeast(minimum))) {
             return@withLock PluginState.Failed(detail)
         }
@@ -306,7 +315,7 @@ class PushApi(private val connection: GatewayConnection) {
             throw e
         } catch (e: Exception) {
             // Older gateways have no profiles API.
-            if (!(e is RpcException && e.code == -32601)) failures += "bot profiles: ${e.message}"
+            if (!(e is RpcException && e.code == -32601)) failures += "bot profiles: ${briefError(e.message)}"
             return ScannedBots(rpc, emptyList(), failures)
         }
         val copies = bots.mapNotNull { bot ->
@@ -316,7 +325,7 @@ class PushApi(private val connection: GatewayConnection) {
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                failures += "${bot.name}: ${e.message}"
+                failures += "${bot.name}: ${briefError(e.message)}"
                 null
             }
         }
@@ -463,6 +472,38 @@ class PushApi(private val connection: GatewayConnection) {
         const val PHONE_LIST_PLUGIN_VERSION = "0.3.1"
         private const val NOT_A_COMMAND = 4018
         private const val INSTALL_TIMEOUT_MS = 180_000L
+        private const val BRIEF_ERROR_CHARS = 160
+
+        /**
+         * A gateway error as a settings row can show it. A failed install can carry a resolver's whole log, many
+         * lines long, which would bury the row's switch: then it's the first line, what failed, and the last, which
+         * usually says why or what to do, each cut short. Brief already, it comes back as it is.
+         */
+        internal fun briefError(message: String?): String {
+            val lines = message.orEmpty().lines().map { it.trim() }.filter { it.isNotEmpty() }
+            val first = lines.firstOrNull() ?: return "no reason given"
+            if (lines.size == 1) return first.cut(BRIEF_ERROR_CHARS)
+            // Each half with its "…", and " … " between: within the limit, so cutting it again changes nothing.
+            val half = (BRIEF_ERROR_CHARS - 5) / 2
+            return "${first.trimEnd(':', ' ').cut(half)} … ${lines.last().cut(half)}"
+        }
+
+        private fun String.cut(chars: Int) = if (length > chars) take(chars).trimEnd() + "…" else this
+
+        /**
+         * [lines] with copies that failed the same way said once ("gateway, default: …"), in the order first seen.
+         * A line is "where: what"; profile names have no ": " in them.
+         */
+        internal fun mergeFailures(lines: List<String>): List<String> {
+            val merged = LinkedHashMap<String, MutableList<String>>()
+            for (line in lines.distinct()) {
+                val at = line.indexOf(": ")
+                if (at < 0) merged.getOrPut(line) { mutableListOf() } else {
+                    merged.getOrPut(line.substring(at + 2)) { mutableListOf() } += line.substring(0, at)
+                }
+            }
+            return merged.map { (what, where) -> if (where.isEmpty()) what else "${where.joinToString(", ")}: $what" }
+        }
     }
 }
 

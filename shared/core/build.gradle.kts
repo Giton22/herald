@@ -55,6 +55,19 @@ kotlin {
         jvmMain.dependencies {
             implementation(libs.sqlite.bundled)
             implementation(libs.jna.platform)
+            implementation(libs.desktop.webrtc)
+            implementation(libs.dbus.core)
+            if (System.getProperty("os.name").startsWith("Linux")) {
+                val classifier = when (System.getProperty("os.arch")) {
+                    "amd64", "x86_64" -> "linux-x86_64"
+                    "aarch64" -> "linux-aarch64"
+                    else -> null
+                }
+                classifier?.let { runtimeOnly("${libs.desktop.webrtc.get()}:$it") }
+                implementation(libs.dbus.unix)
+                implementation(libs.junixsocket.common)
+                runtimeOnly(libs.junixsocket.native)
+            }
         }
         commonMain.dependencies {
             api(libs.kotlinx.coroutines.core)

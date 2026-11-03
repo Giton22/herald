@@ -858,11 +858,19 @@ class ChatViewModel(
         return media.fileDownload(gateway, file, owner.profile)
     }
 
-    /** Adds picked files to the composer tray, up to [OutgoingAttachment.MAX_COUNT]. */
+    /**
+     * Adds picked files to the composer tray, up to [OutgoingAttachment.MAX_COUNT], each at most
+     * [OutgoingAttachment.MAX_BYTES]: the pickers hold to that, a long paste or a drop may not.
+     */
     fun addAttachments(picked: List<OutgoingAttachment>) {
+        val tooLarge = picked.firstOrNull { it.size > OutgoingAttachment.MAX_BYTES }
+        val fitting = picked.filter { it.size <= OutgoingAttachment.MAX_BYTES }
         val room = OutgoingAttachment.MAX_COUNT - _attachments.value.size
-        if (picked.size > room) showAttachmentError("Up to ${OutgoingAttachment.MAX_COUNT} attachments per message.")
-        _attachments.update { it + picked.take(room.coerceAtLeast(0)) }
+        when {
+            tooLarge != null -> showAttachmentError("${tooLarge.name} is larger than ${OutgoingAttachment.MAX_SIZE}.")
+            fitting.size > room -> showAttachmentError("Up to ${OutgoingAttachment.MAX_COUNT} attachments per message.")
+        }
+        _attachments.update { it + fitting.take(room.coerceAtLeast(0)) }
     }
 
     override fun removeAttachment(id: String) = _attachments.update { tray -> tray.filterNot { it.id == id } }

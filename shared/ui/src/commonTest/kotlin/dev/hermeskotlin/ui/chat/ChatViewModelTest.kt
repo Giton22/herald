@@ -398,6 +398,21 @@ class ChatViewModelTest {
     }
 
     @Test
+    fun aFileOverTheSizeLimitStaysOutOfTheTray() = runTest(dispatcher) {
+        val (vm, _) = viewModel()
+        // A drop or a share comes without the picker's check; past what the gateway takes it couldn't be sent.
+        val huge = OutgoingAttachment(
+            "d1", "dump.bin", "application/octet-stream", ByteArray(0),
+            source = dev.hermeskotlin.core.chat.AttachmentSource(OutgoingAttachment.MAX_BYTES + 1L) { error("not read") },
+        )
+
+        vm.addAttachments(listOf(attachment("ok"), huge))
+
+        assertEquals(listOf("ok"), vm.attachments.value.map { it.id })
+        assertEquals("dump.bin is larger than 100 MB.", vm.attachmentError.value)
+    }
+
+    @Test
     fun sharedFilesStopAtTheTrayLimit() = runTest(dispatcher) {
         val (vm, _) = viewModel()
         val many = (1..OutgoingAttachment.MAX_COUNT + 2).map { attachment("f$it") }
