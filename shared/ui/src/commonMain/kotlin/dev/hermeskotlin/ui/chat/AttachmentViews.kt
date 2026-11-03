@@ -181,7 +181,7 @@ internal fun AttachSheet(visible: Boolean, onDismiss: () -> Unit, picker: Attach
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         SheetHeader(
             stringResource(Res.string.chat_attach_title),
-            subtitle ?: stringResource(Res.string.chat_attach_limits, OutgoingAttachment.MAX_COUNT, OutgoingAttachment.MAX_BYTES / (1024 * 1024)),
+            subtitle ?: stringResource(Res.string.chat_attach_limits, OutgoingAttachment.MAX_COUNT, OutgoingAttachment.MAX_BYTES / 1_000_000),
         )
         SheetAction(stringResource(Res.string.chat_attach_photos), Lucide.ImageIcon, onClick = { pick(picker::pickPhotos) })
         SheetAction(stringResource(Res.string.chat_attach_camera), Lucide.Camera, onClick = { pick(picker::takePhoto) })

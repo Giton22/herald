@@ -445,6 +445,8 @@
     <string name="chat_notice_prompt_not_sent">提示词未发送：Kyllene 无法连接网关。它还在输入框里。</string>
     <string name="chat_notice_call_not_started">通话未开始：Kyllene 无法连接网关。</string>
     <string name="chat_notice_too_many_files">每条消息最多 %1$d 个附件。</string>
+    <string name="chat_notice_file_too_large">%1$s 超过 %2$d MB。</string>
+    <string name="chat_uploading">正在上传 %1$s · %2$d%</string>
     <string name="chat_model_bot_note">在这里选择的模型会成为 %1$s 的模型，用于它所有的对话和例程。</string>
     <string name="chat_model_bot_change_failed">无法更改 %1$s 的模型。%2$s</string>
     <string name="chat_drop_title">拖放到此处以附加</string>

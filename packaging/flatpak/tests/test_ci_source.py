@@ -20,7 +20,7 @@ class CiSourceTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             manifest = root / 'app.json'
-            original = json.loads((FLATPAK / 'io.github.Giton22.Kyllene.Devel.json').read_text())
+            original = json.loads((FLATPAK / 'app.kyllene.Kyllene.Devel.json').read_text())
             manifest.write_text(json.dumps(original))
             result = prepare(manifest, 'flatpak-ci-tested')
             self.assertEqual(result.returncode, 0, result.stderr)

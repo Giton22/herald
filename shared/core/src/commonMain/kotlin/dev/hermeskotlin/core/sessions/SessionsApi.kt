@@ -58,6 +58,9 @@ private data class SearchResponse(val results: List<SessionSummary> = emptyList(
  */
 class SessionsApi(private val client: HttpClient) {
 
+    /** Where a chat's large attachments go up before they're attached, on the same signed-in client. */
+    val uploads = dev.hermeskotlin.core.chat.AttachmentUploads(client)
+
     /** `GET /api/sessions`, most recent activity first. Pinned rows past the window are appended by the server. */
     suspend fun list(
         url: GatewayUrl,

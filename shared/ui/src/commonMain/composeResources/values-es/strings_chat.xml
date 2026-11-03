@@ -458,6 +458,8 @@
     <string name="chat_notice_prompt_not_sent">El prompt no se envió: Kyllene no pudo contactar con el Gateway. Está en el cuadro de texto.</string>
     <string name="chat_notice_call_not_started">La llamada no empezó: Kyllene no pudo contactar con el Gateway.</string>
     <string name="chat_notice_too_many_files">Hasta %1$d adjuntos por mensaje.</string>
+    <string name="chat_notice_file_too_large">%1$s ocupa más de %2$d MB.</string>
+    <string name="chat_uploading">Subiendo %1$s · %2$d %</string>
     <string name="chat_model_bot_note">Un modelo elegido aquí pasa a ser el de %1$s, para todos sus chats y rutinas.</string>
     <string name="chat_model_bot_change_failed">No se pudo cambiar el modelo de %1$s. %2$s</string>
     <string name="chat_drop_title">Suelta para adjuntar</string>

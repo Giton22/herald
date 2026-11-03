@@ -458,6 +458,8 @@
     <string name="chat_notice_prompt_not_sent">A prompt nem ment el: a Kyllene nem érte el a Gatewayt. A beviteli mezőben van.</string>
     <string name="chat_notice_call_not_started">A hívás nem indult el: a Kyllene nem érte el a Gatewayt.</string>
     <string name="chat_notice_too_many_files">Üzenetenként legfeljebb %1$d melléklet.</string>
+    <string name="chat_notice_file_too_large">%1$s nagyobb, mint %2$d MB.</string>
+    <string name="chat_uploading">%1$s feltöltése · %2$d%</string>
     <string name="chat_model_bot_note">Az itt választott modell lesz %1$s modellje, minden csevegésében és rutinjában.</string>
     <string name="chat_model_bot_change_failed">Nem sikerült módosítani %1$s modelljét. %2$s</string>
     <string name="chat_drop_title">Engedd el a csatoláshoz</string>

@@ -1271,7 +1271,11 @@ private fun DropOverlay() {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             UnstyledIcon(Lucide.Paperclip, contentDescription = null, tint = accentColor, modifier = Modifier.size(28.dp))
             Text(stringResource(Res.string.chat_drop_title), style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][textColor])
-            Text(stringResource(Res.string.chat_drop_limits, OutgoingAttachment.MAX_COUNT, 25), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+            Text(
+                stringResource(Res.string.chat_drop_limits, OutgoingAttachment.MAX_COUNT, OutgoingAttachment.MAX_BYTES / 1_000_000),
+                style = Theme[typography][bodySmall],
+                color = Theme[colors][textTertiary],
+            )
         }
     }
 }
@@ -1508,6 +1512,7 @@ private fun ComposerNotice.text(): String = when (this) {
     ComposerNotice.PromptNotSent -> stringResource(Res.string.chat_notice_prompt_not_sent)
     ComposerNotice.CallNotStarted -> stringResource(Res.string.chat_notice_call_not_started)
     is ComposerNotice.TooManyAttachments -> stringResource(Res.string.chat_notice_too_many_files, max)
+    is ComposerNotice.FileTooLarge -> stringResource(Res.string.chat_notice_file_too_large, name, megabytes)
 }
 
 /** How things stand, by the color of the dot beside a status line. */
@@ -2554,6 +2559,16 @@ internal fun UserBubble(
                 MessageTimeLabel(message.timestamp)
             }
         } else if (!message.pending) MessageTimeLabel(message.timestamp)
+        // A large file over a slow link takes minutes; how far it has gone shows it isn't stuck.
+        message.upload?.let {
+            Text(
+                stringResource(Res.string.chat_uploading, it.name, it.percent),
+                style = Theme[typography][caption],
+                color = Theme[colors][textTertiary],
+                maxLines = 1,
+                overflow = TextOverflow.MiddleEllipsis,
+            )
+        }
         if (message.queued) {
             Text(stringResource(Res.string.chat_queued), style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }

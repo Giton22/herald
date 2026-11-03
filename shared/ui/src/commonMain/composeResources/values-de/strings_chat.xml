@@ -458,6 +458,8 @@
     <string name="chat_notice_prompt_not_sent">Der Prompt wurde nicht gesendet: Kyllene hat das Gateway nicht erreicht. Er steht im Eingabefeld.</string>
     <string name="chat_notice_call_not_started">Der Anruf hat nicht begonnen: Kyllene hat das Gateway nicht erreicht.</string>
     <string name="chat_notice_too_many_files">Bis zu %1$d Anhänge pro Nachricht.</string>
+    <string name="chat_notice_file_too_large">%1$s ist größer als %2$d MB.</string>
+    <string name="chat_uploading">%1$s wird hochgeladen · %2$d %</string>
     <string name="chat_model_bot_note">Ein hier gewähltes Modell wird das von %1$s, für alle seine Chats und Routinen.</string>
     <string name="chat_model_bot_change_failed">Das Modell von %1$s ließ sich nicht ändern. %2$s</string>
     <string name="chat_drop_title">Zum Anhängen ablegen</string>

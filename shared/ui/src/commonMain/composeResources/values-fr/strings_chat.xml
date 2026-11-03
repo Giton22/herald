@@ -458,6 +458,8 @@
     <string name="chat_notice_prompt_not_sent">Le prompt n’a pas été envoyé : Kyllene n’a pas pu joindre le Gateway. Il est dans la zone de saisie.</string>
     <string name="chat_notice_call_not_started">L’appel n’a pas démarré : Kyllene n’a pas pu joindre le Gateway.</string>
     <string name="chat_notice_too_many_files">Jusqu’à %1$d pièces jointes par message.</string>
+    <string name="chat_notice_file_too_large">%1$s dépasse %2$d Mo.</string>
+    <string name="chat_uploading">Envoi de %1$s · %2$d %</string>
     <string name="chat_model_bot_note">Un modèle choisi ici devient celui de %1$s, pour toutes ses conversations et routines.</string>
     <string name="chat_model_bot_change_failed">Impossible de changer le modèle de %1$s. %2$s</string>
     <string name="chat_drop_title">Déposer pour joindre</string>
