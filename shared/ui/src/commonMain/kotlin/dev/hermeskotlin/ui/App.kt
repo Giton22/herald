@@ -28,6 +28,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composeunstyled.theme.ColorScheme
 import com.composeunstyled.theme.Theme
@@ -157,6 +158,15 @@ fun App(
     // The words dates and times are built from, in the app's language, for code that runs outside composition.
     TimeWords.current = rememberTimeWords()
     val settings = settingsStore.settings.collectAsStateWithLifecycle().value ?: return
+    if (isDesktop) {
+        val app: AppViewModel = koinViewModel()
+        // Retire the call on session exit, including in the background; changing language keeps it.
+        val route by app.route.collectAsState()
+        if (route is Route.Chat) {
+            val chat: ChatViewModel = koinViewModel()
+            DisposableEffect(chat) { onDispose { chat.voice.stopAll() } }
+        }
+    }
     val dark = isDark(settings)
     LaunchedEffect(dark) { onDarkTheme(dark) }
     val density = LocalDensity.current
