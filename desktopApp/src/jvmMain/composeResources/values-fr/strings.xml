@@ -24,9 +24,9 @@
     <string name="storage_title">Stockage de Kyllene</string>
     <string name="storage_folder">Dossier des réglages :</string>
     <string name="storage_retry">Réessayer</string>
-    <string name="storage_start_fresh">Recommencer</string>
+    <string name="storage_start_fresh">Repartir</string>
     <string name="storage_quit">Quitter</string>
-    <string name="storage_with_start_fresh">%1$s « Recommencer » conserve ce fichier sous un autre nom et ouvre Kyllene déconnecté.</string>
+    <string name="storage_with_start_fresh">%1$s « Repartir » conserve ce fichier sous un autre nom et ouvre Kyllene déconnecté.</string>
     <string name="storage_unavailable">Kyllene n’a pas pu récupérer sa clé de stockage. Déverrouillez le trousseau de votre bureau et vérifiez que son portail Secret est disponible, puis réessayez.</string>
     <string name="storage_cancelled">Le déverrouillage du stockage a été annulé. Réessayez pour le déverrouiller ; les données existantes ont été conservées.</string>
     <string name="storage_corrupt">Kyllene n’a pas pu ouvrir ses réglages chiffrés. Restaurez une sauvegarde saine ou utilisez l’identité d’origine de l’application. Les données existantes ont été conservées.</string>
