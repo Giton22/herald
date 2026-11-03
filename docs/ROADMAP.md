@@ -340,4 +340,4 @@ Agent tools that run on the phone: a gateway plugin registers them, Kyllene answ
 - [x] Pebble: quick launch into dictation, a launcher glance with the last reply, prompts edited on the phone (Settings → Connected devices), tap and drag on the talk screen, and an on/off switch
 - [ ] Pebble: a choice of Pebble phone app other than the Core app
 - [ ] Pebble: the gateway's voice on the watch's speaker
-- [ ] Localization (`i18n.catalog`): the catalogue and German are in for Settings and everything it opens, on the phone and in the desktop window (`composeResources`, `docs/i18n.md`); chat, sessions, inbox, capabilities and Phone tools still hold their words in code
+- [ ] Localization (`i18n.catalog`): the catalogue, German, French, Spanish, Portuguese (Brazil), Chinese (Simplified) and Hungarian are in for Settings and everything it opens, on the phone and in the desktop window (`composeResources`, `docs/i18n.md`); chat, sessions, inbox, capabilities and Phone tools still hold their words in code
