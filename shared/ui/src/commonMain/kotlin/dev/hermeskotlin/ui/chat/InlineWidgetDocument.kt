@@ -13,10 +13,10 @@ internal fun supportsWidgetIsolation(version: String?): Boolean =
 internal fun widgetFile(item: ReplyMedia): GatewayFile? =
     if (item.preview) GatewayFile.fromLink(item.source)?.takeIf { it.extension in setOf("html", "htm") } else null
 
-internal fun widgetProblem(file: FileText): String? = when {
-    file.binary -> "This file isn't HTML text."
-    file.truncated || file.byteSize > 512 * 1024 || file.text.encodeToByteArray().size > 512 * 1024 -> "This widget is over the 512 KB preview limit."
-    file.text.isBlank() -> "This widget is empty."
+internal fun widgetProblem(file: FileText): FileProblem? = when {
+    file.binary -> FileProblem.WidgetNotHtml
+    file.truncated || file.byteSize > 512 * 1024 || file.text.encodeToByteArray().size > 512 * 1024 -> FileProblem.WidgetTooBig
+    file.text.isBlank() -> FileProblem.WidgetEmpty
     else -> null
 }
 

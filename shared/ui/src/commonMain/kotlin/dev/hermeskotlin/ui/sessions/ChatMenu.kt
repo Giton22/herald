@@ -35,6 +35,7 @@ import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.core.threads.ChatThread
 import dev.hermeskotlin.core.threads.ThreadsRepository
+import dev.hermeskotlin.ui.chat.SaveOutcome
 import dev.hermeskotlin.ui.chat.rememberMediaActions
 import dev.hermeskotlin.ui.chat.transcriptFileName
 import dev.hermeskotlin.ui.chat.transcriptMarkdown
@@ -81,7 +82,7 @@ internal fun ChatMenu(
     @Suppress("DEPRECATION") val clipboard = LocalClipboardManager.current
     val media = rememberMediaActions()
     val scope = rememberCoroutineScope()
-    var exported by remember { mutableStateOf<Exported?>(null) }
+    var exported by remember { mutableStateOf<SaveOutcome?>(null) }
     // A phone shares the export instead, so it has nothing to say here.
     if (isDesktop) ExportedToast(exported, onDismiss = { exported = null })
 
@@ -101,7 +102,8 @@ internal fun ChatMenu(
             val bytes = transcriptMarkdown(title, messages).encodeToByteArray()
             val name = transcriptFileName(title, it.id)
             // A desktop exports to a file it picks, as any desktop app's Export does; a phone hands it to the share sheet.
-            if (isDesktop) scope.launch { exported = media.save(bytes, name).takeUnless { r -> r == NOT_SAVED }?.let(::Exported) } else media.share(bytes, name)
+            // A cancelled Save dialog (null) has nothing to tell.
+            if (isDesktop) scope.launch { exported = media.saveOutcome(bytes, name) } else media.share(bytes, name)
         },
         onCopyId = { clipboard.setText(AnnotatedString(it.id)) },
         onUsage = { onUsage() },
@@ -134,34 +136,28 @@ internal fun ChatMenu(
 
 /** Where the export went ("Saved to …"), or why it didn't, along the bottom like the archive toast; it goes by itself. */
 @Composable
-private fun ExportedToast(exported: Exported?, onDismiss: () -> Unit) {
-    val message = exported?.text
+private fun ExportedToast(exported: SaveOutcome?, onDismiss: () -> Unit) {
     // Kept while the toast fades out, so its text doesn't vanish first.
-    var shown by remember { mutableStateOf(message) }
-    if (message != null) shown = message
-    // Keyed on the export, not its text: saving to the same file again shows the toast its full time again.
+    var shown by remember { mutableStateOf(exported) }
+    if (exported != null) shown = exported
+    // Keyed on the export (a SaveOutcome is not a data class), not its text: saving to the same file again shows
+    // the toast its full time again.
     LaunchedEffect(exported) {
-        if (message == null) return@LaunchedEffect
+        if (exported == null) return@LaunchedEffect
         delay(EXPORTED_MILLIS)
         onDismiss()
     }
     Box(Modifier.fillMaxSize().padding(14.dp), contentAlignment = Alignment.BottomCenter) {
         AnimatedVisibility(
-            visible = message != null,
+            visible = exported != null,
             enter = fadeIn() + slideInVertically { it / 2 },
             exit = fadeOut() + slideOutVertically { it / 2 },
         ) {
-            shown?.let { text ->
-                val failed = !text.startsWith("Saved")
-                Toast(text, modifier = Modifier.widthIn(max = MaxToastWidth).fillMaxWidth(),icon = if (failed) Lucide.CircleAlert else Lucide.FileCheck, onDismiss = onDismiss)
+            shown?.let { outcome ->
+                Toast(outcome.text, modifier = Modifier.widthIn(max = MaxToastWidth).fillMaxWidth(),icon = if (outcome.saved) Lucide.FileCheck else Lucide.CircleAlert, onDismiss = onDismiss)
             }
         }
     }
 }
 
-/** One export's outcome; not a data class, so two exports that say the same are still two. */
-private class Exported(val text: String)
-
-/** What [dev.hermeskotlin.ui.chat.MediaActions.save] says when the Save dialog was cancelled: nothing to tell. */
-private const val NOT_SAVED = "Not saved."
 private const val EXPORTED_MILLIS = 5_000L

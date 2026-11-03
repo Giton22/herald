@@ -54,7 +54,7 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y flatpak flatpak-builder fontconfig xvfb xauth xdotool python3-pil \
-            xdg-desktop-portal gnome-keyring
+            xdg-desktop-portal gnome-keyring ostree
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak install --user --noninteractive flathub org.freedesktop.Sdk//26.08 org.freedesktop.Platform//26.08
       - name: Packaging contracts
@@ -75,13 +75,14 @@ jobs:
         run: |
           git update-ref refs/heads/flatpak-ci-tested "$GITHUB_SHA"
           python3 packaging/flatpak/prepare-ci.py \
-            packaging/flatpak/io.github.Giton22.Kyllene.Devel.json \
+            packaging/flatpak/app.kyllene.Kyllene.Devel.json \
             --repository "file://$GITHUB_WORKSPACE" \
             --ref flatpak-ci-tested --commit "$GITHUB_SHA"
-      - name: Build offline and bundle
-        run: |
-          flatpak-builder --user --repo=build/flatpak-repo build/flatpak packaging/flatpak/ci.json
-          flatpak build-bundle build/flatpak-repo build/kyllene.flatpak io.github.Giton22.Kyllene.Devel devel
+      # Separate steps, so the run's timings show whether the builder's cache pruning or the bundle takes the time.
+      - name: Build offline
+        run: flatpak-builder --user --repo=build/flatpak-repo build/flatpak packaging/flatpak/ci.json
+      - name: Bundle
+        run: flatpak build-bundle build/flatpak-repo build/kyllene.flatpak app.kyllene.Kyllene.Devel devel
       # The app reads its settings key from the Secret portal at startup, so the smoke runs in a session as a
       # desktop has one: its own bus, and an unlocked keyring answering the portal.
       - name: Installed sandbox smoke
@@ -91,6 +92,9 @@ jobs:
             > ~/.config/xdg-desktop-portal/portals.conf
           dbus-run-session -- sh -c 'printf smoke | gnome-keyring-daemon --unlock --components=secrets >/dev/null &&
             python3 packaging/flatpak/tests/installed_smoke.py build/kyllene.flatpak'
+      # Our repository's publish step and both installs (bundle, .flatpakref) updating from it, on a local server.
+      - name: Repository smoke
+        run: sh packaging/flatpak/tests/repo_smoke.sh build/flatpak-repo app.kyllene.Kyllene.Devel devel
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: kyllene-flatpak-x86_64

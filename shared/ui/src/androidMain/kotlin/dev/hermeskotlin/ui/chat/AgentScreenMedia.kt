@@ -59,6 +59,8 @@ import dev.hermeskotlin.designsystem.radiusMedium
 import dev.hermeskotlin.designsystem.surface3
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Only pictures and media on the web: a screen mustn't show what's on the phone (`file:`, `content:`) or reach
@@ -72,7 +74,7 @@ internal fun isWebUrl(url: String): Boolean = Uri.parse(url.trim()).scheme?.lowe
  */
 internal val ScreenImages = A2uiImageRenderer { url, description, scale, modifier, _ ->
     if (!isWebUrl(url)) {
-        Missing("Picture not shown", modifier)
+        Missing(stringResource(Res.string.android_media_picture_not_shown), modifier)
     } else {
         SubcomposeAsyncImage(
             model = url,
@@ -81,7 +83,7 @@ internal val ScreenImages = A2uiImageRenderer { url, description, scale, modifie
             contentScale = scale,
             modifier = modifier,
             loading = { Box(Modifier.matchParentSize().background(Theme[colors][surface3])) },
-            error = { Missing("Picture didn't load", Modifier.matchParentSize()) },
+            error = { Missing(stringResource(Res.string.android_media_picture_failed), Modifier.matchParentSize()) },
         )
     }
 }
@@ -130,7 +132,7 @@ internal val ScreenAudio = A2uiAudioPlayerRenderer { url, description, modifier,
 @Composable
 private fun Player(url: String, description: String?, audio: Boolean, modifier: Modifier) {
     if (!isWebUrl(url)) {
-        Missing(if (audio) "Audio not played" else "Video not shown", modifier)
+        Missing(stringResource(if (audio) Res.string.android_media_audio_not_played else Res.string.android_media_video_not_shown), modifier)
         return
     }
     val context = LocalContext.current
@@ -162,7 +164,7 @@ private fun Player(url: String, description: String?, audio: Boolean, modifier: 
         }
     }
     if (failed) {
-        Missing(if (audio) "Audio didn't load" else "Video didn't load", modifier)
+        Missing(stringResource(if (audio) Res.string.android_media_audio_failed else Res.string.android_media_video_failed), modifier)
         return
     }
     val areas = LocalPlayerAreas.current

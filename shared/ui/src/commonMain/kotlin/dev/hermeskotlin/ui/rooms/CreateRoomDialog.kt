@@ -1,6 +1,11 @@
 package dev.hermeskotlin.ui.rooms
 
 import dev.hermeskotlin.designsystem.components.handCursor
+import dev.hermeskotlin.ui.inbox.Words
+import dev.hermeskotlin.ui.inbox.text
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -71,9 +76,9 @@ import dev.hermeskotlin.designsystem.typography
 fun CreateRoomDialog(
     visible: Boolean,
     bots: List<Bot>,
-    busy: String?,
+    busy: Words?,
     /** Why the last try didn't make the room, shown until the next try. */
-    error: String? = null,
+    error: Words? = null,
     onDismiss: () -> Unit,
     onCreate: (name: String, members: List<Bot>) -> Unit,
 ) {
@@ -86,11 +91,11 @@ fun CreateRoomDialog(
     Dialog(
         visible = visible,
         onDismissRequest = { if (busy == null) onDismiss() },
-        title = "New room",
+        title = stringResource(Res.string.rooms_new_room),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small, enabled = busy == null)
+            Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small, enabled = busy == null)
             Button(
-                "Create",
+                stringResource(Res.string.rooms_create),
                 onClick = create,
                 variant = ButtonVariant.Primary,
                 size = ButtonSize.Small,
@@ -101,8 +106,8 @@ fun CreateRoomDialog(
     ) {
         TextField(
             state = name,
-            label = "Room name",
-            placeholder = "Release room",
+            label = stringResource(Res.string.rooms_room_name),
+            placeholder = stringResource(Res.string.rooms_room_name_example),
             enabled = busy == null,
             autofocus = true,
             keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
@@ -110,12 +115,11 @@ fun CreateRoomDialog(
             onKeyboardAction = { closeKeyboard -> if (isDesktop) create() else closeKeyboard() },
         )
         Text(
-            "The bots you pick talk things over in the room. It runs on the gateway, so it keeps going " +
-                "with no app open, and the whole conversation is there when you come back.",
+            stringResource(Res.string.rooms_new_room_detail),
             style = Theme[typography][bodySmall],
             color = Theme[colors][textSecondary],
         )
-        SectionLabel("Bots · pick $MIN_MEMBERS to $MAX_MEMBERS")
+        SectionLabel(stringResource(Res.string.rooms_pick_bots, MIN_MEMBERS, MAX_MEMBERS))
         Column(
             Modifier.fillMaxWidth().heightIn(max = 260.dp).verticalScrollWithBar(),
         ) {
@@ -151,12 +155,13 @@ fun CreateRoomDialog(
             }
         }
         Text(
-            "${selected.size} picked",
+            pluralStringResource(Res.plurals.rooms_picked, selected.size, selected.size),
             style = Theme[typography][caption],
             color = Theme[colors][textTertiary],
         )
         if (error != null && busy == null) {
-            CopyableOnDesktop { Text(error, style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
+            val message = error.text()
+            CopyableOnDesktop { Text(message, style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
         }
     }
 }

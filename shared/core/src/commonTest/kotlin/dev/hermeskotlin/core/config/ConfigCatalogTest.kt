@@ -156,6 +156,17 @@ class ConfigCatalogTest {
     }
 
     @Test
+    fun searchMatchesTheNameTheScreenShows() {
+        val values = config("""{"approvals":{"mode":"manual"}}""")
+        val shown = mapOf("approvals.mode" to "Freigabemodus")
+
+        assertEquals(listOf("approvals.mode"), ConfigCatalog.search("freigabe", schema, values, shown).map { it.key })
+        // The English name still finds it.
+        assertEquals(listOf("approvals.mode"), ConfigCatalog.search("approval mode", schema, values, shown).map { it.key })
+        assertTrue(ConfigCatalog.search("freigabe", schema, values).isEmpty())
+    }
+
+    @Test
     fun categoriesFollowTheGatewaysOrderThenTheAlphabet() {
         val ids = ConfigCatalog.categories(schema).map { it.category }
 

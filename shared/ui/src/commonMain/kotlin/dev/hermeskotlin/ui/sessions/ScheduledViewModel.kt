@@ -29,6 +29,8 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.StringResource
 
 data class ScheduledUiState(
     val jobs: List<CronJob> = emptyList(),
@@ -41,7 +43,7 @@ data class ScheduledUiState(
     val runsError: String? = null,
     /** A pause, resume or run-now request is in flight. */
     val busy: Boolean = false,
-    val message: String? = null,
+    val message: Said? = null,
     val sessionExpired: Boolean = false,
     /** The job form, for a new job or an existing one; null when it isn't open. */
     val editor: JobEditor? = null,
@@ -58,7 +60,7 @@ data class JobEditor(
     val jobId: String? = null,
     val deliver: String = LOCAL_DELIVERY.id,
     val saving: Boolean = false,
-    val error: String? = null,
+    val error: Said? = null,
 ) {
     val isNew: Boolean get() = jobId == null
 }
@@ -66,6 +68,7 @@ data class JobEditor(
 /** The bot whose routines a page shows: its profile and the name it goes by. */
 data class RoutineOwner(val profile: String, val label: String)
 
+/** Saving only, the gateway's own fallback; its name here is English, and screens say it in the user's language. */
 internal val LOCAL_DELIVERY = DeliveryTarget(id = "local", name = "Local (save only)")
 
 /**
@@ -148,14 +151,14 @@ class ScheduledViewModel(
 
     override fun togglePaused() {
         val job = _state.value.openJob ?: return
-        act(if (job.paused) "Couldn't resume the job" else "Couldn't pause the job") { url ->
+        act(if (job.paused) Res.string.sessions_job_resume_failed else Res.string.sessions_job_pause_failed) { url ->
             if (job.paused) api.resume(url, job.id, job.profile) else api.pause(url, job.id, job.profile)
         }
     }
 
     override fun runNow() {
         val job = _state.value.openJob ?: return
-        act("Couldn't start a run", success = "Run started") { url -> api.trigger(url, job.id, job.profile) }
+        act(Res.string.sessions_job_run_failed, success = Res.string.sessions_job_run_started) { url -> api.trigger(url, job.id, job.profile) }
     }
 
     fun dismissMessage() = _state.update { it.copy(message = null) }
@@ -220,10 +223,10 @@ class ScheduledViewModel(
         )
         val problem = when {
             // Removed elsewhere while the form was open; saving would quietly create it again.
-            editor.jobId != null && existing == null -> "This job was deleted on the gateway, so there's nothing to save."
-            routineOf != null && title.isEmpty() -> "Give the routine a name."
-            draft.prompt.isEmpty() -> "Say what the agent should do on each run."
-            draft.schedule.isEmpty() && (existing == null || existing.editableSchedule.isNotEmpty()) -> "Say when it should run."
+            editor.jobId != null && existing == null -> said(Res.string.sessions_job_gone)
+            routineOf != null && title.isEmpty() -> said(Res.string.sessions_job_needs_name)
+            draft.prompt.isEmpty() -> said(Res.string.sessions_job_needs_prompt)
+            draft.schedule.isEmpty() && (existing == null || existing.editableSchedule.isNotEmpty()) -> said(Res.string.sessions_job_needs_schedule)
             else -> null
         }
         if (problem != null) {
@@ -257,7 +260,14 @@ class ScheduledViewModel(
                         val saved = result.value
                         val known = state.jobs.any { it.id == saved.id }
                         val jobs = if (known) state.jobs.map { if (it.id == saved.id) saved else it } else listOf(saved) + state.jobs
-                        val message = "${noun(owner)} ${if (existing == null) "scheduled" else "saved"}"
+                        val message = said(
+                            when {
+                                owner != null && existing == null -> Res.string.sessions_routine_scheduled
+                                owner != null -> Res.string.sessions_routine_saved
+                                existing == null -> Res.string.sessions_job_scheduled
+                                else -> Res.string.sessions_job_saved
+                            },
+                        )
                         if (formOpen) {
                             state.copy(
                                 editor = null,
@@ -272,12 +282,12 @@ class ScheduledViewModel(
                     }
                     else -> if (formOpen) {
                         state.copy(
-                            editor = state.editor?.copy(saving = false, error = result.errorMessage),
+                            editor = state.editor?.copy(saving = false, error = result.errorMessage.verbatim()),
                             sessionExpired = result == ApiResult.SessionExpired,
                         )
                     } else {
                         state.copy(
-                            message = listOfNotNull("Couldn't save the job", result.errorMessage).joinToString(": "),
+                            message = said(Res.string.sessions_job_save_failed, detail = result.errorMessage),
                             sessionExpired = result == ApiResult.SessionExpired,
                         )
                     }
@@ -304,11 +314,11 @@ class ScheduledViewModel(
                         jobs = state.jobs.filterNot { it.id == job.id },
                         openJobId = null,
                         runs = emptyList(),
-                        message = "${noun(owner)} deleted",
+                        message = said(if (owner != null) Res.string.sessions_routine_deleted else Res.string.sessions_job_deleted),
                     )
                     else -> state.copy(
                         busy = false,
-                        message = listOfNotNull("Couldn't delete the job", result.errorMessage).joinToString(": "),
+                        message = said(Res.string.sessions_job_delete_failed, detail = result.errorMessage),
                         sessionExpired = result == ApiResult.SessionExpired,
                     )
                 }
@@ -323,7 +333,8 @@ class ScheduledViewModel(
     private fun loadDeliveryTargets() {
         val url = gateway?.gatewayUrl ?: return
         val owner = owner
-        val botChat = owner?.let { DeliveryTarget(id = Routines.BOT_CHAT_DELIVERY, name = "${it.label}'s chat") }
+        // Named on screen by deliveryLabel, in the user's language.
+        val botChat = owner?.let { DeliveryTarget(id = Routines.BOT_CHAT_DELIVERY, name = it.label) }
         _state.update { it.copy(deliveryTargets = listOfNotNull(botChat) + it.deliveryTargets.filterNot { t -> t.id == Routines.BOT_CHAT_DELIVERY }) }
         viewModelScope.launch {
             val result = api.deliveryTargets(url, owner?.profile)
@@ -336,7 +347,7 @@ class ScheduledViewModel(
     }
 
     /** Calls a job action and swaps in the job record the server returns. */
-    private fun act(failure: String, success: String? = null, call: suspend (GatewayUrl) -> ApiResult<CronJob>) {
+    private fun act(failure: StringResource, success: StringResource? = null, call: suspend (GatewayUrl) -> ApiResult<CronJob>) {
         val url = gateway?.gatewayUrl ?: return
         if (_state.value.busy) return
         val before = _state.value.openJob
@@ -348,11 +359,11 @@ class ScheduledViewModel(
                     is ApiResult.Success -> state.copy(
                         busy = false,
                         jobs = state.jobs.map { if (it.id == result.value.id) result.value else it },
-                        message = success,
+                        message = success?.let { said(it) },
                     )
                     else -> state.copy(
                         busy = false,
-                        message = listOfNotNull(failure, result.errorMessage).joinToString(": "),
+                        message = said(failure, detail = result.errorMessage),
                         sessionExpired = result == ApiResult.SessionExpired,
                     )
                 }
@@ -396,9 +407,6 @@ class ScheduledViewModel(
         }
     }
 }
-
-/** What the page calls a job: a bot's are its routines. */
-private fun noun(owner: RoutineOwner?): String = if (owner != null) "Routine" else "Job"
 
 /**
  * Only the cross-profile list tags a job with its profile; a job sent back from a create or an action
