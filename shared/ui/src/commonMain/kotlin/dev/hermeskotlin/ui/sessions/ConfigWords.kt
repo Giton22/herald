@@ -11,7 +11,7 @@ import org.jetbrains.compose.resources.stringResource
 
 /*
  * The Config page's own words in the app's language. ConfigCatalog keeps Desktop's English names, which search
- * still matches; these replace them on screen. A section the gateway names (a schema category) and a field with no
+ * still matches along with these; these replace them on screen. A section the gateway names (a schema category) and a field with no
  * curated name keep the name built from the gateway's key.
  */
 
@@ -24,6 +24,10 @@ internal fun sectionLabel(section: ConfigSection): String =
 @Composable
 internal fun entryLabel(entry: ConfigEntry): String =
     FIELD_LABELS[entry.key]?.let { stringResource(it) } ?: entry.label
+
+/** Every curated setting's name in the app's language, by key, so search finds what the screen shows. */
+@Composable
+internal fun shownLabels(): Map<String, String> = FIELD_LABELS.mapValues { (_, label) -> stringResource(label) }
 
 /** What a setting's row says it's set to. */
 @Composable

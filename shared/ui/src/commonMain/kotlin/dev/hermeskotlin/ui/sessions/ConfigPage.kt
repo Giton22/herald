@@ -325,7 +325,8 @@ private fun Overview(
     val schema = state.schema ?: return
     val values = state.values ?: return
     val typed = query.text.toString()
-    val results = remember(typed, schema, values) { ConfigCatalog.search(typed, schema, values) }
+    val shown = shownLabels()
+    val results = remember(typed, schema, values, shown) { ConfigCatalog.search(typed, schema, values, shown) }
     val sections = remember(schema, values) { ConfigCatalog.sections.map { it to ConfigCatalog.entries(it, schema, values).size }.filter { it.second > 0 } }
     PageList {
         if (withSearch) item(key = "search") {
