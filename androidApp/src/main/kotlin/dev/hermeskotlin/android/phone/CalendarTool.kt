@@ -9,6 +9,7 @@ import android.database.Cursor
 import android.net.Uri
 import android.provider.CalendarContract
 import androidx.core.content.ContextCompat
+import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.phone.PhoneTool
 import dev.hermeskotlin.core.phone.PhoneToolException
 import dev.hermeskotlin.core.phone.forQuestion
@@ -148,13 +149,19 @@ internal class CalendarTool(private val context: Context, private val confirmati
         notes?.let { values.put(CalendarContract.Events.DESCRIPTION, it) }
         // When, where and which calendar first, the agent's own text after: a title can't push them out of sight.
         val what = buildString {
-            append("${span(start, end, allDay)}, in ${forQuestion(calendar.shown)}")
-            location?.let { append(", at ${forQuestion(it)}") }
-            append(".\nTitle: ${forQuestion(title)}")
-            notes?.let { append("\nNotes: ${forQuestion(it)}") }
+            val shown = forQuestion(calendar.shown)
+            append(
+                if (location == null) {
+                    words.text(R.string.phone_calendar_add_question, span(start, end, allDay), shown)
+                } else {
+                    words.text(R.string.phone_calendar_add_question_place, span(start, end, allDay), shown, forQuestion(location))
+                },
+            )
+            append("\n").append(words.text(R.string.phone_calendar_title_line, forQuestion(title)))
+            notes?.let { append("\n").append(words.text(R.string.phone_calendar_notes_line, forQuestion(it))) }
         }
         var id = 0L
-        confirmations.confirm(PhoneTool.Calendar, what, TITLE_ADD) {
+        confirmations.confirm(PhoneTool.Calendar, what, confirmations.text(R.string.phone_calendar_add_title)) {
             val uri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
                 ?: throw PhoneToolException("The calendar didn't take the event.")
             id = ContentUris.parseId(uri)
@@ -204,11 +211,18 @@ internal class CalendarTool(private val context: Context, private val confirmati
         }
         val guests = guests(id)
         val what = buildString {
-            append("From ${at(was)} to ${span(start.toLocalDateTime(), end.toLocalDateTime(), false)}, in ${forQuestion(event.calendar)}.")
-            if (guests > 0) append(" ${if (guests == 1) "1 guest" else "$guests guests"} may be told.")
-            append("\nTitle: ${forQuestion(event.title)}")
+            append(
+                words.text(
+                    R.string.phone_calendar_move_question,
+                    at(was),
+                    span(start.toLocalDateTime(), end.toLocalDateTime(), false),
+                    forQuestion(event.calendar),
+                ),
+            )
+            if (guests > 0) append(" ").append(words.count(R.plurals.phone_calendar_guests, guests))
+            append("\n").append(words.text(R.string.phone_calendar_title_line, forQuestion(event.title)))
         }
-        confirmations.confirm(PhoneTool.Calendar, what, TITLE_MOVE) {
+        confirmations.confirm(PhoneTool.Calendar, what, confirmations.text(R.string.phone_calendar_move_title)) {
             if (context.contentResolver.update(uri, values, null, null) != 1) throw PhoneToolException("The calendar didn't take the change.")
         }
         return buildJsonObject {
@@ -342,18 +356,21 @@ internal class CalendarTool(private val context: Context, private val confirmati
 
     /** "Wed 14 Oct, 9:30–10:30" for the question; the year too when it isn't this one. */
     private fun span(start: LocalDateTime, end: LocalDateTime, allDay: Boolean): String = when {
-        allDay && end.toLocalDate().minusDays(1) <= start.toLocalDate() -> "${day(start)}, all day"
-        allDay -> "${day(start)} to ${day(end.minusDays(1))}, all day"
-        start.toLocalDate() == end.toLocalDate() -> "${day(start)}, ${start.format(HOUR)}–${end.format(HOUR)}"
-        else -> "${at(start)} to ${at(end)}"
+        allDay && end.toLocalDate().minusDays(1) <= start.toLocalDate() -> words.text(R.string.phone_calendar_all_day, day(start))
+        allDay -> words.text(R.string.phone_calendar_days_all_day, day(start), day(end.minusDays(1)))
+        start.toLocalDate() == end.toLocalDate() -> words.text(R.string.phone_calendar_day_hours, day(start), start.format(HOUR), end.format(HOUR))
+        else -> words.text(R.string.phone_calendar_range, at(start), at(end))
     }
 
+    /** In the user's language: the pattern is translated with the words around it. */
     private fun day(time: LocalDateTime): String {
-        val pattern = if (time.year == LocalDate.now().year) "EEE d MMM" else "EEE d MMM yyyy"
-        return time.format(DateTimeFormatter.ofPattern(pattern, Locale.getDefault()))
+        val pattern = words.text(if (time.year == LocalDate.now().year) R.string.phone_calendar_day_pattern else R.string.phone_calendar_day_year_pattern)
+        return time.format(DateTimeFormatter.ofPattern(pattern, context.resources.configuration.locales[0]))
     }
 
-    private fun at(time: LocalDateTime) = "${day(time)}, ${time.format(HOUR)}"
+    private fun at(time: LocalDateTime) = words.text(R.string.phone_calendar_day_time, day(time), time.format(HOUR))
+
+    private val words get() = confirmations
 
     /** At most [MAX_LISTED] characters, never cutting an emoji in half. */
     private fun String.short(): String {
@@ -377,8 +394,6 @@ internal class CalendarTool(private val context: Context, private val confirmati
         // Short enough that the question shows all of it.
         const val MAX_NOTES = 500
         const val DATE_LENGTH = 10
-        const val TITLE_ADD = "The agent wants to add to your calendar"
-        const val TITLE_MOVE = "The agent wants to move an event"
         val RFC_DURATION = Regex("""^\+?P(?:(\d+)W)?(?:(\d+)D)?(?:T?(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?)?$""")
         val LOCAL: DateTimeFormatter = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm", Locale.ROOT)
         // In the user's language, read each time: it can change while Kyllene runs.

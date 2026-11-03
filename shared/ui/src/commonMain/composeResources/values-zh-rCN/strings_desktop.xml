@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="desktop_attach_photos">附加照片</string>
+    <string name="desktop_attach_files">附加文件</string>
+    <string name="desktop_file_dialog_failed">无法打开文件对话框。</string>
+    <string name="desktop_attach_read_failed">无法读取文件。</string>
+    <string name="desktop_attach_no_camera">桌面版暂时无法使用摄像头。</string>
+    <string name="desktop_attach_photo_too_large">%1$s 超过 50 MB。</string>
+    <string name="desktop_attach_file_too_large">%1$s 超过 %2$d MB。</string>
+    <string name="desktop_attach_over_budget">一次附加的内容超过了 50 MB。</string>
+    <string name="desktop_attach_not_an_image">无法将 %1$s 读取为图片。</string>
+
+    <string name="desktop_save_title">保存</string>
+    <string name="desktop_save_dialog_failed">无法打开保存对话框。</string>
+    <string name="desktop_save_cancelled">未保存。</string>
+    <string name="desktop_saved_to">已保存到 %1$s</string>
+    <string name="desktop_save_failed">无法保存：%1$s</string>
+
+    <string name="desktop_pdf_unsupported">桌面版暂时无法打开 PDF。你可以保存该文件。</string>
+    <string name="desktop_widgets_unsupported">此版本的桌面版不显示小组件。</string>
+</resources>

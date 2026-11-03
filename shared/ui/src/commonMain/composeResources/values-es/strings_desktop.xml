@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <string name="desktop_attach_photos">Adjuntar fotos</string>
+    <string name="desktop_attach_files">Adjuntar archivos</string>
+    <string name="desktop_file_dialog_failed">No se pudo abrir el cuadro de diálogo de archivos.</string>
+    <string name="desktop_attach_read_failed">No se pudo leer un archivo.</string>
+    <string name="desktop_attach_no_camera">La aplicación de escritorio aún no puede usar una cámara.</string>
+    <string name="desktop_attach_photo_too_large">%1$s ocupa más de 50 MB.</string>
+    <string name="desktop_attach_file_too_large">%1$s ocupa más de %2$d MB.</string>
+    <string name="desktop_attach_over_budget">Son más de 50 MB de adjuntos a la vez.</string>
+    <string name="desktop_attach_not_an_image">No se pudo leer %1$s como imagen.</string>
+
+    <string name="desktop_save_title">Guardar</string>
+    <string name="desktop_save_dialog_failed">No se pudo abrir el cuadro de diálogo Guardar.</string>
+    <string name="desktop_save_cancelled">No se guardó.</string>
+    <string name="desktop_saved_to">Guardado en %1$s</string>
+    <string name="desktop_save_failed">No se pudo guardar: %1$s</string>
+
+    <string name="desktop_pdf_unsupported">Los PDF aún no se abren en la aplicación de escritorio. Puedes guardar el archivo.</string>
+    <string name="desktop_widgets_unsupported">Los widgets no se muestran en esta versión de la aplicación de escritorio.</string>
+</resources>

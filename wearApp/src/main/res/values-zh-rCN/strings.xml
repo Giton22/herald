@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tile_label">呼叫 Hermes</string>
+    <string name="tile_description">与 Hermes 对话，并查看它的最新回复。</string>
+    <string name="complication_label">呼叫 Hermes</string>
+
+    <string name="wear_call_hermes">呼叫 Hermes</string>
+    <string name="wear_call_target">呼叫 %1$s</string>
+    <string name="wear_call_short">呼叫</string>
+    <string name="wear_start_call">开始通话</string>
+
+    <string name="wear_phone_connected">已连接</string>
+    <string name="wear_phone_reconnecting">正在重新连接</string>
+    <string name="wear_phone_not_connected">未连接</string>
+    <string name="wear_phone_not_connected_detail">你的手机未连接。</string>
+    <string name="wear_phone_no_app">手机上的 Kyllene 没有响应。请在手机上打开它，或更新它。</string>
+    <string name="wear_phone_signed_out">请先在手机上登录 Kyllene。</string>
+    <string name="wear_phone_unreachable">Kyllene 无法连接到你的网关。请在手机上检查。</string>
+    <string name="wear_phone_no_answer">手机上的 Kyllene 没有响应。请重试。</string>
+    <string name="wear_phone_changed">手机已更换。请重试。</string>
+    <string name="wear_phone_unreachable_short">无法连接到你的手机。</string>
+    <string name="wear_profile_changed">手机上的配置文件已更改。请重试。</string>
+    <string name="wear_profile_changed_short">手机上的配置文件已更改。请重试。</string>
+    <string name="wear_update_for_profiles">请在手机上更新 Kyllene，以使用按配置文件的通话。</string>
+    <string name="wear_update_for_bots">请在手机上更新 Kyllene，以便与机器人对话。</string>
+    <string name="wear_update_for_bot_calls">请在手机上更新 Kyllene，以便呼叫机器人。</string>
+    <string name="wear_call_target_changed">通话对象已更改。请再次点按“呼叫”。</string>
+    <string name="wear_default_call_target_changed">默认通话对象已更改。请再次点按“呼叫”。</string>
+
+    <string name="wear_new_chat">新对话</string>
+    <string name="wear_chat">对话</string>
+    <string name="wear_open_chats">打开对话列表</string>
+    <string name="wear_done_talking">说完了</string>
+    <string name="wear_stop">停止</string>
+    <string name="wear_cancel">取消</string>
+    <string name="wear_talk_to_hermes">与 Hermes 对话</string>
+    <string name="wear_context_full">，上下文已用 %1$d%%</string>
+    <string name="wear_ask_hermes">问问 Hermes</string>
+    <string name="wear_listening">正在聆听…说完后点按</string>
+    <string name="wear_checking_phone">正在检查你的手机…</string>
+    <string name="wear_tap_to_stop">点按停止</string>
+    <string name="wear_something_wrong">出了点问题。</string>
+    <string name="wear_tap_to_talk">点按说话</string>
+    <string name="wear_transcribing">正在转写…</string>
+    <string name="wear_sending">正在发送…</string>
+    <string name="wear_waiting_on_phone">正在手机上等你</string>
+    <string name="wear_thinking">正在思考…</string>
+    <string name="wear_said">“%1$s”</string>
+    <string name="wear_needs_microphone">Kyllene 需要麦克风才能听到你。</string>
+    <string name="wear_tap_allow_microphone">点按以允许使用麦克风。</string>
+    <string name="wear_nothing_heard">我什么也没听到。</string>
+    <string name="wear_microphone_failed">无法使用麦克风。</string>
+    <string name="wear_microphone_unavailable">麦克风不可用。</string>
+
+    <string name="wear_mute">静音</string>
+    <string name="wear_unmute">取消静音</string>
+    <string name="wear_volume">音量</string>
+    <string name="wear_end_call">结束通话</string>
+    <string name="wear_decline">拒绝</string>
+    <string name="wear_answer">接听</string>
+    <string name="wear_ring_agent">正在呼叫你</string>
+    <string name="wear_ring_approval">需要你的批准</string>
+    <string name="wear_ring_question">有个问题要问你</string>
+    <string name="wear_call_starting">正在开始…</string>
+    <string name="wear_call_connecting">正在连接…</string>
+    <string name="wear_call_muted">已静音</string>
+    <string name="wear_call_working">Hermes：%1$s</string>
+    <string name="wear_call_thinking">Hermes 正在处理…</string>
+    <string name="wear_call_live">通话中</string>
+    <string name="wear_call_ended">通话已结束</string>
+    <string name="wear_call_ended_detail">通话已结束。</string>
+    <string name="wear_call_dropped">通话已中断。</string>
+    <string name="wear_call_start_failed">无法开始通话。</string>
+    <string name="wear_call_no_connect">通话未能接通。</string>
+    <string name="wear_call_offer_failed">无法发起通话。</string>
+    <string name="wear_call_setup_failed">无法建立通话。</string>
+    <string name="wear_call_events_failed">无法打开通话的事件通道。</string>
+    <string name="wear_call_refused">通话被拒绝。</string>
+    <string name="wear_channel_calls_name">需要回答的来电</string>
+    <string name="wear_channel_calls_description">当 Hermes 需要批准或回答，或有事不能等时会打来电话（前提是手机为此响铃）。</string>
+
+    <string name="wear_chats">对话</string>
+    <string name="wear_bots">机器人</string>
+    <string name="wear_settings">设置</string>
+    <string name="wear_no_bots">还没有机器人。</string>
+    <string name="wear_no_chats">还没有对话。</string>
+    <string name="wear_ago_now">刚刚</string>
+    <string name="wear_ago_minutes">%1$d 分钟</string>
+    <string name="wear_ago_hours">%1$d 小时</string>
+    <string name="wear_ago_days">%1$d 天</string>
+    <string name="wear_ago_weeks">%1$d 周</string>
+
+    <string name="wear_talk_live">实时通话</string>
+    <string name="wear_talk_live_detail">以语音通话方式</string>
+    <string name="wear_read_aloud">朗读</string>
+    <string name="wear_read_aloud_detail">每条回复</string>
+    <string name="wear_assistant">助理</string>
+    <string name="wear_assistant_set">按键由 Kyllene 响应</string>
+    <string name="wear_assistant_refused">未设置。点按重试</string>
+    <string name="wear_assistant_unset">将 Kyllene 设为助理</string>
+</resources>

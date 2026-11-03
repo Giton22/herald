@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tray_open">Ouvrir Kyllene</string>
+    <string name="tray_new_chat">Nouvelle conversation</string>
+    <string name="tray_quick_entry">Saisie rapide</string>
+    <string name="tray_quit">Quitter Kyllene</string>
+
+    <string name="quick_entry_window_title">Saisie rapide de Kyllene</string>
+    <string name="quick_entry_new_chat">Nouvelle conversation</string>
+    <string name="quick_entry_this_chat">Cette conversation</string>
+    <string name="quick_entry_field">Demander à Hermes</string>
+    <string name="quick_entry_placeholder">Demandez ce que vous voulez à Hermes…</string>
+    <string name="quick_entry_keys">Entrée pour envoyer · Tab pour changer · Échap pour fermer</string>
+
+    <string name="notice_reply_failed">Hermes a rencontré un problème</string>
+    <string name="notice_replied">Hermes a répondu</string>
+    <string name="notice_reply_in">La réponse est arrivée.</string>
+    <string name="notice_approval">Approbation requise</string>
+    <string name="notice_question">Hermes a une question</string>
+    <string name="notice_needs_you">Hermes a besoin de vous</string>
+    <string name="notice_approve_once">Approuver une fois</string>
+    <string name="notice_deny">Refuser</string>
+
+    <string name="storage_title">Stockage de Kyllene</string>
+    <string name="storage_folder">Dossier des réglages :</string>
+    <string name="storage_retry">Réessayer</string>
+    <string name="storage_start_fresh">Repartir</string>
+    <string name="storage_quit">Quitter</string>
+    <string name="storage_with_start_fresh">%1$s « Repartir » conserve ce fichier sous un autre nom et ouvre Kyllene déconnecté.</string>
+    <string name="storage_unavailable">Kyllene n’a pas pu récupérer sa clé de stockage. Déverrouillez le trousseau de votre bureau et vérifiez que son portail Secret est disponible, puis réessayez.</string>
+    <string name="storage_cancelled">Le déverrouillage du stockage a été annulé. Réessayez pour le déverrouiller ; les données existantes ont été conservées.</string>
+    <string name="storage_corrupt">Kyllene n’a pas pu ouvrir ses réglages chiffrés. Restaurez une sauvegarde saine ou utilisez l’identité d’origine de l’application. Les données existantes ont été conservées.</string>
+    <string name="storage_version">Ce format de réglages nécessite une autre version de Kyllene. Les données existantes ont été conservées.</string>
+    <string name="storage_read">Kyllene n’a pas pu lire ses réglages, ou le fichier dépasse 16 Mio. Vérifiez l’accès au fichier avant de réessayer.</string>
+    <string name="storage_write">Kyllene n’a pas pu terminer l’enregistrement ou le nettoyage de ses réglages. Les copies existantes ont été conservées ; vérifiez l’espace disque et l’accès aux fichiers avant de réessayer.</string>
+    <string name="storage_uncertain">Kyllene n’a pas pu confirmer l’enregistrement de ses réglages. Vérifiez l’accès aux fichiers, puis relancez le démarrage, ou quittez et redémarrez avant d’apporter d’autres modifications.</string>
+    <string name="storage_changed">Les réglages ont été modifiés en dehors de cette fenêtre. Quittez et redémarrez Kyllene pour les recharger avant d’enregistrer.</string>
+    <string name="storage_legacy">Des réglages anciens contradictoires ou inachevés ont été trouvés. Les fichiers existants ont été conservés. Quittez et réglez le cas de l’ancienne copie avant de réessayer.</string>
+    <string name="storage_unsupported">Kyllene n’a pas pu vérifier son identité d’application Flatpak. Vérifiez l’installation avant de réessayer. Aucun repli en clair n’est disponible.</string>
+
+    <string name="web_widget_no_browser">Impossible de démarrer le navigateur qui affiche les widgets.</string>
+    <string name="web_widget_failed">Impossible d’afficher ce widget.</string>
+    <string name="web_close_page">Fermer la page</string>
+    <string name="web_page_failed">Impossible d’ouvrir la page.</string>
+    <string name="web_try_again">Réessayer</string>
+</resources>

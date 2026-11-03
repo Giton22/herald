@@ -53,6 +53,8 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.PlatformBackHandler
 import dev.hermeskotlin.ui.sessions.SubpageHeader
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /** Settings › App icon: every icon as the launcher draws it; the one tapped goes on the home screen with Apply. */
 @Composable
@@ -90,13 +92,13 @@ internal fun AppIconView(
         contentAlignment = Alignment.TopCenter,
     ) {
         Column(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
-            SubpageHeader("App icon", onBack = onBack)
+            SubpageHeader(stringResource(Res.string.settings_app_icon), onBack = onBack)
             Column(
                 Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, bottom = 16.dp),
                 verticalArrangement = Arrangement.spacedBy(22.dp),
             ) {
                 AppIconGroup.entries.forEach { group ->
-                    Section(group.title) {
+                    Section(stringResource(group.titleRes)) {
                         FlowRow(
                             Modifier.fillMaxWidth().padding(10.dp).selectableGroup(),
                             horizontalArrangement = Arrangement.spacedBy(4.dp),
@@ -115,13 +117,12 @@ internal fun AppIconView(
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
                 Text(
-                    "Kyllene restarts to switch its icon. Some launchers take it off the home screen; add it again " +
-                        "from the app list.",
+                    stringResource(Res.string.app_icon_restart),
                     style = Theme[typography][bodySmall],
                     color = Theme[colors][textTertiary],
                     textAlign = TextAlign.Center,
                 )
-                Button("Apply", onClick = { onApply(picked) }, enabled = picked != current, modifier = Modifier.fillMaxWidth())
+                Button(stringResource(Res.string.common_apply), onClick = { onApply(picked) }, enabled = picked != current, modifier = Modifier.fillMaxWidth())
             }
         }
     }
@@ -131,11 +132,12 @@ internal fun AppIconView(
 @Composable
 private fun IconChoice(icon: AppIcon, picture: ImageBitmap?, selected: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(22.dp)
+    val label = stringResource(icon.labelRes)
     Column(
         Modifier
             .width(TILE + 20.dp)
             .selectable(selected = selected, role = Role.RadioButton, onClick = onClick)
-            .semantics { contentDescription = icon.label }
+            .semantics { contentDescription = label }
             .padding(vertical = 4.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -154,7 +156,7 @@ private fun IconChoice(icon: AppIcon, picture: ImageBitmap?, selected: Boolean, 
             }
         }
         Text(
-            icon.label,
+            label,
             style = Theme[typography][caption],
             color = if (selected) Theme[colors][accentText] else Theme[colors][textSecondary],
             textAlign = TextAlign.Center,

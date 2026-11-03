@@ -3,6 +3,6 @@ Type=Application
 Name=Kyllene (Development)
 Comment=Client for Hermes Agent
 Exec=kyllene %u
-Icon=io.github.Giton22.Kyllene.Devel
+Icon=app.kyllene.Kyllene.Devel
 Terminal=false
 Categories=Network;Chat;

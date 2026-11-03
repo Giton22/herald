@@ -86,6 +86,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.math.roundToLong
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 data class UsageSheetState(
     val totals: SessionTotals? = null,
@@ -119,7 +122,8 @@ class UsageController(private val sessions: SessionsApi, private val scope: Coro
                 totals = (totals as? ApiResult.Success)?.value,
                 limits = limits.await(),
                 breakdown = breakdown.await(),
-                error = totals?.takeIf { it !is ApiResult.Success }?.let { it.errorMessage ?: "Couldn't load this chat's usage." },
+                // Empty when the gateway gave no reason; the sheet then says it in the app's words.
+                error = totals?.takeIf { it !is ApiResult.Success }?.let { it.errorMessage.orEmpty() },
             )
         }
     }
@@ -165,14 +169,14 @@ internal fun UsageSheetView(visible: Boolean, state: UsageSheetState, live: Sess
                 else -> {
                     val totals = state.totals
                     if (totals != null) Totals(totals) else WhoseUsage(model = null)
-                    state.error?.let { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary]) }
+                    state.error?.let { Text(it.ifEmpty { stringResource(Res.string.chat_usage_load_failed) }, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary]) }
                     when {
                         state.breakdown != null -> ContextSplit(state.breakdown)
                         else -> live?.takeIf { it.contextMax != null && it.contextUsed != null }?.let { Context(it) }
                     }
                     if (state.limits.isNotEmpty()) Limits(state.limits)
                     if (state.totals == null && state.error == null && live == null && state.limits.isEmpty()) {
-                        Text("Nothing used yet.", style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
+                        Text(stringResource(Res.string.chat_usage_nothing), style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
                     }
                 }
             }
@@ -183,10 +187,11 @@ internal fun UsageSheetView(visible: Boolean, state: UsageSheetState, live: Sess
 /** Whose usage this is: the sheet's heading, with the model in mono when it's known. It's read as "Usage, …". */
 @Composable
 private fun WhoseUsage(model: String?) {
-    val spoken = "Usage, this chat" + (model?.let { ", $it" } ?: "")
+    val spoken = if (model != null) stringResource(Res.string.chat_usage_heading_model, model) else stringResource(Res.string.chat_usage_heading)
+    val thisChat = stringResource(Res.string.chat_usage_this_chat)
     Text(
         buildAnnotatedString {
-            append("This chat")
+            append(thisChat)
             if (model != null) {
                 append(" · ")
                 withStyle(Theme[typography][code].copy(fontSize = 12.sp).toSpanStyle()) { append(model) }
@@ -211,10 +216,11 @@ private fun Totals(totals: SessionTotals) {
                 WhoseUsage(totals.model?.takeIf { it.isNotBlank() })
                 val unpriced = cost == null || totals.costStatus == "unknown"
                 val amount = when {
-                    totals.costStatus == "included" -> "Included"
-                    unpriced -> "Not priced"
+                    totals.costStatus == "included" -> stringResource(Res.string.chat_usage_included)
+                    unpriced -> stringResource(Res.string.chat_usage_not_priced)
                     else -> usd(cost)
                 }
+                val costLabel = stringResource(Res.string.chat_usage_cost, amount)
                 // One line, however large the text: it shrinks to fit rather than breaking inside the number. Words
                 // in place of an amount are smaller and quieter, so they don't read as a figure.
                 val top = if (unpriced) 28.sp else 40.sp
@@ -228,15 +234,17 @@ private fun Totals(totals: SessionTotals) {
                     ),
                     maxLines = 1,
                     autoSize = TextAutoSize.StepBased(minFontSize = 20.sp, maxFontSize = top),
-                    modifier = Modifier.semantics { contentDescription = "Cost, $amount" },
+                    modifier = Modifier.semantics { contentDescription = costLabel },
                 )
                 Text(
-                    when {
-                        totals.costStatus == "included" -> "Covered by your plan with the provider"
-                        unpriced -> "The gateway has no price for this model, so its cost isn't counted"
-                        totals.costIsEstimate -> "Estimated from the model's list prices"
-                        else -> "As billed by the provider"
-                    },
+                    stringResource(
+                        when {
+                            totals.costStatus == "included" -> Res.string.chat_usage_cost_included
+                            unpriced -> Res.string.chat_usage_cost_unpriced
+                            totals.costIsEstimate -> Res.string.chat_usage_cost_estimated
+                            else -> Res.string.chat_usage_cost_billed
+                        },
+                    ),
                     style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp),
                     color = Theme[colors][textTertiary],
                 )
@@ -245,25 +253,25 @@ private fun Totals(totals: SessionTotals) {
                 // At most a third of the row, so the cost keeps the rest.
                 Column(Modifier.widthIn(max = 120.dp).semantics(mergeDescendants = true) { }, horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(2.dp)) {
                     Text(compactCount(calls), style = Theme[typography][code].copy(fontSize = 20.sp, fontWeight = FontWeight.Medium), color = Theme[colors][text])
-                    Text(if (calls == 1L) "model call" else "model calls", style = Theme[typography][caption].copy(fontSize = 12.sp), color = Theme[colors][textTertiary])
+                    Text(pluralStringResource(Res.plurals.chat_usage_model_calls, calls.coerceAtMost(Int.MAX_VALUE.toLong()).toInt()), style = Theme[typography][caption].copy(fontSize = 12.sp), color = Theme[colors][textTertiary])
                 }
             }
         }
         // Name on the tile, then what a screen reader says.
         val stats = buildList {
-            add(Triple("Input", "Input", totals.inputTokens ?: 0))
-            add(Triple("Output", "Output", totals.outputTokens ?: 0))
+            add(Triple(Res.string.chat_tool_input, Res.string.chat_tool_input, totals.inputTokens ?: 0))
+            add(Triple(Res.string.chat_tool_output, Res.string.chat_tool_output, totals.outputTokens ?: 0))
             // The rest only when the model used them.
-            totals.reasoningTokens?.takeIf { it > 0 }?.let { add(Triple("Reasoning", "Reasoning", it)) }
-            totals.cacheReadTokens?.takeIf { it > 0 }?.let { add(Triple("From cache", "Read from cache", it)) }
-            totals.cacheWriteTokens?.takeIf { it > 0 }?.let { add(Triple("To cache", "Written to cache", it)) }
+            totals.reasoningTokens?.takeIf { it > 0 }?.let { add(Triple(Res.string.chat_usage_reasoning, Res.string.chat_usage_reasoning, it)) }
+            totals.cacheReadTokens?.takeIf { it > 0 }?.let { add(Triple(Res.string.chat_usage_from_cache, Res.string.chat_usage_read_from_cache, it)) }
+            totals.cacheWriteTokens?.takeIf { it > 0 }?.let { add(Triple(Res.string.chat_usage_to_cache, Res.string.chat_usage_written_to_cache, it)) }
         }
         // Four across, or two when large text would leave a tile too narrow for its number.
         val perRow = if (LocalDensity.current.fontScale > 1.3f) 2 else 4
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             stats.chunked(perRow).forEach { row ->
                 Row(Modifier.fillMaxWidth().height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    row.forEach { (name, spoken, value) -> StatTile(name, spoken, value, Modifier.weight(1f).fillMaxHeight()) }
+                    row.forEach { (name, spoken, value) -> StatTile(stringResource(name), stringResource(spoken), value, Modifier.weight(1f).fillMaxHeight()) }
                     // A short last row keeps the tiles the width of the ones above.
                     repeat(perRow - row.size) { Spacer(Modifier.weight(1f)) }
                 }
@@ -275,11 +283,12 @@ private fun Totals(totals: SessionTotals) {
 /** A token count in mono over what it counts, on a raised tile; read as "Input, 184k tokens". */
 @Composable
 private fun StatTile(name: String, spoken: String, value: Long, modifier: Modifier) {
+    val said = stringResource(Res.string.chat_usage_tokens_spoken, spoken, compactCount(value))
     Column(
         modifier
             .background(Theme[colors][surface2], RoundedCornerShape(Theme[radii][radiusMedium]))
             .padding(10.dp)
-            .clearAndSetSemantics { contentDescription = "$spoken, ${compactCount(value)} tokens" },
+            .clearAndSetSemantics { contentDescription = said },
         verticalArrangement = Arrangement.spacedBy(2.dp),
     ) {
         // Shrinks to fit the tile rather than losing its last letter: "184k" must never read as "184".
@@ -306,7 +315,7 @@ private fun ContextHeader(amount: String, spoken: String) {
         verticalArrangement = Arrangement.spacedBy(2.dp),
         itemVerticalAlignment = Alignment.Bottom,
     ) {
-        Text("Context window", style = Theme[typography][headingStyle], color = Theme[colors][text], modifier = Modifier.padding(end = 12.dp).semantics { heading() })
+        Text(stringResource(Res.string.chat_usage_context_window), style = Theme[typography][headingStyle], color = Theme[colors][text], modifier = Modifier.padding(end = 12.dp).semantics { heading() })
         Text(
             amount,
             style = Theme[typography][code].copy(fontSize = 12.sp),
@@ -326,7 +335,7 @@ private fun Context(live: SessionUsage) {
         val percent = live.contextPercent ?: (fraction * 100).toInt()
         ContextHeader(
             "${compactCount(used)} / ${compactCount(max)} · $percent%",
-            "${compactCount(used)} of ${compactCount(max)} tokens, $percent percent",
+            stringResource(Res.string.chat_usage_context_spoken, compactCount(used), compactCount(max), percent),
         )
         Box(Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).background(Theme[colors][surface3])) {
             Box(
@@ -335,7 +344,7 @@ private fun Context(live: SessionUsage) {
             )
         }
         live.cacheHitPercent?.let {
-            Text("$it% of the prompt came from cache", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+            Text(stringResource(Res.string.chat_usage_cache_hit, it), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
         }
     }
 }
@@ -355,7 +364,12 @@ private fun ContextSplit(breakdown: ContextBreakdown) {
         val percent = (usedFraction * 100).toInt()
         ContextHeader(
             "${if (breakdown.estimated) "~" else ""}${compactCount(breakdown.used)} / ${compactCount(max)} · $percent%",
-            "${if (breakdown.estimated) "About " else ""}${compactCount(breakdown.used)} of ${compactCount(max)} tokens, $percent percent",
+            stringResource(
+                if (breakdown.estimated) Res.string.chat_usage_context_spoken_about else Res.string.chat_usage_context_spoken,
+                compactCount(breakdown.used),
+                compactCount(max),
+                percent,
+            ),
         )
         Row(Modifier.fillMaxWidth().height(10.dp).clip(CircleShape).background(Theme[colors][surface3]), horizontalArrangement = Arrangement.spacedBy(2.dp)) {
             shown.forEach { category ->
@@ -402,15 +416,16 @@ private fun FilesReadIn(files: List<ContextFile>) {
             .background(Theme[colors][surface2], RoundedCornerShape(Theme[radii][radiusMedium]))
             .padding(horizontal = 12.dp, vertical = 4.dp),
     ) {
+        val title = stringResource(Res.string.chat_usage_files_read_in)
         Text(
-            "FILES READ IN",
+            title.uppercase(),
             style = Theme[typography][eyebrow],
             color = Theme[colors][textTertiary],
             modifier = Modifier
                 .padding(top = 8.dp, bottom = 4.dp)
                 .semantics {
                     heading()
-                    contentDescription = "Files read in"
+                    contentDescription = title
                 },
         )
         files.forEach { file ->
@@ -429,7 +444,7 @@ private fun FilesReadIn(files: List<ContextFile>) {
                     modifier = Modifier.weight(1f),
                 )
                 Text(
-                    if (file.loaded) compactCount(file.tokens) else "skipped",
+                    if (file.loaded) compactCount(file.tokens) else stringResource(Res.string.chat_usage_skipped),
                     style = Theme[typography][code].copy(fontSize = 12.sp),
                     color = Theme[colors][textTertiary],
                 )
@@ -459,7 +474,7 @@ private val CONTEXT_DARK = listOf(0xFF3987E5, 0xFFD95926, 0xFF199E70, 0xFFC98500
 @Composable
 private fun Limits(lines: List<String>) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text("Account", style = Theme[typography][label], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
+        Text(stringResource(Res.string.chat_usage_account), style = Theme[typography][label], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
         lines.forEach { Text(it, style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary]) }
     }
 }

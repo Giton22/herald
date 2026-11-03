@@ -1,0 +1,120 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="phone_intro">Engedd, hogy az ügynök használja ezt a telefont: lássa, hogy áll, vagy tegyen rajta valamit. Minden eszköz ki van kapcsolva, amíg be nem kapcsolod, és minden, ami a telefont módosítja, előbb rákérdez: a Kyllene-ben, ha meg van nyitva, egyébként értesítésben. A kikapcsolt eszközt az ügynök azonnal elveszíti.</string>
+    <string name="phone_install_what">Felkínálja az ügynöknek az itt bekapcsolt eszközöket, és a hívásaikat erre a telefonra továbbítja.</string>
+    <string name="phone_let_agent">Az ügynök használhatja ezt a telefont</string>
+    <string name="phone_set_up">Beállítás a Gateway-en</string>
+    <string name="phone_allow">Engedélyezés ezen a telefonon</string>
+    <string name="phone_section_tools">Eszközök</string>
+    <string name="phone_section_calls">Hívások</string>
+    <string name="phone_section_phones">Telefonok</string>
+    <string name="phone_section_used">Nemrég használt</string>
+
+    <string name="phone_status_off">Kikapcsolva. Az ügynök nem használhatja ezt a telefont.</string>
+    <string name="phone_status_none">Bekapcsolva. Lent kapcsold be az összes eszközt, amelyet az ügynök használhat.</string>
+    <plurals name="phone_status_count">
+        <item quantity="one">Bekapcsolva. Az új csevegések %1$d eszközt használhatnak.</item>
+        <item quantity="other">Bekapcsolva. Az új csevegések %1$d eszközt használhatnak.</item>
+    </plurals>
+    <string name="phone_status_offline">Várakozás a Gateway-hez való kapcsolódásra.</string>
+    <string name="phone_status_working">Beállítás a Gateway-jel…</string>
+    <string name="phone_status_not_installed">A herald-push bővítmény kell a Gateway-re.</string>
+    <string name="phone_status_outdated">A Gateway herald-push bővítménye %1$s; a telefoneszközökhöz %2$s kell. Frissítsd lent.</string>
+    <string name="phone_status_too_old">A Gateway herald-push bővítménye túl régi.</string>
+    <string name="phone_status_refused">A Gateway elutasította.</string>
+
+    <string name="phone_rings_title">Hívj fel válaszért</string>
+    <string name="phone_rings_detail">Minden jóváhagyás vagy kérdés egy éppen nem nézett csevegésből hívásként csörög. Utasítsd el, és a szokásos értesítést kapod. Csak téged hív: az ügynök soha senkit nem hív erről a telefonról.</string>
+    <string name="phone_rings_talk_title">Beszélgetés fogadáskor</string>
+    <string name="phone_rings_talk_detail">Fogadáskor a Hermes a vonalba lép: a saját szavaival kérdez, te hanggal válaszolsz, és tovább is beszélgethetsz. Kikapcsolva a Fogadás megnyitja a csevegést.</string>
+    <string name="phone_watch_rings_title">Az óra is csörögjön</string>
+    <string name="phone_watch_rings_detail">Az órádon lévő Kyllene is csörög. Fogadd ott, és a Hermes az órán át kérdez. Csak ha a Gateway-ed tud élőben beszélni.</string>
+    <string name="phone_quiet_title">Csendes órák</string>
+    <string name="phone_quiet_empty">%1$s-kor kezdődik és ér véget, így még nincs csend: válassz másik időpontot.</string>
+    <string name="phone_quiet_window">%1$s és %2$s között semmi sem csörög.</string>
+    <string name="phone_quiet_off">A választott időpontok között semmi sem csörög.</string>
+    <string name="phone_quiet_detail">%1$s Az ügynököt arra kérjük, hogy máshogy érjen el; a jóváhagyások és kérdések értesítésként érkeznek. A Ne zavarjanak is elnémítja őket, hacsak nem engeded, hogy a Kyllene áttörje. Ugyanabból a csevegésből 15 percen belüli második hívás átjut, mint egy ismételt hívás.</string>
+    <string name="phone_quiet_starts">Kezdete</string>
+    <string name="phone_quiet_ends">Vége</string>
+    <string name="phone_quiet_start_title">A csendes órák kezdete</string>
+    <string name="phone_quiet_end_title">A csendes órák vége</string>
+    <string name="phone_quiet_set">Beállítás</string>
+    <string name="phone_later_hour">Későbbi óra</string>
+    <string name="phone_earlier_hour">Korábbi óra</string>
+    <string name="phone_later_minutes">Későbbi percek</string>
+    <string name="phone_earlier_minutes">Korábbi percek</string>
+
+    <string name="phone_phones_note">A telefonról küldött csevegés azt a telefont használja. Az ütemezett feladatok és a Hermes Desktopból vagy a vezérlőpultról indított csevegések a lista első olyan telefonját használják, amelyen be van kapcsolva az eszköz. Az eltávolított telefon visszatér, ha a Kyllene továbbra is be van rajta jelentkezve, és a telefoneszközök be vannak kapcsolva.</string>
+    <string name="phone_this_phone">%1$s · Ez a telefon</string>
+    <string name="phone_move_up">%1$s feljebb</string>
+    <string name="phone_move_down">%1$s lejjebb</string>
+    <string name="phone_remove">%1$s eltávolítása</string>
+    <string name="phone_no_tools">Nincs bekapcsolt eszköz</string>
+    <plurals name="phone_tools_on">
+        <item quantity="one">%1$d eszköz bekapcsolva</item>
+        <item quantity="other">%1$d eszköz bekapcsolva</item>
+    </plurals>
+    <string name="phone_used_ago">%1$s · %2$s ezelőtt használva</string>
+    <string name="phone_used_just_now">%1$s · az imént használva</string>
+    <string name="phone_seen_ago">%1$s · %2$s ezelőtt látva</string>
+    <string name="phone_seen_just_now">%1$s · az imént látva</string>
+    <string name="phone_remove_title">Eltávolítod: %1$s?</string>
+    <string name="phone_remove_message">Az ügynök nem használja tovább a telefon eszközeit, a függő hívások elutasításra kerülnek. Ha a Kyllene továbbra is be van jelentkezve azon a telefonon, és az eszközök be vannak kapcsolva, a következő kapcsolódáskor visszatér.</string>
+
+    <string name="phone_places_note_on">Az Android néhány percenként ellenőriz, így egy üzenet kis késéssel érkezhet. A nevedben megy el, a helyről küldöttként jelölve.</string>
+    <string name="phone_places_note_off">A Figyelt helyek ki van kapcsolva, így egyik sem indul el.</string>
+    <string name="phone_place_arriving">Érkezéskor ide: %1$s · %2$d m</string>
+    <string name="phone_place_leaving">Távozáskor innen: %1$s · %2$d m</string>
+    <string name="phone_place_sends">Küldi: %1$s</string>
+    <string name="phone_place_sends_to">Küldi ide: %1$s: %2$s</string>
+    <string name="phone_place_stop">%1$s figyelésének leállítása</string>
+    <string name="phone_just_now">Az imént</string>
+    <string name="phone_ago">%1$s ezelőtt</string>
+
+    <string name="phone_need_notifications">Kapcsold be a Kyllene értesítéseit: a módosítások ott kérdeznek rá.</string>
+    <string name="phone_need_dnd">Engedd, hogy a Kyllene módosítsa a Ne zavarjanak módot.</string>
+    <string name="phone_need_usage">Adj a Kyllene-nek hozzáférést a használati adatokhoz, hogy lássa, mely alkalmazásokat használod.</string>
+    <string name="phone_need_location">Engedd, hogy a Kyllene használja a telefon helyadatait.</string>
+    <string name="phone_need_precise">Engedélyezd a pontos helyadatot: az Android csak azzal figyel helyeket.</string>
+    <string name="phone_need_always">Engedélyezd a helyadatot mindig: a helyeket a Kyllene bezárt állapotában is figyeli. Válaszd a „Mindig engedélyezés” lehetőséget.</string>
+    <string name="phone_need_calendar">Engedd, hogy a Kyllene használja a naptáradat.</string>
+    <string name="phone_need_contacts">Engedd, hogy a Kyllene olvassa a névjegyeidet.</string>
+    <string name="phone_need_health_update">Frissítsd a Health Connectet, onnan jönnek az adatok.</string>
+    <string name="phone_need_health_install">Telepítsd a Health Connectet, onnan jönnek az adatok.</string>
+    <string name="phone_need_health_none">Ezen a telefonon nincs Health Connect.</string>
+    <string name="phone_need_health_read">Engedd, hogy a Kyllene olvassa a lépéseket, az alvást vagy a pulzust a Health Connectben.</string>
+    <string name="phone_need_call_notifications">Kapcsold be a Kyllene értesítéseit: a hívás ott csörög.</string>
+    <string name="phone_need_full_screen">Engedélyezd a teljes képernyős értesítéseket, hogy a hívás a lezárási képernyő fölött jelenjen meg.</string>
+    <string name="phone_need_android">A telefoneszközök egy androidos telefonon futó Kyllene-ből működnek.</string>
+    <string name="phone_optional_closed">A Kyllene bezárt állapotában is (nem kötelező)</string>
+    <string name="phone_optional_health">Lépések, alvás vagy pulzus is (nem kötelező)</string>
+
+    <string name="phone_tool_battery">Akkumulátor</string>
+    <string name="phone_tool_battery_detail">A töltöttség, hogy töltődik-e, és mennyi idő a teljes töltésig.</string>
+    <string name="phone_tool_network">Hálózat</string>
+    <string name="phone_tool_network_detail">Wi-Fi, mobiladat vagy offline, forgalomkorlátos-e, és van-e VPN.</string>
+    <string name="phone_tool_sound">Hang</string>
+    <string name="phone_tool_sound_detail">Ne zavarjanak, a csengési mód és a hangerők. A módosítás előbb rákérdez.</string>
+    <string name="phone_tool_alarms">Ébresztők és időzítők</string>
+    <string name="phone_tool_alarms_detail">Beállít egyet az óra alkalmazásodban, ha engedélyezed.</string>
+    <string name="phone_tool_screen_time">Képernyőidő</string>
+    <string name="phone_tool_screen_time_detail">Mely alkalmazásokat használtad és mennyi ideig, a bekapcsolt képernyő ideje és a feloldások, legfeljebb egy hétre visszamenőleg.</string>
+    <string name="phone_tool_open">Linkek, térképek és alkalmazások megnyitása</string>
+    <string name="phone_tool_open_detail">Megnyit egy linket, egy helyet, egy alkalmazást vagy a megosztási menüt, ha engedélyezed.</string>
+    <string name="phone_tool_clipboard">Másolás a vágólapra</string>
+    <string name="phone_tool_clipboard_detail">Szöveget tesz a vágólapra, ha engedélyezed. Soha nem olvassa, mi van rajta.</string>
+    <string name="phone_tool_location">Hely</string>
+    <string name="phone_tool_location_detail">Hol van a telefon és a legközelebbi cím, olyan pontosan, ahogy engedélyezed. Amíg a Kyllene meg van nyitva, hacsak nem engedélyezed bezárt állapotban is.</string>
+    <string name="phone_tool_geofences">Figyelt helyek</string>
+    <string name="phone_tool_geofences_detail">Egy helyre érkezve vagy onnan távozva elküldi az üzenetét abba a csevegésbe, ahonnan hozzáadták. Hozzáadás vagy eltávolítás előtt rákérdez; mindig engedélyezett pontos helyadat kell hozzá.</string>
+    <string name="phone_tool_calendar">Naptár</string>
+    <string name="phone_tool_calendar_detail">Az eseményeid egy időtartamban. Hozzáadás vagy áthelyezés előtt rákérdez.</string>
+    <string name="phone_tool_contacts">Névjegyek</string>
+    <string name="phone_tool_contacts_detail">Embereket keres név, szám vagy e-mail alapján: csak a nevüket, számukat és e-mail-címüket, egyszerre csak néhányat.</string>
+    <string name="phone_tool_health">Egészség</string>
+    <string name="phone_tool_health_detail">Lépések, alvás és pulzus a Health Connectből, amennyit ott engedélyezel. Amíg a Kyllene meg van nyitva, hacsak nem engedélyezed bezárt állapotban is.</string>
+    <string name="phone_tool_show_ui">Képernyők a csevegésben (kísérlet)</string>
+    <string name="phone_tool_show_ui_detail">Az ügynök egy kis képernyőt rajzol a válasza alá gombokkal, választási lehetőségekkel vagy űrlappal, és legfeljebb 5 percig várja a koppintásodat. Csak Androidon.</string>
+    <string name="phone_tool_call_me">A Hermes felhívhat</string>
+    <string name="phone_tool_call_me_detail">Az ügynök felhív, ha valami nem várhat, vagy ha megkéred rá, akár egy ütemezett feladatból is. Fogadd, és a Hermes a hívásban elmondja, miért. Csak téged hív.</string>
+</resources>

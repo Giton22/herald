@@ -5,6 +5,7 @@ import android.content.Context
 import android.media.AudioManager
 import android.os.Build
 import android.service.notification.Condition
+import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.phone.PhoneTool
 import dev.hermeskotlin.core.phone.PhoneToolException
 import kotlinx.coroutines.delay
@@ -76,11 +77,16 @@ internal class SoundTool(private val context: Context, private val confirmations
             // Asking would be a promise Android won't keep.
             throw PhoneToolException("Do Not Disturb was turned on by the user or another app, and on this Android only they can turn it off.")
         }
+        val words = confirmations
         val what = buildList {
-            args.string("dnd")?.let { add(if (it == "off") "turn Do Not Disturb off" else "turn on Do Not Disturb (${DND_WORDS[it]})") }
-            args.string("ringer")?.let { add("set the ringer to $it") }
-            if (streamName != null) add("set the $streamName volume to $volume%")
-        }.joinToString(", ").replaceFirstChar { it.uppercase() } + "."
+            args.string("dnd")?.let {
+                add(if (it == "off") words.text(R.string.phone_sound_dnd_off) else words.text(R.string.phone_sound_dnd_on, words.text(DND_WORDS.getValue(it))))
+            }
+            args.string("ringer")?.let { add(words.text(R.string.phone_sound_ringer, words.text(RINGER_WORDS.getValue(it)))) }
+            if (streamName != null && volume != null) add(words.text(VOLUME_WORDS.getValue(streamName), volume))
+        }.joinToString(words.text(R.string.phone_list_separator))
+            .replaceFirstChar { it.titlecase(context.resources.configuration.locales[0]) }
+            .let { words.text(R.string.phone_sentence, it) }
         confirmations.confirm(PhoneTool.Sound, what) {
             try {
                 // The volume before the ringer: a ring volume above 0 puts the ringer back to normal.
@@ -140,7 +146,22 @@ internal class SoundTool(private val context: Context, private val confirmations
             "alarms" to NotificationManager.INTERRUPTION_FILTER_ALARMS,
             "silence" to NotificationManager.INTERRUPTION_FILTER_NONE,
         )
-        val DND_WORDS = mapOf("priority" to "priority only", "alarms" to "alarms only", "silence" to "total silence")
+        val DND_WORDS = mapOf(
+            "priority" to R.string.phone_sound_dnd_priority,
+            "alarms" to R.string.phone_sound_dnd_alarms,
+            "silence" to R.string.phone_sound_dnd_silence,
+        )
+        val RINGER_WORDS = mapOf(
+            "normal" to R.string.phone_sound_ringer_normal,
+            "vibrate" to R.string.phone_sound_ringer_vibrate,
+            "silent" to R.string.phone_sound_ringer_silent,
+        )
+        val VOLUME_WORDS = mapOf(
+            "ring" to R.string.phone_sound_volume_ring,
+            "notification" to R.string.phone_sound_volume_notification,
+            "media" to R.string.phone_sound_volume_media,
+            "alarm" to R.string.phone_sound_volume_alarm,
+        )
         val RINGER = mapOf(
             "normal" to AudioManager.RINGER_MODE_NORMAL,
             "vibrate" to AudioManager.RINGER_MODE_VIBRATE,

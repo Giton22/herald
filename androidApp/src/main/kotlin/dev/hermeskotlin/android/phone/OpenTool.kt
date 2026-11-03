@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.core.net.toUri
+import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.phone.PhoneTool
 import dev.hermeskotlin.core.phone.PhoneToolException
 import dev.hermeskotlin.core.phone.checkLink
@@ -45,8 +46,8 @@ internal class OpenTool(private val context: Context, private val confirmations:
         // The browser only: an app that claims the link (a bank, a shop) would open it signed in, which isn't what was asked.
         val browser = browser() ?: throw PhoneToolException("The phone has no browser.")
         val intent = Intent(Intent.ACTION_VIEW, link.url.toUri()).addCategory(Intent.CATEGORY_BROWSABLE).setPackage(browser)
-        val secure = if (link.secure) "" else " (not secure)"
-        start(intent, "Open a link on ${link.site}$secure: ${shorten(link.url)}", "The phone has no browser.")
+        val secure = if (link.secure) "" else confirmations.text(R.string.phone_open_not_secure)
+        start(intent, confirmations.text(R.string.phone_open_link, link.site, secure, shorten(link.url)), "The phone has no browser.")
         return done("url", "The link went to the browser.") { put("site", link.host) }
     }
 
@@ -72,7 +73,7 @@ internal class OpenTool(private val context: Context, private val confirmations:
         val directions = Intent(Intent.ACTION_VIEW, "google.navigation:q=$query".toUri())
         val navigating = navigate && directions.resolveActivity(context.packageManager) != null
         val intent = if (navigating) directions else Intent(Intent.ACTION_VIEW, "geo:0,0?q=$query".toUri())
-        val what = if (navigating) "Start directions in the maps app to: ${forQuestion(place)}" else "Show in the maps app: ${forQuestion(place)}"
+        val what = confirmations.text(if (navigating) R.string.phone_open_directions else R.string.phone_open_map, forQuestion(place))
         start(intent, what, "The phone has no maps app.")
         return done("map", "The place went to the maps app.") {
             put("place", place)
@@ -97,7 +98,7 @@ internal class OpenTool(private val context: Context, private val confirmations:
         if (hidden(label, newlines = false)) throw PhoneToolException("That app's name has hidden characters in it, so it isn't opened.")
         val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setComponent(component)
             .addFlags(Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED)
-        start(intent, "Open the app: $label", "$label can't be opened.")
+        start(intent, confirmations.text(R.string.phone_open_app, label), "$label can't be opened.")
         return done("app", "$label was opened.") { put("app", label) }
     }
 
@@ -106,7 +107,7 @@ internal class OpenTool(private val context: Context, private val confirmations:
         if (text.codePointCount(0, text.length) > QUESTION) throw PhoneToolException("Text to share is at most $QUESTION characters.")
         val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text)
         if (send.resolveActivity(context.packageManager) == null) throw PhoneToolException("Nothing on the phone can share text.")
-        start(Intent.createChooser(send, null), "Share this text: ${forQuestion(text)}", "Nothing on the phone can share text.")
+        start(Intent.createChooser(send, null), confirmations.text(R.string.phone_open_share, forQuestion(text)), "Nothing on the phone can share text.")
         return done("share", "The share sheet opened; they pick where it goes, or close it.") {}
     }
 
@@ -114,7 +115,7 @@ internal class OpenTool(private val context: Context, private val confirmations:
     private suspend fun start(intent: Intent, what: String, none: String) {
         if (intent.resolveActivity(context.packageManager) == null) throw PhoneToolException(none)
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-        confirmations.confirm(PhoneTool.Open, what, TITLE, needsActivity = true) { activity -> activity.startActivity(intent) }
+        confirmations.confirm(PhoneTool.Open, what, confirmations.text(R.string.phone_open_title), needsActivity = true) { activity -> activity.startActivity(intent) }
     }
 
     private fun done(kind: String, note: String, more: JsonObjectBuilder.() -> Unit) = buildJsonObject {
@@ -135,6 +136,5 @@ internal class OpenTool(private val context: Context, private val confirmations:
         /** A link no app claims (example.com is kept for examples), to find the browser by. */
         const val PROBE = "https://example.com/"
         const val QUESTION = 300
-        const val TITLE = "The agent wants to open something on your phone"
     }
 }

@@ -211,15 +211,16 @@ object ConfigCatalog {
 
     /**
      * Settings whose key, label or description holds every word of [query], from the whole schema plus the
-     * curated keys it leaves out. Curated ones come first, in their sections' order.
+     * curated keys it leaves out. Curated ones come first, in their sections' order. [shown] is each key's name as
+     * the screen shows it, in the app's language, matched too.
      */
-    fun search(query: String, schema: ConfigSchema, values: JsonObject): List<ConfigEntry> {
+    fun search(query: String, schema: ConfigSchema, values: JsonObject, shown: Map<String, String> = emptyMap()): List<ConfigEntry> {
         val words = query.trim().lowercase().split(Regex("\\s+")).filter(String::isNotEmpty)
         if (words.isEmpty()) return emptyList()
         val keys = (sections.flatMap { it.keys } + schema.fields.keys).distinct()
         // Matched on the words alone first: building an entry works out its choices, and there are hundreds.
         return keys.mapNotNull { key ->
-            val haystack = listOfNotNull(key, label(key), DESCRIPTIONS[key], schema.fields[key]?.description).joinToString(" ").lowercase()
+            val haystack = listOfNotNull(key, label(key), shown[key], DESCRIPTIONS[key], schema.fields[key]?.description).joinToString(" ").lowercase()
             if (words.all { it in haystack }) entry(key, schema, values) else null
         }
     }

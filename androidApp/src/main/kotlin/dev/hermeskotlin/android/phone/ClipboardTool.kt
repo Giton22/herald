@@ -2,6 +2,7 @@ package dev.hermeskotlin.android.phone
 
 import android.content.ClipData
 import android.content.ClipboardManager
+import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.phone.PhoneTool
 import dev.hermeskotlin.core.phone.PhoneToolException
 import dev.hermeskotlin.core.phone.forQuestion
@@ -27,10 +28,11 @@ internal class ClipboardTool(private val confirmations: PhoneConfirmations) {
         if (hidden(text.replace("\r\n", "\n").replace('\t', ' '), newlines = true)) {
             throw PhoneToolException("text has hidden characters or odd spaces in it.")
         }
-        confirmations.confirm(PhoneTool.Clipboard, "Copy to the clipboard: ${forQuestion(text.replace("\r\n", "\n"))}", TITLE) { activity ->
+        val what = confirmations.text(R.string.phone_clipboard_question, forQuestion(text.replace("\r\n", "\n")))
+        confirmations.confirm(PhoneTool.Clipboard, what, confirmations.text(R.string.phone_clipboard_title)) { activity ->
             val clipboard = activity.getSystemService(ClipboardManager::class.java)
                 ?: throw PhoneToolException("The phone has no clipboard.")
-            clipboard.setPrimaryClip(ClipData.newPlainText(LABEL, text))
+            clipboard.setPrimaryClip(ClipData.newPlainText(confirmations.text(R.string.phone_clipboard_label), text))
         }
         return buildJsonObject {
             put("copied", true)
@@ -42,7 +44,5 @@ internal class ClipboardTool(private val confirmations: PhoneConfirmations) {
     private companion object {
         /** What the question shows whole, as Open's share does. */
         const val MAX_TEXT = 300
-        const val LABEL = "From the agent"
-        const val TITLE = "The agent wants to copy something to your clipboard"
     }
 }

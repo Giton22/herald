@@ -3,6 +3,7 @@ package dev.hermeskotlin.android.phone
 import android.content.Context
 import android.content.Intent
 import android.provider.AlarmClock
+import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.phone.PhoneTool
 import dev.hermeskotlin.core.phone.PhoneToolException
 import dev.hermeskotlin.core.phone.hidden
@@ -12,6 +13,8 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.put
+import java.time.DayOfWeek
+import java.time.format.TextStyle
 import java.util.Calendar
 import java.util.Locale
 
@@ -34,11 +37,11 @@ internal class AlarmTool(private val context: Context, private val confirmations
         val days = days(args)
         val label = label(args)
         val time = "%d:%02d".format(Locale.ROOT, hour, minute)
-        val what = buildString {
-            append("Set an alarm for $time")
-            if (days.isNotEmpty()) append(", ${repeats(days)}")
-            if (label != null) append(": \"$label\"")
-            append('.')
+        val what = when {
+            days.isEmpty() && label == null -> confirmations.text(R.string.phone_alarm_question, time)
+            days.isEmpty() -> confirmations.text(R.string.phone_alarm_question_label, time, label!!)
+            label == null -> confirmations.text(R.string.phone_alarm_question_repeats, time, repeats(days))
+            else -> confirmations.text(R.string.phone_alarm_question_repeats_label, time, repeats(days), label)
         }
         val intent = Intent(AlarmClock.ACTION_SET_ALARM)
             .putExtra(AlarmClock.EXTRA_HOUR, hour)
@@ -60,7 +63,11 @@ internal class AlarmTool(private val context: Context, private val confirmations
         val seconds = args.int("seconds") ?: throw PhoneToolException("A timer needs seconds.")
         if (seconds !in 1..86_400) throw PhoneToolException("seconds is 1 to 86400.")
         val label = label(args)
-        val what = "Start a ${length(seconds)} timer" + (label?.let { ": \"$it\"" } ?: "") + "."
+        val what = if (label == null) {
+            confirmations.text(R.string.phone_timer_question, length(seconds))
+        } else {
+            confirmations.text(R.string.phone_timer_question_label, length(seconds), label)
+        }
         val intent = Intent(AlarmClock.ACTION_SET_TIMER)
             .putExtra(AlarmClock.EXTRA_LENGTH, seconds)
             .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
@@ -99,11 +106,18 @@ internal class AlarmTool(private val context: Context, private val confirmations
 
     /** "every weekday", "every day", or the days by name, for the question. */
     private fun repeats(days: List<String>): String = when (days) {
-        DAYS.keys.toList() -> "every day"
-        DAYS.keys.take(5) -> "every weekday"
-        DAYS.keys.drop(5) -> "every weekend"
-        else -> "every " + days.joinToString(", ") { DAY_WORDS.getValue(it) }
+        DAYS.keys.toList() -> confirmations.text(R.string.phone_alarm_every_day)
+        DAYS.keys.take(5) -> confirmations.text(R.string.phone_alarm_every_weekday)
+        DAYS.keys.drop(5) -> confirmations.text(R.string.phone_alarm_every_weekend)
+        else -> confirmations.text(
+            R.string.phone_alarm_every_days,
+            days.joinToString(confirmations.text(R.string.phone_list_separator)) { dayName(it) },
+        )
     }
+
+    /** The day's full name in the user's language: "Monday". */
+    private fun dayName(day: String): String =
+        DAY_OF_WEEK.getValue(day).getDisplayName(TextStyle.FULL_STANDALONE, context.resources.configuration.locales[0])
 
     private fun label(args: JsonObject): String? =
         args.string("label")?.trim()?.takeIf { it.isNotEmpty() }?.also {
@@ -118,9 +132,9 @@ internal class AlarmTool(private val context: Context, private val confirmations
         val m = seconds % 3600 / 60
         val s = seconds % 60
         return listOfNotNull(
-            h.takeIf { it > 0 }?.let { "$it h" },
-            m.takeIf { it > 0 }?.let { "$it min" },
-            s.takeIf { it > 0 }?.let { "$it s" },
+            h.takeIf { it > 0 }?.let { confirmations.text(R.string.phone_hours_short, it) },
+            m.takeIf { it > 0 }?.let { confirmations.text(R.string.phone_minutes_short, it) },
+            s.takeIf { it > 0 }?.let { confirmations.text(R.string.phone_seconds_short, it) },
         ).joinToString(" ")
     }
 
@@ -132,9 +146,9 @@ internal class AlarmTool(private val context: Context, private val confirmations
             "mon" to Calendar.MONDAY, "tue" to Calendar.TUESDAY, "wed" to Calendar.WEDNESDAY, "thu" to Calendar.THURSDAY,
             "fri" to Calendar.FRIDAY, "sat" to Calendar.SATURDAY, "sun" to Calendar.SUNDAY,
         )
-        val DAY_WORDS = mapOf(
-            "mon" to "Monday", "tue" to "Tuesday", "wed" to "Wednesday", "thu" to "Thursday",
-            "fri" to "Friday", "sat" to "Saturday", "sun" to "Sunday",
+        val DAY_OF_WEEK = mapOf(
+            "mon" to DayOfWeek.MONDAY, "tue" to DayOfWeek.TUESDAY, "wed" to DayOfWeek.WEDNESDAY, "thu" to DayOfWeek.THURSDAY,
+            "fri" to DayOfWeek.FRIDAY, "sat" to DayOfWeek.SATURDAY, "sun" to DayOfWeek.SUNDAY,
         )
     }
 }

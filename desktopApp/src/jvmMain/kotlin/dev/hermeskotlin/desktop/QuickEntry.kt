@@ -61,12 +61,15 @@ import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.desktop.WindowChrome.dragsWindow
+import dev.hermeskotlin.desktop.resources.*
 import dev.hermeskotlin.ui.HeraldTheme
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
 import java.awt.GraphicsEnvironment
 import java.awt.MouseInfo
 
 /** Where a quick entry prompt goes. */
-enum class QuickTarget(val label: String) { NewChat("New chat"), OpenChat("This chat") }
+enum class QuickTarget(val label: StringResource) { NewChat(Res.string.quick_entry_new_chat), OpenChat(Res.string.quick_entry_this_chat) }
 
 private val SIZE = DpSize(620.dp, 132.dp)
 
@@ -84,7 +87,7 @@ fun QuickEntryWindow(visible: Boolean, onDismiss: () -> Unit, onSend: (String, Q
     Window(
         onCloseRequest = onDismiss,
         state = state,
-        title = "Kyllene quick entry",
+        title = stringResource(Res.string.quick_entry_window_title),
         undecorated = true,
         transparent = !native,
         resizable = false,
@@ -115,6 +118,8 @@ private fun QuickEntry(window: java.awt.Window, framed: Boolean, onSend: (String
     val text = remember { TextFieldState() }
     val focus = remember { FocusRequester() }
     var target by remember { mutableStateOf(QuickTarget.NewChat) }
+    val fieldName = stringResource(Res.string.quick_entry_field)
+    val targetLabels = QuickTarget.entries.associateWith { stringResource(it.label) }
     LaunchedEffect(Unit) {
         text.clearText()
         focus.requestFocus()
@@ -141,7 +146,7 @@ private fun QuickEntry(window: java.awt.Window, framed: Boolean, onSend: (String
                 selectionColors = LocalTextSelectionColors.current,
                 lineLimits = TextFieldLineLimits.SingleLine,
                 // A screen reader names the field, as it doesn't read a placeholder as one.
-                modifier = Modifier.weight(1f).focusRequester(focus).semantics { contentDescription = "Ask Hermes" }.onPreviewKeyEvent { event ->
+                modifier = Modifier.weight(1f).focusRequester(focus).semantics { contentDescription = fieldName }.onPreviewKeyEvent { event ->
                     if (event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                     when {
                         (event.key == Key.Enter || event.key == Key.NumPadEnter) && !event.isShiftPressed -> true.also {
@@ -156,7 +161,7 @@ private fun QuickEntry(window: java.awt.Window, framed: Boolean, onSend: (String
                     }
                 },
             ) {
-                TextInput(placeholder = { Text("Ask Hermes anything…", style = Theme[typography][body], color = Theme[colors][textTertiary]) })
+                TextInput(placeholder = { Text(stringResource(Res.string.quick_entry_placeholder), style = Theme[typography][body], color = Theme[colors][textTertiary]) })
             }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -164,11 +169,11 @@ private fun QuickEntry(window: java.awt.Window, framed: Boolean, onSend: (String
                 options = QuickTarget.entries,
                 selected = target,
                 onSelect = { target = it },
-                optionLabel = { it.label },
+                optionLabel = { targetLabels.getValue(it) },
                 modifier = Modifier.weight(1f),
             )
             Text(
-                "Enter to send · Tab to switch · Esc to close",
+                stringResource(Res.string.quick_entry_keys),
                 style = Theme[typography][caption],
                 color = Theme[colors][textTertiary],
                 modifier = Modifier.padding(start = 12.dp),

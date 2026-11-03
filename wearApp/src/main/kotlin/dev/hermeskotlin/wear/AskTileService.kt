@@ -73,7 +73,7 @@ class AskTileService : TileService() {
                             .setCorner(ModifiersBuilders.Corner.Builder().setRadius(dp(MIC_BUTTON / 2)).build())
                             .build(),
                     )
-                    .setSemantics(ModifiersBuilders.Semantics.Builder().setContentDescription("Call Hermes").build())
+                    .setSemantics(ModifiersBuilders.Semantics.Builder().setContentDescription(getString(R.string.wear_call_hermes)).build())
                     .build(),
             )
             .addContent(
@@ -103,12 +103,12 @@ class AskTileService : TileService() {
             .build()
         val column = LayoutElementBuilders.Column.Builder()
             .setHorizontalAlignment(LayoutElementBuilders.HORIZONTAL_ALIGN_CENTER)
-            .addContent(text("Kyllene", LABEL_SIZE, MUTED, maxLines = 1))
+            .addContent(text(getString(R.string.app_name), LABEL_SIZE, MUTED, maxLines = 1))
             .addContent(spacer(6f))
             .addContent(ring)
             .addContent(spacer(8f))
             // Two lines: a third would run into the round edge.
-            .addContent(text(last ?: "Start a call", BODY_SIZE, if (last != null) TEXT else MUTED, maxLines = 2))
+            .addContent(text(last ?: getString(R.string.wear_start_call), BODY_SIZE, if (last != null) TEXT else MUTED, maxLines = 2))
             .build()
         return LayoutElementBuilders.Box.Builder()
             .setWidth(expand())
