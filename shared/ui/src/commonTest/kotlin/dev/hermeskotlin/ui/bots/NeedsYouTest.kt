@@ -1,6 +1,9 @@
 package dev.hermeskotlin.ui.bots
 
 import dev.hermeskotlin.core.bots.Bot
+import dev.hermeskotlin.ui.inbox.Words
+import dev.hermeskotlin.ui.inbox.words
+import dev.hermeskotlin.ui.resources.*
 import dev.hermeskotlin.core.bots.BotProblem
 import dev.hermeskotlin.core.bots.BotSession
 import dev.hermeskotlin.core.bots.BotTrouble
@@ -35,8 +38,8 @@ class NeedsYouTest {
         assertEquals(listOf("scribe", "keeper", "scout"), items.map { it.bot.name })
         // Waiting outranks the bot's own trouble.
         assertIs<NeedsYou.Answer>(items[0])
-        assertEquals("Needs approval", items[0].reason)
-        assertEquals("Routine “Brief” didn't go through", items[2].reason)
+        assertEquals(Words.Raw("Needs approval"), items[0].reason)
+        assertEquals(words(Res.string.bots_routine_failed, "Brief"), items[2].reason)
     }
 
     @Test

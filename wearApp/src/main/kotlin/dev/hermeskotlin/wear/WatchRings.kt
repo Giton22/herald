@@ -41,10 +41,15 @@ class WatchRings(private val context: Context) {
     val ringing: StateFlow<Map<String, WatchRing>> = _ringing.asStateFlow()
 
     init {
+        createChannel()
+    }
+
+    /** Made again with the same id after the language changes, it takes the new name and keeps its settings. */
+    fun createChannel() {
         manager.createNotificationChannel(
             NotificationChannelCompat.Builder(CHANNEL, NotificationManagerCompat.IMPORTANCE_HIGH)
-                .setName("Calls for an answer")
-                .setDescription("Hermes calls when it needs an approval or an answer, or something can't wait, if the phone rings for it.")
+                .setName(context.getString(R.string.wear_channel_calls_name))
+                .setDescription(context.getString(R.string.wear_channel_calls_description))
                 .setVibrationEnabled(true)
                 .setVibrationPattern(VIBRATION)
                 .build(),
@@ -87,7 +92,7 @@ class WatchRings(private val context: Context) {
         val notification = NotificationCompat.Builder(context, CHANNEL)
             .setSmallIcon(R.drawable.ic_call)
             .setStyle(NotificationCompat.CallStyle.forIncomingCall(caller, decline, answer))
-            .setContentText(ringReason(ring.approval, ring.agent))
+            .setContentText(context.getString(ringReason(ring.approval, ring.agent)))
             .setCategory(NotificationCompat.CATEGORY_CALL)
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setFullScreenIntent(screen, true)

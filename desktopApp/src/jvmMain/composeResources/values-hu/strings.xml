@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tray_open">Kyllene megnyitása</string>
+    <string name="tray_new_chat">Új csevegés</string>
+    <string name="tray_quick_entry">Gyorsbevitel</string>
+    <string name="tray_quit">Kilépés a Kyllene-ből</string>
+
+    <string name="quick_entry_window_title">Kyllene gyorsbevitel</string>
+    <string name="quick_entry_new_chat">Új csevegés</string>
+    <string name="quick_entry_this_chat">Ez a csevegés</string>
+    <string name="quick_entry_field">Kérdezd Hermest</string>
+    <string name="quick_entry_placeholder">Kérdezz bármit Hermestől…</string>
+    <string name="quick_entry_keys">Enter: küldés · Tab: váltás · Esc: bezárás</string>
+
+    <string name="notice_reply_failed">Hermes hibába ütközött</string>
+    <string name="notice_replied">Hermes válaszolt</string>
+    <string name="notice_reply_in">Megérkezett a válasz.</string>
+    <string name="notice_approval">Jóváhagyás szükséges</string>
+    <string name="notice_question">Hermesnek kérdése van</string>
+    <string name="notice_needs_you">Hermesnek szüksége van rád</string>
+    <string name="notice_approve_once">Jóváhagyás egyszer</string>
+    <string name="notice_deny">Elutasítás</string>
+
+    <string name="storage_title">Kyllene tárhely</string>
+    <string name="storage_folder">Beállítások mappája:</string>
+    <string name="storage_retry">Újra</string>
+    <string name="storage_start_fresh">Újrakezdés</string>
+    <string name="storage_quit">Kilépés</string>
+    <string name="storage_with_start_fresh">%1$s Az „Újrakezdés” más néven megőrzi a fájlt, és kijelentkezve nyitja meg a Kyllene-t.</string>
+    <string name="storage_unavailable">A Kyllene nem tudta lekérni a tárolókulcsát. Oldd fel az asztali kulcstartódat, ellenőrizd, hogy elérhető-e a Secret portálja, majd próbáld újra.</string>
+    <string name="storage_cancelled">A tárhely feloldása megszakadt. Próbáld újra a feloldáshoz; a meglévő adatok megmaradtak.</string>
+    <string name="storage_corrupt">A Kyllene nem tudta megnyitni a titkosított beállításait. Állíts vissza egy ép biztonsági mentést, vagy használd az eredeti alkalmazásazonosítót. A meglévő adatok megmaradtak.</string>
+    <string name="storage_version">Ehhez a beállításformátumhoz a Kyllene egy másik verziója kell. A meglévő adatok megmaradtak.</string>
+    <string name="storage_read">A Kyllene nem tudta beolvasni a beállításait, vagy a fájl nagyobb 16 MiB-nál. Újrapróbálás előtt ellenőrizd a fájlhozzáférést.</string>
+    <string name="storage_write">A Kyllene nem tudta befejezni a beállításai mentését vagy rendbetételét. A meglévő példányok megmaradtak; újrapróbálás előtt ellenőrizd a szabad lemezterületet és a fájlhozzáférést.</string>
+    <string name="storage_uncertain">A Kyllene nem tudta megerősíteni, hogy a beállításai mentésre kerültek. Ellenőrizd a fájlhozzáférést, majd próbáld újra az indítást, vagy lépj ki és indítsd újra, mielőtt bármit módosítasz.</string>
+    <string name="storage_changed">A beállítások ezen az ablakon kívül módosultak. Mentés előtt lépj ki, és indítsd újra a Kyllene-t, hogy újratöltse őket.</string>
+    <string name="storage_legacy">Ütköző vagy befejezetlen régi beállítások kerültek elő. A meglévő fájlok megmaradtak. Újrapróbálás előtt lépj ki, és rendezd a régebbi példányt.</string>
+    <string name="storage_unsupported">A Kyllene nem tudta ellenőrizni a Flatpak alkalmazásazonosítóját. Újrapróbálás előtt ellenőrizd a telepítést. Titkosítatlan tartalék nem áll rendelkezésre.</string>
+
+    <string name="web_widget_no_browser">Nem sikerült elindítani a böngészőt, amelyben a widgetek megjelennek.</string>
+    <string name="web_widget_failed">Ez a widget nem jeleníthető meg.</string>
+    <string name="web_close_page">Oldal bezárása</string>
+    <string name="web_page_failed">Nem sikerült megnyitni az oldalt.</string>
+    <string name="web_try_again">Újra</string>
+</resources>

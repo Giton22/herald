@@ -3,6 +3,7 @@ package dev.hermeskotlin.android.phone
 import android.content.Context
 import android.location.Location
 import android.location.LocationManager
+import dev.hermeskotlin.android.R
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.SessionWatcher
 import dev.hermeskotlin.core.gateway.GatewayRepository
@@ -109,8 +110,8 @@ internal class GeofenceTool(
         val id = args.string("id") ?: throw PhoneToolException("id is needed: take it from action=list.")
         val place = visible(session).firstOrNull { it.id == id } ?: throw PhoneToolException("No watched place has that id.")
         // The user allowed the place: only the user takes it back.
-        val event = if (place.arriving) "arrive at" else "leave"
-        confirmations.confirm("Stop watching ${forQuestion(place.name)}? Nothing is sent any more when you $event it.", TITLE_REMOVE) {
+        val what = confirmations.text(if (place.arriving) R.string.phone_place_remove_arrive else R.string.phone_place_remove_leave, forQuestion(place.name))
+        confirmations.confirm(what, R.string.phone_place_remove_title) {
             places.remove(id)
         }
         return buildJsonObject {
@@ -183,12 +184,15 @@ internal class GeofenceTool(
             inside = inside,
         )
         val point = String.format(Locale.ROOT, "%.5f, %.5f", latitude, longitude)
-        val where = if (lat == null) "where the phone is now, $point" else point
-        val chat = target.title?.takeIf { it.isNotBlank() }?.let { "\"${forQuestion(it)}\"" } ?: "this chat"
-        val event = if (place.arriving) "When you arrive at" else "When you leave"
+        val where = if (lat == null) confirmations.text(R.string.phone_place_here, point) else point
+        val chat = target.title?.takeIf { it.isNotBlank() }?.let { confirmations.text(R.string.phone_place_chat, forQuestion(it)) }
+            ?: confirmations.text(R.string.phone_place_this_chat)
         confirmations.confirm(
-            "$event ${forQuestion(name)} ($where, $radius m), Kyllene sends this to $chat as you: ${forQuestion(place.sent)}",
-            TITLE,
+            confirmations.text(
+                if (place.arriving) R.string.phone_place_add_arrive else R.string.phone_place_add_leave,
+                forQuestion(name), where, radius, chat, forQuestion(place.sent),
+            ),
+            R.string.phone_place_title,
         ) {
             if (!places.add(place)) throw PhoneToolException("The phone already watches ${Geofences.MAX_PLACES} places. Remove one first.")
         }
@@ -212,7 +216,5 @@ internal class GeofenceTool(
         const val DEFAULT_RADIUS = 200
         const val MIN_RADIUS = 100
         const val MAX_RADIUS = 5000
-        const val TITLE = "The agent wants to watch a place"
-        const val TITLE_REMOVE = "The agent wants to stop watching a place"
     }
 }

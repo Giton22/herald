@@ -84,6 +84,10 @@ import dev.hermeskotlin.designsystem.textMuted
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 /** The chat's subagents and a way to stop one, for the delegation cards in its replies. */
 internal class SubagentContext(val subagents: List<Subagent>, val onStop: (String) -> Unit)
@@ -132,6 +136,8 @@ private fun SubagentRowView(row: SubagentRow, onStop: (String) -> Unit) {
     var expanded by remember(row.key) { mutableStateOf(false) }
     val live = row.status.live
     val hasMore = row.activity.isNotEmpty() || row.summary != null || row.filesWritten.isNotEmpty() || row.goal.length > 80
+    val detailsAction = stringResource(if (expanded) Res.string.chat_hide_details else Res.string.chat_show_details)
+    val detailsState = stringResource(if (expanded) Res.string.chat_details_shown else Res.string.chat_details_hidden)
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         // The goal and the lines under it are one target that opens the details; Stop stays its own button.
         Column(
@@ -142,8 +148,8 @@ private fun SubagentRowView(row: SubagentRow, onStop: (String) -> Unit) {
                     if (hasMore) {
                         Modifier
                             .handCursor()
-                            .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide details" else "Show details") { expanded = !expanded }
-                            .semantics { stateDescription = if (expanded) "Details shown" else "Details hidden" }
+                            .clickable(role = Role.Button, onClickLabel = detailsAction) { expanded = !expanded }
+                            .semantics { stateDescription = detailsState }
                     } else {
                         Modifier.semantics(mergeDescendants = true) {}
                     },
@@ -197,7 +203,7 @@ private fun SubagentRowView(row: SubagentRow, onStop: (String) -> Unit) {
             Column(Modifier.padding(start = 34.dp, end = 8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (row.activity.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("Activity", style = Theme[typography][caption], color = Theme[colors][textSecondary])
+                        Text(stringResource(Res.string.chat_subagent_activity), style = Theme[typography][caption], color = Theme[colors][textSecondary])
                         CommentableSelection(CommentSource(row.key, "the activity of the subagent working on “${row.goal.take(80)}”", code = true)) {
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 row.activity.forEach { line ->
@@ -209,7 +215,7 @@ private fun SubagentRowView(row: SubagentRow, onStop: (String) -> Unit) {
                 }
                 row.summary?.let { summary ->
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text(if (row.status == SubagentStatus.Failed) "What went wrong" else "Result", style = Theme[typography][caption], color = Theme[colors][textSecondary])
+                        Text(stringResource(if (row.status == SubagentStatus.Failed) Res.string.chat_subagent_what_went_wrong else Res.string.chat_subagent_result), style = Theme[typography][caption], color = Theme[colors][textSecondary])
                         CommentableSelection(CommentSource(row.key, "the result of the subagent working on “${row.goal.take(80)}”")) {
                             Text(summary, style = Theme[typography][bodySmall], color = if (row.status == SubagentStatus.Failed) Theme[colors][danger] else Theme[colors][text])
                         }
@@ -217,7 +223,7 @@ private fun SubagentRowView(row: SubagentRow, onStop: (String) -> Unit) {
                 }
                 if (row.filesWritten.isNotEmpty()) {
                     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-                        Text("Files written", style = Theme[typography][caption], color = Theme[colors][textSecondary])
+                        Text(stringResource(Res.string.chat_subagent_files_written), style = Theme[typography][caption], color = Theme[colors][textSecondary])
                         CopyableOnDesktop {
                             Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
                                 row.filesWritten.forEach { Text(it, style = Theme[typography][code], color = Theme[colors][textSecondary]) }
@@ -252,7 +258,8 @@ private fun StatusDisc(status: SubagentStatus) {
         SubagentStatus.Failed -> Theme[colors][dangerSoft] to Theme[colors][danger]
         else -> Theme[colors][surface3] to Theme[colors][textTertiary]
     }
-    val (icon, said) = statusIcon(status)
+    val (icon, saidRes) = statusIcon(status)
+    val said = stringResource(saidRes)
     Box(
         // Clears the spinner's own "Loading", so the disc says its state once.
         Modifier.size(24.dp).background(fill, CircleShape).clearAndSetSemantics { contentDescription = said },
@@ -264,26 +271,27 @@ private fun StatusDisc(status: SubagentStatus) {
 }
 
 /** The disc's icon (null for the spinner) and what it says aloud. */
-private fun statusIcon(status: SubagentStatus): Pair<ImageVector?, String> = when (status) {
-    SubagentStatus.Running -> null to "Running"
-    SubagentStatus.Queued -> Lucide.Clock to "Waiting to start"
-    SubagentStatus.Done -> Lucide.Check to "Done"
-    SubagentStatus.Failed -> Lucide.X to "Failed"
-    SubagentStatus.Interrupted -> Lucide.Ban to "Stopped"
+private fun statusIcon(status: SubagentStatus): Pair<ImageVector?, StringResource> = when (status) {
+    SubagentStatus.Running -> null to Res.string.chat_subagent_running
+    SubagentStatus.Queued -> Lucide.Clock to Res.string.chat_subagent_waiting
+    SubagentStatus.Done -> Lucide.Check to Res.string.chat_subagent_done
+    SubagentStatus.Failed -> Lucide.X to Res.string.chat_tool_failed
+    SubagentStatus.Interrupted -> Lucide.Ban to Res.string.chat_process_stopped
     // Not a spinner: nothing here is watching it, so it can't claim to be live.
-    SubagentStatus.Unwatched -> Lucide.CircleDashed to "Running in the background"
+    SubagentStatus.Unwatched -> Lucide.CircleDashed to Res.string.chat_subagent_running_background
 }
 
 /** A 30dp round stop in a full-size touch target. */
 @Composable
-private fun StopButton(onClick: () -> Unit) = Tooltip("Stop this subagent") {
+private fun StopButton(onClick: () -> Unit) = Tooltip(stringResource(Res.string.chat_subagent_stop)) {
     val interaction = remember { MutableInteractionSource() }
+    val label = stringResource(Res.string.chat_subagent_stop)
     Box(
         Modifier
             .size(MinTouchTarget)
             .handCursor()
             .clickable(interaction, indication = null, role = Role.Button, onClick = onClick)
-            .semantics { contentDescription = "Stop this subagent" },
+            .semantics { contentDescription = label },
         contentAlignment = Alignment.Center,
     ) {
         Box(
@@ -300,16 +308,17 @@ private fun StopButton(onClick: () -> Unit) = Tooltip("Stop this subagent") {
 }
 
 /** "model · 12s · 5 tools", whichever are known. */
+@Composable
 private fun meta(row: SubagentRow): String = listOfNotNull(
     row.model?.let(::displayModelName),
     when (row.status) {
-        SubagentStatus.Queued -> "Waiting to start"
-        SubagentStatus.Interrupted -> "Stopped"
-        SubagentStatus.Unwatched -> "In the background"
+        SubagentStatus.Queued -> stringResource(Res.string.chat_subagent_waiting)
+        SubagentStatus.Interrupted -> stringResource(Res.string.chat_process_stopped)
+        SubagentStatus.Unwatched -> stringResource(Res.string.chat_subagent_in_background)
         else -> null
     },
     row.durationSeconds?.takeIf { !row.status.live }?.let(::formatDuration),
-    row.toolCount?.takeIf { it > 0 }?.let { if (it == 1) "1 tool" else "$it tools" },
+    row.toolCount?.takeIf { it > 0 }?.let { pluralStringResource(Res.plurals.chat_tool_count, it, it) },
 ).joinToString(" · ")
 
 /** The dot color for a subagent in the live card's stack. */

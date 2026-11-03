@@ -49,10 +49,14 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
+import dev.hermeskotlin.ui.JvmOnly
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.voice_error_live_vendor
+import org.jetbrains.compose.resources.getString
 
 class LiveConversationTest {
 
@@ -175,6 +179,25 @@ class LiveConversationTest {
     )
 
     @Test
+    fun gptLiveDoesNotOpenChainedAudio() = runTest {
+        val client = http("gpt-live", mutableListOf())
+        val socket = Socket()
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> socket }, backgroundScope)
+        connection.start(gateway)
+        connection.state.first { it is ConnectionState.Connected }
+        val session = ChatSession(gateway, null, null, connection, SessionsApi(client), backgroundScope)
+        session.start()
+        val player = object : SpeechPlayer {
+            override suspend fun play(audio: SpokenAudio) = Unit
+            override fun chainedChatAudio(): () -> Unit = error("GPT Live must not change chained audio")
+        }
+        val voice = VoiceController(AudioApi(client), NoRecorder, player, backgroundScope, backgroundScope) { FakeCall() }
+        voice.startChat(session, gateway, "work")
+        voice.chat.first { it.live && it.phase == VoicePhase.Listening }
+        voice.stopChat()
+    }
+
+    @Test
     fun aCallTheAgentPlacedOpensWithWhyOnceTheVoiceIsUp() = runTest {
         val client = http("gpt-live", mutableListOf())
         val socket = Socket()
@@ -279,6 +302,7 @@ class LiveConversationTest {
 
     @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Test
+    @JvmOnly
     fun ringbackStopsOnEarlySpeechHangupAndConnectionFailureButManualCallsStayQuiet() = runTest {
         for (ending in listOf("speech", "hangup", "failure", "manual", "playback", "fallback", "error")) {
             val player = RingbackPlayer(fails = ending == "playback")
@@ -692,6 +716,7 @@ class LiveConversationTest {
     }
 
     @Test
+    @JvmOnly
     fun aYesSaidOnceThePhoneLockedIsntTaken() = runTest {
         var locked = false
         lateinit var recorder: Saying
@@ -823,6 +848,7 @@ class LiveConversationTest {
     }
 
     @Test
+    @JvmOnly
     fun theVendorEndingTheCallSaysWhy() = runTest {
         val client = http("gpt-live", mutableListOf())
         val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> Socket() }, backgroundScope)
@@ -834,10 +860,13 @@ class LiveConversationTest {
         voice.chat.first { it.live && it.phase == VoicePhase.Listening }
         call.receive("""{"type":"session.closed","reason":"idle_timeout","usage":{"seconds":61}}""")
 
-        assertEquals("The live call ended: idle_timeout", voice.chat.first { it.phase == VoicePhase.Off }.error)
+        // The gateway's reason is passed on, in whatever words the app's language wraps it.
+        val ended = voice.chat.first { it.phase == VoicePhase.Off }.error.orEmpty()
+        assertTrue("idle_timeout" in ended, ended)
     }
 
     @Test
+    @JvmOnly
     fun aRefusedCallSaysWhatTheVendorSaid() = runTest {
         // The gateway's 502 when OpenAI turns the session down, as a phone saw it.
         val body = """{"detail":"GPT-Live session creation failed (429): {\n    \"error\": {\n        \"message\": \"You have no credits remaining.\",\n        \"code\": \"credit_balance_exhausted\"\n    }\n}"}"""
@@ -858,7 +887,10 @@ class LiveConversationTest {
 
         voice.startChat(session, gateway, null)
 
-        assertEquals("GPT-Live couldn't start: You have no credits remaining.", voice.chat.first { it.phase == VoicePhase.Off && it.error != null }.error)
+        assertEquals(
+            getString(Res.string.voice_error_live_vendor, "You have no credits remaining."),
+            voice.chat.first { it.phase == VoicePhase.Off && it.error != null }.error,
+        )
         assertTrue(call.closed)
     }
 

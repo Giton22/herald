@@ -33,6 +33,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
+import dev.hermeskotlin.ui.resources.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class ConfigViewModelTest {
@@ -116,7 +117,7 @@ class ConfigViewModelTest {
         vm.set(vm.entry("approvals.mode"), JsonPrimitive("off"))
 
         assertEquals(JsonPrimitive("manual"), vm.state.value.values!!.at("approvals.mode"))
-        assertEquals("Couldn't save Approval mode: Unknown approval mode", vm.state.value.message)
+        assertEquals(said(Res.string.sessions_config_save_failed, "Approval mode", detail = "Unknown approval mode"), vm.state.value.message)
     }
 
     @Test
@@ -181,7 +182,7 @@ class ConfigViewModelTest {
         offline = true
         vm.refresh()
 
-        assertEquals("Couldn't refresh: Can't reach the gateway: Gateway down", vm.state.value.message)
+        assertEquals(said(Res.string.sessions_config_refresh_failed, detail = "Can't reach the gateway: Gateway down"), vm.state.value.message)
         assertNotNull(vm.state.value.values)
     }
 
@@ -237,7 +238,7 @@ class ConfigViewModelTest {
 
         assertEquals("""/api/config/raw {"yaml_text":"approvals:\n  mode: smart\n"}""", saves.single())
         assertEquals("approvals:\n  mode: smart\n", vm.state.value.yaml?.loaded)
-        assertEquals("Saved config.yaml", vm.state.value.message)
+        assertEquals(said(Res.string.sessions_config_yaml_saved), vm.state.value.message)
     }
 
     @Test

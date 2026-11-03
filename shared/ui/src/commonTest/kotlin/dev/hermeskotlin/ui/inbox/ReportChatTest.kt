@@ -4,6 +4,7 @@ import dev.hermeskotlin.core.chat.AttachmentKind
 import dev.hermeskotlin.core.chat.DraftStart
 import dev.hermeskotlin.core.inbox.InboxRun
 import dev.hermeskotlin.ui.reportChatProfile
+import dev.hermeskotlin.ui.resources.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNotEquals
@@ -17,11 +18,11 @@ class ReportChatTest {
     @Test
     fun aRunsChatOfTheUnifiedRuntimeIsOpenedToReadNotContinued() {
         // An older gateway's run session goes on like any chat.
-        assertEquals("Continue its chat", runChatLabel(run.copy(session = "cron_006998ffc458_20261012_080150")))
+        assertEquals(Res.string.inbox_continue_its_chat, runChatLabel(run.copy(session = "cron_006998ffc458_20261012_080150")))
         // From hermes-agent 0.22.3 a run keeps the runtime's local id, and its session only runs its job.
         val unified = run.copy(session = "local-" + "a".repeat(64)).withCheckedSession()
         assertTrue(unified.sessionReadOnly)
-        assertEquals("Open its chat", runChatLabel(unified))
+        assertEquals(Res.string.inbox_open_its_chat, runChatLabel(unified))
     }
 
     @Test
