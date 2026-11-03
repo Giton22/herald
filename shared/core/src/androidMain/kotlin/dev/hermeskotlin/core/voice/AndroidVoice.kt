@@ -2,6 +2,7 @@ package dev.hermeskotlin.core.voice
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.media.AudioDeviceCallback
 import android.media.AudioDeviceInfo
 import android.media.AudioManager
 import android.media.AudioAttributes
@@ -263,9 +264,15 @@ class AndroidSpeechPlayer(private val context: Context) : SpeechPlayer {
 
     private val lock = Any()
     private val audioManager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
-    /** Each chained chat with call routing open. The chat, a phone call and the assistant panel share this player. */
+    /** Each chained chat open. The chat, a phone call and the assistant panel share this player. */
     private val chatAudioOwners = mutableSetOf<Any>()
+    /** Puts the usual route back; set while the chained chats have call routing. */
     private var restoreChatAudio: (() -> Unit)? = null
+    /** Headphones or earbuds that come or go during a chained chat change its route. */
+    private val outputsChanged = object : AudioDeviceCallback() {
+        override fun onAudioDevicesAdded(addedDevices: Array<out AudioDeviceInfo>) = reroute()
+        override fun onAudioDevicesRemoved(removedDevices: Array<out AudioDeviceInfo>) = reroute()
+    }
 
     /** Held ([hold]): what plays now is paused, and what's ready meanwhile waits to start. */
     private var holding = false
@@ -277,51 +284,59 @@ class AndroidSpeechPlayer(private val context: Context) : SpeechPlayer {
      * A chained chat on the phone's own speaker uses call routing, so the phone's echo cancelling keeps the voice out
      * of the microphone. Headphones, earbuds or another speaker keep their usual route: call routing would move
      * earbuds without a call profile to the phone's speaker and drop the others to call quality. A route that won't
-     * take leaves the chat on its usual one, never on the earpiece. The returned close action is safe to call again;
-     * the route goes back once every chat that opened it has closed.
+     * take leaves the chat on its usual one, never on the earpiece. Headphones that come or go mid-chat change the
+     * route. The returned close action is safe to call again; the route goes back once every chat has closed.
      */
-    @Suppress("DEPRECATION")
     override fun chainedChatAudio(): () -> Unit = synchronized(lock) {
         val owner = Any()
-        if (restoreChatAudio == null) {
-            val outputs = runCatching { audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS) }.getOrNull()
-            if (outputs == null || outputs.any { it.type in OWN_OUTPUTS }) return@synchronized {}
-            val mode = audioManager.mode
-            val speaker = audioManager.isSpeakerphoneOn
-            val restore = {
-                // Each step on its own: a chat's end must never throw.
-                runCatching { if (Build.VERSION.SDK_INT >= 31) audioManager.clearCommunicationDevice() else audioManager.isSpeakerphoneOn = speaker }
-                runCatching { audioManager.mode = mode }
-                Unit
-            }
-            try {
-                audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
-                if (Build.VERSION.SDK_INT >= 31) {
-                    val builtIn = audioManager.availableCommunicationDevices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
-                    check(builtIn != null && audioManager.setCommunicationDevice(builtIn))
-                } else audioManager.isSpeakerphoneOn = true
-            } catch (_: Exception) {
-                restore()
-                return@synchronized {}
-            }
-            restoreChatAudio = restore
-        }
+        if (chatAudioOwners.isEmpty()) runCatching { audioManager.registerAudioDeviceCallback(outputsChanged, null) }
         chatAudioOwners += owner
+        reroute()
         return@synchronized {
             synchronized(lock) {
                 // An old chat's finally must not restore under a newer one, here or in another controller.
                 if (chatAudioOwners.remove(owner) && chatAudioOwners.isEmpty()) {
-                    val restore = restoreChatAudio
-                    restoreChatAudio = null
-                    restore?.invoke()
+                    runCatching { audioManager.unregisterAudioDeviceCallback(outputsChanged) }
+                    reroute()
                 }
             }
         }
     }
 
-    /** Call audio while a chained chat has call routing open, assistant audio otherwise. */
+    /** Call routing while a chained chat is open on the phone's own speaker, the usual route otherwise. */
+    @Suppress("DEPRECATION")
+    private fun reroute(): Unit = synchronized(lock) {
+        val outputs = runCatching { audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS) }.getOrNull()
+        val wanted = chatAudioOwners.isNotEmpty() && outputs != null && outputs.none { it.type in OWN_OUTPUTS }
+        if (wanted == (restoreChatAudio != null)) return
+        if (!wanted) {
+            restoreChatAudio?.invoke()
+            restoreChatAudio = null
+            return
+        }
+        val mode = audioManager.mode
+        val speaker = audioManager.isSpeakerphoneOn
+        val restore = {
+            // Each step on its own: a chat's end must never throw.
+            runCatching { if (Build.VERSION.SDK_INT >= 31) audioManager.clearCommunicationDevice() else audioManager.isSpeakerphoneOn = speaker }
+            runCatching { audioManager.mode = mode }
+            Unit
+        }
+        try {
+            audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
+            if (Build.VERSION.SDK_INT >= 31) {
+                val builtIn = audioManager.availableCommunicationDevices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                check(builtIn != null && audioManager.setCommunicationDevice(builtIn))
+            } else audioManager.isSpeakerphoneOn = true
+            restoreChatAudio = restore
+        } catch (_: Exception) {
+            restore()
+        }
+    }
+
+    /** Call audio while a chained chat has call routing, assistant audio otherwise. */
     private fun speechUsage() = synchronized(lock) {
-        if (chatAudioOwners.isNotEmpty()) AudioAttributes.USAGE_VOICE_COMMUNICATION else AudioAttributes.USAGE_ASSISTANT
+        if (restoreChatAudio != null) AudioAttributes.USAGE_VOICE_COMMUNICATION else AudioAttributes.USAGE_ASSISTANT
     }
 
     override fun hold(on: Boolean): Boolean {
