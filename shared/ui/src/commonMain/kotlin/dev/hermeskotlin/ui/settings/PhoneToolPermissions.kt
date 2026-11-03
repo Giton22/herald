@@ -27,11 +27,11 @@ internal fun PhoneToolPermissionRow(tool: PhoneTool, settings: AppSettings, onPe
 
 internal val PhoneTool.permissionTitle: String?
     get() = when (this) {
-        PhoneTool.Sound -> "Require permission to change sound controls"
-        PhoneTool.Alarms -> "Require permission to set alarms"
-        PhoneTool.Open -> "Require permission to open links, maps and apps"
-        PhoneTool.Clipboard -> "Require permission to copy text"
-        PhoneTool.Geofences -> "Require permission to change watched places"
-        PhoneTool.Calendar -> "Require permission to change calendar events"
+        PhoneTool.Sound -> "Require approval to change sound controls"
+        PhoneTool.Alarms -> "Require approval to set alarms"
+        PhoneTool.Open -> "Require approval to open links, maps and apps"
+        PhoneTool.Clipboard -> "Require approval to copy text"
+        PhoneTool.Geofences -> "Require approval to change watched places"
+        PhoneTool.Calendar -> "Require approval to change calendar events"
         else -> null
     }

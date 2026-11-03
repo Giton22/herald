@@ -18,12 +18,12 @@ import kotlin.test.assertEquals
 @OptIn(ExperimentalTestApi::class)
 class PhoneToolPermissionTest {
     private val approvalTitles = mapOf(
-        PhoneTool.Sound to "Require permission to change sound controls",
-        PhoneTool.Alarms to "Require permission to set alarms",
-        PhoneTool.Open to "Require permission to open links, maps and apps",
-        PhoneTool.Clipboard to "Require permission to copy text",
-        PhoneTool.Geofences to "Require permission to change watched places",
-        PhoneTool.Calendar to "Require permission to change calendar events",
+        PhoneTool.Sound to "Require approval to change sound controls",
+        PhoneTool.Alarms to "Require approval to set alarms",
+        PhoneTool.Open to "Require approval to open links, maps and apps",
+        PhoneTool.Clipboard to "Require approval to copy text",
+        PhoneTool.Geofences to "Require approval to change watched places",
+        PhoneTool.Calendar to "Require approval to change calendar events",
     )
     @Test fun permissionsAreSeparateFromToolEnablement() = runDesktopComposeUiTest(width = 360, height = 800) {
         setContent { page(AppSettings(phoneTools = true)) }
@@ -39,7 +39,7 @@ class PhoneToolPermissionTest {
             onAllNodesWithText(title).assertCountEquals(1)
             onNodeWithText(title).performScrollTo().assertIsEnabled()
         }
-        onAllNodes(hasText("Require permission", substring = true)).assertCountEquals(6)
+        onAllNodes(hasText("Require approval", substring = true)).assertCountEquals(6)
     }
 
     @Test fun turningOffAParentDisablesButRetainsItsPermissionPreference() = runDesktopComposeUiTest(width = 360, height = 640) {
@@ -53,7 +53,7 @@ class PhoneToolPermissionTest {
                 settings = settings.copy(phoneToolsAsk = settings.phoneToolsAsk + (tool.id to on))
             })
         }
-        val permission = onNodeWithText("Require permission to set alarms")
+        val permission = onNodeWithText("Require approval to set alarms")
         permission.performScrollTo().assertIsOn().performClick().assertIsOff()
         onNodeWithText(PhoneTool.Alarms.title).performScrollTo().performClick()
         permission.performScrollTo().assertIsNotEnabled().assertIsOff().performMouseInput { click() }
@@ -64,13 +64,13 @@ class PhoneToolPermissionTest {
 
     @Test fun permissionsCanBeConfiguredInLightThemeAt360dp() = runDesktopComposeUiTest(width = 360, height = 640) {
         setContent { page(AppSettings(phoneTools = true, phoneToolsOn = listOf(PhoneTool.Open.id)), scheme = ColorScheme.Light) }
-        onNodeWithText("Require permission to open links, maps and apps").performScrollTo().assertIsDisplayed().assertIsOn()
-        onNodeWithText("Require permission to call me").assertDoesNotExist()
+        onNodeWithText("Require approval to open links, maps and apps").performScrollTo().assertIsDisplayed().assertIsOn()
+        onNodeWithText("Require approval to call me").assertDoesNotExist()
     }
 
     @Test fun masterOffDoesNotOfferAnyToolOrPermissionSwitch() = runDesktopComposeUiTest(width = 360, height = 640) {
         setContent { page(AppSettings()) }
-        onAllNodes(hasText("Require permission", substring = true)).assertCountEquals(0)
+        onAllNodes(hasText("Require approval", substring = true)).assertCountEquals(0)
     }
 
     @Test fun storedReadApprovalOverridesDoNotAddCompanionControls() = runDesktopComposeUiTest(width = 360, height = 640) {
@@ -81,10 +81,10 @@ class PhoneToolPermissionTest {
                 phoneToolsAsk = PhoneTool.entries.associate { it.id to true },
             ))
         }
-        onAllNodes(hasText("Require permission", substring = true)).assertCountEquals(6)
-        onNodeWithText("Require permission to read battery").assertDoesNotExist()
-        onNodeWithText("Require permission to read location").assertDoesNotExist()
-        onNodeWithText("Require permission to call me").assertDoesNotExist()
+        onAllNodes(hasText("Require approval", substring = true)).assertCountEquals(6)
+        onNodeWithText("Require approval to read battery").assertDoesNotExist()
+        onNodeWithText("Require approval to read location").assertDoesNotExist()
+        onNodeWithText("Require approval to call me").assertDoesNotExist()
     }
 
     @androidx.compose.runtime.Composable
