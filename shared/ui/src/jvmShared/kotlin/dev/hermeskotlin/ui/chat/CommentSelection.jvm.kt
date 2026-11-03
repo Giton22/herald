@@ -13,6 +13,9 @@ import androidx.compose.runtime.saveable.SaverScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.AnnotatedString
 import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
 
 // Experimental in Compose Multiplatform's foundation, which the desktop gets; stable in Android's.
 @OptIn(ExperimentalFoundationApi::class)
@@ -29,6 +32,7 @@ internal actual fun PlatformCommentableSelection(
         return
     }
     val latestOnAction by rememberUpdatedState(onAction)
+    val labels = SelectionAction.entries.associateWith { stringResource(it.label) }
     SelectionContainer(
         state = state,
         modifier = Modifier.appendTextContextMenuComponents {
@@ -36,7 +40,7 @@ internal actual fun PlatformCommentableSelection(
             // all. A phone's toolbar shows only for a selection, as it always has.
             if (isDesktop && state.selectedTexts.none { it.text.isNotEmpty() }) return@appendTextContextMenuComponents
             SelectionAction.entries.forEach { action ->
-                item(key = action, label = action.label) {
+                item(key = action, label = labels.getValue(action)) {
                     anchorOf(state)?.let { latestOnAction(action, it) }
                     state.clear()
                     close()
@@ -47,11 +51,11 @@ internal actual fun PlatformCommentableSelection(
     )
 }
 
-private val SelectionAction.label: String
+private val SelectionAction.label: StringResource
     get() = when (this) {
-        SelectionAction.Comment -> "Comment"
-        SelectionAction.Explain -> "Explain"
-        SelectionAction.AskAside -> "Ask aside"
+        SelectionAction.Comment -> Res.string.chat_select_comment
+        SelectionAction.Explain -> Res.string.chat_select_explain
+        SelectionAction.AskAside -> Res.string.chat_select_ask_aside
     }
 
 /**

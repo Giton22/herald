@@ -11,19 +11,19 @@ class FileErrorTest {
 
     @Test
     fun theGatewaysRefusalsReadAsSentences() {
-        assertEquals("It isn't on the gateway, or it has moved since the reply was written.", fileError(ApiResult.Failed(404, "File not found")))
-        assertEquals("The gateway keeps files like this one private.", fileError(ApiResult.Failed(403, "Access to sensitive files is not allowed")))
-        assertEquals("The gateway won't share it: Path outside media roots.", fileError(ApiResult.Failed(403, "Path outside media roots")))
-        assertEquals("Path points to a directory.", fileError(ApiResult.Failed(400, "Path points to a directory")))
-        assertEquals("Sign in again to open files.", fileError(ApiResult.SessionExpired))
-        assertEquals("Couldn't reach the gateway.", fileError(ApiResult.Unavailable("timeout")))
+        assertEquals(FileProblem.Missing, fileError(ApiResult.Failed(404, "File not found")))
+        assertEquals(FileProblem.Private, fileError(ApiResult.Failed(403, "Access to sensitive files is not allowed")))
+        assertEquals(FileProblem.Refused("Path outside media roots"), fileError(ApiResult.Failed(403, "Path outside media roots")))
+        assertEquals(FileProblem.Said("Path points to a directory."), fileError(ApiResult.Failed(400, "Path points to a directory")))
+        assertEquals(FileProblem.SignInAgain, fileError(ApiResult.SessionExpired))
+        assertEquals(FileProblem.Unreachable, fileError(ApiResult.Unavailable("timeout")))
     }
 
     @Test
     fun tooLargeForTheWholeFileIsntCalledAPreviewLimit() {
-        assertEquals(MediaApi.TOO_LARGE, fileError(ApiResult.Failed(413, MediaApi.TOO_LARGE), whole = true))
-        assertEquals("It's too large for the gateway to preview. Save still gets it.", fileError(ApiResult.Failed(413, "Too large")))
-        assertEquals("It's too large for the gateway to hand over.", fileError(ApiResult.Failed(413, "Too large"), whole = true))
+        assertEquals(FileProblem.Said(MediaApi.TOO_LARGE), fileError(ApiResult.Failed(413, MediaApi.TOO_LARGE), whole = true))
+        assertEquals(FileProblem.TooLargeToPreview, fileError(ApiResult.Failed(413, "Too large")))
+        assertEquals(FileProblem.TooLargeToHandOver, fileError(ApiResult.Failed(413, "Too large"), whole = true))
     }
 
     @Test
@@ -31,17 +31,14 @@ class FileErrorTest {
         val short = clipFor(FileText("hello", 5, truncated = false, binary = false))
         assertEquals("hello", short.text)
         assertNull(short.note)
-        assertEquals("Copied the part shown. Save gets the whole file.", clipFor(FileText("hello", 900_000, truncated = true, binary = false)).note)
+        assertEquals(ClipNote.PartShown, clipFor(FileText("hello", 900_000, truncated = true, binary = false)).note)
 
         val long = clipFor(FileText("abcdef", 6, truncated = false, binary = false), max = 4)
         assertEquals("abcd", long.text)
-        assertEquals("Copied the first 4 characters. Save gets the whole file.", long.note)
+        assertEquals(ClipNote.FirstChars(4), long.note)
         // A cut never leaves half of an emoji's surrogate pair.
         assertEquals("abc", clipFor(FileText("abc😀d", 6, truncated = false, binary = false), max = 4).text)
-        assertEquals(
-            "Copied the first 100,000 characters. Save gets the whole file.",
-            clipFor(FileText("x".repeat(100_001), 100_001, truncated = false, binary = false)).note,
-        )
+        assertEquals(ClipNote.FirstChars(100_000), clipFor(FileText("x".repeat(100_001), 100_001, truncated = false, binary = false)).note)
     }
 
     @Test
