@@ -3,6 +3,11 @@ package dev.hermeskotlin.designsystem.components
 import android.content.ComponentName
 import androidx.activity.ComponentActivity
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.focusable
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusManager
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -128,6 +133,22 @@ class SidebarKeepsContentTest {
 
         resize(NARROW)
         composeRule.onNodeWithTag(KEPT).assertTextEquals("1")
+    }
+
+    @Test
+    fun theShutDrawerIsSkippedByTheKeyboard() {
+        lateinit var focus: FocusManager
+        show(sidebar = {
+            Box(Modifier.testTag(KEPT).focusable())
+        }) {
+            focus = LocalFocusManager.current
+            Box(Modifier.testTag(CONTENT).focusable())
+        }
+        composeRule.waitForIdle()
+
+        // The sidebar comes first, but shut it's skipped: the first step lands in the chat.
+        composeRule.runOnIdle { focus.moveFocus(FocusDirection.Next) }
+        composeRule.onNodeWithTag(CONTENT).assertIsFocused()
     }
 
     @Test

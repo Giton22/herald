@@ -52,6 +52,8 @@ import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
 import androidx.compose.ui.zIndex
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.foundation.focusGroup
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.designsystem.LocalDesktopLayout
 import dev.hermeskotlin.designsystem.colors
@@ -153,7 +155,12 @@ fun SidebarLayout(
         val most = maxOf(MIN_DOCKED_WIDTH, minOf(MAX_DOCKED_WIDTH, maxWidth - MIN_DOCKED_WIDTH))
         val width = if (docked) (dragged ?: dockedWidth).coerceIn(MIN_DOCKED_WIDTH, most) else min(maxWidth * 0.86f, 340.dp)
         val p = state.fraction
-        val hidden = Modifier.clearAndSetSemantics { }.takeIf { !state.isOpen && p == 0f } ?: Modifier
+        // Shut, it's out of reach: nothing for a screen reader, and Tab doesn't go in, although it comes first.
+        val hidden = Modifier
+            .clearAndSetSemantics { }
+            .focusProperties { onEnter = { cancelFocusChange() } }
+            .focusGroup()
+            .takeIf { !state.isOpen && p == 0f } ?: Modifier
 
         // Docked, the sidebar takes the start inset on top of its width, as it pads itself by it.
         val outer = if (docked) width + startInset else width
