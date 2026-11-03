@@ -13,6 +13,8 @@ import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.chat.SessionWatcher
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
+import dev.hermeskotlin.core.inbox.InboxStore
+import dev.hermeskotlin.core.inbox.markNoticeRead
 import dev.hermeskotlin.core.push.PushSetup
 import dev.hermeskotlin.core.wear.WatchRelay
 import kotlinx.coroutines.CoroutineScope
@@ -34,6 +36,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
     private val push: PushSetup by inject()
     private val watcher: SessionWatcher by inject()
     private val relay: WatchRelay by inject()
+    private val inbox: InboxStore by inject()
 
     override fun onReceive(context: Context, intent: Intent) {
         val pending = goAsync()
@@ -65,6 +68,12 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
                 }
             }
             ACTION_DECLINE_CALL -> intent.getStringExtra(EXTRA_REQUEST_ID)?.let(notifications::decline)
+            ACTION_INBOX_READ -> {
+                // The run this notification showed, of the gateway that sent it: not whichever the app is on now.
+                val key = intent.getStringExtra(ChatNotifications.EXTRA_OPEN_INBOX) ?: return
+                val gateway = intent.getStringExtra(ChatNotifications.EXTRA_INBOX_GATEWAY) ?: return
+                if (inbox.markNoticeRead(gateway, key)) notifications.runsRead(gateway, listOf(key))
+            }
             ACTION_BOT_CLEARED -> intent.getStringExtra(EXTRA_BOT)?.let(notifications::forgetBot)
             ACTION_ROOM_CLEARED -> intent.getStringExtra(ChatNotifications.EXTRA_OPEN_ROOM)?.let(notifications::forgetRoom)
             ACTION_BOT_REPLY -> {
@@ -152,6 +161,7 @@ class NotificationActionReceiver : BroadcastReceiver(), KoinComponent {
         const val ACTION_BOT_CLEARED = "dev.hermeskotlin.action.BOT_CLEARED"
         const val ACTION_ROOM_CLEARED = "dev.hermeskotlin.action.ROOM_CLEARED"
         const val ACTION_DECLINE_CALL = "dev.hermeskotlin.action.DECLINE_CALL"
+        const val ACTION_INBOX_READ = "dev.hermeskotlin.action.INBOX_READ"
         const val EXTRA_BOT = "bot"
 
         const val EXTRA_REQUEST_ID = "request_id"

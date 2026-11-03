@@ -1,5 +1,6 @@
 package dev.hermeskotlin.ui.settings
 
+import dev.hermeskotlin.core.voice.AudioApi
 import dev.hermeskotlin.core.auth.*
 import dev.hermeskotlin.core.connection.*
 import dev.hermeskotlin.core.gateway.*
@@ -85,7 +86,8 @@ class VoiceInstallConsentTest {
         val socket = Gateway()
         val cookies = PersistentCookiesStorage(InMemoryKeyValueStore())
         val client = createHttpClient(MockEngine { request ->
-            if (request.url.encodedPath == "/api/auth/ws-ticket") respond("""{"ticket":"T","ttl_seconds":30}""", headers = headersOf(HttpHeaders.ContentType, "application/json"))
+            if (request.url.encodedPath == "/api/plugins/kyllene_voice/gpt-live/status") respond("""{"ok":true,"source":"plugin","contract":1}""", headers = headersOf(HttpHeaders.ContentType, "application/json"))
+            else if (request.url.encodedPath == "/api/auth/ws-ticket") respond("""{"ticket":"T","ttl_seconds":30}""", headers = headersOf(HttpHeaders.ContentType, "application/json"))
             else respond("{}", HttpStatusCode.NotFound, headersOf(HttpHeaders.ContentType, "application/json"))
         }, cookies)
         val auth = AuthApi(client, cookies)
@@ -96,7 +98,7 @@ class VoiceInstallConsentTest {
         val probe = GatewayProbe(client)
         val push = PushSetup(PushApi(connection), Keys, connection, GatewayRepository(InMemoryKeyValueStore()), store, backgroundScope) { "test" }
         val vm = SettingsViewModel(store, auth, probe, ConnectionCheck(probe, auth, { _, _ -> socket }), push,
-            WallpaperStore(InMemoryBlobFile(), backgroundScope), ProfilesApi(client), SessionsApi(client), NextPromptApi(client, PluginsApi(client)), connection)
+            WallpaperStore(InMemoryBlobFile(), backgroundScope), ProfilesApi(client), SessionsApi(client), NextPromptApi(client, PluginsApi(client)), connection, AudioApi(client))
         vm.voiceReleaseRevision = { pin }
         vm.bind(SavedGateway("https://a.example"))
         runCurrent()
@@ -105,6 +107,18 @@ class VoiceInstallConsentTest {
     private fun test(block: suspend TestScope.() -> Unit) = runTest {
         Dispatchers.setMain(StandardTestDispatcher(testScheduler))
         try { block() } finally { Dispatchers.resetMain() }
+    }
+
+    @Test fun toggleChecksSelectedProfileWithoutInstalling() = test {
+        val (vm, socket) = fixture()
+        vm.bind(SavedGateway("https://a.example"), "one")
+        vm.setSubscriptionVoice(true); runCurrent()
+        assertTrue(vm.settings.value.subscriptionVoicePreview)
+        assertEquals("Setup found for one. Test a call.", vm.voiceSetup.value)
+        assertTrue(socket.writes().isEmpty())
+        vm.setSubscriptionVoice(false); runCurrent()
+        assertFalse(vm.settings.value.subscriptionVoicePreview)
+        assertNull(vm.voiceSetup.value)
     }
 
     @Test fun enablingOpeningAndCancellingNeverWrites() = test {

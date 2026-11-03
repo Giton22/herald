@@ -16,7 +16,8 @@ object VoiceAnswers {
 
     /** What to read aloud for [request]: what it's about and how to answer. */
     fun approvalPrompt(request: InputRequest.Approval): String {
-        val what = request.description.trim().ifEmpty { request.command.trim() }.let(::short)
+        // Never cut off the action being approved: the omitted end may change what it does.
+        val what = request.description.trim().ifEmpty { request.command.trim() }.let(::spoken)
         val ways = buildList {
             add("yes")
             if (ApprovalChoice.Session in request.choices) add("for this chat")
@@ -27,9 +28,9 @@ object VoiceAnswers {
 
     /** What to read aloud for one question of a clarify request. */
     fun questionPrompt(question: ClarifyQuestion): String {
-        val asked = short(question.question.trim()).ifEmpty { "Hermes has a question." }
+        val asked = spoken(question.question.trim()).ifEmpty { "Hermes has a question." }
         if (question.choices.isEmpty()) return asked
-        val choices = question.choices.mapIndexed { i, choice -> "${i + 1}: ${short(choice)}." }.joinToString(" ")
+        val choices = question.choices.mapIndexed { i, choice -> "${i + 1}: ${spoken(choice)}." }.joinToString(" ")
         val pick = if (question.multiSelect) "Say the ones you want" else "Say one"
         return "$asked $pick. $choices Or say something else."
     }
@@ -128,10 +129,7 @@ object VoiceAnswers {
         return if (question.multiSelect) chosen else chosen.take(1)
     }
 
-    private fun short(text: String): String {
-        val line = text.replace(WHITESPACE, " ")
-        return if (line.length <= MAX_SPOKEN) line else line.take(MAX_SPOKEN).substringBeforeLast(' ') + "…"
-    }
+    private fun spoken(text: String): String = text.replace(WHITESPACE, " ")
 
     private fun words(text: String): List<String> =
         text.lowercase().replace('’', '\'').replace('‘', '\'').replace(PUNCTUATION, " ").split(WHITESPACE).filter { it.isNotEmpty() }
@@ -150,7 +148,6 @@ object VoiceAnswers {
 
     private val WHITESPACE = Regex("\\s+")
     private val PUNCTUATION = Regex("[^\\p{L}\\p{N}']+")
-    private const val MAX_SPOKEN = 200
 
     private val DENY = setOf(
         "no", "not", "nope", "nah", "deny", "dont", "wont", "cant", "cannot", "shouldnt", "wouldnt", "reject", "refuse",

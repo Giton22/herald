@@ -7,6 +7,7 @@ import dev.hermeskotlin.core.bots.BotChats
 import dev.hermeskotlin.core.bots.BotSession
 import dev.hermeskotlin.core.chat.ComposeDraft
 import dev.hermeskotlin.ui.chat.ChatTarget
+import dev.hermeskotlin.ui.inbox.ReportChat
 import dev.hermeskotlin.core.cache.InMemoryOfflineDao
 import dev.hermeskotlin.core.cache.OfflineCache
 import dev.hermeskotlin.core.cache.PlainSealer
@@ -67,6 +68,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertNull
+import kotlin.test.assertSame
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -725,5 +727,108 @@ class AppViewModelTest {
 
         assertEquals("s9", chat.target.storedSessionId)
         assertEquals(1_300.0, chat.target.readUpTo)
+    }
+
+    @Test
+    fun aReportChatOfAnotherGatewayOpensNothing() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        val app = viewModel()
+        val before = app.awaitChat(home)
+
+        // The app moved to home while work's report was being read: neither its stored chat nor a new one opens.
+        assertFalse(app.openReportChat(ReportChat(work.gatewayUrl.value, "default", "Briefing", storedSessionId = "r1"), launch = "default"))
+        assertFalse(app.openReportChat(ReportChat(work.gatewayUrl.value, "default", "Briefing", draft = ComposeDraft(text = "About this")), launch = "default"))
+
+        assertSame(before, app.route.value)
+    }
+
+    @Test
+    fun aReportChatOpenedWhileACallIsLookedUpEndsTheLookup() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        gateways.save(home)
+        signedIn(home)
+        val vm = viewModel()
+        runCurrent()
+        sessionGate = CompletableDeferred()
+        callSettings.update { it.copy(callTargets = mapOf(home.url to CallTarget(sessionId = "s1"))) }
+        links.follow(AppLink.VoiceChat)
+        runCurrent()
+        assertTrue(vm.openingCall.value)
+
+        assertTrue(vm.openReportChat(ReportChat(home.gatewayUrl.value, "default", "Briefing", storedSessionId = "r1"), launch = "default"))
+        assertFalse(vm.openingCall.value)
+        sessionGate!!.complete(Unit)
+        runCurrent()
+        // The report's chat stays: the call looked up before it doesn't take its place.
+        assertEquals("r1", assertIs<Route.Chat>(vm.route.value).target.storedSessionId)
+        assertFalse(vm.openingCall.value)
+    }
+
+    @Test
+    fun aReportChatAlreadyOpenInItsProfileStaysAsItIs() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        lastChats.set(home.gatewayUrl, LastChat("r1", "Briefing"))
+        val app = viewModel()
+        val open = app.awaitChat(home)
+        assertEquals("r1", open.target.storedSessionId)
+        assertNull(open.target.profile)
+
+        assertTrue(app.openReportChat(ReportChat(home.gatewayUrl.value, "default", "Briefing", storedSessionId = "r1"), launch = "default"))
+        assertSame(open, app.route.value)
+
+        // The same session id in another profile is another chat, so it opens.
+        assertTrue(app.openReportChat(ReportChat(home.gatewayUrl.value, "work", "Briefing", storedSessionId = "r1"), launch = "default"))
+        val other = assertIs<Route.Chat>(app.route.value).target
+        assertEquals("r1", other.storedSessionId)
+        assertEquals("work", other.profile)
+    }
+
+    @Test
+    fun aReportChatOpensInTheProfileWhoseJobRan() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        val app = viewModel()
+        app.awaitChat(home)
+        fun opened(chat: ReportChat, launch: String?): ChatTarget {
+            assertTrue(app.openReportChat(chat, launch))
+            return assertIs<Route.Chat>(app.route.value).target
+        }
+
+        // The run's stored chat: on the launch profile's own job it's one of its chats (no profile named).
+        val launchJob = opened(ReportChat(home.gatewayUrl.value, "default", "Briefing", storedSessionId = "r1"), launch = "default")
+        assertEquals("r1", launchJob.storedSessionId)
+        assertEquals("Briefing", launchJob.title)
+        assertNull(launchJob.profile)
+        assertEquals("work", opened(ReportChat(home.gatewayUrl.value, "work", "Sales", storedSessionId = "r2"), launch = "default").profile)
+        // The launch profile unknown: the owner is named rather than guessed.
+        assertEquals("default", opened(ReportChat(home.gatewayUrl.value, "default", "Briefing", storedSessionId = "r3"), launch = null).profile)
+
+        // No stored chat: a new one in that profile, starting with the report.
+        val draft = ComposeDraft(text = "About this report", start = DraftStart.Typing)
+        val fresh = opened(ReportChat(home.gatewayUrl.value, "work", "Sales", draft = draft), launch = "default")
+        assertNull(fresh.storedSessionId)
+        assertEquals("work", fresh.profile)
+        assertEquals(draft, fresh.draft)
+        // Another ask about a report is another new chat, not the one just opened.
+        val again = opened(ReportChat(home.gatewayUrl.value, "default", "Briefing", draft = draft), launch = "default")
+        assertNull(again.storedSessionId)
+        assertNull(again.profile)
+        assertTrue(again.nonce > fresh.nonce)
+    }
+
+    @Test
+    fun aReportChatOfTheLaunchProfileIsNamedWhileAnotherProfilesChatsAreShown() = runTest {
+        gateways.save(home)
+        signedIn(home)
+        ProfileStore(store).set(home.gatewayUrl, "work")
+        val app = viewModel()
+        assertEquals("work", app.awaitChat(home).target.profile)
+
+        assertTrue(app.openReportChat(ReportChat(home.gatewayUrl.value, "default", "Briefing", storedSessionId = "r1"), launch = "default"))
+        assertEquals("default", assertIs<Route.Chat>(app.route.value).target.profile)
+        assertTrue(app.openReportChat(ReportChat(home.gatewayUrl.value, "work", "Sales", storedSessionId = "r2"), launch = "default"))
+        assertEquals("work", assertIs<Route.Chat>(app.route.value).target.profile)
     }
 }

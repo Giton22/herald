@@ -293,6 +293,25 @@ class PushSetupTest {
     }
 
     @Test
+    fun aPluginNewerThanTheReviewedOneWorksAndIsNeverReplaced() = runTest {
+        // A gateway updated past the commit this Herald pins (a later plugin release): no update is offered, and
+        // asking for one changes nothing on the gateway.
+        val newer = PushApi.PLUGIN_VERSION.split('.').let { (major, minor, patch) -> "$major.$minor.${patch.toInt() + 1}" }
+        val s = setup(FakeKeys())
+        val gateway = FakeGateway(installed = true, version = newer).apply { profiles["assistant"] = Copy(newer) }
+        connect(s, gateway)
+        s.setup.enable()
+
+        assertEquals(PushStatus.State.On, s.setup.status.value.state)
+        assertNull(s.setup.status.value.update)
+        s.setup.updatePlugin()
+        assertTrue(gateway.calls.none { (it["params"] as? JsonObject)?.get("action")?.jsonPrimitive?.contentOrNull == "install" })
+        assertEquals(newer, gateway.version)
+        assertEquals(Copy(newer), gateway.profiles["assistant"])
+        assertNull(s.setup.status.value.update)
+    }
+
+    @Test
     fun aCurrentGatewayStillOffersAnUpdateForAnOldBotCopy() = runTest {
         val s = setup(FakeKeys())
         val gateway = FakeGateway(installed = true).apply { profiles["assistant"] = Copy("0.1.1") }

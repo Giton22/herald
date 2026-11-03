@@ -18,8 +18,8 @@ URL = 'https://chatgpt.com/backend-api/codex/realtime/calls?intent=quicksilver&a
 BASE = 'https://chatgpt.com/backend-api/codex'
 MAX_BODY = 160 * 1024
 MAX_ANSWER = 64 * 1024
-# Codex built-in v3 (frameless) voices, protocol.rs at 6ff1e1ca.
-VOICES = frozenset(('juniper', 'maple', 'spruce', 'ember', 'vale', 'breeze',
+# Codex built-in v3 voices and Hermes' default. Provider acceptance of marin is unverified.
+VOICES = frozenset(('marin', 'juniper', 'maple', 'spruce', 'ember', 'vale', 'breeze',
                     'arbor', 'sol', 'cove', 'aube', 'bubbie', 'haetsal',
                     'hanul', 'himari', 'leher', 'miko', 'neer', 'porto',
                     'rindo', 'rio', 'rivage', 'selva', 'sonna', 'tinta', 'viola'))
@@ -30,7 +30,11 @@ class UnsupportedProfileVoice(ValueError):
     pass
 
 
-def credentials(refresh):
+class ProviderCredentialsError(ValueError):
+    pass
+
+
+def _credentials(refresh):
     from hermes_cli.auth_codex import resolve_codex_runtime_credentials
     from hermes_cli.auth_constants import _decode_jwt_claims
     # Status must not refresh/adopt; session may refresh as explicitly authorized.
@@ -46,6 +50,13 @@ def credentials(refresh):
     if not isinstance(account, str) or not account.strip() or any(c in account for c in '\r\n'):
         raise ValueError('invalid account')
     return token, account.strip()
+
+
+def credentials(refresh):
+    try:
+        return _credentials(refresh)
+    except Exception as exc:
+        raise ProviderCredentialsError() from exc
 
 
 class NoRedirect(urllib.request.HTTPRedirectHandler):
@@ -134,6 +145,23 @@ def response(data, status=200):
     return JSONResponse(data, status_code=status, headers={'Cache-Control': 'no-store'})
 
 
+@router.get('/gpt-live/status')
+async def status(request: Request):
+    profile = require(request)
+    def check():
+        stock_settings()
+        credentials(False)
+    try:
+        await run_in_threadpool(scoped, profile, check)
+    except UnsupportedProfileVoice:
+        return response({'ok': False, 'detail': 'Profile voice is unsupported. Set voice.gpt_live.voice to a supported subscription voice, such as ember.'}, 400)
+    except ProviderCredentialsError:
+        return response({'ok': False, 'detail': 'ChatGPT/Codex subscription credentials or account ID are unavailable in this profile. Sign in with Codex on the gateway; dashboard sign-in is separate.'}, 400)
+    except Exception:
+        return response({'ok': False, 'detail': 'Could not check profile voice setup; the plugin may be incompatible with this Hermes version.'}, 503)
+    return response({'ok': True, 'source': 'plugin', 'contract': 1})
+
+
 @router.post('/gpt-live/session')
 async def session(request: Request):
     profile = require(request)
@@ -169,6 +197,12 @@ async def session(request: Request):
         answer = await run_in_threadpool(work)
     except UnsupportedProfileVoice:
         return response({'ok': False, 'detail': 'The profile voice is not supported by the subscription provider. Set voice.gpt_live.voice in the selected profile to a supported subscription voice, such as ember. No API fallback was used.'}, 400)
+    except ProviderCredentialsError:
+        return response({'ok': False, 'detail': 'ChatGPT/Codex subscription credentials or account ID are unavailable. Sign in with Codex on the gateway; dashboard sign-in is separate. No API fallback was used.'}, 400)
+    except urllib.error.HTTPError as exc:
+        if exc.code in (401, 403):
+            return response({'ok': False, 'detail': 'The subscription provider rejected the ChatGPT/Codex credentials or account access. Check the gateway Codex sign-in and subscription entitlement; dashboard sign-in is separate. No API fallback was used.'}, 502)
+        return response({'ok': False, 'detail': 'Subscription provider request failed. No API fallback was used.'}, 502)
     except HTTPException:
         raise
     except Exception:

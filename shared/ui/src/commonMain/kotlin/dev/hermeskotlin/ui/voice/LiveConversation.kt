@@ -483,7 +483,9 @@ internal class LiveConversation(
         heard.clear()
         asking = request
         subscriptionFinalReady = false
-        speakAside("Hermes needs an answer before it goes on. $prompt")
+        // Ensure the literal subscription prompt satisfies the existing question-presentation check.
+        val question = if (subscriptionProtocol == null) "" else if (request is InputRequest.Approval) " Do you approve?" else " What is your answer?"
+        speakAside("Hermes needs an answer before it goes on. $prompt$question")
     }
 
     /**

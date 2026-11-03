@@ -22,6 +22,7 @@ import dev.hermeskotlin.core.gateway.ClientCertAliases
 import dev.hermeskotlin.core.gateway.GatewayList
 import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.inbox.InboxStore
+import dev.hermeskotlin.ui.inbox.ReportChat
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.profiles.ProfileStore
 import dev.hermeskotlin.core.bots.BotsApi
@@ -63,6 +64,14 @@ sealed interface Route {
 
 /** The saved gateways to switch between, and which of them still hold a session (switch without signing in). */
 data class GatewayChoices(val list: GatewayList = GatewayList(), val signedIn: Set<String> = emptySet())
+
+/**
+ * The profile to open a chat of [owner]'s (a profile name, `default` the default one) in: none named (null) when the
+ * chats are on the launch profile and [owner] is it, so the chat is one of theirs as any other; else [owner] by name.
+ * [launch] is the launch profile when the gateway said which; when it didn't, [owner] is named rather than guessed.
+ */
+fun reportChatProfile(owner: String, chatsProfile: String?, launch: String?): String? =
+    if (chatsProfile == null && launch != null && owner == launch) null else owner
 
 /** Top-level flow: pick gateway → sign in → chat, reopening where the user left off. Owns the gateway connection lifecycle. */
 class AppViewModel(
@@ -356,6 +365,28 @@ class AppViewModel(
         cancelPendingCall()
         val gateway = signedInGateway() ?: return
         _route.value = Route.Chat(newChatTarget(gateway, currentProfile()).copy(draft = draft, cwd = cwd))
+    }
+
+    /**
+     * A chat about an Inbox report ([chat]): the run's own stored chat, or a new one that starts with the report.
+     * Either is in the profile whose cron job ran, which [reportChatProfile] names as the app does ([launch] is the
+     * gateway's launch profile, when it said). False, opening nothing, when the report is another gateway's: the
+     * app moved on while it was being fetched.
+     */
+    fun openReportChat(chat: ReportChat, launch: String? = null): Boolean {
+        val gateway = signedInGateway()?.takeIf { it.gatewayUrl.value == chat.gatewayUrl } ?: return false
+        // As every other way into a chat: a call still being looked up goes, spinner and all.
+        cancelPendingCall()
+        val profile = reportChatProfile(chat.profile, currentProfile(), launch)
+        val open = (_route.value as? Route.Chat)?.target
+        val stored = chat.storedSessionId
+        _route.value = when {
+            stored == null -> Route.Chat(newChatTarget(gateway, profile).copy(draft = chat.draft))
+            // Already open: it stays as it is, draft and place and all.
+            open != null && open.storedSessionId == stored && open.profile == profile -> return true
+            else -> Route.Chat(ChatTarget(gateway, stored, chat.title, profile = profile))
+        }
+        return true
     }
 
     /** Opens [bot]'s conversation [storedSessionId] that isn't its Bot Chat, in the bot's profile. */

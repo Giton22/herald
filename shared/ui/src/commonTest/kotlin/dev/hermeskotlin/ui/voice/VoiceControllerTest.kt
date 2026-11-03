@@ -30,6 +30,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -187,6 +188,58 @@ class VoiceControllerTest {
 
         assertEquals("deploy the site", text.await())
         assertEquals(1, recorder.recordings)
+    }
+
+    /** Like Android's: clears an earlier Finish as it starts, then listens 20 ms at a time until finished. */
+    private class StartingRecorder : VoiceRecorder {
+        var starting: () -> Unit = {}
+        var recordings = 0
+        var finished = false
+        private var finishRequested = false
+
+        override suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit, onSpeech: () -> Unit): Recording {
+            recordings++
+            starting()
+            finishRequested = false
+            // A minute of quiet frames, unless finished first.
+            repeat(3_000) {
+                onLevel(0f)
+                if (finishRequested) {
+                    finished = true
+                    return Recording(byteArrayOf(), "audio/wav", false)
+                }
+                delay(20)
+            }
+            return Recording(byteArrayOf(), "audio/wav", false)
+        }
+
+        override fun finish() {
+            finishRequested = true
+        }
+    }
+
+    @Test
+    fun finishingBeforeTheMicrophoneOpensDoesntRecord() = runTest {
+        val recorder = StartingRecorder()
+        val voice = VoiceController(audio("unused", Requests()), recorder, FakePlayer(), backgroundScope, backgroundScope)
+
+        voice.startDictation(gateway, null) { error("Nothing was said") }
+        voice.finishDictation()
+
+        assertEquals("Didn't catch anything.", voice.dictation.first { !it.active }.error)
+        assertEquals(0, recorder.recordings)
+    }
+
+    @Test
+    fun finishingWhileTheMicrophoneStartsEndsTheRecording() = runTest {
+        val recorder = StartingRecorder()
+        val voice = VoiceController(audio("unused", Requests()), recorder, FakePlayer(), backgroundScope, backgroundScope)
+        recorder.starting = { voice.finishDictation() }
+
+        voice.startDictation(gateway, null) { error("Nothing was said") }
+
+        assertEquals("Didn't catch anything.", voice.dictation.first { !it.active }.error)
+        assertTrue(recorder.finished)
     }
 
     @Test

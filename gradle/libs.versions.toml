@@ -1,6 +1,7 @@
 [versions]
+junixsocket = "2.11.1"
 kotlin = "2.4.20"
-agp = "9.4.1"
+agp = "9.5.0"
 compose-multiplatform = "1.12.1"
 compose-unstyled = "2.10.0"
 lucide = "1.1.0"
@@ -31,11 +32,20 @@ ksp = "2.3.12"
 play-services-wearable = "20.0.1"
 wear-compose = "1.7.1"
 wear-tiles = "1.6.2"
+# Agent-made UI (experiment, Android only)
+a2ui = "1.0.0-alpha02"
+coil = "3.6.3"
+media3 = "1.11.1"
 wear-protolayout = "1.4.2"
 wear-complications = "1.3.0"
 android-wear-minSdk = "30"
+# Rendered Compose layout tests on the Android host. Test-only: no production code or SDK changes.
+robolectric = "4.17"
+junit4 = "4.13.2"
 
 android-compileSdk = "37"
+# Compose 1.13 and A2UI need 37.1.
+android-compileSdkMinor = "1"
 android-targetSdk = "36"
 android-minSdk = "26"
 
@@ -102,7 +112,18 @@ kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-cor
 wear-compose-material3 = { module = "androidx.wear.compose:compose-material3", version.ref = "wear-compose" }
 wear-compose-foundation = { module = "androidx.wear.compose:compose-foundation", version.ref = "wear-compose" }
 wear-compose-navigation = { module = "androidx.wear.compose:compose-navigation", version.ref = "wear-compose" }
-androidx-concurrent-futures = { module = "androidx.concurrent:concurrent-futures", version = "1.3.0" }
+a2ui-compose-runtime = { module = "androidx.a2ui.compose:compose-runtime", version.ref = "a2ui" }
+a2ui-compose-ui = { module = "androidx.a2ui.compose:compose-ui", version.ref = "a2ui" }
+a2ui-material3 = { module = "androidx.compose.material3:material3-a2ui", version.ref = "a2ui" }
+# Only to theme the A2UI catalog's components: the version material3-a2ui brings.
+androidx-material3 = { module = "androidx.compose.material3:material3", version = "1.5.0-alpha28" }
+# The pictures, video and audio in an agent's screen.
+coil-compose = { module = "io.coil-kt.coil3:coil-compose", version.ref = "coil" }
+coil-network-okhttp = { module = "io.coil-kt.coil3:coil-network-okhttp", version.ref = "coil" }
+media3-exoplayer = { module = "androidx.media3:media3-exoplayer", version.ref = "media3" }
+media3-ui = { module = "androidx.media3:media3-ui", version.ref = "media3" }
+media3-datasource-okhttp = { module = "androidx.media3:media3-datasource-okhttp", version.ref = "media3" }
+androidx-concurrent-futures ={ module = "androidx.concurrent:concurrent-futures", version = "1.3.0" }
 wear-tiles = { module = "androidx.wear.tiles:tiles", version.ref = "wear-tiles" }
 wear-protolayout = { module = "androidx.wear.protolayout:protolayout", version.ref = "wear-protolayout" }
 wear-protolayout-material3 = { module = "androidx.wear.protolayout:protolayout-material3", version.ref = "wear-protolayout" }
@@ -123,12 +144,21 @@ jbr-api = { module = "com.jetbrains:jbr-api", version = "1.5.0" }
 # Compiled against only: the classes come from the JetBrains Runtime the app runs on, which must be a JCEF build of
 # the same API (1.21). JBR 25.0.4.1 b508.40 ships 144.0.15-…-api-1.21-262-b61; b37 is the nearest one published.
 jcef = { module = "org.jetbrains.intellij.deps.jcef:jcef", version = "144.0.15-g72717cf-chromium-144.0.7559.172-api-1.21-262-b37" }
+desktop-webrtc = { module = "dev.onvoid.webrtc:webrtc-java", version = "0.20.0" }
+dbus-core = { module = "com.github.hypfvieh:dbus-java-core", version = "5.2.2" }
+dbus-unix = { module = "com.github.hypfvieh:dbus-java-transport-junixsocket", version = "5.2.2" }
+junixsocket-common = { module = "com.kohlschutter.junixsocket:junixsocket-common", version.ref = "junixsocket" }
+junixsocket-native = { module = "com.kohlschutter.junixsocket:junixsocket-native-common", version.ref = "junixsocket" }
 # The system's own Open and Save dialogs on the desktop (AWT's are the old-style ones on Windows).
 filekit-dialogs = { module = "io.github.vinceglb:filekit-dialogs", version = "0.16.0" }
 
 # Testing
 kotlin-test = { module = "org.jetbrains.kotlin:kotlin-test", version.ref = "kotlin" }
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
+junit4 = { module = "junit:junit", version.ref = "junit4" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+# Host-rendered Compose tests: the same androidx Compose version the multiplatform build resolves.
+compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4", version.ref = "compose-multiplatform" }
 
 [plugins]
 kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }

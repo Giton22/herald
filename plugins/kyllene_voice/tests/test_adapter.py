@@ -42,6 +42,35 @@ class Tests(unittest.TestCase):
             method='POST', path='/gpt-live/session', query='profile='+profile, headers=[],
             body=encode(json.dumps(body if body is not None else {}).encode()), authenticated=auth)))
         return result['status'], json.loads(result['body'])
+    def status(self, profile='alpha', auth=True):
+        result = decode(self.host.op_asgi(dict(plugin='kyllene_voice', dashboard_dir=str(DASH), api_file='plugin_api.py',
+            method='GET', path='/gpt-live/status', query='profile='+profile, headers=[], body=encode(b''), authenticated=auth)))
+        return result['status'], json.loads(result['body'])
+
+    def test_status_is_authenticated_scoped_read_only_and_no_call(self):
+        self.assertEqual(self.status(auth=False)[0], 401)
+        status, body = self.status(profile='beta')
+        self.assertEqual(status, 200)
+        self.assertEqual(body, {'ok': True, 'source': 'plugin', 'contract': 1})
+        self.assertEqual(self.scopes[-1], 'beta')
+        self.c.assert_called_once_with(False)
+        self.e.assert_not_called()
+
+    def test_status_sanitizes_credentials_and_voice_failure(self):
+        self.c.side_effect = self.api.ProviderCredentialsError('SECRET')
+        status, body = self.status()
+        self.assertEqual(status, 400)
+        self.assertIn('dashboard sign-in is separate', body['detail'])
+        self.assertNotIn('SECRET', str(body))
+        self.e.assert_not_called()
+
+    def test_provider_auth_error_is_not_dashboard_401(self):
+        self.e.side_effect = self.api.urllib.error.HTTPError('https://example.invalid', 401, 'SECRET', {}, None)
+        status, body = self.call({'sdp': OFFER, 'billing': 'subscription', 'history': HISTORY})
+        self.assertEqual(status, 502)
+        self.assertIn('dashboard sign-in is separate', body['detail'])
+        self.assertNotIn('SECRET', str(body))
+
     def test_admission_and_scoped_history(self):
         body = {'sdp': OFFER, 'billing': 'subscription', 'history': HISTORY}
         self.assertEqual(self.call(body, auth=False)[0], 401)
@@ -70,7 +99,7 @@ class Tests(unittest.TestCase):
             with patch('tools.voice_live.build_session_config', return_value={'instructions':'PROFILE PERSONA', 'audio':{'output':{'voice':'ember'}}}):
                 self.assertEqual(self.api.stock_settings(), ('PROFILE PERSONA','ember'))
             with patch('tools.voice_live.build_session_config', return_value={'instructions':'x', 'audio':{'output':{'voice':'marin'}}}):
-                with self.assertRaises(ValueError): self.api.stock_settings()
+                self.assertEqual(self.api.stock_settings(), ('x', 'marin'))
         finally: self.settings.start()
     def test_provider_wire_preserves_roles(self):
         self.exchange.stop()

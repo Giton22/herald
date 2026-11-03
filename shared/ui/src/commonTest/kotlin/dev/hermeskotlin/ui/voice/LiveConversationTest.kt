@@ -520,8 +520,8 @@ class LiveConversationTest {
 
     private data class SubscriptionRequestCall(val socket: Socket, val session: ChatSession, val call: FakeCall, val state: MutableStateFlow<VoiceChatState>)
 
-    private suspend fun TestScope.subscriptionRequestCall(lock: DeviceLock = DeviceLock.None, method: String = "approval"): SubscriptionRequestCall {
-        val params = if (method == "approval") """"command":"example","choices":["once","always","deny"]""" else """"question":"Color?","choices":["Red","Blue"]"""
+    private suspend fun TestScope.subscriptionRequestCall(lock: DeviceLock = DeviceLock.None, method: String = "approval", customParams: String? = null): SubscriptionRequestCall {
+        val params = customParams ?: if (method == "approval") """"command":"example","choices":["once","always","deny"]""" else """"question":"Color?","choices":["Red","Blue"]"""
         val client = http("gpt-live", mutableListOf())
         val socket = Socket().apply { resume = """{"session_id":"rt9","running":true,"open_requests":[{"id":"bound","method":"$method","params":{"session_id":"rt9",$params}}]}""" }
         val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> socket }, backgroundScope)
@@ -556,6 +556,33 @@ class LiveConversationTest {
         advanceTimeBy(10_000); runCurrent()
         assertTrue(socket.answers.value.isEmpty())
         call.close()
+    }
+
+    @Test
+    fun subscriptionLongRequestsPresentTheWholeIdentityBeforeTakingAnAnswer() = runTest {
+        for (method in listOf("approval", "clarify")) {
+            val identity = if (method == "approval") "Review ${"details ".repeat(30)}then delete all backups"
+                else "Which ${"details ".repeat(30)}should be kept?"
+            val field = if (method == "approval") "description" else "question"
+            val params = "\"$field\":${JsonPrimitive(identity)},\"command\":\"example\",\"choices\":[${if (method == "approval") "\"once\",\"deny\"" else "\"Red\",\"Blue\""}]"
+            val (socket, _, call) = subscriptionRequestCall(method = method, customParams = params)
+            val presented = call.sent.value.filter { it["type"]?.jsonPrimitive?.contentOrNull == "session.context.append" }
+                .joinToString("") { it.getValue("content").jsonArray.single().jsonObject.getValue("text").jsonPrimitive.content }
+            assertTrue(identity in presented, presented)
+            // A partial description/question must never pass the existing presentation gate.
+            val partial = identity.take(100) + "? yes or no?"
+            call.receive("""{"type":"output_transcript.added","item":{"text":${JsonPrimitive(partial)}}}""")
+            call.subscriptionFinal(if (method == "approval") "yes" else "Blue")
+            advanceTimeBy(10_000); runCurrent()
+            assertTrue(socket.answers.value.isEmpty(), method)
+            call.close()
+            val (freshSocket, _, freshCall) = subscriptionRequestCall(method = method, customParams = params)
+            freshCall.receive("""{"type":"output_transcript.added","item":{"text":${JsonPrimitive(presented)}}}""")
+            freshCall.subscriptionFinal(if (method == "approval") "yes" else "Blue")
+            advanceTimeBy(10_000); runCurrent()
+            assertEquals(1, freshSocket.answers.value.size, method)
+            freshCall.close()
+        }
     }
 
     @Test

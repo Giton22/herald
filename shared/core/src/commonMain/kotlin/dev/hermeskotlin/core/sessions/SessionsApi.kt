@@ -58,6 +58,9 @@ private data class SearchResponse(val results: List<SessionSummary> = emptyList(
  */
 class SessionsApi(private val client: HttpClient) {
 
+    /** Where a chat's large attachments go up before they're attached, on the same signed-in client. */
+    val uploads = dev.hermeskotlin.core.chat.AttachmentUploads(client)
+
     /** `GET /api/sessions`, most recent activity first. Pinned rows past the window are appended by the server. */
     suspend fun list(
         url: GatewayUrl,
@@ -77,7 +80,12 @@ class SessionsApi(private val client: HttpClient) {
         }
     }.map { it.body<SessionPage>() }
 
-    /** `GET /api/sessions/search` — id prefix and full-text message matches, one row per conversation. */
+    /**
+     * `GET /api/sessions/search` — id prefix and full-text message matches. The gateway merges hits per compression
+     * lineage, but an older gateway (one row per matching message) or two lineages that resolve to the same newest
+     * segment can still repeat an id; the list keys rows by id, so a repeat would crash it. The first one is kept, as
+     * the gateway ranks it first.
+     */
     suspend fun search(url: GatewayUrl, query: String, limit: Int = 30, profile: String? = null): ApiResult<List<SessionSummary>> = apiCall {
         client.get(url.resolve("api/sessions/search")) {
             profile?.let { parameter("profile", it) }
@@ -85,7 +93,9 @@ class SessionsApi(private val client: HttpClient) {
             parameter("limit", limit)
         }
     }.map { response ->
-        response.body<SearchResponse>().results.map { it.copy(snippet = it.snippet?.stripMatchMarkers()) }
+        response.body<SearchResponse>().results
+            .distinctBy { it.id }
+            .map { it.copy(snippet = it.snippet?.stripMatchMarkers()) }
     }
 
     /**
@@ -108,7 +118,7 @@ class SessionsApi(private val client: HttpClient) {
         }
     }.map { it.body<SessionMessagesPage>() }
 
-    /** `GET /api/sessions/{id}` — the stored row, read for its token and cost totals. */
+    /** `GET /api/sessions/{id}` — the stored row, including token/cost totals and the shared read watermark. */
     suspend fun totals(url: GatewayUrl, sessionId: String, profile: String? = null): ApiResult<SessionTotals> = apiCall {
         client.get(url.resolve("api/sessions/${sessionId.encodeURLPathPart()}")) {
             profile?.let { parameter("profile", it) }

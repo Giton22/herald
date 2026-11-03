@@ -1,4 +1,5 @@
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.jetbrains.compose.desktop.application.tasks.AbstractProguardTask
 
 plugins {
     alias(libs.plugins.kotlin.multiplatform)
@@ -83,6 +84,8 @@ compose.desktop {
             // jdk.accessibility carries the Java Access Bridge that Windows screen readers (NVDA, JAWS) talk to; jcef
             // the Chromium that shows widgets and plugin pages, with its own files.
             modules("java.naming", "java.net.http", "java.sql", "jdk.unsupported", "jdk.accessibility", "jcef")
+            // D-Bus EXTERNAL authentication reads UnixSystem from this module.
+            if (System.getProperty("os.name").startsWith("Linux")) modules("jdk.security.auth")
             windows {
                 menuGroup = "Kyllene"
                 // Keeps upgrades in place: one Kyllene in Programs and Features, whatever the version.
@@ -160,6 +163,12 @@ afterEvaluate {
                 // The remote-process server is for JCEF's out-of-process mode, which Herald doesn't use.
                 .filterNot { it.startsWith("cef_server") }
                 .forEach { File(jdk, "bin/$it").copyTo(File(bin, it), overwrite = true) }
+            // On Linux Chromium's helper process is a native-lib entry, lib/jcef_helper, and jlink writes those without
+            // the executable bit: Chromium then can't start it, and no widget or plugin page renders in the .deb.
+            val helper = runtime.get().asFile.resolve("lib/jcef_helper")
+            if (helper.isFile) {
+                check(helper.setExecutable(true, false) && helper.canExecute()) { "Couldn't make $helper executable" }
+            }
         }
     }
 }
@@ -193,6 +202,45 @@ if (System.getProperty("os.name").startsWith("Windows")) {
                     java.delete()
                 }
             }
+        }
+    }
+}
+
+// ProGuard reads junixsocket's Java 7 fallback classes, whose enclosing-method metadata is incompatible with
+// shrinking. Keep its matching multi-release Java/native libraries intact, but analyze them when shrinking the app.
+if (System.getProperty("os.name").startsWith("Linux")) {
+    val junixsocketVersion = libs.versions.junixsocket.get()
+    afterEvaluate {
+        val shrinker = tasks.named<AbstractProguardTask>("proguardReleaseJars").get()
+        // Snapshot the sources: inputFiles.from is a live set, so retaining it would make this collection recursive.
+        val original = files(shrinker.inputFiles.from.toList())
+        val nativeJars = original.filter {
+            it.name.startsWith("junixsocket-common-") || it.name.startsWith("junixsocket-native-common-")
+        }
+        val expected = setOf("junixsocket-common-$junixsocketVersion.jar", "junixsocket-native-common-$junixsocketVersion.jar")
+        val rules = layout.buildDirectory.file("secret-transport/native-libraries.pro")
+        val prepare = tasks.register("prepareSecretTransportLibraries") {
+            inputs.files(nativeJars)
+            inputs.property("expectedJars", expected)
+            outputs.file(rules)
+            doLast {
+                val jars = nativeJars.files
+                check(jars.size == 2 && jars.map { it.name }.toSet() == expected) {
+                    "Expected matching junixsocket libraries $expected, found ${jars.map { it.name }}"
+                }
+                val file = rules.get().asFile
+                file.parentFile.mkdirs()
+                file.writeText(jars.sortedBy { it.name }.joinToString("\n", postfix = "\n") {
+                    "-libraryjars \"${it.invariantSeparatorsPath}\""
+                })
+            }
+        }
+        shrinker.inputFiles.setFrom(original - nativeJars)
+        shrinker.inputs.files(nativeJars)
+        shrinker.configurationFiles.from(prepare)
+        val output = shrinker.destinationDir
+        shrinker.doLast {
+            nativeJars.forEach { it.copyTo(output.get().asFile.resolve(it.name), overwrite = true) }
         }
     }
 }

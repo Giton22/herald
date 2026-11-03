@@ -2,6 +2,7 @@ package dev.hermeskotlin.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.hermeskotlin.core.voice.AudioApi
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.connection.ConnectionState
@@ -84,6 +85,7 @@ class SettingsViewModel(
     private val sessionsApi: SessionsApi,
     private val nextPrompt: NextPromptApi,
     private val connection: GatewayConnection,
+    private val audio: AudioApi,
 ) : ViewModel() {
 
     /** The chat background's encoded image, or null when there's none (or it isn't read yet). */
@@ -117,6 +119,38 @@ class SettingsViewModel(
 
     private var bound: SavedGateway? = null
     private var boundProfile: String? = null
+
+    private val _voiceSetup = MutableStateFlow<String?>(null)
+    val voiceSetup: StateFlow<String?> = _voiceSetup.asStateFlow()
+    private var voiceSetupJob: Job? = null
+
+    fun setSubscriptionVoice(on: Boolean) {
+        voiceSetupJob?.cancel()
+        store.update { it.copy(subscriptionVoicePreview = on) }
+        if (!on) { _voiceSetup.value = null; return }
+        checkSubscriptionVoice()
+    }
+
+    fun checkSubscriptionVoice() {
+        voiceSetupJob?.cancel()
+        val target = bound
+        val selected = boundProfile
+        if (target == null) { _voiceSetup.value = "Connect to a gateway to check setup."; return }
+        _voiceSetup.value = "Checking selected profile…"
+        voiceSetupJob = viewModelScope.launch {
+            val profile = selected ?: (profilesApi.roster(target.gatewayUrl) as? ApiResult.Success)?.value
+                ?.takeIf { it.launchKnown && it.launch == ProfilesApi.DEFAULT && it.profiles.any { p -> p.name == ProfilesApi.DEFAULT && p.isDefault } }?.launch
+            val message = if (profile.isNullOrBlank()) "Could not verify the launch profile. Select an explicit profile and check again."
+            else when (val result = audio.subscriptionStatus(target.gatewayUrl, profile)) {
+                is ApiResult.Success -> "Setup found for $profile. Test a call."
+                ApiResult.SessionExpired, ApiResult.InvalidCredentials -> "Dashboard sign-in expired. Sign in to the gateway again; this is separate from Codex provider credentials."
+                ApiResult.RateLimited -> "Gateway rate limited the setup check; try again later."
+                is ApiResult.Failed -> if (result.status == 404) "Subscription voice plugin or compatible status route not found for $profile. Install or update it and check again." else result.message
+                is ApiResult.Unavailable -> "Setup check failed: ${result.message}"
+            }
+            if (bound == target && boundProfile == selected) _voiceSetup.value = message
+        }
+    }
 
     private val _voiceInstall = MutableStateFlow(VoiceInstallUi())
     val voiceInstall: StateFlow<VoiceInstallUi> = _voiceInstall.asStateFlow()
@@ -207,6 +241,8 @@ class SettingsViewModel(
     fun bind(gateway: SavedGateway, profile: String? = null) {
         if (bound == gateway && boundProfile == profile) return
         val sameGateway = bound == gateway
+        voiceSetupJob?.cancel()
+        _voiceSetup.value = if (settings.value.subscriptionVoicePreview) "Gateway or profile changed. Check subscription voice setup again." else null
         bound = gateway
         boundProfile = profile
         checkSuggestions()

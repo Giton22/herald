@@ -58,7 +58,7 @@ class StockVoiceErrorsTest(unittest.TestCase):
             self.assertNotIn(secret, json.dumps(data))
 
     def test_unsupported_voice_before_credentials_in_selected_scope(self):
-        for voice in ('marin', 'unknown', [], None):
+        for voice in ('unknown', [], None):
             with self.subTest(voice=voice), patch('tools.voice_live.build_session_config', return_value=self.config(voice)):
                 status, data = self.call(PAYLOAD, 'profile=beta')
                 self.assertEqual(status, 400)

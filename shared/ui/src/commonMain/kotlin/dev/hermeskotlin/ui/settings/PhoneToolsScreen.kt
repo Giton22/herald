@@ -39,6 +39,7 @@ import com.composables.icons.lucide.Contact
 import com.composables.icons.lucide.ExternalLink
 import com.composables.icons.lucide.HeartPulse
 import com.composables.icons.lucide.Hourglass
+import com.composables.icons.lucide.LayoutPanelTop
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MapPin
 import com.composables.icons.lucide.MapPinned
@@ -647,5 +648,6 @@ internal val PhoneTool.icon: ImageVector
         PhoneTool.Calendar -> Lucide.CalendarDays
         PhoneTool.Contacts -> Lucide.Contact
         PhoneTool.Health -> Lucide.HeartPulse
+        PhoneTool.ShowUi -> Lucide.LayoutPanelTop
         PhoneTool.CallMe -> Lucide.PhoneCall
     }

@@ -118,4 +118,50 @@ class InboxApiTest {
         api.runs()
         assertNull(body(sent.last())["before"])
     }
+
+    @Test
+    fun listedAndReadRunsCarryTheirChatWhenThePluginSaysIt() = runTest {
+        val api = api { arg ->
+            if (arg.startsWith("inbox")) {
+                """{"ok":true,"runs":[{"job":"a","run":"2026-10-12_08-00-00","session":"20261012_080000_abc"},""" +
+                    """{"job":"b","run":"2026-10-12_08-00-00"},{"job":"c","run":"2026-10-12_08-00-00","session":"no such/id"}]}"""
+            } else {
+                """{"ok":true,"run":{"job":"a","run":"2026-10-12_08-00-00","text":"All of it","session":"20261012_080000_abc"}}"""
+            }
+        }
+        assertEquals(listOf("20261012_080000_abc", null, null), api.runs().map { it.session })
+        assertEquals("20261012_080000_abc", api.read(InboxRun(job = "a", run = "2026-10-12_08-00-00"))!!.session)
+    }
+
+    @Test
+    fun aRunWhosePluginSaysItHasNoChatIsToldApartFromOneThatSaysNothing() = runTest {
+        val api = api { arg ->
+            if (arg.startsWith("inbox")) {
+                // 0.7.2 names every run's chat, null for none; an older plugin leaves the key out.
+                """{"ok":true,"runs":[{"job":"a","run":"2026-10-12_08-00-00","session":null},{"job":"b","run":"2026-10-12_08-00-00"},""" +
+                    """{"job":"c","run":"2026-10-12_08-00-00","session":"20261012_080000_abc"}]}"""
+            } else {
+                """{"ok":true,"run":{"job":"a","run":"2026-10-12_08-00-00","text":"All of it","session":null,"truncated":true}}"""
+            }
+        }
+        assertEquals(listOf(true, false, true), api.runs().map { it.sessionSaid })
+        val read = api.read(InboxRun(job = "a", run = "2026-10-12_08-00-00"))!!
+        assertTrue(read.sessionSaid)
+        assertNull(read.session)
+        assertTrue(read.truncated)
+    }
+
+    @Test
+    fun aReadThePluginDidntCutSaysSo() = runTest {
+        val api = api { """{"ok":true,"run":{"job":"a","run":"2026-10-12_08-00-00","text":"All of it"}}""" }
+        val read = api.read(InboxRun(job = "a", run = "2026-10-12_08-00-00"))!!
+        assertFalse(read.truncated)
+        assertFalse(read.sessionSaid)
+    }
+
+    @Test
+    fun aRunThatDoesntReadIsAnErrorNotAnEmptyList() = runTest {
+        val api = api { """{"ok":true,"runs":[{"run":"2026-10-12_08-00-00"}]}""" }
+        assertFailsWith<RpcException> { api.runs() }
+    }
 }

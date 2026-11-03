@@ -18,6 +18,7 @@ import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.media.MediaApi
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.profiles.ProfileRoster
@@ -167,6 +168,8 @@ class SessionsViewModel(
     private val threadsRepo: ThreadsRepository,
     /** The list as last read, shown while the gateway can't be. */
     private val cache: OfflineCache? = null,
+    /** Makes a new project's folder on the gateway's machine. */
+    private val files: MediaApi? = null,
 ) : ViewModel() {
 
     /** Stamps an archive's undo offer, so it runs out on time even if the screen goes and comes back. */
@@ -187,7 +190,7 @@ class SessionsViewModel(
         .flatMapLatest { scope -> scope?.let { (url, profile) -> seenStore.seen(url, profile) } ?: flowOf(null) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    /** How far [session] had been read before it is opened, when it has new messages since; read before [markSeen]. */
+    /** How far [session] had been read before it is opened, when it has new messages since. */
     fun readUpTo(session: SessionSummary): Double? = seen.value?.readUpTo(session)
 
     private val waiting = attention.waiting
@@ -196,17 +199,6 @@ class SessionsViewModel(
 
     fun setAttentionFilter(filter: AttentionFilter) {
         _attentionFilter.value = filter
-    }
-
-    /**
-     * The user has looked at [session] as it is now: its reply is read. A chat the gateway holds as unread is
-     * marked read there too, as Desktop does on opening one, so its other clients clear it as well.
-     */
-    fun markSeen(session: SessionSummary) {
-        val (url, profile) = bound.value ?: return
-        viewModelScope.launch { seenStore.markSeen(url, session, profile) }
-        // Best effort: a failed write leaves the gateway's flag, which this phone's last look already outranks.
-        if (session.unread) viewModelScope.launch { api.setUnread(url, session.id, unread = false, profile = profile) }
     }
 
     private val _user = MutableStateFlow<AuthUser?>(null)
@@ -275,6 +267,25 @@ class SessionsViewModel(
     init {
         observeServerChanges()
         observeSearch()
+        markCaughtUpSeen()
+    }
+
+    /**
+     * The open chat read to its end: what its row says it holds counts as seen, by the gateway's clock, so a reply
+     * stamped on this phone or activity after its last message doesn't leave it marked new.
+     */
+    private fun markCaughtUpSeen() {
+        viewModelScope.launch {
+            val listed = _state.map { it.sessions + it.projectSessions.orEmpty() }.distinctUntilChanged()
+            combine(bound, seenStore.caughtUp, listed) { scope, caught, rows ->
+                val (url, profile) = scope ?: return@combine null
+                if (caught == null || caught.gateway != url || caught.profile != profile) return@combine null
+                rows.firstOrNull { it.id == caught.sessionId }?.let { Triple(url, profile, it) }
+            }.distinctUntilChanged().collect { found ->
+                val (url, profile, row) = found ?: return@collect
+                seenStore.markSeen(url, row, profile)
+            }
+        }
     }
 
     /** Idempotent: binds to [gateway] and [profile] and loads the first page once. */
@@ -402,6 +413,13 @@ class SessionsViewModel(
     /** The folders in [dir] on the gateway's machine starting with [prefix], for picking a project's folder; throws when it can't ask. */
     suspend fun projectFolders(dir: String, prefix: String): FolderListing =
         projectsApi.folders(bound.value?.second, dir, prefix)
+
+    /** Makes the folder [name] in [dir] on the gateway's machine; answers why not, or null once it's there. */
+    suspend fun makeProjectFolder(dir: String, name: String): String? {
+        val url = bound.value?.first ?: return "Not connected."
+        val api = files ?: return "This build can't make folders."
+        return api.makeFolder(url, FolderPath.picked(FolderPath.child(dir, name))).errorMessage
+    }
 
     /** [id]'s chip and the picked project renamed to [label]; with [unless], only while they still show that. */
     private fun SessionsUiState.withProjectLabel(id: String, label: String, unless: String? = null): SessionsUiState {

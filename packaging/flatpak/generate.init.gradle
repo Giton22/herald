@@ -1,0 +1,46 @@
+initscript {
+    repositories { gradlePluginPortal(); mavenCentral() }
+    dependencies { classpath 'io.github.jwharm.flatpak-gradle-generator:plugin:1.8.0' }
+}
+allprojects {
+    apply plugin: io.github.jwharm.flatpakgradlegenerator.FlatpakGradleGeneratorPlugin
+    tasks.named('flatpakGradleGenerator') {
+        outputFile = new File(System.getProperty('flatpak.sources.output'), "${project.path.replace(':', '_')}.json")
+        downloadDirectory = 'offline-repository'
+        onlyArches = 'x86_64'
+        includeConfigurations = ['jvmCompileClasspath', 'jvmRuntimeClasspath', 'kotlinCompilerClasspath', 'kotlinCompilerPluginClasspathJvmMain', 'kspKotlinJvmProcessorClasspath', 'kspPluginClasspath', 'kotlinBuildToolsApiClasspath', 'flatpakProguard', 'flatpakComposeTools', 'flatpakKspTools']
+    }
+}
+// The generator reads plugin repositories, rather than settings dependency
+// repositories. Include the app's exclusive JBR/JCEF repository for generation.
+settingsEvaluated { settings ->
+    settings.pluginManagement.repositories {
+        maven { url = 'https://packages.jetbrains.team/maven/p/ij/intellij-dependencies' }
+    }
+}
+gradle.projectsEvaluated {
+    // KSP's worker dependencies are also detached, outside named configurations.
+    rootProject.allprojects.findAll { it.plugins.hasPlugin('com.google.devtools.ksp') }.each { project ->
+        def plugin = project.plugins.getPlugin('com.google.devtools.ksp')
+        def versions = Class.forName('com.google.devtools.ksp.gradle.KSPVersionsKt', true,
+                plugin.class.classLoader)
+        def version = versions.getMethod('getKSP_VERSION').invoke(null)
+        def coroutines = versions.getMethod('getKSP_COROUTINES_VERSION').invoke(null)
+        project.configurations.create('flatpakKspTools') { transitive = false }
+        ['symbol-processing-api', 'symbol-processing-common-deps', 'symbol-processing-aa-embeddable'].each {
+            project.dependencies.add('flatpakKspTools', "com.google.devtools.ksp:${it}:${version}")
+        }
+        project.dependencies.add('flatpakKspTools',
+                "org.jetbrains.kotlinx:kotlinx-coroutines-core-jvm:${coroutines}")
+    }
+    def desktop = rootProject.project(':desktopApp')
+    def shrinker = desktop.tasks.named('proguardReleaseJars').get()
+    desktop.configurations.create('flatpakComposeTools')
+    def composeVersion = desktop.extensions.getByType(org.gradle.api.artifacts.VersionCatalogsExtension)
+            .named('libs').findVersion('compose-multiplatform').get().requiredVersion
+    desktop.dependencies.add('flatpakComposeTools',
+            "org.jetbrains.compose:gradle-plugin-internal-jdk-version-probe:${composeVersion}")
+    desktop.configurations.create('flatpakProguard')
+    desktop.dependencies.add('flatpakProguard',
+            "com.guardsquare:proguard-gradle:${shrinker.proguardVersion.get()}")
+}

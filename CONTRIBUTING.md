@@ -10,7 +10,7 @@ Thanks for helping. Bug fixes, missing gateway features and UI polish are all we
 
 ## Setup
 
-You need JetBrains Runtime 25 (Android Studio's bundled JBR is one; Gradle downloads it when none is found) and the Android SDK with API 37. You also need a Hermes gateway to test against: your own, or a throwaway one.
+You need JetBrains Runtime 25 (Android Studio's bundled JBR is one; Gradle downloads it when none is found) and the Android SDK with API 37.1. You also need a Hermes gateway to test against: your own, or a throwaway one.
 
 ```bash
 ./gradlew :androidApp:installDebug

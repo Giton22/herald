@@ -143,10 +143,11 @@ internal data class ModelSelection(val model: String?, val provider: String?, va
     }
 }
 
-/** The effort a chat runs at, for labels: its own level, else what the gateway defaults to. */
+/** The effort a chat runs at, for labels: its own level, else the profile's, else what the gateway defaults to. */
 internal fun ChatState.effort(option: ModelOption?): ReasoningEffort? {
     if (option != null && !option.reasoning) return null
-    return ReasoningEffort.fromWire(reasoningEffort) ?: ReasoningEffort.Default.takeIf { option != null }
+    return ReasoningEffort.fromWire(reasoningEffort)
+        ?: (ReasoningEffort.fromWire(profileReasoningEffort) ?: ReasoningEffort.Default).takeIf { option != null }
 }
 
 /**

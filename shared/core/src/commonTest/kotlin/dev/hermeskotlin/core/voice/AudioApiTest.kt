@@ -46,6 +46,21 @@ class AudioApiTest {
     }
 
     @Test
+    fun subscriptionStatusRequiresCompatibleContractAndNeverStartsCall() = runTest {
+        var contract = 1
+        val paths = mutableListOf<String>()
+        val api = AudioApi(createHttpClient(MockEngine { request ->
+            paths += request.url.encodedPath
+            assertEquals("alpha", request.url.parameters["profile"])
+            respond("""{"ok":true,"source":"plugin","contract":$contract}""", headers = headersOf(HttpHeaders.ContentType, "application/json"))
+        }))
+        assertTrue(api.subscriptionStatus(url, "alpha") is ApiResult.Success)
+        contract = 0
+        assertTrue(api.subscriptionStatus(url, "alpha") is ApiResult.Failed)
+        assertEquals(listOf("/api/plugins/kyllene_voice/gpt-live/status", "/api/plugins/kyllene_voice/gpt-live/status"), paths)
+    }
+
+    @Test
     fun aSlowAnswerMayBeSilentAsLongAsItMayTake() = runTest {
         val timeouts = mutableMapOf<String, HttpTimeoutConfig?>()
         val api = AudioApi(createHttpClient(MockEngine { request ->

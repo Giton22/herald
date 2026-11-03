@@ -27,6 +27,8 @@ data class ToolActivity(
     val delegationIds: List<String> = emptyList(),
     /** For `image_generate`: the picture it made. */
     val generatedImage: GeneratedImage? = null,
+    /** For `phone_show_ui`: the screen the agent drew in the chat. */
+    val agentScreen: AgentScreen? = null,
 )
 
 /** Why a tool's output was flagged (`tool.output_risk`): the scanner's finding ids. Advisory; nothing was blocked. */
@@ -49,6 +51,11 @@ enum class SendCheck {
 
     /** A later check found it missing from the transcript: Hermes never got it, so it's safe to resend. */
     NotReceived,
+}
+
+/** [sent] of [total] bytes of attachment [name] uploaded so far. */
+data class UploadProgress(val name: String, val sent: Long, val total: Long) {
+    val percent: Int get() = if (total <= 0) 0 else (sent * 100 / total).toInt().coerceIn(0, 100)
 }
 
 /** How a send ended. */
@@ -85,6 +92,8 @@ sealed interface ChatMessage {
         val sentText: String? = null,
         /** When it was sent, in epoch seconds: the stored row's time, or when this device sent it. */
         val timestamp: Double? = null,
+        /** A large attachment going up over HTTP before the prompt is sent; null once it's up. */
+        val upload: UploadProgress? = null,
     ) : ChatMessage
 
     /** One reply: streamed text, reasoning and the tools it ran. [streaming] until `message.complete`. */
@@ -156,6 +165,10 @@ data class ChatState(
     val provider: String? = null,
     /** `none`, a level such as `medium`, or null for the profile default (see ReasoningEffort). */
     val reasoningEffort: String? = null,
+    /** The profile's default level (`config.get reasoning` without a session), shown until the chat has its own. */
+    val profileReasoningEffort: String? = null,
+    /** Advances whenever a newer reasoning value lands (a pick, `/reasoning`, or `session.info`), so a late read yields to it. */
+    val reasoningRevision: Long = 0,
     /** Priority tier on; null until the gateway reports it. */
     val fast: Boolean? = null,
     /** Tool approvals skipped for this chat (`/yolo`); null until the gateway reports it. */

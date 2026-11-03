@@ -57,7 +57,10 @@ import dev.hermeskotlin.designsystem.components.Button
 import dev.hermeskotlin.ui.bots.StartOverDialog
 import dev.hermeskotlin.ui.bots.BotsViewModel
 import dev.hermeskotlin.ui.bots.LocalBotFaces
+import dev.hermeskotlin.core.phone.AgentScreens
+import dev.hermeskotlin.ui.chat.AgentScreenContext
 import dev.hermeskotlin.ui.chat.ChatScreen
+import dev.hermeskotlin.ui.chat.LocalAgentScreens
 import dev.hermeskotlin.ui.rooms.RoomScreen
 import dev.hermeskotlin.ui.rooms.DesktopRoomScreen
 import dev.hermeskotlin.ui.rooms.RoomsViewModel
@@ -155,12 +158,27 @@ fun App(
         settingsStore.update { it.copy(zoom = zoom) }
         true
     }
+    val agentScreens = koinInject<AgentScreens>()
+    val liveScreens by agentScreens.live.collectAsStateWithLifecycle()
+    val screensGot by agentScreens.got.collectAsStateWithLifecycle()
+    val screenContext = remember(liveScreens, screensGot) {
+        AgentScreenContext(
+            liveScreens,
+            agentScreens::shown,
+            agentScreens::answer,
+            agentScreens::fail,
+            // Only a chat Kyllene knows the id of: the phone's calls are kept by it.
+            onDrawn = { chat, screen -> if (chat != null) agentScreens.drawn(screen, chat) },
+            took = { chat, screen -> AgentScreens.took(screen, chat, screensGot) },
+        )
+    }
     hermesTheme(palette)(schemeFor(settings, dark)) {
         CompositionLocalProvider(
             LocalAccentPalette provides palette,
             LocalAppSettings provides settings,
             LocalCodeWrap provides settings.wrapCode,
             LocalGlow provides settings.glow,
+            LocalAgentScreens provides screenContext,
             LocalAppVersion provides appVersion,
             LocalUpdateOffer provides rememberUpdateOffer(releasesRepo, appVersion, settings.checkForUpdates),
             LocalRenameOffer provides rememberRenameOffer(),
@@ -663,6 +681,9 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                     // A newer link may be handed on already: it is left for the sidebar to take.
                     if (shownInboxLink == link) shownInboxLink = null
                     inboxLinks.consume(link)
+                },
+                onOpenReportChat = { chat ->
+                    if (app.openReportChat(chat, launch = profileRoster?.takeIf { it.launchKnown }?.launch)) closeDrawerToChat()
                 },
                 mainPage = mainPage,
             )

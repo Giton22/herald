@@ -116,6 +116,23 @@ class VoiceAnswersTest {
     }
 
     @Test
+    fun longQuestionsChoicesAndApprovalsAreNeverCutOff() {
+        val longWord = "x".repeat(250)
+        val question = "Which $longWord should be kept?"
+        val choice = "Keep $longWord and delete the backup"
+        assertEquals(
+            "$question Say one. 1: $choice. Or say something else.",
+            VoiceAnswers.questionPrompt(ClarifyQuestion(null, question, listOf(choice))),
+        )
+        val description = "Review ${"details ".repeat(30)}then delete all backups"
+        assertEquals(
+            "Hermes needs your approval: $description. Say yes, or no.",
+            VoiceAnswers.approvalPrompt(onceOnly.copy(description = description)),
+        )
+        assertTrue(VoiceAnswers.approvalPrompt(onceOnly.copy(description = "", command = longWord)).contains(longWord))
+    }
+
+    @Test
     fun aChoiceIsPickedByItsNumberOrItsWords() {
         val question = ClarifyQuestion(null, "Which color?", listOf("Red", "Light blue"))
         assertEquals(listOf("Light blue"), VoiceAnswers.clarify(question, "The second one."))

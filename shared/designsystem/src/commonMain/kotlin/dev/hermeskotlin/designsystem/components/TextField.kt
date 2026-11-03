@@ -76,10 +76,19 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 
-/** Shows every character as a bullet; the underlying [TextFieldState] keeps the real text. */
+/** Shows every code point as a bullet; the underlying [TextFieldState] keeps the real text. */
 private object PasswordMask : OutputTransformation {
     override fun TextFieldBuffer.transformOutput() {
-        replace(0, length, "•".repeat(length))
+        var index = 0
+        // The buffer shrinks as surrogate pairs become one bullet, so read it live: [index] is the next unmasked char.
+        while (index < length) {
+            val end = if (charAt(index).isHighSurrogate() && index + 1 < length && charAt(index + 1).isLowSurrogate()) index + 2 else index + 1
+            // Each replacement is an editing unit. Keep a code point together, not the whole password, and give it one
+            // bullet: an offset inside a replacement maps back to the whole range, so a cursor that arrow keys, TalkBack or
+            // a selection handle put between two bullets of an emoji would select it, and the next key would replace it.
+            replace(index, end, "•")
+            index++
+        }
     }
 }
 

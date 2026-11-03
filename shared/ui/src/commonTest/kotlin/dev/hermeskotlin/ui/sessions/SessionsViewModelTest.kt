@@ -10,10 +10,12 @@ import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.DraftStore
 import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.sessions.ActiveSessions
+import dev.hermeskotlin.core.sessions.CaughtUp
 import dev.hermeskotlin.core.sessions.SeenStore
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.rpc.RpcTransport
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.media.MediaApi
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.profiles.ProfilesApi
 import dev.hermeskotlin.core.cache.InMemoryOfflineDao
@@ -55,6 +57,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -83,6 +86,11 @@ class SessionsViewModelTest {
         /** Whether [socket] connects at once; when not, the test starts it through [onConnection]. */
         connectNow: Boolean = true,
         onConnection: (GatewayConnection) -> Unit = {},
+        /** The body of each folder made on the gateway, in order. */
+        madeFolders: MutableList<String> = mutableListOf(),
+        seen: SeenStore = SeenStore(InMemoryKeyValueStore()) { 0.0 },
+        /** The list's rows, as JSON. */
+        rows: String = """{"id":"a","title":"Alpha","pinned":true},{"id":"b","title":"Beta"}""",
     ): SessionsViewModel {
         // On the test dispatcher, so no request is still finishing on another thread when a test ends
         // (and resuming onto Dispatchers.Main while the next test sets it).
@@ -91,7 +99,7 @@ class SessionsViewModelTest {
         config.addHandler { request ->
             when {
                 request.url.encodedPath == "/api/sessions" -> respond(
-                    """{"sessions":[{"id":"a","title":"Alpha","pinned":true},{"id":"b","title":"Beta"}],"total":$total}""",
+                    """{"sessions":[$rows],"total":$total}""",
                     if (listFails()) HttpStatusCode.InternalServerError else listStatus, json,
                 )
                 request.url.encodedPath == "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
@@ -100,6 +108,10 @@ class SessionsViewModelTest {
                     else respond("""{"profiles":[{"name":"default","is_default":true}],"current":"default"}""", HttpStatusCode.OK, json)
                 // A gateway without snapshots, so writes go without an identity (SessionsApiTest covers that).
                 request.url.encodedPath.endsWith("/mutation-snapshot") -> respond("""{"detail":"Not Found"}""", HttpStatusCode.NotFound, json)
+                request.url.encodedPath == "/api/files/mkdir" -> {
+                    madeFolders += request.body.toByteArray().decodeToString()
+                    respond("""{"ok":true}""", HttpStatusCode.OK, json)
+                }
                 request.method == HttpMethod.Delete -> respond("""{"detail":"Store is busy"}""", deleteStatus, json)
                 request.method == HttpMethod.Patch -> {
                     patches += request.body.toByteArray().decodeToString()
@@ -118,10 +130,30 @@ class SessionsViewModelTest {
         val attention = AttentionTracker(connection, ChatHost(connection, SessionsApi(client), scope), ActiveSessions(connection, scope), scope)
         return SessionsViewModel(
             SessionsApi(client), auth, connection, LastChatStore(InMemoryKeyValueStore()), ProfilesApi(client),
-            attention, SeenStore(InMemoryKeyValueStore()) { 0.0 }, DraftStore(InMemoryKeyValueStore()), ProjectsApi(connection),
+            attention, seen, DraftStore(InMemoryKeyValueStore()), ProjectsApi(connection),
             ThreadsRepository(ThreadsApi(connection), SessionsApi(client), ProfilesApi(client)),
             cache,
+            MediaApi(client),
         )
+    }
+
+    @Test
+    fun theOpenChatReadToItsEndCountsItsRowsActivityAsSeen() = runTest(dispatcher) {
+        // The reply was stamped 1300 on this phone; the gateway's last activity (a title, a tool) came after it.
+        val seen = SeenStore(InMemoryKeyValueStore()) { 1000.0 }
+        val vm = viewModel(seen = seen, rows = """{"id":"a","title":"Alpha","last_active":1305.0},{"id":"b","title":"Beta","last_active":1400.0}""")
+        vm.bind(gateway)
+        seen.markLooked(gateway.gatewayUrl, "a", 1300.0)
+        assertTrue(assertNotNull(vm.seen.value).isUnread(vm.state.value.sessions.first { it.id == "a" }))
+
+        seen.setCaughtUp(CaughtUp(gateway.gatewayUrl, null, "a"))
+
+        assertEquals(1305.0, seen.lastLook(gateway.gatewayUrl, "a"))
+        assertFalse(assertNotNull(vm.seen.value).isUnread(vm.state.value.sessions.first { it.id == "a" }))
+        // Only the chat that's caught up, and only on its own gateway and profile.
+        assertEquals(1000.0, seen.lastLook(gateway.gatewayUrl, "b"))
+        seen.setCaughtUp(CaughtUp(gateway.gatewayUrl, "other", "b"))
+        assertEquals(1000.0, seen.lastLook(gateway.gatewayUrl, "b"))
     }
 
     @Test
@@ -361,6 +393,17 @@ class SessionsViewModelTest {
 
         vm.selectProject(null)
         assertEquals(listOf("a", "b"), vm.state.value.listed.map { it.id })
+    }
+
+    @Test
+    fun aNewFolderIsMadeInTheFolderBeingBrowsed() = runTest(dispatcher) {
+        val made = mutableListOf<String>()
+        val vm = viewModel(madeFolders = made)
+        vm.bind(gateway)
+        vm.awaitLoaded()
+
+        assertEquals(null, vm.makeProjectFolder("~/projects/", "site"))
+        assertEquals(listOf("""{"path":"~/projects/site"}"""), made)
     }
 
     @Test

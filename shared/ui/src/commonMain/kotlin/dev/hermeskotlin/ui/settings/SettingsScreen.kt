@@ -258,6 +258,7 @@ fun SettingsScreen(
     val appIcons = key(appIconOpen) { rememberAppIcons() }
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     val voiceInstall by viewModel.voiceInstall.collectAsStateWithLifecycle()
+    val voiceSetup by viewModel.voiceSetup.collectAsStateWithLifecycle()
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
     PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen, onBack = onBack)
     // The desktop lists the sections beside the page; they say here where they start.
@@ -292,6 +293,9 @@ fun SettingsScreen(
         onInstallSuggestions = viewModel::installSuggestions,
         onCheckSuggestions = viewModel::checkSuggestions,
         onInstallVoice = viewModel::openVoiceInstall,
+        voiceSetup = voiceSetup,
+        onSubscriptionVoice = viewModel::setSubscriptionVoice,
+        onCheckSubscriptionVoice = viewModel::checkSubscriptionVoice,
     ) }
     VoiceInstallSheet(voiceInstall, viewModel::closeVoiceInstall, viewModel::selectVoiceProfile, viewModel::confirmVoiceInstall)
     if (callTargetOpen) CallTargetPicker(gateway, viewModel, botFaces, onDismiss = { callTargetOpen = false }) { target ->
@@ -394,6 +398,9 @@ internal fun SettingsView(
     onInstallSuggestions: () -> Unit = {},
     onCheckSuggestions: () -> Unit = {},
     onInstallVoice: () -> Unit = {},
+    voiceSetup: String? = null,
+    onSubscriptionVoice: (Boolean) -> Unit = {},
+    onCheckSubscriptionVoice: () -> Unit = {},
 ) {
     Box(
         Modifier
@@ -620,13 +627,19 @@ internal fun SettingsView(
                     Divider()
                     SwitchRow(
                         title = "Subscription live voice",
-                        detail = "Outgoing calls and configured incoming calls use your ChatGPT subscription, with no voice API fallback. Chat history and profile voice instructions go to the provider. Delegated chat may incur separate charges.",
+                        detail = "Subscription voice on phone; watch uses API. Chat context is shared.",
                         checked = settings.subscriptionVoicePreview,
-                        onCheckedChange = { on -> onUpdate { it.copy(subscriptionVoicePreview = on) } },
+                        onCheckedChange = onSubscriptionVoice,
                     )
                     if (settings.subscriptionVoicePreview) {
+                        if (voiceSetup != null) {
+                            Divider()
+                            Field("Setup check", detail = voiceSetup) {}
+                        }
                         Divider()
-                        ActionRow("Install subscription voice plugin", Lucide.Download, onClick = onInstallVoice)
+                        ActionRow("Check setup", Lucide.RefreshCw, onClick = onCheckSubscriptionVoice)
+                        Divider()
+                        ActionRow("Install voice plugin", Lucide.Download, onClick = onInstallVoice)
                     }
                     Divider()
                     SwitchRow(

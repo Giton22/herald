@@ -14,9 +14,14 @@ import dev.hermeskotlin.core.inbox.Following
 import dev.hermeskotlin.core.inbox.InboxApi
 import dev.hermeskotlin.core.inbox.InboxGroups
 import dev.hermeskotlin.core.inbox.InboxLayout
+import dev.hermeskotlin.core.inbox.InboxNotices
 import dev.hermeskotlin.core.inbox.InboxPluginTooOld
 import dev.hermeskotlin.core.inbox.InboxRun
 import dev.hermeskotlin.core.inbox.InboxStore
+import dev.hermeskotlin.core.inbox.NoInboxNotices
+import dev.hermeskotlin.core.chat.ComposeDraft
+import dev.hermeskotlin.core.chat.DraftStart
+import dev.hermeskotlin.core.chat.OutgoingAttachment
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.push.PushApi
 import dev.hermeskotlin.core.push.PushSetup
@@ -24,7 +29,10 @@ import dev.hermeskotlin.core.push.PushStatus
 import dev.hermeskotlin.core.settings.SettingsStore
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
@@ -159,11 +167,81 @@ fun List<InboxRun>.filtered(filter: InboxFilter, groups: InboxGroups = InboxGrou
     is InboxFilter.Group -> filter { groups.of(it.bot, it.job) == filter.name }
 }
 
+/**
+ * A chat to open about an Inbox report of [gatewayUrl], in the report's [profile]: [storedSessionId], the run's own
+ * chat, to continue it; or, when null, a new chat that starts with [draft] (the report attached).
+ */
+data class ReportChat(
+    val gatewayUrl: String,
+    val profile: String,
+    val title: String,
+    val storedSessionId: String? = null,
+    val draft: ComposeDraft? = null,
+)
+
+/** [key]'s whole report on its way from the gateway: to ask about it ([ask]), or to copy it. */
+data class ReportFetch(val key: String, val ask: Boolean)
+
+/** What the Inbox hands the app to do, once. */
+sealed interface InboxEvent {
+    data class OpenChat(val chat: ReportChat) : InboxEvent
+
+    /** [text] onto the clipboard. */
+    data class Copy(val text: String) : InboxEvent
+}
+
+/**
+ * The report [run] as a Markdown file for a new chat to ask about: named for the job ([name], what the Inbox calls
+ * it) and the run's time, a failed run said so in its name, holding the run's whole text. A report the gateway cut
+ * short for the read ([InboxRun.truncated]) says so on its first line, so the agent doesn't take it for the whole.
+ */
+fun reportAttachment(run: InboxRun, name: String): OutgoingAttachment {
+    val title = name.map { if (it.isISOControl() || it in FILE_NAME_UNSAFE) ' ' else it }.joinToString("")
+        .replace(Regex("\\s+"), " ").trim().take(MAX_FILE_TITLE).trim().ifBlank { run.job }
+    val time = run.run.replaceFirst('_', ' ')
+    val file = "$title $time" + (if (run.failed) " (failed)" else "") + ".md"
+    val whole = run.text.ifBlank { if (run.failed) "The run failed and left no output." else "The run left no output." }
+    val text = if (run.truncated) "$TRUNCATED_NOTE\n\n$whole" else whole
+    return OutgoingAttachment("report-${run.key.hashCode().toUInt().toString(16)}", file, "text/markdown", text.encodeToByteArray())
+}
+
+/** The new chat that asks about [run] ([name], what the Inbox calls its job): the report attached, the composer empty for the question. */
+fun reportDraft(run: InboxRun, name: String) = ComposeDraft(attachments = listOf(reportAttachment(run, name)), start = DraftStart.Typing)
+
+/**
+ * What opening [run]'s own chat is called: it goes on where the gateway lets it, and is only there to read where
+ * the run's session runs nothing but its job ([InboxRun.sessionReadOnly]); Ask about this takes the question then.
+ */
+internal fun runChatLabel(run: InboxRun): String = if (run.sessionReadOnly) "Open its chat" else "Continue its chat"
+
+/** The first line of a report the gateway cut short ([InboxRun.truncated]). */
+internal const val TRUNCATED_NOTE = "> The gateway cut this report at 48 KB; the rest isn't included."
+
+/** Characters a file name can't hold on one system or another. */
+private const val FILE_NAME_UNSAFE = "/\\:*?\"<>|"
+private const val MAX_FILE_TITLE = 60
+
 /** What the Inbox's pages can ask for; [InboxViewModel] does it all, previews nothing. */
 interface InboxActions {
     fun open(run: InboxRun)
     fun closeRun()
     fun markAllRead()
+
+    /** [run] counts as read; or unread again, when it [InboxUiState.canMarkUnread]. */
+    fun setRead(run: InboxRun, read: Boolean)
+
+    /** Every run of [filter]'s folder counts as read, those paged in from further back too. */
+    fun markFolderRead(filter: InboxFilter)
+
+    /** A new chat in [run]'s profile with the whole report attached, to ask about it. */
+    fun ask(run: InboxRun)
+
+    /** Opens the chat [run] was written in ([InboxRun.session]), in its profile. */
+    fun continueChat(run: InboxRun)
+
+    /** The whole of [run]'s report onto the clipboard. */
+    fun copy(run: InboxRun)
+
     fun setFilter(filter: InboxFilter)
     fun chooseJobs()
     fun closeJobs()
@@ -239,11 +317,16 @@ data class InboxUiState(
     val more: Boolean = false,
     val loadingMore: Boolean = false,
     val moreError: String? = null,
+    /** The run whose whole report is being fetched, to ask about or copy. */
+    val fetching: ReportFetch? = null,
 ) {
     /** Whether the follow page's controls take a change now. */
     val canEditFollowing: Boolean get() = followingLoaded && !saving
 
     fun isUnread(run: InboxRun): Boolean = run.key !in read && run.at > since
+
+    /** Whether [run] can show as unread again: one from before the Inbox started counts as read whatever is done. */
+    fun canMarkUnread(run: InboxRun): Boolean = run.at > since
     val unread: Int get() = runs.count(::isUnread)
     val chips: List<JobChip> get() = jobChips(runs, groups, ::isUnread)
     val folders: List<InboxFolder> get() = inboxFolders(runs, groups, ::isUnread)
@@ -291,10 +374,17 @@ class InboxViewModel(
     private val push: PushSetup,
     private val connection: GatewayConnection,
     private val settings: SettingsStore,
+    /** Takes down the notifications of the runs read here. */
+    private val notices: InboxNotices = NoInboxNotices,
 ) : ViewModel(), InboxActions {
 
     private val _state = MutableStateFlow(InboxUiState())
     val state: StateFlow<InboxUiState> = _state.asStateFlow()
+
+    private val _events = Channel<InboxEvent>(Channel.BUFFERED)
+
+    /** Chats to open and text to copy, each handed over once. */
+    val events: Flow<InboxEvent> = _events.receiveAsFlow()
 
     private var gateway: SavedGateway? = null
 
@@ -317,6 +407,7 @@ class InboxViewModel(
     private var followJob: Job? = null
     private var saveJob: Job? = null
     private var moreJob: Job? = null
+    private var fetchJob: Job? = null
 
     /** Where the Inbox's lists were left (the folders, and the run list per folder), for the page to put back. */
     val places = mutableMapOf<String, ListPlace>()
@@ -364,7 +455,7 @@ class InboxViewModel(
         val first = this.gateway == null
         this.gateway = gateway
         generation++
-        listOf(bindJob, loadJob, openJob, followJob, saveJob, moreJob).forEach { it?.cancel() }
+        listOf(bindJob, loadJob, openJob, followJob, saveJob, moreJob, fetchJob).forEach { it?.cancel() }
         older = emptyList()
         places.clear()
         if (!first) {
@@ -387,6 +478,11 @@ class InboxViewModel(
     fun setVisible(visible: Boolean) {
         val was = this.visible
         this.visible = visible
+        if (!visible) {
+            // A chat asked for out of sight would open by itself later, the next time the Inbox shows.
+            fetchJob?.cancel()
+            while (_events.tryReceive().isSuccess) Unit
+        }
         if (visible && !was && gateway != null) lookAgain()
     }
 
@@ -538,10 +634,11 @@ class InboxViewModel(
         openJob?.cancel()
         openJob = viewModelScope.launch {
             bindJob?.join()
-            store.markRead(url, run)
+            if (gen != generation) return@launch
+            markRead(url, listOf(run))
             val (full, note) = when {
                 !ready() -> null to RunNote.Offline
-                else -> runCatching { api.read(run) }.fold(
+                else -> runCatching { api.read(run)?.keeping(run) }.fold(
                     onSuccess = { it to (if (it == null) RunNote.Gone else null) },
                     onFailure = { null to RunNote.Failed },
                 )
@@ -549,7 +646,7 @@ class InboxViewModel(
             if (gen != generation) return@launch
             if (full != null) {
                 store.add(url, full)
-                if (older.any { it.key == full.key }) older = older.map { if (it.key == full.key) full else it }
+                if (older.any { it.key == full.key }) older = older.map { if (it.key == full.key) full.asKept() else it }
             }
             _state.update { state ->
                 if (state.open?.key != run.key) return@update state
@@ -585,7 +682,129 @@ class InboxViewModel(
     override fun markAllRead() {
         val url = gateway?.gatewayUrl?.value ?: return
         val also = older
-        viewModelScope.launch { store.markAllRead(url, also) }
+        val gen = generation
+        viewModelScope.launch {
+            bindJob?.join()
+            if (gen != generation) return@launch
+            val all = store.state.value.runs.takeIf { store.bound == url }.orEmpty() + also
+            store.markAllRead(url, also)
+            notices.runsRead(url, all.map { it.key })
+        }
+    }
+
+    override fun setRead(run: InboxRun, read: Boolean) {
+        val url = gateway?.gatewayUrl?.value ?: return
+        if (!read && !_state.value.canMarkUnread(run)) return
+        val gen = generation
+        viewModelScope.launch {
+            bindJob?.join()
+            if (gen != generation) return@launch
+            if (read) markRead(url, listOf(run)) else store.markUnread(url, run)
+        }
+    }
+
+    override fun markFolderRead(filter: InboxFilter) {
+        val url = gateway?.gatewayUrl?.value ?: return
+        val s = _state.value
+        // What the folder shows: the kept runs and those paged in from further back alike.
+        val runs = s.runs.filtered(filter, s.groups)
+        if (runs.isEmpty()) return
+        val gen = generation
+        viewModelScope.launch {
+            bindJob?.join()
+            if (gen != generation) return@launch
+            markRead(url, runs)
+        }
+    }
+
+    /** [runs] count as read, and their notifications go. */
+    private suspend fun markRead(url: String, runs: List<InboxRun>) {
+        store.markRead(url, runs)
+        notices.runsRead(url, runs.map { it.key })
+    }
+
+    override fun ask(run: InboxRun) = fetchWhole(run, ask = true) { url, whole, note ->
+        if (whole == null) {
+            _state.update { it.copy(message = note.askText()) }
+            return@fetchWhole
+        }
+        markRead(url, listOf(run))
+        val name = _state.value.nameOf(run)
+        _events.send(InboxEvent.OpenChat(ReportChat(url, run.bot, name, draft = reportDraft(whole, name))))
+    }
+
+    override fun continueChat(run: InboxRun) {
+        val url = gateway?.gatewayUrl?.value ?: return
+        val session = run.session ?: return
+        val gen = generation
+        viewModelScope.launch {
+            bindJob?.join()
+            if (gen != generation) return@launch
+            markRead(url, listOf(run))
+            _events.send(InboxEvent.OpenChat(ReportChat(url, run.bot, _state.value.nameOf(run), storedSessionId = session)))
+        }
+    }
+
+    override fun copy(run: InboxRun) = fetchWhole(run, ask = false) { _, whole, note ->
+        _events.send(InboxEvent.Copy(whole?.text ?: run.text))
+        val message = when {
+            whole == null -> "Copied the start of the report: ${note.copyText()}"
+            // The ask's file says so on its first line; the clipboard keeps the report's own text, so this says it.
+            whole.truncated -> "Copied the report as far as the gateway sends it: the first 48 KB."
+            else -> "Copied the report."
+        }
+        _state.update { it.copy(message = message) }
+    }
+
+    /**
+     * Gets [run]'s whole report: the one open, when it came whole, else a read from the gateway; then [then] with it,
+     * or with null and why there's only the start. One at a time: a second tap waits for nothing. Dropped once the
+     * Inbox moves to another gateway.
+     */
+    private fun fetchWhole(run: InboxRun, ask: Boolean, then: suspend (url: String, whole: InboxRun?, note: RunNote) -> Unit) {
+        val url = gateway?.gatewayUrl?.value ?: return
+        if (fetchJob?.isActive == true) return
+        val gen = generation
+        _state.update { it.copy(fetching = ReportFetch(run.key, ask)) }
+        fetchJob = viewModelScope.launch {
+            try {
+                bindJob?.join()
+                // The run still opening is being read already: that read is the one to wait for, not a second.
+                if (_state.value.let { it.open?.key == run.key && it.openLoading }) openJob?.join()
+                val s = _state.value
+                val shown = s.open?.takeIf { it.key == run.key && !s.openLoading && s.openNote == null }
+                val (whole, note) = when {
+                    shown != null -> shown to RunNote.Failed
+                    !ready() -> null to RunNote.Offline
+                    else -> runCatching { api.read(run) }.fold(
+                        onSuccess = { it to RunNote.Gone },
+                        onFailure = { null to RunNote.Failed },
+                    )
+                }
+                if (gen != generation) return@launch
+                // The plugin's read carries the run's chat too, or says it has none now; a list from an older one may not have.
+                val kept = whole?.keeping(run)
+                if (kept != null && shown == null) {
+                    store.add(url, kept)
+                    if (older.any { it.key == kept.key }) older = older.map { if (it.key == kept.key) kept.asKept() else it }
+                }
+                then(url, kept, note)
+            } finally {
+                if (gen == generation) _state.update { it.copy(fetching = null) }
+            }
+        }
+    }
+
+    private fun RunNote.askText(): String = when (this) {
+        RunNote.Offline -> "Connect to the gateway to ask about this report: only its start is on the phone."
+        RunNote.Gone -> "The gateway no longer has this report, so there's only its start to ask about."
+        RunNote.Failed -> "Couldn't get the whole report from the gateway. Try again in a moment."
+    }
+
+    private fun RunNote.copyText(): String = when (this) {
+        RunNote.Offline -> "connect to the gateway for the rest."
+        RunNote.Gone -> "the gateway no longer has the rest."
+        RunNote.Failed -> "the gateway couldn't send the rest."
     }
 
     /** Opens the follow page: every job, and how each reaches the Inbox now. */
