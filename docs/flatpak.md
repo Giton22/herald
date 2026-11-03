@@ -12,6 +12,14 @@ with `flatpak install build/kyllene.flatpak` has no remote and never updates. Th
 app's own update check is off in this build (it sets no `-PreleasesRepo`), and it
 should stay off.
 
+Each release also carries the stable app as a bundle,
+`kyllene-desktop-<version>_x86_64.flatpak`, for a manual install. The release
+workflow runs `prepare-ci.py --release <version>`, which makes the Devel manifest
+into `release.json`: `app.kyllene.Kyllene` on the `stable` branch, built as that
+version, with its own `.desktop` file and metainfo. The bundle names Flathub as its
+runtime's repository, so installing it fetches the Freedesktop runtime. Installing
+the next release's bundle replaces it in place and keeps the app's data.
+
 Install `org.flatpak.Builder`, `org.freedesktop.Sdk//26.08` and its matching
 runtime in the user installation. From the repository root, build and install:
 
