@@ -188,6 +188,7 @@ class VoiceController(
 
     /** The chained chat running, whose microphone Mute holds shut; null outside one. */
     private var chained: Job? = null
+    private var chainedAudio: (() -> Unit)? = null
 
     /**
      * [pauseMs] is how long a quiet spell after speech has to last before it's sent. [opener]: a call the agent placed,
@@ -259,6 +260,8 @@ class VoiceController(
 
     /** Desktop's chained voice chat: listen, send what you said, read the reply aloud, until it ends. */
     private suspend fun converseChained(session: ChatSession, gateway: GatewayUrl, profile: String?, pauseMs: Long, opener: CallReason?) = coroutineScope {
+        val closeAudio = player.chainedChatAudio()
+        chainedAudio = closeAudio
         appScope.launch { audio.ttsLease(gateway, active = true, profile) }
         // Read while the first listen goes on; it's needed once the first reply is on its way.
         val settings = async { audio.bargeIn(gateway, profile) }
@@ -300,6 +303,8 @@ class VoiceController(
             // A newer chat may have started while this one wound down; it keeps its own.
             if (chained === running) chained = null
             appScope.launch { audio.ttsLease(gateway, active = false, profile) }
+            if (chainedAudio === closeAudio) chainedAudio = null
+            closeAudio()
         }
         settings.cancel()
     }
@@ -362,6 +367,7 @@ class VoiceController(
         stoppedByUser = true
         chatJob?.cancel()
         chatJob = null
+        chainedAudio?.let { chainedAudio = null; it() }
     }
 
     /** Cuts the reply being read aloud and listens again. */
