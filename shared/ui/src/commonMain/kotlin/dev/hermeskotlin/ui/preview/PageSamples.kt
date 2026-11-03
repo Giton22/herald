@@ -25,6 +25,9 @@ import dev.hermeskotlin.core.cron.CronJob
 import dev.hermeskotlin.core.cron.DeliveryTarget
 import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.ui.sessions.ScheduledUiState
+import dev.hermeskotlin.ui.sessions.said
+import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.sessions_hub_blocked
 import kotlin.time.Duration.Companion.days
 import kotlin.time.Duration.Companion.hours
 import dev.hermeskotlin.core.gateway.CheckStage
@@ -157,7 +160,7 @@ internal object PageSamples {
     val skillsHubCaution = skillsHub.copy(confirm = hubScan)
     val skillsHubBlocked = skillsHub.copy(
         detail = HubDetail(hubFeatured[1], preview = hubPreview, scan = hubScan.copy(verdict = "dangerous", policy = "block", summary = "1 high-risk finding", findings = hubScan.findings.take(1))),
-        message = "smart-disks was blocked by the security scan.",
+        message = said(Res.string.sessions_hub_blocked, "smart-disks"),
     )
 
     /** Hermes's settings on a sample gateway, open at [place]: the sections, or one of them by id. */

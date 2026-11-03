@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tray_open">Abrir o Kyllene</string>
+    <string name="tray_new_chat">Nova conversa</string>
+    <string name="tray_quick_entry">Entrada rápida</string>
+    <string name="tray_quit">Sair do Kyllene</string>
+
+    <string name="quick_entry_window_title">Entrada rápida do Kyllene</string>
+    <string name="quick_entry_new_chat">Nova conversa</string>
+    <string name="quick_entry_this_chat">Esta conversa</string>
+    <string name="quick_entry_field">Pergunte ao Hermes</string>
+    <string name="quick_entry_placeholder">Pergunte qualquer coisa ao Hermes…</string>
+    <string name="quick_entry_keys">Enter para enviar · Tab para alternar · Esc para fechar</string>
+
+    <string name="notice_reply_failed">O Hermes teve um problema</string>
+    <string name="notice_replied">O Hermes respondeu</string>
+    <string name="notice_reply_in">A resposta chegou.</string>
+    <string name="notice_approval">Aprovação necessária</string>
+    <string name="notice_question">O Hermes tem uma pergunta</string>
+    <string name="notice_needs_you">O Hermes precisa de você</string>
+    <string name="notice_approve_once">Aprovar uma vez</string>
+    <string name="notice_deny">Negar</string>
+
+    <string name="storage_title">Armazenamento do Kyllene</string>
+    <string name="storage_folder">Pasta de configurações:</string>
+    <string name="storage_retry">Tentar de novo</string>
+    <string name="storage_start_fresh">Do zero</string>
+    <string name="storage_quit">Sair</string>
+    <string name="storage_with_start_fresh">%1$s “Do zero” guarda esse arquivo com outro nome e abre o Kyllene sem login.</string>
+    <string name="storage_unavailable">O Kyllene não conseguiu obter sua chave de armazenamento. Desbloqueie o chaveiro do seu desktop, confira se o portal Secret dele está disponível e tente de novo.</string>
+    <string name="storage_cancelled">O desbloqueio do armazenamento foi cancelado. Tente de novo para desbloqueá-lo; os dados existentes foram preservados.</string>
+    <string name="storage_corrupt">O Kyllene não conseguiu abrir suas configurações criptografadas. Restaure um backup em bom estado ou use a identidade original do aplicativo. Os dados existentes foram preservados.</string>
+    <string name="storage_version">Este formato de configurações precisa de outra versão do Kyllene. Os dados existentes foram preservados.</string>
+    <string name="storage_read">O Kyllene não conseguiu ler suas configurações, ou o arquivo passa de 16 MiB. Confira o acesso ao arquivo antes de tentar de novo.</string>
+    <string name="storage_write">O Kyllene não conseguiu terminar de salvar ou limpar suas configurações. As cópias existentes foram preservadas; confira o espaço em disco e o acesso aos arquivos antes de tentar de novo.</string>
+    <string name="storage_uncertain">O Kyllene não conseguiu confirmar que suas configurações foram salvas. Confira o acesso aos arquivos e tente iniciar de novo, ou saia e reinicie antes de fazer outras alterações.</string>
+    <string name="storage_changed">As configurações mudaram fora desta janela. Saia do Kyllene e reinicie-o para recarregá-las antes de salvar.</string>
+    <string name="storage_legacy">Foram encontradas configurações antigas conflitantes ou incompletas. Os arquivos existentes foram preservados. Saia e resolva a cópia mais antiga antes de tentar de novo.</string>
+    <string name="storage_unsupported">O Kyllene não conseguiu verificar sua identidade de aplicativo Flatpak. Confira a instalação antes de tentar de novo. Não há alternativa sem criptografia.</string>
+
+    <string name="web_widget_no_browser">Não foi possível iniciar o navegador onde os widgets aparecem.</string>
+    <string name="web_widget_failed">Não foi possível mostrar este widget.</string>
+    <string name="web_close_page">Fechar a página</string>
+    <string name="web_page_failed">Não foi possível abrir a página.</string>
+    <string name="web_try_again">Tentar de novo</string>
+</resources>

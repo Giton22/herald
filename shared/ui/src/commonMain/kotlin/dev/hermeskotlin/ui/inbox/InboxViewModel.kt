@@ -1,7 +1,9 @@
 package dev.hermeskotlin.ui.inbox
 
 import androidx.lifecycle.ViewModel
-import dev.hermeskotlin.ui.deviceNoun
+import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.StringResource
 import androidx.lifecycle.viewModelScope
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
@@ -75,11 +77,11 @@ sealed interface InboxFilter {
 fun showsChips(chips: Int, failed: Int, selected: InboxFilter): Boolean = chips >= 2 || failed > 0 || selected != InboxFilter.All
 
 /** What a save of the follow page that didn't go through says. */
-fun saveErrorText(error: Throwable): String = when {
+fun saveErrorText(error: Throwable): Words = when {
     error is InboxPluginTooOld && error.needs == InboxApi.ALL_JOBS_PLUGIN_VERSION ->
-        "Couldn't save that. All on and switching jobs off need the gateway's plugin ${InboxApi.ALL_JOBS_PLUGIN_VERSION}: update it in Settings."
-    error is InboxPluginTooOld -> "Couldn't save that. ${InboxApi.TOO_OLD} Update it in Settings."
-    else -> error.message?.takeIf { it.isNotBlank() }?.let { "Couldn't save that: $it" } ?: "Couldn't save that."
+        words(Res.string.inbox_save_needs_all_jobs_plugin, InboxApi.ALL_JOBS_PLUGIN_VERSION)
+    error is InboxPluginTooOld -> words(Res.string.inbox_save_plugin_too_old)
+    else -> error.message?.takeIf { it.isNotBlank() }?.let { words(Res.string.inbox_save_failed_because, it) } ?: words(Res.string.inbox_save_failed)
 }
 
 /**
@@ -212,7 +214,8 @@ fun reportDraft(run: InboxRun, name: String) = ComposeDraft(attachments = listOf
  * What opening [run]'s own chat is called: it goes on where the gateway lets it, and is only there to read where
  * the run's session runs nothing but its job ([InboxRun.sessionReadOnly]); Ask about this takes the question then.
  */
-internal fun runChatLabel(run: InboxRun): String = if (run.sessionReadOnly) "Open its chat" else "Continue its chat"
+internal fun runChatLabel(run: InboxRun): StringResource =
+    if (run.sessionReadOnly) Res.string.inbox_open_its_chat else Res.string.inbox_continue_its_chat
 
 /** The first line of a report the gateway cut short ([InboxRun.truncated]). */
 internal const val TRUNCATED_NOTE = "> The gateway cut this report at 48 KB; the rest isn't included."
@@ -291,7 +294,7 @@ data class InboxUiState(
     /** The groups page: make, rename and remove groups, and put jobs in them. */
     val grouping: Boolean = false,
     val loading: Boolean = true,
-    val error: String? = null,
+    val error: Words? = null,
     val block: InboxBlock? = null,
     val filter: InboxFilter = InboxFilter.All,
     /** The run open in full; null shows the list. */
@@ -310,13 +313,13 @@ data class InboxUiState(
      */
     val followingLoaded: Boolean = false,
     /** Why what this phone follows couldn't be read, while it can't. */
-    val followingError: String? = null,
+    val followingError: Words? = null,
     val saving: Boolean = false,
-    val message: String? = null,
+    val message: Words? = null,
     /** The gateway may have runs before the oldest one shown. */
     val more: Boolean = false,
     val loadingMore: Boolean = false,
-    val moreError: String? = null,
+    val moreError: Words? = null,
     /** The run whose whole report is being fetched, to ask about or copy. */
     val fetching: ReportFetch? = null,
 ) {
@@ -586,7 +589,7 @@ class InboxViewModel(
                 it.copy(
                     loading = false,
                     block = if (old) InboxBlock.PluginOld else it.block,
-                    error = if (old || it.runs.isNotEmpty() || quiet) null else e.message ?: "Couldn't load the Inbox.",
+                    error = if (old || it.runs.isNotEmpty() || quiet) null else e.said(Res.string.inbox_load_failed),
                 )
             }
         }
@@ -599,15 +602,19 @@ class InboxViewModel(
         val gen = generation
         _state.update { it.copy(loadingMore = true, moreError = null) }
         moreJob = viewModelScope.launch {
-            val result = if (ready()) runCatching { api.runs(InboxApi.PAGE, before) } else Result.failure(IllegalStateException("Not connected to the gateway."))
+            val result = if (ready()) runCatching { api.runs(InboxApi.PAGE, before) } else null
             if (gen != generation) return@launch
+            if (result == null) {
+                _state.update { it.copy(loadingMore = false, moreError = words(Res.string.inbox_not_connected)) }
+                return@launch
+            }
             result.onSuccess { page ->
                 val (added, more) = pageIn(_state.value.runs, page, InboxApi.PAGE)
                 older = (older + added).distinctBy { it.key }
                 // Onto the runs shown, which are this gateway's: the shared store may hold another's.
                 _state.update { it.copy(runs = withOlder(it.runs), loadingMore = false, more = more) }
             }.onFailure { e ->
-                _state.update { it.copy(loadingMore = false, moreError = e.message ?: "Couldn't load more.") }
+                _state.update { it.copy(loadingMore = false, moreError = e.said(Res.string.inbox_load_more_failed)) }
             }
         }
     }
@@ -666,7 +673,8 @@ class InboxViewModel(
             }?.runs?.firstOrNull { it.key == key }
             if (gen != generation) return@launch
             if (run == null) {
-                _state.update { it.copy(message = "That report isn't on the $deviceNoun. It may be further back in the list.") }
+                val gone = if (isDesktop) Res.string.inbox_report_not_here_computer else Res.string.inbox_report_not_here_phone
+                _state.update { it.copy(message = words(gone)) }
                 return@launch
             }
             _state.update { it.copy(choosing = false, grouping = false) }
@@ -748,12 +756,12 @@ class InboxViewModel(
     override fun copy(run: InboxRun) = fetchWhole(run, ask = false) { _, whole, note ->
         _events.send(InboxEvent.Copy(whole?.text ?: run.text))
         val message = when {
-            whole == null -> "Copied the start of the report: ${note.copyText()}"
+            whole == null -> note.copyText()
             // The ask's file says so on its first line; the clipboard keeps the report's own text, so this says it.
-            whole.truncated -> "Copied the report as far as the gateway sends it: the first 48 KB."
-            else -> "Copied the report."
+            whole.truncated -> Res.string.inbox_copied_truncated
+            else -> Res.string.inbox_copied
         }
-        _state.update { it.copy(message = message) }
+        _state.update { it.copy(message = words(message)) }
     }
 
     /**
@@ -795,16 +803,19 @@ class InboxViewModel(
         }
     }
 
-    private fun RunNote.askText(): String = when (this) {
-        RunNote.Offline -> "Connect to the gateway to ask about this report: only its start is on the phone."
-        RunNote.Gone -> "The gateway no longer has this report, so there's only its start to ask about."
-        RunNote.Failed -> "Couldn't get the whole report from the gateway. Try again in a moment."
-    }
+    private fun RunNote.askText(): Words = words(
+        when (this) {
+            RunNote.Offline -> Res.string.inbox_ask_offline
+            RunNote.Gone -> Res.string.inbox_ask_gone
+            RunNote.Failed -> Res.string.inbox_ask_failed
+        },
+    )
 
-    private fun RunNote.copyText(): String = when (this) {
-        RunNote.Offline -> "connect to the gateway for the rest."
-        RunNote.Gone -> "the gateway no longer has the rest."
-        RunNote.Failed -> "the gateway couldn't send the rest."
+    /** What a copy of only the report's start says, by why there's only its start. */
+    private fun RunNote.copyText(): StringResource = when (this) {
+        RunNote.Offline -> Res.string.inbox_copied_start_offline
+        RunNote.Gone -> Res.string.inbox_copied_start_gone
+        RunNote.Failed -> Res.string.inbox_copied_start_failed
     }
 
     /** Opens the follow page: every job, and how each reaches the Inbox now. */
@@ -820,7 +831,7 @@ class InboxViewModel(
                 it.copy(
                     jobs = (jobs as? ApiResult.Success)?.value?.sortedBy { job -> job.displayName.lowercase() } ?: it.jobs,
                     jobsLoading = false,
-                    message = if (jobs !is ApiResult.Success) "Couldn't load the jobs." else it.message,
+                    message = if (jobs !is ApiResult.Success) words(Res.string.inbox_jobs_load_failed) else it.message,
                 )
             }
             readFollowing(gen)
@@ -833,8 +844,12 @@ class InboxViewModel(
      */
     private suspend fun readFollowing(gen: Int) {
         val savesBefore = saves
-        val result = if (ready()) runCatching { api.following() } else Result.failure(IllegalStateException("Connect to the gateway to see what this phone follows."))
+        val result = if (ready()) runCatching { api.following() } else null
         if (gen != generation || saves != savesBefore) return
+        if (result == null) {
+            _state.update { it.copy(followingLoaded = false, followingError = words(Res.string.inbox_following_offline)) }
+            return
+        }
         result.onSuccess { following ->
             _state.update { it.copy(following = following, followingLoaded = true, followingError = null) }
         }.onFailure { e ->
@@ -864,7 +879,7 @@ class InboxViewModel(
         saveJob = viewModelScope.launch {
             if (!ready()) {
                 // Nothing was sent, so nothing changed on the gateway.
-                if (gen == generation) _state.update { it.copy(following = before, saving = false, message = "Connect to the gateway to change this.") }
+                if (gen == generation) _state.update { it.copy(following = before, saving = false, message = words(Res.string.inbox_change_offline)) }
                 return@launch
             }
             val saved = runCatching { api.setFollowing(next) }
@@ -888,7 +903,7 @@ class InboxViewModel(
                         it.copy(
                             followingLoaded = false,
                             saving = false,
-                            followingError = "Couldn't tell whether that was saved. ${followingErrorText(again)}",
+                            followingError = words(Res.string.inbox_save_unknown, followingErrorText(again)),
                         )
                     }
                 }
@@ -896,8 +911,11 @@ class InboxViewModel(
         }
     }
 
-    private fun followingErrorText(e: Throwable): String =
-        if (e is InboxPluginTooOld) InboxApi.TOO_OLD else e.message ?: "Couldn't read what this phone follows."
+    private fun followingErrorText(e: Throwable): Words =
+        if (e is InboxPluginTooOld) words(Res.string.inbox_plugin_too_old) else e.said(Res.string.inbox_following_failed)
+
+    /** The gateway's own words for what went wrong, else [fallback]. */
+    private fun Throwable.said(fallback: StringResource): Words = message?.let(Words::Raw) ?: words(fallback)
 
     companion object {
         /** The plugin the Inbox needs, for the message that asks to update it. */
