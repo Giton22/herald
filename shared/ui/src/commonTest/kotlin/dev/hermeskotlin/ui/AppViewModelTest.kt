@@ -37,6 +37,7 @@ import dev.hermeskotlin.core.sessions.SessionListFilter
 import dev.hermeskotlin.core.sessions.SessionSummary
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.settings.SettingsStore
+import dev.hermeskotlin.core.settings.startProject
 import dev.hermeskotlin.core.settings.CallTarget
 import kotlinx.coroutines.CompletableDeferred
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
@@ -53,6 +54,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.TestScope
@@ -866,6 +868,7 @@ class AppViewModelTest {
         signedIn(home)
         val app = viewModel()
         app.awaitChat(home)
+        callSettings.settings.filterNotNull().first()
         app.newChat(cwd = "/srv/site")
 
         app.switchProfile("work", fresh = true)
@@ -941,6 +944,66 @@ class AppViewModelTest {
         val moved = app.target()
         assertEquals("/srv/site", moved.cwd)
         assertEquals(opened.nonce, moved.nonce)
+    }
+
+    /** Settings whose stored copy is only read once [loaded] completes. */
+    private fun TestScope.slowSettings(loaded: CompletableDeferred<Unit>): SettingsStore {
+        val delayed = object : KeyValueStore by store {
+            override suspend fun get(key: String): String? {
+                if (key == "settings.v1") loaded.await()
+                return store.get(key)
+            }
+        }
+        return SettingsStore(delayed, backgroundScope)
+    }
+
+    @Test
+    fun aChatSharedAtLaunchStartsInTheLastProject() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        gateways.save(home)
+        signedIn(home)
+        store.put("settings.v1", """{"lastProjects":{"${home.gatewayUrl.value}":"/srv/site"}}""")
+        val loaded = CompletableDeferred<Unit>()
+        val app = viewModel(slowSettings(loaded))
+        runCurrent()
+        app.awaitChat(home)
+
+        // Shared before the settings are read: it waits for them rather than opening outside the project…
+        app.newChat(ComposeDraft(text = "Look at this", start = DraftStart.Send))
+        runCurrent()
+        assertNull(app.target().draft)
+        loaded.complete(Unit)
+        runCurrent()
+
+        // …and opens there with its draft, never moved after it may have sent itself.
+        val shared = app.target()
+        assertEquals("/srv/site", shared.cwd)
+        assertEquals("Look at this", shared.draft?.text)
+    }
+
+    @Test
+    fun aProjectPickedBeforeTheSettingsAreReadStaysAndKeepsThem() = runTest {
+        Dispatchers.setMain(StandardTestDispatcher(testScheduler))
+        gateways.save(home)
+        signedIn(home)
+        store.put("settings.v1", """{"lastProjects":{"${home.gatewayUrl.value}":"/srv/site"},"pureBlack":true}""")
+        val loaded = CompletableDeferred<Unit>()
+        val settings = slowSettings(loaded)
+        val app = viewModel(settings)
+        runCurrent()
+        app.awaitChat(home)
+
+        app.pickProject("/srv/other")
+        runCurrent()
+        loaded.complete(Unit)
+        runCurrent()
+
+        // The pick isn't undone by the remembered project arriving late…
+        assertEquals("/srv/other", app.target().cwd)
+        // …and remembering it kept the rest of the stored settings.
+        val read = settings.settings.value!!
+        assertTrue(read.pureBlack)
+        assertEquals("/srv/other", read.startProject(home.gatewayUrl, null))
     }
 
     @Test

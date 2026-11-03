@@ -397,6 +397,15 @@ class AppViewModel(
         val profile = currentProfile()
         // [picked]: started in a project on purpose (the list's, Home included). The next new chat starts there too.
         if (picked) rememberProject(gateway, profile, cwd)
+        if (!picked && settings.settings.value == null) {
+            // Opened from a share or a shortcut at launch, before the settings are read: wait for them, so the chat
+            // starts in the last project. Moved once open, a draft that sends itself would already be on its way.
+            viewModelScope.launch {
+                val read = settings.settings.filterNotNull().first()
+                _route.value = Route.Chat(freshChat(gateway, profile, read).copy(draft = draft))
+            }
+            return
+        }
         val target = if (picked) newChatTarget(gateway, profile).copy(cwd = cwd) else freshChat(gateway, profile)
         _route.value = Route.Chat(target.copy(draft = draft))
     }
@@ -415,7 +424,13 @@ class AppViewModel(
     }
 
     private fun rememberProject(gateway: SavedGateway, profile: String?, cwd: String?) {
-        settings.update { it.withLastProject(gateway.gatewayUrl, profile, cwd) }
+        val remember = { settings.update { it.withLastProject(gateway.gatewayUrl, profile, cwd) } }
+        if (settings.settings.value != null) return remember()
+        // Not before the stored settings are read: a change made then would replace them all.
+        viewModelScope.launch {
+            settings.settings.filterNotNull().first()
+            remember()
+        }
     }
 
     /**

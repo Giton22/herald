@@ -141,7 +141,8 @@ internal fun ProjectQuestion(places: GreetingPlaces, cwd: String?) {
         val beside = maxWidth - with(density) { (lead + tail).toDp() } - LINE_SLACK
         val room = if (beside >= maxWidth * MIN_LINE_SHARE) beside else maxWidth - with(density) { tail.toDp() } - LINE_SLACK
         val pill = with(density) { nameWidth.toDp() } + PILL_PADDING * 2 + CHEVRON_GAP + chevron + LINE_SLACK
-        val width = min(pill + PILL_MARGIN, room)
+        // Never below nothing: a window measured nearly closed (a pane opening) leaves no room at all.
+        val width = min(pill + PILL_MARGIN, room).coerceAtLeast(0.dp)
         val height = style.lineHeight.takeIf { it.isSpecified } ?: style.fontSize
         val inline = mapOf(
             PROJECT_BUTTON to InlineTextContent(

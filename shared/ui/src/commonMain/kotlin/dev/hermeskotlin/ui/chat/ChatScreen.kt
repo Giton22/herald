@@ -606,8 +606,8 @@ fun ChatScreen(
             }
         },
         sprite = viewModel.pets.sprite.collectAsStateWithLifecycle().value,
-        // Re-rolled per conversation, kept while a new chat gets its stored id.
-        placeholder = stringResource(remember(target) { (if (target.storedSessionId == null) NEW_CHAT_PROMPTS else FOLLOW_UP_PROMPTS).random() }),
+        // Re-rolled per conversation, kept while a new chat gets its stored id or moves to another project.
+        placeholder = stringResource(remember(target.copy(cwd = null, draft = null)) { (if (target.storedSessionId == null) NEW_CHAT_PROMPTS else FOLLOW_UP_PROMPTS).random() }),
         notice = notice,
         actions = viewModel,
         widgetFiles = transcript.widgetFiles,
@@ -1724,7 +1724,9 @@ private fun Greeting(
         Column(Modifier.fillMaxWidth().padding(bottom = if (overComposer) 22.dp else 30.dp), verticalArrangement = Arrangement.spacedBy(22.dp)) {
             AppMark(52.dp)
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                if (places != null && places.hasProjects) {
+                // A chat already set to start in a folder names it even while the projects are still loading (or
+                // couldn't be), so a send never goes somewhere the screen didn't say.
+                if (places != null && (places.hasProjects || cwd != null)) {
                     ProjectQuestion(places, cwd)
                 } else {
                     // The question keeps its word order per language; the accent word goes where its placeholder is.
