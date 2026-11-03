@@ -57,7 +57,7 @@ import org.koin.dsl.module
 /** Real App/Home routing with an in-memory account and a call that owns no audio or provider connection. */
 @OptIn(ExperimentalTestApi::class)
 class SessionVoiceTest {
-    @Test fun signingOutClosesTheCall() = sessionEnds { it.signOut() }
+    @Test fun signingOutClosesTheCall() = sessionEnds(relogin = true) { it.signOut() }
 
     @Test fun expirationClosesTheCall() = sessionEnds { it.onSessionExpired() }
 
@@ -68,6 +68,7 @@ class SessionVoiceTest {
     private fun sessionEnds(
         leavesHome: Boolean = true,
         disposeRoot: Boolean = false,
+        relogin: Boolean = false,
         leave: (AppViewModel) -> Unit,
     ) = runComposeUiTest {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
@@ -80,6 +81,7 @@ class SessionVoiceTest {
             }
             start()
         }
+        val gateway = SavedGateway("http://127.0.0.1:${server.address.port}")
         val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
         val calls = Channel<OwnedCall>(Channel.UNLIMITED)
         val koin = startKoin {
@@ -112,7 +114,7 @@ class SessionVoiceTest {
                 }
             }
             waitUntil(timeoutMillis = 10_000) { initialized && app.route.value !is Route.Loading }
-            runOnIdle { app.onSignedIn(SavedGateway("http://127.0.0.1:${server.address.port}")) }
+            runOnIdle { app.onSignedIn(gateway) }
             waitUntil(timeoutMillis = 10_000) { app.route.value is Route.Chat && koin.get<ChatHost>().session.value != null }
             runOnIdle { chat.startVoiceChat() }
             var call: OwnedCall? = null
@@ -137,18 +139,34 @@ class SessionVoiceTest {
                 waitForIdle()
                 assertEquals(0, owned.closes.get(), "A hidden window must retain the authenticated call")
             }
+            if (leavesHome && !disposeRoot) mainClock.autoAdvance = false
             runOnIdle { leave(app); if (disposeRoot) shown = false }
             if (leavesHome && !disposeRoot) {
                 waitUntil(timeoutMillis = 10_000) { app.route.value is Route.SignIn }
                 assertIs<Route.SignIn>(app.route.value)
             }
             waitUntil(timeoutMillis = 10_000) { owned.closes.get() > 0 && checkNotNull(owned.job).isCompleted }
+            mainClock.autoAdvance = true
             assertEquals(1, owned.closes.get())
             // Repeated session retirement and eventual root disposal must not close the old call twice.
             runOnIdle { app.onSessionExpired(); shown = false }
             waitForIdle()
             assertEquals(1, owned.closes.get())
+            if (relogin) {
+                runOnIdle { shown = true; app.onSignedIn(gateway) }
+                waitUntil(timeoutMillis = 10_000) { app.route.value is Route.Chat && koin.get<ChatHost>().session.value != null }
+                runOnIdle { chat.startVoiceChat() }
+                var next: OwnedCall? = null
+                waitUntil(timeoutMillis = 10_000) {
+                    if (next == null) next = calls.tryReceive().getOrNull()
+                    next?.job?.isActive == true
+                }
+                waitForIdle()
+                assertEquals(0, checkNotNull(next).closes.get(), "Retiring the previous Home must not close the new call")
+                assertEquals(1, owned.closes.get())
+            }
         } finally {
+            mainClock.autoAdvance = true
             try {
                 runOnIdle {
                     if (initialized) chat.voice.stopAll()

@@ -164,6 +164,10 @@ fun App(
         val route by app.route.collectAsState()
         if (route is Route.Chat) {
             val chat: ChatViewModel = koinViewModel()
+            // Hidden windows pause recomposition, so session exit must also retire voice without a frame.
+            LaunchedEffect(app, chat) {
+                app.route.collect { if (it !is Route.Chat) chat.voice.stopAll() }
+            }
             DisposableEffect(chat) { onDispose { chat.voice.stopAll() } }
         }
     }
