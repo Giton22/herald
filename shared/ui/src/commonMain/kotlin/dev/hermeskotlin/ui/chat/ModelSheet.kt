@@ -128,6 +128,8 @@ import dev.hermeskotlin.ui.LocalAppSettings
 import dev.hermeskotlin.ui.arrowFocus
 import dev.hermeskotlin.ui.isDesktop
 import org.koin.compose.koinInject
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /** What the composer shows and the sheet marks: the chat's own pick, else the profile default. */
 internal data class ModelSelection(val model: String?, val provider: String?, val option: ModelOption?) {
@@ -211,7 +213,7 @@ internal fun ModelSheet(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                "Model",
+                stringResource(Res.string.chat_model_title),
                 style = Theme[typography][title],
                 color = Theme[colors][textColor],
                 modifier = Modifier.weight(1f).semantics { heading() },
@@ -219,7 +221,7 @@ internal fun ModelSheet(
             // A note says what a pick changes (a bot's model is for all its chats), so it doesn't also say this.
             if (!modelOnly && note == null) {
                 Text(
-                    "For this chat",
+                    stringResource(Res.string.chat_model_for_this_chat),
                     style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp),
                     color = Theme[colors][textTertiary],
                     modifier = Modifier.padding(bottom = 3.dp),
@@ -234,7 +236,7 @@ internal fun ModelSheet(
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, bottom = 12.dp),
             )
         }
-        val saveLine = if (picker.saving) "Saving…" else picker.saveError
+        val saveLine = if (picker.saving) stringResource(Res.string.chat_model_saving) else picker.saveError
         saveLine?.let {
             Text(
                 it,
@@ -247,7 +249,7 @@ internal fun ModelSheet(
         val efforts = if (modelOnly) emptyList() else ReasoningEffort.choicesFor(option)
         if (efforts.isNotEmpty()) {
             Text(
-                "Thinking",
+                stringResource(Res.string.chat_model_thinking),
                 style = Theme[typography][label],
                 color = Theme[colors][textSecondary],
                 modifier = Modifier.padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 8.dp).semantics { heading() },
@@ -261,7 +263,7 @@ internal fun ModelSheet(
                 if (visible && !isDesktop) chips.scrollToItem((efforts.indexOf(current) - 1).coerceAtLeast(0))
             }
             ChipRow(efforts, state = chips, key = { it.wire }) { effort ->
-                Chip(effort.label, selected = effort == current, onClick = { onSelectEffort(effort) })
+                Chip(effortLabel(effort), selected = effort == current, onClick = { onSelectEffort(effort) })
             }
         }
         if (option?.fast == true && !modelOnly) {
@@ -281,8 +283,8 @@ internal fun ModelSheet(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 UnstyledIcon(Lucide.CloudOff, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(24.dp))
-                Text(picker.error ?: "Couldn't load the models.", style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
-                Button("Try again", onClick = onRefresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+                Text(picker.error?.ifEmpty { null } ?: stringResource(Res.string.chat_model_load_failed), style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
+                Button(stringResource(Res.string.chat_try_again), onClick = onRefresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
             }
             else -> ModelList(
                 catalog = catalog,
@@ -336,7 +338,7 @@ private fun ColumnScope.ModelList(
         if (isDesktop) LaunchedEffect(Unit) { focus.requestFocus() }
         TextField(
             state = query,
-            placeholder = "Search models or providers",
+            placeholder = stringResource(Res.string.chat_model_search),
             leadingIcon = Lucide.Search,
             clearable = true,
             focusRequester = focus,
@@ -354,9 +356,11 @@ private fun ColumnScope.ModelList(
             },
         )
     }
+    val yours = stringResource(Res.string.chat_model_yours)
+    val all = stringResource(Res.string.chat_model_all)
     val scopes = buildList {
-        if (hasYours) add(PickerScope.Yours to "Your models")
-        add(PickerScope.All to "All")
+        if (hasYours) add(PickerScope.Yours to yours)
+        add(PickerScope.All to all)
         if (catalog.providers.size > 1) catalog.providers.forEach { add(PickerScope.Provider(it.slug) to providerNames.getValue(it.slug)) }
     }
     if (scopes.size > 1) {
@@ -384,7 +388,7 @@ private fun ColumnScope.ModelList(
     ScrollbarBox(list, Modifier.fillMaxWidth().then(if (isDesktop) Modifier.weight(1f, fill = false) else Modifier).padding(top = 4.dp)) {
         LazyColumn(Modifier.fillMaxWidth().heightIn(max = 440.dp).arrowFocus(), state = list) {
             sections.forEachIndexed { index, section ->
-                section.title?.let { title -> item(key = "h$index") { SectionLabel(title) } }
+                section.title?.let { title -> item(key = "h$index") { SectionLabel(sectionTitle(title)) } }
                 items(section.models, key = { "$index-${it.variants.first().starKey}" }) { row ->
                     val pick = row.preferred(selection.provider, selection.model, starred, recent)
                     ModelRow(
@@ -411,7 +415,7 @@ private fun ColumnScope.ModelList(
             if (sections.isEmpty()) {
                 item(key = "empty") {
                     Text(
-                        if (needle.isEmpty()) "The gateway offers no models." else "No models match \"$needle\".",
+                        if (needle.isEmpty()) stringResource(Res.string.chat_model_none) else stringResource(Res.string.chat_model_no_match, needle),
                         style = Theme[typography][bodySmall],
                         color = Theme[colors][textTertiary],
                         modifier = Modifier.padding(20.dp),
@@ -497,8 +501,8 @@ private fun FastModeCard(on: Boolean, onFast: (Boolean) -> Unit, modifier: Modif
             UnstyledIcon(Lucide.Zap, contentDescription = null, tint = Theme[colors][warning], modifier = Modifier.size(15.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("Fast mode", style = Theme[typography][body].copy(fontSize = 15.sp), color = Theme[colors][textColor])
-            Text("Priority processing. Costs more.", style = Theme[typography][caption].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary])
+            Text(stringResource(Res.string.chat_model_fast), style = Theme[typography][body].copy(fontSize = 15.sp), color = Theme[colors][textColor])
+            Text(stringResource(Res.string.chat_model_fast_detail), style = Theme[typography][caption].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary])
         }
         Switch(on)
     }
@@ -535,7 +539,7 @@ private fun ModelRow(
                     haptics.performHapticFeedback(HapticFeedbackType.LongPress)
                     onToggleStar()
                 },
-                onLongClickLabel = if (starred) "Unstar" else "Star",
+                onLongClickLabel = stringResource(if (starred) Res.string.chat_model_unstar else Res.string.chat_model_star),
             )
             .semantics { this.selected = selected }
             .padding(start = 12.dp, top = 6.dp, bottom = 6.dp),
@@ -605,7 +609,7 @@ private fun ModelRow(
         if (selected) UnstyledIcon(Lucide.Check, contentDescription = null, tint = Theme[colors][accentText], modifier = Modifier.size(18.dp))
         IconButton(
             icon = if (starred) StarFilled else Lucide.Star,
-            contentDescription = if (starred) "Unstar ${row.name}" else "Star ${row.name}",
+            contentDescription = stringResource(if (starred) Res.string.chat_model_unstar_named else Res.string.chat_model_star_named, row.name),
             onClick = onToggleStar,
             tint = if (starred) Theme[colors][accentText] else Theme[colors][textTertiary],
             iconSize = 18.dp,
@@ -667,7 +671,7 @@ private fun BrowseAllRow(count: Int, onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            "All models",
+            stringResource(Res.string.chat_model_all_models),
             style = Theme[typography][body].copy(fontSize = 14.5.sp, fontWeight = FontWeight.Medium),
             color = Theme[colors][accentText],
             modifier = Modifier.weight(1f),
@@ -683,13 +687,38 @@ internal fun ModelConfirmDialog(pending: PendingSwitch?, onConfirm: (ModelOption
     Dialog(
         visible = pending != null,
         onDismissRequest = onDismiss,
-        title = "Switch to ${pending?.model?.id?.let(::displayModelName).orEmpty()}?",
+        title = stringResource(Res.string.chat_model_switch_title, pending?.model?.id?.let(::displayModelName).orEmpty()),
         message = pending?.message,
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost)
-            Button("Switch", onClick = { pending?.let { onConfirm(it.model) } })
+            Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost)
+            Button(stringResource(Res.string.chat_model_switch), onClick = { pending?.let { onConfirm(it.model) } })
         },
     )
+}
+
+/** A thinking level's name, as the chips and the composer's model pill show it. */
+@Composable
+internal fun effortLabel(effort: ReasoningEffort): String = stringResource(
+    when (effort) {
+        ReasoningEffort.Off -> Res.string.chat_effort_off
+        ReasoningEffort.Minimal -> Res.string.chat_effort_minimal
+        ReasoningEffort.Low -> Res.string.chat_effort_low
+        ReasoningEffort.Medium -> Res.string.chat_effort_medium
+        ReasoningEffort.High -> Res.string.chat_effort_high
+        ReasoningEffort.XHigh -> Res.string.chat_effort_xhigh
+        ReasoningEffort.Max -> Res.string.chat_effort_max
+        ReasoningEffort.Ultra -> Res.string.chat_effort_ultra
+    },
+)
+
+/** A heading core's model picker names in English ("Starred", "From OpenAI"), in the app's language. */
+@Composable
+private fun sectionTitle(title: String): String = when {
+    title == "Starred" -> stringResource(Res.string.chat_model_starred)
+    title == "Recent" -> stringResource(Res.string.chat_model_recent)
+    title == "Models" -> stringResource(Res.string.chat_model_models)
+    title.startsWith("From ") -> stringResource(Res.string.chat_model_from, title.removePrefix("From "))
+    else -> title
 }
 
 private const val SEARCH_THRESHOLD = 12

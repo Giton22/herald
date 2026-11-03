@@ -56,6 +56,8 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.typography
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 internal val LocalLinkPreviewLoader = staticCompositionLocalOf<suspend (String) -> LinkPreview?> { { null } }
 
@@ -84,11 +86,13 @@ private fun LinkPreviewCard(card: LinkPreview) {
     val scope = rememberCoroutineScope()
     var menuOpen by remember { mutableStateOf(false) }
     val open = { runCatching { uris.openUri(card.url) }; Unit }
+    val openLabel = stringResource(Res.string.chat_link_open)
+    val copyLabel = stringResource(Res.string.chat_link_copy)
     // A right-click offers the link itself, as a browser's does.
     RowContextMenu(menuOpen, onDismiss = { menuOpen = false }) {
         listOf(
-            RowMenuItem("Open link", Lucide.ExternalLink, run = open),
-            RowMenuItem("Copy link", Lucide.Link) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(card.url)) } },
+            RowMenuItem(openLabel, Lucide.ExternalLink, run = open),
+            RowMenuItem(copyLabel, Lucide.Link) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(card.url)) } },
         )
     }
     Row(

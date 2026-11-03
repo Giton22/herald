@@ -8,11 +8,13 @@ import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.chat.TurnOutcome
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
+import dev.hermeskotlin.desktop.resources.*
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.getString
 
 /**
  * One system notification, and the chat a click on it opens. [request] is what the agent waits on, when that's what
@@ -26,6 +28,27 @@ data class DesktopNotice(
     val request: InputRequest? = null,
 )
 
+/** A notification's own words, in the system's language: read once, before the chat is followed. */
+internal data class NoticeWords(
+    val replyFailed: String,
+    val replied: String,
+    val replyIn: String,
+    val approval: String,
+    val question: String,
+    val needsYou: String,
+) {
+    companion object {
+        suspend fun load() = NoticeWords(
+            replyFailed = getString(Res.string.notice_reply_failed),
+            replied = getString(Res.string.notice_replied),
+            replyIn = getString(Res.string.notice_reply_in),
+            approval = getString(Res.string.notice_approval),
+            question = getString(Res.string.notice_question),
+            needsYou = getString(Res.string.notice_needs_you),
+        )
+    }
+}
+
 /**
  * The open chat's moments worth a system notification, as Hermes Desktop has them: a question or an approval the
  * agent waits on, and a reply finishing or failing. Only while the window isn't the one in use, since the chat says
@@ -37,6 +60,7 @@ internal fun noticesFor(
     focused: Boolean,
     prefs: AppSettings,
     notified: MutableSet<String>,
+    words: NoticeWords,
 ): List<DesktopNotice> {
     val notices = mutableListOf<DesktopNotice>()
     val chat = state.title?.takeIf { it.isNotBlank() }
@@ -46,7 +70,7 @@ internal fun noticesFor(
         notified.addAll(state.inputRequests.map { it.id })
     } else if (prefs.notifyRequests) {
         for (request in state.inputRequests) {
-            if (notified.add(request.id)) notices += DesktopNotice(requestTitle(request, chat), requestBody(request), state.storedSessionId, chat, request)
+            if (notified.add(request.id)) notices += DesktopNotice(requestTitle(request, chat, words), requestBody(request), state.storedSessionId, chat, request)
         }
     }
     if (previous?.running == true && !state.running && !focused && prefs.notifyReplies) {
@@ -55,8 +79,8 @@ internal fun noticesFor(
             val failed = reply.outcome == TurnOutcome.Error
             val text = (if (failed) reply.error ?: reply.text else reply.text).trim()
             notices += DesktopNotice(
-                title = if (failed) "Hermes ran into a problem" else chat ?: "Hermes replied",
-                body = text.lineSequence().firstOrNull { it.isNotBlank() }?.take(BODY_LIMIT) ?: "The reply is in.",
+                title = if (failed) words.replyFailed else chat ?: words.replied,
+                body = text.lineSequence().firstOrNull { it.isNotBlank() }?.take(BODY_LIMIT) ?: words.replyIn,
                 sessionId = state.storedSessionId,
                 chatTitle = chat,
             )
@@ -65,11 +89,11 @@ internal fun noticesFor(
     return notices
 }
 
-private fun requestTitle(request: InputRequest, chat: String?): String {
+private fun requestTitle(request: InputRequest, chat: String?, words: NoticeWords): String {
     val what = when (request) {
-        is InputRequest.Approval -> "Approval needed"
-        is InputRequest.Clarify -> "Hermes has a question"
-        else -> "Hermes needs you"
+        is InputRequest.Approval -> words.approval
+        is InputRequest.Clarify -> words.question
+        else -> words.needsYou
     }
     return if (chat == null) what else "$what · $chat"
 }
@@ -98,9 +122,10 @@ class DesktopNotifier(
     private suspend fun follow(session: ChatSession) {
         val notified = mutableSetOf<String>()
         var previous: ChatState? = null
+        val words = NoticeWords.load()
         combine(session.state, focused, settings.settings) { state, focused, prefs -> Triple(state, focused, prefs ?: AppSettings()) }
             .collect { (state, focused, prefs) ->
-                noticesFor(previous, state, focused, prefs, notified).forEach(post)
+                noticesFor(previous, state, focused, prefs, notified, words).forEach(post)
                 previous = state
             }
     }

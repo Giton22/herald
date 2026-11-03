@@ -6,6 +6,7 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.SquareTerminal
 import com.composables.icons.lucide.Wrench
 import dev.hermeskotlin.core.chat.ToolActivity
+import dev.hermeskotlin.ui.resources.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
@@ -19,17 +20,19 @@ class ReplyPartsTest {
             ToolActivity("3", "patch"),
         )
 
-        assertEquals("Ran 3 tools" to "42s", workedLabel(tools))
+        assertEquals(ran(3) to "42s", workedLabel(tools))
     }
+
+    private fun ran(count: Int) = Words.Count(Res.plurals.chat_tools_ran, count)
 
     @Test
     fun withNoTimesThePillSaysOnlyHowManyRan() {
-        assertEquals("Ran 1 tool" to null, workedLabel(listOf(ToolActivity("1", "terminal"))))
+        assertEquals(ran(1) to null, workedLabel(listOf(ToolActivity("1", "terminal"))))
     }
 
     @Test
     fun aMinuteOrMoreIsInMinutes() {
-        assertEquals("Ran 2 tools" to "1m 15s", workedLabel(listOf(ToolActivity("1", "a", durationSeconds = 60.0), ToolActivity("2", "b", durationSeconds = 15.0))))
+        assertEquals(ran(2) to "1m 15s", workedLabel(listOf(ToolActivity("1", "a", durationSeconds = 60.0), ToolActivity("2", "b", durationSeconds = 15.0))))
     }
 
     @Test

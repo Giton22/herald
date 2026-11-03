@@ -9,24 +9,40 @@ class DeliveryLabelTest {
 
     private val targets = listOf(DeliveryTarget("telegram", "Telegram"), LOCAL_DELIVERY)
 
+    // The screen's own words for these two, as a screen would read them from the catalogue.
+    private fun label(id: String, targets: List<DeliveryTarget> = this.targets) =
+        deliveryLabel(id, targets, botChat = "BOT_CHAT", local = "LOCAL")
+
     @Test
     fun aListedTargetGoesByItsName() {
-        assertEquals("Telegram", deliveryLabel("telegram", targets, botLabel = null))
+        assertEquals("Telegram", label("telegram"))
     }
 
     @Test
-    fun aBotsChatNamesTheBot() {
-        assertEquals("Ops's chat", deliveryLabel(Routines.BOT_CHAT_DELIVERY, targets, botLabel = "Ops"))
-        assertEquals("the bot's chat", deliveryLabel(Routines.BOT_CHAT_DELIVERY, targets, botLabel = null))
+    fun aBotsChatIsTheScreensWords() {
+        assertEquals("BOT_CHAT", label(Routines.BOT_CHAT_DELIVERY))
+        // Even when the list carries the bot's entry under its own name.
+        assertEquals("BOT_CHAT", label(Routines.BOT_CHAT_DELIVERY, targets + DeliveryTarget(Routines.BOT_CHAT_DELIVERY, "Ops")))
+    }
+
+    @Test
+    fun savingOnlyIsTheScreensWords() {
+        assertEquals("LOCAL", label(LOCAL_DELIVERY.id))
+        assertEquals("LOCAL", label(LOCAL_DELIVERY.id, targets = emptyList()))
+    }
+
+    @Test
+    fun aGatewayNamedLocalTargetKeepsItsName() {
+        assertEquals("On this machine", label("local", listOf(DeliveryTarget("local", "On this machine"))))
     }
 
     @Test
     fun oneChatSaysItsPlatform() {
-        assertEquals("Telegram · -1001234", deliveryLabel("telegram:-1001234", targets, botLabel = null))
+        assertEquals("Telegram · -1001234", label("telegram:-1001234"))
     }
 
     @Test
     fun anUnknownPlainIdStaysAsIs() {
-        assertEquals("origin", deliveryLabel("origin", targets, botLabel = null))
+        assertEquals("origin", label("origin"))
     }
 }

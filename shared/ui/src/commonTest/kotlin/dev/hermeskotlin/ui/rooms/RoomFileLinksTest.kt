@@ -8,6 +8,7 @@ import dev.hermeskotlin.core.media.MediaApi
 import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.ui.chat.FileDownload
 import dev.hermeskotlin.ui.chat.FileLoad
+import dev.hermeskotlin.ui.chat.FileProblem
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpStatusCode
@@ -123,8 +124,8 @@ class RoomFileLinksTest {
             respond("""{"detail":"Sensitive file"}""", HttpStatusCode.Forbidden, json)
         }))
         val target = RoomFileLink(first, hosted, "a", file)
-        assertEquals("The gateway keeps files like this one private.", assertIs<FileLoad.Failed>(target.preview(api)).message)
-        assertEquals("The gateway keeps files like this one private.", assertIs<FileDownload.Failed>(target.download(api)).message)
+        assertEquals(FileProblem.Private, assertIs<FileLoad.Failed>(target.preview(api)).problem)
+        assertEquals(FileProblem.Private, assertIs<FileDownload.Failed>(target.download(api)).problem)
         assertEquals(listOf("/api/fs/read-text", "/api/fs/download"), paths)
     }
 }
