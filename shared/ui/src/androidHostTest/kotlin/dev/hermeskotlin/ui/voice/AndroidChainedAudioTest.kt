@@ -20,21 +20,34 @@ class AndroidChainedAudioTest {
     private val context = RuntimeEnvironment.getApplication()
     private val manager = context.getSystemService(Context.AUDIO_SERVICE) as AudioManager
     private fun device(type: Int) = AudioDeviceInfoBuilder.newBuilder().setType(type).build()
+    private val speaker = device(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER)
 
     @Test
-    fun aChainedChatUsesTheSpeakerOrHeadsetAndRestoresItsMode() {
-        for (type in listOf(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER, AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_BLE_HEADSET)) {
-            val speaker = device(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER)
-            val selected = device(type)
-            shadowOf(manager).setAvailableCommunicationDevices(listOf(speaker, selected))
+    fun aChainedChatOnThePhoneSpeakerUsesCallRoutingAndRestoresItsMode() {
+        shadowOf(manager).setOutputDevices(listOf(speaker))
+        shadowOf(manager).setAvailableCommunicationDevices(listOf(device(AudioDeviceInfo.TYPE_BUILTIN_EARPIECE), speaker))
+        manager.mode = AudioManager.MODE_NORMAL
+        val close = AndroidSpeechPlayer(context).chainedChatAudio()
+        assertEquals(AudioManager.MODE_IN_COMMUNICATION, manager.mode)
+        assertEquals(speaker, manager.communicationDevice)
+        close()
+        close()
+        assertEquals(AudioManager.MODE_NORMAL, manager.mode)
+        assertNull(manager.communicationDevice)
+    }
+
+    /** Earbuds without a call profile would move to the phone's speaker, and the rest would drop to call quality. */
+    @Test
+    fun headphonesAndBluetoothKeepTheirUsualRoute() {
+        for (type in listOf(AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLE_HEADSET)) {
+            shadowOf(manager).setOutputDevices(listOf(speaker, device(type)))
+            shadowOf(manager).setAvailableCommunicationDevices(listOf(speaker))
             manager.mode = AudioManager.MODE_NORMAL
             val close = AndroidSpeechPlayer(context).chainedChatAudio()
-            assertEquals(AudioManager.MODE_IN_COMMUNICATION, manager.mode)
-            assertEquals(if (type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER) speaker else selected, manager.communicationDevice)
-            close()
-            close()
             assertEquals(AudioManager.MODE_NORMAL, manager.mode)
             assertNull(manager.communicationDevice)
+            close()
+            assertEquals(AudioManager.MODE_NORMAL, manager.mode)
         }
     }
 
@@ -51,14 +64,12 @@ class AndroidChainedAudioTest {
     }
 
     @Test
-    fun anExistingCommunicationRouteIsRestored() {
-        val headset = device(AudioDeviceInfo.TYPE_WIRED_HEADSET)
-        shadowOf(manager).setAvailableCommunicationDevices(listOf(headset))
+    fun theModeBeforeTheChatComesBack() {
+        shadowOf(manager).setAvailableCommunicationDevices(listOf(speaker))
         manager.mode = AudioManager.MODE_IN_COMMUNICATION
-        manager.setCommunicationDevice(headset)
         AndroidSpeechPlayer(context).chainedChatAudio()()
         assertEquals(AudioManager.MODE_IN_COMMUNICATION, manager.mode)
-        assertEquals(headset, manager.communicationDevice)
+        assertNull(manager.communicationDevice)
     }
 
     @Test
@@ -72,5 +83,18 @@ class AndroidChainedAudioTest {
         close()
         assertEquals(false, manager.isSpeakerphoneOn)
         assertEquals(AudioManager.MODE_NORMAL, manager.mode)
+    }
+
+    @Test
+    @Config(sdk = [30])
+    @Suppress("DEPRECATION")
+    fun olderAndroidLeavesBluetoothEarbudsAlone() {
+        shadowOf(manager).setOutputDevices(listOf(device(AudioDeviceInfo.TYPE_BUILTIN_SPEAKER), device(AudioDeviceInfo.TYPE_BLUETOOTH_A2DP)))
+        manager.mode = AudioManager.MODE_NORMAL
+        manager.isSpeakerphoneOn = false
+        val close = AndroidSpeechPlayer(context).chainedChatAudio()
+        assertEquals(false, manager.isSpeakerphoneOn)
+        assertEquals(AudioManager.MODE_NORMAL, manager.mode)
+        close()
     }
 }

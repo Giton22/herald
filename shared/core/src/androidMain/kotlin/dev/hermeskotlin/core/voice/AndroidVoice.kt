@@ -272,29 +272,30 @@ class AndroidSpeechPlayer(private val context: Context) : SpeechPlayer {
     /** A clip once it's ready to play. */
     private var clip: MediaPlayer? = null
 
-    /** The chained chat uses call routing; the returned close action is safe to call again or after a newer chat. */
+    /**
+     * A chained chat on the phone's own speaker uses call routing, so the phone's echo cancelling keeps the voice out
+     * of the microphone. Headphones, earbuds or another speaker keep their usual route: call routing would move
+     * earbuds without a call profile to the phone's speaker and drop the others to call quality. The returned close
+     * action is safe to call again or after a newer chat.
+     */
     @Suppress("DEPRECATION")
     override fun chainedChatAudio(): () -> Unit = synchronized(lock) {
         val owner = Any()
         if (restoreChatAudio == null) {
+            if (audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any { it.type in OWN_OUTPUTS }) return@synchronized {}
             val mode = audioManager.mode
-            val device = if (Build.VERSION.SDK_INT >= 31) audioManager.communicationDevice else null
             val speaker = audioManager.isSpeakerphoneOn
             val restore = {
                 try {
-                    if (Build.VERSION.SDK_INT >= 31) {
-                        audioManager.clearCommunicationDevice()
-                        if (mode != AudioManager.MODE_NORMAL && device != null) audioManager.setCommunicationDevice(device)
-                    } else audioManager.isSpeakerphoneOn = speaker
+                    if (Build.VERSION.SDK_INT >= 31) audioManager.clearCommunicationDevice() else audioManager.isSpeakerphoneOn = speaker
                 } finally { audioManager.mode = mode }
             }
             try {
                 audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
                 if (Build.VERSION.SDK_INT >= 31) {
-                    val devices = audioManager.availableCommunicationDevices
-                    val headset = devices.firstOrNull { it.type in setOf(AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_USB_HEADSET, AudioDeviceInfo.TYPE_BLUETOOTH_SCO, AudioDeviceInfo.TYPE_BLE_HEADSET) }
-                    (headset ?: devices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER })?.let(audioManager::setCommunicationDevice)
-                } else audioManager.isSpeakerphoneOn = !audioManager.isWiredHeadsetOn && !audioManager.isBluetoothScoOn
+                    audioManager.availableCommunicationDevices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                        ?.let(audioManager::setCommunicationDevice)
+                } else audioManager.isSpeakerphoneOn = true
             } catch (e: Exception) {
                 restore()
                 throw e
@@ -476,5 +477,15 @@ class AndroidSpeechPlayer(private val context: Context) : SpeechPlayer {
         const val DRAIN_SLACK_MS = 400L
         /** How often the drain looks whether it's held. */
         const val DRAIN_STEP_MS = 50L
+
+        /** Outputs that aren't the phone itself: with one in, a chained chat leaves the route alone. */
+        @SuppressLint("InlinedApi") // A device only reports the types its Android knows.
+        val OWN_OUTPUTS = setOf(
+            AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES, AudioDeviceInfo.TYPE_LINE_ANALOG,
+            AudioDeviceInfo.TYPE_LINE_DIGITAL, AudioDeviceInfo.TYPE_AUX_LINE, AudioDeviceInfo.TYPE_HDMI,
+            AudioDeviceInfo.TYPE_USB_DEVICE, AudioDeviceInfo.TYPE_USB_ACCESSORY, AudioDeviceInfo.TYPE_USB_HEADSET,
+            AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO, AudioDeviceInfo.TYPE_HEARING_AID,
+            AudioDeviceInfo.TYPE_BLE_HEADSET, AudioDeviceInfo.TYPE_BLE_SPEAKER, AudioDeviceInfo.TYPE_BLE_BROADCAST,
+        )
     }
 }
