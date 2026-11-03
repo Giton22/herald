@@ -178,9 +178,12 @@ def uninstall(commit):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('bundle', type=Path)
+    # A release bundle is the stable app, app.kyllene.Kyllene.
+    parser.add_argument('--app', default=APP)
     args = parser.parse_args()
     # Always create a private display; no environment flag can select the live desktop.
-    child = "import sys; from pathlib import Path; from installed_smoke import main; main(Path(sys.argv[1]))"
+    child = ("import sys; from pathlib import Path; import installed_smoke; "
+             "installed_smoke.APP = sys.argv[2]; installed_smoke.main(Path(sys.argv[1]))")
     raise SystemExit(subprocess.call(['xvfb-run', '-a', '-s', '-screen 0 1280x900x24',
-                                     sys.executable, '-c', child, str(args.bundle.resolve(strict=True))],
+                                     sys.executable, '-c', child, str(args.bundle.resolve(strict=True)), args.app],
                                      cwd=Path(__file__).resolve().parent))
