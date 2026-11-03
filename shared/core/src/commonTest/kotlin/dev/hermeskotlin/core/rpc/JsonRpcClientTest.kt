@@ -62,6 +62,106 @@ class JsonRpcClientTest {
     }
 
     @Test
+    fun aRequestOverTheSocketsLimitIsRefusedBeforeItGoesOut() = runTest {
+        val transport = FakeTransport()
+        val client = JsonRpcClient(transport)
+        val pump = launch { runCatching { client.run() } }
+
+        // #340: OkHttp closes the whole socket (1001) on a message it won't queue, so this one must never reach it.
+        val tooLarge = "A".repeat(JsonRpcClient.MAX_FRAME_BYTES)
+        val refused = assertFailsWith<RpcException> {
+            client.request("pdf.attach", buildJsonObject { put("content_base64", tooLarge) })
+        }
+        assertEquals(JsonRpcClient.MESSAGE_TOO_LARGE, refused.code)
+        assertTrue(transport.sent.value.isEmpty())
+
+        // The link is fine: the next request goes out and is answered.
+        val call = async { client.request("session.list") }
+        val sent = transport.awaitSent { it["method"]?.jsonPrimitive?.str() == "session.list" }
+        transport.push("""{"jsonrpc":"2.0","id":"${sent["id"]!!.jsonPrimitive.str()}","result":{}}""")
+        assertEquals("{}", call.await().toString())
+        pump.cancel()
+    }
+
+    @Test
+    fun aRequestOfExactlyTheLimitGoesOutAndOneByteMoreDoesNot() = runTest {
+        val transport = FakeTransport()
+        val client = JsonRpcClient(transport)
+        val pump = launch { runCatching { client.run() } }
+
+        // No READY was pushed, so these are c1 and c2: frames of the same length but for the padding.
+        fun frame(id: String, pad: String) = dev.hermeskotlin.core.network.HermesJson.encodeToString(
+            kotlinx.serialization.json.JsonObject.serializer(),
+            buildJsonObject {
+                put("jsonrpc", "2.0"); put("id", id); put("method", "m")
+                put("params", buildJsonObject { put("d", pad) })
+            },
+        )
+        val atLimit = "A".repeat(JsonRpcClient.MAX_FRAME_BYTES - frame("c1", "").length)
+        assertEquals(JsonRpcClient.MAX_FRAME_BYTES, frame("c1", atLimit).length)
+
+        val call = async { client.request("m", buildJsonObject { put("d", atLimit) }) }
+        val sent = transport.awaitSent { it["id"]?.jsonPrimitive?.str() == "c1" }
+        val over = assertFailsWith<RpcException> { client.request("m", buildJsonObject { put("d", atLimit + "A") }) }
+        assertEquals(JsonRpcClient.MESSAGE_TOO_LARGE, over.code)
+        transport.push("""{"jsonrpc":"2.0","id":"${sent["id"]!!.jsonPrimitive.str()}","result":{}}""")
+        assertEquals("{}", call.await().toString())
+        assertEquals(1, transport.sent.value.size)
+        pump.cancel()
+    }
+
+    @Test
+    fun aSecondLargeRequestWaitsForTheFirstOnesReply() = runTest {
+        val transport = FakeTransport()
+        val client = JsonRpcClient(transport)
+        val pump = launch { runCatching { client.run() } }
+
+        // OkHttp counts everything still queued: two 11 MB uploads draining together would close the socket.
+        val upload = "A".repeat(JsonRpcClient.LARGE_FRAME_CHARS + 1)
+        val first = async { client.request("pdf.attach", buildJsonObject { put("content_base64", upload) }) }
+        val sentFirst = transport.awaitSent { it["method"]?.jsonPrimitive?.str() == "pdf.attach" }
+        val second = async { client.request("file.attach", buildJsonObject { put("data_url", upload) }) }
+        // A small request isn't held up by it.
+        val small = async { client.request("session.list") }
+        val sentSmall = transport.awaitSent { it["method"]?.jsonPrimitive?.str() == "session.list" }
+        testScheduler.runCurrent()
+        assertTrue(transport.sent.value.none { it["method"]?.jsonPrimitive?.str() == "file.attach" })
+
+        transport.push("""{"jsonrpc":"2.0","id":"${sentSmall["id"]!!.jsonPrimitive.str()}","result":{}}""")
+        small.await()
+        transport.push("""{"jsonrpc":"2.0","id":"${sentFirst["id"]!!.jsonPrimitive.str()}","result":{}}""")
+        first.await()
+        val sentSecond = transport.awaitSent { it["method"]?.jsonPrimitive?.str() == "file.attach" }
+        transport.push("""{"jsonrpc":"2.0","id":"${sentSecond["id"]!!.jsonPrimitive.str()}","result":{}}""")
+        assertEquals("{}", second.await().toString())
+        pump.cancel()
+    }
+
+    @Test
+    fun aLargeRequestThatTimesOutLetsTheNextOneGo() = runTest {
+        val transport = FakeTransport()
+        val client = JsonRpcClient(transport)
+        val pump = launch { runCatching { client.run() } }
+
+        val upload = "A".repeat(JsonRpcClient.LARGE_FRAME_CHARS + 1)
+        assertFailsWith<RpcTimeoutException> {
+            client.request("pdf.attach", buildJsonObject { put("content_base64", upload) }, timeoutMs = 1_000)
+        }
+        val next = async { client.request("file.attach", buildJsonObject { put("data_url", upload) }) }
+        val sent = transport.awaitSent { it["method"]?.jsonPrimitive?.str() == "file.attach" }
+        transport.push("""{"jsonrpc":"2.0","id":"${sent["id"]!!.jsonPrimitive.str()}","result":{}}""")
+        assertEquals("{}", next.await().toString())
+        pump.cancel()
+    }
+
+    @Test
+    fun utf8SizeCountsWhatGoesOnTheWire() {
+        for (text in listOf("", "abc", "é", "€", "😀", "a😀é€")) {
+            assertEquals(text.encodeToByteArray().size.toLong(), utf8Size(text), text)
+        }
+    }
+
+    @Test
     fun requestsFromManyThreadsGetTheirOwnReplies() = runTest {
         val transport = FakeTransport()
         val client = JsonRpcClient(transport)
