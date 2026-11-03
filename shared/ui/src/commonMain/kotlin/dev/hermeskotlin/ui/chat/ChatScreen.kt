@@ -1260,7 +1260,7 @@ private fun DropOverlay() {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             UnstyledIcon(Lucide.Paperclip, contentDescription = null, tint = accentColor, modifier = Modifier.size(28.dp))
             Text("Drop to attach", style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][textColor])
-            Text("Up to ${OutgoingAttachment.MAX_COUNT} files, 25 MB each.", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+            Text("Up to ${OutgoingAttachment.MAX_COUNT} files, ${OutgoingAttachment.MAX_SIZE} each.", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
         }
     }
 }
@@ -2495,6 +2495,16 @@ internal fun UserBubble(
                 MessageTimeLabel(message.timestamp)
             }
         } else if (!message.pending) MessageTimeLabel(message.timestamp)
+        // A large file over a slow link takes minutes; how far it has gone shows it isn't stuck.
+        message.upload?.let {
+            Text(
+                "Uploading ${it.name} · ${it.percent}%",
+                style = Theme[typography][caption],
+                color = Theme[colors][textTertiary],
+                maxLines = 1,
+                overflow = TextOverflow.MiddleEllipsis,
+            )
+        }
         if (message.queued) {
             Text("Queued · sends after this task", style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }
