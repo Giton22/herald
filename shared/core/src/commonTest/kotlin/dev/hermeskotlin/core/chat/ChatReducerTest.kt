@@ -21,10 +21,15 @@ class ChatReducerTest {
             "attachments/report.pdf" to "report.pdf",
         )) {
             val footer = "\n\n--- Attached Context ---\n\n📄 @file:$reference (3 tokens)\n```\nExtracted text\n```"
+            // What the gateway writes for a PDF, which it doesn't inline (`_on_disk_reference_block`).
+            val binary = "\n\n--- Attached Context ---\n\n📎 @file:$reference (application/pdf, 2.1 MB) — binary file, " +
+                "not inlined as text. It is available on disk at `/home/u/work/attachments/$name`. Use your tools to work with it."
             for (text in listOf(
                 "@file:$reference\n\nWhat's on page 61?",
                 "What's on page 61?$footer",
                 "@file:$reference\n\nWhat's on page 61?$footer",
+                "What's on page 61?$binary",
+                "@file:$reference\n\nWhat's on page 61?$binary",
             )) {
                 val row = SessionMessage(role = "user", content = JsonPrimitive(text))
                 val message = assertIs<ChatMessage.User>(historyToMessages(listOf(row)).single())
