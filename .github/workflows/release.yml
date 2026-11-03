@@ -1,6 +1,6 @@
 # Pushing a tag like v0.2.0 tests and builds the signed phone and watch APKs and the Pebble watchapp, and attaches
 # them to a DRAFT release; the `desktop` job adds the Windows, macOS and Linux installers to it (see there for their
-# optional signing secrets).
+# optional signing secrets), and the `flatpak` job the Linux Flatpak bundle.
 # Publishing the draft (on GitHub) is what makes it the latest release the app offers as an update.
 #
 # Repo secrets (Settings → Secrets and variables → Actions):
@@ -113,8 +113,10 @@ jobs:
           | Windows 10 or 11 | \`kyllene-desktop-$v.msi\`: installs for you alone, no administrator needed |
           | A Mac with Apple silicon | \`kyllene-desktop-$v.dmg\`: drag Kyllene into Applications |
           | Debian, Ubuntu and the like | \`kyllene-desktop-${v}_amd64.deb\` |
+          | Any Linux with Flatpak (x86_64) | \`kyllene-desktop-${v}_x86_64.flatpak\`: \`flatpak install --user kyllene-desktop-${v}_x86_64.flatpak\` |
 
           Once Kyllene is installed, Settings → About offers each new version; on Windows, Install updates it in place.
+          The Flatpak doesn't check: to update it, install the next release's \`.flatpak\` the same way, and your sign-in and settings stay.
           EOF
           gh release create "$GITHUB_REF_NAME" "kyllene-$v.apk" "kyllene-$v.apk.sha256" --draft --generate-notes --notes-file which-apk.md --title "$GITHUB_REF_NAME"
           for abi in arm64-v8a armeabi-v7a x86_64 x86; do gh release upload "$GITHUB_REF_NAME" "kyllene-${v}_$abi.apk" "kyllene-${v}_$abi.apk.sha256"; done
@@ -252,3 +254,57 @@ jobs:
         if: always() && runner.os == 'macOS'
         run: |
           if [ -f "$RUNNER_TEMP/signing.keychain-db" ]; then security delete-keychain "$RUNNER_TEMP/signing.keychain-db"; fi
+
+  # The stable Flatpak, app.kyllene.Kyllene, added to the draft as kyllene-desktop-1.2.3_x86_64.flatpak for a manual
+  # install. It is built offline from this tag's commit, like the Linux workflow's Devel build, and installing it
+  # fetches the Freedesktop runtime from Flathub. It never checks GitHub for updates (no -PreleasesRepo): a Flatpak
+  # takes new versions from its remote, and a bundle has none, so the next release's bundle is installed over it.
+  flatpak:
+    needs: release
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          # The Flatpak build clones this checkout; a shallow one can't be cloned reliably.
+          fetch-depth: 0
+
+      - name: Install Flatpak tools and SDK
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y flatpak flatpak-builder xvfb xauth xdotool python3-pil xdg-desktop-portal gnome-keyring
+          flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
+          flatpak install --user --noninteractive flathub org.freedesktop.Sdk//26.08 org.freedesktop.Platform//26.08
+
+      - name: Select the tagged source
+        run: |
+          git update-ref refs/heads/flatpak-release "$GITHUB_SHA"
+          python3 packaging/flatpak/prepare-ci.py \
+            packaging/flatpak/app.kyllene.Kyllene.Devel.json \
+            --repository "file://$GITHUB_WORKSPACE" \
+            --ref flatpak-release --commit "$GITHUB_SHA" --release "${GITHUB_REF_NAME#v}"
+
+      - name: Build offline and bundle
+        run: |
+          flatpak-builder --user --repo=build/flatpak-repo build/flatpak packaging/flatpak/release.json
+          flatpak build-bundle --runtime-repo=https://flathub.org/repo/flathub.flatpakrepo \
+            build/flatpak-repo build/kyllene.flatpak app.kyllene.Kyllene stable
+
+      # As in the Linux workflow: its own bus, and an unlocked keyring answering the Secret portal.
+      - name: Installed sandbox smoke
+        run: |
+          mkdir -p ~/.config/xdg-desktop-portal
+          printf '[preferred]\ndefault=*\norg.freedesktop.impl.portal.Secret=gnome-keyring\n' \
+            > ~/.config/xdg-desktop-portal/portals.conf
+          dbus-run-session -- sh -c 'printf smoke | gnome-keyring-daemon --unlock --components=secrets >/dev/null &&
+            python3 packaging/flatpak/tests/installed_smoke.py --app app.kyllene.Kyllene build/kyllene.flatpak'
+
+      - name: Add to the draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          file="kyllene-desktop-${GITHUB_REF_NAME#v}_x86_64.flatpak"
+          cp build/kyllene.flatpak "$file"
+          sha256sum "$file" > "$file.sha256"
+          gh release upload "$GITHUB_REF_NAME" "$file" "$file.sha256"
