@@ -2,18 +2,25 @@
 
 The x86_64 development recipe builds the existing desktop application from a
 pinned upstream revision, using Freedesktop 26.08 and JBRSDK 25 with JCEF. It does
-not extract a DEB or use host Java. The development identity is provisional,
-separate from other installations; a stable identity needs maintainer agreement.
+not extract a DEB or use host Java. Its identity, `app.kyllene.Kyllene.Devel`, is
+separate from other installations. The stable app is `app.kyllene.Kyllene`, after
+the project's domain, kyllene.app.
+
+A Flatpak doesn't update itself from GitHub releases: `flatpak update` and software
+centres take new versions from the remote it was installed from. A bundle installed
+with `flatpak install build/kyllene.flatpak` has no remote and never updates. The
+app's own update check is off in this build (it sets no `-PreleasesRepo`), and it
+should stay off.
 
 Install `org.flatpak.Builder`, `org.freedesktop.Sdk//26.08` and its matching
 runtime in the user installation. From the repository root, build and install:
 
 ```sh
 user_flatpak="$(realpath "${XDG_DATA_HOME:-$HOME/.local/share}/flatpak")"
-flatpak run --env=FLATPAK_USER_DIR="$user_flatpak" --filesystem="$user_flatpak" org.flatpak.Builder --user --repo=build/flatpak-repo build/flatpak packaging/flatpak/io.github.Giton22.Kyllene.Devel.json
-flatpak build-bundle build/flatpak-repo build/kyllene.flatpak io.github.Giton22.Kyllene.Devel devel
+flatpak run --env=FLATPAK_USER_DIR="$user_flatpak" --filesystem="$user_flatpak" org.flatpak.Builder --user --repo=build/flatpak-repo build/flatpak packaging/flatpak/app.kyllene.Kyllene.Devel.json
+flatpak build-bundle build/flatpak-repo build/kyllene.flatpak app.kyllene.Kyllene.Devel devel
 flatpak install --user build/kyllene.flatpak
-flatpak run io.github.Giton22.Kyllene.Devel
+flatpak run app.kyllene.Kyllene.Devel
 ```
 
 Flatpak-builder downloads checksummed inputs before running Gradle offline in
@@ -103,3 +110,96 @@ or backups. Encryption does not protect an unlocked process or prevent a same-us
 attacker replacing the entire profile. Run the Linux storage and migration tests
 with `./gradlew :shared:core:jvmTest --tests '*Linux*StoreTest' --tests '*LinuxStorage*Test'`
 and startup contracts with `./gradlew :desktopApp:jvmTest --tests '*StorageStartupTest'`.
+
+### Microphone backend
+
+Linux has a recorder behind the existing `VoiceRecorder` contract, using the default
+microphone through webrtc-java 0.20.0 and PulseAudio compatibility on PipeWire.
+The package grants the PulseAudio socket for this feature. This socket can access
+microphone and output devices; it is not a per-recording permission prompt.
+Recording begins only when requested, uses bounded PCM buffering, and releases its
+native device on completion, cancellation or failure. It changes no device defaults
+or system volume and writes no temporary recording files.
+The existing desktop voice UI remains disabled until capability and UI integration;
+this backend alone does not enable dictation, spoken replies or live calls.
+Unit tests use synthetic PCM. Installed capture, audio quality and live-provider
+behavior require separate qualification; synthetic frames do not prove them.
+
+### Spoken playback backend
+
+Linux playback implements the existing `SpeechPlayer` contract through the same
+native audio backend and default output device. Freedesktop 26.08 supplies
+`/usr/bin/ffmpeg`; encoded replies and raw PCM are decoded through pipes to
+48 kHz mono PCM. Only pipe input and selected audio formats are allowed. The
+codec inherits no environment, opens no temporary media files and needs no new
+sandbox permission. Other Linux distributions need that executable separately.
+
+Playback buffers are bounded. Hold emits silence without consuming queued audio;
+cancellation or failure retires the owned codec and output device. No system
+volume, mute or device defaults are changed. Unit tests cover lifecycle and codec
+failures. Installed output, physical audio quality and live-provider behavior
+require separate qualification. This backend does not enable the desktop voice
+UI or live calls; those need their own capability and lifecycle integration.
+
+### Live transport backend
+
+The internal Linux WebRTC transport reuses the existing offer/answer callback and
+`oai-events` channel. The gateway retains provider credentials; this adapter does
+not add a provider client or change the signaling payload. SDP is preserved,
+including trailing CRLF. Incoming text events and outgoing buffering are bounded;
+unsupported or overflowing events end the connection instead of silently losing
+part of the conversation.
+
+Each instance owns one connection. Setup cancellation requests native retirement
+even while an answer callback is still returning, and a late answer cannot reach
+the retired peer. This retires native resources without claiming that arbitrary
+non-cancellable callback code can be forced to finish. Native callbacks schedule
+one owned cleanup operation; channel, peer, factory and device releases share the
+same completion path. Explicit owner close waits for that release.
+
+This stage uses dummy audio and no captured track, with recording and playout off.
+The desktop live-call binding and voice controls remain disabled. Real capture,
+rendering, echo cancellation and capability/UI integration are separate work.
+Local peer SDP/event exchange and cleanup do not qualify provider compatibility,
+physical audio quality or interruption. Unit tests cover the transport boundary;
+optimized installed-runtime and media/provider checks require separate validation.
+
+## Advisory CI
+
+The separate Linux workflow runs JVM/packaging tests and exports an x86_64 bundle.
+It runs only when the desktop app's sources, the build or this packaging change.
+It builds the exact commit tested by the workflow (a pull request's merge commit)
+from a Git clone of the checkout, with the same locked build inputs, so committed
+files only: never untracked files in the runner workspace. Only the bundle is uploaded. The
+font-filter contract uses the selected SDK's fontconfig, independent of the
+runner host's fontconfig version. CI uses the native `flatpak-builder` package;
+the Builder application needs a desktop host-command service unavailable there.
+
+Keep these Linux checks non-required in branch rules. Failures stay visibly
+failed; Android checks and release publication remain independent. A built CI
+bundle still needs installed-sandbox and Bazzite acceptance before publication.
+
+The workflow installs its bundle and exercises the actual sandbox on a private
+Xvfb display: gateway address input, synthetic sign-in, local HTML rendering,
+JavaScript interaction and window resize. The loopback-only fixture never calls
+a provider or reads host files. The runner stops its exact owned instance and
+uninstalls its verified app without deleting data after failed checks. If the
+installed commit cannot be verified, it reports retained/unknown state and leaves
+the installation for inspection instead of deleting an unverified ref.
+
+Run `python3 packaging/flatpak/tests/installed_smoke.py build/kyllene.flatpak`
+on Linux with Flatpak, its matching runtime, Xvfb, xauth, xdotool and Pillow
+installed. The app reads its settings key from the Secret portal at startup, so
+run it as CI does: `dbus-run-session` with a throwaway unlocked gnome-keyring as
+the portal's Secret backend (see `.github/workflows/linux.yml`). On a desktop
+session it would use, and leave an item in, your own keyring. Direct invocation
+on Windows/macOS exits before optional imports or external actions; use a
+suitable Linux environment or open/update a PR to trigger the Ubuntu GitHub
+Actions job. Portable fixture/platform contracts still run in
+normal test discovery; Linux-only integration coverage is explicitly skipped
+on unsupported platforms. It refuses to replace an existing
+user installation; use a disposable Flatpak user installation with its matching
+runtime available. Screenshots and profiles are not uploaded. Xvfb smoke does
+not qualify KDE focus, context menus, portals other than the Secret portal
+through gnome-keyring, voice or live-provider behavior;
+real Bazzite acceptance remains a separate release gate.

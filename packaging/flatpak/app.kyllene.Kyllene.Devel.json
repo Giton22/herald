@@ -1,5 +1,5 @@
 {
-  "app-id": "io.github.Giton22.Kyllene.Devel",
+  "app-id": "app.kyllene.Kyllene.Devel",
   "branch": "devel",
   "runtime": "org.freedesktop.Platform",
   "runtime-version": "26.08",
@@ -9,6 +9,7 @@
     "--share=network",
     "--share=ipc",
     "--socket=x11",
+    "--socket=pulseaudio",
     "--device=dri"
   ],
   "modules": [
@@ -23,12 +24,12 @@
         }
       },
       "build-commands": [
-        "./gradle/bin/gradle --offline --no-daemon --max-workers=2 --no-configuration-cache -I packaging/flatpak/offline.init.gradle :desktopApp:createReleaseDistributable",
+        "./gradle/bin/gradle --offline --no-daemon --max-workers=4 --no-configuration-cache -I packaging/flatpak/offline.init.gradle :desktopApp:createReleaseDistributable",
         "python3 packaging/flatpak/stage.py desktopApp/build/compose/binaries/main-release/app/Kyllene /app jdk/bin/java",
         "install -Dm644 packaging/flatpak/fonts.conf /app/etc/fonts/local.conf",
-        "install -Dm644 packaging/flatpak/io.github.Giton22.Kyllene.Devel.desktop /app/share/applications/io.github.Giton22.Kyllene.Devel.desktop",
-        "install -Dm644 packaging/flatpak/io.github.Giton22.Kyllene.Devel.metainfo.xml /app/share/metainfo/io.github.Giton22.Kyllene.Devel.metainfo.xml",
-        "install -Dm644 desktopApp/icons/herald.png /app/share/icons/hicolor/512x512/apps/io.github.Giton22.Kyllene.Devel.png",
+        "install -Dm644 packaging/flatpak/app.kyllene.Kyllene.Devel.desktop /app/share/applications/app.kyllene.Kyllene.Devel.desktop",
+        "install -Dm644 packaging/flatpak/app.kyllene.Kyllene.Devel.metainfo.xml /app/share/metainfo/app.kyllene.Kyllene.Devel.metainfo.xml",
+        "install -Dm644 desktopApp/icons/herald.png /app/share/icons/hicolor/512x512/apps/app.kyllene.Kyllene.Devel.png",
         "install -d /app/share/kyllene",
         "git rev-parse HEAD > /app/share/kyllene/source-revision",
         "install -Dm644 packaging/flatpak/gradle-sources.json /app/share/kyllene/build-inputs.json",
@@ -71,12 +72,12 @@
         },
         {
           "type": "file",
-          "path": "io.github.Giton22.Kyllene.Devel.desktop",
+          "path": "app.kyllene.Kyllene.Devel.desktop",
           "dest": "packaging/flatpak"
         },
         {
           "type": "file",
-          "path": "io.github.Giton22.Kyllene.Devel.metainfo.xml",
+          "path": "app.kyllene.Kyllene.Devel.metainfo.xml",
           "dest": "packaging/flatpak"
         },
         {

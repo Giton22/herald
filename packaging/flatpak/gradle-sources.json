@@ -6621,6 +6621,46 @@
   },
   {
     "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/dev/onvoid/webrtc/webrtc-java/0.20.0/webrtc-java-0.20.0-linux-x86_64.jar",
+    "sha512": "5073bda32e74b9e206cd727198f502b35af188c03620c461f69bb381e9182d9842732d4e320746dd264d4ff193a0a73c964f6219d1e37e20c7c8035253b18b88",
+    "dest": "offline-repository/dev/onvoid/webrtc/webrtc-java/0.20.0",
+    "dest-filename": "webrtc-java-0.20.0-linux-x86_64.jar",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/dev/onvoid/webrtc/webrtc-java/0.20.0/webrtc-java-0.20.0.jar",
+    "sha512": "8661326b322aa78b91c8a8ceb7e55dfce998b0ec89b3fcd1aa071bc4a935a8a9410d1e57eb0c9d03f0df249231469930197ced3fa0a3ef14b4d31aef2f502dae",
+    "dest": "offline-repository/dev/onvoid/webrtc/webrtc-java/0.20.0",
+    "dest-filename": "webrtc-java-0.20.0.jar",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/dev/onvoid/webrtc/webrtc-java/0.20.0/webrtc-java-0.20.0.pom",
+    "sha512": "2f1a31f6df7ea682ce4aff570a838c340348356799a1985f34c0193817e792321014451b9b1e23bd97b0bc109fc9bdf14bfc6cd850e96be592234df5740098d7",
+    "dest": "offline-repository/dev/onvoid/webrtc/webrtc-java/0.20.0",
+    "dest-filename": "webrtc-java-0.20.0.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/dev/onvoid/webrtc/webrtc-java-parent/0.20.0/webrtc-java-parent-0.20.0.pom",
+    "sha512": "c61f0ff14a089c9bfbe569145742741a5f0f3eae72b634b53df55d2ca997dccd7149ed451ceda7004c8022a8daf5661a1c63506330c916b68646b1e429ba5379",
+    "dest": "offline-repository/dev/onvoid/webrtc/webrtc-java-parent/0.20.0",
+    "dest-filename": "webrtc-java-parent-0.20.0.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
     "url": "https://repo.maven.apache.org/maven2/dev/snipme/highlights/1.1.0/highlights-1.1.0.module",
     "sha512": "994a67abc6ed0af73797b06aad65b1ea33a32d50450762cf59433715a38942d55167a44ad7a7ef54fd09e264e25e31b3e73017b198ca78b8cb9d2fc807511358",
     "dest": "offline-repository/dev/snipme/highlights/1.1.0",
@@ -9521,6 +9561,26 @@
   },
   {
     "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/components/components-resources/1.12.1/components-resources-1.12.1.module",
+    "sha512": "a6cf0c2fc0f19b0db88df61d8a8549b02d23c0bbc65cac66ae357528ae5d97d0066990c812a96a43a11a9e0ed74cadf096172865f22a63e95be304c179ff6799",
+    "dest": "offline-repository/org/jetbrains/compose/components/components-resources/1.12.1",
+    "dest-filename": "components-resources-1.12.1.module",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/components/components-resources/1.12.1/components-resources-1.12.1.pom",
+    "sha512": "f4687a63c69ca196b332017d44589b6c290bbd4397578e439fc96d2c7e7472bfa2e2aa7dce5ddb10c21470ae7d303d79f00c9c66d728736e2a1650f8fd3dc53e",
+    "dest": "offline-repository/org/jetbrains/compose/components/components-resources/1.12.1",
+    "dest-filename": "components-resources-1.12.1.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
     "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/components/components-resources-desktop/1.12.0/components-resources-desktop-1.12.0.jar",
     "sha512": "3cf937c12af79865973503f6d49828c5c86c3c4fb23eaee3dd8aa8b82c3761c73b85e20c422f54a26e2508080f6d59621794fcf9c97febed288e1a0511f5efd2",
     "dest": "offline-repository/org/jetbrains/compose/components/components-resources-desktop/1.12.0",
@@ -9545,6 +9605,36 @@
     "sha512": "a38069b264d965e7fcefec1747c59d0941be4f4ce3d0c243f67854d8b1d212b22e59b0bb865769f86eff3386fbe47d78ae3835bffd0f9dab69f322973812bac1",
     "dest": "offline-repository/org/jetbrains/compose/components/components-resources-desktop/1.12.0",
     "dest-filename": "components-resources-desktop-1.12.0.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/components/components-resources-desktop/1.12.1/components-resources-desktop-1.12.1.jar",
+    "sha512": "3cf937c12af79865973503f6d49828c5c86c3c4fb23eaee3dd8aa8b82c3761c73b85e20c422f54a26e2508080f6d59621794fcf9c97febed288e1a0511f5efd2",
+    "dest": "offline-repository/org/jetbrains/compose/components/components-resources-desktop/1.12.1",
+    "dest-filename": "components-resources-desktop-1.12.1.jar",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/components/components-resources-desktop/1.12.1/components-resources-desktop-1.12.1.module",
+    "sha512": "c894b6e9dcf128d6d114f4e5873013521744195ca6d371430761a0092cf702ace87d912a648367555d2aa4b416e8ca775651ca794491cd3e15ecc04fbb5ffe34",
+    "dest": "offline-repository/org/jetbrains/compose/components/components-resources-desktop/1.12.1",
+    "dest-filename": "components-resources-desktop-1.12.1.module",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/jetbrains/compose/components/components-resources-desktop/1.12.1/components-resources-desktop-1.12.1.pom",
+    "sha512": "e57f6e48fe0ba1eec34d7b9cce32a918e1c2a431639ffce5a65c856df25e3fda4f78284c218fe09ac713fda582f1b4b1d3b5ada490960c9e1854be9b3bbaa72f",
+    "dest": "offline-repository/org/jetbrains/compose/components/components-resources-desktop/1.12.1",
+    "dest-filename": "components-resources-desktop-1.12.1.pom",
     "only-arches": [
       "x86_64"
     ]

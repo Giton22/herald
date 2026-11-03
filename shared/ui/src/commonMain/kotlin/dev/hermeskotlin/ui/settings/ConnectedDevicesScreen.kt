@@ -41,9 +41,11 @@ import dev.hermeskotlin.designsystem.components.halo
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.PlatformBackHandler
+import dev.hermeskotlin.ui.resources.*
 import dev.hermeskotlin.ui.sessions.SubpageHeader
 import dev.hermeskotlin.wearlink.PebbleLink
 import kotlinx.coroutines.flow.drop
+import org.jetbrains.compose.resources.stringResource
 
 /** Settings › Connected devices: the watches Kyllene talks to, and how. Saved as it changes. */
 @Composable
@@ -65,16 +67,15 @@ internal fun ConnectedDevicesView(settings: AppSettings, onUpdate: ((AppSettings
         contentAlignment = Alignment.TopCenter,
     ) {
         Column(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
-            SubpageHeader("Connected devices", onBack = onBack)
+            SubpageHeader(stringResource(Res.string.settings_connected_devices), onBack = onBack)
             Column(
                 Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 14.dp, end = 14.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(22.dp),
             ) {
-                Section("Pebble") {
+                Section(stringResource(Res.string.connected_devices_section_pebble)) {
                     SwitchRow(
-                        title = "Kyllene on the Pebble",
-                        detail = "Talk to Hermes from Kyllene's Pebble watchapp, and let it ring there. Off, the watchapp " +
-                            "says so and nothing goes to it.",
+                        title = stringResource(Res.string.connected_devices_pebble),
+                        detail = stringResource(Res.string.connected_devices_pebble_detail),
                         checked = settings.pebble,
                         onCheckedChange = { on -> onUpdate { it.copy(pebble = on) } },
                         icon = Lucide.Watch,
@@ -82,9 +83,8 @@ internal fun ConnectedDevicesView(settings: AppSettings, onUpdate: ((AppSettings
                     if (settings.pebble) {
                         Divider()
                         SwitchRow(
-                            title = "Answer on the Pebble",
-                            detail = "Approvals and questions can be answered on the watch, which doesn't ask for this " +
-                                "phone's unlock: anyone wearing it can answer them.",
+                            title = stringResource(Res.string.connected_devices_answers),
+                            detail = stringResource(Res.string.connected_devices_answers_detail),
                             checked = settings.pebbleAnswers,
                             onCheckedChange = { on -> onUpdate { it.copy(pebbleAnswers = on) } },
                             icon = Lucide.ShieldAlert,
@@ -92,10 +92,9 @@ internal fun ConnectedDevicesView(settings: AppSettings, onUpdate: ((AppSettings
                     }
                 }
                 if (settings.pebble) {
-                    Section("Pebble prompts") {
+                    Section(stringResource(Res.string.connected_devices_section_prompts)) {
                         Text(
-                            "Hold Select on the watch for these, and one press asks it. They go to the watch the next " +
-                                "time it checks in with the phone, and stay there.",
+                            stringResource(Res.string.connected_devices_prompts_detail),
                             style = Theme[typography][bodySmall],
                             color = Theme[colors][textTertiary],
                             modifier = Modifier.padding(start = 14.dp, end = 14.dp, top = 13.dp),
@@ -103,10 +102,9 @@ internal fun ConnectedDevicesView(settings: AppSettings, onUpdate: ((AppSettings
                         PromptsEditor(settings.pebblePrompts) { prompts -> onUpdate { it.copy(pebblePrompts = prompts) } }
                     }
                 }
-                Section("Wear OS") {
+                Section(stringResource(Res.string.connected_devices_section_wear)) {
                     Text(
-                        "Kyllene on a Wear OS watch keeps its own settings: on the watch, open Kyllene's chats and tap " +
-                            "Settings. Whether it rings along with the phone is in Phone tools › Calls, as for a Pebble.",
+                        stringResource(Res.string.connected_devices_wear_detail),
                         style = Theme[typography][bodySmall],
                         color = Theme[colors][textTertiary],
                         modifier = Modifier.padding(14.dp),
@@ -128,19 +126,32 @@ private fun PromptsEditor(prompts: List<String>, onChange: (List<String>) -> Uni
     Column(Modifier.padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 4.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         fields.forEachIndexed { index, field ->
             Row(verticalAlignment = Alignment.CenterVertically) {
-                TextField(field, modifier = Modifier.weight(1f), placeholder = "Something to ask")
-                IconButton(Lucide.Trash2, contentDescription = "Remove this prompt", onClick = { fields.removeAt(index) })
+                TextField(field, modifier = Modifier.weight(1f), placeholder = stringResource(Res.string.connected_devices_prompt_placeholder))
+                IconButton(Lucide.Trash2, contentDescription = stringResource(Res.string.connected_devices_prompt_remove), onClick = { fields.removeAt(index) })
             }
         }
     }
     if (fields.size < PebbleLink.MAX_PROMPTS) {
-        ActionRow("Add a prompt", Lucide.Plus) { fields.add(TextFieldState()) }
+        ActionRow(stringResource(Res.string.connected_devices_prompt_add), Lucide.Plus) { fields.add(TextFieldState()) }
     }
 }
 
-/** The Settings row's line: whether the Pebble is on, and answers there. */
-internal fun connectedDevicesSummary(settings: AppSettings): String = when {
-    !settings.pebble -> "Pebble off."
-    settings.pebbleAnswers -> "Pebble on, answering approvals and questions."
-    else -> "Pebble on."
+/** Which line the Settings row shows. Kept apart from the words so a test can check the choice without Compose. */
+internal enum class ConnectedDevicesLine { PebbleOff, PebbleOn, PebbleAnswers }
+
+/** Whether the Pebble is on, and answers there. */
+internal fun connectedDevicesLine(settings: AppSettings): ConnectedDevicesLine = when {
+    !settings.pebble -> ConnectedDevicesLine.PebbleOff
+    settings.pebbleAnswers -> ConnectedDevicesLine.PebbleAnswers
+    else -> ConnectedDevicesLine.PebbleOn
 }
+
+/** The Settings row's line. */
+@Composable
+internal fun connectedDevicesSummary(settings: AppSettings): String = stringResource(
+    when (connectedDevicesLine(settings)) {
+        ConnectedDevicesLine.PebbleOff -> Res.string.settings_connected_devices_pebble_off
+        ConnectedDevicesLine.PebbleOn -> Res.string.settings_connected_devices_pebble_on
+        ConnectedDevicesLine.PebbleAnswers -> Res.string.settings_connected_devices_pebble_answers
+    },
+)

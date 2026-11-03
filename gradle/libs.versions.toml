@@ -147,6 +147,7 @@ jbr-api = { module = "com.jetbrains:jbr-api", version = "1.5.0" }
 # Compiled against only: the classes come from the JetBrains Runtime the app runs on, which must be a JCEF build of
 # the same API (1.21). JBR 25.0.4.1 b508.40 ships 144.0.15-…-api-1.21-262-b61; b37 is the nearest one published.
 jcef = { module = "org.jetbrains.intellij.deps.jcef:jcef", version = "144.0.15-g72717cf-chromium-144.0.7559.172-api-1.21-262-b37" }
+desktop-webrtc = { module = "dev.onvoid.webrtc:webrtc-java", version = "0.20.0" }
 dbus-core = { module = "com.github.hypfvieh:dbus-java-core", version = "5.2.2" }
 dbus-unix = { module = "com.github.hypfvieh:dbus-java-transport-junixsocket", version = "5.2.2" }
 junixsocket-common = { module = "com.kohlschutter.junixsocket:junixsocket-common", version.ref = "junixsocket" }

@@ -8,9 +8,9 @@ class ConnectedDevicesSummaryTest {
 
     @Test
     fun theRowSaysWhetherThePebbleIsOnAndAnswers() {
-        assertEquals("Pebble on.", connectedDevicesSummary(AppSettings()))
-        assertEquals("Pebble on, answering approvals and questions.", connectedDevicesSummary(AppSettings(pebbleAnswers = true)))
+        assertEquals(ConnectedDevicesLine.PebbleOn, connectedDevicesLine(AppSettings()))
+        assertEquals(ConnectedDevicesLine.PebbleAnswers, connectedDevicesLine(AppSettings(pebbleAnswers = true)))
         // Off, answering there doesn't count either.
-        assertEquals("Pebble off.", connectedDevicesSummary(AppSettings(pebble = false, pebbleAnswers = true)))
+        assertEquals(ConnectedDevicesLine.PebbleOff, connectedDevicesLine(AppSettings(pebble = false, pebbleAnswers = true)))
     }
 }
