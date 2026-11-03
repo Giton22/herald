@@ -38,7 +38,10 @@ internal interface LivePeer : AutoCloseable {
 }
 
 /** Signaling and events only; a LiveCall supplies real media separately. One connection per instance. */
-internal class LinuxLiveTransport(private val makePeer: (LivePeerEvents) -> LivePeer) : AutoCloseable {
+internal class LinuxLiveTransport(
+    private val onEventFailure: (Throwable) -> Unit = {},
+    private val makePeer: (LivePeerEvents) -> LivePeer,
+) : AutoCloseable {
     private val owner = Any()
     private var peer: LivePeer? = null
     private val started = AtomicBoolean()
@@ -86,7 +89,10 @@ internal class LinuxLiveTransport(private val makePeer: (LivePeerEvents) -> Live
             val reason = failure ?: IllegalStateException("The call ended.")
             if (terminal.compareAndSet(null, reason)) {
                 incoming.close(failure)
-                if (failure != null) while (incoming.tryReceive().isSuccess) { }
+                if (failure != null) {
+                    onEventFailure(failure)
+                    while (incoming.tryReceive().isSuccess) { }
+                }
                 ended.complete(reason)
             }
         }

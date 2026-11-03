@@ -2,6 +2,12 @@ package dev.hermeskotlin.core.voice
 
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicReference
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.launch
 
 internal interface LiveMediaPeer : LivePeer {
     fun setMuted(muted: Boolean)
@@ -14,7 +20,12 @@ internal class LinuxLiveCall(makePeer: (LivePeerEvents) -> LiveMediaPeer) : Live
     private val media = AtomicReference<LiveMediaPeer?>()
     private val muteOwner = Any()
     private var muted = false
-    private val transport = LinuxLiveTransport { events ->
+    private val eventScope = CoroutineScope(Dispatchers.IO)
+    private val incoming = Channel<String>()
+    private val transport = LinuxLiveTransport(onEventFailure = { failure ->
+        incoming.close(failure)
+        eventScope.cancel()
+    }) { events ->
         val created = makePeer(events)
         try {
             synchronized(muteOwner) {
@@ -31,7 +42,17 @@ internal class LinuxLiveCall(makePeer: (LivePeerEvents) -> LiveMediaPeer) : Live
         }
     }
 
-    override val events get() = transport.events
+    override val events: ReceiveChannel<String> = incoming
+
+    init {
+        // Keep the transport's queue accounting while exposing the shared selectable channel.
+        eventScope.launch {
+            try {
+                for (event in transport.events) incoming.send(event)
+                incoming.close()
+            } catch (failure: Throwable) { incoming.close(failure) }
+        }
+    }
     override suspend fun connect(answer: suspend (String) -> String) = transport.connect(answer)
     override fun send(event: String) = transport.send(event)
     override fun setMuted(muted: Boolean) = synchronized(muteOwner) {
@@ -45,6 +66,8 @@ internal class LinuxLiveCall(makePeer: (LivePeerEvents) -> LiveMediaPeer) : Live
     override fun close() {
         closed.set(true)
         media.set(null)
+        incoming.cancel()
+        eventScope.cancel()
         // Never hold the mute lock while joining native shutdown: a callback may end this call.
         transport.close()
     }

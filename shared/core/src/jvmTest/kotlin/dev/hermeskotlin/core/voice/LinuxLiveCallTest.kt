@@ -56,6 +56,42 @@ class LinuxLiveCallTest {
         } finally { call.close() }
     }
 
+    @Test fun sharedCallChannelSupportsSelectionAndReleasesConsumedQueueBudget() = checkCall {
+        val peer = MediaPeer(); val call: LiveCall = LinuxLiveCall { peer.apply { events = it } }
+        try {
+            call.connect { "answer" }
+            val text = "x".repeat(64 * 1024)
+            repeat(300) {
+                assertTrue(peer.events.message(text.encodeToByteArray(), false))
+                assertEquals(text, kotlinx.coroutines.selects.select { call.events.onReceive { it } })
+            }
+        } finally { call.close() }
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test fun failureWithdrawsAnEventWaitingForTheSharedReader() = checkCall {
+        val peer = MediaPeer(); val call: LiveCall = LinuxLiveCall { peer.apply { events = it } }
+        try {
+            call.connect { "answer" }
+            assertTrue(peer.events.message("stale action".encodeToByteArray(), false))
+            while (call.events.isEmpty) kotlinx.coroutines.yield()
+            peer.events.ended(IllegalStateException("synthetic transport failure"))
+            val result = call.events.receiveCatching()
+            assertTrue(result.isClosed)
+            assertEquals("synthetic transport failure", result.exceptionOrNull()?.message)
+        } finally { call.close() }
+    }
+
+    @Test fun transportFailureClosesTheSharedCallChannelWithItsCause() = checkCall {
+        val peer = MediaPeer(); val call: LiveCall = LinuxLiveCall { peer.apply { events = it } }
+        try {
+            call.connect { "answer" }
+            peer.events.ended(IllegalStateException("synthetic transport failure"))
+            val failure = call.events.receiveCatching().exceptionOrNull()
+            assertEquals("synthetic transport failure", failure?.message)
+        } finally { call.close() }
+    }
+
     @Test fun endSilencesLevelsClosesEventsAndRetiresExactlyOneMediaOwner() = checkCall {
         val peer = MediaPeer(); val call = LinuxLiveCall { peer.apply { events = it } }
         call.connect { "answer" }
@@ -70,7 +106,8 @@ class LinuxLiveCallTest {
         var allocations = 0
         val call = LinuxLiveCall { allocations++; MediaPeer() }
         call.close()
-        assertFailsWith<kotlinx.coroutines.CancellationException> { call.connect { "answer" } }
+        val failure = assertFailsWith<IllegalStateException> { call.connect { "answer" } }
+        assertEquals("The call was closed.", failure.message)
         assertEquals(0, allocations)
     }
 
