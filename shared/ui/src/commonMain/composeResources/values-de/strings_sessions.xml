@@ -187,6 +187,7 @@
     <string name="sessions_sign_out">Abmelden</string>
     <string name="sessions_switch_gateway">Gateway wechseln oder hinzufügen</string>
     <string name="sessions_profiles">Profile</string>
+    <string name="sessions_switch_profile">Profil wechseln</string>
     <string name="sessions_profiles_detail">Jedes Profil ist ein eigener Agent, mit eigenen Chats, eigenem Gedächtnis und Modell.</string>
     <string name="sessions_profiles_add_hint">Profile legst du auf dem Gateway-Rechner mit „hermes profile create“ an.</string>
     <string name="sessions_profile_default">Standard</string>
