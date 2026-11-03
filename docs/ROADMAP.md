@@ -173,7 +173,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Image attachments from the photo picker or camera (`image.attach_bytes`), upright and scaled to 2048 px; a failed send detaches them (`image.detach`)
 - [x] File and PDF attachments (`file.attach` as `@file:` refs, `pdf.attach` with a `file.attach` fallback when the gateway can't render pages)
 - [x] Attachments up to 12 MB each, what one WebSocket message carries base64 (#340): a larger file is turned down when picked, pasted or shared, a message over the socket's 16 MiB isn't sent, and only one large message is out at a time, where they used to drop the connection
-- [ ] Larger attachments over `POST /api/chat/file-upload` and `file.attach`'s `staged_upload`, on gateways that have the route (not in a release yet)
+- [x] Attachments up to 100 MB: a file past 12 MB streams up over `POST /api/files/upload-stream` and is attached by its path (`pdf.attach` for a PDF's pages, else `file.attach`), with how far it has gone under the bubble; the upload is removed once attached, or after a week when the chat uses it in place. A gateway without the route says to update Hermes
 - [x] Images in history: stored `@image:` refs fetched through `GET /api/media`, `@file:` refs as file cards, the attached-context block hidden
 - [x] Pictures and files the agent delivers (`MEDIA:` paths, Markdown images, `::preview` widget files) shown inline or as cards, fetched through `GET /api/files/download`
 - [x] Links to files on the gateway (`[name](/path)`, `file://`, `/src/App.kt:42`) open full screen: Markdown rendered, JSON indented, CSV/TSV as a table, code with line numbers at the linked line; Save and Share fetch the whole file (`GET /api/fs/read-text`, `GET /api/fs/download`)

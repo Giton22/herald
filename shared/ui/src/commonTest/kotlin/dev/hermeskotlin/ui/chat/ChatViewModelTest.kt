@@ -329,15 +329,18 @@ class ChatViewModelTest {
     }
 
     @Test
-    fun aPasteOverTheSizeLimitStaysOutOfTheTray() = runTest(dispatcher) {
+    fun aFileOverTheSizeLimitStaysOutOfTheTray() = runTest(dispatcher) {
         val (vm, _) = viewModel()
-        // #340: a long paste becomes pasted.txt with no picker to stop it; past 12 MB it couldn't be sent.
-        val pasted = pastedTextAttachment("a".repeat(OutgoingAttachment.MAX_BYTES + 1), "p1")
+        // A drop or a share comes without the picker's check; past what the gateway takes it couldn't be sent.
+        val huge = OutgoingAttachment(
+            "d1", "dump.bin", "application/octet-stream", ByteArray(0),
+            source = dev.hermeskotlin.core.chat.AttachmentSource(OutgoingAttachment.MAX_BYTES + 1L) { error("not read") },
+        )
 
-        vm.addAttachments(listOf(attachment("ok"), pasted))
+        vm.addAttachments(listOf(attachment("ok"), huge))
 
         assertEquals(listOf("ok"), vm.attachments.value.map { it.id })
-        assertEquals("pasted.txt is larger than 12 MB.", vm.attachmentError.value)
+        assertEquals("dump.bin is larger than 100 MB.", vm.attachmentError.value)
     }
 
     @Test
