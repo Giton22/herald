@@ -9,6 +9,7 @@ import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.pointerHoverIcon
 import androidx.compose.ui.draw.clipToBounds
@@ -175,6 +176,7 @@ import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.key
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -182,6 +184,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.util.lerp
 import androidx.compose.foundation.layout.offset
 import androidx.compose.animation.core.animateFloatAsState
@@ -420,6 +423,12 @@ fun ChatScreen(
     LaunchedEffect(target) { viewModel.open(target) }
     val transcript = viewModel.transcript.collectAsStateWithLifecycle().value
     val state = transcript.state
+    // The same chat reopened with a new position (a notification for it) keeps the last one until the new one is read.
+    val readPosition = viewModel.readPosition.collectAsStateWithLifecycle().value
+        ?.takeIf { it.target.copy(readUpTo = null) == target.copy(readUpTo = null) }
+    val ownsTranscript = transcript.owner?.copy(readUpTo = null) == target.copy(readUpTo = null)
+    // Keep this small lifecycle signal observable through stop/start, when transcript collection is paused.
+    val screenShown = viewModel.screenShown.collectAsState().value
     val picker = viewModel.picker.collectAsStateWithLifecycle().value
     val connection = viewModel.connectionState.collectAsStateWithLifecycle().value
     val connected = connection is ConnectionState.Connected
@@ -480,7 +489,7 @@ fun ChatScreen(
     LifecycleEventEffect(Lifecycle.Event.ON_STOP) {
         if (!changingConfigurations()) viewModel.voice.onBackground()
         viewModel.onScreen(false)
-        // What's on screen now counts as read, so a reply that comes in while away is new.
+        // Preserve the actual reading position and remember a turn still running while away.
         viewModel.markLooked()
     }
     LifecycleEventEffect(Lifecycle.Event.ON_START) { viewModel.onScreen(true) }
@@ -556,7 +565,8 @@ fun ChatScreen(
         titleFace = LocalBotFaces.current.let { faces ->
             faces.find(target.bot?.name)?.let { bot -> { BotAvatar(bot, faces.picture(bot), size = 22.dp) } }
         },
-        state = state,
+        state = if (readPosition == null || !ownsTranscript) state.copy(historyLoaded = false) else state,
+        conversationKey = Triple(target.gateway.gatewayUrl, target.profile, target.storedSessionId),
         picker = picker,
         connected = connected,
         connectionLabel = connectionLabel(connection),
@@ -590,7 +600,10 @@ fun ChatScreen(
         widgetFiles = transcript.widgetFiles,
         editing = viewModel.editing.collectAsStateWithLifecycle().value,
         // Only for the chat it was taken for, not one the screen moved on to (a branch, a fresh start).
-        readUpTo = target.readUpTo?.takeIf { state.storedSessionId == target.storedSessionId },
+        readUpTo = readPosition?.readUpTo?.takeIf { state.storedSessionId == target.storedSessionId },
+        onReadLatest = if (readPosition != null && ownsTranscript && screenShown && connected && state.historyRead && !state.running) {
+            { viewModel.readLatest(target, state) }
+        } else null,
         onOpenSidebar = onOpenSidebar,
         // Already on an untouched new chat: nothing to start over from.
         onNewChat = onNewChat.takeIf { target.storedSessionId != null || state.messages.isNotEmpty() },
@@ -715,6 +728,8 @@ internal fun ChatView(
     /** Drawn beside the title, e.g. the face of the bot whose chat this is. */
     titleFace: (@Composable () -> Unit)? = null,
     state: ChatState,
+    /** Isolates the transcript's scroll state across gateways, profiles and chats. */
+    conversationKey: Any? = null,
     picker: ModelPickerState,
     connected: Boolean,
     /** Which way the link is down, shown under the title while not [connected]. */
@@ -749,6 +764,7 @@ internal fun ChatView(
     editing: String? = null,
     /** How far this chat had been read when it was opened (epoch seconds); later messages are marked new. */
     readUpTo: Double? = null,
+    onReadLatest: (() -> Unit)? = null,
     onOpenSidebar: () -> Unit,
     onNewChat: (() -> Unit)?,
     onOpenMenu: ((Rect?) -> Unit)?,
@@ -892,7 +908,10 @@ internal fun ChatView(
             val found = foundKey.takeIf { findOpen && match >= 0 }
             LaunchedEffect(found) {
                 val index = listed.indexOfFirst { it.key == found }
-                if (index >= 0) composerFold.list?.animateScrollToItem(index)
+                if (index >= 0) {
+                    composerFold.onNavigate()
+                    composerFold.list?.animateScrollToItem(index)
+                }
             }
             if (findOpen) {
                 FindBar(
@@ -949,6 +968,7 @@ internal fun ChatView(
                     Shortcut.ModelPicker -> true.also { onOpenModels() }
                     Shortcut.PageUp, Shortcut.PageDown -> {
                         val list = composerFold.list ?: return@ShortcutHandler false
+                        composerFold.onNavigate()
                         val page = list.layoutInfo.viewportSize.height * PAGE_SCROLL
                         shortcutScope.launch { list.animateScrollBy(if (shortcut == Shortcut.PageUp) -page else page) }
                         true
@@ -959,6 +979,7 @@ internal fun ChatView(
                         val list = composerFold.list ?: return@ShortcutHandler false
                         if (actions.composer.text.isNotEmpty()) return@ShortcutHandler false
                         if (focusHeld.value && !composerFold.typing) return@ShortcutHandler false
+                        composerFold.onNavigate()
                         shortcutScope.launch { if (shortcut == Shortcut.ScrollTop) list.scrollToItem(0) else list.animateToEnd() }
                         true
                     }
@@ -1042,24 +1063,28 @@ internal fun ChatView(
                             LocalAgentScreenSend provides actions::sendPrompt,
                             LocalCommentHost provides commentHost,
                         ) {
-                            Messages(
-                                listed,
-                                olderMessages = state.olderMessages,
-                                loadingOlder = state.loadingOlder,
-                                bottomInset = listInset,
-                                controlsInset = dockInset,
-                                fold = composerFold,
-                                actions = actions,
-                                connected = connected,
-                                // A saved copy may lack what changed since; edits wait for the gateway's transcript.
-                                canChange = state.canChangeChat(connected && state.savedCopyAt == null),
-                                editing = editing,
-                                readUpTo = readUpTo,
-                                reading = readAloud.key,
-                                // The voice chat and dictation have the speaker and the microphone.
-                                canReadAloud = hasVoice && !voiceOn && !dictation.active,
-                                found = found,
-                            )
+                            key(conversationKey) {
+                                Messages(
+                                    listed,
+                                    olderMessages = state.olderMessages,
+                                    loadingOlder = state.loadingOlder,
+                                    savedCopy = state.savedCopyAt != null,
+                                    bottomInset = listInset,
+                                    controlsInset = dockInset,
+                                    fold = composerFold,
+                                    actions = actions,
+                                    connected = connected,
+                                    // A saved copy may lack what changed since; edits wait for the gateway's transcript.
+                                    canChange = state.canChangeChat(connected && state.savedCopyAt == null),
+                                    editing = editing,
+                                    readUpTo = readUpTo,
+                                    onReadLatest = onReadLatest,
+                                    reading = readAloud.key,
+                                    // The voice chat and dictation have the speaker and the microphone.
+                                    canReadAloud = hasVoice && !voiceOn && !dictation.active,
+                                    found = found,
+                                )
+                            }
                         }
                     } else Box(
                         Modifier.align(Alignment.TopCenter).widthIn(max = READING_WIDTH).fillMaxSize()
@@ -1235,7 +1260,7 @@ private fun DropOverlay() {
         Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
             UnstyledIcon(Lucide.Paperclip, contentDescription = null, tint = accentColor, modifier = Modifier.size(28.dp))
             Text("Drop to attach", style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold), color = Theme[colors][textColor])
-            Text("Up to ${OutgoingAttachment.MAX_COUNT} files, 25 MB each.", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+            Text("Up to ${OutgoingAttachment.MAX_COUNT} files, ${OutgoingAttachment.MAX_SIZE} each.", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
         }
     }
 }
@@ -1758,6 +1783,8 @@ private fun Messages(
     /** The conversation goes back further than [messages]; nearing the top loads the page before. */
     olderMessages: Boolean,
     loadingOlder: Boolean,
+    /** Replaced by current history when the gateway answers; its unread position is provisional. */
+    savedCopy: Boolean,
     bottomInset: Dp,
     /** How high the dock really stands, for what floats just above it. */
     controlsInset: Dp,
@@ -1769,6 +1796,7 @@ private fun Messages(
     editing: String?,
     /** How far the chat had been read when it was opened (epoch seconds); later messages are marked new. */
     readUpTo: Double? = null,
+    onReadLatest: (() -> Unit)? = null,
     /** The reply being read aloud, by its key. */
     reading: String? = null,
     /** Replies offer Read aloud. */
@@ -1800,6 +1828,12 @@ private fun Messages(
     val awayFromBottom by remember { derivedStateOf { listState.layoutInfo.hiddenBelow() > 600 } }
     // Following while the reader sits right at the end; where they drag to decides whether it carries on.
     var pinned by remember { mutableStateOf(true) }
+    var readerNavigated by remember(readUpTo) { mutableStateOf(false) }
+    // Once the user sends from here, what follows is their own conversation, not news to mark or jump to.
+    var unreadSettled by remember(readUpTo) { mutableStateOf(false) }
+    // The opening jump is done; only then may reaching the end mark the chat read. A saved copy giving way to
+    // current history looks for the unread line again, so it waits for that too.
+    var positioned by remember(readUpTo, savedCopy) { mutableStateOf(readUpTo == null || unreadSettled) }
     LaunchedEffect(listState) {
         snapshotFlow { listState.layoutInfo }.collect { info ->
             when (followStep(pinned, info.hiddenBelow(), listState.isScrollInProgress)) {
@@ -1811,10 +1845,12 @@ private fun Messages(
         }
     }
     // The composer folds by how near the end the list stands; scrolling back up lets go of one opened by a tap.
-    DisposableEffect(listState, fold) {
+    DisposableEffect(listState, fold, readUpTo) {
         fold.list = listState
+        fold.onNavigate = { readerNavigated = true }
         onDispose {
             fold.list = null
+            fold.onNavigate = {}
             fold.heldOpen = false
         }
     }
@@ -1826,9 +1862,16 @@ private fun Messages(
     }
     val readBackTravel = with(LocalDensity.current) { READ_BACK_TRAVEL.toPx() }
     val readBack = remember(readBackTravel, fold) { ReadBackDetector(readBackTravel) { fold.heldOpen = false } }
-    // A prompt just sent is always shown, wherever the reader was.
+    // A prompt just sent here is always shown, wherever the reader was. One sent elsewhere, or a stored one coming
+    // in with history, only pulls a reader who hasn't moved.
     LaunchedEffect(newest?.key) {
-        if (newest is ChatMessage.User) {
+        // A fast submit can acknowledge the local prompt before the screen ever draws it pending.
+        val sentHere = newest is ChatMessage.User && (newest.pending || newest.key.startsWith("local-"))
+        if (sentHere) {
+            unreadSettled = true
+            positioned = true
+        }
+        if (newest is ChatMessage.User && (sentHere || !readerNavigated)) {
             pinned = true
             listState.scrollToItem(messages.lastIndex, LIST_END)
         }
@@ -1841,16 +1884,17 @@ private fun Messages(
     // Where the messages that came since the chat was last read begin. It stays put for the rest of this visit,
     // so reading on doesn't move or remove it under the reader; the next visit starts from the new last look.
     // Older pages load first while every loaded message is still new.
-    var unreadFrom by remember(readUpTo) { mutableStateOf<String?>(null) }
-    var unreadPagesLoaded by remember(readUpTo) { mutableStateOf(0) }
+    // A saved copy may omit older unread messages or contain rows the gateway no longer serves.
+    // Discover the boundary again against current history, without pulling a reader who has taken over.
+    var unreadFrom by remember(readUpTo, savedCopy) { mutableStateOf<String?>(null) }
+    var unreadPagesLoaded by remember(readUpTo, savedCopy) { mutableStateOf(0) }
     // The oldest message when a page was last asked for: a reply streaming in reruns this before the page loads.
-    var unreadPageAskedAt by remember(readUpTo) { mutableStateOf<String?>(null) }
-    // Once the user sends from here, what follows is their own conversation, not news to mark or jump to.
-    var unreadSettled by remember(readUpTo) { mutableStateOf(false) }
-    LaunchedEffect(readUpTo, messages, olderMessages, loadingOlder) {
+    var unreadPageAskedAt by remember(readUpTo, savedCopy) { mutableStateOf<String?>(null) }
+    LaunchedEffect(readUpTo, messages, olderMessages, loadingOlder, savedCopy) {
         if (readUpTo == null || unreadFrom != null || unreadSettled) return@LaunchedEffect
         if (messages.any { it is ChatMessage.User && it.pending }) {
             unreadSettled = true
+            positioned = true
             return@LaunchedEffect
         }
         if (loadingOlder) return@LaunchedEffect
@@ -1864,20 +1908,58 @@ private fun Messages(
                 }
                 return@LaunchedEffect
             }
-            UnreadLineStep.None -> return@LaunchedEffect
+            UnreadLineStep.None -> {
+                if (!savedCopy) unreadSettled = true
+                if (!readerNavigated && messages.isNotEmpty()) {
+                    pinned = true
+                    listState.scrollToItem(messages.lastIndex, LIST_END)
+                }
+                positioned = true
+                return@LaunchedEffect
+            }
             is UnreadLineStep.Above -> step.key
         }
         unreadFrom = key
         val index = messages.indexOfFirst { it.key == key }
-        if (index >= 0) {
+        if (index >= 0 && !readerNavigated) {
             // Opened at the line instead of the end, so reading starts where it was left.
             pinned = false
             listState.scrollToItem(index)
         }
+        positioned = true
+    }
+    val readLatest by rememberUpdatedState(onReadLatest)
+    val messageCount by rememberUpdatedState(messages.size)
+    // Asked again whenever the messages change, not just the tail: a page loaded above, or a row redrawn, can turn
+    // down an ask made while the rendered list and the chat's differed for a frame.
+    LaunchedEffect(listState, positioned, onReadLatest != null, messages) {
+        if (!positioned || onReadLatest == null) return@LaunchedEffect
+        snapshotFlow {
+            listState.layoutInfo.visibleItemsInfo.isNotEmpty() &&
+                listState.layoutInfo.totalItemsCount == messageCount && !listState.canScrollForward
+        }.collect { atEnd -> if (atEnd) readLatest?.invoke() }
     }
     val unservable = remember(messages) { unservableEchoes(messages) }
     val unreadLine = remember(messages, unreadFrom, readUpTo) { unreadLineKey(messages, unreadFrom, readUpTo) }
-    BoxWithConstraints(Modifier.fillMaxSize()) {
+    BoxWithConstraints(Modifier.fillMaxSize().pointerInput(readUpTo) {
+        awaitPointerEventScope {
+            var down: Offset? = null
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val change = event.changes.firstOrNull() ?: continue
+                // The wheel, or a drag on the list, seen before children consume it. A tap on a link or an icon
+                // doesn't move the list, so it leaves the jump to the unread line alone.
+                when (event.type) {
+                    PointerEventType.Scroll -> readerNavigated = true
+                    PointerEventType.Press -> down = change.position
+                    PointerEventType.Release -> if (event.changes.none { it.pressed }) down = null
+                    PointerEventType.Move -> if (change.pressed && down?.let { (change.position - it).getDistance() > viewConfiguration.touchSlop } == true) {
+                        readerNavigated = true
+                    }
+                }
+            }
+        }
+    }) {
         // The list spans the pane, so the wheel and the scrollbar work at its edges; what's read keeps to the
         // reading width in the middle. Desktop messages sit a little closer together, as a pointer's eye reads them.
         val side = 16.dp + ((maxWidth - READING_WIDTH) / 2).coerceAtLeast(0.dp)
@@ -1977,10 +2059,17 @@ private fun Messages(
                 }
             }
         }
-        // Clear of the composer floating over the chat's end.
+        // Clear of the composer floating over the chat's end. Any press on it moves the list, even a click on its track.
         VerticalScrollbar(
             listState,
-            Modifier.align(Alignment.TopEnd).fillMaxHeight().padding(top = windowControlsHeight() + 4.dp, bottom = bottomInset + 4.dp, end = 2.dp),
+            Modifier.align(Alignment.TopEnd).fillMaxHeight().padding(top = windowControlsHeight() + 4.dp, bottom = bottomInset + 4.dp, end = 2.dp)
+                .pointerInput(readUpTo) {
+                    awaitPointerEventScope {
+                        while (true) {
+                            if (awaitPointerEvent(PointerEventPass.Initial).type == PointerEventType.Press) readerNavigated = true
+                        }
+                    }
+                },
         )
         AnimatedVisibility(
             visible = awayFromBottom,
@@ -1993,6 +2082,7 @@ private fun Messages(
             val size = if (isDesktop) 34.dp else 40.dp
             Tooltip(if (isDesktop && !newBelow) "Jump to latest" else "") { UnstyledButton(
                 onClick = {
+                    readerNavigated = true
                     scope.launch {
                         listState.animateToEnd()
                         pinned = true
@@ -2045,6 +2135,9 @@ private const val PAGE_SCROLL = 0.85f
 internal class ComposerFold {
     /** The conversation while it's on screen; none (an empty chat) leaves the composer open. */
     var list: LazyListState? by mutableStateOf(null)
+
+    /** Explicit navigation takes precedence over a delayed initial unread jump. */
+    var onNavigate: () -> Unit = {}
 
     /** The list is following the end; a reply growing there never folds the composer between two frames. */
     var following: Boolean by mutableStateOf(true)
@@ -2402,6 +2495,16 @@ internal fun UserBubble(
                 MessageTimeLabel(message.timestamp)
             }
         } else if (!message.pending) MessageTimeLabel(message.timestamp)
+        // A large file over a slow link takes minutes; how far it has gone shows it isn't stuck.
+        message.upload?.let {
+            Text(
+                "Uploading ${it.name} · ${it.percent}%",
+                style = Theme[typography][caption],
+                color = Theme[colors][textTertiary],
+                maxLines = 1,
+                overflow = TextOverflow.MiddleEllipsis,
+            )
+        }
         if (message.queued) {
             Text("Queued · sends after this task", style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }
@@ -2600,7 +2703,7 @@ private fun ConfirmChange(
 }
 
 @Composable
-private fun AssistantReply(
+internal fun AssistantReply(
     message: ChatMessage.Assistant,
     onBranch: (() -> Unit)?,
     /** Drops this reply and what follows and sends its prompt again; null when it can't. */
@@ -2722,21 +2825,28 @@ private fun AssistantReply(
                         replyUsage(it.input, it.output),
                         style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
                         color = Theme[colors][textMuted],
+                        // On one line in a narrow window at the largest text, as on the phone.
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.padding(start = 8.dp).semantics { contentDescription = "${compactCount(it.input)} tokens in, ${compactCount(it.output)} out" },
                     )
                 }
             }
         } else if (actionable || usage != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                usage?.let {
+                // The count takes only what the actions leave: at the largest text it ellipsizes instead of squeezing them out.
+                if (usage != null) {
                     Text(
-                        replyUsage(it.input, it.output),
+                        replyUsage(usage.input, usage.output),
                         style = Theme[typography][caption].copy(fontFamily = Theme[typography][code].fontFamily),
                         color = Theme[colors][textMuted],
-                        modifier = Modifier.semantics { contentDescription = "${compactCount(it.input)} tokens in, ${compactCount(it.output)} out" },
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f).semantics { contentDescription = "${compactCount(usage.input)} tokens in, ${compactCount(usage.output)} out" },
                     )
+                } else {
+                    Spacer(Modifier.weight(1f))
                 }
-                Spacer(Modifier.weight(1f))
                 if (actionable) {
                     // On the end, under the thumb of the hand holding the phone; Copy, the one used most, sits last.
                     // Copy's padding trimmed off the end lines its icon up with the reply's edge; all of them lose 4dp on top to sit close under it.
@@ -3197,7 +3307,7 @@ internal fun MentionSuggestions(
 
 /** A tappable one-line header that opens to show more, as the reply's reasoning does. */
 @Composable
-private fun Disclosure(
+internal fun Disclosure(
     icon: @Composable () -> Unit,
     label: String,
     expanded: Boolean,
@@ -4263,5 +4373,10 @@ private fun ModelPill(
 private fun Modifier.trimEndTop(end: Dp, top: Dp) = layout { measurable, constraints ->
     val placeable = measurable.measure(constraints)
     val dy = top.roundToPx()
-    layout(placeable.width - end.roundToPx(), placeable.height - dy) { placeable.placeRelative(0, -dy) }
+    val size = trimmedSize(placeable.width, placeable.height, end.roundToPx(), dy)
+    layout(size.width, size.height) { placeable.placeRelative(0, -dy) }
 }
+
+/** What [trimEndTop] leaves of a [width] by [height] element, never below nothing: the largest text can squeeze one narrower than its trim. */
+internal fun trimmedSize(width: Int, height: Int, end: Int, top: Int): IntSize =
+    IntSize((width - end).coerceAtLeast(0), (height - top).coerceAtLeast(0))

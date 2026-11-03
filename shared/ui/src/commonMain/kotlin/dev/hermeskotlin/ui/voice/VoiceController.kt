@@ -38,6 +38,7 @@ import dev.hermeskotlin.core.voice.readAloudText
 import dev.hermeskotlin.core.voice.speakableText
 import dev.hermeskotlin.core.voice.speechChunks
 import dev.hermeskotlin.core.voice.speakableSoFar
+import kotlin.concurrent.Volatile
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
@@ -163,8 +164,11 @@ class VoiceController(
     private var readingJob: Job? = null
     /** The recognizer the dictation in progress listens with; null when the gateway transcribes it. */
     private var dictating: DeviceDictation? = null
-    /** The dictation in progress was asked to finish; a gateway fallback doesn't start recording then. */
-    private var dictationFinished = false
+    /**
+     * The dictation in progress was asked to finish; a gateway fallback doesn't start recording then. Read on the
+     * recorder's thread too, as its level comes in.
+     */
+    @Volatile private var dictationFinished = false
     private var live: LiveConversation? = null
     private var held = false
     /** The room's quiet floor as the chat's last listen over the voice left it, for the next one. */
@@ -1095,16 +1099,20 @@ class VoiceController(
                         if (text.isNotEmpty()) onText(text)
                         return@launch
                     }
-                    // Stopped while the recognizers were being tried: nothing to record.
-                    if (dictationFinished) {
-                        _dictation.value = DictationState(error = "Didn't catch anything.")
-                        return@launch
-                    }
+                }
+                // Stopped before the microphone opened (or while the recognizers were tried): nothing to record.
+                if (dictationFinished) {
+                    _dictation.value = DictationState(error = "Didn't catch anything.")
+                    return@launch
                 }
                 // Pauses to think are fine here; a long quiet spell still ends it.
                 val recording = recorder.record(
                     VoiceActivity(silenceMs = DICTATION_SILENCE_MS, idleMs = DICTATION_IDLE_MS, maxMs = DICTATION_MAX_MS),
-                    onLevel = { level -> _dictation.update { it.copy(level = level) } },
+                    onLevel = { level ->
+                        // A recorder forgets a Finish that came while it started, so it's passed on once it listens.
+                        if (dictationFinished) recorder.finish()
+                        _dictation.update { it.copy(level = level) }
+                    },
                 )
                 if (!recording.heardSpeech) {
                     _dictation.value = DictationState(error = "Didn't catch anything.")

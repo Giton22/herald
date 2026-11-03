@@ -5,6 +5,8 @@ import dev.hermeskotlin.core.network.HermesJson
 import dev.hermeskotlin.core.storage.KeyValueStore
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onStart
@@ -27,28 +29,45 @@ data class SeenChats(
 ) {
 
     /**
-     * A chat with activity after the user last looked at it. `is_active` can't rule a reply out: the
-     * gateway keeps it set while the session stays loaded, well after the turn ends.
+     * The gateway's tracked read state takes precedence over a local look. With no shared watermark,
+     * activity after the local look counts as new. `is_active` stays set after a turn ends and cannot rule it out.
      *
+     * A compressed chat may also have a local look under [resolvedId], its current stored transcript.
      * A chat from outside the gateway's clients ([isExternalSource]: Telegram, Discord, a plugin's bridge) is read
      * where it came in, so as in Hermes Desktop its activity alone doesn't count: only the gateway's read state
      * ([SessionSummary.unread]) or a turn the user left running here does.
      */
-    fun isUnread(session: SessionSummary): Boolean {
+    fun isUnread(session: SessionSummary, resolvedId: String? = null): Boolean {
+        val shared = session.lastReadAt?.takeIf { it.isFinite() && it >= 0 }
+        if (shared != null) {
+            val activity = session.activityAt ?: 0.0
+            // A read here outranks the watermark until the gateway's catches up with it (or its write fails). Zero is
+            // an explicit mark-unread, which no earlier look outranks.
+            val lookedHere = listOfNotNull(chats[session.id], resolvedId?.let { chats[it] }).maxOrNull()
+            if (shared > 0 && lookedHere != null && activity <= lookedHere + SEEN_SLACK_SECONDS) return false
+            return session.unread || activity > shared
+        }
+        if (session.unread) return true
         val activity = session.activityAt ?: return false
-        if (activity <= lastLook(session.id) + SEEN_SLACK_SECONDS) return false
-        return !isExternalSource(session.source) || session.unread || session.id in leftRunning
+        val looked = resolvedId?.let { maxOf(lastLook(session.id), lastLook(it)) } ?: lastLook(session.id)
+        if (activity <= looked + SEEN_SLACK_SECONDS) return false
+        return !isExternalSource(session.source) || session.unread || session.id in leftRunning || resolvedId in leftRunning
     }
 
     /**
-     * The activity time [session] had when the user last looked at it, for marking where the new messages
-     * start; null when nothing has happened in it since.
+     * The shared watermark, with a local fallback for untracked or explicitly marked-unread chats;
+     * null when nothing has happened since. Zero marks unread but is not an exact reading position.
      */
-    fun readUpTo(session: SessionSummary): Double? = if (isUnread(session)) lastLook(session.id) else null
+    fun readUpTo(session: SessionSummary): Double? = if (isUnread(session)) {
+        session.lastReadAt?.takeIf { it.isFinite() && it > 0 } ?: lastLook(session.id)
+    } else null
 
     /** When the user last looked at the chat [sessionId] on this phone, or when tracking began if never. */
     fun lastLook(sessionId: String): Double = chats[sessionId] ?: since
 }
+
+/** A chat by its gateway, profile (null: the launch profile) and stored id. */
+data class CaughtUp(val gateway: GatewayUrl, val profile: String?, val sessionId: String)
 
 /** Timestamps from the gateway and this phone's clock round differently. */
 private const val SEEN_SLACK_SECONDS = 1.0
@@ -58,6 +77,19 @@ class SeenStore(private val store: KeyValueStore, private val now: () -> Double)
 
     private val loaded = MutableStateFlow<Map<String, SeenChats>>(emptyMap())
     private val mutex = Mutex()
+
+    private val _caughtUp = MutableStateFlow<CaughtUp?>(null)
+
+    /**
+     * The chat on screen that the user has read to its end, until something new comes in or they leave it. The
+     * lists then record its summary's activity as seen: the gateway's clock, which a reply stamped on this
+     * phone, or activity after the last message (tools, a title), can run ahead of.
+     */
+    val caughtUp: StateFlow<CaughtUp?> = _caughtUp.asStateFlow()
+
+    fun setCaughtUp(chat: CaughtUp?) {
+        _caughtUp.value = chat
+    }
 
     fun seen(gateway: GatewayUrl, profile: String? = null): Flow<SeenChats> {
         val key = key(gateway, profile)

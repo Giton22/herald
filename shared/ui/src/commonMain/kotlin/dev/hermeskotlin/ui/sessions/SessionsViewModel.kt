@@ -190,7 +190,7 @@ class SessionsViewModel(
         .flatMapLatest { scope -> scope?.let { (url, profile) -> seenStore.seen(url, profile) } ?: flowOf(null) }
         .stateIn(viewModelScope, SharingStarted.Eagerly, null)
 
-    /** How far [session] had been read before it is opened, when it has new messages since; read before [markSeen]. */
+    /** How far [session] had been read before it is opened, when it has new messages since. */
     fun readUpTo(session: SessionSummary): Double? = seen.value?.readUpTo(session)
 
     private val waiting = attention.waiting
@@ -199,17 +199,6 @@ class SessionsViewModel(
 
     fun setAttentionFilter(filter: AttentionFilter) {
         _attentionFilter.value = filter
-    }
-
-    /**
-     * The user has looked at [session] as it is now: its reply is read. A chat the gateway holds as unread is
-     * marked read there too, as Desktop does on opening one, so its other clients clear it as well.
-     */
-    fun markSeen(session: SessionSummary) {
-        val (url, profile) = bound.value ?: return
-        viewModelScope.launch { seenStore.markSeen(url, session, profile) }
-        // Best effort: a failed write leaves the gateway's flag, which this phone's last look already outranks.
-        if (session.unread) viewModelScope.launch { api.setUnread(url, session.id, unread = false, profile = profile) }
     }
 
     private val _user = MutableStateFlow<AuthUser?>(null)
@@ -278,6 +267,25 @@ class SessionsViewModel(
     init {
         observeServerChanges()
         observeSearch()
+        markCaughtUpSeen()
+    }
+
+    /**
+     * The open chat read to its end: what its row says it holds counts as seen, by the gateway's clock, so a reply
+     * stamped on this phone or activity after its last message doesn't leave it marked new.
+     */
+    private fun markCaughtUpSeen() {
+        viewModelScope.launch {
+            val listed = _state.map { it.sessions + it.projectSessions.orEmpty() }.distinctUntilChanged()
+            combine(bound, seenStore.caughtUp, listed) { scope, caught, rows ->
+                val (url, profile) = scope ?: return@combine null
+                if (caught == null || caught.gateway != url || caught.profile != profile) return@combine null
+                rows.firstOrNull { it.id == caught.sessionId }?.let { Triple(url, profile, it) }
+            }.distinctUntilChanged().collect { found ->
+                val (url, profile, row) = found ?: return@collect
+                seenStore.markSeen(url, row, profile)
+            }
+        }
     }
 
     /** Idempotent: binds to [gateway] and [profile] and loads the first page once. */
