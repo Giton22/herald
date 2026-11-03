@@ -85,11 +85,14 @@ class VoiceInstallConsentTest {
     private suspend fun TestScope.fixture(): Fixture {
         val socket = Gateway()
         val cookies = PersistentCookiesStorage(InMemoryKeyValueStore())
-        val client = createHttpClient(MockEngine { request ->
-            if (request.url.encodedPath == "/api/plugins/kyllene_voice/gpt-live/status") respond("""{"ok":true,"source":"plugin","contract":1}""", headers = headersOf(HttpHeaders.ContentType, "application/json"))
-            else if (request.url.encodedPath == "/api/auth/ws-ticket") respond("""{"ticket":"T","ttl_seconds":30}""", headers = headersOf(HttpHeaders.ContentType, "application/json"))
-            else respond("{}", HttpStatusCode.NotFound, headersOf(HttpHeaders.ContentType, "application/json"))
-        }, cookies)
+        val client = createHttpClient(MockEngine(MockEngineConfig().apply {
+            dispatcher = StandardTestDispatcher(testScheduler)
+            addHandler { request ->
+                if (request.url.encodedPath == "/api/plugins/kyllene_voice/gpt-live/status") respond("""{"ok":true,"source":"plugin","contract":1}""", headers = headersOf(HttpHeaders.ContentType, "application/json"))
+                else if (request.url.encodedPath == "/api/auth/ws-ticket") respond("""{"ticket":"T","ttl_seconds":30}""", headers = headersOf(HttpHeaders.ContentType, "application/json"))
+                else respond("{}", HttpStatusCode.NotFound, headersOf(HttpHeaders.ContentType, "application/json"))
+            }
+        }), cookies)
         val auth = AuthApi(client, cookies)
         val connection = GatewayConnection(auth, { _, _ -> socket }, backgroundScope)
         connection.start(GatewayUrl.parse("https://a.example"))
