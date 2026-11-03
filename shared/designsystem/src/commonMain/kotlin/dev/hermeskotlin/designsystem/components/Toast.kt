@@ -37,6 +37,7 @@ import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.designsystem.rememberHoverIndication
 import dev.hermeskotlin.designsystem.accent
+import dev.hermeskotlin.designsystem.LocalDesignWords
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.designsystem.inverse
@@ -111,6 +112,6 @@ fun Toast(
                 }
             }
         }
-        if (onDismiss != null) IconButton(Lucide.X, contentDescription = "Dismiss", onClick = onDismiss, tint = on.copy(alpha = 0.7f), iconSize = 16.dp)
+        if (onDismiss != null) IconButton(Lucide.X, contentDescription = LocalDesignWords.current.dismiss, onClick = onDismiss, tint = on.copy(alpha = 0.7f), iconSize = 16.dp)
     }
 }

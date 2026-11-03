@@ -19,15 +19,15 @@ class ApprovalIntroTest {
     @Test
     fun toolAndPurposeReadAsOneLine() {
         assertEquals(
-            "Hermes wants to run this with terminal. Run the backup now",
+            ApprovalIntro(tool = "terminal", purpose = "Run the backup now"),
             approvalIntro(approval("terminal", "run the backup now")),
         )
     }
 
     @Test
     fun aBlankToolNameIsLeftOut() {
-        assertEquals("Run the backup now", approvalIntro(approval("", "run the backup now")))
-        assertEquals("Run the backup now", approvalIntro(approval(" ", "run the backup now")))
+        assertEquals(ApprovalIntro(tool = null, purpose = "Run the backup now"), approvalIntro(approval("", "run the backup now")))
+        assertEquals(ApprovalIntro(tool = null, purpose = "Run the backup now"), approvalIntro(approval(" ", "run the backup now")))
     }
 
     @Test

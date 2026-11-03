@@ -597,7 +597,7 @@ class StreamedSpeechTest {
         setup.voice.chat.first { it.phase == VoicePhase.Speaking }
         assertFalse(setup.voice.chat.value.bargeIn)
         assertEquals(0, recorder.listening.value)
-        assertEquals("Tap skip to talk again", hint(setup.voice.chat.value))
+        assertEquals(VoiceHint.Skip, hint(setup.voice.chat.value))
         setup.voice.stopChat()
     }
 

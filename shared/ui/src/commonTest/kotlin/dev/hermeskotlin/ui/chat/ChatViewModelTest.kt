@@ -233,7 +233,7 @@ class ChatViewModelTest {
 
         assertEquals("look at this", vm.composer.text.toString())
         assertEquals(listOf("a", "b"), vm.attachments.value.map { it.id })
-        assertEquals("Only some fit.", vm.attachmentError.value)
+        assertEquals(ComposerNotice.Said("Only some fit."), vm.attachmentError.value)
         assertTrue(vm.state.value.messages.isEmpty())
     }
 
@@ -325,7 +325,7 @@ class ChatViewModelTest {
 
         assertEquals(OutgoingAttachment.MAX_COUNT, vm.attachments.value.size)
         // Not "the first 10 were attached": only 7 of them were.
-        assertEquals("Up to ${OutgoingAttachment.MAX_COUNT} attachments per message.", vm.attachmentError.value)
+        assertEquals(ComposerNotice.TooManyAttachments(OutgoingAttachment.MAX_COUNT), vm.attachmentError.value)
     }
 
     @Test
@@ -340,7 +340,7 @@ class ChatViewModelTest {
         vm.addAttachments(listOf(attachment("ok"), huge))
 
         assertEquals(listOf("ok"), vm.attachments.value.map { it.id })
-        assertEquals("dump.bin is larger than 100 MB.", vm.attachmentError.value)
+        assertEquals(ComposerNotice.FileTooLarge("dump.bin", 100), vm.attachmentError.value)
     }
 
     @Test
@@ -432,7 +432,7 @@ class ChatViewModelTest {
         advanceTimeBy(30_001)
 
         assertEquals(emptyList(), requests)
-        assertEquals("The call didn't start: Kyllene couldn't reach the gateway.", vm.attachmentError.value)
+        assertEquals(ComposerNotice.CallNotStarted, vm.attachmentError.value)
         // Connecting afterwards doesn't start a call the person has given up on.
         connection.start(gateway.gatewayUrl)
         vm.connectionState.first { it is ConnectionState.Connected }

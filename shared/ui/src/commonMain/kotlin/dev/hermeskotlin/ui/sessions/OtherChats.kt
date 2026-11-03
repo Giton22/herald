@@ -1,7 +1,12 @@
 package dev.hermeskotlin.ui.sessions
 
+import androidx.compose.runtime.Composable
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.chat.Waiting
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * A chat other than the one on screen, as the Sessions badge, the banner and Next see it. [waiting]: what it
@@ -36,7 +41,12 @@ data class SessionsBadge(val waiting: Int = 0, val replies: Int = 0) {
     val urgent: Boolean get() = waiting > 0
 
     /** What a screen reader says for the button. */
-    val description: String get() = if (none) "Sessions" else "Sessions, $count need${if (count == 1) "s" else ""} you"
+    val description: String
+        @Composable get() = if (none) {
+            stringResource(Res.string.sessions_badge)
+        } else {
+            pluralStringResource(Res.plurals.sessions_badge_need_you, count, count)
+        }
 }
 
 /** What the banner says happened in another chat. */
@@ -57,15 +67,20 @@ data class OtherChatEvent(
     /** The start of the reply, or what is asked (the command, the question), as plain text; null until known. */
     val preview: String? = null,
 ) {
-    val message: String get() {
-        val said = when (call) {
-            OtherChatCall.Reply -> "Reply in $title"
-            OtherChatCall.Approval -> "$title needs your OK"
-            OtherChatCall.Question -> "$title needs an answer"
-            OtherChatCall.Input -> "$title needs your input"
-        }
-        return if (more > 0) "$said, and $more more" else said
+    /** What happened, by [call], with the chat's title for its argument. */
+    val said: StringResource get() = when (call) {
+        OtherChatCall.Reply -> Res.string.sessions_other_reply
+        OtherChatCall.Approval -> Res.string.sessions_other_approval
+        OtherChatCall.Question -> Res.string.sessions_other_question
+        OtherChatCall.Input -> Res.string.sessions_other_input
     }
+
+    /** The banner's line: [said], and how many [more] chats did something too. */
+    val message: String
+        @Composable get() {
+            val line = stringResource(said, title)
+            return if (more > 0) pluralStringResource(Res.plurals.sessions_other_and_more, more, line, more) else line
+        }
 
     /** The chat is waiting on the user: the phone buzzes for these, not for replies. */
     val waiting: Boolean get() = call != OtherChatCall.Reply
@@ -305,7 +320,8 @@ fun previewOf(request: InputRequest?): String? = when (request) {
     null -> null
     is InputRequest.Approval -> if (request.command.isNotBlank()) commandPreview(request.command) else previewOf(request.description)
     is InputRequest.Clarify -> request.questions.firstOrNull()?.question?.let { first ->
-        previewOf(if (request.questions.size > 1) "$first (+${request.questions.size - 1} more)" else first)
+        // "(+2)" for the questions after the first: a count, so it reads the same in every language.
+        previewOf(if (request.questions.size > 1) "$first (+${request.questions.size - 1})" else first)
     }
     is InputRequest.Secret -> if (request.prompt.isNotBlank()) previewOf(request.prompt) else (request.command ?: request.envVar)?.let(::commandPreview)
     is InputRequest.VaultSaveLogin -> previewOf(request.title)

@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Words only the phone draws: shared/ui's androidMain (media on an agent's screen, attachments, widgets, saving).
+    Keys start with android_.
+-->
+<resources>
+    <!-- Media on a screen the agent shows -->
+    <string name="android_media_picture_not_shown">Picture not shown</string>
+    <string name="android_media_picture_failed">Picture didn’t load</string>
+    <string name="android_media_audio_not_played">Audio not played</string>
+    <string name="android_media_video_not_shown">Video not shown</string>
+    <string name="android_media_audio_failed">Audio didn’t load</string>
+    <string name="android_media_video_failed">Video didn’t load</string>
+    <string name="android_screen_closed">The agent closed this screen.</string>
+    <string name="android_screen_part_failed">Couldn’t draw this part</string>
+
+    <!-- Attachments: picked, taken or shared from another app -->
+    <string name="android_attach_photo_failed">Couldn’t read the photo.</string>
+    <string name="android_attach_no_camera">No camera app is available.</string>
+    <string name="android_attach_not_allowed">The app that shared it didn’t let Kyllene read the file.</string>
+    <string name="android_attach_read_failed">Couldn’t read a file.</string>
+    <!-- %1$s: the file's name -->
+    <string name="android_attach_photo_too_large">%1$s is larger than 50 MB.</string>
+    <string name="android_attach_file_too_large">%1$s is larger than %2$d MB.</string>
+    <string name="android_attach_unreadable">Couldn’t read %1$s.</string>
+    <string name="android_attach_not_image">Couldn’t read %1$s as an image.</string>
+    <string name="android_attach_too_much">That’s more than 50 MB of attachments at once.</string>
+
+    <!-- Widgets in a reply -->
+    <string name="android_widget_update_webview">Update Android System WebView to run this widget.</string>
+    <string name="android_widget_failed">Couldn’t display this widget.</string>
+
+    <!-- Saving a file or picture -->
+    <string name="android_save_needs_android_10">Saving needs Android 10. Use Share instead.</string>
+    <!-- %1$s: the file's name -->
+    <string name="android_save_failed">Couldn’t save %1$s.</string>
+    <!-- %1$s: the folder, such as Pictures/Kyllene -->
+    <string name="android_saved_to">Saved to %1$s</string>
+</resources>

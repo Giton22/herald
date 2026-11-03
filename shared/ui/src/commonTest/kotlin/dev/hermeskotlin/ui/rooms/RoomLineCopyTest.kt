@@ -1,5 +1,7 @@
 package dev.hermeskotlin.ui.rooms
 
+import dev.hermeskotlin.ui.inbox.words
+import dev.hermeskotlin.ui.resources.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -22,7 +24,7 @@ class RoomLineCopyTest {
 
     @Test
     fun theLabelSaysWhoseMessageItCopies() {
-        assertEquals("Copy Main's message", copyLabel("Main"))
-        assertEquals("Copy your message", copyLabel(null))
+        assertEquals(words(Res.string.rooms_copy_their_message, "Main"), copyLabel("Main"))
+        assertEquals(words(Res.string.rooms_copy_your_message), copyLabel(null))
     }
 }

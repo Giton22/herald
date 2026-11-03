@@ -27,6 +27,10 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import dev.hermeskotlin.designsystem.components.VerticalScrollbar
 import androidx.compose.ui.focus.FocusRequester
 import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.inbox.Words
+import dev.hermeskotlin.ui.inbox.text
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
@@ -124,7 +128,7 @@ fun BotEditor(
     bot: Bot?,
     /** Profile ids already in use. */
     taken: Set<String>,
-    busy: String?,
+    busy: Words?,
     loadDetails: suspend () -> BotDetails?,
     onBack: () -> Unit,
     onCreate: (BotDraft) -> Unit,
@@ -185,7 +189,9 @@ fun BotEditor(
         contentAlignment = Alignment.TopCenter,
     ) {
         Column(Modifier.widthIn(max = 640.dp).fillMaxSize()) {
-            SubpageHeader(if (bot == null) "New bot" else "Edit ${bot.label}", onBack = { if (busy == null) onBack() })
+            SubpageHeader(
+                if (bot == null) stringResource(Res.string.bots_new_bot) else stringResource(Res.string.bots_edit_named, bot.label),
+                onBack = { if (busy == null) onBack() })
             Column(
                 Modifier.fillMaxSize().verticalScroll(scroll).padding(start = 16.dp, end = 16.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
@@ -194,14 +200,14 @@ fun BotEditor(
                     BotAvatar(preview, picture = null, size = 72.dp)
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SectionLabel("Face")
+                    SectionLabel(stringResource(Res.string.bots_face))
                     ChoiceRow {
                         BotShape.entries.forEach { option ->
                             val look = Bot(name = profile.ifEmpty { "agent" }, uiMeta = JsonObject(mapOf(BotMeta.KEY to JsonObject(mapOf(
                                 "shape" to JsonPrimitive(option.name.lowercase()),
                                 "custom" to JsonPrimitive(true),
                             ) + (color?.let { mapOf("color" to JsonPrimitive(cssHex(it))) } ?: emptyMap())))))
-                            Choice(selected = option == (shape ?: botLook(preview).shape), label = option.name, onClick = { shape = option }) {
+                            Choice(selected = option == (shape ?: botLook(preview).shape), label = shapeName(option), onClick = { shape = option }) {
                                 BotAvatar(look, picture = null, size = 32.dp)
                             }
                         }
@@ -221,29 +227,30 @@ fun BotEditor(
                     TextField(
                         name,
                         focusRequester = nameFocus,
-                        label = "Name",
-                        placeholder = "e.g. Researcher",
+                        label = stringResource(Res.string.bots_name),
+                        placeholder = stringResource(Res.string.bots_name_example),
                         supportingText = when {
-                            typedName.isBlank() -> "Becomes the bot's profile on the gateway."
-                            problem == null -> "Profile: $slug"
+                            typedName.isBlank() -> stringResource(Res.string.bots_name_detail)
+                            problem == null -> stringResource(Res.string.bots_profile_named, slug)
                             else -> null
                         },
                         error = problem,
                     )
                 }
-                TextField(title, label = "Title", placeholder = autoTitle.ifEmpty { "What it is, e.g. Research analyst" })
+                val titleExample = stringResource(Res.string.bots_title_example)
+                TextField(title, label = stringResource(Res.string.bots_title), placeholder = autoTitle.ifEmpty { titleExample })
                 TextField(
                     description,
-                    label = "Description",
-                    placeholder = "What should this bot help with?",
+                    label = stringResource(Res.string.bots_description),
+                    placeholder = stringResource(Res.string.bots_description_placeholder),
                     singleLine = false,
                     maxLines = 5,
                 )
                 TextField(
                     soul,
-                    label = "Persona (SOUL.md)",
-                    placeholder = if (bot == null) "Optional. Left empty, one is written from the name, title and description." else null,
-                    supportingText = "How the bot thinks of itself and works, read at the start of every chat.",
+                    label = stringResource(Res.string.bots_persona),
+                    placeholder = if (bot == null) stringResource(Res.string.bots_persona_placeholder) else null,
+                    supportingText = stringResource(Res.string.bots_persona_detail),
                     singleLine = false,
                     maxLines = 12,
                 )
@@ -251,7 +258,7 @@ fun BotEditor(
                 if (bot != null) {
                     val now = live ?: bot
                     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        SectionLabel("How it works")
+                        SectionLabel(stringResource(Res.string.bots_how_it_works))
                         // The two settings on one ringed card, split by a hairline.
                         val card = RoundedCornerShape(Theme[radii][radiusLarge])
                         Column(
@@ -263,24 +270,34 @@ fun BotEditor(
                         ) {
                             SettingRow(
                                 Lucide.Cpu,
-                                "Model",
+                                stringResource(Res.string.bots_model),
                                 now.model?.takeIf { it.isNotBlank() }?.let { model ->
                                     listOfNotNull(displayModelName(model), now.provider?.takeIf { it.isNotBlank() }?.let { displayProviderName(it) })
                                         .joinToString(" · ")
-                                } ?: "The gateway's default",
+                                } ?: stringResource(Res.string.bots_model_default),
                                 onClick = onPickModel,
                             )
                             Box(Modifier.fillMaxWidth().height(1.dp).background(Theme[colors][stroke]))
-                            SettingRow(Lucide.Blocks, "Skills, tools and connectors", "What ${bot.label} can use in its chats", onClick = onCapabilities)
+                            SettingRow(
+                                Lucide.Blocks,
+                                stringResource(Res.string.bots_capabilities),
+                                stringResource(Res.string.bots_capabilities_detail, bot.label),
+                                onClick = onCapabilities,
+                            )
                             Box(Modifier.fillMaxWidth().height(1.dp).background(Theme[colors][stroke]))
-                            SettingRow(Lucide.SlidersHorizontal, "Config", "${bot.label}'s voice, memory, approvals and the rest", onClick = onConfig)
+                            SettingRow(
+                                Lucide.SlidersHorizontal,
+                                stringResource(Res.string.bots_config),
+                                stringResource(Res.string.bots_config_detail, bot.label),
+                                onClick = onConfig,
+                            )
                         }
                     }
                 }
-                busy?.let { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary]) }
+                busy?.let { Text(it.text(), style = Theme[typography][bodySmall], color = Theme[colors][textSecondary]) }
                 if (bot == null) {
                     Button(
-                        "Make bot",
+                        stringResource(Res.string.bots_make),
                         onClick = {
                             onCreate(
                                 BotDraft(
@@ -299,7 +316,7 @@ fun BotEditor(
                     )
                 } else {
                     Button(
-                        "Save",
+                        stringResource(Res.string.bots_save),
                         onClick = {
                             val look = buildMap<String, JsonElement?> {
                                 val newTitle = title.text.toString().trim()
@@ -324,7 +341,7 @@ fun BotEditor(
                     )
                 }
                 if (bot != null && details == null) {
-                    Text("Reading ${bot.label}'s description and persona…", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                    Text(stringResource(Res.string.bots_reading_details, bot.label), style = Theme[typography][caption], color = Theme[colors][textTertiary])
                 }
             }
         }
@@ -332,6 +349,20 @@ fun BotEditor(
         VerticalScrollbar(scroll, Modifier.align(Alignment.TopEnd).fillMaxHeight().padding(vertical = 2.dp, horizontal = 1.dp))
     }
 }
+
+/** A face's shape, as its tooltip names it. */
+@Composable
+private fun shapeName(shape: BotShape): String = stringResource(
+    when (shape) {
+        BotShape.Circle -> Res.string.bots_shape_circle
+        BotShape.Squircle -> Res.string.bots_shape_squircle
+        BotShape.Pill -> Res.string.bots_shape_pill
+        BotShape.Triangle -> Res.string.bots_shape_triangle
+        BotShape.Hexagon -> Res.string.bots_shape_hexagon
+        BotShape.Cloud -> Res.string.bots_shape_cloud
+        BotShape.Drop -> Res.string.bots_shape_drop
+    },
+)
 
 /** A row that opens one of the bot's settings: what it is, and what it's set to now. */
 @Composable

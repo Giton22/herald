@@ -96,7 +96,10 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.chat.usd
 import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.ReportSkeleton
-import dev.hermeskotlin.ui.tapVerb
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.time.Clock
 
@@ -143,10 +146,13 @@ internal fun InsightsView(
     // The report's own days once it's here; until then the period's, so the title doesn't jump as it loads.
     val range = days?.takeIf { it.isNotEmpty() }?.let { it.first().day to it.last().day }
         ?: (isoDateOf(today - state.period.days + 1) to isoDateOf(today))
+    val shortDate = rememberShortDate()
+    // Read here for the switch's plain label lambda.
+    val periodNames = InsightsPeriod.entries.associateWith { pluralStringResource(Res.plurals.sessions_insights_days, it.days, it.days) }
     Column(Modifier.fillMaxSize()) {
         // The period sits in the back row, as in the design; the title says which days it covers and where.
         SubpageHeader(
-            "Insights",
+            stringResource(Res.string.sessions_nav_insights),
             onBack = onBack,
             subtitle = listOfNotNull("${shortDate(range.first)} – ${shortDate(range.second)}", place).joinToString(" · "),
         ) {
@@ -154,18 +160,21 @@ internal fun InsightsView(
                 options = InsightsPeriod.entries,
                 selected = state.period,
                 onSelect = onSelectPeriod,
-                optionLabel = { it.label },
+                optionLabel = { periodNames.getValue(it) },
                 modifier = Modifier.widthIn(max = 228.dp).weight(1f, fill = false),
             )
         }
         Box(Modifier.weight(1f).fillMaxWidth()) {
             when {
-                report == null && state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load insights", state.error, error = true) {
-                    Button("Try again", onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+                report == null && state.error != null -> EmptyState(Lucide.CloudOff, stringResource(Res.string.sessions_insights_load_failed), state.error, error = true) {
+                    Button(stringResource(Res.string.sessions_try_again), onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                 }
                 report == null -> ReportSkeleton()
-                report.totals.sessions == 0 && report.totals.apiCalls == 0 ->
-                    EmptyState(Lucide.ChartColumn, "Nothing used yet", "Chats from this period, and what they cost, show up here.")
+                report.totals.sessions == 0 && report.totals.apiCalls == 0 -> EmptyState(
+                    Lucide.ChartColumn,
+                    stringResource(Res.string.sessions_insights_empty),
+                    stringResource(Res.string.sessions_insights_empty_detail),
+                )
                 else -> Report(report, days.orEmpty())
             }
         }
@@ -205,7 +214,7 @@ private val TWO_COLUMNS_FROM = 720.dp
 private fun Summary(report: UsageReport, days: List<UsageDay>) {
     val totals = report.totals
     val cost = usd(totals.cost)
-    val costCaption = if (totals.actualCost > 0) "billed" else "estimated cost"
+    val costCaption = stringResource(if (totals.actualCost > 0) Res.string.sessions_insights_billed else Res.string.sessions_insights_estimated)
     Column(Modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(2.dp)) {
         // Shrinks to fit rather than wrapping mid-number.
         BasicText(
@@ -217,9 +226,9 @@ private fun Summary(report: UsageReport, days: List<UsageDay>) {
         Text(costCaption, style = Theme[typography][bodySmall].copy(fontSize = 13.sp), color = Theme[colors][textTertiary])
     }
     val tiles = listOf(
-        compactCount(totals.sessions.toLong()) to if (totals.sessions == 1) "chat" else "chats",
-        compactCount(totals.input + totals.output) to "tokens in and out",
-        (totals.cachePercent?.let { "$it%" } ?: "—") to "prompt from cache",
+        compactCount(totals.sessions.toLong()) to pluralStringResource(Res.plurals.sessions_insights_chats, totals.sessions),
+        compactCount(totals.input + totals.output) to stringResource(Res.string.sessions_insights_tokens_in_out),
+        (totals.cachePercent?.let { "$it%" } ?: "—") to stringResource(Res.string.sessions_insights_from_cache),
     )
     // Three across, or one a row once a large font or a narrow page would crush them.
     BoxWithConstraints(Modifier.fillMaxWidth()) {
@@ -241,13 +250,21 @@ private fun Summary(report: UsageReport, days: List<UsageDay>) {
 @Composable
 private fun Breakdown(report: UsageReport) {
     Ranked(
-        "Models",
+        stringResource(Res.string.sessions_insights_models),
         report.byModel.sortedByDescending { it.tokens }.map { displayModelName(it.model) to it.tokens },
-        format = { "${compactCount(it)} tokens" },
+        format = Res.string.sessions_insights_tokens,
     )
     // The title says what the chips count.
-    Chips("Tool calls", report.tools.sortedByDescending { it.count }.map { it.tool to it.count.toLong() }, unit = "calls")
-    Chips("Skill uses", report.topSkills.sortedByDescending { it.count }.map { it.skill to it.count.toLong() }, unit = "uses")
+    Chips(
+        stringResource(Res.string.sessions_insights_tool_calls),
+        report.tools.sortedByDescending { it.count }.map { it.tool to it.count.toLong() },
+        spoken = Res.string.sessions_insights_tool_calls_spoken,
+    )
+    Chips(
+        stringResource(Res.string.sessions_insights_skill_uses),
+        report.topSkills.sortedByDescending { it.count }.map { it.skill to it.count.toLong() },
+        spoken = Res.string.sessions_insights_skill_uses_spoken,
+    )
 }
 
 /** A headline number with its caption, on a ringed surface. */
@@ -286,6 +303,8 @@ private fun DailyChart(report: UsageReport, days: List<UsageDay>) {
     val shown = picked ?: hovered
     val gap = if (days.size > 45) 1.dp else 3.dp
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
+    val shortDate = rememberShortDate()
+    val showLabel = stringResource(Res.string.sessions_insights_show_numbers)
     Column(
         Modifier.fillMaxWidth().background(Theme[colors][surface], shape).border(1.dp, Theme[colors][stroke], shape).padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(10.dp),
@@ -295,9 +314,14 @@ private fun DailyChart(report: UsageReport, days: List<UsageDay>) {
             horizontalArrangement = Arrangement.SpaceBetween,
             itemVerticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Tokens by day", style = Theme[typography][headingStyle], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
             Text(
-                "Peak ${compactCount(peakDay.tokens)} · ${shortDate(peakDay.day)}",
+                stringResource(Res.string.sessions_insights_tokens_by_day),
+                style = Theme[typography][headingStyle],
+                color = Theme[colors][text],
+                modifier = Modifier.semantics { heading() },
+            )
+            Text(
+                stringResource(Res.string.sessions_insights_peak, compactCount(peakDay.tokens), shortDate(peakDay.day)),
                 style = Theme[typography][caption].copy(fontSize = 12.sp),
                 color = Theme[colors][textTertiary],
             )
@@ -307,11 +331,11 @@ private fun DailyChart(report: UsageReport, days: List<UsageDay>) {
             shown?.let { day ->
                 listOf(
                     shortDate(day.day),
-                    "${compactCount(day.tokens)} tokens",
+                    stringResource(Res.string.sessions_insights_tokens, compactCount(day.tokens)),
                     usd(day.cost),
-                    "${day.sessions} ${if (day.sessions == 1) "chat" else "chats"}",
+                    pluralStringResource(Res.plurals.sessions_insights_day_chats, day.sessions, day.sessions),
                 ).joinToString(" · ")
-            } ?: if (isDesktop) "Point at a day for its numbers." else "$tapVerb a day for its numbers.",
+            } ?: stringResource(if (isDesktop) Res.string.sessions_insights_hint_pointer else Res.string.sessions_insights_hint_touch),
             style = Theme[typography][bodySmall],
             color = Theme[colors][if (shown != null) text else textTertiary],
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
@@ -319,6 +343,7 @@ private fun DailyChart(report: UsageReport, days: List<UsageDay>) {
         Row(Modifier.fillMaxWidth().height(120.dp), horizontalArrangement = Arrangement.spacedBy(gap), verticalAlignment = Alignment.Bottom) {
             days.forEach { day ->
                 val fraction = day.tokens.toFloat() / peak
+                val spoken = stringResource(Res.string.sessions_insights_day_spoken, shortDate(day.day), compactCount(day.tokens))
                 // The peak stands out by the others stepping back, which works whatever the accent.
                 val alpha = when {
                     shown != null -> if (shown == day) 1f else 0.35f
@@ -344,12 +369,12 @@ private fun DailyChart(report: UsageReport, days: List<UsageDay>) {
                         .clickable(
                             interactionSource = remember { MutableInteractionSource() },
                             indication = null,
-                            onClickLabel = "Show its numbers",
+                            onClickLabel = showLabel,
                         ) {
                             picked = if (picked == day) null else day
                         }
                         .semantics {
-                            contentDescription = "${shortDate(day.day)}: ${compactCount(day.tokens)} tokens"
+                            contentDescription = spoken
                             selected = picked == day
                         },
                     contentAlignment = Alignment.BottomCenter,
@@ -378,7 +403,7 @@ private fun DailyChart(report: UsageReport, days: List<UsageDay>) {
 
 /** A top-five list with a bar per row scaled to the leader; the label and value carry the meaning. */
 @Composable
-private fun Ranked(title: String, rows: List<Pair<String, Long>>, format: (Long) -> String) {
+private fun Ranked(title: String, rows: List<Pair<String, Long>>, format: StringResource) {
     val shown = rows.filter { it.second > 0 }.take(5)
     if (shown.isEmpty()) return
     val top = shown.first().second.coerceAtLeast(1)
@@ -388,7 +413,7 @@ private fun Ranked(title: String, rows: List<Pair<String, Long>>, format: (Long)
             Column(Modifier.semantics(mergeDescendants = true) {}, verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(name, style = Theme[typography][body].copy(fontSize = 14.sp), color = Theme[colors][text], maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
-                    Text(format(value), style = Theme[typography][code].copy(fontSize = 12.sp), color = Theme[colors][textSecondary])
+                    Text(stringResource(format, compactCount(value)), style = Theme[typography][code].copy(fontSize = 12.sp), color = Theme[colors][textSecondary])
                 }
                 Box(Modifier.fillMaxWidth().height(6.dp).background(Theme[colors][surface3], CircleShape)) {
                     Box(Modifier.fillMaxWidth(value.toFloat() / top).fillMaxHeight().background(Theme[colors][accent], CircleShape))
@@ -398,22 +423,23 @@ private fun Ranked(title: String, rows: List<Pair<String, Long>>, format: (Long)
     }
 }
 
-/** The most used, as mono chips with their counts. */
+/** The most used, as mono chips with their counts; [spoken] reads a chip from its name and count. */
 @Composable
-private fun Chips(title: String, rows: List<Pair<String, Long>>, unit: String) {
+private fun Chips(title: String, rows: List<Pair<String, Long>>, spoken: StringResource) {
     val shown = rows.filter { it.second > 0 }.take(8)
     if (shown.isEmpty()) return
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         SectionTitle(title)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             shown.forEach { (name, value) ->
+                val said = stringResource(spoken, name, compactCount(value))
                 Row(
                     Modifier
                         .heightIn(min = 30.dp)
                         .background(Theme[colors][surface2], CircleShape)
                         .border(1.dp, Theme[colors][stroke], CircleShape)
                         .padding(horizontal = 12.dp, vertical = 4.dp)
-                        .clearAndSetSemantics { contentDescription = "$name, ${compactCount(value)} $unit" },
+                        .clearAndSetSemantics { contentDescription = said },
                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -439,12 +465,36 @@ private fun SectionTitle(text: String) {
     )
 }
 
-/** "2026-10-03" → "Oct 3". */
-internal fun shortDate(iso: String): String {
-    val parts = iso.split('-')
-    val month = parts.getOrNull(1)?.toIntOrNull()?.let { MONTHS.getOrNull(it - 1) } ?: return iso
-    val day = parts.getOrNull(2)?.toIntOrNull() ?: return iso
-    return "$month $day"
+/**
+ * A short date in the user's language: "2026-10-03" → "Oct 3" in English, "3. Okt." in German. The month names
+ * and the order come from the catalogue, read once here so the result also works in semantics blocks.
+ */
+@Composable
+private fun rememberShortDate(): (String) -> String {
+    val months = MONTHS.map { stringResource(it) }
+    val pattern = stringResource(Res.string.sessions_short_date, "\u0000M", "\u0000D")
+    return { iso -> shortDate(iso, months, pattern) }
 }
 
-private val MONTHS = listOf("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+/** [iso] ("2026-10-03") as [pattern] with its month from [months] and its day put in; [iso] as it is if it isn't one. */
+internal fun shortDate(iso: String, months: List<String>, pattern: String): String {
+    val parts = iso.split('-')
+    val month = parts.getOrNull(1)?.toIntOrNull()?.let { months.getOrNull(it - 1) } ?: return iso
+    val day = parts.getOrNull(2)?.toIntOrNull() ?: return iso
+    return pattern.replace("\u0000M", month).replace("\u0000D", day.toString())
+}
+
+private val MONTHS = listOf(
+    Res.string.sessions_month_1,
+    Res.string.sessions_month_2,
+    Res.string.sessions_month_3,
+    Res.string.sessions_month_4,
+    Res.string.sessions_month_5,
+    Res.string.sessions_month_6,
+    Res.string.sessions_month_7,
+    Res.string.sessions_month_8,
+    Res.string.sessions_month_9,
+    Res.string.sessions_month_10,
+    Res.string.sessions_month_11,
+    Res.string.sessions_month_12,
+)
