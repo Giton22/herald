@@ -6471,6 +6471,26 @@
   },
   {
     "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/commons-logging/commons-logging/1.4.0/commons-logging-1.4.0.jar",
+    "sha512": "5c333d925f81fdd09a80176ff15cd38381eb12e9ec2dac75f113d66006002175b33cdd9a0668100c5c6a49ae81f9f576909b89219a345a0075ed4683a997570a",
+    "dest": "offline-repository/commons-logging/commons-logging/1.4.0",
+    "dest-filename": "commons-logging-1.4.0.jar",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/commons-logging/commons-logging/1.4.0/commons-logging-1.4.0.pom",
+    "sha512": "6f96134739f0b2bf8553300ff4d80097d93e04816bbb1d695847537e28d05707b339fb095c82495b8fa17bf86a2ce23025d6a65bce27caef73555c4fd59da77f",
+    "dest": "offline-repository/commons-logging/commons-logging/1.4.0",
+    "dest-filename": "commons-logging-1.4.0.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
     "url": "https://repo.maven.apache.org/maven2/dev/chrisbanes/haze/haze/2.0.1/haze-2.0.1.module",
     "sha512": "2e22e2a1d11c9a3862eb2cc5ae546f864960c6b7bf5ad21d32f2dd5f51ac72af3f934eef48c1219f3852c02b4aa496d58929c587c00ffa7738c5d7c31d5ac10d",
     "dest": "offline-repository/dev/chrisbanes/haze/haze/2.0.1",
@@ -8291,6 +8311,26 @@
   },
   {
     "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/apache/apache/38/apache-38.pom",
+    "sha512": "32747243a85bf79763c88b248a47890577d5ff1b3c7c44e4fe26d27004b9967fe7f6b78ced0800877018a0c04b21cf2c05a5cbf8f8c960448d324852ce00e17b",
+    "dest": "offline-repository/org/apache/apache/38",
+    "dest-filename": "apache-38.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/apache/apache/39/apache-39.pom",
+    "sha512": "eaf61c6302666177b7e717f2bb2bd58b8213d26fe36a777bfe44a9444c9b56713d58bb5dd42573f5441f47dce200a98dc0a04b11dd2b0b3f8057c2fb5822bf20",
+    "dest": "offline-repository/org/apache/apache/39",
+    "dest-filename": "apache-39.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
     "url": "https://repo.maven.apache.org/maven2/org/apache/commons/commons-compress/1.27.1/commons-compress-1.27.1.jar",
     "sha512": "5e1fcf9f552ab86beceef6743609e97d700dcbaa5b5ee58858e765c1238cd4dbca2852e1eb415bc2a09dad478d31197ddf09b2ba148dd30be8c9ecd565775226",
     "dest": "offline-repository/org/apache/commons/commons-compress/1.27.1",
@@ -8325,6 +8365,16 @@
     "sha512": "3cd5902655ed2bb80243aa1817af04bf1738e908196767d450e4e84bb31e29a0a6bea84500ffa80eeb9f9eb465f0abc2c5b9d527de6817b085c8155c60127e04",
     "dest": "offline-repository/org/apache/commons/commons-lang3/3.16.0",
     "dest-filename": "commons-lang3-3.16.0.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/apache/commons/commons-parent/102/commons-parent-102.pom",
+    "sha512": "2a1976185937d0d55ce1dcd17bf9e02d799d23a11af964bd97e560b7b5472c7153014ba3a74cee345f06415693832195d55071a717b5ea013e7ddbf68638f228",
+    "dest": "offline-repository/org/apache/commons/commons-parent/102",
+    "dest-filename": "commons-parent-102.pom",
     "only-arches": [
       "x86_64"
     ]
@@ -8565,6 +8615,76 @@
     "sha512": "b04e926221d11008535d0fb3c30408ede1cb1f0e0841c2fca0a79081c1730f3c838c7ae824a635a4f07227ca9e7a4e565423399a2e86f22d78c356fab726af02",
     "dest": "offline-repository/org/apache/logging/logging-parent/11.3.0",
     "dest-filename": "logging-parent-11.3.0.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/apache/pdfbox/fontbox/3.0.8/fontbox-3.0.8.jar",
+    "sha512": "fdc1a5bcb016280c561e20684db77cba126660872f6ad03440596b8817ed97452e80237e0c3e41f8914711dac96abb8da8d1f37014eef7a7433fff85aff953b7",
+    "dest": "offline-repository/org/apache/pdfbox/fontbox/3.0.8",
+    "dest-filename": "fontbox-3.0.8.jar",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/apache/pdfbox/fontbox/3.0.8/fontbox-3.0.8.pom",
+    "sha512": "34d2f94dad4b7952637a832c173ecad07bcfc5b10aa8f391c0c5310a4ec572b8297fe99cb8ea5c3c24bcffcc43332f474a4be9ad61fa99c1d56036214a85ca66",
+    "dest": "offline-repository/org/apache/pdfbox/fontbox/3.0.8",
+    "dest-filename": "fontbox-3.0.8.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/apache/pdfbox/pdfbox/3.0.8/pdfbox-3.0.8.jar",
+    "sha512": "bd59e4918285dbed5d5a5e922368b139b2d3eed3e7b1102e726bbc69041328c82175826b92f341885f17f22c7af8438f4c5e676f25b90a8c062d42b1d7e5a57c",
+    "dest": "offline-repository/org/apache/pdfbox/pdfbox/3.0.8",
+    "dest-filename": "pdfbox-3.0.8.jar",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/apache/pdfbox/pdfbox/3.0.8/pdfbox-3.0.8.pom",
+    "sha512": "ddc24c7aa52d046c8dd8db213d9c1d9a1485b7b4d6f53372b619faf3999a085b6a17ef8869dee9a3cbd5efcad35207139e6760e397fca8e6be5525c696e9cc77",
+    "dest": "offline-repository/org/apache/pdfbox/pdfbox/3.0.8",
+    "dest-filename": "pdfbox-3.0.8.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/apache/pdfbox/pdfbox-io/3.0.8/pdfbox-io-3.0.8.jar",
+    "sha512": "659c72ecfa9743df09321ef594cb0e948cabff17d7aed01583f78ec344e2126e6c75506abc43bc36369c0692bf09ea9e81b956ea9a3e28af29dd5c86bae9ff7b",
+    "dest": "offline-repository/org/apache/pdfbox/pdfbox-io/3.0.8",
+    "dest-filename": "pdfbox-io-3.0.8.jar",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/apache/pdfbox/pdfbox-io/3.0.8/pdfbox-io-3.0.8.pom",
+    "sha512": "2a707b100387aa30d6aee52c5310af0f96f775cae3fa356e1bd89e7706e510bbac2463432a015317e9548847d37d2b245ceabc7489cdf5671847f43458182ecb",
+    "dest": "offline-repository/org/apache/pdfbox/pdfbox-io/3.0.8",
+    "dest-filename": "pdfbox-io-3.0.8.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/apache/pdfbox/pdfbox-parent/3.0.8/pdfbox-parent-3.0.8.pom",
+    "sha512": "182872f22cd467420a264dfc18afacfa626111e9344bba8dce311fc4d9fd0be149e803064043a5260f875e39069a6e05f376ed8999aff032d1abc9f94997e2aa",
+    "dest": "offline-repository/org/apache/pdfbox/pdfbox-parent/3.0.8",
+    "dest-filename": "pdfbox-parent-3.0.8.pom",
     "only-arches": [
       "x86_64"
     ]
@@ -13405,6 +13525,16 @@
     "sha512": "ec795b2f32982c1af8dccef57553aa9d959c13ee829aebd6459ba22b4ef434aeb4184aa89f63ad2f0d8c45d59cd020a15cd976ddb4bf20f1044b492a406e029e",
     "dest": "offline-repository/org/junit/junit-bom/5.13.4",
     "dest-filename": "junit-bom-5.13.4.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/junit/junit-bom/5.14.3/junit-bom-5.14.3.pom",
+    "sha512": "f00243baba8e6a7a9526b93be0ce45b44ee2c2005b152d7f655af3d5ff00bd73727a2aa3a60102cd303a23bd489c6c9ce6e0f6fa6634d53b7b50b720b186c053",
+    "dest": "offline-repository/org/junit/junit-bom/5.14.3",
+    "dest-filename": "junit-bom-5.14.3.pom",
     "only-arches": [
       "x86_64"
     ]

@@ -8,5 +8,15 @@
     "only-arches": [
       "x86_64"
     ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/commons-io/commons-io/2.16.1/commons-io-2.16.1.jar",
+    "sha512": "97eab31b073c5c57c8bcfaa2fec7b481a15a9a1f9ed864dfdc63b57f062b230557caa734c3133aca1165facb588c58db0185c07832241d70159e87a4bcf48008",
+    "dest": "offline-repository/commons-io/commons-io/2.16.1",
+    "dest-filename": "commons-io-2.16.1.jar",
+    "only-arches": [
+      "x86_64"
+    ]
   }
 ]
