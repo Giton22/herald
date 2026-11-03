@@ -10,6 +10,7 @@ import kotlin.test.assertEquals
 
 class SettingsStoreTest {
 
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
     @Test
     fun phoneToolPermissionOverridesSurviveReloadWithoutEnablingTools() = runTest {
         val disk = InMemoryKeyValueStore()
