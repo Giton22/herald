@@ -49,6 +49,9 @@
     <string name="call_title">Kyllene 通话</string>
     <string name="call_answer">接听</string>
     <string name="call_decline">拒绝</string>
+    <string name="call_reason_approval">需要你的批准</string>
+    <string name="call_reason_question">有个问题要问你</string>
+    <string name="call_reason_agent">正在呼叫你</string>
     <string name="call_ended">通话已结束</string>
     <string name="call_status">%1$s · %2$s</string>
     <string name="call_listening">正在聆听</string>

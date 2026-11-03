@@ -49,6 +49,9 @@
     <string name="call_title">Kyllene-hívás</string>
     <string name="call_answer">Fogadás</string>
     <string name="call_decline">Elutasítás</string>
+    <string name="call_reason_approval">Jóváhagyásodra vár</string>
+    <string name="call_reason_question">Kérdése van hozzád</string>
+    <string name="call_reason_agent">Hív téged</string>
     <string name="call_ended">A hívás véget ért</string>
     <string name="call_status">%1$s · %2$s</string>
     <string name="call_listening">Figyel</string>

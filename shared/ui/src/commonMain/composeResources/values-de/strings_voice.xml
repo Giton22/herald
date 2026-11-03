@@ -49,6 +49,9 @@
     <string name="call_title">Kyllene-Anruf</string>
     <string name="call_answer">Annehmen</string>
     <string name="call_decline">Ablehnen</string>
+    <string name="call_reason_approval">Braucht deine Freigabe</string>
+    <string name="call_reason_question">Hat eine Frage an dich</string>
+    <string name="call_reason_agent">Ruft dich an</string>
     <string name="call_ended">Anruf beendet</string>
     <string name="call_status">%1$s · %2$s</string>
     <string name="call_listening">Hört zu</string>

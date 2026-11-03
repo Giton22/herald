@@ -38,6 +38,7 @@ import com.composables.icons.lucide.Phone
 import com.composables.icons.lucide.PhoneOff
 import dev.hermeskotlin.designsystem.surface3
 import dev.hermeskotlin.ui.voice.VoicePhase
+import dev.hermeskotlin.ui.components.ProvideAppWords
 import kotlinx.coroutines.delay
 import kotlin.time.TimeSource
 import com.composeunstyled.Text
@@ -75,7 +76,7 @@ fun IncomingCallScreen(caller: String, why: String, onAnswer: () -> Unit, onDecl
     val palette = AccentPalette.named(settings.accent)
     hermesTheme(palette)(if (settings.pureBlack) PureBlack else ColorScheme.Dark) {
         CompositionLocalProvider(LocalAccentPalette provides palette) {
-            IncomingCallView(caller, why, onAnswer, onDecline)
+            ProvideAppWords { IncomingCallView(caller, why, onAnswer, onDecline) }
         }
     }
 }
@@ -145,7 +146,7 @@ fun InCallScreen(model: PhoneCallModel) {
     }
     hermesTheme(palette)(if (settings.pureBlack) PureBlack else ColorScheme.Dark) {
         CompositionLocalProvider(LocalAccentPalette provides palette) {
-            InCallView(state, seconds, onMute = model::toggleMute, onEnd = model::hangUp)
+            ProvideAppWords { InCallView(state, seconds, onMute = model::toggleMute, onEnd = model::hangUp) }
         }
     }
 }
@@ -258,8 +259,20 @@ internal fun callStatusText(status: CallStatus): String = when (status) {
     }
 }
 
-/** Why it rings, in a few words: what the agent waits for, never the command or the question itself. */
+/**
+ * Why it rings, in a few words: what the agent waits for, never the command or the question itself. In English,
+ * for the call's notification, whose other words are English too; [IncomingCallScreen] shows [callReasonText].
+ */
 fun callReason(approval: Boolean): String = if (approval) "Needs your approval" else "Has a question for you"
 
 /** Why a call the agent placed rings, over the lock screen: not what it's about, which Hermes says on the line. */
 fun agentCallReason(): String = "Calling you"
+
+/** [callReason] in the app's language, for the call screen. */
+@Composable
+fun callReasonText(approval: Boolean): String =
+    stringResource(if (approval) Res.string.call_reason_approval else Res.string.call_reason_question)
+
+/** [agentCallReason] in the app's language, for the call screen. */
+@Composable
+fun agentCallReasonText(): String = stringResource(Res.string.call_reason_agent)

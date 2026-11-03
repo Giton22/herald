@@ -49,6 +49,9 @@
     <string name="call_title">Appel Kyllene</string>
     <string name="call_answer">Répondre</string>
     <string name="call_decline">Refuser</string>
+    <string name="call_reason_approval">Attend votre approbation</string>
+    <string name="call_reason_question">A une question pour vous</string>
+    <string name="call_reason_agent">Vous appelle</string>
     <string name="call_ended">Appel terminé</string>
     <string name="call_status">%1$s · %2$s</string>
     <string name="call_listening">À l’écoute</string>

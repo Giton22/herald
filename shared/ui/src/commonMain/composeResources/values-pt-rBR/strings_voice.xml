@@ -49,6 +49,9 @@
     <string name="call_title">Chamada do Kyllene</string>
     <string name="call_answer">Atender</string>
     <string name="call_decline">Recusar</string>
+    <string name="call_reason_approval">Precisa da sua aprovação</string>
+    <string name="call_reason_question">Tem uma pergunta para você</string>
+    <string name="call_reason_agent">Está ligando para você</string>
     <string name="call_ended">Chamada encerrada</string>
     <string name="call_status">%1$s · %2$s</string>
     <string name="call_listening">Escutando</string>

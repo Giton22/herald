@@ -54,6 +54,9 @@
     <string name="call_title">Kyllene call</string>
     <string name="call_answer">Answer</string>
     <string name="call_decline">Decline</string>
+    <string name="call_reason_approval">Needs your approval</string>
+    <string name="call_reason_question">Has a question for you</string>
+    <string name="call_reason_agent">Calling you</string>
     <string name="call_ended">Call ended</string>
     <string name="call_status">%1$s · %2$s</string>
     <string name="call_listening">Listening</string>

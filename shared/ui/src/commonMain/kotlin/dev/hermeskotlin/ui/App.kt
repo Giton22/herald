@@ -122,6 +122,7 @@ import org.koin.compose.viewmodel.koinViewModel
 import org.koin.core.parameter.parametersOf
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import dev.hermeskotlin.ui.components.CommandPalette
+import dev.hermeskotlin.ui.components.ProvideAppWords
 import dev.hermeskotlin.ui.components.TimeWords
 import dev.hermeskotlin.ui.components.rememberTimeWords
 import dev.hermeskotlin.ui.resources.*
@@ -297,7 +298,7 @@ fun HeraldTheme(content: @Composable () -> Unit) {
             LocalDensity provides Density(density.density, density.fontScale * settings.textSize.scale),
             LocalOpenModals provides modals,
         ) {
-            PlatformTextContextMenu(content)
+            ProvideAppWords { PlatformTextContextMenu(content) }
         }
     }
 }
