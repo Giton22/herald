@@ -120,6 +120,10 @@
     <string name="bots_start_fresh_detail">%1$s 的对话会被归档，并开始一段新的空白对话。%1$s 会保留记忆、技能和设置，旧对话以归档形式留在网关上。</string>
     <string name="bots_edit_named">编辑 %1$s</string>
     <string name="bots_face">外观</string>
+    <string name="bots_photo_choose">选择照片</string>
+    <string name="bots_photo_change">更换照片</string>
+    <string name="bots_photo_remove">移除照片</string>
+    <string name="bots_photo_save_failed">无法保存 %1$s 的头像。</string>
     <string name="bots_shape_circle">圆形</string>
     <string name="bots_shape_squircle">圆角方形</string>
     <string name="bots_shape_pill">胶囊</string>

@@ -122,6 +122,10 @@
     <string name="bots_start_fresh_detail">%1$s csevegése archiválódik, és egy új, üres indul. %1$s megtartja a memóriáját, képességeit és beállításait, a régi csevegés pedig archiválva a Gateway-en marad.</string>
     <string name="bots_edit_named">%1$s szerkesztése</string>
     <string name="bots_face">Arc</string>
+    <string name="bots_photo_choose">Fotó választása</string>
+    <string name="bots_photo_change">Fotó cseréje</string>
+    <string name="bots_photo_remove">Fotó eltávolítása</string>
+    <string name="bots_photo_save_failed">Nem sikerült menteni %1$s képét.</string>
     <string name="bots_shape_circle">Kör</string>
     <string name="bots_shape_squircle">Lekerekített négyzet</string>
     <string name="bots_shape_pill">Kapszula</string>

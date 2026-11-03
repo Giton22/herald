@@ -427,12 +427,27 @@ class BotsViewModel(
     /** The bot's SOUL and description, for its editor; null when they couldn't be read. */
     suspend fun details(bot: Bot): BotDetails? = runCatching { api.describe(bot.name) }.getOrNull()
 
-    /** Saves an edit; only what changed is sent, so an edit made on Desktop meanwhile isn't undone. */
-    fun save(bot: Bot, description: String?, soul: String?, look: Map<String, JsonElement?>, onDone: () -> Unit) {
+    /**
+     * Saves an edit; only what changed is sent, so an edit made on Desktop meanwhile isn't undone. A new
+     * [photo] goes up before the look that says to draw it, so no client draws a picture that isn't there yet.
+     */
+    fun save(bot: Bot, description: String?, soul: String?, look: Map<String, JsonElement?>, photo: PhotoEdit = PhotoEdit.Unchanged, onDone: () -> Unit) {
         if (_busy.value != null) return
         _busy.value = words(Res.string.bots_saving)
         viewModelScope.launch {
             try {
+                val png = when (photo) {
+                    PhotoEdit.Unchanged -> null
+                    PhotoEdit.Removed -> null
+                    is PhotoEdit.Picked -> photo.png
+                }
+                if (photo != PhotoEdit.Unchanged && !savePhoto(bot, png)) {
+                    // The look would point at a picture that isn't there: the rest is saved, the look waits.
+                    api.editBot(bot.name, description, soul, look - "imageKind" - "custom")
+                    _state.update { it.copy(notice = words(Res.string.bots_photo_save_failed, bot.label)) }
+                    onDone()
+                    return@launch
+                }
                 api.editBot(bot.name, description, soul, look)
                 health.recheck(bot.name)
                 onDone()
@@ -561,6 +576,24 @@ class BotsViewModel(
         val chat = bot.chatSummary() ?: return@mapNotNull null
         bot.name.takeIf { seenStore.seen(url, bot.name).first().isUnread(chat, resolvedId = bot.canonicalSession?.openId) }
     }.toSet()
+
+    /**
+     * Sends [bot]'s new picture (null takes it away) and shows it at once, without waiting for the roster.
+     * False when the gateway didn't keep it.
+     */
+    private suspend fun savePhoto(bot: Bot, png: ByteArray?): Boolean {
+        try {
+            api.setAvatar(bot.name, png)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            return false
+        }
+        _avatars.update { if (png == null) it - bot.name else it + (bot.name to png) }
+        // Asked again on the next roster read, which may still name the old picture.
+        avatarsAsked.remove(bot.name)
+        return true
+    }
 
     private fun loadAvatars(bots: List<Bot>) {
         val wanted = bots.filter { it.hasAvatar && avatarsAsked.add(it.name) }

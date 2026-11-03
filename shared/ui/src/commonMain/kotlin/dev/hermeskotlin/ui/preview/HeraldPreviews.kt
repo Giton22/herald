@@ -462,7 +462,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                     },
                     onBack = {},
                     onCreate = {},
-                    onSave = { _, _, _ -> },
+                    onSave = { _, _, _, _ -> },
                 )
                 PreviewScene.NewRoom -> Box(Modifier.fillMaxSize()) {
                     OpenSidebar {

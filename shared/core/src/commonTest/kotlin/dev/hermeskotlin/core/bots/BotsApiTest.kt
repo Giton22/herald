@@ -17,11 +17,15 @@ class BotsApiTest {
     /** Every `profiles.configure` the gateway was sent. */
     private val configured = mutableListOf<JsonObject>()
 
+    /** Every `profiles.set_asset` the gateway was sent. */
+    private val assets = mutableListOf<JsonObject>()
+
     /** Answers every call's params with [answer]. */
     private suspend fun api(scope: CoroutineScope, answer: (JsonObject) -> String): BotsApi {
         val gateway = FakeGateway(scope, reconnects = false)
         gateway.answer = { call ->
             if (call.method == "profiles.configure") configured += call.params
+            if (call.method == "profiles.set_asset") assets += call.params
             answer(call.params)
         }
         return BotsApi(gateway.start())
@@ -61,5 +65,36 @@ class BotsApiTest {
         val api = api(backgroundScope) { """{"ok":false,"applied":{"model":false}}""" }
 
         assertFailsWith<RpcException> { api.setModel("scribe", "x", "y") }
+    }
+
+    @Test
+    fun aPictureGoesUpAsTheBotsAvatarInADataUrl() = runTest {
+        val api = api(backgroundScope) { """{"ok":true,"asset":"avatar","size":4}""" }
+
+        api.setAvatar("scribe", byteArrayOf(1, 2, 3, 4))
+
+        val sent = assets.single()
+        assertEquals("scribe", sent["name"]?.jsonPrimitive?.contentOrNull)
+        assertEquals("avatar", sent["asset"]?.jsonPrimitive?.contentOrNull)
+        assertEquals("data:image/png;base64,AQIDBA==", sent["data"]?.jsonPrimitive?.contentOrNull)
+        assertNull(sent["clear"])
+    }
+
+    @Test
+    fun takingThePictureAwayClearsTheAsset() = runTest {
+        val api = api(backgroundScope) { """{"ok":true,"asset":"avatar","size":0,"removed":true}""" }
+
+        api.setAvatar("scribe", null)
+
+        val sent = assets.single()
+        assertEquals("true", sent["clear"]?.jsonPrimitive?.contentOrNull)
+        assertNull(sent["data"])
+    }
+
+    @Test
+    fun aPictureTheGatewayDidntKeepIsAnError() = runTest {
+        val api = api(backgroundScope) { """{"ok":false}""" }
+
+        assertFailsWith<RpcException> { api.setAvatar("scribe", byteArrayOf(1)) }
     }
 }

@@ -876,13 +876,14 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                     closeDrawer()
                 }
             },
-            onSave = { description, soul, look ->
-                target.bot?.let { bot -> bots.save(bot, description, soul, look) { editing = null } }
+            onSave = { description, soul, look, photo ->
+                target.bot?.let { bot -> bots.save(bot, description, soul, look, photo) { editing = null } }
             },
             live = live,
             onPickModel = { pickingModel = true },
             onCapabilities = { capabilitiesOpen = true },
             onConfig = { configOpen = true },
+            picture = target.bot?.let { edited -> faces.picture(live ?: edited) },
         )
         live?.let { bot ->
             ModelSheet(

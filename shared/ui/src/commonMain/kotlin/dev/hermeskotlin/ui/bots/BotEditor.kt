@@ -88,7 +88,10 @@ import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.caption
 import dev.hermeskotlin.designsystem.colors
+import dev.hermeskotlin.designsystem.danger
 import dev.hermeskotlin.designsystem.components.Button
+import dev.hermeskotlin.designsystem.components.ButtonSize
+import dev.hermeskotlin.designsystem.components.ButtonVariant
 import dev.hermeskotlin.designsystem.components.SectionLabel
 import dev.hermeskotlin.designsystem.components.TextField
 import dev.hermeskotlin.designsystem.radii
@@ -118,8 +121,8 @@ private fun ChoiceRow(content: @Composable () -> Unit) {
 }
 
 /**
- * Making a bot or changing one, as a page over the app: its face (shape and colour), name, role,
- * what it's for, and optionally the persona it runs with. A new bot's name becomes its profile id; an
+ * Making a bot or changing one, as a page over the app: its face (a picture, or a shape and colour), name,
+ * role, what it's for, and optionally the persona it runs with. A new bot's name becomes its profile id; an
  * edit sends only what changed, so a change made on Desktop meanwhile isn't undone.
  */
 @Composable
@@ -132,7 +135,8 @@ fun BotEditor(
     loadDetails: suspend () -> BotDetails?,
     onBack: () -> Unit,
     onCreate: (BotDraft) -> Unit,
-    onSave: (description: String?, soul: String?, look: Map<String, JsonElement?>) -> Unit,
+    /** [photo] is the picture to keep, [PhotoEdit.Unchanged] when it wasn't touched. */
+    onSave: (description: String?, soul: String?, look: Map<String, JsonElement?>, photo: PhotoEdit) -> Unit,
     /** The bot as the roster has it now, for what's saved apart from the form (its model). */
     live: Bot? = bot,
     /** Picks the model the bot runs; saved on its own, at once. */
@@ -141,6 +145,8 @@ fun BotEditor(
     onCapabilities: () -> Unit = {},
     /** Opens the bot's own Hermes settings. */
     onConfig: () -> Unit = {},
+    /** The bot's picture now, as the roster shows it; null when it wears its shape. */
+    picture: ByteArray? = null,
 ) {
     PlatformBackHandler(enabled = busy == null, onBack = onBack)
     val meta = bot?.meta ?: BotMeta()
@@ -153,6 +159,18 @@ fun BotEditor(
     val current = remember(bot) { bot?.let(::botLook) }
     var shape by remember { mutableStateOf(current?.shape) }
     var color by remember { mutableStateOf(current?.color) }
+    // A picture picked here, or taken away, kept apart from the shape until Save.
+    var photo by remember { mutableStateOf<PhotoEdit>(PhotoEdit.Unchanged) }
+    var photoProblem by remember { mutableStateOf<String?>(null) }
+    val shownPicture = when (val edit = photo) {
+        PhotoEdit.Unchanged -> picture
+        PhotoEdit.Removed -> null
+        is PhotoEdit.Picked -> edit.png
+    }
+    val pickPhoto = rememberBotPhotoPicker(
+        onPicked = { photo = PhotoEdit.Picked(it); photoProblem = null },
+        onError = { photoProblem = it },
+    )
     var typedName by remember { mutableStateOf("") }
     LaunchedEffect(name) { snapshotFlow { name.text.toString() }.collect { typedName = it } }
     LaunchedEffect(bot) {
@@ -196,8 +214,28 @@ fun BotEditor(
                 Modifier.fillMaxSize().verticalScroll(scroll).padding(start = 16.dp, end = 16.dp, bottom = 32.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp),
             ) {
-                Box(Modifier.fillMaxWidth().padding(top = 8.dp), contentAlignment = Alignment.Center) {
-                    BotAvatar(preview, picture = null, size = 72.dp)
+                Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    BotAvatar(preview, picture = shownPicture, size = 72.dp)
+                    // A picture is saved with the bot, so a new one gets it once it's made.
+                    if (bot != null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Button(
+                            stringResource(if (shownPicture == null) Res.string.bots_photo_choose else Res.string.bots_photo_change),
+                            onClick = pickPhoto,
+                            enabled = busy == null,
+                            variant = ButtonVariant.Secondary,
+                            size = ButtonSize.Small,
+                        )
+                        if (shownPicture != null) {
+                            Button(
+                                stringResource(Res.string.bots_photo_remove),
+                                onClick = { photo = if (picture == null) PhotoEdit.Unchanged else PhotoEdit.Removed },
+                                enabled = busy == null,
+                                variant = ButtonVariant.Ghost,
+                                size = ButtonSize.Small,
+                            )
+                        }
+                    }
+                    photoProblem?.let { Text(it, style = Theme[typography][caption], color = Theme[colors][danger]) }
                 }
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     SectionLabel(stringResource(Res.string.bots_face))
@@ -207,14 +245,20 @@ fun BotEditor(
                                 "shape" to JsonPrimitive(option.name.lowercase()),
                                 "custom" to JsonPrimitive(true),
                             ) + (color?.let { mapOf("color" to JsonPrimitive(cssHex(it))) } ?: emptyMap())))))
-                            Choice(selected = option == (shape ?: botLook(preview).shape), label = shapeName(option), onClick = { shape = option }) {
+                            Choice(selected = shownPicture == null && option == (shape ?: botLook(preview).shape), label = shapeName(option), onClick = {
+                                shape = option
+                                if (shownPicture != null) photo = if (picture == null) PhotoEdit.Unchanged else PhotoEdit.Removed
+                            }) {
                                 BotAvatar(look, picture = null, size = 32.dp)
                             }
                         }
                     }
                     ChoiceRow {
                         BOT_SWATCHES.forEach { swatch ->
-                            Choice(selected = color == swatch, label = cssHex(swatch), onClick = { color = swatch }) {
+                            Choice(selected = shownPicture == null && color == swatch, label = cssHex(swatch), onClick = {
+                                color = swatch
+                                if (shownPicture != null) photo = if (picture == null) PhotoEdit.Unchanged else PhotoEdit.Removed
+                            }) {
                                 Box(Modifier.size(28.dp).background(Color(0xFF000000 or swatch.toLong()), CircleShape))
                             }
                         }
@@ -323,9 +367,15 @@ fun BotEditor(
                                 if (newTitle != meta.title.orEmpty()) put("title", JsonPrimitive(newTitle))
                                 if (shape != current?.shape) shape?.let { put("shape", JsonPrimitive(it.name.lowercase())) }
                                 if (color != current?.color) color?.let { put("color", JsonPrimitive(cssHex(it))) }
-                                if (shape != current?.shape || color != current?.color) {
+                                // Desktop reads imageKind to know whether to draw the picture or the shape.
+                                val kind = when {
+                                    photo is PhotoEdit.Picked -> "photo"
+                                    photo == PhotoEdit.Removed || shape != current?.shape || color != current?.color -> "shape"
+                                    else -> null
+                                }
+                                kind?.let {
                                     put("custom", JsonPrimitive(true))
-                                    put("imageKind", JsonPrimitive("shape"))
+                                    put("imageKind", JsonPrimitive(it))
                                 }
                             }
                             val loaded = details
@@ -333,6 +383,7 @@ fun BotEditor(
                                 description.text.toString().trim().takeIf { loaded != null && it != loaded.description.trim() },
                                 soul.text.toString().trim().takeIf { loaded != null && it.isNotEmpty() && it != loaded.soul.trim() },
                                 look,
+                                photo,
                             )
                         },
                         enabled = busy == null,
@@ -406,4 +457,16 @@ private fun Choice(selected: Boolean, label: String, onClick: () -> Unit, conten
             contentAlignment = Alignment.Center,
         ) { content() }
     }
+}
+
+/** What the editor does to a bot's picture on Save. */
+sealed interface PhotoEdit {
+    /** Left as it is: nothing is sent. */
+    data object Unchanged : PhotoEdit
+
+    /** Taken away: the bot wears its shape again. */
+    data object Removed : PhotoEdit
+
+    /** A new picture, a square PNG ready for the gateway. */
+    class Picked(val png: ByteArray) : PhotoEdit
 }

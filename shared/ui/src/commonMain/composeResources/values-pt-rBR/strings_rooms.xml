@@ -122,6 +122,10 @@
     <string name="bots_start_fresh_detail">A conversa de %1$s é arquivada e uma nova, vazia, começa. %1$s mantém a memória, as habilidades e as configurações, e a conversa antiga fica no Gateway, arquivada.</string>
     <string name="bots_edit_named">Editar %1$s</string>
     <string name="bots_face">Rosto</string>
+    <string name="bots_photo_choose">Escolher foto</string>
+    <string name="bots_photo_change">Trocar foto</string>
+    <string name="bots_photo_remove">Remover foto</string>
+    <string name="bots_photo_save_failed">Não foi possível salvar a imagem de %1$s.</string>
     <string name="bots_shape_circle">Círculo</string>
     <string name="bots_shape_squircle">Quadrado arredondado</string>
     <string name="bots_shape_pill">Pílula</string>
