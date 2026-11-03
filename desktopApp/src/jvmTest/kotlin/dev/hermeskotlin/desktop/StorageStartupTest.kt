@@ -16,16 +16,19 @@ import kotlin.test.assertTrue
 class StorageStartupTest {
     @Test fun everyFailurePromptFitsA360PixelDisplayInEveryLanguage() {
         val folder = "/home/a-much-longer-user-name/.var/app/app.kyllene.Kyllene.Devel/data/herald"
+        // Every prompt that's too wide, not only the first: fonts differ by system, so one run should name them all.
+        val tooWide = mutableListOf<String>()
         for (language in LANGUAGES) withLocale(language) {
             val words = runBlocking { StoragePromptWords.load() }
             for (reason in SecureStorageException.Reason.entries) {
                 val guidance = runBlocking { storageGuidance(reason) }
                 SwingUtilities.invokeAndWait {
-                    val pane = storageUnlockPane(reason, guidance, words, folder)
-                    assertTrue(pane.preferredSize.width <= 360, "$language ${reason.name}: ${pane.preferredSize.width}px")
+                    val width = storageUnlockPane(reason, guidance, words, folder).preferredSize.width
+                    if (width > 360) tooWide += "$language ${reason.name}: ${width}px"
                 }
             }
         }
+        assertTrue(tooWide.isEmpty(), tooWide.joinToString())
     }
 
     @Test fun theStartFreshNoteNamesItsButtonInEveryLanguage() {
