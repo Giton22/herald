@@ -3,6 +3,9 @@ package dev.hermeskotlin.ui.rooms
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import dev.hermeskotlin.core.auth.AuthApi
 import dev.hermeskotlin.ui.inbox.mentions
+import dev.hermeskotlin.ui.inbox.words
+import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.rooms_attachment_size
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.connection.ConnectionState
@@ -145,6 +148,20 @@ class RoomsViewModelTest {
         bind(gateway.gatewayUrl); setVisible(true)
         state.first { !it.loading }; open(roomA)
         opened.first { it?.loading == false }
+    }
+
+    @Test
+    fun aRoomFileOverWhatTheSocketCarriesIsTurnedDown() = runTest(dispatcher) {
+        val vm = attachmentRoom(RoomsGateway(CoroutineScope(dispatcher)) { m, p -> attachmentReply(m, p) ?: "{}" })
+        try {
+            // #340: the gateway takes 15 MB, but 13 MB base64 is past the socket's 16 MiB message.
+            vm.addAttachments(listOf(picked("scan", size = 13_000_000)), vm.opened.value!!.draftKey)
+            assertTrue(vm.opened.value!!.attachments.isEmpty())
+            assertEquals(words(Res.string.rooms_attachment_size, 12), vm.opened.value!!.notice)
+
+            vm.addAttachments(listOf(picked("scan", size = 12_000_000)), vm.opened.value!!.draftKey)
+            assertEquals("scan", vm.opened.value!!.attachments.single().id)
+        } finally { vm.close(); vm.setVisible(false) }
     }
 
     @Test

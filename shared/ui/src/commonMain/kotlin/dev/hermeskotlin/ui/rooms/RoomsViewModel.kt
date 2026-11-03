@@ -364,7 +364,7 @@ class RoomsViewModel(
         val error = when {
             !open.attachmentsSupported -> words(Res.string.rooms_attachments_unsupported)
             files.size > RoomAttachment.MAX_COUNT -> words(Res.string.rooms_attachments_too_many, RoomAttachment.MAX_COUNT)
-            picked.any { it.bytes.isEmpty() || it.bytes.size > RoomAttachment.MAX_BYTES } ->
+            picked.any { it.size == 0L || it.size > RoomAttachment.MAX_BYTES } ->
                 words(Res.string.rooms_attachment_size, RoomAttachment.MAX_BYTES / 1_000_000)
             files.sumOf { size(it).toLong() } > RoomAttachment.MAX_TOTAL_BYTES ->
                 words(Res.string.rooms_attachments_too_big, RoomAttachment.MAX_TOTAL_BYTES / 1_000_000)
