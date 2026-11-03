@@ -65,10 +65,13 @@ class SessionVoiceTest {
 
     @Test fun closingTheRootClosesTheCall() = sessionEnds(disposeRoot = true) {}
 
+    @Test fun addingAGatewayKeepsTheCall() = sessionEnds(adding = true) {}
+
     private fun sessionEnds(
         leavesHome: Boolean = true,
         disposeRoot: Boolean = false,
         relogin: Boolean = false,
+        adding: Boolean = false,
         leave: (AppViewModel) -> Unit,
     ) = runComposeUiTest {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
@@ -104,13 +107,15 @@ class SessionVoiceTest {
         lateinit var chat: ChatViewModel
         var initialized = false
         var shown by mutableStateOf(true)
+        // The gateways whose chat windows App said to close.
+        val ended = java.util.concurrent.CopyOnWriteArrayList<String>()
         try {
             setContent {
                 CompositionLocalProvider(LocalViewModelStoreOwner provides owner, LocalLifecycleOwner provides owner) {
                     app = koinViewModel()
                     chat = koinViewModel()
                     initialized = true
-                    if (shown) App()
+                    if (shown) App(onSessionEnded = { ended += it })
                 }
             }
             waitUntil(timeoutMillis = 10_000) { initialized && app.route.value !is Route.Loading }
@@ -134,6 +139,19 @@ class SessionVoiceTest {
             waitForIdle()
             assertEquals(0, owned.closes.get(), "Changing language must retain the authenticated call")
             assertTrue(checkNotNull(owned.job).isActive)
+            if (adding) {
+                // Adding a gateway, up to its sign-in: the current one stays signed in throughout.
+                runOnIdle { app.addGateway() }
+                waitUntil(timeoutMillis = 10_000) { (app.route.value as? Route.Connect)?.canCancel == true }
+                waitForIdle()
+                runOnIdle { app.onGatewayChosen(SavedGateway("http://127.0.0.1:1")) }
+                waitUntil(timeoutMillis = 10_000) { (app.route.value as? Route.SignIn)?.adding == true }
+                waitForIdle()
+                assertEquals(0, owned.closes.get(), "Adding a gateway must retain the authenticated call")
+                assertTrue(checkNotNull(owned.job).isActive)
+                assertEquals(emptyList(), ended.toList())
+                return@runComposeUiTest
+            }
             if (leavesHome) {
                 runOnIdle { owner.lifecycle.currentState = Lifecycle.State.CREATED }
                 waitForIdle()
@@ -148,6 +166,9 @@ class SessionVoiceTest {
             waitUntil(timeoutMillis = 10_000) { owned.closes.get() > 0 && checkNotNull(owned.job).isCompleted }
             mainClock.autoAdvance = true
             assertEquals(1, owned.closes.get())
+            // Signed out or expired, the gateway's chat windows close; another profile of it keeps them.
+            if (leavesHome && !disposeRoot) assertEquals(listOf(gateway.url), ended.toList())
+            else assertEquals(emptyList(), ended.toList())
             // Repeated session retirement and eventual root disposal must not close the old call twice.
             runOnIdle { app.onSessionExpired(); shown = false }
             waitForIdle()
