@@ -733,7 +733,9 @@ fun SessionsSidebar(
                     onSettings = onOpenSettings,
                     onSearch = { searchOpen = true }.takeIf { mode == SidebarMode.Chats },
                     profiles = roster?.profiles.orEmpty(),
-                    activeProfile = profile ?: roster?.launch,
+                    activeProfile = roster?.active(profile)?.name,
+                    // Profiles made or removed on the host since show up, as the account sheet's do.
+                    onOpenMenu = viewModel::refreshProfiles,
                     onProfile = { picked -> onSwitchProfile(profileToStore(picked, roster)) },
                     onOpenGateways = onOpenGateways,
                 )
@@ -1086,7 +1088,7 @@ fun SessionsSidebar(
         },
     )
     // The picked profile, else the one the gateway runs as.
-    val activeProfile = roster?.let { r -> r.profiles.find { it.name == (profile ?: r.launch) } }
+    val activeProfile = roster?.active(profile)
     AccountSheet(
         visible = accountOpen,
         anchor = accountAnchor.takeIf { isDesktop },
@@ -1117,6 +1119,9 @@ fun SessionsSidebar(
 
 /** The launch profile is stored as "none picked", so calls stay exactly as before profiles. */
 internal fun profileToStore(picked: Profile, roster: ProfileRoster?): String? = picked.name.takeIf { it != roster?.launch }
+
+/** The profile in use: the stored one, or the launch profile when none is stored; null if the gateway no longer has it. */
+internal fun ProfileRoster.active(stored: String?): Profile? = profiles.find { it.name == (stored ?: launch) }
 
 /**
  * The sidebar's main page drawn from [sessions] alone, for previews: the same header, sections and
@@ -1321,7 +1326,7 @@ private fun modeLabel(mode: SidebarMode, names: Map<SidebarMode, String>, needsY
  * search pill. With more than one profile, the name and gateway open a menu of them; otherwise the account sheet.
  */
 @Composable
-private fun MainHeader(
+internal fun MainHeader(
     gatewayLabel: String,
     /** Null in previews, which have no connection to report. */
     connection: ConnectionState?,
@@ -1334,6 +1339,8 @@ private fun MainHeader(
     activeProfile: String? = null,
     onProfile: (Profile) -> Unit = {},
     onOpenGateways: () -> Unit = {},
+    /** The profile menu is opening. */
+    onOpenMenu: () -> Unit = {},
     /** For previews: the profile menu drawn open. */
     menuInitiallyOpen: Boolean = false,
 ) {
@@ -1363,7 +1370,8 @@ private fun MainHeader(
                     items = {
                         profiles.forEach { profile ->
                             val picked = profile.name == activeProfile
-                            MenuChoice(profile.label, Lucide.CircleUser, selected = picked, onClick = { if (!picked) onProfile(profile) })
+                            // A bot, as the account sheet's Profile row: the account row below is the person.
+                            MenuChoice(profile.label, Lucide.Bot, selected = picked, onClick = { if (!picked) onProfile(profile) })
                         }
                         MenuSeparator()
                         MenuAction(stringResource(Res.string.sessions_switch_gateway), Lucide.ArrowLeftRight, onClick = onOpenGateways)
@@ -1381,7 +1389,16 @@ private fun MainHeader(
                             role = if (switching) Role.DropdownList else Role.Button,
                             interactionSource = null,
                             indication = if (isDesktop) rememberHoverIndication(Theme[colors][text]) else LocalIndication.current,
-                            onClick = { if (switching) menuOpen = !menuOpen else onAccount() },
+                            onClick = {
+                                when {
+                                    !switching -> onAccount()
+                                    menuOpen -> menuOpen = false
+                                    else -> {
+                                        menuOpen = true
+                                        onOpenMenu()
+                                    }
+                                }
+                            },
                         )
                         .then(if (isDesktop) Modifier.padding(horizontal = 6.dp) else Modifier)
                         .semantics(mergeDescendants = true) { stateDescription = connectionText },
@@ -1404,7 +1421,8 @@ private fun MainHeader(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false),
                         )
-                        // The profile keeps its room; a long gateway name is cut short first.
+                        // Both names share the room left by the chevron, so a long one of either is cut short
+                        // and the chevron always shows.
                         if (switching && active != null) {
                             Text(
                                 "· ${active.label}",
@@ -1412,6 +1430,7 @@ private fun MainHeader(
                                 color = Theme[colors][textSecondary],
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f, fill = false),
                             )
                         }
                         UnstyledIcon(

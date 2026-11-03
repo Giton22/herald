@@ -30,4 +30,25 @@ class ProfileToStoreTest {
     fun withNoRosterYetEveryProfileIsStoredByName() {
         assertEquals("default", profileToStore(Profile("default", isDefault = true), null))
     }
+
+    @Test
+    fun noStoredProfileMeansTheLaunchOneIsActive() {
+        assertEquals("default", roster.active(null)?.name)
+        assertEquals("work", roster.copy(launch = "work").active(null)?.name)
+    }
+
+    @Test
+    fun aStoredProfileIsActive() {
+        assertEquals("work", roster.active("work")?.name)
+    }
+
+    @Test
+    fun aStoredProfileTheGatewayNoLongerHasIsNoneOfThem() {
+        assertNull(roster.active("gone"))
+    }
+
+    @Test
+    fun aPickedProfileStoredAndReadBackIsTheOneActive() {
+        roster.profiles.forEach { picked -> assertEquals(picked, roster.active(profileToStore(picked, roster))) }
+    }
 }
