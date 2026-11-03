@@ -28,6 +28,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
+import dev.hermeskotlin.ui.resources.*
 
 /** Where the Config page is: its sections, one section, every schema category, or the YAML file. */
 sealed interface ConfigPlace {
@@ -60,7 +61,7 @@ data class ConfigUiState(
     /** Leaving the file with changes not saved waits for a yes. */
     val confirmDiscard: Boolean = false,
     val yaml: YamlState? = null,
-    val message: String? = null,
+    val message: Said? = null,
     val sessionExpired: Boolean = false,
 )
 
@@ -127,7 +128,7 @@ class ConfigViewModel(private val api: ConfigApi) : ViewModel(), ConfigActions {
                         loading = false,
                         error = failed.errorMessage,
                         // With the page already showing, the error page doesn't: say so in the banner.
-                        message = if (state.schema != null && state.values != null) listOfNotNull("Couldn't refresh", failed.errorMessage).joinToString(": ") else state.message,
+                        message = if (state.schema != null && state.values != null) said(Res.string.sessions_config_refresh_failed, detail = failed.errorMessage) else state.message,
                         sessionExpired = failed == ApiResult.SessionExpired,
                     )
                 }
@@ -202,7 +203,7 @@ class ConfigViewModel(private val api: ConfigApi) : ViewModel(), ConfigActions {
                         values = state.values?.takeIf { it.at(entry.key) != value }
                             ?: state.values?.let { if (before == null) it.without(entry.key) else it.with(entry.key, before) },
                         saving = state.saving - entry.key,
-                        message = listOfNotNull("Couldn't save ${entry.label}", result.errorMessage).joinToString(": "),
+                        message = said(Res.string.sessions_config_save_failed, entry.label, detail = result.errorMessage),
                         sessionExpired = result == ApiResult.SessionExpired,
                     )
                 }
@@ -256,7 +257,7 @@ class ConfigViewModel(private val api: ConfigApi) : ViewModel(), ConfigActions {
             _state.update { state ->
                 val editor = state.yaml ?: return@update state
                 if (result is ApiResult.Success) {
-                    state.copy(yaml = editor.copy(saving = false, loaded = text), message = "Saved config.yaml")
+                    state.copy(yaml = editor.copy(saving = false, loaded = text), message = said(Res.string.sessions_config_yaml_saved))
                 } else {
                     state.copy(yaml = editor.copy(saving = false, error = result.errorMessage), sessionExpired = result == ApiResult.SessionExpired)
                 }

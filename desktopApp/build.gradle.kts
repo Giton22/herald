@@ -29,6 +29,8 @@ kotlin {
             compileOnly(libs.jcef)
             // Windows' global hotkey for the quick entry.
             implementation(libs.jna.platform)
+            // The tray's, quick entry's and system prompts' words (src/jvmMain/composeResources).
+            implementation(compose.components.resources)
         }
         jvmTest.dependencies {
             implementation(libs.kotlin.test)
@@ -38,6 +40,14 @@ kotlin {
             implementation(libs.jcef)
         }
     }
+}
+
+// The desktop app's own words: the tray, the quick entry, notifications and the storage prompt. values/ is English,
+// one folder per language beside it, as in shared/ui (docs/i18n.md). They follow the system's language.
+compose.resources {
+    packageOfResClass = "dev.hermeskotlin.desktop.resources"
+    // "auto" looks for the library in commonMain, which a desktop-only module doesn't use.
+    generateResClass = always
 }
 
 compose.desktop {

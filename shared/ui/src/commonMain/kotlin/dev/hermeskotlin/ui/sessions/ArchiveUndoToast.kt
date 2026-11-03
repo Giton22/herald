@@ -35,6 +35,8 @@ import dev.hermeskotlin.ui.chat.AFTER_HOVER_MILLIS
 import kotlinx.coroutines.delay
 import kotlin.time.Clock
 import org.koin.compose.viewmodel.koinViewModel
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * "Archived “title” · Undo" after a chat is archived or unarchived, from the sidebar or the chat's menu. It
@@ -74,15 +76,18 @@ fun ArchiveUndoToast(viewModel: SessionsViewModel = koinViewModel()) {
             exit = fadeOut() + slideOutVertically { it / 2 },
         ) {
             shown?.let {
+                val done = stringResource(it.message)
+                val title = it.session.displayTitle
                 Toast(
-                    "${it.message} “${it.session.displayTitle}”",
+                    stringResource(Res.string.sessions_undo_toast, done, title),
                     modifier = Modifier.widthIn(max = MaxToastWidth).fillMaxWidth().hoverable(hover),
                     icon = if (it.session.archived) Lucide.ArchiveRestore else Lucide.Archive,
-                    actionLabel = "Undo",
+                    actionLabel = stringResource(Res.string.sessions_undo),
                     onAction = viewModel::undoArchive,
                     // It goes by itself, unless a screen reader keeps it until it's closed.
                     onDismiss = viewModel::dismissUndo.takeIf { timeout == Long.MAX_VALUE },
-                    spokenMessage = it.spoken,
+                    // Which chat, too.
+                    spokenMessage = stringResource(Res.string.sessions_with_detail, done, title),
                 )
             }
         }

@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="android_media_picture_not_shown">图片未显示</string>
+    <string name="android_media_picture_failed">图片未加载</string>
+    <string name="android_media_audio_not_played">音频未播放</string>
+    <string name="android_media_video_not_shown">视频未显示</string>
+    <string name="android_media_audio_failed">音频未加载</string>
+    <string name="android_media_video_failed">视频未加载</string>
+    <string name="android_screen_closed">代理关闭了这个界面。</string>
+    <string name="android_screen_part_failed">无法显示这部分</string>
+
+    <string name="android_attach_photo_failed">无法读取照片。</string>
+    <string name="android_attach_no_camera">没有可用的相机应用。</string>
+    <string name="android_attach_not_allowed">分享它的应用不允许 Kyllene 读取该文件。</string>
+    <string name="android_attach_read_failed">无法读取文件。</string>
+    <string name="android_attach_photo_too_large">%1$s 超过 50 MB。</string>
+    <string name="android_attach_file_too_large">%1$s 超过 %2$d MB。</string>
+    <string name="android_attach_unreadable">无法读取 %1$s。</string>
+    <string name="android_attach_not_image">无法将 %1$s 读取为图片。</string>
+    <string name="android_attach_too_much">一次附加的文件超过了 50 MB。</string>
+
+    <string name="android_widget_update_webview">请更新 Android System WebView 以运行此小组件。</string>
+    <string name="android_widget_failed">无法显示此小组件。</string>
+
+    <string name="android_save_needs_android_10">保存需要 Android 10。请改用分享。</string>
+    <string name="android_save_failed">无法保存 %1$s。</string>
+    <string name="android_saved_to">已保存到 %1$s</string>
+</resources>

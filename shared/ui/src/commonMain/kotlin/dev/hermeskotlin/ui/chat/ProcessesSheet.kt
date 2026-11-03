@@ -102,6 +102,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 data class ProcessesState(
     /** Null until the first answer arrives. */
@@ -191,18 +194,18 @@ internal fun ProcessesSheetView(
         val finished = processes?.filterNot { it.running }.orEmpty()
         Header(
             when {
-                processes == null -> "Started by the agent in this chat"
-                running.isEmpty() -> "None running"
-                else -> "${running.size} running"
+                processes == null -> stringResource(Res.string.chat_processes_subtitle)
+                running.isEmpty() -> stringResource(Res.string.chat_processes_none_running)
+                else -> pluralStringResource(Res.plurals.chat_processes_running, running.size, running.size)
             },
             live = running.isNotEmpty(),
         )
         when {
             processes == null && state.unavailable ->
-                Note("Available once this chat is connected and has had its first reply.")
+                Note(stringResource(Res.string.chat_available_after_first_reply))
             processes == null -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Spinner() }
             processes.isEmpty() ->
-                Note("Nothing running. Dev servers, builds and watchers the agent starts in the background show up here.")
+                Note(stringResource(Res.string.chat_processes_empty))
             else -> ScrollbarBox { listState -> LazyColumn(
                 Modifier.fillMaxWidth().heightIn(max = 560.dp),
                 state = listState,
@@ -220,15 +223,16 @@ internal fun ProcessesSheetView(
                 }
                 if (finished.isNotEmpty()) {
                     item(key = "finished") {
+                        val finishedLabel = stringResource(Res.string.chat_processes_finished)
                         Text(
-                            "FINISHED",
+                            finishedLabel.uppercase(),
                             style = Theme[typography][eyebrow],
                             color = Theme[colors][textTertiary],
                             modifier = Modifier
                                 .padding(start = 4.dp, top = 4.dp)
                                 .semantics {
                                     heading()
-                                    contentDescription = "Finished"
+                                    contentDescription = finishedLabel
                                 },
                         )
                     }
@@ -250,7 +254,7 @@ internal fun ProcessesSheetView(
 @Composable
 private fun Header(status: String, live: Boolean) {
     Column(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text("Background processes", style = Theme[typography][title], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
+        Text(stringResource(Res.string.chat_processes_title), style = Theme[typography][title], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
             if (live) {
                 Box(
@@ -284,7 +288,7 @@ private fun RunningCard(process: BackgroundProcess, expanded: Boolean, stopping:
             Modifier
                 .fillMaxWidth()
                 .handCursor()
-                .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide output" else "Show output", onClick = onToggle)
+                .clickable(role = Role.Button, onClickLabel = outputLabel(expanded), onClick = onToggle)
                 .padding(start = 14.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -327,7 +331,7 @@ private fun StopButton(stopping: Boolean, onClick: () -> Unit) {
             if (stopping) Spinner(Modifier.size(10.dp), color = tint)
             else UnstyledIcon(Lucide.Square, contentDescription = null, tint = tint, modifier = Modifier.size(10.dp))
             Text(
-                if (stopping) "Stopping" else "Stop",
+                stringResource(if (stopping) Res.string.chat_process_stopping else Res.string.chat_stop),
                 style = Theme[typography][label].copy(fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold),
                 color = tint,
                 maxLines = 1,
@@ -354,7 +358,7 @@ private fun FinishedRow(process: BackgroundProcess, expanded: Boolean, onToggle:
                 .heightIn(min = 48.dp)
                 .clip(RoundedCornerShape(Theme[radii][radiusMedium]))
                 .handCursor()
-                .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide output" else "Show output", onClick = onToggle)
+                .clickable(role = Role.Button, onClickLabel = outputLabel(expanded), onClick = onToggle)
                 .padding(horizontal = 4.dp, vertical = 4.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -450,7 +454,7 @@ private fun Output(process: BackgroundProcess) {
     val log = @Composable {
     Text(
         if (lines == null) {
-            AnnotatedString("No output yet.")
+            AnnotatedString(stringResource(Res.string.chat_process_no_output))
         } else {
             buildAnnotatedString {
                 lines.forEachIndexed { index, text ->
@@ -488,14 +492,15 @@ internal fun Note(text: String, error: Boolean = false) {
 }
 
 /** "12m · pid 48211 · /opt/backup" while it runs; "Exited with code 0 · pid 47990" once it ends. */
+@Composable
 private fun BackgroundProcess.statusLine(): String = listOfNotNull(
     when {
-        running -> uptimeSeconds?.let { duration(it) } ?: "Running"
-        stopped -> "Stopped"
-        exitCode != null -> "Exited with code $exitCode"
-        else -> "Ended"
+        running -> uptimeSeconds?.let { duration(it) } ?: stringResource(Res.string.chat_process_running)
+        stopped -> stringResource(Res.string.chat_process_stopped)
+        exitCode != null -> stringResource(Res.string.chat_process_exited, exitCode ?: 0)
+        else -> stringResource(Res.string.chat_process_ended)
     },
-    pid?.let { "pid $it" },
+    pid?.let { stringResource(Res.string.chat_process_pid, it) },
     cwd?.takeIf { it.isNotBlank() },
 ).joinToString(" · ")
 
@@ -507,6 +512,10 @@ internal fun duration(seconds: Long): String = when {
 }
 
 private const val OUTPUT_LINES = 40
+
+@Composable
+private fun outputLabel(expanded: Boolean): String =
+    stringResource(if (expanded) Res.string.chat_process_hide_output else Res.string.chat_process_show_output)
 
 /** Leading `NAME=value` assignments (group 1), then the program word (group 2). */
 private val PROGRAM = Regex("""^((?:[A-Za-z_][A-Za-z0-9_]*=\S*\s+)*)(\S+)""")

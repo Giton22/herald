@@ -181,7 +181,7 @@ fun App(
             took = { chat, screen -> AgentScreens.took(screen, chat, screensGot) },
         )
     }
-    hermesTheme(palette)(schemeFor(settings, dark)) {
+    ProvideAppLanguage(settings.language) { hermesTheme(palette)(schemeFor(settings, dark)) {
         CompositionLocalProvider(
             LocalAccentPalette provides palette,
             LocalAppSettings provides settings,
@@ -230,7 +230,7 @@ fun App(
                 }
             }
         }
-    }
+    } }
 }
 
 /** The zoom levels Ctrl+= and Ctrl+- step through, in percent, as a browser's. */
@@ -286,7 +286,7 @@ fun HeraldTheme(content: @Composable () -> Unit) {
     val density = LocalDensity.current
     // Each window's own count of its open dialogs.
     val modals = remember { OpenModals() }
-    hermesTheme(palette)(schemeFor(settings, isDark(settings))) {
+    ProvideAppLanguage(settings.language) { hermesTheme(palette)(schemeFor(settings, isDark(settings))) {
         // As the app's own window has them: text size, code wrap, glow and the desktop's layout. The zoom is the
         // caller's to put under its title bar.
         CompositionLocalProvider(
@@ -300,7 +300,7 @@ fun HeraldTheme(content: @Composable () -> Unit) {
         ) {
             ProvideAppWords { PlatformTextContextMenu(content) }
         }
-    }
+    } }
 }
 
 /** Why a call didn't start, in the app's language; the gateway's or the error's own words as they are. */
@@ -396,7 +396,8 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
     val sidebar = rememberSidebarState()
     val scope = rememberCoroutineScope()
     val focusManager = LocalFocusManager.current
-    var settingsOpen by rememberSaveable { mutableStateOf(false) }
+    // Open again after a language picked in Settings redraws the screens.
+    var settingsOpen by rememberSaveable { mutableStateOf(LanguagePageReturn.pending) }
     // A plugin's page open over everything, served by the gateway itself; null when none is open.
     var pluginUrl by rememberSaveable { mutableStateOf<String?>(null) }
     var pluginLabel by rememberSaveable { mutableStateOf<String?>(null) }

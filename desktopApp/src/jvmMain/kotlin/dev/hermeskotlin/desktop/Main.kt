@@ -38,6 +38,11 @@ import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatLinks
 import dev.hermeskotlin.core.chat.InputAnswers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withTimeoutOrNull
+import dev.hermeskotlin.ui.applyAppLanguage
 import dev.hermeskotlin.core.chat.ComposeDraft
 import dev.hermeskotlin.core.chat.DraftStart
 import dev.hermeskotlin.core.settings.AppSettings
@@ -62,7 +67,9 @@ import dev.hermeskotlin.ui.chat.dialogOwner
 import dev.hermeskotlin.ui.di.sharedModules
 import dev.hermeskotlin.ui.update.LocalUpdateInstaller
 import dev.hermeskotlin.ui.useAppTextContextMenu
+import dev.hermeskotlin.desktop.resources.*
 import kotlinx.coroutines.flow.MutableStateFlow
+import org.jetbrains.compose.resources.stringResource
 import org.koin.core.context.startKoin
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
@@ -106,8 +113,11 @@ fun main(args: Array<String>) {
                 folder = desktopStorageFolder(this.koin.get()),
             )) exitProcess(1) // Quit: the app didn't start, which a launcher or script can tell from the status.
     }.koin
-    useAppTextContextMenu()
     val settingsStore = koin.get<SettingsStore>()
+    // The language picked in Settings, before anything reads a string, so the first window is already in it.
+    // The read is a file's; were it ever stuck, the window opens in the system's language and switches once it's in.
+    applyAppLanguage(runBlocking { withTimeoutOrNull(2_000) { settingsStore.settings.filterNotNull().first() } }?.language)
+    useAppTextContextMenu()
     val links = koin.get<ChatLinks>()
     val saved = WindowMemory.read(koin.get())
     // The same mark as docs/logo.svg, for the title bar, the taskbar and the tray.
@@ -200,11 +210,13 @@ fun main(args: Array<String>) {
         // Chats opened in windows of their own, each with its own key so closing one keeps the others' state.
         val chatWindows = remember { mutableStateListOf<PoppedChat>() }
         var nextWindow by remember { mutableStateOf(0) }
+        val approveOnce = stringResource(Res.string.notice_approve_once)
+        val deny = stringResource(Res.string.notice_deny)
         val post: (DesktopNotice) -> Unit = { notice ->
             lastNotice = notice
             // Windows' own notification where it can be had (it has buttons and stays in the Action Center);
             // otherwise the tray's.
-            if (!WindowsToasts.show(notice)) tray.sendNotification(Notification(notice.title, notice.body, Notification.Type.None))
+            if (!WindowsToasts.show(notice, approveOnce, deny)) tray.sendNotification(Notification(notice.title, notice.body, Notification.Type.None))
             // The taskbar button flashes (the Dock icon bounces once) until the user comes back.
             if (!focused.value) runCatching {
                 if (Taskbar.isTaskbarSupported()) {
@@ -237,14 +249,14 @@ fun main(args: Array<String>) {
                 lastNotice = null
             },
             menu = {
-                Item("Open Kyllene", onClick = ::show)
-                Item("New chat") {
+                Item(stringResource(Res.string.tray_open), onClick = ::show)
+                Item(stringResource(Res.string.tray_new_chat)) {
                     show()
                     links.newChat()
                 }
-                Item("Quick entry", onClick = { quickOpen = true })
+                Item(stringResource(Res.string.tray_quick_entry), onClick = { quickOpen = true })
                 Separator()
-                Item("Quit Kyllene", onClick = ::exitApplication)
+                Item(stringResource(Res.string.tray_quit), onClick = ::exitApplication)
             },
         )
 

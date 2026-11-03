@@ -38,6 +38,8 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
 import com.composeunstyled.Text
 import com.composeunstyled.TextInput
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 import com.composeunstyled.UnstyledTextField
 import com.composeunstyled.theme.Theme
 import androidx.compose.ui.text.font.FontWeight
@@ -127,12 +129,12 @@ private fun PendingCommentCard(number: Int, comment: PendingComment, focus: Bool
                 TextInput(
                     placeholder = {
                         // Short enough for the card's one line: a longer one wrapped and was cut off.
-                        Text("Add a note (optional)", maxLines = 1, overflow = TextOverflow.Ellipsis, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+                        Text(stringResource(Res.string.chat_comment_note_placeholder), maxLines = 1, overflow = TextOverflow.Ellipsis, style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
                     },
                 )
             }
         }
-        IconButton(Lucide.X, contentDescription = "Remove comment $number", onClick = onRemove, tint = Theme[colors][textTertiary], iconSize = 14.dp)
+        IconButton(Lucide.X, contentDescription = stringResource(Res.string.chat_comment_remove, number), onClick = onRemove, tint = Theme[colors][textTertiary], iconSize = 14.dp)
     }
 }
 

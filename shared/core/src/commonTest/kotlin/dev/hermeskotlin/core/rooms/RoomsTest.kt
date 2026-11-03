@@ -57,10 +57,18 @@ class RoomsTest {
         assertEquals(RoomLine.Message(1, fromUser = true, speaker = null, text = "hello everyone", eventId = "e:1"), lines[0])
         // The member's profile comes along, for its face and color.
         assertEquals(RoomLine.Message(2, fromUser = false, speaker = "Ops Bot", text = "on it", eventId = "e:2", profile = "ops"), lines[1])
-        val failure = lines[2] as RoomLine.System
-        assertTrue(failure.text.contains("scribe"))
-        assertTrue(failure.text.contains("the model said no"))
-        assertTrue((lines[3] as RoomLine.System).text.contains("Release room"))
+        assertEquals(RoomLine.System(4, RoomNote.TurnFailed("scribe", "the model said no")), lines[2])
+        assertEquals(RoomLine.System(5, RoomNote.Renamed("Release room")), lines[3])
+    }
+
+    @Test
+    fun aNoteLeavesWhatTheGatewayDidntSayToTheScreen() {
+        val unknown = event(1, "turn.failed", buildJsonObject { put("member_id", "gone") })
+        val stopped = event(2, "turn.cancelled", buildJsonObject { put("reason", "") })
+        assertEquals(
+            listOf(RoomLine.System(1, RoomNote.TurnFailed(null, null)), RoomLine.System(2, RoomNote.TurnStopped(null))),
+            roomLines(listOf(unknown, stopped), members),
+        )
     }
 
     @Test
