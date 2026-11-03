@@ -1,11 +1,12 @@
 # Separate from Android CI: keep this workflow's checks advisory in branch rules.
 name: Linux (advisory)
 
-# Every PR gets fast feedback; full package validation is selected below.
+# Only what the desktop app or its package is built from; an Android-only change skips this workflow.
+# Such PRs get the fast checks, and the full package build only when `select` finds a packaging input.
 on:
   push:
     branches: [master]
-    paths:
+    paths: &paths
       - "shared/**"
       - "desktopApp/**"
       - "packaging/flatpak/**"
@@ -21,6 +22,7 @@ on:
       - "website/*.flatpakrepo"
       - "gradlew*"
   pull_request:
+    paths: *paths
   workflow_dispatch:
   schedule:
     - cron: "17 4 * * 1"

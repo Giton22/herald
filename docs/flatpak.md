@@ -52,7 +52,8 @@ installed by hand updates from it too.
 - **Storage:** the R2 bucket `kyllene-flatpak` (or the `FLATPAK_R2_BUCKET`
   variable), with the custom domain `flatpak.kyllene.app` and an Object Read & Write
   token in the `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` secrets.
-- **Tests:** Linux advisory runs JVM/desktop and portable packaging checks on every PR,
+- **Tests:** Linux advisory runs JVM/desktop and portable packaging checks on every PR
+  that touches what the desktop app is built from (Android-only PRs skip it),
   alongside a tiny repository fixture. Full offline builds and installed-app smoke run
   for packaging, dependency, desktop entry-point and workflow PRs, relevant master
   pushes, weekly, and via **Run workflow** on any branch. Ordinary shared UI PRs
