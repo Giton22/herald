@@ -317,10 +317,6 @@ private fun TalkScreen(
                 }
             }
             item { ChatTitle(chatTitle, onChats) }
-            if (chat.id != null || chat.botProfile != null) item {
-                Button(onClick = onHistory, modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp),
-                    label = { Text("Read chat", modifier = Modifier.fillMaxWidth(), fontFamily = Geist, fontSize = 14.sp, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis) })
-            }
             item { Caption(captionLine, mood) }
             val micError = mic.error
             if (micError != null) item { Notice(micError.text(), onClick = onDismissListeningError) }
@@ -331,7 +327,17 @@ private fun TalkScreen(
             }
         }
     }
-    ScreenScaffold(scrollState = listState, modifier = Modifier.halo(mood, MaterialTheme.colorScheme.primaryContainer)) { contentPadding -> content(contentPadding) }
+    ScreenScaffold(
+        scrollState = listState,
+        modifier = Modifier.halo(mood, MaterialTheme.colorScheme.primaryContainer),
+        edgeButton = {
+            if (chat.id != null || chat.botProfile != null) {
+                EdgeButton(onClick = onHistory, buttonSize = EdgeButtonSize.Medium) {
+                    Text("View More", fontFamily = Geist, fontSize = 14.sp, maxLines = 1)
+                }
+            }
+        },
+    ) { contentPadding -> content(contentPadding) }
 }
 
 /**
