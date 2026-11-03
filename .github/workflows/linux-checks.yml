@@ -32,8 +32,9 @@ jobs:
       - name: Lightweight packaging contracts
         run: |
           # The SDK's fontconfig test remains in the package job; no SDK download on this path.
+          cd packaging/flatpak/tests
           tests=()
-          for test in packaging/flatpak/tests/test_*.py; do
-            [ "$test" = packaging/flatpak/tests/test_fonts.py ] || tests+=("$test")
+          for test in test_*.py; do
+            [ "$test" = test_fonts.py ] || tests+=("$test")
           done
           python3 -m unittest "${tests[@]}" -v
