@@ -36,6 +36,9 @@ import java.io.File
 import java.io.InputStream
 import kotlin.math.max
 import kotlin.random.Random
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.getString
 
 @Composable
 actual fun rememberAttachmentPicker(
@@ -73,7 +76,8 @@ actual fun rememberAttachmentPicker(
             val result = withContext(Dispatchers.IO) {
                 runCatching { readAttachment(context, Uri.fromFile(file), MAX_PICK_BYTES) }.also { file.delete() }
             }
-            result.onSuccess { picked(listOf(it)) }.onFailure { failed(it.message ?: "Couldn't read the photo.") }
+            result.onSuccess { picked(listOf(it)) }
+            result.exceptionOrNull()?.let { failed(said(it, Res.string.android_attach_photo_failed)) }
         }
     }
 
@@ -91,7 +95,7 @@ actual fun rememberAttachmentPicker(
                     camera.launch(uri)
                 } catch (e: Exception) {
                     cameraFile = null
-                    failed("No camera app is available.")
+                    scope.launch { failed(getString(Res.string.android_attach_no_camera)) }
                 }
             }
 
@@ -115,11 +119,20 @@ suspend fun readAttachments(context: Context, uris: List<Uri>): Pair<List<Outgoi
         when (val e = result.exceptionOrNull()) {
             null -> null
             // A share whose app didn't grant access; Android's message is a raw URI.
-            is SecurityException -> "The app that shared it didn't let Kyllene read the file."
-            else -> e.message ?: "Couldn't read a file."
+            is SecurityException -> getString(Res.string.android_attach_not_allowed)
+            else -> said(e, Res.string.android_attach_read_failed)
         }
     }
     return results.mapNotNull { it.getOrNull() } to error
+}
+
+/** Why a file can't be attached, in the user's language when the words are the app's own. */
+private class AttachmentProblem(val words: StringResource, vararg val args: Any) : Exception()
+
+/** What [e] tells the user: the app's own reason, else the system's message, else [fallback]. */
+private suspend fun said(e: Throwable, fallback: StringResource): String = when (e) {
+    is AttachmentProblem -> getString(e.words, *e.args)
+    else -> e.message ?: getString(fallback)
 }
 
 @Composable
@@ -155,30 +168,33 @@ private fun readAttachment(context: Context, uri: Uri, budget: Long): OutgoingAt
     val size = resolver.size(uri)
     if (mime.startsWith("image/") && mime != "image/gif" && mime != "image/svg+xml") {
         // The original is read whole to decode it, so it has a ceiling of its own; only the resized JPEG is kept.
-        if (size != null && size > MAX_PHOTO_BYTES) error("$name is larger than 50 MB.")
-        val original = resolver.openInputStream(uri)?.use { it.readAtMost(MAX_PHOTO_BYTES) ?: error("$name is larger than 50 MB.") }
-            ?: error("Couldn't read $name.")
-        val upright = decodeUpright(original, MAX_EDGE) ?: error("Couldn't read $name as an image.")
+        if (size != null && size > MAX_PHOTO_BYTES) throw AttachmentProblem(Res.string.android_attach_photo_too_large, name)
+        val original = resolver.openInputStream(uri)?.use {
+            it.readAtMost(MAX_PHOTO_BYTES) ?: throw AttachmentProblem(Res.string.android_attach_photo_too_large, name)
+        } ?: throw AttachmentProblem(Res.string.android_attach_unreadable, name)
+        val upright = decodeUpright(original, MAX_EDGE) ?: throw AttachmentProblem(Res.string.android_attach_not_image, name)
         val upload = upright.jpeg(UPLOAD_QUALITY)
-        if (upload.size > budget) error("That's more than 50 MB of attachments at once.")
+        if (upload.size > budget) throw AttachmentProblem(Res.string.android_attach_too_much)
         val thumbnail = upright.scaledTo(THUMBNAIL_EDGE).jpeg(THUMBNAIL_QUALITY)
         return OutgoingAttachment(id, name.withExtension("jpg"), "image/jpeg", upload, thumbnail)
     }
-    if (size != null && size > OutgoingAttachment.MAX_BYTES) error("$name is larger than ${OutgoingAttachment.MAX_SIZE}.")
+    if (size != null && size > OutgoingAttachment.MAX_BYTES) {
+        throw AttachmentProblem(Res.string.android_attach_file_too_large, name, OutgoingAttachment.MAX_BYTES / 1_000_000)
+    }
     // Too large for one socket message: read as it goes up, never held here (the pick's budget is for what is).
     if (size != null && size > OutgoingAttachment.MAX_INLINE_BYTES) {
         val source = streamedSource(size) { resolver.openInputStream(uri) ?: error("Couldn't read $name.") }
         return OutgoingAttachment(id, name, mime, ByteArray(0), source = source)
     }
-    if (size != null && size > budget) error("That's more than 50 MB of attachments at once.")
+    if (size != null && size > budget) throw AttachmentProblem(Res.string.android_attach_too_much)
     // The reported size can be missing or wrong, so the read itself stops at the limit.
-    val stream = resolver.openInputStream(uri) ?: error("Couldn't read $name.")
+    val stream = resolver.openInputStream(uri) ?: throw AttachmentProblem(Res.string.android_attach_unreadable, name)
     val bytes = stream.use { it.readAtMost(OutgoingAttachment.MAX_INLINE_BYTES.toLong()) } ?: run {
         // Past one socket message, with no size said up front: copied aside to learn it, then sent from there.
         val spooled = spool(context, uri, name)
         return OutgoingAttachment(id, name, mime, ByteArray(0), source = streamedSource(spooled.length()) { spooled.inputStream() })
     }
-    if (bytes.size > budget) error("That's more than 50 MB of attachments at once.")
+    if (bytes.size > budget) throw AttachmentProblem(Res.string.android_attach_too_much)
     val thumbnail = if (mime.startsWith("image/")) decodeUpright(bytes, THUMBNAIL_EDGE)?.jpeg(THUMBNAIL_QUALITY) else null
     return OutgoingAttachment(id, name, mime, bytes, thumbnail)
 }
@@ -193,7 +209,7 @@ private fun spool(context: Context, uri: Uri, name: String): File {
     folder.listFiles()?.filter { it.lastModified() < dayAgo }?.forEach { it.delete() }
     val file = File.createTempFile("att-", ".bin", folder)
     try {
-        val stream = context.contentResolver.openInputStream(uri) ?: error("Couldn't read $name.")
+        val stream = context.contentResolver.openInputStream(uri) ?: throw AttachmentProblem(Res.string.android_attach_unreadable, name)
         var copied = 0L
         stream.use { input ->
             file.outputStream().use { output ->
@@ -202,7 +218,9 @@ private fun spool(context: Context, uri: Uri, name: String): File {
                     val read = input.read(buffer)
                     if (read < 0) break
                     copied += read
-                    if (copied > OutgoingAttachment.MAX_BYTES) error("$name is larger than ${OutgoingAttachment.MAX_SIZE}.")
+                    if (copied > OutgoingAttachment.MAX_BYTES) {
+                        throw AttachmentProblem(Res.string.android_attach_file_too_large, name, OutgoingAttachment.MAX_BYTES / 1_000_000)
+                    }
                     output.write(buffer, 0, read)
                 }
             }
