@@ -72,7 +72,7 @@ explicitly. Run `./gradlew :shared:core:jvmTest --tests '*LinuxSecretPortalTest'
 
 The Linux Secret transport pins matching junixsocket Java/native libraries. Release
 builds analyze those two JARs as ProGuard libraries and package their original bytes,
-preserving multi-release classes and JNI resources while optimizing the application.
+preserving multi-release classes and JNI resources while shrinking the application.
 The Linux runtime includes `jdk.security.auth` for D-Bus EXTERNAL authentication.
 Other desktop platforms retain FileKit's existing transport provider.
 

@@ -78,10 +78,11 @@ jobs:
             packaging/flatpak/app.kyllene.Kyllene.Devel.json \
             --repository "file://$GITHUB_WORKSPACE" \
             --ref flatpak-ci-tested --commit "$GITHUB_SHA"
-      - name: Build offline and bundle
-        run: |
-          flatpak-builder --user --repo=build/flatpak-repo build/flatpak packaging/flatpak/ci.json
-          flatpak build-bundle build/flatpak-repo build/kyllene.flatpak app.kyllene.Kyllene.Devel devel
+      # Separate steps, so the run's timings show whether the builder's cache pruning or the bundle takes the time.
+      - name: Build offline
+        run: flatpak-builder --user --repo=build/flatpak-repo build/flatpak packaging/flatpak/ci.json
+      - name: Bundle
+        run: flatpak build-bundle build/flatpak-repo build/kyllene.flatpak app.kyllene.Kyllene.Devel devel
       # The app reads its settings key from the Secret portal at startup, so the smoke runs in a session as a
       # desktop has one: its own bus, and an unlocked keyring answering the portal.
       - name: Installed sandbox smoke
