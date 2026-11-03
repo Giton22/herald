@@ -17,6 +17,9 @@ kotlin {
         // The RTL layout harness renders the real components under Robolectric, so the host test needs the
         // module's merged Android resources (the app's fonts and theme) rather than stubs.
         withHostTest { isIncludeAndroidResources = true }
+        // The catalogue ships as this module's assets; the KMP library plugin leaves Android resources off
+        // unless asked, and then every stringResource() would find nothing at run time.
+        androidResources { enable = true }
     }
     // The desktop app (experimental). Its lambdas are compiled as classes, not made at run time: the app's warm-up
     // can load them ahead, so a page's first opening doesn't build them one by one on the UI thread.
