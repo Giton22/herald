@@ -311,7 +311,7 @@ private fun TalkScreen(
             item { ChatTitle(chat.title ?: if (chat.id == null) "New chat" else "Chat", onChats) }
             if (chat.id != null || chat.botProfile != null) item {
                 Button(onClick = onHistory, modifier = Modifier.fillMaxWidth().padding(horizontal = 28.dp),
-                    label = { Text("Conversation", modifier = Modifier.fillMaxWidth(), fontFamily = Geist, fontSize = 14.sp, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis) })
+                    label = { Text("Read chat", modifier = Modifier.fillMaxWidth(), fontFamily = Geist, fontSize = 14.sp, textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis) })
             }
             item { Caption(if (call != null) callCaption(call) else caption(mood, current, mic, phone), mood) }
             val micError = mic.error
