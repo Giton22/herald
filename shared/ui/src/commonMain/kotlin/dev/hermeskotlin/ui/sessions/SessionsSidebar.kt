@@ -30,6 +30,9 @@ import com.composables.icons.lucide.House
 import com.composeunstyled.AnchorAlignment
 import dev.hermeskotlin.designsystem.components.DropdownMenu
 import dev.hermeskotlin.designsystem.components.MenuChoice
+import dev.hermeskotlin.designsystem.components.MenuAction
+import dev.hermeskotlin.designsystem.components.MenuSeparator
+import com.composables.icons.lucide.CircleUserRound
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.PointerEventType
@@ -209,6 +212,7 @@ import dev.hermeskotlin.ui.bots.BotsViewModel
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.models.displayModelName
 import dev.hermeskotlin.core.profiles.Profile
+import dev.hermeskotlin.core.profiles.ProfileRoster
 import dev.hermeskotlin.core.projects.Project
 import dev.hermeskotlin.core.projects.ProjectIndex
 import dev.hermeskotlin.core.sessions.SessionListFilter
@@ -728,6 +732,10 @@ fun SessionsSidebar(
                     },
                     onSettings = onOpenSettings,
                     onSearch = { searchOpen = true }.takeIf { mode == SidebarMode.Chats },
+                    profiles = roster?.profiles.orEmpty(),
+                    activeProfile = profile ?: roster?.launch,
+                    onProfile = { picked -> onSwitchProfile(profileToStore(picked, roster)) },
+                    onOpenGateways = onOpenGateways,
                 )
             }
             if (!searchOpen && state.filter == SessionListFilter.Recent) {
@@ -917,7 +925,9 @@ fun SessionsSidebar(
                                 }
                             }
                             when {
-                                state.loading -> item(key = "loading") { ListSpinner() }
+                                // Stand-in rows rather than a spinner: switching profile keeps the sidebar open, and
+                                // the list then fills in where it will be.
+                                state.loading -> item(key = "loading") { ListSkeleton() }
                                 state.error != null -> item(key = "error") {
                                     ListNotice(
                                         stringResource(Res.string.sessions_load_failed_detail, state.error.orEmpty()),
@@ -925,7 +935,7 @@ fun SessionsSidebar(
                                         onAction = viewModel::refresh,
                                     )
                                 }
-                                state.project != null && state.projectSessions == null -> item(key = "project-loading") { ListSpinner() }
+                                state.project != null && state.projectSessions == null -> item(key = "project-loading") { ListSkeleton() }
                                 state.listed.isEmpty() -> item(key = "empty") {
                                     ListNotice(
                                         stringResource(if (state.project != null) Res.string.sessions_empty_project else Res.string.sessions_empty),
@@ -1100,11 +1110,13 @@ fun SessionsSidebar(
         onDismiss = { profilesOpen = false },
         onSelect = { picked ->
             profilesOpen = false
-            // The launch profile is stored as "none picked", so calls stay exactly as before profiles.
-            onSwitchProfile(picked.name.takeIf { it != roster?.launch })
+            onSwitchProfile(profileToStore(picked, roster))
         },
     )
 }
+
+/** The launch profile is stored as "none picked", so calls stay exactly as before profiles. */
+internal fun profileToStore(picked: Profile, roster: ProfileRoster?): String? = picked.name.takeIf { it != roster?.launch }
 
 /**
  * The sidebar's main page drawn from [sessions] alone, for previews: the same header, sections and
@@ -1126,6 +1138,10 @@ internal fun SessionsSidebarSample(
     projectsAsDropdown: Boolean = false,
     /** The Threads section's threads, whose chats are among [sessions]. */
     threads: List<ChatThread> = emptyList(),
+    /** The gateway's profiles, the first in use; with more than one the header names it. */
+    profiles: List<Profile> = emptyList(),
+    /** The header's profile menu drawn open. */
+    profileMenuOpen: Boolean = false,
 ) {
     // Folds for real in the gallery, kept only while the preview shows.
     var pinnedCollapsed by remember { mutableStateOf(false) }
@@ -1137,7 +1153,16 @@ internal fun SessionsSidebarSample(
             .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Vertical + WindowInsetsSides.Start)),
     ) {
         Column(Modifier.fillMaxSize()) {
-            MainHeader(gatewayLabel = "homelab", connection = null, onAccount = {}, onSettings = {}, onSearch = {})
+            MainHeader(
+                gatewayLabel = "homelab",
+                connection = null,
+                onAccount = {},
+                onSettings = {},
+                onSearch = {},
+                profiles = profiles,
+                activeProfile = profiles.firstOrNull()?.name,
+                menuInitiallyOpen = profileMenuOpen,
+            )
             RenameBanner(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp))
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 val index = remember(projects) { ProjectIndex(projects) }
@@ -1293,7 +1318,7 @@ private fun modeLabel(mode: SidebarMode, names: Map<SidebarMode, String>, needsY
 
 /**
  * The app's mark and name over the gateway in use, its dot showing the connection, and Settings; then the
- * search pill. The name and gateway open the account sheet.
+ * search pill. With more than one profile, the name and gateway open a menu of them; otherwise the account sheet.
  */
 @Composable
 private fun MainHeader(
@@ -1303,9 +1328,20 @@ private fun MainHeader(
     onAccount: () -> Unit,
     onSettings: () -> Unit,
     onSearch: (() -> Unit)?,
+    /** The gateway's profiles; with more than one, the header names the active one and opens them in a menu. */
+    profiles: List<Profile> = emptyList(),
+    /** The active profile's name, the launch profile's included. */
+    activeProfile: String? = null,
+    onProfile: (Profile) -> Unit = {},
+    onOpenGateways: () -> Unit = {},
+    /** For previews: the profile menu drawn open. */
+    menuInitiallyOpen: Boolean = false,
 ) {
     val accountLabel = stringResource(Res.string.sessions_account_and_gateways)
     val connectionText = stringResource(connectionWord(connection))
+    val switching = profiles.size > 1
+    val active = profiles.firstOrNull { it.name == activeProfile }
+    var menuOpen by remember { mutableStateOf(menuInitiallyOpen) }
     Column {
         Row(
             Modifier.fillMaxWidth().clearOfWindowControls().padding(start = 18.dp, end = 6.dp, top = 6.dp, bottom = 4.dp),
@@ -1317,6 +1353,23 @@ private fun MainHeader(
             // as they are, and the rest of the strip drags the window (a double-click maximises it). The Box takes
             // what Settings leaves, so a long gateway name can't push Settings off the strip.
             Box(Modifier.weight(1f)) {
+                // With profiles to switch between, they come first in a menu here, one tap from the list; the account
+                // sheet is the menu's last row. With one, a tap opens the account sheet as before.
+                DropdownMenu(
+                    expanded = menuOpen,
+                    onExpandedChange = { menuOpen = it },
+                    alignment = AnchorAlignment.Start,
+                    maxHeight = PROJECT_MENU_MAX_HEIGHT,
+                    items = {
+                        profiles.forEach { profile ->
+                            val picked = profile.name == activeProfile
+                            MenuChoice(profile.label, Lucide.CircleUser, selected = picked, onClick = { if (!picked) onProfile(profile) })
+                        }
+                        MenuSeparator()
+                        MenuAction(stringResource(Res.string.sessions_switch_gateway), Lucide.ArrowLeftRight, onClick = onOpenGateways)
+                        MenuAction(accountLabel, Lucide.CircleUserRound, onClick = onAccount)
+                    },
+                ) {
                 Column(
                     Modifier
                         .then(if (isDesktop) Modifier.widthIn(max = 200.dp) else Modifier.fillMaxWidth())
@@ -1324,11 +1377,11 @@ private fun MainHeader(
                         .clip(RoundedCornerShape(Theme[radii][radiusSmall]))
                         .handCursor()
                         .clickable(
-                            onClickLabel = accountLabel,
-                            role = Role.Button,
+                            onClickLabel = if (switching) stringResource(Res.string.sessions_switch_profile) else accountLabel,
+                            role = if (switching) Role.DropdownList else Role.Button,
                             interactionSource = null,
                             indication = if (isDesktop) rememberHoverIndication(Theme[colors][text]) else LocalIndication.current,
-                            onClick = onAccount,
+                            onClick = { if (switching) menuOpen = !menuOpen else onAccount() },
                         )
                         .then(if (isDesktop) Modifier.padding(horizontal = 6.dp) else Modifier)
                         .semantics(mergeDescendants = true) { stateDescription = connectionText },
@@ -1351,8 +1404,24 @@ private fun MainHeader(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false),
                         )
-                        UnstyledIcon(Lucide.ChevronDown, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(12.dp))
+                        // The profile keeps its room; a long gateway name is cut short first.
+                        if (switching && active != null) {
+                            Text(
+                                "· ${active.label}",
+                                style = Theme[typography][caption].copy(fontSize = 12.sp),
+                                color = Theme[colors][textSecondary],
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                        UnstyledIcon(
+                            if (menuOpen) Lucide.ChevronUp else Lucide.ChevronDown,
+                            contentDescription = null,
+                            tint = Theme[colors][textTertiary],
+                            modifier = Modifier.size(12.dp),
+                        )
                     }
+                }
                 }
             }
             val settingsWord = stringResource(Res.string.common_settings)

@@ -180,6 +180,7 @@
     <string name="sessions_sign_out">退出登录</string>
     <string name="sessions_switch_gateway">切换或添加网关</string>
     <string name="sessions_profiles">配置</string>
+    <string name="sessions_switch_profile">切换配置</string>
     <string name="sessions_profiles_detail">每个配置都是一个独立的智能体，有自己的对话、记忆和模型。</string>
     <string name="sessions_profiles_add_hint">在网关主机上用“hermes profile create”添加配置。</string>
     <string name="sessions_profile_default">默认</string>

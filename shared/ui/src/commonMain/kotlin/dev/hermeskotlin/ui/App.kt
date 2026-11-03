@@ -668,7 +668,11 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                 onOpenSettings = { settingsOpen = true },
                 onSwitchProfile = {
                     app.switchProfile(it)
-                    closeDrawerToChat()
+                    // The sidebar stays open on the new profile's chats, to pick one from; what was open in the
+                    // chat's place belonged to the old profile.
+                    rooms.close()
+                    openDesktopRoom = null
+                    mainPage.close()
                 },
                 onOpenBot = { bot, storedSessionId, readUpTo ->
                     if (storedSessionId != openSessionId || route.target.bot == null) app.openBotChat(bot, storedSessionId, readUpTo)

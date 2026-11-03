@@ -147,6 +147,7 @@ enum class PreviewScene(val label: String) {
     ReadAloudFailed("A reply the gateway couldn't voice"),
     NewChat("A new chat"),
     Sidebar("The sessions sidebar"),
+    SidebarProfiles("The sidebar's profile menu"),
     Renamed("The sidebar after updating from Herald, with the rename card"),
     Bots("The bots and rooms"),
     Room("A room of bots"),
@@ -257,6 +258,17 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                         statuses = ChatSamples.sessionStatuses,
                         drafts = ChatSamples.sessionDrafts,
                         projects = ChatSamples.projects,
+                    )
+                }
+                PreviewScene.SidebarProfiles -> OpenSidebar {
+                    SessionsSidebarSample(
+                        ChatSamples.sessions(),
+                        selectedId = "s1",
+                        userLabel = ChatSamples.USER,
+                        statuses = ChatSamples.sessionStatuses,
+                        projects = ChatSamples.projects,
+                        profiles = ChatSamples.profiles,
+                        profileMenuOpen = true,
                     )
                 }
                 PreviewScene.Renamed -> OpenSidebar {
@@ -788,6 +800,14 @@ private fun NewChatPreview() = HeraldPreview(PreviewScene.NewChat)
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun SidebarPreview() = HeraldPreview(PreviewScene.Sidebar)
+
+@Preview(widthDp = 360, heightDp = 800)
+@Composable
+private fun SidebarProfilesPreview() = HeraldPreview(PreviewScene.SidebarProfiles)
+
+@Preview(widthDp = 360, heightDp = 800)
+@Composable
+private fun SidebarProfilesLightPreview() = HeraldPreview(PreviewScene.SidebarProfiles, dark = false)
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
