@@ -32,6 +32,35 @@
     <string name="chat_kind_pdf">PDF</string>
     <string name="chat_kind_audio">Audio</string>
     <string name="chat_kind_video">Video</string>
+    <!-- Playing audio and video -->
+    <string name="chat_media_cant_decode">Dieses Telefon kann diese Datei nicht abspielen.</string>
+    <string name="chat_media_cant_play">Diese Datei konnte nicht abgespielt werden.</string>
+    <string name="chat_media_cant_play_here">%1$s · kann hier nicht abgespielt werden</string>
+    <string name="chat_media_close_named">%1$s schließen</string>
+    <string name="chat_media_full_screen">Vollbild</string>
+    <string name="chat_media_gateway_stopped">Das Gateway hat das Senden abgebrochen (HTTP %1$d).</string>
+    <string name="chat_media_gateway_unreachable">Das Gateway war nicht erreichbar.</string>
+    <string name="chat_media_get_failed">%1$s konnte nicht geladen werden.</string>
+    <string name="chat_media_get_failed_gateway">%1$s konnte nicht vom Gateway geladen werden.</string>
+    <string name="chat_media_hide_controls">Videosteuerung ausblenden</string>
+    <string name="chat_media_in_a_window">In einem Fenster</string>
+    <string name="chat_media_loading">Wird geladen…</string>
+    <string name="chat_media_own_network">Nicht abgespielt: Der Link führt in dein eigenes Netzwerk.</string>
+    <string name="chat_media_pause_named">%1$s pausieren</string>
+    <string name="chat_media_play_in_window">In einem Fenster abspielen</string>
+    <string name="chat_media_play_named">%1$s abspielen</string>
+    <string name="chat_media_replay_named">%1$s erneut abspielen</string>
+    <string name="chat_media_retry_named">%1$s erneut versuchen</string>
+    <string name="chat_media_show_controls">Videosteuerung einblenden</string>
+    <string name="chat_media_show_in_chat">Im Chat zeigen</string>
+    <string name="chat_media_sign_in">Melde dich erneut an, um Dateien abzuspielen.</string>
+    <string name="chat_media_site_stopped">Die Website hat das Senden abgebrochen (HTTP %1$d).</string>
+    <string name="chat_media_site_unreachable">Die Website war nicht erreichbar.</string>
+    <string name="chat_media_speed">Wiedergabegeschwindigkeit %1$s</string>
+    <string name="chat_media_stop_named">%1$s stoppen</string>
+    <string name="chat_media_video_failed">Dieses Video konnte nicht abgespielt werden.</string>
+    <string name="chat_media_video_in_window">Video %1$s, in einem Fenster</string>
+    <string name="chat_media_wait_for_voice">Es kann abgespielt werden, sobald der Sprachchat oder das Diktat endet.</string>
     <string name="chat_kind_file">Datei</string>
 
     <string name="chat_file_line">Zeile %1$d</string>

@@ -167,7 +167,7 @@ internal class AndroidChatMediaPlayer private constructor(
         }
 
         override fun onPlayerError(error: PlaybackException) {
-            _state.update { it.copy(phase = PlaybackPhase.Failed, error = describe(error)) }
+            _state.update { it.copy(phase = PlaybackPhase.Failed, failure = describe(error)) }
             stopTicking()
         }
     }
@@ -202,7 +202,7 @@ internal class AndroidChatMediaPlayer private constructor(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    PlaySource.Failed(dev.hermeskotlin.core.network.ApiResult.Unavailable(e.message ?: "Couldn't reach the gateway."))
+                    PlaySource.Failed(dev.hermeskotlin.core.network.ApiResult.Unavailable(e.message.orEmpty()))
                 }
                 else -> null
             }
@@ -213,11 +213,11 @@ internal class AndroidChatMediaPlayer private constructor(
                 is PlaySource.Web -> progressive(OkHttpDataSource.Factory(http), source.url)
                 is PlaySource.Bytes -> progressive({ ByteArrayDataSource(source.bytes) }, "data:clip")
                 is PlaySource.Failed -> {
-                    _state.update { it.copy(phase = PlaybackPhase.Failed, error = playbackError(source.result)) }
+                    _state.update { it.copy(phase = PlaybackPhase.Failed, failure = PlaybackFailure.File(playbackProblem(source.result))) }
                     return@launch
                 }
                 null -> {
-                    _state.update { it.copy(phase = PlaybackPhase.Failed, error = CANT_PLAY) }
+                    _state.update { it.copy(phase = PlaybackPhase.Failed, failure = PlaybackFailure.CantPlay) }
                     return@launch
                 }
             }
@@ -375,7 +375,7 @@ internal class AndroidChatMediaPlayer private constructor(
                 phase = phase,
                 positionMs = if (phase == PlaybackPhase.Ended) exo.duration.coerceAtLeast(0) else exo.currentPosition,
                 durationMs = exo.duration.takeIf { d -> d != C.TIME_UNSET && d > 0 },
-                error = null,
+                failure = null,
                 videoAspect = exo.videoSize.takeIf { v -> v.width > 0 && v.height > 0 }?.let { v -> v.width * v.pixelWidthHeightRatio / v.height },
             )
         }
@@ -399,24 +399,22 @@ internal class AndroidChatMediaPlayer private constructor(
         ticking = null
     }
 
-    private fun describe(error: PlaybackException): String {
+    private fun describe(error: PlaybackException): PlaybackFailure {
         val status = ((error.cause as? HttpDataSource.InvalidResponseCodeException)?.responseCode)
-        val sender = if (fromWeb) "The site" else "The gateway"
         return when {
-            fromWeb && isNotPublicAddress(error) -> "Not played: the link points into your own network."
-            status == 401 && !fromWeb -> "Sign in again to play files."
-            status != null -> "$sender stopped sending it (HTTP $status)."
+            fromWeb && isNotPublicAddress(error) -> PlaybackFailure.OwnNetwork
+            status == 401 && !fromWeb -> PlaybackFailure.SignIn
+            status != null -> PlaybackFailure.Stopped(fromWeb, status)
             error.errorCode in PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED..PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT ->
-                if (fromWeb) "Couldn't reach the site." else "Couldn't reach the gateway."
+                PlaybackFailure.Unreachable(fromWeb)
             error.errorCode in PlaybackException.ERROR_CODE_PARSING_CONTAINER_MALFORMED..PlaybackException.ERROR_CODE_DECODING_FORMAT_UNSUPPORTED ||
-                error.errorCode == PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED -> "This phone can't play this file."
-            else -> CANT_PLAY
+                error.errorCode == PlaybackException.ERROR_CODE_AUDIO_TRACK_INIT_FAILED -> PlaybackFailure.CantDecode
+            else -> PlaybackFailure.CantPlay
         }
     }
 
     companion object {
         private const val TICK_MS = 250L
-        private const val CANT_PLAY = "Couldn't play this file."
 
         // Holds the application's context only, which lives as long as the process.
         @SuppressLint("StaticFieldLeak")

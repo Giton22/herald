@@ -38,6 +38,35 @@
     <string name="chat_kind_pdf">PDF</string>
     <string name="chat_kind_audio">Audio</string>
     <string name="chat_kind_video">Video</string>
+    <!-- Playing audio and video -->
+    <string name="chat_media_cant_decode">This phone can’t play this file.</string>
+    <string name="chat_media_cant_play">Couldn’t play this file.</string>
+    <string name="chat_media_cant_play_here">%1$s · can’t be played here</string>
+    <string name="chat_media_close_named">Close %1$s</string>
+    <string name="chat_media_full_screen">Full screen</string>
+    <string name="chat_media_gateway_stopped">The gateway stopped sending it (HTTP %1$d).</string>
+    <string name="chat_media_gateway_unreachable">Couldn’t reach the gateway.</string>
+    <string name="chat_media_get_failed">Couldn’t get %1$s.</string>
+    <string name="chat_media_get_failed_gateway">Couldn’t get %1$s from the gateway.</string>
+    <string name="chat_media_hide_controls">Hide video controls</string>
+    <string name="chat_media_in_a_window">In a window</string>
+    <string name="chat_media_loading">Loading…</string>
+    <string name="chat_media_own_network">Not played: the link points into your own network.</string>
+    <string name="chat_media_pause_named">Pause %1$s</string>
+    <string name="chat_media_play_in_window">Play in a window</string>
+    <string name="chat_media_play_named">Play %1$s</string>
+    <string name="chat_media_replay_named">Play %1$s again</string>
+    <string name="chat_media_retry_named">Try playing %1$s again</string>
+    <string name="chat_media_show_controls">Show video controls</string>
+    <string name="chat_media_show_in_chat">Show in the chat</string>
+    <string name="chat_media_sign_in">Sign in again to play files.</string>
+    <string name="chat_media_site_stopped">The site stopped sending it (HTTP %1$d).</string>
+    <string name="chat_media_site_unreachable">Couldn’t reach the site.</string>
+    <string name="chat_media_speed">Playback speed %1$s</string>
+    <string name="chat_media_stop_named">Stop %1$s</string>
+    <string name="chat_media_video_failed">Couldn’t play this video.</string>
+    <string name="chat_media_video_in_window">Video %1$s, in a window</string>
+    <string name="chat_media_wait_for_voice">It can play once the voice chat or dictation ends.</string>
     <string name="chat_kind_file">File</string>
 
     <!-- The file viewer -->

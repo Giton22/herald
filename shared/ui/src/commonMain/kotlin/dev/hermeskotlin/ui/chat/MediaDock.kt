@@ -77,6 +77,8 @@ import dev.hermeskotlin.ui.KeepScreenOn
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The audio clip the player holds, over the composer while its row is scrolled out of sight: its name (a tap goes
@@ -87,6 +89,7 @@ import kotlin.math.roundToInt
 internal fun MiniPlayer(player: ChatMediaPlayer, rows: ClipRows, starting: () -> Boolean, onNotice: (String) -> Unit) {
     val state by player.state.collectAsStateWithLifecycle()
     val shows by remember(rows) { derivedStateOf { miniPlayerShows(state, state.key?.let(rows::inView) == true) } }
+    val waitForVoice = stringResource(Res.string.chat_media_wait_for_voice)
     // Kept through the fold away, so the bar doesn't empty before it leaves.
     var last by remember { mutableStateOf(state) }
     if (shows) last = state
@@ -96,7 +99,7 @@ internal fun MiniPlayer(player: ChatMediaPlayer, rows: ClipRows, starting: () ->
             onToggle = {
                 when {
                     last.phase == PlaybackPhase.Playing || last.phase == PlaybackPhase.Loading -> player.pause()
-                    !starting() -> onNotice("It can play once the voice chat or dictation ends.")
+                    !starting() -> onNotice(waitForVoice)
                     else -> player.resume()
                 }
             },
@@ -111,28 +114,29 @@ private fun MiniPlayerBar(state: PlaybackState, onToggle: () -> Unit, onShow: ()
     val name = state.media?.name.orEmpty()
     val duration = state.durationMs?.takeIf { it > 0 }
     val fraction = duration?.let { (state.positionMs.toFloat() / it).coerceIn(0f, 1f) } ?: 0f
+    val pause = stringResource(Res.string.chat_media_pause_named, name)
     Surface(Modifier.padding(horizontal = 16.dp, vertical = 4.dp).fillMaxWidth(), elevated = true) {
         Column {
             Row(Modifier.padding(start = 4.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 when (state.phase) {
                     PlaybackPhase.Loading -> Box(
-                        Modifier.size(40.dp).clickable(onClick = onToggle).semantics { contentDescription = "Pause $name" },
+                        Modifier.size(40.dp).clickable(onClick = onToggle).semantics { contentDescription = pause },
                         contentAlignment = Alignment.Center,
                     ) { Spinner(Modifier.size(18.dp)) }
-                    PlaybackPhase.Playing -> IconButton(Lucide.Pause, contentDescription = "Pause $name", onClick = onToggle)
-                    PlaybackPhase.Ended -> IconButton(Lucide.RotateCcw, contentDescription = "Play $name again", onClick = onToggle)
-                    else -> IconButton(Lucide.Play, contentDescription = "Play $name", onClick = onToggle)
+                    PlaybackPhase.Playing -> IconButton(Lucide.Pause, contentDescription = pause, onClick = onToggle)
+                    PlaybackPhase.Ended -> IconButton(Lucide.RotateCcw, contentDescription = stringResource(Res.string.chat_media_replay_named, name), onClick = onToggle)
+                    else -> IconButton(Lucide.Play, contentDescription = stringResource(Res.string.chat_media_play_named, name), onClick = onToggle)
                 }
                 Column(
                     Modifier
                         .weight(1f)
-                        .clickable(onClickLabel = "Show in the chat", onClick = onShow)
+                        .clickable(onClickLabel = stringResource(Res.string.chat_media_show_in_chat), onClick = onShow)
                         .padding(horizontal = 6.dp, vertical = 8.dp),
                 ) {
                     Text(name, style = Theme[typography][label], color = Theme[colors][textColor], maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(playTimeLabel(state.positionMs, state.durationMs), style = Theme[typography][caption], color = Theme[colors][textTertiary], maxLines = 1)
                 }
-                IconButton(Lucide.X, contentDescription = "Stop $name", onClick = onClose)
+                IconButton(Lucide.X, contentDescription = stringResource(Res.string.chat_media_stop_named, name), onClick = onClose)
             }
             // How far through, as a hairline along the bottom; the row in the chat has the seek bar.
             Box(Modifier.fillMaxWidth().height(2.dp).background(Theme[colors][surface3])) {
@@ -178,6 +182,9 @@ internal fun VideoPopup(player: ChatMediaPlayer, bottomInset: Dp, starting: () -
         // The corner's place moves with the keyboard and the composer; the window follows unless held.
         LaunchedEffect(target) { if (!dragging) position.animateTo(target) }
         var controls by remember { mutableStateOf(false) }
+        val inWindow = stringResource(Res.string.chat_media_video_in_window, media.name)
+        val toggleControls = stringResource(if (controls) Res.string.chat_media_hide_controls else Res.string.chat_media_show_controls)
+        val waitForVoice = stringResource(Res.string.chat_media_wait_for_voice)
         LaunchedEffect(controls, state.phase) {
             if (controls && state.phase == PlaybackPhase.Playing) {
                 delay(POPUP_CONTROLS_MS)
@@ -227,8 +234,8 @@ internal fun VideoPopup(player: ChatMediaPlayer, bottomInset: Dp, starting: () -
                         )
                     }
                     .semantics {
-                        contentDescription = "Video ${media.name}, in a window"
-                        onClick(label = if (controls) "Hide video controls" else "Show video controls") {
+                        contentDescription = inWindow
+                        onClick(label = toggleControls) {
                             controls = !controls
                             true
                         }
@@ -236,7 +243,7 @@ internal fun VideoPopup(player: ChatMediaPlayer, bottomInset: Dp, starting: () -
             )
             when (state.phase) {
                 PlaybackPhase.Failed -> Text(
-                    state.error ?: "Couldn't play this video.",
+                    state.failure?.text() ?: stringResource(Res.string.chat_media_video_failed),
                     style = Theme[typography][caption],
                     color = Color.White,
                     maxLines = 3,
@@ -255,7 +262,7 @@ internal fun VideoPopup(player: ChatMediaPlayer, bottomInset: Dp, starting: () -
                 onToggle = {
                     when {
                         state.phase == PlaybackPhase.Playing || state.phase == PlaybackPhase.Loading -> player.pause()
-                        !starting() -> onNotice("It can play once the voice chat or dictation ends.")
+                        !starting() -> onNotice(waitForVoice)
                         else -> player.resume()
                     }
                 },
@@ -277,15 +284,16 @@ private fun PopupControls(
 ) {
     AnimatedVisibility(visible = visible, enter = fadeIn(), exit = fadeOut()) {
         Box(Modifier.fillMaxSize().background(Color.Black.copy(alpha = 0.35f))) {
-            IconButton(Lucide.Maximize2, contentDescription = "Full screen", onClick = onExpand, tint = Color.White, modifier = Modifier.align(Alignment.TopStart))
-            IconButton(Lucide.X, contentDescription = "Close ${media.name}", onClick = onClose, tint = Color.White, modifier = Modifier.align(Alignment.TopEnd))
+            IconButton(Lucide.Maximize2, contentDescription = stringResource(Res.string.chat_media_full_screen), onClick = onExpand, tint = Color.White, modifier = Modifier.align(Alignment.TopStart))
+            IconButton(Lucide.X, contentDescription = stringResource(Res.string.chat_media_close_named, media.name), onClick = onClose, tint = Color.White, modifier = Modifier.align(Alignment.TopEnd))
             if (state.phase != PlaybackPhase.Loading) {
-                val (icon, description) = when (state.phase) {
-                    PlaybackPhase.Playing -> Lucide.Pause to "Pause ${media.name}"
-                    PlaybackPhase.Ended -> Lucide.RotateCcw to "Play ${media.name} again"
-                    PlaybackPhase.Failed -> Lucide.RotateCcw to "Try playing ${media.name} again"
-                    else -> Lucide.Play to "Play ${media.name}"
+                val (icon, words) = when (state.phase) {
+                    PlaybackPhase.Playing -> Lucide.Pause to Res.string.chat_media_pause_named
+                    PlaybackPhase.Ended -> Lucide.RotateCcw to Res.string.chat_media_replay_named
+                    PlaybackPhase.Failed -> Lucide.RotateCcw to Res.string.chat_media_retry_named
+                    else -> Lucide.Play to Res.string.chat_media_play_named
                 }
+                val description = stringResource(words, media.name)
                 IconButton(
                     icon,
                     contentDescription = description,

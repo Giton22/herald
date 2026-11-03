@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import dev.hermeskotlin.core.media.MediaType
 import dev.hermeskotlin.core.media.PlaySource
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Audio or video a message shows: [source] is a gateway path, a web address or a `data:` URL, unless the
@@ -34,7 +36,8 @@ internal data class PlaybackState(
     /** Null until the clip says how long it is (a live or unindexed stream may never). */
     val durationMs: Long? = null,
     val speed: Float = 1f,
-    val error: String? = null,
+    /** Why it didn't play, once [phase] is [PlaybackPhase.Failed]. */
+    val failure: PlaybackFailure? = null,
     /** Width over height of the picture, once a video says; the window over the chat letterboxes to it. */
     val videoAspect: Float? = null,
 ) {
@@ -190,5 +193,35 @@ internal class PlayerSlot {
 /** Why a clip didn't play, as the file viewer names it. */
 internal fun playbackProblem(result: dev.hermeskotlin.core.network.ApiResult<*>): FileProblem = fileError(result, whole = true)
 
-/** The same, in the words the row shows. */
-internal suspend fun playbackError(result: dev.hermeskotlin.core.network.ApiResult<*>): String = fileProblemWords(playbackProblem(result))
+/** Why a clip stopped, or never started: words picked here, said in the app's language where they show. */
+internal sealed interface PlaybackFailure {
+    /** Fetching it from the gateway failed, as the file viewer says it. */
+    data class File(val problem: FileProblem) : PlaybackFailure
+
+    /** A reply's link points into the user's own network, which the player doesn't reach. */
+    data object OwnNetwork : PlaybackFailure
+
+    data object SignIn : PlaybackFailure
+
+    /** The gateway, or the site a link points to, answered [status] partway. */
+    data class Stopped(val fromWeb: Boolean, val status: Int) : PlaybackFailure
+
+    data class Unreachable(val fromWeb: Boolean) : PlaybackFailure
+
+    /** A format this phone can't decode. */
+    data object CantDecode : PlaybackFailure
+
+    data object CantPlay : PlaybackFailure
+}
+
+/** [this] in the words the player shows. */
+@Composable
+internal fun PlaybackFailure.text(): String = when (this) {
+    is PlaybackFailure.File -> fileProblemText(problem)
+    PlaybackFailure.OwnNetwork -> stringResource(Res.string.chat_media_own_network)
+    PlaybackFailure.SignIn -> stringResource(Res.string.chat_media_sign_in)
+    is PlaybackFailure.Stopped -> stringResource(if (fromWeb) Res.string.chat_media_site_stopped else Res.string.chat_media_gateway_stopped, status)
+    is PlaybackFailure.Unreachable -> stringResource(if (fromWeb) Res.string.chat_media_site_unreachable else Res.string.chat_media_gateway_unreachable)
+    PlaybackFailure.CantDecode -> stringResource(Res.string.chat_media_cant_decode)
+    PlaybackFailure.CantPlay -> stringResource(Res.string.chat_media_cant_play)
+}

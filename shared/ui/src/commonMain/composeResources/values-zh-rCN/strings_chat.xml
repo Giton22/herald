@@ -32,6 +32,35 @@
     <string name="chat_kind_pdf">PDF</string>
     <string name="chat_kind_audio">音频</string>
     <string name="chat_kind_video">视频</string>
+    <!-- Playing audio and video -->
+    <string name="chat_media_cant_decode">此手机无法播放此文件。</string>
+    <string name="chat_media_cant_play">无法播放此文件。</string>
+    <string name="chat_media_cant_play_here">%1$s · 无法在此播放</string>
+    <string name="chat_media_close_named">关闭 %1$s</string>
+    <string name="chat_media_full_screen">全屏</string>
+    <string name="chat_media_gateway_stopped">网关已停止发送 (HTTP %1$d)。</string>
+    <string name="chat_media_gateway_unreachable">无法连接网关。</string>
+    <string name="chat_media_get_failed">无法获取 %1$s。</string>
+    <string name="chat_media_get_failed_gateway">无法从网关获取 %1$s。</string>
+    <string name="chat_media_hide_controls">隐藏视频控件</string>
+    <string name="chat_media_in_a_window">在窗口中</string>
+    <string name="chat_media_loading">正在加载…</string>
+    <string name="chat_media_own_network">未播放：该链接指向你自己的网络。</string>
+    <string name="chat_media_pause_named">暂停 %1$s</string>
+    <string name="chat_media_play_in_window">在窗口中播放</string>
+    <string name="chat_media_play_named">播放 %1$s</string>
+    <string name="chat_media_replay_named">再次播放 %1$s</string>
+    <string name="chat_media_retry_named">重试播放 %1$s</string>
+    <string name="chat_media_show_controls">显示视频控件</string>
+    <string name="chat_media_show_in_chat">在聊天中显示</string>
+    <string name="chat_media_sign_in">请重新登录以播放文件。</string>
+    <string name="chat_media_site_stopped">网站已停止发送 (HTTP %1$d)。</string>
+    <string name="chat_media_site_unreachable">无法连接该网站。</string>
+    <string name="chat_media_speed">播放速度 %1$s</string>
+    <string name="chat_media_stop_named">停止 %1$s</string>
+    <string name="chat_media_video_failed">无法播放此视频。</string>
+    <string name="chat_media_video_in_window">视频 %1$s，在窗口中</string>
+    <string name="chat_media_wait_for_voice">语音聊天或听写结束后即可播放。</string>
     <string name="chat_kind_file">文件</string>
 
     <string name="chat_file_line">第 %1$d 行</string>

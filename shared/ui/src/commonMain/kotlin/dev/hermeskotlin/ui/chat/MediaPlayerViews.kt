@@ -87,6 +87,8 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.KeepScreenOn
 import dev.hermeskotlin.ui.fullScreenDialogProperties
 import kotlinx.coroutines.launch
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * A clip in a message: audio as a compact player row, video as a card that plays it in a window over the chat
@@ -97,7 +99,8 @@ import kotlinx.coroutines.launch
 internal fun MediaCard(
     media: PlayableMedia,
     save: (suspend () -> ByteArray?)?,
-    failure: String = "Couldn't get ${media.name}.",
+    /** What a failed Save or Share says; null says it couldn't get the clip. */
+    failure: String? = null,
 ) {
     val player = LocalChatMediaPlayer.current
     val sources = LocalMediaSources.current
@@ -111,6 +114,8 @@ internal fun MediaCard(
     val notify = LocalNotice.current
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
+    val couldntGet = failure ?: stringResource(Res.string.chat_media_get_failed, media.name)
+    val waitForVoice = stringResource(Res.string.chat_media_wait_for_voice)
 
     fun withBytes(action: suspend (ByteArray) -> Unit) {
         if (busy || save == null) return
@@ -118,7 +123,7 @@ internal fun MediaCard(
         scope.launch {
             try {
                 val bytes = save()
-                if (bytes == null) notify(failure) else action(bytes)
+                if (bytes == null) notify(couldntGet) else action(bytes)
             } finally {
                 busy = false
             }
@@ -129,7 +134,7 @@ internal fun MediaCard(
         when {
             !canPlay -> Unit
             state.phase == PlaybackPhase.Playing || state.phase == PlaybackPhase.Loading -> player.pause()
-            !starting() -> notify("It can play once the voice chat or dictation ends.")
+            !starting() -> notify(waitForVoice)
             // Where it shows already (full screen is over the card, so that's the window), else in a window.
             media.type == MediaType.Video -> player.openVideo(media, resolve, shown?.mode ?: VideoMode.Popup)
             else -> player.play(media, resolve)
@@ -164,7 +169,7 @@ internal fun MediaCard(
                     SeekBar(state, onSeek = { player.seekTo(media.key, it) })
                 }
                 Text(
-                    statusLine(media, state, canPlay, shown?.mode),
+                    statusLine(media, state, canPlay, shown?.mode, failed = state.failure?.text()),
                     style = Theme[typography][caption],
                     color = if (state.phase == PlaybackPhase.Failed) Theme[colors][danger] else Theme[colors][textTertiary],
                     maxLines = 2,
@@ -178,26 +183,27 @@ internal fun MediaCard(
                 if (busy) {
                     Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
                 } else {
-                    IconButton(Lucide.Download, contentDescription = "Save ${media.name}", onClick = { withBytes { notify(actions.save(it, media.name)) } })
-                    IconButton(Lucide.Share2, contentDescription = "Share ${media.name}", onClick = { withBytes { actions.share(it, media.name) } })
+                    IconButton(Lucide.Download, contentDescription = stringResource(Res.string.chat_save_named, media.name), onClick = { withBytes { notify(actions.save(it, media.name)) } })
+                    IconButton(Lucide.Share2, contentDescription = stringResource(Res.string.chat_share_named, media.name), onClick = { withBytes { actions.share(it, media.name) } })
                 }
             }
         }
     }
 }
 
-/** What the row says under the name: the time, or why it can't play. */
-private fun statusLine(media: PlayableMedia, state: PlaybackState, canPlay: Boolean, mode: VideoMode?): String {
-    val kind = if (media.type == MediaType.Audio) "Audio" else "Video"
+/** What the row says under the name: the time, or why it can't play ([failed], said already). */
+@Composable
+private fun statusLine(media: PlayableMedia, state: PlaybackState, canPlay: Boolean, mode: VideoMode?, failed: String?): String {
+    val kind = stringResource(if (media.type == MediaType.Audio) Res.string.chat_kind_audio else Res.string.chat_kind_video)
     val ext = media.name.substringAfterLast('.', "").uppercase()
     val idle = listOf(kind, ext).filter { it.isNotEmpty() }.distinct().joinToString(" · ")
     return when {
-        !canPlay -> "$idle · can't be played here"
-        state.phase == PlaybackPhase.Failed -> state.error ?: "Couldn't play it."
+        !canPlay -> stringResource(Res.string.chat_media_cant_play_here, idle)
+        state.phase == PlaybackPhase.Failed -> failed ?: stringResource(Res.string.chat_media_cant_play)
         state.key == null -> idle
-        state.phase == PlaybackPhase.Loading && state.durationMs == null -> "Loading…"
+        state.phase == PlaybackPhase.Loading && state.durationMs == null -> stringResource(Res.string.chat_media_loading)
         media.type == MediaType.Video -> {
-            val where = if (mode == VideoMode.Full) "Full screen" else "In a window"
+            val where = stringResource(if (mode == VideoMode.Full) Res.string.chat_media_full_screen else Res.string.chat_media_in_a_window)
             "$where · ${playTimeLabel(state.positionMs, state.durationMs)}"
         }
         else -> playTimeLabel(state.positionMs, state.durationMs)
@@ -214,11 +220,14 @@ private fun PlayButton(media: PlayableMedia, state: PlaybackState, enabled: Bool
         media.type == MediaType.Video -> Lucide.CirclePlay
         else -> Lucide.Play
     }
-    val description = when {
-        playing || loading -> "Pause ${media.name}"
-        state.phase == PlaybackPhase.Failed -> "Try playing ${media.name} again"
-        else -> "Play ${media.name}"
-    }
+    val description = stringResource(
+        when {
+            playing || loading -> Res.string.chat_media_pause_named
+            state.phase == PlaybackPhase.Failed -> Res.string.chat_media_retry_named
+            else -> Res.string.chat_media_play_named
+        },
+        media.name,
+    )
     UnstyledButton(
         onClick = onClick,
         enabled = enabled,
@@ -282,12 +291,13 @@ private fun SeekBar(state: PlaybackState, onSeek: (Long) -> Unit) {
 
 @Composable
 private fun SpeedButton(speed: Float, onClick: () -> Unit) {
+    val described = stringResource(Res.string.chat_media_speed, speedLabel(speed))
     UnstyledButton(
         onClick = onClick,
         modifier = Modifier.size(48.dp).padding(6.dp).clip(RoundedCornerShape(Theme[radii][radiusMedium])).background(Theme[colors][accentSoft]),
         indication = rememberColoredIndication(Theme[colors][accentText]),
     ) {
-        Box(Modifier.fillMaxSize().semantics { contentDescription = "Playback speed ${speedLabel(speed)}" }, contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxSize().semantics { contentDescription = described }, contentAlignment = Alignment.Center) {
             Text(speedLabel(speed), style = Theme[typography][caption], color = Theme[colors][accentText])
         }
     }
@@ -309,7 +319,7 @@ internal fun VideoViewer() {
             VideoSurface(player, Modifier.fillMaxSize().windowInsetsPadding(WindowInsets.safeDrawing))
             if (state.phase == PlaybackPhase.Failed) {
                 Text(
-                    state.error ?: "Couldn't play this video.",
+                    state.failure?.text() ?: stringResource(Res.string.chat_media_video_failed),
                     style = Theme[typography][label],
                     color = Color.White,
                     modifier = Modifier.align(Alignment.Center).padding(32.dp),
@@ -325,7 +335,7 @@ internal fun VideoViewer() {
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(Lucide.X, contentDescription = "Close", onClick = player::closeVideo, tint = Color.White)
+                IconButton(Lucide.X, contentDescription = stringResource(Res.string.chat_close), onClick = player::closeVideo, tint = Color.White)
                 Text(
                     media.name,
                     style = Theme[typography][label],
@@ -334,7 +344,7 @@ internal fun VideoViewer() {
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f).padding(horizontal = 8.dp),
                 )
-                IconButton(Lucide.PictureInPicture2, contentDescription = "Play in a window", onClick = { player.showVideo(VideoMode.Popup) }, tint = Color.White)
+                IconButton(Lucide.PictureInPicture2, contentDescription = stringResource(Res.string.chat_media_play_in_window), onClick = { player.showVideo(VideoMode.Popup) }, tint = Color.White)
             }
         }
     }

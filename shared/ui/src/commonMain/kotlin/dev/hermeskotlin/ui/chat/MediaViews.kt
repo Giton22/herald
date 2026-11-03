@@ -219,7 +219,7 @@ internal fun webHost(source: String): String? {
 private fun ReplyClip(item: ReplyMedia, type: MediaType) {
     val load = LocalMediaLoader.current
     val media = remember(item.source, type) { PlayableMedia(key = "reply|${item.source}", source = item.source, name = item.name, type = type) }
-    MediaCard(media, save = { load(item.source) }, failure = "Couldn't get ${item.name} from the gateway.")
+    MediaCard(media, save = { load(item.source) }, failure = stringResource(Res.string.chat_media_get_failed_gateway, item.name))
 }
 
 /** A delivered file: its name, with Save and Share. */

@@ -32,6 +32,35 @@
     <string name="chat_kind_pdf">PDF</string>
     <string name="chat_kind_audio">Hang</string>
     <string name="chat_kind_video">Videó</string>
+    <!-- Playing audio and video -->
+    <string name="chat_media_cant_decode">Ez a telefon nem tudja lejátszani ezt a fájlt.</string>
+    <string name="chat_media_cant_play">Nem sikerült lejátszani ezt a fájlt.</string>
+    <string name="chat_media_cant_play_here">%1$s · itt nem játszható le</string>
+    <string name="chat_media_close_named">%1$s bezárása</string>
+    <string name="chat_media_full_screen">Teljes képernyő</string>
+    <string name="chat_media_gateway_stopped">A gateway leállította a küldést (HTTP %1$d).</string>
+    <string name="chat_media_gateway_unreachable">Nem sikerült elérni a gatewayt.</string>
+    <string name="chat_media_get_failed">Nem sikerült lekérni: %1$s.</string>
+    <string name="chat_media_get_failed_gateway">Nem sikerült lekérni a gatewayről: %1$s.</string>
+    <string name="chat_media_hide_controls">Videóvezérlők elrejtése</string>
+    <string name="chat_media_in_a_window">Ablakban</string>
+    <string name="chat_media_loading">Betöltés…</string>
+    <string name="chat_media_own_network">Nem játszható le: a hivatkozás a saját hálózatodra mutat.</string>
+    <string name="chat_media_pause_named">%1$s szüneteltetése</string>
+    <string name="chat_media_play_in_window">Lejátszás ablakban</string>
+    <string name="chat_media_play_named">%1$s lejátszása</string>
+    <string name="chat_media_replay_named">%1$s lejátszása újra</string>
+    <string name="chat_media_retry_named">%1$s lejátszásának újrapróbálása</string>
+    <string name="chat_media_show_controls">Videóvezérlők megjelenítése</string>
+    <string name="chat_media_show_in_chat">Megjelenítés a csevegésben</string>
+    <string name="chat_media_sign_in">Jelentkezz be újra a fájlok lejátszásához.</string>
+    <string name="chat_media_site_stopped">A webhely leállította a küldést (HTTP %1$d).</string>
+    <string name="chat_media_site_unreachable">Nem sikerült elérni a webhelyet.</string>
+    <string name="chat_media_speed">Lejátszási sebesség: %1$s</string>
+    <string name="chat_media_stop_named">%1$s leállítása</string>
+    <string name="chat_media_video_failed">Nem sikerült lejátszani ezt a videót.</string>
+    <string name="chat_media_video_in_window">Videó: %1$s, ablakban</string>
+    <string name="chat_media_wait_for_voice">A hangcsevegés vagy a diktálás befejezése után lejátszható.</string>
     <string name="chat_kind_file">Fájl</string>
 
     <string name="chat_file_line">%1$d. sor</string>
