@@ -102,6 +102,10 @@ import dev.hermeskotlin.ui.assistant.AssistantBackdrop
 import dev.hermeskotlin.ui.assistant.AssistantCard
 import dev.hermeskotlin.ui.sessions.ProjectDraft
 import dev.hermeskotlin.core.projects.FolderListing
+import dev.hermeskotlin.core.projects.Project
+import dev.hermeskotlin.core.projects.ProjectsApi
+import dev.hermeskotlin.core.profiles.Profile
+import dev.hermeskotlin.ui.chat.GreetingPlaces
 import dev.hermeskotlin.ui.sessions.ProjectActionsSheet
 import dev.hermeskotlin.ui.sessions.NewProjectDialog
 import dev.hermeskotlin.ui.settings.AppIconScreen
@@ -249,7 +253,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 PreviewScene.VoiceCutIn -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.speakingCutIn)
                 PreviewScene.ReadAloud -> SampleChat(ChatSamples.reply, readAloud = ReadAloudState(key = "a1"))
                 PreviewScene.ReadAloudFailed -> SampleChat(ChatSamples.reply, readAloud = ReadAloudState(error = "Speech synthesis failed"))
-                PreviewScene.NewChat -> SampleChat(ChatSamples.empty, placeholder = "What are we building?")
+                PreviewScene.NewChat -> SampleChat(ChatSamples.empty, placeholder = "What are we building?", places = samplePlaces, cwd = "/srv/site")
                 PreviewScene.Sidebar -> OpenSidebar {
                     SessionsSidebarSample(
                         ChatSamples.sessions(),
@@ -728,6 +732,9 @@ private fun SampleChat(
     composerText: String = "",
     /** The gateway can't be reached and the link is being made again. */
     offline: Boolean = false,
+    /** An empty new chat's projects and profiles to pick from on its greeting. */
+    places: GreetingPlaces? = null,
+    cwd: String? = null,
 ) {
     ChatView(
         title = state.title ?: "New chat",
@@ -758,8 +765,21 @@ private fun SampleChat(
         onViewImage = {},
         onNotice = {},
         place = "homelab",
+        places = places,
+        cwd = cwd,
     )
 }
+
+/** Made-up projects and profiles for the new chat's greeting. */
+private val samplePlaces = GreetingPlaces(
+    projects = listOf(
+        Project("p1", "website", "/srv/site", sessionCount = 12),
+        Project("p2", "backups", "/srv/backup", sessionCount = 5),
+        Project(ProjectsApi.NO_PROJECT_ID, "Home", null, sessionCount = 30, isNoProject = true),
+    ),
+    profiles = listOf(Profile("default", isDefault = true), Profile("work")),
+    profile = "default",
+)
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
@@ -796,6 +816,10 @@ private fun VoicePreview() = HeraldPreview(PreviewScene.Voice)
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun NewChatPreview() = HeraldPreview(PreviewScene.NewChat)
+
+@Preview(widthDp = 360, heightDp = 800)
+@Composable
+private fun NewChatNarrowLightPreview() = HeraldPreview(PreviewScene.NewChat, dark = false)
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
