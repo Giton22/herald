@@ -335,7 +335,8 @@ jobs:
           name: qualified-flatpak
           path: build/kyllene.flatpak
           if-no-files-found: error
-          retention-days: 3
+          # Long enough to re-run a failed Android job days later without rebuilding the Flatpak.
+          retention-days: 14
 
   flatpak-attach:
     needs: [release, flatpak, flatpak-checks]
