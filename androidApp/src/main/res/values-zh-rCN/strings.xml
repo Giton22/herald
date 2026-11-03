@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_new_chat">新对话</string>
+    <string name="shortcut_voice_short">听写</string>
+    <string name="shortcut_voice">语音新对话</string>
+    <string name="shortcut_voice_chat">呼叫 Hermes</string>
+    <string name="shortcut_voice_chat_moved">“呼叫 Hermes”已移动位置。长按应用图标，重新固定它。</string>
+
+    <string name="app_lock_prompt_title">解锁 Kyllene</string>
+    <string name="link_no_app">这部手机上没有应用能打开该链接。</string>
+
+    <string name="channel_connection_name">后台连接</string>
+    <string name="channel_connection_description">Kyllene 在后台保持连接或处理一轮对话时显示。</string>
+    <string name="channel_requests_name">批准和问题</string>
+    <string name="channel_requests_description">智能体正在等你。</string>
+    <string name="channel_replies_name">已完成的回复</string>
+    <string name="channel_replies_description">应用在后台时，一轮对话结束了。</string>
+    <string name="channel_bots_name">机器人消息</string>
+    <string name="channel_bots_description">应用在后台时，有机器人在它的对话里发了消息。</string>
+    <string name="channel_inbox_name">收件箱</string>
+    <string name="channel_inbox_description">你关注的定时任务有了报告，例如晨间简报。</string>
+    <string name="channel_inbox_failed_name">失败的任务</string>
+    <string name="channel_inbox_failed_description">定时任务的一次运行失败了。</string>
+    <string name="channel_voice_name">语音对话</string>
+    <string name="channel_voice_description">在屏幕关闭或打开其他应用时，语音对话仍在进行时显示。</string>
+    <string name="channel_calls_name">需要回答的来电</string>
+    <string name="channel_calls_description">批准请求或问题会像来电一样响铃（设置 → 手机工具 → 通话）。</string>
+    <string name="channel_phone_tools_name">手机工具</string>
+    <string name="channel_phone_tools_description">智能体想要更改这部手机上的设置时</string>
+
+    <string name="notification_connected">已连接到 Hermes</string>
+    <string name="notification_reconnecting">正在重新连接 Hermes…</string>
+    <string name="notification_push_anywhere">机器人消息会通过“随处通知”送达</string>
+    <string name="notification_not_connected">未连接到 Hermes</string>
+    <string name="notification_turn_off">关闭</string>
+
+    <string name="notification_voice_title">语音对话</string>
+    <string name="notification_voice_text">正在与 Hermes 通话</string>
+    <string name="notification_voice_end">结束</string>
+
+    <string name="notification_approve_title">允许此命令？</string>
+    <string name="notification_question_title">Hermes 有个问题</string>
+    <plurals name="notification_questions">
+        <item quantity="other">%d 个问题</item>
+    </plurals>
+    <string name="notification_your_answer">你的回答</string>
+    <string name="notification_answer">回答</string>
+    <string name="notification_secret_sudo">需要 sudo 密码</string>
+    <string name="notification_secret_secret">需要密钥</string>
+    <string name="notification_secret_vault_unlock">解锁你的密码管理器</string>
+    <string name="notification_secret_vault_code">需要登录验证码</string>
+    <string name="notification_vault_no_login">Hermes 没有 %1$s 的登录信息。打开对话来保存一个。</string>
+    <string name="notification_vault_this_site">此网站</string>
+    <string name="notification_allow_once">允许一次</string>
+    <string name="notification_allow_session">在此对话中允许</string>
+    <string name="notification_allow_always">始终允许</string>
+    <string name="notification_deny">拒绝</string>
+
+    <string name="notification_turn_failed_text">这一轮失败了。</string>
+    <string name="notification_done">完成。</string>
+    <string name="notification_finished">已结束。</string>
+    <string name="notification_message_hermes">给 Hermes 发消息</string>
+    <string name="notification_turn_failed">这一轮失败了</string>
+    <string name="notification_hermes_replied">Hermes 已回复</string>
+    <string name="notification_reply">回复</string>
+    <string name="notification_you">你</string>
+    <string name="notification_message_bot">给 %1$s 发消息</string>
+    <string name="notification_run_failed_text">运行失败了。</string>
+    <string name="notification_job_failed">%1$s 失败</string>
+    <string name="notification_mark_read">标为已读</string>
+    <string name="notification_push_test_title">“随处通知”已生效</string>
+    <string name="notification_push_test_text">这条通知经 ntfy 端到端加密送达，而不是通过你的网关连接。</string>
+
+    <string name="notification_send_failed">无法发送</string>
+    <string name="notification_bot_send_failed">无法发送。打开 Kyllene 重试。</string>
+    <string name="notification_chat_closed">该对话已不再打开。打开 Kyllene 来回复。</string>
+    <string name="notification_reply_send_failed">无法发送。打开 Kyllene 重新发送。</string>
+    <string name="notification_reply_open_app">打开 Kyllene 重新发送。</string>
+    <string name="notification_answer_not_connected">未连接到网关。打开 Kyllene 来回答。</string>
+
+    <string name="call_needs_microphone">Kyllene 需要麦克风才能通话。问题在对话里。</string>
+    <string name="call_new_session">新会话</string>
+
+    <string name="phone_allow">允许</string>
+    <string name="phone_deny">拒绝</string>
+    <string name="phone_question_change">智能体想要更改你的手机设置</string>
+    <string name="phone_list_separator">、</string>
+    <string name="phone_sentence">%1$s。</string>
+
+    <string name="phone_alarm_question">设置 %1$s 的闹钟。</string>
+    <string name="phone_alarm_question_repeats">设置 %1$s 的闹钟，%2$s。</string>
+    <string name="phone_alarm_question_label">设置 %1$s 的闹钟：\"%2$s\"。</string>
+    <string name="phone_alarm_question_repeats_label">设置 %1$s 的闹钟，%2$s：\"%3$s\"。</string>
+    <string name="phone_alarm_every_day">每天</string>
+    <string name="phone_alarm_every_weekday">每个工作日</string>
+    <string name="phone_alarm_every_weekend">每个周末</string>
+    <string name="phone_alarm_every_days">每%1$s</string>
+    <string name="phone_timer_question">启动一个 %1$s 的计时器。</string>
+    <string name="phone_timer_question_label">启动一个 %1$s 的计时器：\"%2$s\"。</string>
+    <string name="phone_hours_short">%1$d 小时</string>
+    <string name="phone_minutes_short">%1$d 分钟</string>
+    <string name="phone_seconds_short">%1$d 秒</string>
+
+    <string name="phone_clipboard_title">智能体想把内容复制到你的剪贴板</string>
+    <string name="phone_clipboard_question">复制到剪贴板：%1$s</string>
+    <string name="phone_clipboard_label">来自智能体</string>
+
+    <string name="phone_open_title">智能体想在你的手机上打开内容</string>
+    <string name="phone_open_link">打开 %1$s%2$s 上的链接：%3$s</string>
+    <string name="phone_open_not_secure">（不安全）</string>
+    <string name="phone_open_directions">在地图应用中开始导航到：%1$s</string>
+    <string name="phone_open_map">在地图应用中显示：%1$s</string>
+    <string name="phone_open_app">打开应用：%1$s</string>
+    <string name="phone_open_share">分享这段文字：%1$s</string>
+
+    <string name="phone_sound_dnd_off">关闭勿扰模式</string>
+    <string name="phone_sound_dnd_on">开启勿扰模式（%1$s）</string>
+    <string name="phone_sound_dnd_priority">仅限优先事项</string>
+    <string name="phone_sound_dnd_alarms">仅限闹钟</string>
+    <string name="phone_sound_dnd_silence">完全静音</string>
+    <string name="phone_sound_ringer">将响铃模式设为%1$s</string>
+    <string name="phone_sound_ringer_normal">正常</string>
+    <string name="phone_sound_ringer_vibrate">振动</string>
+    <string name="phone_sound_ringer_silent">静音</string>
+    <string name="phone_sound_volume_ring">将铃声音量设为 %1$d%%</string>
+    <string name="phone_sound_volume_notification">将通知音量设为 %1$d%%</string>
+    <string name="phone_sound_volume_media">将媒体音量设为 %1$d%%</string>
+    <string name="phone_sound_volume_alarm">将闹钟音量设为 %1$d%%</string>
+
+    <string name="phone_calendar_add_title">智能体想在你的日历中添加日程</string>
+    <string name="phone_calendar_move_title">智能体想移动一个日程</string>
+    <string name="phone_calendar_add_question">%1$s，在“%2$s”中。</string>
+    <string name="phone_calendar_add_question_place">%1$s，在“%2$s”中，地点：%3$s。</string>
+    <string name="phone_calendar_move_question">从 %1$s 移到 %2$s，在“%3$s”中。</string>
+    <plurals name="phone_calendar_guests">
+        <item quantity="other">可能会通知 %d 位邀请对象。</item>
+    </plurals>
+    <string name="phone_calendar_title_line">标题：%1$s</string>
+    <string name="phone_calendar_notes_line">备注：%1$s</string>
+    <string name="phone_calendar_all_day">%1$s，全天</string>
+    <string name="phone_calendar_days_all_day">%1$s 至 %2$s，全天</string>
+    <string name="phone_calendar_day_hours">%1$s %2$s–%3$s</string>
+    <string name="phone_calendar_range">%1$s 至 %2$s</string>
+    <string name="phone_calendar_day_time">%1$s %2$s</string>
+    <string name="phone_calendar_day_pattern">M月d日 EEE</string>
+    <string name="phone_calendar_day_year_pattern">yyyy年M月d日 EEE</string>
+
+    <string name="phone_place_title">智能体想监测一个地点</string>
+    <string name="phone_place_remove_title">智能体想停止监测一个地点</string>
+    <string name="phone_place_remove_arrive">停止监测 %1$s？你到达那里时将不再发送任何内容。</string>
+    <string name="phone_place_remove_leave">停止监测 %1$s？你离开那里时将不再发送任何内容。</string>
+    <string name="phone_place_here">手机当前所在位置，%1$s</string>
+    <string name="phone_place_chat">\"%1$s\"</string>
+    <string name="phone_place_this_chat">此对话</string>
+    <string name="phone_place_add_arrive">当你到达 %1$s（%2$s，%3$d 米）时，Kyllene 会以你的身份把这段内容发送到 %4$s：%5$s</string>
+    <string name="phone_place_add_leave">当你离开 %1$s（%2$s，%3$d 米）时，Kyllene 会以你的身份把这段内容发送到 %4$s：%5$s</string>
+    <string name="phone_place_arrived">已到达 %1$s</string>
+    <string name="phone_place_left">已离开 %1$s</string>
+    <string name="phone_place_the_chat">对话</string>
+    <string name="phone_place_sent">已发送到 %1$s：%2$s</string>
+    <string name="phone_place_not_sent">无法发送到 %1$s：%2$s。打开 Kyllene 自己发送。</string>
+    <string name="phone_place_no_answer">网关没有及时响应</string>
+    <string name="phone_place_other_gateway">Kyllene 现在登录的是另一个网关</string>
+    <string name="phone_place_not_accepted">未被接受</string>
+    <string name="phone_place_no_reach">Kyllene 无法连接到网关</string>
+    <string name="phone_place_refused">网关拒绝了它</string>
+</resources>

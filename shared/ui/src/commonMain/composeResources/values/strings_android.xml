@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Words only the phone draws: shared/ui's androidMain (media on an agent's screen, attachments, widgets, saving,
+    the plugin page, the wallpaper, what a phone tool still needs). Keys start with android_.
+-->
+<resources>
+    <!-- Media on a screen the agent shows -->
+    <string name="android_media_picture_not_shown">Picture not shown</string>
+    <string name="android_media_picture_failed">Picture didn’t load</string>
+    <string name="android_media_audio_not_played">Audio not played</string>
+    <string name="android_media_video_not_shown">Video not shown</string>
+    <string name="android_media_audio_failed">Audio didn’t load</string>
+    <string name="android_media_video_failed">Video didn’t load</string>
+    <string name="android_screen_closed">The agent closed this screen.</string>
+    <string name="android_screen_part_failed">Couldn’t draw this part</string>
+
+    <!-- Attachments: picked, taken or shared from another app -->
+    <string name="android_attach_photo_failed">Couldn’t read the photo.</string>
+    <string name="android_attach_no_camera">No camera app is available.</string>
+    <string name="android_attach_not_allowed">The app that shared it didn’t let Kyllene read the file.</string>
+    <string name="android_attach_read_failed">Couldn’t read a file.</string>
+    <!-- %1$s: the file's name -->
+    <string name="android_attach_photo_too_large">%1$s is larger than 50 MB.</string>
+    <string name="android_attach_file_too_large">%1$s is larger than %2$d MB.</string>
+    <string name="android_attach_unreadable">Couldn’t read %1$s.</string>
+    <string name="android_attach_not_image">Couldn’t read %1$s as an image.</string>
+    <string name="android_attach_too_much">That’s more than 50 MB of attachments at once.</string>
+
+    <!-- Widgets in a reply -->
+    <string name="android_widget_update_webview">Update Android System WebView to run this widget.</string>
+    <string name="android_widget_failed">Couldn’t display this widget.</string>
+
+    <!-- Saving a file or picture -->
+    <string name="android_save_needs_android_10">Saving needs Android 10. Use Share instead.</string>
+    <!-- %1$s: the file's name -->
+    <string name="android_save_failed">Couldn’t save %1$s.</string>
+    <!-- %1$s: the folder, such as Pictures/Kyllene -->
+    <string name="android_saved_to">Saved to %1$s</string>
+
+    <!-- A plugin's page -->
+    <string name="android_plugin_close">Close the page</string>
+    <string name="android_plugin_failed">Couldn’t open the page.</string>
+    <string name="android_plugin_retry">Try again</string>
+
+    <!-- The chat wallpaper -->
+    <string name="android_wallpaper_too_large">That photo is too large or can’t be read.</string>
+    <string name="android_wallpaper_not_image">That file isn’t an image Kyllene can read.</string>
+    <string name="android_wallpaper_failed">Couldn’t read that photo.</string>
+
+    <!-- What a phone tool still needs from Android, under its switch -->
+    <string name="android_access_notifications">Turn on Kyllene’s notifications: changes are asked there.</string>
+    <string name="android_access_dnd">Allow Kyllene to change Do Not Disturb.</string>
+    <string name="android_access_usage">Give Kyllene Usage access, to see which apps you use.</string>
+    <string name="android_access_location">Allow Kyllene to use this phone’s location.</string>
+    <string name="android_access_precise">Allow precise location: Android only watches places with it.</string>
+    <!-- “Allow all the time” is Android's own button: use the words Android shows in this language. -->
+    <string name="android_access_background">Allow location all the time: places are watched while Kyllene is closed. Choose “Allow all the time”.</string>
+    <string name="android_access_calendar">Allow Kyllene to use your calendar.</string>
+    <string name="android_access_contacts">Allow Kyllene to read your contacts.</string>
+    <string name="android_access_health_update">Update Health Connect, where the data comes from.</string>
+    <string name="android_access_health_install">Install Health Connect, where the data comes from.</string>
+    <string name="android_access_health_none">This phone has no Health Connect.</string>
+    <string name="android_access_health_read">Allow Kyllene to read steps, sleep or heart rate in Health Connect.</string>
+    <string name="android_access_closed_optional">Also while Kyllene is closed (optional)</string>
+    <string name="android_access_health_more_optional">Also steps, sleep or heart rate (optional)</string>
+    <string name="android_access_call_notifications">Turn on Kyllene’s notifications: the call rings there.</string>
+    <string name="android_access_full_screen">Allow full-screen notifications, so the call shows over the lock screen.</string>
+</resources>

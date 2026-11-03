@@ -30,7 +30,7 @@ import kotlinx.coroutines.launch
 data class Listening(
     val recording: Boolean = false,
     val level: Float = 0f,
-    val error: String? = null,
+    val error: WatchLine? = null,
     val waiting: Boolean = false,
 )
 
@@ -191,10 +191,10 @@ class MainActivity : ComponentActivity() {
             callGeneration = app.link.profileReset.value
             val target = try { app.link.resolveDefaultCall() } catch (e: CancellationException) {
                 if (e !is kotlinx.coroutines.TimeoutCancellationException) throw e
-                listening.value = Listening(error = "Kyllene on your phone didn't answer. Try again.")
+                listening.value = Listening(error = WatchLine.Res(R.string.wear_phone_no_answer))
                 return@launch
             }
-            if (target.error != null) { listening.value = Listening(error = target.error); return@launch }
+            target.error?.let { listening.value = Listening(error = WatchLine.Raw(it)); return@launch }
             listening.value = Listening()
             inputGeneration = app.link.profileReset.value
             // No live voice there: the tile still talks to the target, one spoken ask at a time.
@@ -254,7 +254,7 @@ class MainActivity : ComponentActivity() {
         // The watch's speech recognizer, straight to listening: talking is what the mic is for.
         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
             .putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-            .putExtra(RecognizerIntent.EXTRA_PROMPT, "Ask Hermes")
+            .putExtra(RecognizerIntent.EXTRA_PROMPT, getString(R.string.wear_ask_hermes))
         if (intent.resolveActivity(packageManager) != null) {
             try {
                 recognitionGeneration = app.link.profileReset.value
@@ -290,7 +290,7 @@ class MainActivity : ComponentActivity() {
         private const val EXTRA_ANSWER_CALL = "call"
         private const val EXTRA_DEBUG_ASK = "ask"
         private const val PHONE_CHECK_MS = 30_000L
-        private const val NEEDS_MICROPHONE = "Kyllene needs the microphone to hear you."
+        private val NEEDS_MICROPHONE = WatchLine.Res(R.string.wear_needs_microphone)
 
         /** For a PendingIntent, which starts it in its own task (it's singleTask) and to its onNewIntent when open. */
         fun callIntent(context: Context): Intent = Intent(context, MainActivity::class.java).putExtra(EXTRA_CALL, true)

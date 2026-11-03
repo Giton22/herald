@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="android_media_picture_not_shown">Imagen no mostrada</string>
+    <string name="android_media_picture_failed">La imagen no se cargó</string>
+    <string name="android_media_audio_not_played">Audio no reproducido</string>
+    <string name="android_media_video_not_shown">Vídeo no mostrado</string>
+    <string name="android_media_audio_failed">El audio no se cargó</string>
+    <string name="android_media_video_failed">El vídeo no se cargó</string>
+    <string name="android_screen_closed">El agente cerró esta pantalla.</string>
+    <string name="android_screen_part_failed">No se pudo mostrar esta parte</string>
+
+    <string name="android_attach_photo_failed">No se pudo leer la foto.</string>
+    <string name="android_attach_no_camera">No hay ninguna app de cámara disponible.</string>
+    <string name="android_attach_not_allowed">La app que lo compartió no dejó que Kyllene leyera el archivo.</string>
+    <string name="android_attach_read_failed">No se pudo leer un archivo.</string>
+    <string name="android_attach_photo_too_large">%1$s ocupa más de 50 MB.</string>
+    <string name="android_attach_file_too_large">%1$s ocupa más de %2$d MB.</string>
+    <string name="android_attach_unreadable">No se pudo leer %1$s.</string>
+    <string name="android_attach_not_image">No se pudo leer %1$s como imagen.</string>
+    <string name="android_attach_too_much">Son más de 50 MB de adjuntos a la vez.</string>
+
+    <string name="android_widget_update_webview">Actualiza Android System WebView para ejecutar este widget.</string>
+    <string name="android_widget_failed">No se pudo mostrar este widget.</string>
+
+    <string name="android_save_needs_android_10">Guardar requiere Android 10. Usa Compartir en su lugar.</string>
+    <string name="android_save_failed">No se pudo guardar %1$s.</string>
+    <string name="android_saved_to">Guardado en %1$s</string>
+
+    <string name="android_plugin_close">Cerrar la página</string>
+    <string name="android_plugin_failed">No se pudo abrir la página.</string>
+    <string name="android_plugin_retry">Reintentar</string>
+
+    <string name="android_wallpaper_too_large">Esa foto es demasiado grande o no se puede leer.</string>
+    <string name="android_wallpaper_not_image">Ese archivo no es una imagen que Kyllene pueda leer.</string>
+    <string name="android_wallpaper_failed">No se pudo leer esa foto.</string>
+
+    <string name="android_access_notifications">Activa las notificaciones de Kyllene: los cambios se preguntan ahí.</string>
+    <string name="android_access_dnd">Permite que Kyllene cambie No molestar.</string>
+    <string name="android_access_usage">Da a Kyllene acceso a los datos de uso, para ver qué apps usas.</string>
+    <string name="android_access_location">Permite que Kyllene use la ubicación de este teléfono.</string>
+    <string name="android_access_precise">Permite la ubicación precisa: Android solo vigila lugares con ella.</string>
+    <string name="android_access_background">Permite la ubicación todo el tiempo: los lugares se vigilan aunque Kyllene esté cerrada. Elige «Permitir todo el tiempo».</string>
+    <string name="android_access_calendar">Permite que Kyllene use tu calendario.</string>
+    <string name="android_access_contacts">Permite que Kyllene lea tus contactos.</string>
+    <string name="android_access_health_update">Actualiza Health Connect, de donde vienen los datos.</string>
+    <string name="android_access_health_install">Instala Health Connect, de donde vienen los datos.</string>
+    <string name="android_access_health_none">Este teléfono no tiene Health Connect.</string>
+    <string name="android_access_health_read">Permite que Kyllene lea pasos, sueño o frecuencia cardíaca en Health Connect.</string>
+    <string name="android_access_closed_optional">También con Kyllene cerrada (opcional)</string>
+    <string name="android_access_health_more_optional">También pasos, sueño o frecuencia cardíaca (opcional)</string>
+    <string name="android_access_call_notifications">Activa las notificaciones de Kyllene: la llamada suena ahí.</string>
+    <string name="android_access_full_screen">Permite las notificaciones a pantalla completa, para que la llamada aparezca sobre la pantalla de bloqueo.</string>
+</resources>

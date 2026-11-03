@@ -52,11 +52,11 @@ class WatchTextTest {
         val now = 1_000_000_000_000L
         val seconds = now / 1000.0
         assertNull(ago(null, now))
-        assertEquals("now", ago(seconds - 30, now))
-        assertEquals("5m", ago(seconds - 5 * 60, now))
-        assertEquals("3h", ago(seconds - 3 * 3600, now))
-        assertEquals("2d", ago(seconds - 2 * 86_400, now))
-        assertEquals("3w", ago(seconds - 21 * 86_400, now))
+        assertEquals(WatchLine.Res(R.string.wear_ago_now), ago(seconds - 30, now))
+        assertEquals(WatchLine.Res(R.string.wear_ago_minutes, listOf(5L)), ago(seconds - 5 * 60, now))
+        assertEquals(WatchLine.Res(R.string.wear_ago_hours, listOf(3L)), ago(seconds - 3 * 3600, now))
+        assertEquals(WatchLine.Res(R.string.wear_ago_days, listOf(2L)), ago(seconds - 2 * 86_400, now))
+        assertEquals(WatchLine.Res(R.string.wear_ago_weeks, listOf(3L)), ago(seconds - 21 * 86_400, now))
     }
 
     @Test
@@ -67,10 +67,11 @@ class WatchTextTest {
 
     @Test
     fun theActivityLineFallsBackToThePhase() {
-        assertEquals("Running a command", activityLine(ReplyPhase.Working, "Running a command"))
-        assertEquals("Thinking…", activityLine(ReplyPhase.Working, null))
-        assertEquals("Writing it down…", activityLine(ReplyPhase.Transcribing, null))
-        assertEquals("Waiting for you on your phone", activityLine(ReplyPhase.WaitingOnPhone, null))
+        assertEquals(WatchLine.Raw("Running a command"), activityLine(ReplyPhase.Working, "Running a command"))
+        assertEquals(WatchLine.Res(R.string.wear_thinking), activityLine(ReplyPhase.Working, null))
+        assertEquals(WatchLine.Res(R.string.wear_transcribing), activityLine(ReplyPhase.Transcribing, null))
+        assertEquals(WatchLine.Res(R.string.wear_waiting_on_phone), activityLine(ReplyPhase.WaitingOnPhone, null))
+        assertEquals(WatchLine.Res(R.string.wear_sending), activityLine(ReplyPhase.Sending, null))
     }
 
     @Test
@@ -89,15 +90,25 @@ class WatchTextTest {
     @Test
     fun aCallSaysWhereItStands() {
         val live = WatchCallState("c1", CallStage.Live)
-        assertEquals("Live", callCaption(live))
+        assertEquals(WatchLine.Res(R.string.wear_call_live), callCaption(live))
         assertEquals(OrbMood.Listening, callMood(live))
-        assertEquals("Muted", callCaption(live.copy(muted = true)))
-        assertEquals("Hermes: terminal", callCaption(live.copy(thinking = true, working = "terminal")))
+        assertEquals(WatchLine.Res(R.string.wear_call_muted), callCaption(live.copy(muted = true)))
+        assertEquals(WatchLine.Res(R.string.wear_call_working, listOf("terminal")), callCaption(live.copy(thinking = true, working = "terminal")))
+        assertEquals(WatchLine.Res(R.string.wear_call_thinking), callCaption(live.copy(thinking = true)))
         assertEquals(OrbMood.Working, callMood(live.copy(thinking = true)))
         assertEquals(OrbMood.Speaking, callMood(live.copy(speaking = true)))
-        assertEquals("Call ended", callCaption(live.copy(stage = CallStage.Ended)))
-        assertEquals(OrbMood.Failed, callMood(live.copy(stage = CallStage.Ended, error = "The call dropped.")))
-        assertEquals("Connecting…", callCaption(WatchCallState("c2", CallStage.Connecting)))
+        assertEquals(WatchLine.Res(R.string.wear_call_ended), callCaption(live.copy(stage = CallStage.Ended)))
+        // How it ended, when it says, is shown as it came.
+        assertEquals(WatchLine.Raw("dropped"), callCaption(live.copy(stage = CallStage.Ended, error = "dropped")))
+        assertEquals(OrbMood.Failed, callMood(live.copy(stage = CallStage.Ended, error = "dropped")))
+        assertEquals(WatchLine.Res(R.string.wear_call_connecting), callCaption(WatchCallState("c2", CallStage.Connecting)))
+    }
+
+    @Test
+    fun aRingSaysWhyNeverWhat() {
+        assertEquals(R.string.wear_ring_agent, ringReason(approval = true, agent = true))
+        assertEquals(R.string.wear_ring_approval, ringReason(approval = true))
+        assertEquals(R.string.wear_ring_question, ringReason(approval = false))
     }
 
     @Test
