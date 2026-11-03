@@ -27,6 +27,8 @@ import dev.hermeskotlin.designsystem.R
 import java.io.ByteArrayInputStream
 import kotlin.io.encoding.Base64
 import kotlin.math.hypot
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /** Untrusted widget HTML gets no gateway origin, cookies, storage, native bridge or network. */
 @Composable
@@ -35,13 +37,15 @@ internal actual fun WidgetWebView(html: String, theme: WidgetTheme, name: String
     val failure = rememberUpdatedState(onFailure)
     val supported = remember { supportsWidgetIsolation(WebView.getCurrentWebViewPackage()?.versionName) }
     if (!supported) {
-        LaunchedEffect(Unit) { failure.value("Update Android System WebView to run this widget.") }
+        val update = stringResource(Res.string.android_widget_update_webview)
+        LaunchedEffect(Unit) { failure.value(update) }
         return
     }
+    val failed = rememberUpdatedState(stringResource(Res.string.android_widget_failed))
     val font = remember { widgetFont(context) }
     val document = remember(html, theme, font) { widgetDocument(html, theme, font) }
     val currentDocument = rememberUpdatedState(document)
-    val view = remember { createWidgetWebView(context, name, { currentDocument.value }) { failure.value("Couldn't display this widget.") } }
+    val view = remember { createWidgetWebView(context, name, { currentDocument.value }) { failure.value(failed.value) } }
     DisposableEffect(view) {
         onDispose { view.stopLoading(); view.destroy() }
     }

@@ -9,6 +9,8 @@ import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import androidx.annotation.PluralsRes
+import androidx.annotation.StringRes
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
@@ -58,16 +60,23 @@ class PhoneConfirmations(private val context: Context) {
     /**
      * The channel questions go on. It gets through Do Not Disturb (priority only) once Herald may manage Do Not
      * Disturb, which the Sound tool needs anyway: else the agent could never ask to turn it off. Created again
-     * before each question, since that access can come after the channel was first made.
+     * before each question, since that access can come after the channel was first made, and when the language
+     * changes, so it takes the new name.
      */
-    private fun createChannel() {
+    fun createChannel() {
         system?.createNotificationChannel(
-            NotificationChannel(CHANNEL, "Phone tools", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "When the agent wants to change something on this phone"
+            NotificationChannel(CHANNEL, text(R.string.channel_phone_tools_name), NotificationManager.IMPORTANCE_HIGH).apply {
+                description = text(R.string.channel_phone_tools_description)
                 if (system.isNotificationPolicyAccessGranted) setBypassDnd(true)
             },
         )
     }
+
+    /** One of the app's lines in the user's language, for a question or what a tool tells. */
+    fun text(@StringRes id: Int, vararg args: Any): String = context.getString(id, *args)
+
+    /** A line with a count in it, such as how many guests are told. */
+    fun count(@PluralsRes id: Int, count: Int): String = context.resources.getQuantityString(id, count, count)
 
     /** Why a question can't reach the user now, or null when it can. */
     private fun cantAsk(): String? {
@@ -85,12 +94,13 @@ class PhoneConfirmations(private val context: Context) {
     }
 
     /**
-     * Shows [what] (a sentence: "Set an alarm for 7:00") and waits. Runs [action] on the tap of Allow, from an
-     * activity; throws [PhoneToolException] when the user denies, doesn't answer before the agent stops waiting,
-     * or can't be asked. Asked in Herald while it's open ([inApp]), else in a notification; one that's answered
-     * either way, and the notification comes and goes as the user leaves Herald and comes back.
+     * Shows [what] (a sentence: "Set an alarm for 7:00") under the title [titleId] and waits. Runs [action] on the
+     * tap of Allow, from an activity; throws [PhoneToolException] when the user denies, doesn't answer before the
+     * agent stops waiting, or can't be asked. Asked in Herald while it's open ([inApp]), else in a notification; one
+     * that's answered either way, and the notification comes and goes as the user leaves Herald and comes back.
      */
-    suspend fun confirm(what: String, title: String = CHANGE, action: (Activity) -> Unit) {
+    suspend fun confirm(what: String, @StringRes titleId: Int = R.string.phone_question_change, action: (Activity) -> Unit) {
+        val title = text(titleId)
         val key = "c" + ids.incrementAndGet()
         val pending = Pending(action, CompletableDeferred())
         waiting[key] = pending
@@ -180,8 +190,8 @@ class PhoneConfirmations(private val context: Context) {
             .setCategory(NotificationCompat.CATEGORY_REMINDER)
             .setDeleteIntent(deny)
             .setTimeoutAfter(ANSWER_MS)
-            .addAction(0, "Deny", deny)
-            .addAction(0, "Allow", allow)
+            .addAction(0, text(R.string.phone_deny), deny)
+            .addAction(0, text(R.string.phone_allow), allow)
             .build()
         return runCatching { manager.notify(TAG, id, notification) }.isSuccess
     }
@@ -190,9 +200,6 @@ class PhoneConfirmations(private val context: Context) {
         private const val CHANNEL = "phone_tools"
         private const val TAG = "phone_tool"
         private const val NOTE_TAG = "phone_tool_note"
-
-        /** The question's title for a change to the phone's own settings. */
-        const val CHANGE = "The agent wants to change your phone"
         internal const val EXTRA_KEY = "phone_tool_key"
         internal const val EXTRA_ID = "phone_tool_id"
 

@@ -113,10 +113,11 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.PlatformBackHandler
 import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.components.ListSkeleton
-import dev.hermeskotlin.ui.components.relativeTime
-import dev.hermeskotlin.ui.components.timeUntil
 import kotlinx.coroutines.delay
 import org.koin.compose.viewmodel.koinViewModel
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The sidebar's Scheduled page: the gateway's cron jobs, and inside a job its runs. A run is a chat,
@@ -212,16 +213,16 @@ internal fun ScheduledPage(
                 },
             )
         }
-        state.message?.let { MessageBanner(it, onDismiss = viewModel::dismissMessage, modifier = Modifier.padding(bottom = PageFoot)) }
+        state.message?.let { MessageBanner(it.text(), onDismiss = viewModel::dismissMessage, modifier = Modifier.padding(bottom = PageFoot)) }
     }
     Dialog(
         visible = leaving != null,
         onDismissRequest = { leaving = null },
-        title = "Discard changes?",
-        message = "What you changed in this ${if (owner != null) "routine" else "job"} isn't saved yet.",
+        title = stringResource(Res.string.sessions_discard_changes_title),
+        message = stringResource(if (owner != null) Res.string.sessions_discard_routine_detail else Res.string.sessions_discard_job_detail),
         actions = {
-            Button("Keep editing", onClick = { leaving = null }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Discard", onClick = {
+            Button(stringResource(Res.string.sessions_keep_editing), onClick = { leaving = null }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(stringResource(Res.string.sessions_discard), onClick = {
                 val then = leaving
                 leaving = null
                 viewModel.closeEditor()
@@ -262,7 +263,6 @@ internal fun ScheduledView(
 ) {
     val job = state.openJob
     val routines = owner != null
-    val noun = if (routines) "routine" else "job"
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // A desktop page wide enough for both lists the jobs on the left and the open one on the right, as a
         // desktop mail or task app does, so a job is a click away from the next one without a trip back. With no
@@ -281,7 +281,11 @@ internal fun ScheduledView(
                         if (editorPane != null) {
                             editorPane()
                         } else if (job == null) {
-                            EmptyState(Lucide.CalendarClock, "Pick a $noun", "Its prompt, where it reports and its runs show here.")
+                            EmptyState(
+                                Lucide.CalendarClock,
+                                stringResource(if (routines) Res.string.sessions_pick_routine else Res.string.sessions_pick_job),
+                                stringResource(Res.string.sessions_pick_job_detail),
+                            )
                         } else {
                             Column(Modifier.fillMaxSize()) {
                                 // The pane's own head: the job, how it stands, and Edit and Delete beside it.
@@ -303,7 +307,7 @@ internal fun ScheduledView(
                                             Text(it, style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary], maxLines = 1)
                                         }
                                     }
-                                    JobActions(noun, state.busy, actions)
+                                    JobActions(routines, state.busy, actions)
                                 }
                                 // Each job's runs scroll from their own top.
                                 key(job.id) {
@@ -324,7 +328,7 @@ internal fun ScheduledView(
         } else {
             Column(Modifier.fillMaxSize()) {
                 SubpageHeader(job.displayName, onBack = actions::closeJob, subtitle = job.statusLine().ifEmpty { null }) {
-                    JobActions(noun, state.busy, actions)
+                    JobActions(routines, state.busy, actions)
                 }
                 JobDetail(job, state, actions, owner, selectedId, onOpenRun, onPopOutRun, Modifier.weight(1f).fillMaxWidth())
             }
@@ -334,11 +338,11 @@ internal fun ScheduledView(
     Dialog(
         visible = state.confirmingDelete,
         onDismissRequest = actions::cancelDelete,
-        title = if (routines) "Delete routine?" else "Delete job?",
-        message = "“${job?.displayName.orEmpty()}” stops running. The chats from its past runs stay.",
+        title = stringResource(if (routines) Res.string.sessions_delete_routine_title else Res.string.sessions_delete_job_title),
+        message = stringResource(Res.string.sessions_delete_job_detail, job?.displayName.orEmpty()),
         actions = {
-            Button("Cancel", onClick = actions::cancelDelete, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Delete", onClick = actions::deleteJob, variant = ButtonVariant.Danger, size = ButtonSize.Small)
+            Button(stringResource(Res.string.common_cancel), onClick = actions::cancelDelete, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(stringResource(Res.string.sessions_delete), onClick = actions::deleteJob, variant = ButtonVariant.Danger, size = ButtonSize.Small)
         },
     )
 }
@@ -353,16 +357,16 @@ private val SPLIT_LIST_WIDTH = 320.dp
 private fun JobsHeader(state: ScheduledUiState, actions: ScheduledActions, owner: RoutineOwner?, onBack: () -> Unit, leaveEditor: (() -> Unit) -> Unit) {
     val count = state.jobs.size
     SubpageHeader(
-        owner?.let { "${it.label}'s routines" } ?: "Scheduled",
+        owner?.let { stringResource(Res.string.sessions_bot_routines, it.label) } ?: stringResource(Res.string.sessions_nav_scheduled),
         onBack = onBack,
         subtitle = when {
             state.loading || state.error != null || count == 0 -> null
-            owner != null -> "$count ${if (count == 1) "routine" else "routines"} · each runs as ${owner.label}"
-            else -> "$count ${if (count == 1) "job" else "jobs"} · each run opens as a chat"
+            owner != null -> pluralStringResource(Res.plurals.sessions_routines_count, count, count, owner.label)
+            else -> pluralStringResource(Res.plurals.sessions_jobs_count, count, count)
         },
     ) {
         Button(
-            if (owner != null) "New routine" else "New job",
+            stringResource(if (owner != null) Res.string.sessions_new_routine else Res.string.sessions_new_job),
             onClick = { leaveEditor(actions::newJob) },
             size = ButtonSize.Small,
             leadingIcon = Lucide.Plus,
@@ -372,9 +376,15 @@ private fun JobsHeader(state: ScheduledUiState, actions: ScheduledActions, owner
 }
 
 @Composable
-private fun JobActions(noun: String, busy: Boolean, actions: ScheduledActions) {
-    IconButton(Lucide.Pencil, contentDescription = "Edit $noun", onClick = actions::editJob, enabled = !busy, tint = Theme[colors][textSecondary])
-    IconButton(Lucide.Trash2, contentDescription = "Delete $noun", onClick = actions::askDelete, enabled = !busy, tint = Theme[colors][textSecondary])
+private fun JobActions(routine: Boolean, busy: Boolean, actions: ScheduledActions) {
+    IconButton(
+        Lucide.Pencil,
+        contentDescription = stringResource(if (routine) Res.string.sessions_edit_routine else Res.string.sessions_edit_job),
+        onClick = actions::editJob,
+        enabled = !busy,
+        tint = Theme[colors][textSecondary],
+    )
+    IconButton(Lucide.Trash2, contentDescription = stringResource(if (routine) Res.string.sessions_delete_routine else Res.string.sessions_delete_job), onClick = actions::askDelete, enabled = !busy, tint = Theme[colors][textSecondary])
 }
 
 /** The jobs, or why there are none; [openId] marks the one open beside the list on the desktop. */
@@ -391,24 +401,37 @@ private fun JobsList(
     val routines = owner != null
     when {
         state.loading -> ListSkeleton()
-        state.error != null -> EmptyState(Lucide.CloudOff, if (routines) "Couldn't load routines" else "Couldn't load scheduled jobs", state.error, error = true) {
-            Button("Try again", onClick = actions::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+        state.error != null -> EmptyState(
+            Lucide.CloudOff,
+            stringResource(if (routines) Res.string.sessions_routines_load_failed else Res.string.sessions_jobs_load_failed),
+            state.error,
+            error = true,
+        ) {
+            Button(stringResource(Res.string.sessions_try_again), onClick = actions::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
         }
         state.jobs.isEmpty() && owner != null ->
             EmptyState(
                 Lucide.CalendarClock,
-                "No routines yet",
-                "Have ${owner.label} do something on a schedule, like a morning briefing. It runs as ${owner.label}, " +
-                    "with its own memory and skills, and can report to its chat.",
+                stringResource(Res.string.sessions_no_routines),
+                stringResource(Res.string.sessions_no_routines_detail, owner.label),
             ) {
-                Button("New routine", onClick = actions::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
+                Button(stringResource(Res.string.sessions_new_routine), onClick = actions::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
             }
         state.jobs.isEmpty() ->
-            EmptyState(Lucide.CalendarClock, "No scheduled jobs", "Have the agent do something on a schedule, like a morning briefing. Each run opens as a chat here.") {
-                Button("New job", onClick = actions::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
+            EmptyState(Lucide.CalendarClock, stringResource(Res.string.sessions_no_jobs), stringResource(Res.string.sessions_no_jobs_detail)) {
+                Button(stringResource(Res.string.sessions_new_job), onClick = actions::newJob, variant = ButtonVariant.Secondary, leadingIcon = Lucide.Plus)
             }
         else -> {
             val list = rememberLazyListState()
+            // The right-click menu's words, read here: the menu is built outside composition.
+            val menuWords = JobMenuWords(
+                open = stringResource(Res.string.sessions_open),
+                runNow = stringResource(Res.string.sessions_run_now),
+                resume = stringResource(Res.string.sessions_resume),
+                pause = stringResource(Res.string.sessions_pause),
+                edit = stringResource(Res.string.sessions_edit),
+                delete = stringResource(Res.string.sessions_delete),
+            )
             ScrollbarBox(list, Modifier.fillMaxSize(), bottomInset = PageFoot) {
                 LazyColumn(
                     Modifier.fillMaxSize().arrowFocus(),
@@ -429,15 +452,16 @@ private fun JobsList(
                         }
                         val open = { openThen {} }
                         // While a change is on its way, only Open, as the job page's own buttons wait too.
+                        val words = menuWords
                         JobRow(item, selected = item.id == openId, onClick = open, menu = {
-                            val opening = listOf(RowMenuItem("Open", Lucide.CalendarClock, run = open))
+                            val opening = listOf(RowMenuItem(words.open, Lucide.CalendarClock, run = open))
                             if (state.busy) opening else opening + listOf(
-                                RowMenuItem("Run now", Lucide.Zap) { openThen(actions::runNow) },
-                                RowMenuItem(if (item.paused) "Resume" else "Pause", if (item.paused) Lucide.Play else Lucide.Pause) {
+                                RowMenuItem(words.runNow, Lucide.Zap) { openThen(actions::runNow) },
+                                RowMenuItem(if (item.paused) words.resume else words.pause, if (item.paused) Lucide.Play else Lucide.Pause) {
                                     openThen(actions::togglePaused)
                                 },
-                                RowMenuItem("Edit", Lucide.Pencil) { openThen(actions::editJob) },
-                                RowMenuItem("Delete", Lucide.Trash2, destructive = true) { openThen(actions::askDelete) },
+                                RowMenuItem(words.edit, Lucide.Pencil) { openThen(actions::editJob) },
+                                RowMenuItem(words.delete, Lucide.Trash2, destructive = true) { openThen(actions::askDelete) },
                             )
                         })
                     }
@@ -446,6 +470,8 @@ private fun JobsList(
         }
     }
 }
+
+private class JobMenuWords(val open: String, val runNow: String, val resume: String, val pause: String, val edit: String, val delete: String)
 
 /** A job's summary and its runs, each a chat to open. */
 @Composable
@@ -468,28 +494,34 @@ private fun JobDetail(
             contentPadding = PaddingValues(start = start, end = 14.dp, bottom = PageFoot),
         ) {
             item(key = "summary") {
+                val botChat = botChatName(owner?.label ?: Routines.taggedBot(job.name))
                 val deliversTo = job.deliver?.takeIf { it.isNotBlank() }?.let { id ->
-                    deliveryLabel(id, state.deliveryTargets, botLabel = owner?.label ?: Routines.taggedBot(job.name))
+                    deliveryLabel(id, state.deliveryTargets, botChat = botChat, local = stringResource(Res.string.sessions_delivery_local))
                 }
                 JobSummary(job, deliversTo, busy = state.busy, onRunNow = actions::runNow, onTogglePaused = actions::togglePaused)
             }
             item(key = "runs-header") {
+                val runs = stringResource(Res.string.sessions_runs)
                 Text(
-                    "RUNS",
+                    runs.uppercase(),
                     style = Theme[typography][eyebrow],
                     color = Theme[colors][textTertiary],
                     modifier = Modifier.padding(start = 6.dp, top = 20.dp, bottom = 6.dp).semantics {
                         heading()
-                        contentDescription = "Runs"
+                        contentDescription = runs
                     },
                 )
             }
             when {
                 state.runsLoading -> item(key = "runs-loading") { ListSpinner() }
                 state.runsError != null -> item(key = "runs-error") {
-                    ListNotice("Couldn't load runs. ${state.runsError}", action = "Try again", onAction = actions::refresh)
+                    ListNotice(
+                        stringResource(Res.string.sessions_runs_load_failed, state.runsError.orEmpty()),
+                        action = stringResource(Res.string.sessions_try_again),
+                        onAction = actions::refresh,
+                    )
                 }
-                state.runs.isEmpty() -> item(key = "runs-empty") { ListNotice("No runs yet. Each run opens as a chat here.") }
+                state.runs.isEmpty() -> item(key = "runs-empty") { ListNotice(stringResource(Res.string.sessions_no_runs)) }
                 else -> items(state.runs, key = { it.id }) { run ->
                     RunRow(run, selected = run.id == selectedId, onOpen = { onOpenRun(run) }, onPopOut = onPopOutRun?.let { { it(run) } })
                 }
@@ -540,7 +572,7 @@ private fun JobRow(job: CronJob, selected: Boolean = false, onClick: () -> Unit,
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(job.displayName, style = Theme[typography][body].copy(fontWeight = FontWeight.Medium), color = Theme[colors][text], maxLines = 1, overflow = TextOverflow.Ellipsis)
             job.scheduleDisplay.takeIf { it.isNotBlank() && it != "?" }?.let {
-                Text(readableSchedule(it), style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(readableScheduleText(it), style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
         if (next != null) {
@@ -553,26 +585,37 @@ private fun JobRow(job: CronJob, selected: Boolean = false, onClick: () -> Unit,
 }
 
 /** "21h" over "next run", "failed" or "missed" over "last run", or "paused" (over "last run failed" when it did). */
-private fun CronJob.nextColumn(): Pair<String?, String?> = when {
-    paused -> "paused" to ("last run failed".takeIf { problem != null })
-    state == "completed" -> "done" to ("last run failed".takeIf { problem != null })
-    // The runner never got the fire, so nothing ran to fail.
-    missedLastFire -> "missed" to "last run"
-    problem != null -> "failed" to "last run"
-    else -> when (val until = timeUntil(nextRunEpochSeconds)) {
-        "" -> null to null
-        "now" -> "now" to "next run"
-        else -> until to "next run"
+@Composable
+private fun CronJob.nextColumn(): Pair<String?, String?> {
+    val lastRunFailed = stringResource(Res.string.sessions_job_last_run_failed).takeIf { problem != null }
+    return when {
+        paused -> stringResource(Res.string.sessions_job_paused) to lastRunFailed
+        state == "completed" -> stringResource(Res.string.sessions_job_done) to lastRunFailed
+        // The runner never got the fire, so nothing ran to fail.
+        missedLastFire -> stringResource(Res.string.sessions_job_missed) to stringResource(Res.string.sessions_job_last_run)
+        problem != null -> stringResource(Res.string.sessions_job_failed) to stringResource(Res.string.sessions_job_last_run)
+        else -> when (val until = untilOf(nextRunEpochSeconds)) {
+            null -> null to null
+            else -> shortUntil(until) to stringResource(Res.string.sessions_job_next_run)
+        }
     }
 }
 
+/** What a bot's chat is called as a place runs go: "Ops's chat", or "the bot's chat" without a name. */
+@Composable
+internal fun botChatName(botLabel: String?): String =
+    botLabel?.let { stringResource(Res.string.sessions_delivery_bot_chat, it) } ?: stringResource(Res.string.sessions_delivery_the_bot_chat)
+
 /**
- * Where runs go, said for people: the target's own name, a bot's chat, or the platform and the chat's id
- * for one chat the target list doesn't name.
+ * Where runs go, said for people: the target's own name, a bot's chat ([botChat]), saving only ([local]), or
+ * the platform and the chat's id for one chat the target list doesn't name.
  */
-internal fun deliveryLabel(id: String, targets: List<DeliveryTarget>, botLabel: String?): String {
-    targets.firstOrNull { it.id == id }?.name?.takeIf { it != id }?.let { return it }
-    if (id == Routines.BOT_CHAT_DELIVERY) return botLabel?.let { "$it's chat" } ?: "the bot's chat"
+internal fun deliveryLabel(id: String, targets: List<DeliveryTarget>, botChat: String, local: String): String {
+    // The bot's chat and the local fallback are this app's own entries; a name the gateway gives is shown as it is.
+    if (id == Routines.BOT_CHAT_DELIVERY) return botChat
+    val named = targets.firstOrNull { it.id == id }
+    if (named == LOCAL_DELIVERY || named == null && id == LOCAL_DELIVERY.id) return local
+    named?.name?.takeIf { it != id }?.let { return it }
     val platform = id.substringBefore(':', missingDelimiterValue = "")
     return if (platform.isEmpty()) id else "${platform.replaceFirstChar { it.uppercase() }} · ${id.substringAfter(':')}"
 }
@@ -594,13 +637,13 @@ private fun JobSummary(job: CronJob, deliversTo: String?, busy: Boolean, onRunNo
         deliversTo?.let {
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
                 UnstyledIcon(Lucide.Send, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(13.dp))
-                Text("Delivers to $it", style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary])
+                Text(stringResource(Res.string.sessions_delivers_to, it), style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary])
             }
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button("Run now", onClick = onRunNow, variant = ButtonVariant.Inverse, leadingIcon = Lucide.Zap, loading = busy)
+            Button(stringResource(Res.string.sessions_run_now), onClick = onRunNow, variant = ButtonVariant.Inverse, leadingIcon = Lucide.Zap, loading = busy)
             Button(
-                if (job.paused) "Resume" else "Pause",
+                stringResource(if (job.paused) Res.string.sessions_resume else Res.string.sessions_pause),
                 onClick = onTogglePaused,
                 variant = ButtonVariant.Secondary,
                 leadingIcon = if (job.paused) Lucide.Play else Lucide.Pause,
@@ -616,13 +659,16 @@ private fun RunRow(run: SessionSummary, selected: Boolean, onOpen: () -> Unit, o
     val shape = RoundedCornerShape(Theme[radii][radiusMedium])
     var menuOpen by remember { mutableStateOf(false) }
     if (isDesktop) {
+        val openWord = stringResource(Res.string.sessions_open)
+        val windowWord = stringResource(Res.string.sessions_open_in_new_window)
         RowContextMenu(menuOpen, onDismiss = { menuOpen = false }, items = {
             listOfNotNull(
-                RowMenuItem("Open", Lucide.MessageSquare, run = onOpen),
-                onPopOut?.let { RowMenuItem("Open in new window", Lucide.AppWindow, run = it) },
+                RowMenuItem(openWord, Lucide.MessageSquare, run = onOpen),
+                onPopOut?.let { RowMenuItem(windowWord, Lucide.AppWindow, run = it) },
             )
         })
     }
+    val runningWord = stringResource(Res.string.sessions_status_running)
     // A Ctrl-click (⌘ on a Mac) opens the run in a window of its own, as it does a chat in the sidebar, so the
     // page stays where it is.
     val windowInfo = LocalWindowInfo.current
@@ -647,7 +693,7 @@ private fun RunRow(run: SessionSummary, selected: Boolean, onOpen: () -> Unit, o
             Modifier
                 .size(28.dp)
                 .background(Theme[colors][if (run.isActive) accentSoft else surface2], CircleShape)
-                .clearAndSetSemantics { if (run.isActive) contentDescription = "Running" },
+                .clearAndSetSemantics { if (run.isActive) contentDescription = runningWord },
             contentAlignment = Alignment.Center,
         ) {
             if (run.isActive) Spinner(Modifier.size(13.dp), color = Theme[colors][accentText])
@@ -655,7 +701,7 @@ private fun RunRow(run: SessionSummary, selected: Boolean, onOpen: () -> Unit, o
         }
         Column(Modifier.weight(1f)) {
             Text(
-                relativeTime(run.activityAt).let { if (it == "now") "Just now" else "$it ago" },
+                runAge(run.activityAt),
                 style = Theme[typography][body].copy(fontSize = 14.5.sp),
                 color = Theme[colors][text],
             )
@@ -663,40 +709,79 @@ private fun RunRow(run: SessionSummary, selected: Boolean, onOpen: () -> Unit, o
                 Text(it.trim(), style = Theme[typography][bodySmall].copy(fontSize = 12.5.sp), color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
-        if (run.messageCount > 0) Text("${run.messageCount} msgs", style = Theme[typography][code].copy(fontSize = 11.5.sp), color = Theme[colors][textMuted])
+        if (run.messageCount > 0) {
+            Text(
+                pluralStringResource(Res.plurals.sessions_run_messages, run.messageCount, run.messageCount),
+                style = Theme[typography][code].copy(fontSize = 11.5.sp),
+                color = Theme[colors][textMuted],
+            )
+        }
     }
 }
 
+/** When a run was: "Just now", or "5 minutes ago". */
+@Composable
+private fun runAge(activityAt: Double?): String {
+    val age = ageOf(activityAt) ?: return ""
+    return if (age.now) stringResource(Res.string.sessions_just_now_alone) else agoPhrase(age)
+}
+
+@Composable
 private fun CronJob.statusLine(): String = listOfNotNull(
-    scheduleDisplay.takeIf { it.isNotBlank() && it != "?" }?.let(::readableSchedule),
+    scheduleDisplay.takeIf { it.isNotBlank() && it != "?" }?.let { readableScheduleText(it) },
     when {
-        paused -> "paused"
-        state == "completed" -> "finished"
-        else -> when (val until = timeUntil(nextRunEpochSeconds)) {
-            "" -> null
-            "now" -> "due now"
-            else -> "next $until"
+        paused -> stringResource(Res.string.sessions_job_paused)
+        state == "completed" -> stringResource(Res.string.sessions_job_finished)
+        else -> untilOf(nextRunEpochSeconds)?.let { until ->
+            if (until.now) stringResource(Res.string.sessions_job_due_now) else stringResource(Res.string.sessions_job_next, shortUntil(until))
         }
     },
 ).joinToString(" · ")
 
-/**
- * Plain words for the common five-field cron shapes ("0 9 * * *" → "Daily at 09:00"); anything
- * else, and the gateway's own phrasings like "every 30m", pass through.
- */
-internal fun readableSchedule(display: String): String {
+/** The common five-field cron shapes, read: [time] is the 24-hour "09:00". */
+internal sealed interface ReadableSchedule {
+    data class Daily(val time: String) : ReadableSchedule
+    data class Weekdays(val time: String) : ReadableSchedule
+
+    /** Each week on [day], 0 for Sunday to 6 for Saturday. */
+    data class Weekly(val day: Int, val time: String) : ReadableSchedule
+
+    /** Anything else, and the gateway's own phrasings like "every 30m", as they are. */
+    data class AsIs(val display: String) : ReadableSchedule
+}
+
+/** Reads the common five-field cron shapes ("0 9 * * *" → daily at 09:00); anything else passes through. */
+internal fun readableSchedule(display: String): ReadableSchedule {
+    val asIs = ReadableSchedule.AsIs(display)
     val fields = display.trim().split(Regex("\\s+"))
-    if (fields.size != 5) return display
+    if (fields.size != 5) return asIs
     val (minute, hour, dayOfMonth, month, dayOfWeek) = fields
-    val m = minute.toIntOrNull() ?: return display
-    val h = hour.toIntOrNull() ?: return display
-    if (dayOfMonth != "*" || month != "*" || m !in 0..59 || h !in 0..23) return display
+    val m = minute.toIntOrNull() ?: return asIs
+    val h = hour.toIntOrNull() ?: return asIs
+    if (dayOfMonth != "*" || month != "*" || m !in 0..59 || h !in 0..23) return asIs
     val time = "${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}"
     return when (dayOfWeek) {
-        "*" -> "Daily at $time"
-        "1-5" -> "Weekdays at $time"
-        else -> dayOfWeek.toIntOrNull()?.let { WEEKDAYS.getOrNull(it % 7) }?.let { "${it}s at $time" } ?: display
+        "*" -> ReadableSchedule.Daily(time)
+        "1-5" -> ReadableSchedule.Weekdays(time)
+        else -> dayOfWeek.toIntOrNull()?.takeIf { it >= 0 }?.let { ReadableSchedule.Weekly(it % 7, time) } ?: asIs
     }
 }
 
-private val WEEKDAYS = listOf("Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday")
+/** [display] in plain words where it's a common shape: "Daily at 09:00", "Mondays at 07:05". */
+@Composable
+internal fun readableScheduleText(display: String): String = when (val s = readableSchedule(display)) {
+    is ReadableSchedule.Daily -> stringResource(Res.string.sessions_schedule_daily, s.time)
+    is ReadableSchedule.Weekdays -> stringResource(Res.string.sessions_schedule_weekdays, s.time)
+    is ReadableSchedule.Weekly -> stringResource(WEEKLY[s.day], s.time)
+    is ReadableSchedule.AsIs -> s.display
+}
+
+private val WEEKLY = listOf(
+    Res.string.sessions_schedule_sundays,
+    Res.string.sessions_schedule_mondays,
+    Res.string.sessions_schedule_tuesdays,
+    Res.string.sessions_schedule_wednesdays,
+    Res.string.sessions_schedule_thursdays,
+    Res.string.sessions_schedule_fridays,
+    Res.string.sessions_schedule_saturdays,
+)

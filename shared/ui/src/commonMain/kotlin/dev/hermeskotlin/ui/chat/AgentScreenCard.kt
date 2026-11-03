@@ -45,6 +45,9 @@ import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.buildJsonObject
 import kotlinx.serialization.json.contentOrNull
+import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * What the app lends the agent's screens: the screens a `phone_show_ui` call waits on now, and where it's said
@@ -192,9 +195,9 @@ internal fun AgentScreenCard(view: ScreenView, newest: Boolean) {
                 .padding(horizontal = 14.dp, vertical = 12.dp),
         )
         val note = when {
-            live -> "Waiting for your answer"
-            waits && !wasLive -> "Opening…"
-            replies -> "A tap answers in the chat"
+            live -> stringResource(Res.string.chat_screen_waiting)
+            waits && !wasLive -> stringResource(Res.string.chat_screen_opening)
+            replies -> stringResource(if (isDesktop) Res.string.chat_screen_click_answers else Res.string.chat_screen_tap_answers)
             else -> null
         }
         if (note != null) {

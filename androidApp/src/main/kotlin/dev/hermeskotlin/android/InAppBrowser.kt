@@ -30,7 +30,7 @@ class InAppBrowser(private val activity: Activity, private val dark: () -> Boole
         try {
             activity.startActivity(Intent(Intent.ACTION_VIEW, parsed))
         } catch (_: ActivityNotFoundException) {
-            Toast.makeText(activity, "No app on this phone can open that link.", Toast.LENGTH_SHORT).show()
+            Toast.makeText(activity, R.string.link_no_app, Toast.LENGTH_SHORT).show()
         }
     }
 
