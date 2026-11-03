@@ -67,11 +67,14 @@ class SessionVoiceTest {
 
     @Test fun addingAGatewayKeepsTheCall() = sessionEnds(adding = true) {}
 
+    @Test fun theChatReopenedOnAClosedSessionClosesTheCall() = sessionEnds(reopened = true) {}
+
     private fun sessionEnds(
         leavesHome: Boolean = true,
         disposeRoot: Boolean = false,
         relogin: Boolean = false,
         adding: Boolean = false,
+        reopened: Boolean = false,
         leave: (AppViewModel) -> Unit,
     ) = runComposeUiTest {
         val server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0).apply {
@@ -139,6 +142,15 @@ class SessionVoiceTest {
             waitForIdle()
             assertEquals(0, owned.closes.get(), "Changing language must retain the authenticated call")
             assertTrue(checkNotNull(owned.job).isActive)
+            if (reopened) {
+                // The host closed under the chat (as open() does on adding the gateway already open), and the same
+                // chat shown again: the call went with the stopped session.
+                val target = (app.route.value as Route.Chat).target
+                runOnIdle { koin.get<ChatHost>().close(); chat.open(target) }
+                waitUntil(timeoutMillis = 10_000) { owned.closes.get() > 0 && checkNotNull(owned.job).isCompleted }
+                assertEquals(1, owned.closes.get())
+                return@runComposeUiTest
+            }
             if (adding) {
                 // Adding a gateway, up to its sign-in: the current one stays signed in throughout.
                 runOnIdle { app.addGateway() }
