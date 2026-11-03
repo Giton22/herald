@@ -959,8 +959,8 @@ private fun suggestionsDetail(on: Boolean, plugin: SuggestionsPlugin): String =
         SuggestionsLine.NeedsRestart -> stringResource(Res.string.settings_suggestions_needs_restart)
         is SuggestionsLine.Failed ->
             stringResource(Res.string.settings_suggestions_failed, line.message ?: stringResource(Res.string.app_suggestions_no_reason))
-        SuggestionsLine.NotListed ->
-            stringResource(Res.string.settings_suggestions_failed, stringResource(Res.string.app_suggestions_not_listed))
+        // Installed: not under "wasn't installed", which would say both.
+        SuggestionsLine.NotListed -> stringResource(Res.string.app_suggestions_not_listed)
         is SuggestionsLine.Outdated -> stringResource(Res.string.settings_suggestions_outdated, line.have.orEmpty(), line.need)
     }
 
