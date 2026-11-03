@@ -74,6 +74,12 @@ data class AppSettings(
      */
     val glow: Boolean = true,
     val textSize: TextSize = TextSize.Default,
+    /**
+     * The language picked in Settings › Language, as a BCP 47 tag (`de`, `pt-BR`); null follows the system. Kept here
+     * on the desktop and on Android 12 and older; Android 13 and later keep the app's language themselves, so there
+     * this stays unused. A tag for a language the app no longer ships reads as null.
+     */
+    val language: String? = null,
     /** How strongly the chat background (kept by [WallpaperStore]) shows, when there is one. */
     val wallpaperStrength: WallpaperStrength = WallpaperStrength.Faint,
     val showReasoning: Boolean = true,
