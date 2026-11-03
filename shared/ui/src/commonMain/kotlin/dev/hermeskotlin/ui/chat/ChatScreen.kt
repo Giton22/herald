@@ -3495,7 +3495,8 @@ internal fun Tools(tools: List<ToolActivity>, messageKey: String) {
                     .padding(12.dp),
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    tools.forEach { ToolRow(it, messageKey) }
+                    // Keyed, so a row opened before the activity was made again is restored by its tool, not its place.
+                    tools.forEach { key(it.id) { ToolRow(it, messageKey) } }
                 }
             }
         }
