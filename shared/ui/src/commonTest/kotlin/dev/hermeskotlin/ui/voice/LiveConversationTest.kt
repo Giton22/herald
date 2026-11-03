@@ -179,6 +179,25 @@ class LiveConversationTest {
     )
 
     @Test
+    fun gptLiveDoesNotOpenChainedAudio() = runTest {
+        val client = http("gpt-live", mutableListOf())
+        val socket = Socket()
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> socket }, backgroundScope)
+        connection.start(gateway)
+        connection.state.first { it is ConnectionState.Connected }
+        val session = ChatSession(gateway, null, null, connection, SessionsApi(client), backgroundScope)
+        session.start()
+        val player = object : SpeechPlayer {
+            override suspend fun play(audio: SpokenAudio) = Unit
+            override fun chainedChatAudio(): () -> Unit = error("GPT Live must not change chained audio")
+        }
+        val voice = VoiceController(AudioApi(client), NoRecorder, player, backgroundScope, backgroundScope) { FakeCall() }
+        voice.startChat(session, gateway, "work")
+        voice.chat.first { it.live && it.phase == VoicePhase.Listening }
+        voice.stopChat()
+    }
+
+    @Test
     fun aCallTheAgentPlacedOpensWithWhyOnceTheVoiceIsUp() = runTest {
         val client = http("gpt-live", mutableListOf())
         val socket = Socket()
