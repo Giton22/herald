@@ -56,6 +56,7 @@ for _ in $(seq 50); do
   kill -0 "$server"
   sleep 0.1
 done
+[ -s "$work/port" ] || { echo 'The local HTTP server did not start' >&2; exit 1; }
 url="http://127.0.0.1:$(cat "$work/port")/"
 
 # An independent user installation per route: never touch the caller's apps, remotes or data.
