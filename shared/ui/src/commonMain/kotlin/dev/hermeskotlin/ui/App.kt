@@ -64,6 +64,9 @@ import dev.hermeskotlin.ui.bots.LocalBotFaces
 import dev.hermeskotlin.core.phone.AgentScreens
 import dev.hermeskotlin.ui.chat.AgentScreenContext
 import dev.hermeskotlin.ui.chat.ChatScreen
+import dev.hermeskotlin.ui.chat.GreetingPlaces
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import dev.hermeskotlin.ui.chat.LocalAgentScreens
 import dev.hermeskotlin.ui.rooms.RoomScreen
 import dev.hermeskotlin.ui.rooms.DesktopRoomScreen
@@ -596,6 +599,28 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
         speakerSource.launchProfile.value = launchProfile
     }
     val others: OtherChatsViewModel = koinViewModel { parametersOf(sessions) }
+    // What an empty new chat's greeting offers to start it in instead: the list's projects, when they're this chat's
+    // gateway and profile, the profiles, and the saved gateways. Not for a chat outside the list's profile (a bot's
+    // throwaway chat): a profile picked there could be the one the list is already on.
+    val listedFor by sessions.listedFor.collectAsStateWithLifecycle()
+    // Only the projects: the list itself changes every few seconds while it's polled.
+    val listedProjects by remember(sessions) { sessions.state.map { it.projects }.distinctUntilChanged() }.collectAsStateWithLifecycle(emptyList())
+    val gatewayChoices by app.gatewayChoices.collectAsStateWithLifecycle()
+    val greetingPlaces = remember(listedFor, listedProjects, profileRoster, gatewayChoices, route.target.gateway, route.target.profile, chatsProfile) {
+        val target = route.target
+        if (target.profile != chatsProfile) return@remember null
+        GreetingPlaces(
+            projects = listedProjects.takeIf { listedFor == target.gateway.gatewayUrl to target.profile }.orEmpty(),
+            profiles = profileRoster?.profiles.orEmpty(),
+            profile = target.profile ?: profileRoster?.launch,
+            gateways = gatewayChoices.list.gateways,
+            gateway = target.gateway.url,
+            onProject = app::pickProject,
+            // The launch profile is stored as "none picked", as the sidebar's profile picker does.
+            onProfile = { picked -> app.switchProfile(picked.name.takeIf { it != profileRoster?.launch }, fresh = true) },
+            onGateway = { picked -> app.switchGateway(picked, fresh = true) },
+        )
+    }
     val settings = LocalAppSettings.current
     val sidebarWidthStore = koinInject<SettingsStore>()
     val alerts = settings.otherChatsAlerts
@@ -696,8 +721,9 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                     if (session.id != openSessionId) app.openSession(session.id, session.displayTitle, readUpTo)
                     closeDrawerToChat()
                 },
-                onNewChat = { cwd ->
-                    app.newChat(cwd = cwd)
+                onNewChat = { project ->
+                    // Home, or a project made without a folder, is a pick too: a chat with no project.
+                    app.newChat(cwd = project?.path?.takeIf { !project.isNoProject }, picked = project != null)
                     closeDrawerToChat()
                 },
                 onDeleted = { if (it.id == openSessionId) app.newChat() },
@@ -707,7 +733,11 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                 onOpenSettings = { settingsOpen = true },
                 onSwitchProfile = {
                     app.switchProfile(it)
-                    closeDrawerToChat()
+                    // The sidebar stays open on the new profile's chats, to pick one from; what was open in the
+                    // chat's place belonged to the old profile.
+                    rooms.close()
+                    openDesktopRoom = null
+                    mainPage.close()
                 },
                 onOpenBot = { bot, storedSessionId, readUpTo ->
                     if (storedSessionId != openSessionId || route.target.bot == null) app.openBotChat(bot, storedSessionId, readUpTo)
@@ -807,6 +837,7 @@ private fun Home(route: Route.Chat, app: AppViewModel, onOpenGateways: () -> Uni
                             }
                             return next != null
                         },
+                        greetingPlaces = greetingPlaces,
                     )
                 }
             }

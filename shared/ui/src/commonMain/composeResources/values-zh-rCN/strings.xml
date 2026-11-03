@@ -82,6 +82,8 @@
     <string name="running_send_stop_and_send_label">停止并发送</string>
     <string name="settings_start_instruction">开场指令</string>
     <string name="settings_start_instruction_none">无。先告诉每个新对话一些事，比如回复要简短。</string>
+    <string name="settings_use_last_project">使用上次的项目</string>
+    <string name="settings_use_last_project_detail">新对话在你上次在此开始的对话所在的项目中开始，按网关和配置分别记住。</string>
     <string name="settings_show_reasoning">显示推理过程</string>
     <string name="settings_show_reasoning_detail">模型的思考过程，折叠在每条回复上方。</string>
     <string name="settings_show_tool_activity">显示工具活动</string>

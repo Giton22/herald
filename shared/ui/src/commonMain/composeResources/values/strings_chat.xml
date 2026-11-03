@@ -442,6 +442,10 @@
     <string name="chat_greeting_place_default">Hermes on %1$s · default profile</string>
     <string name="chat_greeting_profile">Hermes · %1$s profile</string>
     <string name="chat_greeting_default">Hermes · default profile</string>
+    <string name="chat_greeting_question_in">What are we building\nin %1$s?</string>
+    <string name="chat_greeting_home">Home</string>
+    <string name="chat_greeting_choose_project">Choose the project</string>
+    <string name="chat_greeting_choose_place">Choose the profile or gateway</string>
     <string name="chat_attach">Attach</string>
     <string name="chat_voice_chat">Voice chat</string>
     <string name="chat_dictate">Dictate</string>

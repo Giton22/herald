@@ -82,6 +82,8 @@
     <string name="running_send_stop_and_send_label">Stoppen &amp; senden</string>
     <string name="settings_start_instruction">Startanweisung</string>
     <string name="settings_start_instruction_none">Keine. Sag jedem neuen Chat zuerst etwas, etwa dass Antworten kurz bleiben sollen.</string>
+    <string name="settings_use_last_project">Letztes Projekt verwenden</string>
+    <string name="settings_use_last_project_detail">Neue Chats starten im Projekt des letzten Chats, den du hier gestartet hast, je Gateway und Profil.</string>
     <string name="settings_show_reasoning">Denkprozess zeigen</string>
     <string name="settings_show_reasoning_detail">Das Denken des Modells, eingeklappt über jeder Antwort.</string>
     <string name="settings_show_tool_activity">Tool-Aktivität zeigen</string>
