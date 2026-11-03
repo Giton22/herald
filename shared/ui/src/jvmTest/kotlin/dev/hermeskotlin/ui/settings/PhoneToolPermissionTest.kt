@@ -17,20 +17,29 @@ import kotlin.test.assertEquals
 
 @OptIn(ExperimentalTestApi::class)
 class PhoneToolPermissionTest {
+    private val approvalTitles = mapOf(
+        PhoneTool.Sound to "Require permission to change sound controls",
+        PhoneTool.Alarms to "Require permission to set alarms",
+        PhoneTool.Open to "Require permission to open links, maps and apps",
+        PhoneTool.Clipboard to "Require permission to copy text",
+        PhoneTool.Geofences to "Require permission to change watched places",
+        PhoneTool.Calendar to "Require permission to change calendar events",
+    )
     @Test fun permissionsAreSeparateFromToolEnablement() = runDesktopComposeUiTest(width = 360, height = 800) {
         setContent { page(AppSettings(phoneTools = true)) }
-        PhoneTool.entries.forEach {
-            onNodeWithText(it.permissionTitle).performScrollTo().assertIsNotEnabled()
+        approvalTitles.values.forEach {
+            onNodeWithText(it).performScrollTo().assertIsNotEnabled()
         }
     }
 
-    @Test fun eachToolHasExactlyOneCompanion() = runDesktopComposeUiTest(width = 360, height = 800) {
+    @Test fun onlyExistingWriteToolsHaveExactlyOneCompanion() = runDesktopComposeUiTest(width = 360, height = 800) {
         setContent { page(AppSettings(phoneTools = true, phoneToolsOn = PhoneTool.entries.map { it.id })) }
-        PhoneTool.entries.forEach {
-            onNodeWithText(it.title).assertExists()
-            onAllNodesWithText(it.permissionTitle).assertCountEquals(1)
-            onNodeWithText(it.permissionTitle).performScrollTo().assertIsEnabled()
+        approvalTitles.forEach { (tool, title) ->
+            onNodeWithText(tool.title).assertExists()
+            onAllNodesWithText(title).assertCountEquals(1)
+            onNodeWithText(title).performScrollTo().assertIsEnabled()
         }
+        onAllNodes(hasText("Require permission", substring = true)).assertCountEquals(6)
     }
 
     @Test fun turningOffAParentDisablesButRetainsItsPermissionPreference() = runDesktopComposeUiTest(width = 360, height = 640) {
@@ -56,12 +65,26 @@ class PhoneToolPermissionTest {
     @Test fun permissionsCanBeConfiguredInLightThemeAt360dp() = runDesktopComposeUiTest(width = 360, height = 640) {
         setContent { page(AppSettings(phoneTools = true, phoneToolsOn = listOf(PhoneTool.Open.id)), scheme = ColorScheme.Light) }
         onNodeWithText("Require permission to open links, maps and apps").performScrollTo().assertIsDisplayed().assertIsOn()
-        onNodeWithText("Require permission to call me").performScrollTo().assertIsNotEnabled()
+        onNodeWithText("Require permission to call me").assertDoesNotExist()
     }
 
     @Test fun masterOffDoesNotOfferAnyToolOrPermissionSwitch() = runDesktopComposeUiTest(width = 360, height = 640) {
         setContent { page(AppSettings()) }
-        PhoneTool.entries.forEach { onNodeWithText(it.permissionTitle).assertDoesNotExist() }
+        onAllNodes(hasText("Require permission", substring = true)).assertCountEquals(0)
+    }
+
+    @Test fun storedReadApprovalOverridesDoNotAddCompanionControls() = runDesktopComposeUiTest(width = 360, height = 640) {
+        setContent {
+            page(AppSettings(
+                phoneTools = true,
+                phoneToolsOn = PhoneTool.entries.map { it.id },
+                phoneToolsAsk = PhoneTool.entries.associate { it.id to true },
+            ))
+        }
+        onAllNodes(hasText("Require permission", substring = true)).assertCountEquals(6)
+        onNodeWithText("Require permission to read battery").assertDoesNotExist()
+        onNodeWithText("Require permission to read location").assertDoesNotExist()
+        onNodeWithText("Require permission to call me").assertDoesNotExist()
     }
 
     @androidx.compose.runtime.Composable

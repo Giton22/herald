@@ -136,7 +136,7 @@ data class AppSettings(
     val phoneTools: Boolean = false,
     /** The phone tools switched on, by gateway name (`PhoneTool.id`). Each starts off. */
     val phoneToolsOn: List<String> = emptyList(),
-    /** Per-tool confirmation preferences, keyed by `PhoneTool.id`; does not enable a tool or grant Android access. */
+    /** Per-tool write/action confirmation preferences, keyed by `PhoneTool.id`; does not enable a tool or grant Android access. */
     val phoneToolsAsk: Map<String, Boolean> = emptyMap(),
     /**
      * An approval or a question from a chat out of sight rings like an incoming call instead of a plain notification.

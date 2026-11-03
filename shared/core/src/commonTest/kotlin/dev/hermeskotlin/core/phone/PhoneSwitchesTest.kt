@@ -39,10 +39,10 @@ class PhoneSwitchesTest {
     }
 
     @Test
-    fun everyToolCanOverridePermissionWithoutGrantingUse() {
+    fun onlyExistingWriteToolsCanOverridePermissionWithoutGrantingUse() {
         for (tool in PhoneTool.entries) {
             val ask = AppSettings(phoneToolsAsk = mapOf(tool.id to true))
-            assertTrue(ask.requiresPhoneToolPermission(tool))
+            assertEquals(tool in setOf(PhoneTool.Sound, PhoneTool.Alarms, PhoneTool.Open, PhoneTool.Clipboard, PhoneTool.Geofences, PhoneTool.Calendar), ask.requiresPhoneToolPermission(tool), tool.id)
             assertTrue(ask.enabledPhoneTools().isEmpty())
             assertFalse(ask.copy(phoneToolsAsk = mapOf(tool.id to false)).requiresPhoneToolPermission(tool))
         }

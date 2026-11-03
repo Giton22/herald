@@ -42,12 +42,17 @@ enum class PhoneTool(val id: String, val title: String, val detail: String) {
 fun AppSettings.enabledPhoneTools(): Set<PhoneTool> =
     if (!phoneTools) emptySet() else phoneToolsOn.mapNotNull(PhoneTool::byId).toSet()
 
-/** Whether each use asks first. The six tools with existing change confirmations start with it on. */
-fun AppSettings.requiresPhoneToolPermission(tool: PhoneTool): Boolean = phoneToolsAsk[tool.id] ?: when (tool) {
-    PhoneTool.Sound, PhoneTool.Alarms, PhoneTool.Open, PhoneTool.Clipboard, PhoneTool.Geofences, PhoneTool.Calendar -> true
-    PhoneTool.Battery, PhoneTool.Network, PhoneTool.ScreenTime, PhoneTool.Location,
-    PhoneTool.Contacts, PhoneTool.Health, PhoneTool.ShowUi, PhoneTool.CallMe -> false
-}
+/** The tools with an existing write/action confirmation; read operations never ask. */
+val PhoneTool.hasWriteConfirmation: Boolean
+    get() = when (this) {
+        PhoneTool.Sound, PhoneTool.Alarms, PhoneTool.Open, PhoneTool.Clipboard, PhoneTool.Geofences, PhoneTool.Calendar -> true
+        PhoneTool.Battery, PhoneTool.Network, PhoneTool.ScreenTime, PhoneTool.Location,
+        PhoneTool.Contacts, PhoneTool.Health, PhoneTool.ShowUi, PhoneTool.CallMe -> false
+    }
+
+/** Whether this tool's existing write/action prompt is required. Stale overrides for other tools are ignored. */
+fun AppSettings.requiresPhoneToolPermission(tool: PhoneTool): Boolean =
+    tool.hasWriteConfirmation && (phoneToolsAsk[tool.id] ?: true)
 
 /** An approval or a question rings this phone like a call: its own switch, under the Phone tools switch. */
 val AppSettings.ringsForAnswers: Boolean get() = phoneTools && phoneRings

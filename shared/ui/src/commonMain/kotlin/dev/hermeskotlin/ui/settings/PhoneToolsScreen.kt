@@ -241,8 +241,8 @@ internal fun PhoneToolsView(
                 verticalArrangement = Arrangement.spacedBy(22.dp),
             ) {
                 Text(
-                    "Tools stay off until you enable them. Choose below whether each enabled tool must ask you " +
-                        "before it runs. Android permissions still apply. A tool you turn off is taken away from the agent at once.",
+                    "Tools stay off until you enable them. Reads don't ask. For tools that change the phone, choose " +
+                        "whether changes need approval. Android permissions still apply. A tool you turn off is taken away from the agent at once.",
                     style = Theme[typography][bodySmall],
                     color = Theme[colors][textTertiary],
                     modifier = Modifier.padding(horizontal = 6.dp),
@@ -308,7 +308,6 @@ internal fun PhoneToolsView(
                             onCheckedChange = { onTool(PhoneTool.CallMe, it) },
                             icon = PhoneTool.CallMe.icon,
                         )
-                        PhoneToolPermissionRow(PhoneTool.CallMe, settings, onPermission)
                         if (callNeeds != null) {
                             Divider()
                             ActionRow(stringResource(Res.string.phone_allow), Lucide.ShieldCheck, onAllowRings)

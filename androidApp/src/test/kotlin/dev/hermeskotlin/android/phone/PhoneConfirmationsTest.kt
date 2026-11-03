@@ -33,7 +33,10 @@ import kotlin.test.assertTrue
 
 @RunWith(RobolectricTestRunner::class)
 @Config(application = android.app.Application::class, sdk = [35], manifest = Config.NONE)
+@OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
 class PhoneConfirmationsTest {
+    private val writeTools = listOf(PhoneTool.Sound, PhoneTool.Alarms, PhoneTool.Open, PhoneTool.Clipboard, PhoneTool.Geofences, PhoneTool.Calendar)
+
     @After fun reset() {
         PhoneConfirmations.asking.value = emptyList()
         PhoneConfirmations.waiting.clear()
@@ -53,11 +56,11 @@ class PhoneConfirmationsTest {
         return settings to PhoneConfirmations(org.robolectric.RuntimeEnvironment.getApplication(), settings)
     }
 
-    @Test fun optOutRunsEveryToolWithoutQuestion() = runTest {
+    @Test fun optOutRunsExistingWriteToolsWithoutQuestion() = runTest {
         val (_, confirmations) = fixture(ask = false)
         var runs = 0
-        for (tool in PhoneTool.entries) confirmations.confirm(tool, "Use ${tool.title}") { runs++ }
-        assertEquals(PhoneTool.entries.size, runs)
+        for (tool in writeTools) confirmations.confirm(tool, "Use ${tool.title}") { runs++ }
+        assertEquals(writeTools.size, runs)
         assertTrue(PhoneConfirmations.asking.value.isEmpty())
     }
 
@@ -65,7 +68,7 @@ class PhoneConfirmationsTest {
         val (_, confirmations) = fixture()
         var runs = 0
         val activity = Robolectric.buildActivity(Activity::class.java).setup().get()
-        for (tool in PhoneTool.entries) {
+        for (tool in writeTools) {
             val result = async { confirmations.confirm(tool, "Use ${tool.title}") { runs++ } }
             runCurrent()
             val before = runs
@@ -77,7 +80,7 @@ class PhoneConfirmationsTest {
             assertEquals(before + 1, runs)
             assertTrue(PhoneConfirmations.asking.value.isEmpty())
         }
-        assertEquals(PhoneTool.entries.size, runs)
+        assertEquals(writeTools.size, runs)
     }
 
     @Test fun denialAndCancellationNeverExecute() = runTest {
@@ -98,9 +101,9 @@ class PhoneConfirmationsTest {
     @Test fun disabledParentRefusesEvenWhenPermissionIsOff() = runTest {
         val (settings, confirmations) = fixture(ask = false)
         for (master in listOf(false, true)) {
-            settings.update { it.copy(phoneTools = master, phoneToolsOn = if (master) emptyList() else listOf(PhoneTool.Battery.id)) }
+            settings.update { it.copy(phoneTools = master, phoneToolsOn = if (master) emptyList() else listOf(PhoneTool.Clipboard.id)) }
             assertFailsWith<PhoneToolException> {
-                confirmations.confirm(PhoneTool.Battery, "Read") { error("Must not execute") }
+                confirmations.confirm(PhoneTool.Clipboard, "Copy") { error("Must not execute") }
             }
         }
     }
@@ -130,12 +133,12 @@ class PhoneConfirmationsTest {
     @Test fun changingPermissionWhileQueuedOrWaitingDoesNotBypassApproval() = runTest {
         val (settings, confirmations) = fixture(ask = false)
         var runs = 0
-        val result = async { confirmations.confirm(PhoneTool.Network, "Read network") { runs++ } }
-        settings.update { it.copy(phoneToolsAsk = mapOf(PhoneTool.Network.id to true)) }
+        val result = async { confirmations.confirm(PhoneTool.Clipboard, "Copy") { runs++ } }
+        settings.update { it.copy(phoneToolsAsk = mapOf(PhoneTool.Clipboard.id to true)) }
         runCurrent()
         assertEquals(0, runs)
         val key = PhoneConfirmations.asking.value.single().key
-        settings.update { it.copy(phoneToolsAsk = mapOf(PhoneTool.Network.id to false)) }
+        settings.update { it.copy(phoneToolsAsk = mapOf(PhoneTool.Clipboard.id to false)) }
         runCurrent()
         assertEquals(0, runs)
         PhoneConfirmations.allow(key, Robolectric.buildActivity(Activity::class.java).setup().get())
@@ -151,11 +154,10 @@ class PhoneConfirmationsTest {
         assertFailsWith<PhoneToolException> {
             confirmations.confirm(PhoneTool.Clipboard, "Copy") { error("Must not execute") }
         }
-        // Reads which do not require approval keep their existing background capability.
-        confirmations.confirm(PhoneTool.Battery, "Read", needsUnlocked = false) {
+        keyguard.setIsDeviceLocked(false)
+        confirmations.confirm(PhoneTool.Clipboard, "Copy") {
             assertEquals(Looper.getMainLooper(), Looper.myLooper())
         }
-        keyguard.setIsDeviceLocked(false)
     }
 
     @Test fun approvedPlatformFailureAndTimeoutNeverReportSuccess() = runTest {

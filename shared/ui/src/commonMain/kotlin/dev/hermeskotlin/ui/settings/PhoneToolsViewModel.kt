@@ -10,6 +10,7 @@ import dev.hermeskotlin.core.phone.PhoneToolUse
 import dev.hermeskotlin.core.phone.PhoneToolsBridge
 import dev.hermeskotlin.core.phone.PhoneToolsStatus
 import dev.hermeskotlin.core.phone.enabledPhoneTools
+import dev.hermeskotlin.core.phone.hasWriteConfirmation
 import dev.hermeskotlin.core.push.KnownPhone
 import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
@@ -49,7 +50,7 @@ class PhoneToolsViewModel(
 
     /** A permission preference never turns its tool on. Off tools retain their last preference. */
     fun setPermission(tool: PhoneTool, required: Boolean) = store.update { s ->
-        if (tool !in s.enabledPhoneTools()) s else s.copy(phoneToolsAsk = s.phoneToolsAsk + (tool.id to required))
+        if (!tool.hasWriteConfirmation || tool !in s.enabledPhoneTools()) s else s.copy(phoneToolsAsk = s.phoneToolsAsk + (tool.id to required))
     }
 
     fun setRings(on: Boolean) = store.update { it.copy(phoneRings = on) }

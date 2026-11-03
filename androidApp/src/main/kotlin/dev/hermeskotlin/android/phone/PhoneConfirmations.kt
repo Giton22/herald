@@ -39,7 +39,7 @@ import kotlinx.coroutines.withTimeout
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicInteger
 
-/** Asks in Kyllene or a notification when the tool's confirmation preference is on. */
+/** Asks before a tool's write/action in Kyllene or a notification when its confirmation preference is on. */
 class PhoneConfirmations(private val context: Context, private val settings: SettingsStore) {
 
     internal class Pending(val action: (Activity) -> Unit, val done: CompletableDeferred<Unit>)
@@ -110,7 +110,6 @@ class PhoneConfirmations(private val context: Context, private val settings: Set
         what: String,
         title: String = text(R.string.phone_question_change),
         needsActivity: Boolean = false,
-        needsUnlocked: Boolean = true,
         action: (Context) -> Unit,
     ) = withContext(Dispatchers.Main.immediate) {
         checkEnabled(tool)
@@ -119,7 +118,7 @@ class PhoneConfirmations(private val context: Context, private val settings: Set
         val guarded: (Context) -> Unit = { from ->
             caller.ensureActive()
             checkEnabled(tool)
-            if ((required || needsUnlocked) && context.getSystemService(KeyguardManager::class.java)?.isDeviceLocked == true) {
+            if (context.getSystemService(KeyguardManager::class.java)?.isDeviceLocked == true) {
                 throw PhoneToolException("Unlock the phone before using this tool.")
             }
             if (!required && needsActivity && !inApp.value) {

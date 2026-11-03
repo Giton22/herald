@@ -45,16 +45,6 @@ class AndroidPhoneTools(
 
     override suspend fun run(tool: PhoneTool, args: JsonObject, session: String): JsonElement = withContext(Dispatchers.IO) {
         confirmations.checkEnabled(tool)
-        // Writes ask after validating their detailed description. Reads use the same per-tool preference.
-        val asksInTool = when (tool) {
-            PhoneTool.Sound -> args.string("action") == "set"
-            PhoneTool.Calendar -> args.string("action") in setOf("add", "move")
-            PhoneTool.Geofences -> args.string("action") in setOf("add", "remove")
-            PhoneTool.Alarms, PhoneTool.Open, PhoneTool.Clipboard -> true
-            else -> false
-        }
-        if (!asksInTool) confirmations.confirm(tool, "Use ${tool.title}: ${tool.detail}", "The agent wants to use a phone tool", needsUnlocked = false) {}
-        confirmations.checkEnabled(tool)
         when (tool) {
             PhoneTool.Battery -> battery()
             PhoneTool.Network -> network()

@@ -10,12 +10,13 @@ import dev.hermeskotlin.core.phone.enabledPhoneTools
 import dev.hermeskotlin.core.phone.requiresPhoneToolPermission
 import dev.hermeskotlin.core.settings.AppSettings
 
-/** The parent grants tool access; its indented companion controls whether each use must ask first. */
+/** The parent grants tool access; its companion controls whether existing write actions must ask first. */
 @Composable
 internal fun PhoneToolPermissionRow(tool: PhoneTool, settings: AppSettings, onPermission: (PhoneTool, Boolean) -> Unit) {
+    val title = tool.permissionTitle ?: return
     Box(Modifier.padding(start = 46.dp)) {
         SwitchRow(
-            title = tool.permissionTitle,
+            title = title,
             detail = null,
             checked = settings.requiresPhoneToolPermission(tool),
             enabled = tool in settings.enabledPhoneTools(),
@@ -24,20 +25,13 @@ internal fun PhoneToolPermissionRow(tool: PhoneTool, settings: AppSettings, onPe
     }
 }
 
-internal val PhoneTool.permissionTitle: String
+internal val PhoneTool.permissionTitle: String?
     get() = when (this) {
-        PhoneTool.Battery -> "Require permission to read battery"
-        PhoneTool.Network -> "Require permission to read network"
-        PhoneTool.Sound -> "Require permission to use sound controls"
+        PhoneTool.Sound -> "Require permission to change sound controls"
         PhoneTool.Alarms -> "Require permission to set alarms"
-        PhoneTool.ScreenTime -> "Require permission to read screen time"
         PhoneTool.Open -> "Require permission to open links, maps and apps"
         PhoneTool.Clipboard -> "Require permission to copy text"
-        PhoneTool.Location -> "Require permission to read location"
-        PhoneTool.Geofences -> "Require permission to manage watched places"
-        PhoneTool.Calendar -> "Require permission to use calendar"
-        PhoneTool.Contacts -> "Require permission to read contacts"
-        PhoneTool.Health -> "Require permission to read health"
-        PhoneTool.ShowUi -> "Require permission to show screens"
-        PhoneTool.CallMe -> "Require permission to call me"
+        PhoneTool.Geofences -> "Require permission to change watched places"
+        PhoneTool.Calendar -> "Require permission to change calendar events"
+        else -> null
     }
