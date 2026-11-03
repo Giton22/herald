@@ -158,6 +158,7 @@ uses. The protocol itself is described in [hermes-protocol-research.md](hermes-p
 - [x] Profile picker (account sheet → Profile; `GET /api/profiles`, chats and sessions scoped with `profile`)
 - [x] Settings screen, opened from the account sheet
 - [x] Theme: system, light, dark, plus pure black; window and system bars follow it
+- [x] macOS native file dialogs follow the system appearance (set before AWT starts)
 - [x] Text size on top of the system font scale
 - [x] Chat background: a photo behind the conversation (frosted under the composer), with how strongly it shows
 - [x] Show or hide reasoning and tool activity in the chat
