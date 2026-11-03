@@ -278,8 +278,10 @@ class ShortcutBus {
 
 /** The desktop shortcut's availability, so Settings can explain permission or keys held by another app. */
 object QuickEntryHotkey {
+    enum class State { Off, Binding, Bound, Declined, Unavailable }
+    data class Status(val state: State, val trigger: String? = null)
+    var status by mutableStateOf<Status?>(null)
     var taken by mutableStateOf(false)
-    var detail by mutableStateOf<String?>(null)
 }
 
 /** The window's shortcuts; a bus nothing fires into where there's no keyboard to speak of (phones). */

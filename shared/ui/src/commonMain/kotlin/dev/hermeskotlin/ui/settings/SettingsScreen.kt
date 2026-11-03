@@ -699,10 +699,7 @@ internal fun SettingsView(
                     Divider()
                     SwitchRow(
                         title = stringResource(Res.string.settings_quick_entry),
-                        detail = (QuickEntryHotkey.detail ?: stringResource(
-                            Res.string.settings_quick_entry_detail,
-                            keysLabel("Ctrl+Shift+Space"),
-                        )) +
+                        detail = quickEntryDetail() +
                             // Windows gives a hotkey to one app at a time: say so rather than leave it on and silent.
                             if (settings.quickEntry && QuickEntryHotkey.taken) {
                                 " " + stringResource(Res.string.settings_quick_entry_taken)
@@ -1534,4 +1531,15 @@ internal fun ActionRow(title: String, icon: ImageVector, onClick: () -> Unit) {
         IconTile(icon)
         Text(title, style = Theme[typography][body], color = Theme[colors][text])
     }
+}
+
+@Composable
+private fun quickEntryDetail(): String = when (QuickEntryHotkey.status?.state) {
+    QuickEntryHotkey.State.Off -> stringResource(Res.string.settings_quick_entry_off)
+    QuickEntryHotkey.State.Binding -> stringResource(Res.string.settings_quick_entry_binding)
+    QuickEntryHotkey.State.Bound -> stringResource(Res.string.settings_quick_entry_bound,
+        QuickEntryHotkey.status?.trigger ?: stringResource(Res.string.settings_quick_entry_desktop_choice))
+    QuickEntryHotkey.State.Declined -> stringResource(Res.string.settings_quick_entry_declined)
+    QuickEntryHotkey.State.Unavailable -> stringResource(Res.string.settings_quick_entry_unavailable)
+    null -> stringResource(Res.string.settings_quick_entry_detail, keysLabel("Ctrl+Shift+Space"))
 }

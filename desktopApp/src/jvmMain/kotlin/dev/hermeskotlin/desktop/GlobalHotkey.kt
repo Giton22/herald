@@ -4,6 +4,7 @@ import com.sun.jna.platform.win32.Kernel32
 import com.sun.jna.platform.win32.User32
 import com.sun.jna.platform.win32.WinDef
 import com.sun.jna.platform.win32.WinUser
+import dev.hermeskotlin.ui.QuickEntryHotkey
 import java.util.concurrent.CountDownLatch
 import kotlin.concurrent.thread
 
@@ -29,15 +30,15 @@ class GlobalHotkey private constructor(private val release: () -> Unit) {
          * Calls [onPress] off the window thread. Linux reports its asynchronous consent through [onStatus];
          * Windows returns null when another app holds its keys. Other platforms return null.
          */
-        fun register(onStatus: (String) -> Unit = {}, onPress: () -> Unit): GlobalHotkey? {
+        fun register(onStatus: (QuickEntryHotkey.Status) -> Unit = {}, onPress: () -> Unit): GlobalHotkey? {
             if (System.getProperty("os.name") == "Linux") {
                 val portal = LinuxGlobalShortcut(onPress, { state, trigger ->
-                    onStatus(when (state) {
-                        LinuxGlobalShortcut.State.Binding -> "Choose a shortcut in your desktop's permission dialog."
-                        LinuxGlobalShortcut.State.Bound -> "Desktop shortcut: ${trigger ?: "chosen by your desktop"}."
-                        LinuxGlobalShortcut.State.Declined -> "No desktop shortcut was granted. Turn Quick entry off and on to try again."
-                        LinuxGlobalShortcut.State.Unavailable -> "This desktop's global shortcut portal is unavailable."
-                    })
+                    onStatus(QuickEntryHotkey.Status(when (state) {
+                        LinuxGlobalShortcut.State.Binding -> QuickEntryHotkey.State.Binding
+                        LinuxGlobalShortcut.State.Bound -> QuickEntryHotkey.State.Bound
+                        LinuxGlobalShortcut.State.Declined -> QuickEntryHotkey.State.Declined
+                        LinuxGlobalShortcut.State.Unavailable -> QuickEntryHotkey.State.Unavailable
+                    }, trigger))
                 })
                 return GlobalHotkey(portal::close)
             }
