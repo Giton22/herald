@@ -107,6 +107,7 @@ internal fun SessionsButton(badge: SessionsBadge, onClick: () -> Unit, onNext: (
     },
 ) {
     val haptics = LocalHapticFeedback.current
+    val spoken = badge.description
     Box(
         Modifier
             .size(if (isDesktop) 32.dp else MinTouchTarget)
@@ -127,7 +128,7 @@ internal fun SessionsButton(badge: SessionsBadge, onClick: () -> Unit, onNext: (
                 interactionSource = null,
                 indication = rememberHoverIndication(Theme[colors][textColor]),
             )
-            .semantics { contentDescription = badge.description },
+            .semantics { contentDescription = spoken },
         contentAlignment = Alignment.Center,
     ) {
         UnstyledIcon(Lucide.PanelLeft, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(19.dp))
