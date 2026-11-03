@@ -52,11 +52,37 @@ installed by hand updates from it too.
 - **Storage:** the R2 bucket `kyllene-flatpak` (or the `FLATPAK_R2_BUCKET`
   variable), with the custom domain `flatpak.kyllene.app` and an Object Read & Write
   token in the `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID` and `R2_SECRET_ACCESS_KEY` secrets.
-- **Tests:** the Linux workflow runs `tests/repo_smoke.sh` on every Flatpak build. It
-  publishes three releases to a local server with a throwaway key, and checks that:
-  - a bundle install and a `.flatpakref` install both update with `flatpak update`;
-  - a commit signed with another key is refused, even when the summary is signed
-    with ours.
+- **Tests:** Linux advisory runs JVM/desktop and portable packaging checks on every PR
+  that touches what the desktop app is built from (Android-only PRs skip it),
+  alongside a tiny repository fixture. Full offline builds and installed-app smoke run
+  for packaging, dependency, desktop entry-point and workflow PRs, relevant master
+  pushes, weekly, and via **Run workflow** on any branch. Ordinary shared UI PRs
+  receive package qualification after merge; Linux remains advisory for Android.
+  The SDK font test stays in the full package job.
+- **Release qualification:** the Flatpak build starts alongside Android. Its bundle
+  is attached only after Android's draft exists and JVM/desktop tests, Flatpak contracts, real installed
+  UI smoke, and repository tests pass. Publication reuses that qualified bundle.
+  Repository tests use the real candidate payload on tags and a tiny fixture on PRs.
+  Two isolated user installations share two signed test releases: bundle and
+  `.flatpakref` both update, then both reject a wrong-key commit and retain the
+  previous commit. The two releases use the same payload; this tests delivery/trust,
+  not application-data migration from a historical version. Temporary keys/origins
+  never appear in the downloadable candidate bundle.
+
+Repository tests require Linux, Flatpak, OSTree, GnuPG and Python 3. They do not
+launch the app, download a runtime, or change the caller's installation. Run
+`timeout 300 sh packaging/flatpak/tests/repo_smoke.sh --fixture`, or replace
+`--fixture` with `BUILD_REPO APP BRANCH` to test a built app payload. Windows/macOS
+contributors can run the Ubuntu workflow instead; direct unsupported invocation
+fails before making changes. Installed UI tests additionally need the SDK/runtime,
+Xvfb, xauth, xdotool, Pillow, the desktop portal and an unlocked test keyring.
+
+Keep all selected jobs green when qualifying a Flatpak; a green fast-check job
+alone is not package qualification. Tagged releases perform their own checks on
+that exact source rather than trusting a potentially skipped advisory run.
+Timing targets (4–7 minutes fast, 12–18 package, 15–20 Flatpak release qualification)
+need hosted measurements; they are not guarantees. JVM and packaging now overlap,
+so runner concurrency can increase even when elapsed time decreases.
 
 Install `org.flatpak.Builder`, `org.freedesktop.Sdk//26.08` and its matching
 runtime in the user installation. From the repository root, build and install:
