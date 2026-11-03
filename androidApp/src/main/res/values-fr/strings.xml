@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_new_chat">Nouvelle conversation</string>
+    <string name="shortcut_voice_short">Dicter</string>
+    <string name="shortcut_voice">Nouvelle conversation à la voix</string>
+    <string name="shortcut_voice_chat">Appeler Hermes</string>
+    <string name="shortcut_voice_chat_moved">« Appeler Hermes » a changé de place. Maintenez l’icône de l’app et épinglez-le à nouveau.</string>
+
+    <string name="app_lock_prompt_title">Déverrouiller Kyllene</string>
+    <string name="link_no_app">Aucune app de ce téléphone ne peut ouvrir ce lien.</string>
+
+    <string name="channel_connection_name">Connexion en arrière-plan</string>
+    <string name="channel_connection_description">Affichée tant que Kyllene reste connecté en arrière-plan ou traite un tour.</string>
+    <string name="channel_requests_name">Approbations et questions</string>
+    <string name="channel_requests_description">L’agent vous attend.</string>
+    <string name="channel_replies_name">Réponses terminées</string>
+    <string name="channel_replies_description">Un tour s’est terminé pendant que l’app était en arrière-plan.</string>
+    <string name="channel_bots_name">Messages des bots</string>
+    <string name="channel_bots_description">Un bot a écrit dans sa conversation pendant que l’app était en arrière-plan.</string>
+    <string name="channel_inbox_name">Boîte de réception</string>
+    <string name="channel_inbox_description">Une tâche planifiée que vous suivez a rendu compte, comme un briefing du matin.</string>
+    <string name="channel_inbox_failed_name">Tâches en échec</string>
+    <string name="channel_inbox_failed_description">L’exécution d’une tâche planifiée a échoué.</string>
+    <string name="channel_voice_name">Conversation vocale</string>
+    <string name="channel_voice_description">Affichée pendant une conversation vocale, écran éteint ou dans une autre app.</string>
+    <string name="channel_calls_name">Appels pour une réponse</string>
+    <string name="channel_calls_description">Une approbation ou une question sonne comme un appel (Paramètres → Outils du téléphone → Appels).</string>
+    <string name="channel_phone_tools_name">Outils du téléphone</string>
+    <string name="channel_phone_tools_description">Quand l’agent veut modifier quelque chose sur ce téléphone</string>
+
+    <string name="notification_connected">Connecté à Hermes</string>
+    <string name="notification_reconnecting">Reconnexion à Hermes…</string>
+    <string name="notification_push_anywhere">Les messages des bots vous parviennent via Notifications partout</string>
+    <string name="notification_not_connected">Non connecté à Hermes</string>
+    <string name="notification_turn_off">Désactiver</string>
+
+    <string name="notification_voice_title">Conversation vocale</string>
+    <string name="notification_voice_text">En ligne avec Hermes</string>
+    <string name="notification_voice_end">Terminer</string>
+
+    <string name="notification_approve_title">Autoriser cette commande ?</string>
+    <string name="notification_question_title">Hermes a une question</string>
+    <plurals name="notification_questions">
+        <item quantity="one">%d question</item>
+        <item quantity="many">%d questions</item>
+        <item quantity="other">%d questions</item>
+    </plurals>
+    <string name="notification_your_answer">Votre réponse</string>
+    <string name="notification_answer">Répondre</string>
+    <string name="notification_secret_sudo">Mot de passe sudo requis</string>
+    <string name="notification_secret_secret">Secret requis</string>
+    <string name="notification_secret_vault_unlock">Déverrouillez votre gestionnaire de mots de passe</string>
+    <string name="notification_secret_vault_code">Code de connexion requis</string>
+    <string name="notification_vault_no_login">Hermes n’a pas d’identifiants pour %1$s. Ouvrez la conversation pour en enregistrer.</string>
+    <string name="notification_vault_this_site">ce site</string>
+    <string name="notification_allow_once">Autoriser une fois</string>
+    <string name="notification_allow_session">Autoriser pour la conversation</string>
+    <string name="notification_allow_always">Toujours autoriser</string>
+    <string name="notification_deny">Refuser</string>
+
+    <string name="notification_turn_failed_text">Le tour a échoué.</string>
+    <string name="notification_done">Terminé.</string>
+    <string name="notification_finished">Fini.</string>
+    <string name="notification_message_hermes">Écrire à Hermes</string>
+    <string name="notification_turn_failed">Échec du tour</string>
+    <string name="notification_hermes_replied">Hermes a répondu</string>
+    <string name="notification_reply">Répondre</string>
+    <string name="notification_you">Vous</string>
+    <string name="notification_message_bot">Écrire à %1$s</string>
+    <string name="notification_run_failed_text">L’exécution a échoué.</string>
+    <string name="notification_job_failed">Échec : %1$s</string>
+    <string name="notification_mark_read">Marquer comme lu</string>
+    <string name="notification_push_test_title">Notifications partout fonctionne</string>
+    <string name="notification_push_test_text">Ceci est arrivé chiffré de bout en bout via ntfy, pas par la connexion à votre Gateway.</string>
+
+    <string name="notification_send_failed">Envoi impossible</string>
+    <string name="notification_bot_send_failed">Envoi impossible. Ouvrez Kyllene pour réessayer.</string>
+    <string name="notification_chat_closed">Cette conversation n’est plus ouverte. Ouvrez Kyllene pour répondre.</string>
+    <string name="notification_reply_send_failed">Envoi impossible. Ouvrez Kyllene pour renvoyer le message.</string>
+    <string name="notification_reply_open_app">Ouvrez Kyllene pour renvoyer le message.</string>
+    <string name="notification_answer_not_connected">Non connecté au Gateway. Ouvrez Kyllene pour répondre.</string>
+
+    <string name="call_needs_microphone">Kyllene a besoin du micro pour les appels. La question est dans la conversation.</string>
+    <string name="call_new_session">Nouvelle session</string>
+
+    <string name="phone_allow">Autoriser</string>
+    <string name="phone_deny">Refuser</string>
+    <string name="phone_question_change">L’agent veut modifier votre téléphone</string>
+    <string name="phone_list_separator">", "</string>
+    <string name="phone_sentence">%1$s.</string>
+
+    <string name="phone_alarm_question">Régler une alarme à %1$s.</string>
+    <string name="phone_alarm_question_repeats">Régler une alarme à %1$s, %2$s.</string>
+    <string name="phone_alarm_question_label">Régler une alarme à %1$s : \"%2$s\".</string>
+    <string name="phone_alarm_question_repeats_label">Régler une alarme à %1$s, %2$s : \"%3$s\".</string>
+    <string name="phone_alarm_every_day">tous les jours</string>
+    <string name="phone_alarm_every_weekday">en semaine</string>
+    <string name="phone_alarm_every_weekend">le week-end</string>
+    <string name="phone_alarm_every_days">chaque %1$s</string>
+    <string name="phone_timer_question">Lancer un minuteur de %1$s.</string>
+    <string name="phone_timer_question_label">Lancer un minuteur de %1$s : \"%2$s\".</string>
+    <string name="phone_hours_short">%1$d h</string>
+    <string name="phone_minutes_short">%1$d min</string>
+    <string name="phone_seconds_short">%1$d s</string>
+
+    <string name="phone_clipboard_title">L’agent veut copier quelque chose dans votre presse-papiers</string>
+    <string name="phone_clipboard_question">Copier dans le presse-papiers : %1$s</string>
+    <string name="phone_clipboard_label">De l’agent</string>
+
+    <string name="phone_open_title">L’agent veut ouvrir quelque chose sur votre téléphone</string>
+    <string name="phone_open_link">Ouvrir un lien sur %1$s%2$s : %3$s</string>
+    <string name="phone_open_not_secure">" (non sécurisé)"</string>
+    <string name="phone_open_directions">Lancer l’itinéraire dans l’app de cartes vers : %1$s</string>
+    <string name="phone_open_map">Afficher dans l’app de cartes : %1$s</string>
+    <string name="phone_open_app">Ouvrir l’app : %1$s</string>
+    <string name="phone_open_share">Partager ce texte : %1$s</string>
+
+    <string name="phone_sound_dnd_off">désactiver Ne pas déranger</string>
+    <string name="phone_sound_dnd_on">activer Ne pas déranger (%1$s)</string>
+    <string name="phone_sound_dnd_priority">prioritaires uniquement</string>
+    <string name="phone_sound_dnd_alarms">alarmes uniquement</string>
+    <string name="phone_sound_dnd_silence">silence total</string>
+    <string name="phone_sound_ringer">mettre la sonnerie en mode %1$s</string>
+    <string name="phone_sound_ringer_normal">normal</string>
+    <string name="phone_sound_ringer_vibrate">vibreur</string>
+    <string name="phone_sound_ringer_silent">silencieux</string>
+    <string name="phone_sound_volume_ring">régler le volume de la sonnerie sur %1$d %%</string>
+    <string name="phone_sound_volume_notification">régler le volume des notifications sur %1$d %%</string>
+    <string name="phone_sound_volume_media">régler le volume des médias sur %1$d %%</string>
+    <string name="phone_sound_volume_alarm">régler le volume des alarmes sur %1$d %%</string>
+
+    <string name="phone_calendar_add_title">L’agent veut ajouter un événement à votre agenda</string>
+    <string name="phone_calendar_move_title">L’agent veut déplacer un événement</string>
+    <string name="phone_calendar_add_question">%1$s, dans %2$s.</string>
+    <string name="phone_calendar_add_question_place">%1$s, dans %2$s, à %3$s.</string>
+    <string name="phone_calendar_move_question">Du %1$s au %2$s, dans %3$s.</string>
+    <plurals name="phone_calendar_guests">
+        <item quantity="one">%d invité pourra être prévenu.</item>
+        <item quantity="many">%d invités pourront être prévenus.</item>
+        <item quantity="other">%d invités pourront être prévenus.</item>
+    </plurals>
+    <string name="phone_calendar_title_line">Titre : %1$s</string>
+    <string name="phone_calendar_notes_line">Notes : %1$s</string>
+    <string name="phone_calendar_all_day">%1$s, toute la journée</string>
+    <string name="phone_calendar_days_all_day">Du %1$s au %2$s, toute la journée</string>
+    <string name="phone_calendar_day_hours">%1$s, %2$s–%3$s</string>
+    <string name="phone_calendar_range">%1$s au %2$s</string>
+    <string name="phone_calendar_day_time">%1$s, %2$s</string>
+    <string name="phone_calendar_day_pattern">EEE d MMM</string>
+    <string name="phone_calendar_day_year_pattern">EEE d MMM yyyy</string>
+
+    <string name="phone_place_title">L’agent veut surveiller un lieu</string>
+    <string name="phone_place_remove_title">L’agent veut arrêter de surveiller un lieu</string>
+    <string name="phone_place_remove_arrive">Ne plus surveiller %1$s ? Plus rien ne sera envoyé quand vous y arriverez.</string>
+    <string name="phone_place_remove_leave">Ne plus surveiller %1$s ? Plus rien ne sera envoyé quand vous le quitterez.</string>
+    <string name="phone_place_here">là où se trouve le téléphone, %1$s</string>
+    <string name="phone_place_chat">\"%1$s\"</string>
+    <string name="phone_place_this_chat">cette conversation</string>
+    <string name="phone_place_add_arrive">Quand vous arrivez à %1$s (%2$s, %3$d m), Kyllene envoie ceci à %4$s en votre nom : %5$s</string>
+    <string name="phone_place_add_leave">Quand vous quittez %1$s (%2$s, %3$d m), Kyllene envoie ceci à %4$s en votre nom : %5$s</string>
+    <string name="phone_place_arrived">Arrivé à %1$s</string>
+    <string name="phone_place_left">Parti de %1$s</string>
+    <string name="phone_place_the_chat">la conversation</string>
+    <string name="phone_place_sent">Envoyé à %1$s : %2$s</string>
+    <string name="phone_place_not_sent">Envoi impossible à %1$s : %2$s. Ouvrez Kyllene pour l’envoyer vous-même.</string>
+    <string name="phone_place_no_answer">le Gateway n’a pas répondu à temps</string>
+    <string name="phone_place_other_gateway">Kyllene est maintenant connecté à un autre Gateway</string>
+    <string name="phone_place_not_accepted">il n’a pas été accepté</string>
+    <string name="phone_place_no_reach">Kyllene n’a pas pu joindre le Gateway</string>
+    <string name="phone_place_refused">le Gateway l’a refusé</string>
+</resources>

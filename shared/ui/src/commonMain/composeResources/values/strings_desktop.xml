@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Words only the desktop window’s own versions of shared pieces use (shared/ui/src/jvmMain): its file dialogs,
+    saving and what it can’t do yet. desktop_ keeps them apart from the phone’s.
+-->
+<resources>
+    <!-- Attaching files from the system’s Open dialog, a drop or a paste. -->
+    <string name="desktop_attach_photos">Attach photos</string>
+    <string name="desktop_attach_files">Attach files</string>
+    <string name="desktop_file_dialog_failed">Couldn’t open the file dialog.</string>
+    <string name="desktop_attach_read_failed">Couldn’t read a file.</string>
+    <string name="desktop_attach_no_camera">The desktop app can’t use a camera yet.</string>
+    <string name="desktop_attach_photo_too_large">%1$s is larger than 50 MB.</string>
+    <string name="desktop_attach_file_too_large">%1$s is larger than %2$d MB.</string>
+    <string name="desktop_attach_over_budget">That’s more than 50 MB of attachments at once.</string>
+    <string name="desktop_attach_not_an_image">Couldn’t read %1$s as an image.</string>
+
+    <!-- Saving a file from a chat through the system’s Save dialog. -->
+    <string name="desktop_save_title">Save</string>
+    <string name="desktop_save_dialog_failed">Couldn’t open the Save dialog.</string>
+    <string name="desktop_save_cancelled">Not saved.</string>
+    <string name="desktop_saved_to">Saved to %1$s</string>
+    <string name="desktop_save_failed">Couldn’t save: %1$s</string>
+
+    <!-- What the desktop app can’t show or do. -->
+    <string name="desktop_pdf_unsupported">PDFs don’t open in the desktop app yet. Save gets the file.</string>
+    <string name="desktop_widgets_unsupported">Widgets don’t show in this build of the desktop app.</string>
+</resources>

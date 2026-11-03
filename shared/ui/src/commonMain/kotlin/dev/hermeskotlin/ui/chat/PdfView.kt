@@ -48,6 +48,8 @@ import dev.hermeskotlin.designsystem.stroke
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 import kotlin.math.sqrt
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /** An open PDF: the shape of each page, and a way to draw one. Closed when the viewer leaves it. */
 internal interface PdfPages : AutoCloseable {
@@ -62,16 +64,19 @@ internal interface PdfPages : AutoCloseable {
 internal sealed interface PdfOpen {
     class Ready(val pages: PdfPages) : PdfOpen
 
-    data class Failed(val message: String) : PdfOpen
+    data class Failed(val problem: FileProblem) : PdfOpen {
+        /** Words already written elsewhere, shown as they are. */
+        constructor(message: String) : this(FileProblem.Said(message))
+    }
 }
 
 /** Opens a PDF's bytes off the main thread. */
 @Composable
 internal expect fun rememberPdfOpener(): suspend (ByteArray) -> PdfOpen
 
-internal const val PDF_LOCKED = "It's protected with a password. Save it, or share it to an app that asks for one."
-internal const val PDF_BROKEN = "It doesn't read as a PDF: it may be damaged or cut short. Save gets the file as it is."
-internal const val PDF_NO_ROOM = "The phone has no room to open it right now. Save or share it instead."
+internal val PDF_LOCKED: FileProblem = FileProblem.PdfLocked
+internal val PDF_BROKEN: FileProblem = FileProblem.PdfBroken
+internal val PDF_NO_ROOM: FileProblem = FileProblem.PdfNoRoom
 
 /**
  * A PDF's pages one under another, each as wide as the screen and drawn only once it scrolls near.
@@ -146,13 +151,14 @@ internal fun PdfDocumentView(pages: PdfPages, modifier: Modifier = Modifier) {
 @Composable
 private fun PdfPage(pages: PdfPages, index: Int, count: Int) {
     val aspect = pages.aspects[index].takeIf { it.isFinite() && it > 0f }?.coerceIn(0.1f, 10f) ?: (1f / 1.414f)
+    val pageLabel = stringResource(Res.string.chat_pdf_page_of, index + 1, count)
     BoxWithConstraints(
         Modifier
             .fillMaxWidth()
             .aspectRatio(aspect)
             .background(Color.White)
             .border(1.dp, Theme[colors][stroke])
-            .semantics { contentDescription = "Page ${index + 1} of $count" },
+            .semantics { contentDescription = pageLabel },
     ) {
         val target = renderWidth(constraints.maxWidth, aspect)
         var bitmap by remember(pages, index) { mutableStateOf<ImageBitmap?>(null) }

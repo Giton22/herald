@@ -82,7 +82,6 @@ import com.composables.icons.lucide.FileText
 import com.composables.icons.lucide.FileWarning
 import com.composables.icons.lucide.Lucide
 import dev.hermeskotlin.ui.shareIcon
-import dev.hermeskotlin.ui.shareLabel
 import com.composables.icons.lucide.WrapText
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
@@ -136,6 +135,11 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 /** Where a file preview stands: loading, its text, or why it can't be shown. */
 sealed interface FileLoad {
@@ -143,7 +147,10 @@ sealed interface FileLoad {
 
     data class Ready(val text: FileText) : FileLoad
 
-    data class Failed(val message: String) : FileLoad
+    data class Failed(val problem: FileProblem) : FileLoad {
+        /** Words already written elsewhere, shown as they are. */
+        constructor(message: String) : this(FileProblem.Said(message))
+    }
 
     /** A PDF fetched whole and opened: its pages, drawn as they scroll near. */
     class Pdf internal constructor(internal val pages: PdfPages) : FileLoad
@@ -153,7 +160,76 @@ sealed interface FileLoad {
 sealed interface FileDownload {
     class Ready(val bytes: ByteArray) : FileDownload
 
-    data class Failed(val message: String) : FileDownload
+    data class Failed(val problem: FileProblem) : FileDownload {
+        /** Words already written elsewhere, shown as they are. */
+        constructor(message: String) : this(FileProblem.Said(message))
+    }
+}
+
+/** Why a file or widget can't be shown; [fileProblemText] puts it into words. */
+sealed interface FileProblem {
+    /** Words from elsewhere (the gateway's own reason, another screen's), shown as they are. */
+    data class Said(val text: String) : FileProblem
+
+    /** The gateway refused for a [reason] it gave. */
+    data class Refused(val reason: String) : FileProblem
+
+    data object NotConnected : FileProblem
+    data object Missing : FileProblem
+    data object Private : FileProblem
+    data object TooLargeToPreview : FileProblem
+    data object TooLargeToHandOver : FileProblem
+    data object SignInAgain : FileProblem
+    data object Busy : FileProblem
+    data object Unreachable : FileProblem
+    data object CouldNotOpen : FileProblem
+    data object PdfLocked : FileProblem
+    data object PdfBroken : FileProblem
+    data object PdfNoRoom : FileProblem
+    data object WidgetNotHtml : FileProblem
+    data object WidgetTooBig : FileProblem
+    data object WidgetEmpty : FileProblem
+    data object WidgetSlow : FileProblem
+    data object WidgetUnreadable : FileProblem
+    data object WidgetNotLoaded : FileProblem
+    data object WidgetNotFetched : FileProblem
+}
+
+private fun FileProblem.resource(): Pair<StringResource, String?>? = when (this) {
+    is FileProblem.Said -> null
+    is FileProblem.Refused -> Res.string.chat_file_refused to reason.trimEnd('.')
+    FileProblem.NotConnected -> Res.string.chat_file_not_connected to null
+    FileProblem.Missing -> Res.string.chat_file_missing to null
+    FileProblem.Private -> Res.string.chat_file_private to null
+    FileProblem.TooLargeToPreview -> Res.string.chat_file_too_large_preview to null
+    FileProblem.TooLargeToHandOver -> Res.string.chat_file_too_large_whole to null
+    FileProblem.SignInAgain -> Res.string.chat_file_sign_in to null
+    FileProblem.Busy -> Res.string.chat_file_busy to null
+    FileProblem.Unreachable -> Res.string.chat_file_unreachable to null
+    FileProblem.CouldNotOpen -> Res.string.chat_file_could_not_open to null
+    FileProblem.PdfLocked -> Res.string.chat_pdf_locked to null
+    FileProblem.PdfBroken -> Res.string.chat_pdf_broken to null
+    FileProblem.PdfNoRoom -> Res.string.chat_pdf_no_room to null
+    FileProblem.WidgetNotHtml -> Res.string.chat_widget_not_html to null
+    FileProblem.WidgetTooBig -> Res.string.chat_widget_too_big to null
+    FileProblem.WidgetEmpty -> Res.string.chat_widget_empty to null
+    FileProblem.WidgetSlow -> Res.string.chat_widget_slow to null
+    FileProblem.WidgetUnreadable -> Res.string.chat_widget_unreadable to null
+    FileProblem.WidgetNotLoaded -> Res.string.chat_widget_not_loaded to null
+    FileProblem.WidgetNotFetched -> Res.string.chat_widget_not_fetched to null
+}
+
+/** [problem] in the words the viewer shows. */
+@Composable
+internal fun fileProblemText(problem: FileProblem): String {
+    val (res, arg) = problem.resource() ?: return (problem as FileProblem.Said).text
+    return if (arg != null) stringResource(res, arg) else stringResource(res)
+}
+
+/** The same, for a notice set from a coroutine. */
+internal suspend fun fileProblemWords(problem: FileProblem): String {
+    val (res, arg) = problem.resource() ?: return (problem as FileProblem.Said).text
+    return if (arg != null) getString(res, arg) else getString(res)
 }
 
 /**
@@ -268,13 +344,13 @@ internal fun FileViewerPage(
         }
         val got = download(file)
         if (got is FileDownload.Failed) {
-            value = FileLoad.Failed(got.message)
+            value = FileLoad.Failed(got.problem)
             return@produceState
         }
         fetched = (got as FileDownload.Ready).bytes
         // Platform openers own cancellation cleanup; an opened document closes with this page.
         when (val opened = openPdf(got.bytes)) {
-            is PdfOpen.Failed -> value = FileLoad.Failed(opened.message)
+            is PdfOpen.Failed -> value = FileLoad.Failed(opened.problem)
             is PdfOpen.Ready -> {
                 if (!isActive) {
                     opened.pages.close()
@@ -308,7 +384,7 @@ internal fun FileViewerPage(
         scope.launch {
             when (val result = download(file)) {
                 is FileDownload.Ready -> action(result.bytes)
-                is FileDownload.Failed -> notice = Notice("Couldn't get ${file.name}: ${result.message.replaceFirstChar { it.lowercase() }}", error = true)
+                is FileDownload.Failed -> notice = Notice(getString(Res.string.chat_file_get_failed, file.name, fileProblemWords(result.problem)), error = true)
             }
             busy = false
         }
@@ -322,7 +398,7 @@ internal fun FileViewerPage(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            IconButton(Lucide.ArrowLeft, contentDescription = if (canGoBack) "Back" else "Close", onClick = onDismiss, tint = Theme[colors][textColor])
+            IconButton(Lucide.ArrowLeft, contentDescription = stringResource(if (canGoBack) Res.string.common_back else Res.string.chat_close), onClick = onDismiss, tint = Theme[colors][textColor])
             KindTile(kind)
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
                 Text(
@@ -337,8 +413,8 @@ internal fun FileViewerPage(
                     listOfNotNull(
                         file.folder.ifEmpty { "/" },
                         (ready?.byteSize ?: fetched?.size?.toLong())?.let(::formatBytes),
-                        pdf?.pages?.aspects?.size?.let { if (it == 1) "1 page" else "$it pages" },
-                        file.line?.let { "line $it" },
+                        pdf?.pages?.aspects?.size?.let { pluralStringResource(Res.plurals.chat_pdf_pages, it, it) },
+                        file.line?.let { stringResource(Res.string.chat_file_line, it) },
                     ).joinToString(" · "),
                     style = Theme[typography][caption],
                     color = Theme[colors][textTertiary],
@@ -349,10 +425,10 @@ internal fun FileViewerPage(
             if (busy || fetching) {
                 Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
             } else {
-                IconButton(Lucide.Download, contentDescription = "Save ${file.name}", onClick = {
+                IconButton(Lucide.Download, contentDescription = stringResource(Res.string.chat_save_named, file.name), onClick = {
                     withBytes { notice = Notice(actions.save(it, file.name)) }
                 })
-                IconButton(shareIcon, contentDescription = "$shareLabel: ${file.name}", onClick = { withBytes { actions.share(it, file.name) } })
+                IconButton(shareIcon, contentDescription = shareNamed(file.name), onClick = { withBytes { actions.share(it, file.name) } })
             }
         }
 
@@ -365,11 +441,13 @@ internal fun FileViewerPage(
             ) {
                 // The switch takes the room the buttons leave: it fills its width and would push them off screen.
                 if (kind == GatewayFileKind.Markdown || kind == GatewayFileKind.Table || kind == GatewayFileKind.Json) {
+                    val source = stringResource(Res.string.chat_file_source)
+                    val shown = stringResource(if (kind == GatewayFileKind.Json) Res.string.chat_file_formatted else Res.string.chat_file_preview)
                     SegmentedControl(
                         options = listOf(false, true),
                         selected = raw,
                         onSelect = { raw = it },
-                        optionLabel = { if (it) "Source" else if (kind == GatewayFileKind.Json) "Formatted" else "Preview" },
+                        optionLabel = { if (it) source else shown },
                         modifier = Modifier.weight(1f),
                         optionIcon = { if (it) Lucide.FileCode else kindIcon(kind) },
                     )
@@ -379,7 +457,7 @@ internal fun FileViewerPage(
                 if (textual) {
                     IconButton(
                         Lucide.WrapText,
-                        contentDescription = if (wrap) "Don't wrap lines" else "Wrap lines",
+                        contentDescription = stringResource(if (wrap) Res.string.chat_file_no_wrap else Res.string.chat_file_wrap),
                         onClick = { wrap = !wrap },
                         tint = if (wrap) Theme[colors][accentText] else Theme[colors][textSecondary],
                         containerColor = if (wrap) Theme[colors][accentSoft] else Color.Transparent,
@@ -387,7 +465,7 @@ internal fun FileViewerPage(
                 }
                 IconButton(
                     if (copied) Lucide.Check else Lucide.Copy,
-                    contentDescription = "Copy the text",
+                    contentDescription = stringResource(Res.string.chat_file_copy_text),
                     onClick = {
                         scope.launch {
                             val clip = clipFor(ready)
@@ -397,10 +475,10 @@ internal fun FileViewerPage(
                             } catch (e: CancellationException) {
                                 throw e
                             } catch (e: Exception) {
-                                notice = Notice("Couldn't copy it to the clipboard. Save gets the whole file.", error = true)
+                                notice = Notice(getString(Res.string.chat_file_copy_failed), error = true)
                                 return@launch
                             }
-                            clip.note?.let { notice = Notice(it) }
+                            clip.note?.let { notice = Notice(clipNoteWords(it)) }
                             copied = true
                             kotlinx.coroutines.delay(1_500)
                             copied = false
@@ -415,7 +493,7 @@ internal fun FileViewerPage(
         if (ready?.truncated == true) {
             val shownBytes = remember(ready) { ready.text.encodeToByteArray().size.toLong() }
             Banner(
-                "Showing the first ${formatBytes(shownBytes)} of ${formatBytes(ready.byteSize)}. Save gets the whole file.",
+                stringResource(Res.string.chat_file_showing_first, formatBytes(shownBytes), formatBytes(ready.byteSize)),
                 tint = Theme[colors][warning],
                 background = Theme[colors][warningSoft],
             )
@@ -430,7 +508,7 @@ internal fun FileViewerPage(
                     state is FileLoad.Failed -> Unavailable(
                         file,
                         kind,
-                        state.message,
+                        fileProblemText(state.problem),
                         onSave = { withBytes { notice = Notice(actions.save(it, file.name)) } },
                         onShare = { withBytes { actions.share(it, file.name) } }.takeIf { fetched != null },
                     )
@@ -565,7 +643,7 @@ private fun FileBody(file: GatewayFile, kind: GatewayFileKind, text: FileText, r
 private fun DataTable(table: DelimitedTable, modifier: Modifier) {
     if (table.rows.isEmpty()) {
         Box(modifier, contentAlignment = Alignment.Center) {
-            Text("The file is empty.", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+            Text(stringResource(Res.string.chat_file_empty), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
         }
         return
     }
@@ -627,10 +705,11 @@ private fun DataTable(table: DelimitedTable, modifier: Modifier) {
         }
         }
         Text(
-            buildString {
-                append("${table.rows.size - 1} rows · ${table.columns} columns")
-                if (table.more) append(" · more in the full file")
-            },
+            listOfNotNull(
+                pluralStringResource(Res.plurals.chat_table_rows, table.rows.size - 1, table.rows.size - 1),
+                pluralStringResource(Res.plurals.chat_table_columns, table.columns, table.columns),
+                if (table.more) stringResource(Res.string.chat_table_more) else null,
+            ).joinToString(" · "),
             style = Theme[typography][caption],
             color = Theme[colors][textTertiary],
             modifier = Modifier.fillMaxWidth().background(Theme[colors][surface2]).padding(horizontal = 12.dp, vertical = 8.dp),
@@ -655,13 +734,17 @@ private fun Unavailable(file: GatewayFile, kind: GatewayFileKind, error: String?
         }
         Spacer(Modifier.height(16.dp))
         Text(
-            if (error != null) "Couldn't open ${file.name}" else "No preview for ${file.extension.uppercase().ifEmpty { "this" }} files",
+            when {
+                error != null -> stringResource(Res.string.chat_file_open_failed, file.name)
+                file.extension.isEmpty() -> stringResource(Res.string.chat_file_no_preview)
+                else -> stringResource(Res.string.chat_file_no_preview_type, file.extension.uppercase())
+            },
             style = Theme[typography][label],
             color = Theme[colors][textColor],
         )
         Spacer(Modifier.height(6.dp))
         Text(
-            error ?: if (isDesktop) "Save it, then open it with an app that can." else "Save it to the phone, or share it to an app that opens it.",
+            error ?: stringResource(if (isDesktop) Res.string.chat_file_save_hint_desktop else Res.string.chat_file_save_hint),
             style = Theme[typography][bodySmall],
             color = Theme[colors][textTertiary],
             textAlign = TextAlign.Center,
@@ -669,8 +752,8 @@ private fun Unavailable(file: GatewayFile, kind: GatewayFileKind, error: String?
         if (onShare != null) {
             Spacer(Modifier.height(20.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                Button("Save", onClick = onSave, leadingIcon = Lucide.Download, size = ButtonSize.Small)
-                Button(shareLabel, onClick = onShare, leadingIcon = shareIcon, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
+                Button(stringResource(Res.string.chat_save), onClick = onSave, leadingIcon = Lucide.Download, size = ButtonSize.Small)
+                Button(shareText(), onClick = onShare, leadingIcon = shareIcon, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
             }
         }
     }
@@ -706,7 +789,7 @@ private fun KindTile(kind: GatewayFileKind) {
         Modifier.size(40.dp).background(Theme[colors][accentSoft], RoundedCornerShape(12.dp)),
         contentAlignment = Alignment.Center,
     ) {
-        UnstyledIcon(kindIcon(kind), contentDescription = kind.label, tint = Theme[colors][accentText], modifier = Modifier.size(22.dp))
+        UnstyledIcon(kindIcon(kind), contentDescription = kindLabel(kind), tint = Theme[colors][accentText], modifier = Modifier.size(22.dp))
     }
 }
 
@@ -728,7 +811,43 @@ private fun languageOf(file: GatewayFile): String? = when (file.kind) {
 }
 
 /** What Copy puts on the clipboard, and what to tell when that isn't the whole file. */
-internal class Clip(val text: String, val note: String?)
+internal class Clip(val text: String, val note: ClipNote?)
+
+/** Why Copy didn't take the whole file: only the part shown came, or the first [chars] characters. */
+internal sealed interface ClipNote {
+    data object PartShown : ClipNote
+
+    data class FirstChars(val chars: Int) : ClipNote
+}
+
+private suspend fun clipNoteWords(note: ClipNote): String = when (note) {
+    ClipNote.PartShown -> getString(Res.string.chat_file_copied_part)
+    is ClipNote.FirstChars -> getString(Res.string.chat_file_copied_first, groupThousands(note.chars))
+}
+
+/** Share on the phone, Open in app on the desktop. */
+@Composable
+internal fun shareText(): String = stringResource(if (isDesktop) Res.string.chat_open_in_app else Res.string.chat_share)
+
+/** [shareText] for one file, as a button's description. */
+@Composable
+internal fun shareNamed(name: String): String =
+    stringResource(if (isDesktop) Res.string.chat_open_in_app_named else Res.string.chat_share_named, name)
+
+/** A file kind's name, for screen readers. */
+@Composable
+internal fun kindLabel(kind: GatewayFileKind): String = stringResource(
+    when (kind) {
+        GatewayFileKind.Markdown -> Res.string.chat_kind_markdown
+        GatewayFileKind.Json -> Res.string.chat_kind_json
+        GatewayFileKind.Table -> Res.string.chat_kind_table
+        GatewayFileKind.Code -> Res.string.chat_kind_code
+        GatewayFileKind.Text -> Res.string.chat_kind_text
+        GatewayFileKind.Image -> Res.string.chat_kind_picture
+        GatewayFileKind.Pdf -> Res.string.chat_kind_pdf
+        GatewayFileKind.Other -> Res.string.chat_kind_file
+    },
+)
 
 /**
  * The preview's text for the clipboard, cut to [max] characters: Android hands a clip to the system in
@@ -737,10 +856,10 @@ internal class Clip(val text: String, val note: String?)
  */
 internal fun clipFor(file: FileText, max: Int = MAX_CLIP_CHARS): Clip {
     if (file.text.length <= max) {
-        return Clip(file.text, if (file.truncated) "Copied the part shown. Save gets the whole file." else null)
+        return Clip(file.text, if (file.truncated) ClipNote.PartShown else null)
     }
     val end = if (file.text[max - 1].isHighSurrogate()) max - 1 else max
-    return Clip(file.text.substring(0, end), "Copied the first ${groupThousands(end)} characters. Save gets the whole file.")
+    return Clip(file.text.substring(0, end), ClipNote.FirstChars(end))
 }
 
 /** 100000 as 100,000. */

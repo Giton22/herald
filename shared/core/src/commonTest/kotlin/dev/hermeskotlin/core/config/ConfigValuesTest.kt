@@ -18,14 +18,16 @@ class ConfigValuesTest {
 
     @Test
     fun summariesSayWhatsSet() {
-        assertEquals("Not set", entry(ConfigControl.Text, null).summary())
-        assertEquals("Not set", entry(ConfigControl.Text, JsonPrimitive("")).summary())
-        assertEquals("smart", entry(ConfigControl.Text, JsonPrimitive("smart")).summary())
-        assertEquals("ls, git status", entry(ConfigControl.Lines, json("""["ls","git status"]""")).summary())
-        assertEquals("None", entry(ConfigControl.Lines, json("[]")).summary())
-        assertEquals("2 entries", entry(ConfigControl.Json, json("""{"a":1,"b":2}""")).summary())
+        assertEquals(ConfigSummary.NotSet, entry(ConfigControl.Text, null).summary())
+        assertEquals(ConfigSummary.NotSet, entry(ConfigControl.Text, JsonPrimitive("")).summary())
+        assertEquals(ConfigSummary.Text("smart"), entry(ConfigControl.Text, JsonPrimitive("smart")).summary())
+        assertEquals(ConfigSummary.Text("ls, git status"), entry(ConfigControl.Lines, json("""["ls","git status"]""")).summary())
+        assertEquals(ConfigSummary.None, entry(ConfigControl.Lines, json("[]")).summary())
+        assertEquals(ConfigSummary.Entries(2), entry(ConfigControl.Json, json("""{"a":1,"b":2}""")).summary())
+        assertEquals(ConfigSummary.On, entry(ConfigControl.Toggle, JsonPrimitive(true)).summary())
+        assertEquals(ConfigSummary.Off, entry(ConfigControl.Toggle, JsonPrimitive(false)).summary())
         assertEquals(
-            "opencode-go:glm-5.3, openrouter:anthropic/claude-sonnet-4.6",
+            ConfigSummary.Text("opencode-go:glm-5.3, openrouter:anthropic/claude-sonnet-4.6"),
             entry(ConfigControl.Fallbacks, json("""[{"provider":"opencode-go","model":"glm-5.3"},"openrouter/anthropic/claude-sonnet-4.6"]""")).summary(),
         )
     }

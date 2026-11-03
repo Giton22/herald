@@ -17,6 +17,9 @@ kotlin {
         // The RTL layout harness renders the real components under Robolectric, so the host test needs the
         // module's merged Android resources (the app's fonts and theme) rather than stubs.
         withHostTest { isIncludeAndroidResources = true }
+        // The catalogue ships as this module's assets; the KMP library plugin leaves Android resources off
+        // unless asked, and then every stringResource() would find nothing at run time.
+        androidResources { enable = true }
     }
     // The desktop app (experimental). Its lambdas are compiled as classes, not made at run time: the app's warm-up
     // can load them ahead, so a page's first opening doesn't build them one by one on the UI thread.
@@ -39,6 +42,7 @@ kotlin {
             implementation(libs.compose.ui.tooling.preview)
             implementation(libs.haze)
             implementation(libs.haze.blur)
+            implementation(compose.components.resources)
         }
         androidMain.dependencies {
             implementation(libs.androidx.activity.compose)
@@ -85,6 +89,12 @@ kotlin {
 
 // Lint only ever gets this module's test sources, and the app's lint ignores those (see androidApp).
 tasks.matching { it.name == "lintAnalyzeAndroidHostTest" }.configureEach { enabled = false }
+
+// The screens' words live in composeResources: values/ is English, values-de German, and a new language is a
+// folder beside them. Both apps read from it; docs/i18n.md says what is left in code.
+compose.resources {
+    packageOfResClass = "dev.hermeskotlin.ui.resources"
+}
 
 // `-Drtl.geometry=<dir>` asks the RTL layout tests to write their geometry and pixels there.
 providers.systemProperty("rtl.geometry").orNull?.let { dir ->

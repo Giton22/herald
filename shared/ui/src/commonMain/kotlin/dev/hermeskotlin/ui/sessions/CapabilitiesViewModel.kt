@@ -19,8 +19,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.StringResource
 
-enum class CapabilityTab(val label: String) { Skills("Skills"), Tools("Toolsets"), Mcp("MCP") }
+enum class CapabilityTab(val label: StringResource) {
+    Skills(Res.string.sessions_tab_skills),
+    Tools(Res.string.sessions_tab_toolsets),
+    Mcp(Res.string.sessions_tab_mcp),
+}
 
 /** One list's load state; [items] stays null until the first answer. */
 data class Loadable<T>(val items: List<T>? = null, val loading: Boolean = false, val error: String? = null)
@@ -32,7 +38,7 @@ data class CapabilitiesUiState(
     val servers: Loadable<McpServer> = Loadable(),
     /** Connection tests by server name; a null value is a test in flight. */
     val tests: Map<String, McpTestResult?> = emptyMap(),
-    val message: String? = null,
+    val message: Said? = null,
     val sessionExpired: Boolean = false,
 )
 
@@ -156,7 +162,11 @@ class CapabilitiesViewModel(private val api: CapabilitiesApi) : ViewModel(), Cap
             if (result !is ApiResult.Success) {
                 _state.update {
                     apply(it, !enabled).copy(
-                        message = listOfNotNull("Couldn't ${if (enabled) "turn on" else "turn off"} $label", result.errorMessage).joinToString(": "),
+                        message = said(
+                            if (enabled) Res.string.sessions_turn_on_failed else Res.string.sessions_turn_off_failed,
+                            label,
+                            detail = result.errorMessage,
+                        ),
                         sessionExpired = result == ApiResult.SessionExpired,
                     )
                 }

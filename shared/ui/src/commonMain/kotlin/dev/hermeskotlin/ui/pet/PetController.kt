@@ -12,6 +12,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.getString
 
 data class PetGalleryState(
     val gallery: PetGallery? = null,
@@ -70,7 +72,7 @@ class PetController(private val api: PetApi, private val scope: CoroutineScope) 
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _gallery.update { it.copy(loading = false, error = e.message ?: "Couldn't load the pets.") }
+                _gallery.update { it.copy(loading = false, error = e.message ?: getString(Res.string.pet_error_load)) }
             }
         }
     }
@@ -99,7 +101,7 @@ class PetController(private val api: PetApi, private val scope: CoroutineScope) 
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            _gallery.update { it.copy(adopting = null, error = e.message ?: "Couldn't adopt ${pet.displayName}.") }
+            _gallery.update { it.copy(adopting = null, error = e.message ?: getString(Res.string.pet_error_adopt, pet.displayName)) }
             throw e
         }
     }

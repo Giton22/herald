@@ -48,8 +48,11 @@ import dev.hermeskotlin.designsystem.well
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
+import dev.hermeskotlin.core.gateway.CheckNote
 import dev.hermeskotlin.core.gateway.CheckStage
 import dev.hermeskotlin.core.gateway.StageResult
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 import dev.hermeskotlin.designsystem.body
 import dev.hermeskotlin.designsystem.bodySmall
 import dev.hermeskotlin.designsystem.colors
@@ -70,18 +73,18 @@ internal fun ConnectionChecklist(
     results: Map<CheckStage, StageResult>,
     running: Boolean,
     modifier: Modifier = Modifier,
-    pendingNote: (CheckStage) -> String = { "Not checked yet." },
+    pendingNote: @Composable (CheckStage) -> String = { stringResource(Res.string.check_not_checked_yet) },
 ) {
     val current = if (running) CheckStage.entries.firstOrNull { it !in results } else null
     val stages = CheckStage.entries
     Column(modifier.fillMaxWidth()) {
         stages.forEachIndexed { index, stage ->
             StageRow(
-                stage.label,
+                stageTitle(stage),
                 results[stage],
                 checking = stage == current,
                 pendingNote(stage),
-                step = "Step ${index + 1} of ${stages.size}",
+                step = stringResource(Res.string.check_step, index + 1, stages.size),
                 first = index == 0,
                 last = index == stages.lastIndex,
             )
@@ -115,15 +118,15 @@ private fun StageRow(title: String, result: StageResult?, checking: Boolean, pen
         Column(Modifier.weight(1f).padding(vertical = 9.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(title, style = Theme[typography][body].copy(fontWeight = FontWeight.Medium), color = Theme[colors][text])
             val detail = when {
-                checking -> "Checking…"
-                result is StageResult.Passed -> result.detail
-                result is StageResult.Failed -> result.problem
-                result is StageResult.Skipped -> result.reason
+                checking -> stringResource(Res.string.common_checking)
+                result is StageResult.Passed -> checkNoteText(result.detail)
+                result is StageResult.Failed -> checkNoteText(result.problem)
+                result is StageResult.Skipped -> checkNoteText(result.reason)
                 else -> pendingNote
             }
             // What went wrong and what to do can be selected and copied on a desktop, for a bug report.
             CopyableOnDesktop { Text(detail, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary]) }
-            if (result is StageResult.Failed) FixHint(result.fix)
+            if (result is StageResult.Failed) FixHint(checkNoteText(result.fix))
         }
     }
 }
@@ -131,15 +134,16 @@ private fun StageRow(title: String, result: StageResult?, checking: Boolean, pen
 @Composable
 private fun StageDisc(result: StageResult?, checking: Boolean, step: String, modifier: Modifier) {
     val (fill, tint, icon, spoken) = when {
-        checking -> Quad(Theme[colors][surface2], Theme[colors][accentText], null, "Checking")
-        result is StageResult.Passed -> Quad(Theme[colors][successSoft], Theme[colors][success], Lucide.Check, "Passed")
-        result is StageResult.Failed -> Quad(Theme[colors][dangerSoft], Theme[colors][danger], Lucide.X, "Failed")
-        result is StageResult.Skipped -> Quad(Theme[colors][surface2], Theme[colors][textTertiary], Lucide.Minus, "Skipped")
-        else -> Quad(Theme[colors][surface2], Theme[colors][textTertiary], null, "Not checked")
+        checking -> Quad(Theme[colors][surface2], Theme[colors][accentText], null, stringResource(Res.string.check_state_checking))
+        result is StageResult.Passed -> Quad(Theme[colors][successSoft], Theme[colors][success], Lucide.Check, stringResource(Res.string.check_state_passed))
+        result is StageResult.Failed -> Quad(Theme[colors][dangerSoft], Theme[colors][danger], Lucide.X, stringResource(Res.string.check_state_failed))
+        result is StageResult.Skipped -> Quad(Theme[colors][surface2], Theme[colors][textTertiary], Lucide.Minus, stringResource(Res.string.check_state_skipped))
+        else -> Quad(Theme[colors][surface2], Theme[colors][textTertiary], null, stringResource(Res.string.check_state_not_checked))
     }
+    val description = stringResource(Res.string.check_disc, step, spoken)
     Box(
         // One description for the disc, the spinner's own "Loading" folded in.
-        modifier.size(28.dp).background(fill, CircleShape).clearAndSetSemantics { contentDescription = "$step, $spoken" },
+        modifier.size(28.dp).background(fill, CircleShape).clearAndSetSemantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
         when {
@@ -168,7 +172,7 @@ private fun FixHint(fix: String) {
             .semantics(mergeDescendants = true) { },
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        UnstyledIcon(Lucide.Lightbulb, contentDescription = "What to do", tint = Theme[colors][warning], modifier = Modifier.padding(top = 2.dp).size(14.dp))
+        UnstyledIcon(Lucide.Lightbulb, contentDescription = stringResource(Res.string.check_what_to_do), tint = Theme[colors][warning], modifier = Modifier.padding(top = 2.dp).size(14.dp))
         CopyableOnDesktop { Text(fix, style = Theme[typography][bodySmall].copy(fontSize = 13.sp), color = Theme[colors][textSecondary]) }
     }
 }
@@ -179,19 +183,78 @@ private val DISC_TOP = 6.dp
 @Composable
 internal fun AddressGuide(modifier: Modifier = Modifier) {
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        GuideItem(
-            "Same Wi-Fi or local network",
-            "Use the server's local address and port, like 192.168.1.20:9119. Start the dashboard with --host 0.0.0.0 so other devices can reach it.",
-        )
+        GuideItem(stringResource(Res.string.connect_guide_local), stringResource(Res.string.connect_guide_local_detail))
         GuideItem(
             "Tailscale",
-            "Turn on Tailscale on this ${if (isDesktop) "computer" else "phone"} and use the server's Tailscale address, like 100.64.0.1:9119 or its .ts.net name. Works away from home too.",
+            stringResource(if (isDesktop) Res.string.connect_guide_tailscale_detail_desktop else Res.string.connect_guide_tailscale_detail),
         )
-        GuideItem(
-            "HTTPS",
-            "Use your https:// address when the dashboard sits behind a proxy with a certificate. The proxy must also pass WebSocket upgrades on /api/ws.",
-        )
+        GuideItem("HTTPS", stringResource(Res.string.connect_guide_https_detail))
     }
+}
+
+/** A stage's name. */
+@Composable
+internal fun stageTitle(stage: CheckStage): String = stringResource(
+    when (stage) {
+        CheckStage.Server -> Res.string.check_stage_server
+        CheckStage.SignIn -> Res.string.check_stage_sign_in
+        CheckStage.Live -> Res.string.check_stage_live
+    },
+)
+
+/** A line of the check in the app's language, its [CheckNote.args] filled in as they came. */
+@Composable
+internal fun checkNoteText(note: CheckNote): String {
+    val res = when (note.kind) {
+        CheckNote.Kind.ServerAnswers -> Res.string.check_server_answers
+        CheckNote.Kind.SignedInAs -> Res.string.check_signed_in_as
+        CheckNote.Kind.LiveReady -> Res.string.check_live_ready
+        CheckNote.Kind.NeedsServer -> Res.string.check_needs_server
+        CheckNote.Kind.NeedsSignIn -> Res.string.check_needs_sign_in
+        CheckNote.Kind.SignInExpired -> Res.string.check_sign_in_expired
+        CheckNote.Kind.SignInRateLimited -> Res.string.check_sign_in_rate_limited
+        CheckNote.Kind.SignInUnavailable -> Res.string.check_sign_in_unavailable
+        CheckNote.Kind.SignInRefused -> Res.string.check_sign_in_refused
+        CheckNote.Kind.TicketExpired -> Res.string.check_ticket_expired
+        CheckNote.Kind.TicketUnavailable -> Res.string.check_ticket_unavailable
+        CheckNote.Kind.RequestsRateLimited -> Res.string.check_requests_rate_limited
+        CheckNote.Kind.TicketRefused -> Res.string.check_ticket_refused
+        CheckNote.Kind.NeverReady -> Res.string.check_never_ready
+        CheckNote.Kind.NoChatEndpoint -> Res.string.check_no_chat_endpoint
+        CheckNote.Kind.ChatGuarded -> Res.string.check_chat_guarded
+        CheckNote.Kind.ChatLoginRedirect -> Res.string.check_chat_login_redirect
+        CheckNote.Kind.ChatRefused -> Res.string.check_chat_refused
+        CheckNote.Kind.TicketRejected -> Res.string.check_ticket_rejected
+        CheckNote.Kind.ChatCertRequired -> Res.string.check_chat_cert_required
+        CheckNote.Kind.ChatFailed -> Res.string.check_chat_failed
+        CheckNote.Kind.ServerCertRequired -> Res.string.check_server_cert_required
+        CheckNote.Kind.NotHermes -> Res.string.check_not_hermes
+        CheckNote.Kind.NotHermesStatus -> Res.string.check_not_hermes_status
+        CheckNote.Kind.AccessTokenRefused -> Res.string.check_access_token_refused
+        CheckNote.Kind.AccessBlocked -> Res.string.check_access_blocked
+        CheckNote.Kind.Unreachable -> Res.string.check_unreachable
+        CheckNote.Kind.FixSignInAgain -> Res.string.check_fix_sign_in_again
+        CheckNote.Kind.FixSignInPasswordOrBrowser -> Res.string.check_fix_sign_in_password_or_browser
+        CheckNote.Kind.FixWaitAMinute -> Res.string.check_fix_wait_a_minute
+        CheckNote.Kind.FixSignInOrUpdate -> Res.string.check_fix_sign_in_or_update
+        CheckNote.Kind.FixUpdateHermesTryAgain -> Res.string.check_fix_update_hermes_try_again
+        CheckNote.Kind.FixUpdateHermes -> Res.string.check_fix_update_hermes
+        CheckNote.Kind.FixAgentRunning -> Res.string.check_fix_agent_running
+        CheckNote.Kind.FixExactAddress -> Res.string.check_fix_exact_address
+        CheckNote.Kind.FixAccessTokenOrProxy -> Res.string.check_fix_access_token_or_proxy
+        CheckNote.Kind.FixAllowUpgrades -> Res.string.check_fix_allow_upgrades
+        CheckNote.Kind.FixAllowUpgradesOrRetry -> Res.string.check_fix_allow_upgrades_or_retry
+        CheckNote.Kind.FixClientCert -> Res.string.check_fix_client_cert
+        CheckNote.Kind.FixDashboardPort -> Res.string.check_fix_dashboard_port
+        CheckNote.Kind.FixCheckAccessToken -> Res.string.check_fix_check_access_token
+        CheckNote.Kind.FixAddAccessToken -> Res.string.check_fix_add_access_token
+        CheckNote.Kind.FixLoopback -> Res.string.check_fix_loopback
+        CheckNote.Kind.FixTailscale -> Res.string.check_fix_tailscale
+        CheckNote.Kind.FixHttps -> Res.string.check_fix_https
+        CheckNote.Kind.FixLocalNetwork -> Res.string.check_fix_local_network
+        CheckNote.Kind.FixReachable -> Res.string.check_fix_reachable
+    }
+    return stringResource(res, *note.args.toTypedArray())
 }
 
 @Composable

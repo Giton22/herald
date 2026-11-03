@@ -6,7 +6,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import dev.hermeskotlin.ui.rememberDesktopWeb
+import dev.hermeskotlin.ui.resources.*
 import kotlin.io.encoding.Base64
+import org.jetbrains.compose.resources.getString
 
 /** PDF parsing and drawing live in a bounded child of the bundled Java runtime. */
 @Composable
@@ -19,7 +21,7 @@ internal actual fun WidgetWebView(html: String, theme: WidgetTheme, name: String
     val web = rememberDesktopWeb()
     if (web == null) {
         val failure = rememberUpdatedState(onFailure)
-        LaunchedEffect(Unit) { failure.value("Widgets don't show in this build of the desktop app.") }
+        LaunchedEffect(Unit) { failure.value(getString(Res.string.desktop_widgets_unsupported)) }
         return
     }
     val document = remember(html, theme) { widgetDocument(html, theme, widgetFont) }
