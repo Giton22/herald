@@ -18,9 +18,11 @@ import dev.hermeskotlin.core.chat.LastChatStore
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.AccessTokens
+import dev.hermeskotlin.core.gateway.ClientCertAliases
 import dev.hermeskotlin.core.gateway.GatewayList
 import dev.hermeskotlin.core.gateway.GatewayRepository
 import dev.hermeskotlin.core.inbox.InboxStore
+import dev.hermeskotlin.ui.inbox.ReportChat
 import dev.hermeskotlin.core.gateway.SavedGateway
 import dev.hermeskotlin.core.profiles.ProfileStore
 import dev.hermeskotlin.core.bots.BotsApi
@@ -63,6 +65,14 @@ sealed interface Route {
 /** The saved gateways to switch between, and which of them still hold a session (switch without signing in). */
 data class GatewayChoices(val list: GatewayList = GatewayList(), val signedIn: Set<String> = emptySet())
 
+/**
+ * The profile to open a chat of [owner]'s (a profile name, `default` the default one) in: none named (null) when the
+ * chats are on the launch profile and [owner] is it, so the chat is one of theirs as any other; else [owner] by name.
+ * [launch] is the launch profile when the gateway said which; when it didn't, [owner] is named rather than guessed.
+ */
+fun reportChatProfile(owner: String, chatsProfile: String?, launch: String?): String? =
+    if (chatsProfile == null && launch != null && owner == launch) null else owner
+
 /** Top-level flow: pick gateway → sign in → chat, reopening where the user left off. Owns the gateway connection lifecycle. */
 class AppViewModel(
     private val gateways: GatewayRepository,
@@ -84,6 +94,8 @@ class AppViewModel(
     private val seen: SeenStore? = null,
     /** Each gateway's Inbox kept on the phone, which goes with the gateway. */
     private val inbox: InboxStore? = null,
+    /** Aliases picked on the Connect screen before their gateway is saved; saved gateways carry their own. */
+    private val certs: ClientCertAliases,
 ) : ViewModel() {
 
     private val _route = MutableStateFlow<Route>(Route.Loading)
@@ -251,6 +263,10 @@ class AppViewModel(
         viewModelScope.launch {
             if (signedInGateway()?.url != gateway.url) host.close()
             val saved = gateways.save(gateway)
+            // The Connect-screen pick is persisted on the gateway now, and the add flow is over: drop every
+            // pending pick so none shadows a saved gateway's certificate.
+            certs.clear()
+            if (saved.clientCertAlias != null) certs.changed(saved.gatewayUrl.host)
             sessionsChanged.update { it + 1 }
             connection.start(saved.gatewayUrl)
             _route.value = home(saved)
@@ -267,6 +283,8 @@ class AppViewModel(
     fun cancelAddGateway() {
         cancelPendingCall()
         viewModelScope.launch {
+            // A pick for the address abandoned would otherwise shadow saved gateways on its host until restart.
+            certs.clear()
             val current = gateways.current() ?: return@launch
             _route.value = if (auth.hasStoredSession(current.gatewayUrl)) home(current).also { connection.start(current.gatewayUrl) }
             else Route.SignIn(current)
@@ -288,6 +306,16 @@ class AppViewModel(
         viewModelScope.launch { gateways.rename(gateway.url, name) }
     }
 
+    /** Picks the client certificate to present to [gateway]; a null [alias] goes back to presenting none. */
+    fun setClientCert(gateway: SavedGateway, alias: String?) {
+        viewModelScope.launch {
+            gateways.setClientCert(gateway.url, alias)
+            // Saved gateways carry their own alias: a pending pick for the host would shadow this one (and the
+            // other gateways there). Dropping it also tells the engine to stop reusing connections to the host.
+            certs.set(gateway.gatewayUrl.host, null)
+        }
+    }
+
     /** Signs out of [gateway] and forgets it; removing the current one moves to the primary (or to [Route.Connect]). */
     fun removeGateway(gateway: SavedGateway) {
         if (gateway.url == currentGateway()?.url) cancelPendingCall()
@@ -305,6 +333,8 @@ class AppViewModel(
             // Again: a list read that was under way may have saved itself since.
             cache?.forgetGateway(gateway.gatewayUrl)
             gateways.remove(gateway.url)
+            // The saved alias goes with the gateway: no connection made with it is reused.
+            if (gateway.clientCertAlias != null) certs.changed(gateway.gatewayUrl.host)
             inbox?.forget(gateway.gatewayUrl.value)
             forgetUnusedAccessTokens()
             sessionsChanged.update { it + 1 }
@@ -335,6 +365,28 @@ class AppViewModel(
         cancelPendingCall()
         val gateway = signedInGateway() ?: return
         _route.value = Route.Chat(newChatTarget(gateway, currentProfile()).copy(draft = draft, cwd = cwd))
+    }
+
+    /**
+     * A chat about an Inbox report ([chat]): the run's own stored chat, or a new one that starts with the report.
+     * Either is in the profile whose cron job ran, which [reportChatProfile] names as the app does ([launch] is the
+     * gateway's launch profile, when it said). False, opening nothing, when the report is another gateway's: the
+     * app moved on while it was being fetched.
+     */
+    fun openReportChat(chat: ReportChat, launch: String? = null): Boolean {
+        val gateway = signedInGateway()?.takeIf { it.gatewayUrl.value == chat.gatewayUrl } ?: return false
+        // As every other way into a chat: a call still being looked up goes, spinner and all.
+        cancelPendingCall()
+        val profile = reportChatProfile(chat.profile, currentProfile(), launch)
+        val open = (_route.value as? Route.Chat)?.target
+        val stored = chat.storedSessionId
+        _route.value = when {
+            stored == null -> Route.Chat(newChatTarget(gateway, profile).copy(draft = chat.draft))
+            // Already open: it stays as it is, draft and place and all.
+            open != null && open.storedSessionId == stored && open.profile == profile -> return true
+            else -> Route.Chat(ChatTarget(gateway, stored, chat.title, profile = profile))
+        }
+        return true
     }
 
     /** Opens [bot]'s conversation [storedSessionId] that isn't its Bot Chat, in the bot's profile. */

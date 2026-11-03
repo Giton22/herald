@@ -56,12 +56,14 @@ import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
 import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Server
+import com.composables.icons.lucide.ShieldCheck
 import com.composables.icons.lucide.Star
 import com.composables.icons.lucide.Trash2
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.core.gateway.SavedGateway
+import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.accentText
 import dev.hermeskotlin.designsystem.body
@@ -86,6 +88,7 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.GatewayChoices
+import dev.hermeskotlin.ui.components.rememberClientCertPicker
 
 /**
  * The saved gateways, primary first, the one in use checked. Tapping one switches to it (its sign-in when it
@@ -103,9 +106,11 @@ fun GatewaysSheet(
     onSetPrimary: (SavedGateway) -> Unit,
     onRename: (SavedGateway, String) -> Unit,
     onRemove: (SavedGateway) -> Unit,
+    onSetClientCert: (SavedGateway, String?) -> Unit,
 ) {
     var renameTarget by remember { mutableStateOf<SavedGateway?>(null) }
     var removeTarget by remember { mutableStateOf<SavedGateway?>(null) }
+    var certTarget by remember { mutableStateOf<SavedGateway?>(null) }
     val list = choices.list
 
     BottomSheet(visible = visible, onDismiss = onDismiss) {
@@ -131,6 +136,7 @@ fun GatewaysSheet(
                     onSetPrimary = { onSetPrimary(gateway) },
                     onRename = { renameTarget = gateway },
                     onRemove = { removeTarget = gateway },
+                    onClientCert = { certTarget = gateway },
                 )
             }
         }
@@ -140,6 +146,7 @@ fun GatewaysSheet(
 
     RenameGatewayDialog(renameTarget, onDismiss = { renameTarget = null }, onRename = onRename)
     RemoveGatewayDialog(removeTarget, onDismiss = { removeTarget = null }, onRemove = { onDismiss(); onRemove(it) })
+    ClientCertDialog(certTarget, onDismiss = { certTarget = null }, onSet = { gateway, alias -> certTarget = null; onSetClientCert(gateway, alias) })
 }
 
 @Composable
@@ -153,6 +160,7 @@ private fun GatewayRow(
     onSetPrimary: () -> Unit,
     onRename: () -> Unit,
     onRemove: () -> Unit,
+    onClientCert: () -> Unit,
 ) {
     var menuOpen by remember { mutableStateOf(false) }
     // The same choices as the ⋮ menu, at the pointer from a right-click on the desktop.
@@ -250,6 +258,8 @@ private fun GatewayRow(
             items = {
                 if (!primary) MenuAction("Make primary", Lucide.Star, onClick = { menuOpen = false; onSetPrimary() })
                 MenuAction("Rename", Lucide.Pencil, onClick = { menuOpen = false; onRename() })
+                // Client certificates come from Android's system store; the desktop has none to pick from yet.
+                if (!isDesktop) MenuAction("Client certificate", Lucide.ShieldCheck, onClick = { menuOpen = false; onClientCert() })
                 MenuAction("Remove", Lucide.Trash2, onClick = { menuOpen = false; onRemove() })
             },
         ) {
@@ -306,4 +316,48 @@ private fun RemoveGatewayDialog(gateway: SavedGateway?, onDismiss: () -> Unit, o
             Button("Remove", onClick = { onDismiss(); onRemove(g) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
         },
     )
+}
+
+/**
+ * The client certificate to present to [gateway], for proxies that ask for one (`ssl_verify_client`).
+ * Picking opens the system store; only the chosen name is kept, the key never leaves the store.
+ */
+@Composable
+private fun ClientCertDialog(gateway: SavedGateway?, onDismiss: () -> Unit, onSet: (SavedGateway, String?) -> Unit) {
+    var shown by remember { mutableStateOf(gateway) }
+    if (gateway != null) shown = gateway
+    val g = shown ?: return
+    val parsed = GatewayUrl.parseOrNull(g.url)
+    val picker = rememberClientCertPicker(parsed?.host, parsed?.port ?: -1, onPicked = { alias ->
+        if (alias != null) {
+            onDismiss()
+            onSet(g, alias)
+        }
+    })
+    Dialog(
+        visible = gateway != null,
+        onDismissRequest = onDismiss,
+        title = "Client certificate",
+        message = "Kyllene presents this certificate to “${g.label}” when its server asks for one. " +
+            "The key stays in the system store; only its name is kept.",
+        actions = {
+            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(if (g.clientCertAlias == null) "Pick…" else "Change…", onClick = picker::pick, size = ButtonSize.Small)
+        },
+    ) {
+        val alias = g.clientCertAlias
+        if (alias != null) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    alias,
+                    style = Theme[typography][code].copy(fontSize = 11.5.sp),
+                    color = Theme[colors][textSecondary],
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f, fill = false),
+                )
+                Button("Clear", onClick = { onDismiss(); onSet(g, null) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            }
+        }
+    }
 }

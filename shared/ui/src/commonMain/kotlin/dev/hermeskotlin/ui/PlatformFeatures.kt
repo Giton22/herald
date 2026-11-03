@@ -8,3 +8,6 @@ internal expect val phoneToolsShow: Boolean
 
 /** The App icon picker in Settings. */
 internal expect val appIconsShow: Boolean
+
+/** The client-certificate rows on the Connect screen, picked from the system store. */
+internal expect val clientCertsShow: Boolean

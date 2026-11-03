@@ -21,16 +21,21 @@ import dev.hermeskotlin.core.voice.SpokenAudio
 import dev.hermeskotlin.core.voice.VoiceActivity
 import dev.hermeskotlin.core.voice.VoiceKeepAlive
 import dev.hermeskotlin.core.voice.VoiceRecorder
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.test.StandardTestDispatcher
+import io.ktor.client.engine.mock.MockEngineConfig
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.client.engine.mock.toByteArray
 import io.ktor.http.HttpHeaders
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.channels.Channel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -151,18 +156,21 @@ class LiveConversationTest {
         override suspend fun play(audio: SpokenAudio) = Unit
     }
 
-    private fun http(mode: String, offers: MutableList<String>) = createHttpClient(
-        MockEngine { request ->
-            when (request.url.encodedPath) {
-                "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
-                "/api/audio/voice-live/status" -> respond("""{"ok":true,"mode":"$mode","available":true,"reason":null,"model":"gpt-live-1","voice":"marin"}""", HttpStatusCode.OK, json)
-                "/api/audio/voice-live/session" -> {
-                    offers += request.body.toByteArray().decodeToString()
-                    respond("""{"ok":true,"session":{"id":"live-1"},"transport":{"type":"webrtc","sdp":"v=0 answer\r\n"}}""", HttpStatusCode.OK, json)
+    private fun http(mode: String, offers: MutableList<String>, testDispatcher: CoroutineDispatcher? = null) = createHttpClient(
+        MockEngine(MockEngineConfig().apply {
+            testDispatcher?.let { dispatcher = it }
+            addHandler { request ->
+                when (request.url.encodedPath) {
+                    "/api/auth/ws-ticket" -> respond("""{"ticket":"T","ttl_seconds":30}""", HttpStatusCode.OK, json)
+                    "/api/audio/voice-live/status" -> respond("""{"ok":true,"mode":"$mode","available":true,"reason":null,"model":"gpt-live-1","voice":"marin"}""", HttpStatusCode.OK, json)
+                    "/api/audio/voice-live/session" -> {
+                        offers += request.body.toByteArray().decodeToString()
+                        respond("""{"ok":true,"session":{"id":"live-1"},"transport":{"type":"webrtc","sdp":"v=0 answer\r\n"}}""", HttpStatusCode.OK, json)
+                    }
+                    else -> respond("""{"ok":true}""", HttpStatusCode.OK, json)
                 }
-                else -> respond("""{"ok":true}""", HttpStatusCode.OK, json)
             }
-        },
+        }),
         PersistentCookiesStorage(InMemoryKeyValueStore()),
     )
 
@@ -244,6 +252,80 @@ class LiveConversationTest {
         voice.stopChat()
         voice.chat.first { it.phase == VoicePhase.Off }
         assertTrue(call.closed)
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun shortcutRingbackWaitsThreeSecondsBetweenClipsAndStopsWhenLiveAnswers() = runTest {
+        val player = RingbackPlayer()
+        val (voice, call) = ringingCall(player)
+        voice.chat.first { it.live && it.phase == VoicePhase.Listening }
+        runCurrent()
+        assertTrue(player.playing)
+        advanceTimeBy(750); runCurrent()
+        assertFalse(player.playing)
+        advanceTimeBy(2_999); runCurrent()
+        assertEquals(1, player.clips)
+        advanceTimeBy(1); runCurrent()
+        assertEquals(2, player.clips)
+        call.receive("""{"type":"session.started"}""")
+        runCurrent()
+        assertFalse(player.playing)
+        advanceTimeBy(4_000); runCurrent()
+        assertEquals(2, player.clips)
+        assertTrue(voice.chat.value.live)
+        voice.stopChat()
+    }
+
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun ringbackStopsOnEarlySpeechHangupAndConnectionFailureButManualCallsStayQuiet() = runTest {
+        for (ending in listOf("speech", "hangup", "failure", "manual", "playback", "fallback", "error")) {
+            val player = RingbackPlayer(fails = ending == "playback")
+            val (voice, call) = ringingCall(player, enabled = ending != "manual", mode = if (ending == "fallback") "chained" else "gpt-live")
+            voice.chat.first { it.phase == VoicePhase.Listening }
+            runCurrent()
+            when (ending) {
+                "speech" -> call.receive("""{"type":"session.output_transcript.delta","delta":"Hello"}""")
+                "hangup" -> voice.stopChat()
+                "error" -> call.receive("""{"type":"error","error":{"message":"Provider unavailable"}}""")
+                "failure" -> call.receive("""{"type":"session.closed","reason":"failed"}""")
+            }
+            runCurrent()
+            if (ending != "playback") assertFalse(player.playing, ending)
+            val count = player.clips
+            advanceTimeBy(4_000); runCurrent()
+            assertEquals(count, player.clips, ending)
+            if (ending == "manual") assertEquals(0, count)
+            if (ending == "playback") assertTrue(voice.chat.value.live)
+            voice.stopChat(); runCurrent()
+        }
+    }
+
+    private class RingbackPlayer(val fails: Boolean = false) : SpeechPlayer {
+        var clips = 0
+        var playing = false
+        override suspend fun play(audio: SpokenAudio) = Unit
+        override suspend fun playRingback() {
+            clips++
+            if (fails) error("Speaker unavailable")
+            playing = true
+            try { delay(750) } finally { playing = false }
+        }
+    }
+
+    private fun TestScope.ringingCall(player: SpeechPlayer, enabled: Boolean = true, mode: String = "gpt-live"): Pair<VoiceController, FakeCall> {
+        val client = http(mode, mutableListOf(), StandardTestDispatcher(testScheduler))
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> Socket() }, backgroundScope)
+        val session = ChatSession(gateway, null, null, connection, SessionsApi(client), backgroundScope)
+        val call = FakeCall()
+        val recorder = object : VoiceRecorder {
+            override suspend fun record(activity: VoiceActivity, onLevel: (Float) -> Unit, onSpeech: () -> Unit): Recording = awaitCancellation()
+            override fun finish() = Unit
+        }
+        val voice = VoiceController(AudioApi(client), recorder, player, backgroundScope, backgroundScope) { call }
+        voice.startChat(session, gateway, null, ringback = enabled)
+        return voice to call
     }
 
     /** A live call whose request d1 started a turn that is now running. */

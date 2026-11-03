@@ -22,6 +22,7 @@ import dev.hermeskotlin.designsystem.components.LocalGlow
 import dev.hermeskotlin.designsystem.components.SheetHeader
 import dev.hermeskotlin.ui.chat.PendingComment
 import dev.hermeskotlin.ui.connect.AccessToken
+import dev.hermeskotlin.ui.connect.ClientCert
 import dev.hermeskotlin.ui.connect.ConnectUiState
 import dev.hermeskotlin.ui.connect.ConnectView
 import dev.hermeskotlin.ui.connect.ConnectionChecklist
@@ -48,7 +49,10 @@ import dev.hermeskotlin.designsystem.components.Toast
 import dev.hermeskotlin.core.capabilities.McpServer
 import dev.hermeskotlin.core.capabilities.Skill
 import dev.hermeskotlin.core.capabilities.Toolset
+import dev.hermeskotlin.core.phone.AgentScreens
+import dev.hermeskotlin.ui.chat.AgentScreenContext
 import dev.hermeskotlin.ui.chat.CheckpointsSheetView
+import dev.hermeskotlin.ui.chat.LocalAgentScreens
 import dev.hermeskotlin.ui.chat.FileDownload
 import dev.hermeskotlin.ui.chat.FileLoad
 import dev.hermeskotlin.ui.chat.FileViewerPage
@@ -136,6 +140,7 @@ enum class PreviewScene(val label: String) {
     VaultSaveLogin("A login to save"),
     Undelivered("Messages that lost their reply"),
     Subagents("Subagents"),
+    AgentScreen("A screen the agent drew, waiting for a tap"),
     Voice("Voice chat"),
     VoiceCutIn("A reply read in the voice chat, talking over it on"),
     ReadAloud("A reply being read aloud"),
@@ -231,6 +236,14 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                 PreviewScene.VaultSaveLogin -> SampleChat(ChatSamples.vaultSaveLogin)
                 PreviewScene.Undelivered -> SampleChat(ChatSamples.undelivered)
                 PreviewScene.Subagents -> SampleChat(ChatSamples.subagents)
+                PreviewScene.AgentScreen -> CompositionLocalProvider(
+                    LocalAgentScreens provides AgentScreenContext(
+                        live = listOf(AgentScreens.Live(null, setOf(ChatSamples.SCREEN_SURFACE))),
+                        onShown = { _, _ -> },
+                        onAnswer = { _, _, _ -> true },
+                        onFail = { _, _, _ -> },
+                    ),
+                ) { SampleChat(ChatSamples.agentScreen) }
                 PreviewScene.Voice -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.listening)
                 PreviewScene.VoiceCutIn -> SampleChat(ChatSamples.voice, voiceChat = ChatSamples.speakingCutIn)
                 PreviewScene.ReadAloud -> SampleChat(ChatSamples.reply, readAloud = ReadAloudState(key = "a1"))
@@ -331,6 +344,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                                     if (dir.endsWith("/projects/")) listOf("herald", "notes-app", "site") else listOf("androidApp", "docs", "shared"),
                                 )
                             },
+                            makeFolder = { _, _ -> null },
                         )
                     }
                 }
@@ -433,6 +447,7 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                         onSetPrimary = {},
                         onRename = { _, _ -> },
                         onRemove = {},
+                        onSetClientCert = { _, _ -> },
                     )
                 }
                 PreviewScene.BotEditor -> BotEditor(
@@ -754,6 +769,14 @@ private fun ApprovalPreview() = HeraldPreview(PreviewScene.Approval)
 @Composable
 private fun SubagentsPreview() = HeraldPreview(PreviewScene.Subagents)
 
+@Preview(widthDp = 360, heightDp = 800)
+@Composable
+private fun AgentScreenPreview() = HeraldPreview(PreviewScene.AgentScreen)
+
+@Preview(widthDp = 360, heightDp = 800)
+@Composable
+private fun AgentScreenLightPreview() = HeraldPreview(PreviewScene.AgentScreen, dark = false)
+
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun VoicePreview() = HeraldPreview(PreviewScene.Voice)
@@ -861,6 +884,7 @@ private fun SampleConnect(result: ProbeResult, address: String = "hermes.example
         url = remember { TextFieldState(address) },
         state = ConnectUiState(result = result),
         access = AccessToken(remember { TextFieldState() }, remember { TextFieldState() }, saved = false, onForget = {}),
+        cert = ClientCert(alias = null, onPick = {}, onClear = {}),
         onTest = {},
         onContinue = {},
         onCancel = null,

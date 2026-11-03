@@ -3,6 +3,7 @@ package dev.hermeskotlin.ui.preview
 import androidx.compose.foundation.text.input.TextFieldState
 import dev.hermeskotlin.core.chat.ApprovalChoice
 import dev.hermeskotlin.core.chat.Attachment
+import dev.hermeskotlin.core.chat.TranscriptEvent
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.GatewayNotice
 import dev.hermeskotlin.core.projects.Project
@@ -17,6 +18,8 @@ import dev.hermeskotlin.core.chat.TodoItem
 import dev.hermeskotlin.core.chat.TodoList
 import dev.hermeskotlin.core.chat.TodoStatus
 import dev.hermeskotlin.core.chat.ToolActivity
+import dev.hermeskotlin.core.chat.AgentScreen
+import dev.hermeskotlin.core.chat.SHOW_UI_TOOL
 import dev.hermeskotlin.core.chat.TurnUsage
 import dev.hermeskotlin.core.settings.RunningSend
 import dev.hermeskotlin.core.slash.SlashSuggestion
@@ -131,6 +134,15 @@ internal object ChatSamples {
 
     /** The finished turn with the gateway's notices: credits, and the agent still starting. */
     val notices: ChatState = reply.copy(
+        messages = listOf(
+            ask,
+            ChatMessage.Event("system-1", TranscriptEvent.SystemMessages(listOf(
+                TranscriptEvent.Routine("Backup monitor", "The nightly scan found one failed backup."),
+                TranscriptEvent.Compaction("Earlier checks found the NAS full.\n\n```text\nbackup: no space left\n```"),
+                TranscriptEvent.Process("Background process finished: check backup", "1 failed backup", failed = false),
+            ), firstKey = "system-0")),
+            answer,
+        ),
         notices = listOf(
             GatewayNotice("credits.depleted", "Credit access paused · run /topup to top up", GatewayNotice.Level.Error, GatewayNotice.Kind.Sticky),
             GatewayNotice("credits.usage", "80% of this month's credit used", GatewayNotice.Level.Warning, GatewayNotice.Kind.Sticky),
@@ -262,6 +274,48 @@ internal object ChatSamples {
             DelegatedTask("List which folders grew most since March", SubagentStatus.Running),
             DelegatedTask("Draft a weekly email report of backup sizes", SubagentStatus.Running),
         ),
+    )
+
+    /** The surface [agentScreen] draws, waiting for a tap. */
+    const val SCREEN_SURFACE = "table-1"
+
+    /** A screen the agent drew in the chat (phone_show_ui), waiting for the user to pick a time. */
+    val agentScreen: ChatState = connected.copy(
+        title = "Dinner on Friday",
+        messages = listOf(
+            ChatMessage.User("u1", "Find us a table for two on Friday evening, somewhere quiet."),
+            ChatMessage.Assistant(
+                key = "a1",
+                text = "Three quiet places have a table for two on Friday. Which one should I book?",
+                tools = listOf(
+                    ToolActivity(
+                        id = "t1",
+                        name = SHOW_UI_TOOL,
+                        running = true,
+                        agentScreen = AgentScreen(
+                            messages = listOf(
+                                """{"version":"v0.9","createSurface":{"surfaceId":"$SCREEN_SURFACE","catalogId":"https://a2ui.org/specification/v0_9/catalogs/basic/catalog.json"}}""",
+                                """{"version":"v0.9","updateComponents":{"surfaceId":"$SCREEN_SURFACE","components":[""" +
+                                    """{"id":"root","component":"Column","children":["title","note","first","second","third"]},""" +
+                                    """{"id":"title","component":"Text","text":"Friday, table for two","variant":"h4"},""" +
+                                    """{"id":"note","component":"Text","text":"All three hold the table for 15 minutes.","variant":"caption"},""" +
+                                    """{"id":"l1","component":"Text","text":"Olive Yard · 19:00"},""" +
+                                    """{"id":"first","component":"Button","child":"l1","variant":"primary","action":{"event":{"name":"book","context":{"place":"olive-yard","time":"19:00"}}}},""" +
+                                    """{"id":"l2","component":"Text","text":"Lantern Room · 19:30"},""" +
+                                    """{"id":"second","component":"Button","child":"l2","action":{"event":{"name":"book","context":{"place":"lantern-room","time":"19:30"}}}},""" +
+                                    """{"id":"l3","component":"Text","text":"None of these"},""" +
+                                    """{"id":"third","component":"Button","child":"l3","variant":"borderless","action":{"event":{"name":"none"}}}""" +
+                                    """]}}""",
+                            ),
+                            surfaceIds = setOf(SCREEN_SURFACE),
+                            wait = true,
+                        ),
+                    ),
+                ),
+                streaming = true,
+            ),
+        ),
+        running = true,
     )
 
     /** Three subagents working on parts of a bigger job, one of them already done. */

@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kyllene: the Hermes Agent app for Android</title>
+<meta name="description" content="Kyllene is a free, open source Android app for Hermes Agent. Connect to your own Hermes dashboard, chat with your agent, approve what it wants to do and follow its work from your phone.">
+<meta name="theme-color" content="#0b0d14">
+<link rel="canonical" href="https://kyllene.app/">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://kyllene.app/">
+<meta property="og:title" content="Kyllene: the Hermes Agent app for Android">
+<meta property="og:description" content="Chat with Hermes and approve its work from your phone. Free, open source, no account.">
+<meta property="og:image" content="https://kyllene.app/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap">
+<link rel="stylesheet" href="styles.css">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  "name": "Kyllene",
+  "alternateName": "Kyllene for Hermes Agent",
+  "description": "A free, open source Android app for Hermes Agent: chat with your agent, approve its actions and follow its work from your phone.",
+  "url": "https://kyllene.app/",
+  "image": "https://kyllene.app/og.png",
+  "operatingSystem": "Android 8.0 or newer",
+  "applicationCategory": "UtilitiesApplication",
+  "softwareVersion": "0.14.0",
+  "downloadUrl": "https://github.com/Giton22/kyllene/releases/latest",
+  "license": "https://opensource.org/licenses/MIT",
+  "isAccessibleForFree": true,
+  "offers": { "@type": "Offer", "price": "0", "priceCurrency": "USD" },
+  "author": { "@type": "Person", "name": "Giton22", "url": "https://github.com/Giton22" },
+  "sameAs": ["https://github.com/Giton22/kyllene"]
+}
+</script>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="wrap">
+    <a class="brand" href="#top"><img src="favicon.svg" alt="">Kyllene</a>
+    <nav class="nav" aria-label="Main">
+      <a href="#features">Features</a>
+      <a href="#how">How it connects</a>
+      <a href="#privacy">Privacy</a>
+      <a href="https://github.com/Giton22/kyllene">GitHub</a>
+    </nav>
+    <details class="menu">
+      <summary aria-label="Menu">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </summary>
+      <nav aria-label="Main">
+        <a href="#features">Features</a>
+        <a href="#how">How it connects</a>
+        <a href="#privacy">Privacy</a>
+        <a href="#faq">Questions</a>
+        <a href="#install">Install</a>
+        <a href="https://github.com/Giton22/kyllene">GitHub</a>
+      </nav>
+    </details>
+    <a class="btn btn-primary btn-small" href="#install">Download</a>
+  </div>
+</header>
+
+<main>
+<section class="hero" id="top">
+  <svg class="hero-scene" viewBox="0 0 1440 800" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+    <defs>
+      <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#0b0d14"/>
+        <stop offset="1" stop-color="#131b38"/>
+      </linearGradient>
+      <linearGradient id="sun" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#ffc877"/>
+        <stop offset="1" stop-color="#ff6b3d"/>
+      </linearGradient>
+    </defs>
+    <rect width="1440" height="800" fill="url(#sky)"/>
+    <circle cx="1296" cy="556" r="56" fill="url(#sun)"/>
+    <path fill="#141c3c" d="M0 644 180 568 320 612 520 528 640 580 720 556 860 600 1040 520 1240 588 1440 548V800H0Z"/>
+    <path fill="#0f1530" d="M0 700 240 628 420 688 600 652 760 716 980 612 1200 676 1440 636V800H0Z"/>
+    <path fill="#0b0f1f" d="M0 760 300 704 560 756 820 720 1100 768 1440 716V800H0Z"/>
+  </svg>
+  <div class="wrap">
+    <div class="hero-copy">
+      <h1>Chat with Hermes and approve its work from your Android phone</h1>
+      <p class="lede">Kyllene is a free, open source Hermes Agent app for Android. It connects straight to the Hermes dashboard you run on your own server, with no account and no server of its own. New to Hermes? <a href="https://github.com/NousResearch/hermes-agent">Set up Hermes Agent first</a>.</p>
+      <div class="actions">
+        <a class="btn btn-primary" href="#install">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+          Download for Android
+        </a>
+        <a class="btn btn-ghost" href="https://github.com/Giton22/kyllene">View on GitHub</a>
+      </div>
+    </div>
+    <div class="stage">
+      <img class="phone" src="screens/reply.jpg" width="840" height="1870" alt="A finished reply from Hermes with reasoning, tools and a code block">
+      <div class="notif" aria-hidden="true">
+        <div class="notif-meta">
+          <img src="favicon.svg" alt="">
+          <span>Kyllene · homelab</span>
+          <time><span class="dot"></span>now</time>
+        </div>
+        <div class="notif-body">
+          <span class="notif-title">Hermes wants to run a command</span>
+          <code>sudo systemctl start backup.service</code>
+        </div>
+        <div class="notif-actions"><span>Approve</span><span>Deny</span><span>Reply</span></div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section class="section band" id="how">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">How it connects</span>
+      <h2>From your phone to your gateway, with nothing in between</h2>
+      <p>Kyllene connects to the dashboard on your server, homelab, VPS or Tailnet, the same way Hermes Desktop's remote gateway does.</p>
+    </div>
+    <div class="route">
+      <div class="node">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>
+        <h3>Kyllene</h3>
+        <p>On your Android phone, 8.0 or newer</p>
+      </div>
+      <div class="link mono">
+        <span class="muted">Wi-Fi · Tailscale · https</span>
+        <span class="line" aria-hidden="true"></span>
+        <span style="color: var(--text-3)">no Kyllene server, no account</span>
+      </div>
+      <div class="node">
+        <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="7" rx="2"/><rect x="3" y="13" width="18" height="7" rx="2"/><path d="M7 7.5h.01M7 16.5h.01"/></svg>
+        <h3 class="mono">hermes dashboard</h3>
+        <p>On your server, where the agent runs</p>
+      </div>
+    </div>
+    <div class="facts">
+      <div><h3>Sign in your usual way</h3><p>A dashboard username and password, or browser sign-in on SSO and OIDC gateways</p></div>
+      <div><h3>Behind Cloudflare Access</h3><p>Supported with a service token, and Kyllene warns before it sends a password unencrypted</p></div>
+      <div><h3>Check connection</h3><p>Tests the server, the sign-in and the live connection one at a time, and says what to fix</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="section" id="features">
+  <div class="wrap">
+    <div class="section-head">
+      <span class="eyebrow">Features</span>
+      <h2>What your agent does at the desk, from the phone in your hand</h2>
+    </div>
+    <div class="features">
+      <div class="chat">
+        <div class="chat-head">
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/></svg>
+          <h3>Chat</h3>
+        </div>
+        <div class="chat-grid">
+          <div><h3>Streaming replies</h3><p>Markdown, code, math, reasoning and tool activity as they arrive</p></div>
+          <div><h3>Send while it works</h3><p>Steer the running reply, queue the next prompt, or stop</p></div>
+          <div><h3>A model per chat</h3><p>Model, thinking level and fast mode, with starred models</p></div>
+          <div><h3>Voice and files</h3><p>Photos, PDFs, dictation and live voice calls</p></div>
+        </div>
+      </div>
+      <ul class="rows">
+        <li>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 4 6v6c0 4.5 3.4 8 8 9 4.6-1 8-4.5 8-9V6z"/><path d="m9 12 2 2 4-4"/></svg>
+          <div><h3>Control</h3><p>Approve commands, answer questions and stop subagents, also from a notification</p></div>
+        </li>
+        <li>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M9 4v16"/></svg>
+          <div><h3>Organize</h3><p>Search and pin sessions with a <span class="tag"><span class="dot"></span>Needs you</span> filter, plus bots, rooms and scheduled jobs</p></div>
+        </li>
+        <li>
+          <svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>
+          <div><h3>Stay connected</h3><p>Replies from a notification, optional encrypted push from outside your network, and recent chats offline</p></div>
+        </li>
+      </ul>
+    </div>
+    <div class="shots">
+      <figure><img class="phone" src="screens/working.jpg" width="840" height="1870" loading="lazy" alt="A running turn with its status above the composer"><figcaption>A turn at work</figcaption></figure>
+      <figure><img class="phone" src="screens/subagents.jpg" width="840" height="1870" loading="lazy" alt="Three subagents working side by side"><figcaption>Subagents side by side</figcaption></figure>
+      <figure><img class="phone" src="screens/bots.jpg" width="840" height="1870" loading="lazy" alt="The bot roster with a needs-you inbox and rooms"><figcaption>Bots and rooms</figcaption></figure>
+      <figure><img class="phone" src="screens/voice.jpg" width="840" height="1870" loading="lazy" alt="A hands-free voice chat, listening"><figcaption>Hands-free voice</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section class="section band" id="privacy">
+  <div class="wrap split">
+    <div class="section-head">
+      <span class="eyebrow">Privacy</span>
+      <h2>No Kyllene account and no Kyllene cloud</h2>
+      <p>The app talks to your gateway. The few exceptions, like the update check and link previews, are each yours to switch off.</p>
+    </div>
+    <ul class="checks">
+      <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>Sign-in and offline chats encrypted with a key in the Android Keystore</li>
+      <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="m5.6 5.6 12.8 12.8"/></svg>No analytics and no tracking</li>
+      <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.9 1.9 0 0 0 3.4 0"/></svg>Optional push from outside your network, through the push plugin, is end-to-end encrypted and needs no Google services</li>
+      <li><svg class="icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="7" y="2" width="10" height="20" rx="2"/><path d="M11 18h2"/></svg>Phone tools stay off until you switch each one on</li>
+    </ul>
+  </div>
+</section>
+
+<section class="section" id="faq">
+  <div class="wrap split">
+    <div class="section-head">
+      <span class="eyebrow">Questions</span>
+      <h2>Using Hermes Agent from an Android phone</h2>
+    </div>
+    <dl class="faq">
+      <div>
+        <dt>Is there a Hermes Agent app for Android?</dt>
+        <dd>Yes. Kyllene is a native Android app for Hermes Agent, for Android 8.0 and newer, with a companion app for Wear OS watches. It's free and open source under the MIT license.</dd>
+      </div>
+      <div>
+        <dt>Do I need my own Hermes server?</dt>
+        <dd>Yes. Kyllene connects to Hermes Agent's dashboard, started with <code>hermes dashboard</code> on your server, homelab, VPS or Tailnet. Your chats stay between your phone and your gateway.</dd>
+      </div>
+      <div>
+        <dt>Can I use it away from home?</dt>
+        <dd>Yes, over Tailscale or an https address, including gateways behind Cloudflare Access. With the optional push plugin, notifications reach you outside your network too.</dd>
+      </div>
+      <div>
+        <dt>Is Kyllene made by Nous Research?</dt>
+        <dd>No. Nous Research makes Hermes Agent. Kyllene is an independent project, built in the open on <a href="https://github.com/Giton22/kyllene">GitHub</a>.</dd>
+      </div>
+      <div>
+        <dt>Where do I get updates?</dt>
+        <dd>Each release is published on GitHub. Kyllene tells you when a new one is out, and installing it keeps your sign-in and settings.</dd>
+      </div>
+    </dl>
+  </div>
+</section>
+
+<section class="section band" id="install">
+  <div class="wrap install">
+    <div class="install-head">
+      <div class="section-head">
+        <span class="eyebrow">Install</span>
+        <h2>Install Kyllene on Android 8.0 or newer</h2>
+      </div>
+      <div class="actions">
+        <a class="btn btn-primary" data-apk href="https://github.com/Giton22/kyllene/releases/latest">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3v12M7 10l5 5 5-5M5 21h14"/></svg>
+          Download the APK
+        </a>
+      </div>
+      <p class="release mono"><span data-version>v0.14.0</span> · <time data-released datetime="2026-10-29">29 October 2026</time> · <a href="https://github.com/Giton22/kyllene/releases/latest">Release notes</a></p>
+    </div>
+    <ol class="steps">
+      <li><div><h3>Download the APK</h3><p>The arm64 build fits almost every phone, and other builds and the Wear OS app are on the <a href="https://github.com/Giton22/kyllene/releases/latest">release page</a></p></div></li>
+      <li><div><h3>Allow the install</h3><p>Open the file, and allow installing from your browser when Android asks</p></div></li>
+      <li><div><h3>Connect to your gateway</h3><p>Enter your dashboard's address and sign in, and Kyllene will tell you when an update is out</p></div></li>
+    </ol>
+  </div>
+</section>
+</main>
+
+<footer class="site-footer">
+  <div class="wrap">
+    <div>
+      <a class="brand" href="#top"><img src="favicon.svg" alt="">Kyllene</a>
+      <p>An independent, MIT-licensed project, not made or endorsed by Nous Research</p>
+    </div>
+    <nav aria-label="Footer">
+      <a href="https://github.com/Giton22/kyllene">GitHub</a>
+      <a href="https://discord.gg/wCtyvQ3KcM">Discord</a>
+      <a href="https://github.com/sponsors/Giton22">Sponsor</a>
+      <a href="https://ko-fi.com/giton">Ko-fi</a>
+    </nav>
+  </div>
+</footer>
+
+<script>
+  // The header isn't sticky, so close the phone menu once a link in it is used.
+  document.querySelectorAll(".menu nav a").forEach((a) => {
+    a.addEventListener("click", () => { a.closest("details").open = false; });
+  });
+
+  // Point the download at the newest arm64 APK. The markup above is the fallback.
+  fetch("https://api.github.com/repos/Giton22/kyllene/releases/latest")
+    .then((r) => (r.ok ? r.json() : Promise.reject(r.status)))
+    .then((release) => {
+      const date = new Date(release.published_at);
+      document.querySelectorAll("[data-version]").forEach((el) => { el.textContent = release.tag_name; });
+      document.querySelectorAll("[data-released]").forEach((el) => {
+        el.dateTime = release.published_at.slice(0, 10);
+        el.textContent = date.toLocaleDateString("en-GB", { day: "numeric", month: "long", year: "numeric" });
+      });
+      const apk = release.assets.find((a) => a.name.endsWith("_arm64-v8a.apk"));
+      if (apk) document.querySelectorAll("[data-apk]").forEach((el) => { el.href = apk.browser_download_url; });
+    })
+    .catch(() => {});
+</script>
+</body>
+</html>

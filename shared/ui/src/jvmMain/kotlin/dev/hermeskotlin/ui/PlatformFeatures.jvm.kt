@@ -6,3 +6,6 @@ internal actual val inlineWidgetsShow: Boolean = true
 internal actual val phoneToolsShow: Boolean = false
 
 internal actual val appIconsShow: Boolean = false
+
+// No system certificate store to pick from yet.
+internal actual val clientCertsShow: Boolean = false

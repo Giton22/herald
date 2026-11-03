@@ -4,6 +4,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.text.selection.TextSelectionColors
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextDirection
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.em
 import androidx.compose.ui.unit.sp
@@ -11,7 +12,9 @@ import com.composeunstyled.theme.ColorScheme
 import com.composeunstyled.theme.buildThemeV2
 
 // Body text sits a hair tighter than the default, as the design's -0.005em does.
-private val baseText = TextStyle(fontFamily = Geist, letterSpacing = (-0.005).em)
+// Content: every string takes its base direction from its own first strong character, so Arabic reads
+// right to left — ordered and start-aligned — while English sentences are untouched.
+private val baseText = TextStyle(fontFamily = Geist, letterSpacing = (-0.005).em, textDirection = TextDirection.Content)
 
 /** Dark with true black backgrounds, for OLED screens. */
 val PureBlack = ColorScheme("pure_black")
@@ -50,7 +53,7 @@ private fun buildHermesTheme(palette: AccentPalette) = buildThemeV2 {
         bodySmall to baseText.copy(fontSize = 13.5.sp, lineHeight = 19.5.sp),
         label to baseText.copy(fontSize = 13.sp, lineHeight = 17.sp, fontWeight = FontWeight.Medium),
         caption to baseText.copy(fontSize = 12.sp, lineHeight = 16.sp),
-        code to TextStyle(fontFamily = GeistMono, fontSize = 12.5.sp, lineHeight = 19.5.sp),
+        code to TextStyle(fontFamily = GeistMono, fontSize = 12.5.sp, lineHeight = 19.5.sp, textDirection = TextDirection.Ltr),
         eyebrow to baseText.copy(fontSize = 11.sp, lineHeight = 14.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.08.em),
         wordmark to baseText.copy(fontSize = 56.sp, lineHeight = 52.sp, fontWeight = FontWeight.SemiBold, letterSpacing = 0.08.em),
     )

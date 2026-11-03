@@ -319,6 +319,7 @@ class WatchLink(
             if (!synchronizeProfile()) return@launch finishCall(id, NOT_CONNECTED)
             if (generation != _profileReset.value || _call.value?.id != id) return@launch
             if (chat.scope != null && !profileSync) return@launch finishCall(id, UPDATE_PROFILE)
+            val ringing = launch { ringCall(defaultRequestId) { playCallRingback(context) } }
             val call = WatchCall(context)
             watchCall = call
             try {
@@ -337,6 +338,7 @@ class WatchLink(
                 launch {
                     while (true) {
                         val speaking = call.speaking()
+                        if (speaking) ringing.cancel()
                         _call.update { if (it?.id == id) it.copy(speaking = speaking, level = if (it.muted || speaking) 0f else call.micLevel()) else it }
                         delay(CALL_POLL_MS)
                     }
@@ -348,7 +350,8 @@ class WatchLink(
                         send(WearPaths.CALL_EVENTS, WearJson.encode(CallEvents(id, ++callEventsSeq, emptyList())))
                     }
                 }
-                forwardEvents(id, call)
+                forwardEvents(id, call, ringing)
+                ringing.cancel()
                 // The channel closed. When the phone ended it ("stop" said), its word is on the way; else it dropped.
                 delay(DROP_GRACE_MS)
                 if (_call.value?.let { it.id == id && it.active } == true) {
@@ -359,6 +362,8 @@ class WatchLink(
                 throw e
             } catch (e: Exception) {
                 finishCall(id, e.message ?: "Couldn't start the call.")
+            } finally {
+                ringing.cancel()
             }
         }
     }
@@ -409,12 +414,14 @@ class WatchLink(
     }
 
     /** What the voice model sends on the event channel goes to the phone, gathered a moment, the kinds it acts on. */
-    private suspend fun forwardEvents(id: String, call: WatchCall) {
+    private suspend fun forwardEvents(id: String, call: WatchCall, ringing: Job) {
         while (true) {
             val first = call.events.receiveCatching().getOrNull() ?: return
+            if (endsRingback(eventType(first))) ringing.cancel()
             delay(EVENT_GATHER_MS)
             val batch = mutableListOf(first)
             while (true) batch += call.events.tryReceive().getOrNull() ?: break
+            if (batch.any { endsRingback(eventType(it)) }) ringing.cancel()
             val wanted = batch.filter { eventType(it) in CALL_EVENT_TYPES }
             if (wanted.isNotEmpty()) send(WearPaths.CALL_EVENTS, WearJson.encode(CallEvents(id, ++callEventsSeq, wanted)))
         }

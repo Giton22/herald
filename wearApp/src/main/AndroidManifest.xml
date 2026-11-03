@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-feature android:name="android.hardware.type.watch" />
 
@@ -17,6 +18,13 @@
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.VIBRATE" />
+
+    <!-- The watch's own "Digital assistant app" screen, which is where the assistant role is picked there. -->
+    <queries>
+        <intent>
+            <action android:name="android.settings.VOICE_INPUT_SETTINGS" />
+        </intent>
+    </queries>
 
     <!-- The watch's own speech recognizer, used first; apps are hidden from Herald unless it says which it looks up. -->
     <queries>
@@ -51,6 +59,12 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+            <!-- The watch's assistant: Wear OS counts this exported activity as qualified for the assistant
+                 role (AssistantRoleBehavior), so Herald can be picked in Settings → Digital assistant app. -->
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 
@@ -112,6 +126,56 @@
             <meta-data
                 android:name="android.support.wearable.complications.UPDATE_PERIOD_SECONDS"
                 android:value="0" />
+        </service>
+
+        <!-- Herald as the watch's assistant: the assist gesture opens Herald's own listening screen over the
+             watch face, instead of bringing the app up. -->
+        <service
+            android:name=".assist.HeraldWearAssistService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION">
+            <meta-data
+                android:name="android.voice_interaction"
+                android:resource="@xml/wear_assist_service" />
+            <intent-filter>
+                <action android:name="android.service.voice.VoiceInteractionService" />
+            </intent-filter>
+        </service>
+
+        <service
+            android:name=".assist.HeraldWearAssistSessionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_VOICE_INTERACTION" />
+
+        <!-- The assist button's target on watches that can only map it to an activity: a listen, then out of
+             the way; invisible and never in Recents. -->
+        <activity
+            android:name=".assist.AssistLaunchActivity"
+            android:excludeFromRecents="true"
+            android:exported="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.NoDisplay"
+            tools:ignore="CustomSplashScreen" />
+
+        <!-- Shows the microphone prompt for the assistant's session, which can't; invisible and kept out of Herald's task.
+             Not noHistory: Wear opens the prompt in a task of its own, which stops this one before the answer. -->
+        <activity
+            android:name=".assist.MicrophonePermissionActivity"
+            android:excludeFromRecents="true"
+            android:exported="false"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            tools:ignore="WearRecents" />
+
+        <!-- Android only accepts an assistant that names a recognizer of its own; this one turns other apps away. -->
+        <service
+            android:name=".assist.HeraldWearRecognitionService"
+            android:exported="true"
+            android:permission="android.permission.BIND_RECOGNITION_SERVICE">
+            <intent-filter>
+                <action android:name="android.speech.RecognitionService" />
+            </intent-filter>
         </service>
     </application>
 </manifest>

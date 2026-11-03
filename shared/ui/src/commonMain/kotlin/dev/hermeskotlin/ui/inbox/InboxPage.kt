@@ -16,6 +16,8 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -39,6 +41,17 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
+import com.composables.icons.lucide.CircleDot
+import com.composables.icons.lucide.Copy
+import com.composables.icons.lucide.MessageSquarePlus
+import com.composables.icons.lucide.MessageSquareReply
+import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.text.AnnotatedString
+import dev.hermeskotlin.designsystem.components.Spinner
+import dev.hermeskotlin.ui.sessions.SwipeAction
+import dev.hermeskotlin.ui.sessions.SwipeKind
+import dev.hermeskotlin.ui.sessions.SwipeRow
+import dev.hermeskotlin.ui.sessions.onSecondaryPress
 import com.composables.icons.lucide.Folder
 import com.composables.icons.lucide.FolderPlus
 import com.composables.icons.lucide.FolderTree
@@ -136,10 +149,23 @@ internal fun InboxPage(
     /** A run to open, from a tapped notification ([InboxRun.key]); [onOpenedKey] once it has been. */
     openKey: String? = null,
     onOpenedKey: () -> Unit = {},
+    /** Opens a chat about a report: its own, or a new one with the report attached. */
+    onOpenChat: (ReportChat) -> Unit = {},
     viewModel: InboxViewModel = koinViewModel(),
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
     LaunchedEffect(gateway) { viewModel.bind(gateway) }
+    @Suppress("DEPRECATION") val clipboard = LocalClipboardManager.current
+    val openChat by rememberUpdatedState(onOpenChat)
+    LaunchedEffect(viewModel) {
+        viewModel.events.collect { event ->
+            when (event) {
+                // The app checks the chat is of the gateway it is on still.
+                is InboxEvent.OpenChat -> openChat(event.chat)
+                is InboxEvent.Copy -> clipboard.setText(AnnotatedString(event.text))
+            }
+        }
+    }
     // In sight: the page reads the gateway when it comes into view, and on its nudges only while it shows.
     DisposableEffect(visible) {
         viewModel.setVisible(visible)
@@ -198,7 +224,17 @@ internal fun InboxPage(
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize()) {
             when {
-                state.open != null -> RunView(state.open, state.nameOf(state.open), state.openLoading, state.openNote, onBack = viewModel::closeRun)
+                state.open != null -> RunView(
+                    state.open,
+                    state.nameOf(state.open),
+                    state.openLoading,
+                    state.openNote,
+                    onBack = viewModel::closeRun,
+                    fetching = state.fetching,
+                    onAsk = { viewModel.ask(state.open) },
+                    onContinue = state.open.session?.let { { viewModel.continueChat(state.open) } },
+                    onCopy = { viewModel.copy(state.open) },
+                )
                 state.choosing -> FollowView(state, viewModel)
                 state.grouping -> GroupsView(state, viewModel)
                 else -> InboxView(state, viewModel, onBack = onBack, onOpenSettings = onOpenSettings, foldersList = foldersList, runsList = runsList)
@@ -249,6 +285,8 @@ internal fun InboxView(
     }
     state.block?.let { BlockNotice(it, onOpenSettings) }
     var renaming by remember { mutableStateOf<JobChip?>(null) }
+    var folderMenu by remember { mutableStateOf<InboxFolder?>(null) }
+    var runMenu by remember { mutableStateOf<InboxRun?>(null) }
     // Folders are the way in on the folder layout; the chips belong to the single list.
     if (!folders) FilterChips(state, onSelect = viewModel::setFilter, onRename = { renaming = it })
     RenameJobDialog(renaming, onDismiss = { renaming = null }) { chip, name ->
@@ -277,9 +315,8 @@ internal fun InboxView(
                     recent = state.more,
                     newestName = state.nameOf(folder.newest),
                     onClick = { viewModel.setFilter(folder.filter) },
-                    onLongClick = (folder.filter as? InboxFilter.Job)?.let { f ->
-                        state.chips.firstOrNull { it.filter == f }?.let { chip -> { renaming = chip } }
-                    },
+                    // A group's folder with nothing unread has nothing to offer: it's renamed on the groups page.
+                    onLongClick = { folderMenu = folder }.takeIf { folder.unread > 0 || folder.filter is InboxFilter.Job },
                 )
             }
             if (state.failed > 0) {
@@ -299,12 +336,110 @@ internal fun InboxView(
                     lastDay = day
                     item(key = "day-$day") { DayLabel(day) }
                 }
-                item(key = run.key) { RunCard(run, state.nameOf(run), unread = state.isUnread(run), onClick = { viewModel.open(run) }) }
+                item(key = run.key) {
+                    val unread = state.isUnread(run)
+                    // Either way across, the row's read state flips: there is only the one thing to do to a report.
+                    val swipe = when {
+                        unread -> SwipeAction("Mark read", Lucide.Check, SwipeKind.Pin) { viewModel.setRead(run, read = true) }
+                        state.canMarkUnread(run) -> SwipeAction("Mark unread", Lucide.CircleDot, SwipeKind.Pin) { viewModel.setRead(run, read = false) }
+                        else -> null
+                    }
+                    SwipeRow(start = swipe, end = swipe, shape = RoundedCornerShape(Theme[radii][radiusLarge])) { swipeActions ->
+                        RunCard(
+                            run,
+                            state.nameOf(run),
+                            unread = unread,
+                            onClick = { viewModel.open(run) },
+                            onLongClick = { runMenu = run },
+                            modifier = swipeActions,
+                            fetching = state.fetching?.key == run.key,
+                        )
+                    }
+                }
             }
             if (state.more || state.moreError != null) {
                 item(key = "more") { MoreRow(state.loadingMore, state.moreError, onClick = viewModel::loadMore) }
             }
         }
+    }
+    FolderMenu(
+        folder = folderMenu,
+        // Only a job's folder renames; a group is renamed on the groups page.
+        canRename = (folderMenu?.filter as? InboxFilter.Job)?.let { f -> state.chips.any { it.filter == f } } == true,
+        onDismiss = { folderMenu = null },
+        onRename = { folder ->
+            folderMenu = null
+            renaming = (folder.filter as? InboxFilter.Job)?.let { f -> state.chips.firstOrNull { it.filter == f } }
+        },
+        onMarkRead = { folder ->
+            folderMenu = null
+            viewModel.markFolderRead(folder.filter)
+        },
+    )
+    // The run as the list has it now: read or not, and with its chat once a read in full learned it.
+    val menuRun = runMenu?.let { r -> state.runs.firstOrNull { it.key == r.key } ?: r }
+    RunMenu(
+        run = menuRun,
+        name = menuRun?.let(state::nameOf).orEmpty(),
+        unread = menuRun?.let(state::isUnread) == true,
+        canMarkUnread = menuRun?.let(state::canMarkUnread) == true,
+        onDismiss = { runMenu = null },
+        onAsk = { runMenu = null; viewModel.ask(it) },
+        onContinue = { runMenu = null; viewModel.continueChat(it) },
+        onSetRead = { r, read -> runMenu = null; viewModel.setRead(r, read) },
+        onCopy = { runMenu = null; viewModel.copy(it) },
+    )
+}
+
+/** A folder's long press: rename its job (a job's folder only), or count every report in it as read. */
+@Composable
+private fun FolderMenu(
+    folder: InboxFolder?,
+    canRename: Boolean,
+    onDismiss: () -> Unit,
+    onRename: (InboxFolder) -> Unit,
+    onMarkRead: (InboxFolder) -> Unit,
+) {
+    // Kept while the sheet slides away, so it doesn't empty as it goes.
+    var shown by remember { mutableStateOf(folder) }
+    if (folder != null) shown = folder
+    BottomSheet(visible = folder != null, onDismiss = onDismiss) {
+        val f = shown ?: return@BottomSheet
+        SheetHeader(f.label, if (f.unread > 0) "${f.unread} unread" else "Folder")
+        if (f.unread > 0) SheetAction("Mark folder read", Lucide.CheckCheck, onClick = { onMarkRead(f) })
+        if (canRename) SheetAction("Rename", Lucide.Pencil, onClick = { onRename(f) })
+    }
+}
+
+/** A report's long press: ask about it, continue its chat when known, mark it read or unread, copy it. */
+@Composable
+private fun RunMenu(
+    run: InboxRun?,
+    name: String,
+    unread: Boolean,
+    canMarkUnread: Boolean,
+    onDismiss: () -> Unit,
+    onAsk: (InboxRun) -> Unit,
+    onContinue: (InboxRun) -> Unit,
+    onSetRead: (InboxRun, Boolean) -> Unit,
+    onCopy: (InboxRun) -> Unit,
+) {
+    var shown by remember { mutableStateOf(run) }
+    var shownName by remember { mutableStateOf(name) }
+    if (run != null) {
+        shown = run
+        shownName = name
+    }
+    BottomSheet(visible = run != null, onDismiss = onDismiss) {
+        val r = shown ?: return@BottomSheet
+        SheetHeader(shownName, (if (r.failed) "Failed · " else "") + timeLabel(r.at))
+        SheetAction("Ask about this", Lucide.MessageSquarePlus, onClick = { onAsk(r) })
+        if (r.session != null) SheetAction(runChatLabel(r), Lucide.MessageSquareReply, onClick = { onContinue(r) })
+        when {
+            unread -> SheetAction("Mark read", Lucide.Check, onClick = { onSetRead(r, true) })
+            canMarkUnread -> SheetAction("Mark unread", Lucide.CircleDot, onClick = { onSetRead(r, false) })
+        }
+        SheetAction("Copy", Lucide.Copy, onClick = { onCopy(r) })
     }
 }
 
@@ -366,10 +501,11 @@ private fun FolderCard(folder: InboxFolder, newestName: String, recent: Boolean,
             .clip(shape)
             .background(Theme[colors][surface])
             .border(1.dp, Theme[colors][stroke], shape)
+            .then(if (isDesktop && onLongClick != null) Modifier.onSecondaryPress(onPress = onLongClick) else Modifier)
             .combinedClickable(
                 onClickLabel = "Open ${folder.label}",
                 onClick = onClick,
-                onLongClickLabel = onLongClick?.let { "Rename" },
+                onLongClickLabel = onLongClick?.let { "More for ${folder.label}" },
                 onLongClick = onLongClick,
             )
             .padding(14.dp),
@@ -478,23 +614,39 @@ private fun DayLabel(day: String) {
     )
 }
 
-/** A run as a card: the job, when, the start of what it said, and a dot while it's unread. */
+/**
+ * A run as a card: the job, when, the start of what it said, and a dot while it's unread. [modifier] goes on its
+ * clickable node, as [SwipeRow]'s screen-reader actions must.
+ */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
-private fun RunCard(run: InboxRun, name: String, unread: Boolean, onClick: () -> Unit) {
+private fun RunCard(
+    run: InboxRun,
+    name: String,
+    unread: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    /** Its whole report is on its way, for Ask or Copy from its menu. */
+    fetching: Boolean = false,
+) {
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     val (tile, tint) = if (run.failed) Theme[colors][dangerSoft] to Theme[colors][danger] else Theme[colors][accentSoft] to Theme[colors][accentText]
     Row(
-        Modifier
+        modifier
             .fillMaxWidth()
             .clip(shape)
             .background(Theme[colors][surface])
             .border(1.dp, Theme[colors][stroke], shape)
-            .clickable(onClickLabel = "Read $name", onClick = onClick)
+            // A right-click is a desktop's long press, as on the session rows.
+            .then(if (isDesktop) Modifier.onSecondaryPress(onPress = onLongClick) else Modifier)
+            .combinedClickable(onClickLabel = "Read $name", onClick = onClick, onLongClickLabel = "More for this report", onLongClick = onLongClick)
             .padding(14.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Box(Modifier.size(36.dp).background(tile, RoundedCornerShape(Theme[radii][radiusSmall])), contentAlignment = Alignment.Center) {
-            UnstyledIcon(if (run.failed) Lucide.TriangleAlert else Lucide.Inbox, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
+            if (fetching) Spinner(Modifier.size(16.dp), color = tint)
+            else UnstyledIcon(if (run.failed) Lucide.TriangleAlert else Lucide.Inbox, contentDescription = null, tint = tint, modifier = Modifier.size(16.dp))
         }
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -541,10 +693,29 @@ private fun MoreRow(loading: Boolean, error: String?, onClick: () -> Unit) {
     }
 }
 
-/** One run in full, as Markdown. */
+/**
+ * One run in full, as Markdown, with a way to talk about it: a new chat with the report attached ([onAsk]), or the
+ * run's own chat ([onContinue], null when the gateway didn't say which it was).
+ */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-internal fun RunView(run: InboxRun, name: String, loading: Boolean, note: RunNote?, onBack: () -> Unit) {
-    SubpageHeader(name, onBack = onBack, subtitle = (if (run.failed) "Failed · " else "") + messageTime(run.at.toDouble(), uses24HourClock()))
+internal fun RunView(
+    run: InboxRun,
+    name: String,
+    loading: Boolean,
+    note: RunNote?,
+    onBack: () -> Unit,
+    /** A whole report being fetched for [onAsk] or [onCopy], this one's or one asked for from the list. */
+    fetching: ReportFetch? = null,
+    onAsk: () -> Unit = {},
+    onContinue: (() -> Unit)? = null,
+    onCopy: () -> Unit = {},
+) {
+    // One fetch at a time: while one runs, a tap here would do nothing.
+    val busy = fetching != null
+    SubpageHeader(name, onBack = onBack, subtitle = (if (run.failed) "Failed · " else "") + messageTime(run.at.toDouble(), uses24HourClock())) {
+        IconButton(Lucide.Copy, contentDescription = "Copy report", onClick = onCopy, enabled = !busy)
+    }
     Column(
         Modifier
             .fillMaxSize()
@@ -552,6 +723,29 @@ internal fun RunView(run: InboxRun, name: String, loading: Boolean, note: RunNot
             .padding(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 96.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
+        // On a narrow sidebar Continue goes under Ask, rather than its label breaking over two lines.
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(
+                "Ask about this",
+                onClick = onAsk,
+                size = ButtonSize.Small,
+                variant = ButtonVariant.Secondary,
+                leadingIcon = Lucide.MessageSquarePlus,
+                // Copy's fetch disables it too, but only Ask's turns it: no chat is on its way for a copy.
+                loading = fetching != null && fetching.key == run.key && fetching.ask,
+                enabled = !busy,
+            )
+            if (onContinue != null) {
+                Button(
+                    runChatLabel(run),
+                    onClick = onContinue,
+                    size = ButtonSize.Small,
+                    variant = ButtonVariant.Ghost,
+                    leadingIcon = Lucide.MessageSquareReply,
+                    enabled = !busy,
+                )
+            }
+        }
         if (note != null) {
             Text(
                 when (note) {

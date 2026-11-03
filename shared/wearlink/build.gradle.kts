@@ -9,7 +9,11 @@ plugins {
 kotlin {
     android {
         namespace = "dev.hermeskotlin.wearlink"
-        compileSdk = libs.versions.android.compileSdk.get().toInt()
+        compileSdk {
+            version = release(libs.versions.android.compileSdk.get().toInt()) {
+                minorApiLevel = libs.versions.android.compileSdkMinor.get().toInt()
+            }
+        }
         minSdk = libs.versions.android.minSdk.get().toInt()
         withHostTest {}
         // The apps build for JVM 11, and they inline WearJson's reified helpers: this module's bytecode must match.

@@ -13,7 +13,11 @@ val releasesRepo = (findProperty("releasesRepo") as String?).orEmpty()
 
 android {
     namespace = "dev.hermeskotlin.wear"
-    compileSdk = libs.versions.android.compileSdk.get().toInt()
+    compileSdk {
+        version = release(libs.versions.android.compileSdk.get().toInt()) {
+            minorApiLevel = libs.versions.android.compileSdkMinor.get().toInt()
+        }
+    }
 
     defaultConfig {
         applicationId = "dev.herald.android"
@@ -30,7 +34,11 @@ android {
         Properties().apply { file.inputStream().use(::load) }
     }
     // As androidApp: a published watch APK signed with the debug key wouldn't pair with the phone, so a release fails.
-    if (keystore == null && releasesRepo.isNotEmpty()) error("releasesRepo is set but keystore.properties is missing")
+    // Also as there: only packaging an APK fails, so the desktop release, which configures this project, still builds.
+    if (keystore == null && releasesRepo.isNotEmpty()) {
+        val missing = "releasesRepo is set but keystore.properties is missing"
+        tasks.configureEach { if (name.startsWith("package")) doFirst { throw GradleException(missing) } }
+    }
     signingConfigs {
         if (keystore != null) create("release") {
             storeFile = rootProject.file("androidApp").resolve(keystore.getProperty("storeFile"))

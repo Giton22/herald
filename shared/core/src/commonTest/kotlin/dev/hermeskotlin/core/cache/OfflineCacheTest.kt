@@ -71,6 +71,17 @@ class OfflineCacheTest {
     }
 
     @Test
+    fun oversizedReasoningProjectionsAreOmittedWithoutDroppingTheTurn() = runTest {
+        val huge = "x".repeat(OfflineCache.MAX_ROW_BYTES + 1)
+        val row = message(2, "assistant").copy(displayReasoning = huge, displayCommentary = listOf(huge))
+        cache.saveTranscript(home, null, "s1", listOf(message(1, "user"), row), rowsSessionId = "s1")
+        val saved = assertNotNull(cache.savedTranscript(home, null, "s1"))
+        assertEquals(listOf(1L, 2L), saved.rows.map { it.id })
+        assertEquals(OfflineCache.TOO_BIG_NOTE, saved.rows[1].text)
+        assertEquals("", saved.rows[1].reasoningText)
+    }
+
+    @Test
     fun aRowTooBigEvenWithoutItsTextLeavesOnlyTheTurnsAfterIt() = runTest {
         val hugeCall = JsonPrimitive("x".repeat(OfflineCache.MAX_ROW_BYTES + 1))
         val rows = listOf(

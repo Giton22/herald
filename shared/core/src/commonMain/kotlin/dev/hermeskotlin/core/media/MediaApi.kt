@@ -7,15 +7,21 @@ import dev.hermeskotlin.core.network.map
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.post
+import io.ktor.client.request.setBody
 import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.bodyAsChannel
 import io.ktor.utils.io.readRemaining
 import kotlinx.coroutines.CancellationException
 import kotlinx.io.readByteArray
 import io.ktor.client.request.parameter
+import io.ktor.http.ContentType
 import io.ktor.http.contentLength
+import io.ktor.http.contentType
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.put
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
@@ -106,6 +112,20 @@ class MediaApi(
         }
     }
 
+    /**
+     * Makes the folder [path] on the gateway's machine, and any folders above it that are missing
+     * (`POST /api/files/mkdir`, Desktop's New folder). One already there is fine. `~/` paths are the
+     * gateway's home; like the managed downloads, this is the host's disk, not a sandboxed profile's.
+     * The route makes missing folders rather than answering 404, so any 404 is a gateway without it. So is a
+     * 405: the dashboard's catch-all only takes GET, so a POST to a route it lacks is "Method Not Allowed".
+     */
+    suspend fun makeFolder(url: GatewayUrl, path: String): ApiResult<Unit> = apiCall {
+        client.post(url.resolve("api/files/mkdir")) {
+            contentType(ContentType.Application.Json)
+            setBody(buildJsonObject { put("path", path) })
+        }
+    }.map { }.let { if (it is ApiResult.Failed && (it.status == 404 || it.status == 405)) ApiResult.Failed(404, NO_MKDIR) else it }
+
     /** A reply's picture from the web (`![alt](https://...)`). */
     suspend fun remote(url: String): ApiResult<ByteArray> = apiCall { web.get(url) }.map { response ->
         // A reply can point anywhere; a huge "picture" mustn't fill the phone's memory.
@@ -119,6 +139,9 @@ class MediaApi(
         const val MAX_DOWNLOAD_BYTES = 64L * 1024 * 1024
 
         const val TOO_LARGE = "It's over 64 MB, too large to fetch to the phone from the chat."
+
+        /** Why [makeFolder] failed on a gateway older than `POST /api/files/mkdir`. */
+        const val NO_MKDIR = "This gateway can't make folders. Update Hermes, or make the folder on the gateway's machine."
 
         const val NO_PROFILE_DOWNLOAD = "This gateway can't hand over whole files from a profile yet. Update Hermes on it."
     }

@@ -1,8 +1,13 @@
 package dev.hermeskotlin.wear
 
+import android.app.role.RoleManager
 import android.content.Context
+import android.content.Intent
 import android.media.AudioManager
 import android.os.SystemClock
+import android.provider.Settings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
@@ -13,6 +18,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.width
@@ -24,16 +31,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.GenericShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
@@ -503,6 +512,7 @@ internal fun callCaption(call: WatchCallState): String = when (call.stage) {
 /** What's going on, under the orb. */
 private fun caption(mood: OrbMood, turn: WatchTurn?, mic: Listening, phone: PhoneState): String? = when {
     mic.recording -> "Listening… tap when done"
+    mic.waiting -> "Checking your phone…"
     mood == OrbMood.Speaking -> "Tap to stop"
     turn != null && turn.update.phase == ReplyPhase.Failed -> turn.update.error ?: "Something went wrong."
     turn != null && turn.running -> activityLine(turn.update.phase, turn.update.activity)
@@ -698,12 +708,104 @@ private fun ChatsScreen(link: WatchLink, store: WatchStore, onPicked: () -> Unit
     }
 }
 
+/**
+ * The assistant's screen, when Android calls Herald through the assistant role: the orb and what it's doing,
+ * nothing else. The talk screen in [MainActivity] keeps the chats and the settings; this one is a glance over
+ * the watch face, so it closes when the user swipes it away. Without [showsLast] (a locked watch) it shows no
+ * turn it didn't ask itself: the session window is shown over the lock screen.
+ */
+@Composable
+fun AssistPanel(
+    link: WatchLink,
+    store: WatchStore,
+    speech: SpeechOut,
+    listening: Listening,
+    showsLast: Boolean,
+    onOrb: () -> Unit,
+    onNotice: () -> Unit,
+) {
+    val accent by store.accent.collectAsState()
+    val lastTurn by link.turn.collectAsState()
+    val turn = lastTurn.takeIf { showsLast }
+    val phone by link.phone.collectAsState()
+    val chat by store.chat.collectAsState()
+    val speaking by speech.speaking.collectAsState()
+    MaterialTheme(colorScheme = watchColors(accent)) {
+        val mood = when {
+            listening.recording -> OrbMood.Listening
+            listening.waiting -> OrbMood.Waiting
+            turn?.update?.phase == ReplyPhase.WaitingOnPhone -> OrbMood.Waiting
+            turn?.running == true -> OrbMood.Working
+            speaking -> OrbMood.Speaking
+            turn?.update?.phase == ReplyPhase.Failed || listening.error != null -> OrbMood.Failed
+            else -> OrbMood.Idle
+        }
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .halo(mood, MaterialTheme.colorScheme.primaryContainer)
+                .verticalScroll(rememberScrollState())
+                .padding(horizontal = 12.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            HeraldOrb(
+                mood = mood,
+                level = listening.level,
+                context = chat.contextPercent?.takeIf { showsLast }?.let { it / 100f },
+                modifier = Modifier
+                    .size(84.dp)
+                    .clip(CircleShape)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        role = Role.Button,
+                        onClick = onOrb,
+                    )
+                    .semantics {
+                        contentDescription = when {
+                            listening.recording -> "Done talking"
+                            listening.waiting -> "Cancel"
+                            else -> "Talk to Hermes"
+                        }
+                    },
+            )
+            Spacer(Modifier.height(6.dp))
+            Caption(caption(mood, turn, listening, phone), mood)
+            listening.error?.let { Notice(it, onClick = onNotice) }
+            if (!listening.recording && !listening.waiting) {
+                turn?.said?.let { Said(it) }
+                turn?.update?.text?.takeIf { it.isNotBlank() }?.let { Reply(it) }
+            }
+        }
+    }
+}
+
 /** How the watch talks: live in a call (when the gateway can), and whether replies are read aloud. */
 @Composable
 private fun SettingsScreen(link: WatchLink, store: WatchStore) {
     val speak by store.speak.collectAsState()
     val live by store.live.collectAsState()
     val liveVoice by link.liveVoice.collectAsState()
+    // The assistant role belongs to the system, so it is asked rather than remembered: it can be taken away in
+    // Settings at any time. A watch without the role (some builds drop it) simply doesn't show the row.
+    val context = LocalContext.current
+    val roles = remember(context) { context.getSystemService(RoleManager::class.java) }
+    val canBeAssistant = remember(roles) { roles?.isRoleAvailable(RoleManager.ROLE_ASSISTANT) == true }
+    var isAssistant by remember { mutableStateOf(roles?.isRoleHeld(RoleManager.ROLE_ASSISTANT) == true) }
+    // Wear's own "Digital assistant app" screen is where the role is picked there: some builds refuse the
+    // role request itself ("Role is not requestable"). The system picker stays the fallback for the ones that
+    // have no such screen.
+    val assistantRequest = remember(context, roles) {
+        Intent(Settings.ACTION_VOICE_INPUT_SETTINGS).takeIf { context.packageManager.resolveActivity(it, 0) != null }
+            ?: roles?.createRequestRoleIntent(RoleManager.ROLE_ASSISTANT)
+    }
+    // The picker closing with nothing picked is that refusal, so the row says so instead of doing nothing again.
+    var refused by remember { mutableStateOf(false) }
+    val askAssistant = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) {
+        isAssistant = roles?.isRoleHeld(RoleManager.ROLE_ASSISTANT) == true
+        refused = !isAssistant && assistantRequest?.action != Settings.ACTION_VOICE_INPUT_SETTINGS
+    }
     val listState = rememberTransformingLazyColumnState()
     ScreenScaffold(scrollState = listState, modifier = Modifier.halo(OrbMood.Idle, MaterialTheme.colorScheme.primaryContainer)) { contentPadding ->
         TransformingLazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
@@ -715,6 +817,29 @@ private fun SettingsScreen(link: WatchLink, store: WatchStore) {
                 item { VoiceSwitch("Talk live", "As a voice call", live, store::setLive) }
             }
             item { VoiceSwitch("Read aloud", "Every reply", speak, store::setSpeak) }
+            // Not a switch: the system's picker decides it, and it can be taken away there too.
+            if (canBeAssistant && assistantRequest != null) {
+                item {
+                    Button(
+                        onClick = { askAssistant.launch(assistantRequest) },
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = Surface2, contentColor = Text1, secondaryContentColor = Muted),
+                        label = { Text("Assistant", style = geist(14, FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        secondaryLabel = {
+                            Text(
+                                when {
+                                    isAssistant -> "Kyllene answers the button"
+                                    refused -> "Not set. Tap to try again"
+                                    else -> "Set Kyllene as assistant"
+                                },
+                                style = geist(12, color = Text2),
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        },
+                    )
+                }
+            }
         }
     }
 }

@@ -8,6 +8,7 @@ import dev.hermeskotlin.core.auth.WebCookieJar
 import dev.hermeskotlin.core.cache.OfflineCache
 import dev.hermeskotlin.core.cache.OfflineDatabase
 import dev.hermeskotlin.core.chat.AttentionTracker
+import dev.hermeskotlin.core.phone.AgentScreens
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.ChatLinks
 import dev.hermeskotlin.core.chat.DraftStore
@@ -28,7 +29,9 @@ import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.AccessTokens
 import dev.hermeskotlin.core.gateway.ConnectionCheck
 import dev.hermeskotlin.core.gateway.GatewayProbe
+import dev.hermeskotlin.core.gateway.ClientCertAliases
 import dev.hermeskotlin.core.gateway.GatewayRepository
+import dev.hermeskotlin.core.gateway.mtlsEngine
 import dev.hermeskotlin.core.media.LinkPreviews
 import dev.hermeskotlin.core.media.MediaApi
 import dev.hermeskotlin.core.media.publicWebEngine
@@ -81,7 +84,9 @@ val coreModule = module {
     single { WebCookieJar(get(), get(), get(), get()) }
     single { AccessTokens(get()) }
     single { NativeTokens(get()) }
-    single { createHttpClient(cookies = get<PersistentCookiesStorage>(), access = get(), bearer = get()) }
+    single { ClientCertAliases() }
+    // One engine for the REST calls and the /api/ws upgrade, presenting each gateway's client certificate.
+    single { createHttpClient(engine = mtlsEngine(get(), get()), cookies = get<PersistentCookiesStorage>(), access = get(), bearer = get()) }
     single { GatewayProbe(get()) }
     single {
         val client = get<HttpClient>()
@@ -99,6 +104,7 @@ val coreModule = module {
     single { InsightsApi(get()) }
     single { ConfigApi(get()) }
     single { LastChatStore(get()) }
+    single { AgentScreens() }
     single { DraftStore(get()) }
     single { ProfilesApi(get()) }
     single { ProfileStore(get()) }

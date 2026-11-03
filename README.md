@@ -7,6 +7,7 @@
 **A native Android client for [Hermes Agent](https://github.com/NousResearch/hermes-agent).**
 Chat with your own agent, approve what it wants to do, and follow its work from your phone.
 
+[![Website](https://img.shields.io/badge/website-kyllene.app-1F5CF2?style=flat)](https://kyllene.app)
 [![Latest release](https://img.shields.io/github/v/release/Giton22/kyllene?style=flat&label=release)](https://github.com/Giton22/kyllene/releases/latest)
 [![Android 8.0+](https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=flat&logo=android&logoColor=white)](#install)
 [![Kotlin Multiplatform](https://img.shields.io/badge/Kotlin-Multiplatform-7F52FF?style=flat&logo=kotlin&logoColor=white)](#development)

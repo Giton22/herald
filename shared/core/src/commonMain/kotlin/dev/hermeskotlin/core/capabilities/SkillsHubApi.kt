@@ -51,14 +51,14 @@ class SkillsHubApi(
     suspend fun sources(url: GatewayUrl, profile: String?): ApiResult<HubSources> = apiCall {
         client.get(url.resolve("api/skills/hub/sources")) {
             profile(profile)
-            timeout { requestTimeoutMillis = HUB_REQUEST_TIMEOUT_MS }
+            waitForHub()
         }
     }.map { it.decode<HubSources>() }
 
     suspend fun official(url: GatewayUrl, profile: String?): ApiResult<List<HubSkill>> = apiCall {
         client.get(url.resolve("api/skills/hub/official")) {
             profile(profile)
-            timeout { requestTimeoutMillis = HUB_REQUEST_TIMEOUT_MS }
+            waitForHub()
         }
     }.map { it.decode<OfficialResponse>().skills }
 
@@ -68,7 +68,7 @@ class SkillsHubApi(
             parameter("q", query)
             parameter("source", "all")
             parameter("limit", limit)
-            timeout { requestTimeoutMillis = HUB_REQUEST_TIMEOUT_MS }
+            waitForHub()
         }
     }.map { it.decode<HubSearch>() }
 
@@ -76,7 +76,7 @@ class SkillsHubApi(
         client.get(url.resolve("api/skills/hub/preview")) {
             profile(profile)
             parameter("identifier", identifier)
-            timeout { requestTimeoutMillis = HUB_REQUEST_TIMEOUT_MS }
+            waitForHub()
         }
     }.map { it.decode<HubPreview>() }
 
@@ -84,7 +84,7 @@ class SkillsHubApi(
         client.get(url.resolve("api/skills/hub/scan")) {
             profile(profile)
             parameter("identifier", identifier)
-            timeout { requestTimeoutMillis = HUB_REQUEST_TIMEOUT_MS }
+            waitForHub()
         }
     }.map { it.decode<HubScan>() }
 
@@ -161,6 +161,15 @@ class SkillsHubApi(
 
     private fun HttpRequestBuilder.profile(profile: String?) {
         profile?.let { parameter("profile", it) }
+    }
+
+    /**
+     * A read may be silent for as long as it may take: a preview or scan fetches the skill first, and the
+     * engine's own read timeout (10 s on OkHttp) would cut it off long before.
+     */
+    private fun HttpRequestBuilder.waitForHub() = timeout {
+        requestTimeoutMillis = HUB_REQUEST_TIMEOUT_MS
+        socketTimeoutMillis = HUB_REQUEST_TIMEOUT_MS
     }
 
     private suspend inline fun <reified T> HttpResponse.decode(): T = lenientJson.decodeFromString<T>(bodyAsText())

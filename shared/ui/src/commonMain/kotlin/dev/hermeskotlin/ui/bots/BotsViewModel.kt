@@ -54,6 +54,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
@@ -154,8 +155,6 @@ class BotsViewModel(
     /** Bots whose chats the gateway was asked to watch on this connection. */
     private val watched = mutableSetOf<String>()
 
-    /** The stored session open in the chat pane, so its bot's chat counts as read. */
-    private var openSession: String? = null
 
     init {
         // While the roster shows, or a Desktop room's copy read from it: read it now, then on every change
@@ -175,6 +174,18 @@ class BotsViewModel(
                 .filter { it.type == "sessions.changed" && (visible.value && _mode.value == SidebarMode.Bots || desktopRoomOpen.value) }
                 .debounce(EVENT_DEBOUNCE_MS)
                 .collect { refreshNow() }
+        }
+        // A bot's chat read to its end on screen: its row's activity counts as seen and its badge goes at once.
+        viewModelScope.launch {
+            combine(gateway, seenStore.caughtUp, _state.map { it.all }.distinctUntilChanged()) { url, caught, bots ->
+                if (url == null || caught == null || caught.gateway != url) return@combine null
+                val bot = bots.firstOrNull { it.name == caught.profile && it.canonicalSession?.isChat(caught.sessionId) == true }
+                bot?.chatSummary()?.let { Triple(url, bot.name, it) }
+            }.distinctUntilChanged().collect { found ->
+                val (url, name, chat) = found ?: return@collect
+                seenStore.markSeen(url, chat, name)
+                _state.update { it.copy(unread = it.unread - name) }
+            }
         }
         // A job changed (the launch store's jobs only; others are read on the minute): no waiting a minute.
         viewModelScope.launch {
@@ -220,12 +231,6 @@ class BotsViewModel(
         viewModelScope.launch { modes.set(url, mode) }
     }
 
-    /** The chat pane now shows [storedSessionId]; a bot's chat open there is read. */
-    fun setOpenSession(storedSessionId: String?) {
-        openSession = storedSessionId
-        viewModelScope.launch { markOpenSeen(_state.value.all) }
-    }
-
     fun refresh() {
         viewModelScope.launch { refreshNow() }
     }
@@ -241,8 +246,8 @@ class BotsViewModel(
 
     /**
      * Finds [bot]'s chat (starting it when the bot has never had one) and hands its stored id to [onOpened],
-     * with when the user last looked at it, so the messages since are marked new (taken before opening counts
-     * as reading). When that can't be done safely the row says so instead, and the user can tap again.
+     * with its local reading position as a fallback when the gateway has no shared watermark.
+     * When that can't be done safely the row says so instead, and the user can tap again.
      */
     fun open(bot: Bot, onOpened: (storedSessionId: String, readUpTo: Double?) -> Unit) {
         if (_state.value.opening != null) return
@@ -257,7 +262,6 @@ class BotsViewModel(
                 val readUpTo = gateway.value?.let { url ->
                     listOfNotNull(canonical, id).distinct().maxOf { seenStore.lastLook(url, it, bot.name) }
                 }
-                openSession = id
                 onOpened(id, readUpTo)
                 refreshNow()
             } catch (e: CancellationException) {
@@ -327,7 +331,6 @@ class BotsViewModel(
                 }
                 val stored = api.startWithIntro(made.profile)
                 chats.note(listOf(bot.copy(canonicalSession = dev.hermeskotlin.core.bots.BotSession(id = stored))))
-                openSession = stored
                 onOpened(bot, stored)
                 refreshNow()
             } catch (e: CancellationException) {
@@ -499,7 +502,6 @@ class BotsViewModel(
             if (gateway.value != url) return
             chats.note(roster.bots)
             val ordered = roster.bots.forRoster()
-            markOpenSeen(ordered)
             val unread = unread(url, ordered)
             // Desktop's rooms ride the roster's default row, so they refresh without a call of their own.
             val desktopRooms = parseDesktopRooms(roster.bots.firstOrNull { it.isDefault || it.name == Bot.DEFAULT }?.uiMeta)
@@ -543,22 +545,13 @@ class BotsViewModel(
         }
     }
 
-    /** Read state is kept per bot profile, on its Bot Chat's stable id. */
+    /** Local fallback read state follows both the stable id and the resolved transcript after compression. */
     private suspend fun unread(url: GatewayUrl, bots: List<Bot>): Set<String> = bots.mapNotNull { bot ->
         // A chat just begun has nothing in it to read.
         if (bot.canonicalSession?.messageCount == 0) return@mapNotNull null
         val chat = bot.chatSummary() ?: return@mapNotNull null
-        bot.name.takeIf { seenStore.seen(url, bot.name).first().isUnread(chat) }
+        bot.name.takeIf { seenStore.seen(url, bot.name).first().isUnread(chat, resolvedId = bot.canonicalSession?.openId) }
     }.toSet()
-
-    private suspend fun markOpenSeen(bots: List<Bot>) {
-        val url = gateway.value ?: return
-        val open = openSession ?: return
-        val bot = bots.firstOrNull { it.canonicalSession?.let { chat -> open == chat.id || open == chat.openId } == true } ?: return
-        val chat = bot.chatSummary() ?: return
-        seenStore.markSeen(url, chat, bot.name)
-        _state.update { it.copy(unread = it.unread - bot.name) }
-    }
 
     private fun loadAvatars(bots: List<Bot>) {
         val wanted = bots.filter { it.hasAvatar && avatarsAsked.add(it.name) }

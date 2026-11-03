@@ -11,6 +11,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,6 +25,7 @@ import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.layout.Placeable
 import androidx.compose.ui.semantics.CollectionInfo
 import androidx.compose.ui.semantics.CollectionItemInfo
@@ -41,6 +43,7 @@ import com.mikepenz.markdown.compose.LocalMarkdownColors
 import com.mikepenz.markdown.compose.LocalMarkdownDimens
 import com.mikepenz.markdown.compose.elements.MarkdownTableBasicText
 import org.intellij.markdown.ast.ASTNode
+import org.intellij.markdown.ast.getTextInNode
 import org.intellij.markdown.flavours.gfm.GFMElementTypes.HEADER
 import org.intellij.markdown.flavours.gfm.GFMElementTypes.ROW
 import org.intellij.markdown.flavours.gfm.GFMTokenTypes.CELL
@@ -61,6 +64,8 @@ internal fun FittedTable(content: String, node: ASTNode, style: TextStyle) {
         node.children.filter { it.type == HEADER || it.type == ROW }.map { row -> row.children.filter { it.type == CELL } }
     }
     if (rows.isEmpty()) return
+    // An Arabic table reads its first column from the right, like the prose around it.
+    val rtl = remember(node, content) { Bidi.prefersRightToLeft(node.getTextInNode(content).toString()) }
     val dimens = LocalMarkdownDimens.current
     val shape = RoundedCornerShape(dimens.tableCornerSize)
     val faint = LocalMarkdownColors.current.dividerColor.fainter()
@@ -72,11 +77,14 @@ internal fun FittedTable(content: String, node: ASTNode, style: TextStyle) {
     ) {
         val available = if (constraints.hasBoundedWidth) constraints.maxWidth else Int.MAX_VALUE
         val sideways = rememberScrollState()
-        Box(Modifier.horizontalScroll(sideways)) {
-            TableGrid(rows, content, style, available, LocalMarkdownColors.current.dividerColor, dimens.dividerThickness)
+        CompositionLocalProvider(LocalLayoutDirection provides if (rtl) LayoutDirection.Rtl else LayoutDirection.Ltr) {
+            Box(Modifier.horizontalScroll(sideways)) {
+                TableGrid(rows, content, style, available, LocalMarkdownColors.current.dividerColor, dimens.dividerThickness)
+            }
+            // A table wider than the reply shows the desktop's bar to drag it by, as a wide code block does. It is in
+            // the table's direction too, so for a right-to-left table it starts at the right and drags the same way.
+            Box(Modifier.matchParentSize()) { HorizontalScrollbar(sideways, Modifier.align(Alignment.BottomStart).fillMaxWidth()) }
         }
-        // A table wider than the reply shows the desktop's bar to drag it by, as a wide code block does.
-        Box(Modifier.matchParentSize()) { HorizontalScrollbar(sideways, Modifier.align(Alignment.BottomStart).fillMaxWidth()) }
     }
 }
 

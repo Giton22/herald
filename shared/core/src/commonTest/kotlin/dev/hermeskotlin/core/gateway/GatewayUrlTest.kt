@@ -57,4 +57,14 @@ class GatewayUrlTest {
     fun resolveJoinsPaths() {
         assertEquals("http://host:9119/api/status", GatewayUrl.parse("host:9119").resolve("/api/status"))
     }
+
+    @Test
+    fun portFallsBackToTheSchemesOwnSoThePickerHintsTheHandshakePort() {
+        // KeyChain.choosePrivateKeyAlias takes host+port only as a hint; the handshake runs on the
+        // effective port. An https address without an explicit port must therefore hint 443, not -1.
+        assertEquals(443, GatewayUrl.parse("https://hermes.example.com").port)
+        assertEquals(80, GatewayUrl.parse("http://hermes.example.com").port)
+        assertEquals(9119, GatewayUrl.parse("100.64.0.1:9119").port)
+        assertEquals(8443, GatewayUrl.parse("https://hermes.example.com:8443").port)
+    }
 }

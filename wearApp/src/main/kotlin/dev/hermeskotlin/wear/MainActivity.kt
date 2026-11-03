@@ -23,14 +23,22 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.launch
 
-/** This app's own recording, on a watch without an input screen: [level] while it hears, [error] when it missed. */
-data class Listening(val recording: Boolean = false, val level: Float = 0f, val error: String? = null)
+/**
+ * This app's own recording, on a watch without an input screen: [level] while it hears, [error] when it missed.
+ * [waiting] while it checks with the phone first, before the microphone opens.
+ */
+data class Listening(
+    val recording: Boolean = false,
+    val level: Float = 0f,
+    val error: String? = null,
+    val waiting: Boolean = false,
+)
 
 /**
  * The talk screen. A tap on the mic opens the watch's own speech recognizer, so only words go to the phone;
  * a watch without one records and the gateway transcribes. Launched with
  * [EXTRA_CALL] (the tile, the complication) it resolves the phone’s default target and calls.
- * [EXTRA_LISTEN] retains the existing listening action.
+ * With [EXTRA_LISTEN], or as the watch's assistant (`ACTION_ASSIST`), it starts listening at once.
  */
 class MainActivity : ComponentActivity() {
 
@@ -141,7 +149,7 @@ class MainActivity : ComponentActivity() {
             !typed.isNullOrBlank() -> app.link.ask(typed)
             intent.getBooleanExtra(EXTRA_CALL, false) -> defaultCall()
             intent.getStringExtra(EXTRA_ANSWER_CALL) == app.callToken -> call()
-            intent.getBooleanExtra(EXTRA_LISTEN, false) -> talk()
+            AssistEntry.asksToListen(intent.action, intent.getBooleanExtra(EXTRA_LISTEN, false)) -> talk()
         }
     }
 
@@ -202,6 +210,9 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun talk() {
+        // A second call-up while Herald already hears (the assistant button pressed twice) changes nothing: its own
+        // recording, the watch's recognizer, or a live call.
+        if (recordingJob?.isActive == true || recognitionGeneration != null || app.link.call.value?.active == true) return
         defaultCallJob?.cancel()
         permissionDefault = null
         callPermissionPending = false
@@ -232,7 +243,7 @@ class MainActivity : ComponentActivity() {
         lifecycleScope.launch {
             if (!ready()) return@launch
             if (generation == null || generation != app.link.profileReset.value) {
-                listening.value = Listening(error = "Phone profile changed. Please try again.")
+                listening.value = Listening(error = PROFILE_CHANGED)
             } else action()
         }
     }
@@ -251,6 +262,7 @@ class MainActivity : ComponentActivity() {
                 return
             } catch (_: ActivityNotFoundException) {
                 // Listed but gone: record instead.
+                recognitionGeneration = null
             }
         }
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
@@ -266,22 +278,7 @@ class MainActivity : ComponentActivity() {
         val generation = app.link.profileReset.value
         listening.value = Listening(recording = true)
         recordingJob = lifecycleScope.launch {
-            val audio = try {
-                recorder.record { level -> listening.value = listening.value.copy(level = level) }
-            } catch (e: CancellationException) {
-                // Left the screen: nothing to tell.
-                throw e
-            } catch (e: Exception) {
-                listening.value = Listening(error = e.message ?: "Couldn't use the microphone.")
-                return@launch
-            } finally {
-                if (listening.value.recording) listening.value = Listening()
-            }
-            if (generation != app.link.profileReset.value) {
-                listening.value = Listening(error = "Phone profile changed. Please try again.")
-            } else if (audio == null) {
-                listening.value = Listening(error = "I didn't hear anything.")
-            } else {
+            recordAsk(listening, generation, { app.link.profileReset.value }, recorder::record) { audio ->
                 app.link.ask(null, audio, WatchRecorder.MIME_TYPE)
             }
         }
