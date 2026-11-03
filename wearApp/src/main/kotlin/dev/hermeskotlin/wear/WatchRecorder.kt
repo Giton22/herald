@@ -14,6 +14,9 @@ import java.nio.ByteOrder
 import kotlin.math.min
 import kotlin.math.sqrt
 
+/** The microphone couldn't be opened: the screen says so in the watch's language. */
+class MicrophoneUnavailableException : IllegalStateException("The microphone isn't available.")
+
 /**
  * Records what's said for the gateway to transcribe, on a watch without a speech recognizer of its own: 16 kHz
  * mono WAV, as the phone records, ending a moment after the speaker stops, or on [finish]. The end of speech is
@@ -37,7 +40,7 @@ class WatchRecorder {
         )
         if (record.state != AudioRecord.STATE_INITIALIZED) {
             record.release()
-            error("The microphone isn't available.")
+            throw MicrophoneUnavailableException()
         }
         val pcm = ByteArrayOutputStream()
         val frame = ShortArray(FRAME)

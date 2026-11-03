@@ -1,5 +1,6 @@
 package dev.hermeskotlin.core.settings
 
+import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
@@ -7,6 +8,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertNull
 
 class SettingsStoreTest {
 
@@ -24,6 +26,25 @@ class SettingsStoreTest {
         assertEquals(restored.callTargets["https://home.example"], saved.callTargets["https://home.example"])
         assertEquals(CallTarget(profile = "helper", label = "Helper"), saved.callTargets["https://work.example"])
         assertEquals(ThemeMode.Dark, saved.theme)
+    }
+
+    @Test
+    fun theLastProjectIsRememberedPerGatewayAndProfile() {
+        val home = GatewayUrl.parse("https://hermes.example")
+        val work = GatewayUrl.parse("http://100.64.0.2:9119")
+        val settings = AppSettings()
+            .withLastProject(home, null, "/srv/site")
+            .withLastProject(home, "work", "/srv/work")
+        assertEquals("/srv/site", settings.startProject(home, null))
+        assertEquals("/srv/work", settings.startProject(home, "work"))
+        assertNull(settings.startProject(work, null))
+        // No project last time: none next time.
+        assertNull(settings.withLastProject(home, null, null).startProject(home, null))
+        assertEquals("/srv/work", settings.withLastProject(home, null, null).startProject(home, "work"))
+        // Turned off, nothing is started in, though it's still kept for when it's back on.
+        val off = settings.copy(useLastProject = false)
+        assertNull(off.startProject(home, null))
+        assertEquals("/srv/site", off.copy(useLastProject = true).startProject(home, null))
     }
 
     @Test
@@ -56,6 +77,25 @@ class SettingsStoreTest {
         val restored = SettingsStore(disk, backgroundScope).settings.filterNotNull().first()
         assertEquals(false, restored.dictation)
         assertEquals(DictationEngine.Gateway, restored.dictationEngine)
+    }
+
+    @Test
+    fun languageFollowsTheSystemUntilPickedAndBackAgain() = runTest {
+        val disk = InMemoryKeyValueStore()
+        // Settings saved before the option existed follow the system.
+        disk.put("settings.v1", """{"theme":"Dark"}""")
+        val first = SettingsStore(disk, backgroundScope)
+        assertEquals(null, first.settings.filterNotNull().first().language)
+
+        first.update { it.copy(language = "pt-BR") }
+        advanceUntilIdle()
+        val picked = SettingsStore(disk, backgroundScope)
+        assertEquals("pt-BR", picked.settings.filterNotNull().first().language)
+
+        // System default again: the tag goes, rather than staying as a stale choice.
+        picked.update { it.copy(language = null) }
+        advanceUntilIdle()
+        assertEquals(null, SettingsStore(disk, backgroundScope).settings.filterNotNull().first().language)
     }
 
     @Test

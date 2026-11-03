@@ -109,6 +109,8 @@ import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import kotlinx.coroutines.delay
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The agent's plan above the composer. While its turn runs it's open and ticks off as the agent works;
@@ -155,7 +157,7 @@ private fun Panel(todos: TodoList, live: Boolean, hazeState: HazeState) {
         ) {
             UnstyledIcon(Lucide.ListChecks, contentDescription = null, tint = Theme[colors][textSecondary], modifier = Modifier.size(16.dp))
             Text(
-                "${if (live) "Tasks" else "Last plan"} ${todos.done}/${todos.total}",
+                stringResource(if (live) Res.string.chat_tasks_count else Res.string.chat_last_plan_count, todos.done, todos.total),
                 style = Theme[typography][label],
                 color = if (live) Theme[colors][text] else Theme[colors][textSecondary],
             )
@@ -173,7 +175,7 @@ private fun Panel(todos: TodoList, live: Boolean, hazeState: HazeState) {
             }
             UnstyledIcon(
                 if (expanded) Lucide.ChevronDown else Lucide.ChevronUp,
-                contentDescription = if (expanded) "Fold the tasks" else "Show the tasks",
+                contentDescription = stringResource(if (expanded) Res.string.chat_tasks_fold else Res.string.chat_tasks_show),
                 tint = Theme[colors][textTertiary],
                 modifier = Modifier.size(16.dp),
             )
@@ -208,9 +210,11 @@ internal fun ProgressPanel(
 ) {
     var expanded by remember { mutableStateOf(false) }
     val plan = todos?.takeIf { it.items.isNotEmpty() }
-    val statusDetail = status?.takeIf { it.isNotBlank() && it != step.title }
+    val statusDetail = status?.takeIf { it.isNotBlank() && Words.Said(it) != step.title }
     val toolDetail = tool?.let { t -> listOfNotNull(t.name, t.detail?.takeIf { it.isNotBlank() }).joinToString(": ") }
     val hasDetails = statusDetail != null || toolDetail != null || plan != null
+    val detailsAction = stringResource(if (expanded) Res.string.chat_hide_details else Res.string.chat_show_details)
+    val detailsState = stringResource(if (expanded) Res.string.chat_details_shown else Res.string.chat_details_hidden)
     ShimmerCard {
         // The header opens and folds the details; the details themselves scroll without folding.
         Column(
@@ -218,8 +222,8 @@ internal fun ProgressPanel(
                 if (hasDetails) {
                     Modifier
                         .handCursor()
-                        .clickable(onClickLabel = if (expanded) "Hide details" else "Show details") { expanded = !expanded }
-                        .semantics { stateDescription = if (expanded) "Details shown" else "Details hidden" }
+                        .clickable(onClickLabel = detailsAction) { expanded = !expanded }
+                        .semantics { stateDescription = detailsState }
                 } else {
                     Modifier
                 },
@@ -232,10 +236,10 @@ internal fun ProgressPanel(
                 Modifier.heightIn(max = 240.dp).verticalScrollWithBar().padding(start = 14.dp, end = 14.dp, bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                statusDetail?.let { DetailLine("Status", it) }
-                toolDetail?.let { DetailLine("Tool", it) }
+                statusDetail?.let { DetailLine(stringResource(Res.string.chat_detail_status), it) }
+                toolDetail?.let { DetailLine(stringResource(Res.string.chat_detail_tool), it) }
                 plan?.let { list ->
-                    Text("Tasks ${list.done}/${list.total}", style = Theme[typography][label], color = Theme[colors][textSecondary])
+                    Text(stringResource(Res.string.chat_tasks_count, list.done, list.total), style = Theme[typography][label], color = Theme[colors][textSecondary])
                     list.tree().forEach { (item, depth) -> TodoRow(item, depth, live = true) }
                 }
             }
@@ -246,7 +250,7 @@ internal fun ProgressPanel(
 @Composable
 private fun DetailLine(name: String, value: String) {
     Text(
-        "$name: $value",
+        stringResource(Res.string.chat_detail_line, name, value),
         style = Theme[typography][bodySmall],
         color = Theme[colors][textSecondary],
         maxLines = 3,
@@ -340,13 +344,14 @@ private fun CardHeader(step: LiveStep, turnKey: String?, plan: TodoList?, hasDet
             }
         }
         Column(Modifier.weight(1f)) {
-            val progress = step.teamProgress
+            val progress = step.teamProgress?.text()
+            val title = step.title.text()
             Text(
                 if (progress == null) {
-                    AnnotatedString(step.title)
+                    AnnotatedString(title)
                 } else {
                     buildAnnotatedString {
-                        append(step.title)
+                        append(title)
                         withStyle(SpanStyle(color = Theme[colors][textTertiary], fontWeight = FontWeight.Normal)) { append(" · $progress") }
                     }
                 },
@@ -379,7 +384,7 @@ private fun CardHeader(step: LiveStep, turnKey: String?, plan: TodoList?, hasDet
             PlanBar(plan.done.toFloat() / plan.total.coerceAtLeast(1), Modifier.weight(1f))
             val inHand = planStep(plan)
             Text(
-                if (inHand != null) "Step $inHand of ${plan.total}" else "${plan.done} of ${plan.total} done",
+                if (inHand != null) stringResource(Res.string.chat_plan_step_of, inHand, plan.total) else stringResource(Res.string.chat_plan_done_of, plan.done, plan.total),
                 style = Theme[typography][caption],
                 color = Theme[colors][textTertiary],
             )
@@ -431,7 +436,7 @@ internal fun runningTime(seconds: Long): String {
 
 /** Stops the task: a small round button, with the full touch size around it. */
 @Composable
-private fun StopButton(onStop: () -> Unit, enabled: Boolean) = Tooltip("Stop the task") {
+private fun StopButton(onStop: () -> Unit, enabled: Boolean) = Tooltip(stringResource(Res.string.chat_stop_task)) {
     UnstyledButton(
         onClick = onStop,
         enabled = enabled,
@@ -439,7 +444,7 @@ private fun StopButton(onStop: () -> Unit, enabled: Boolean) = Tooltip("Stop the
         indication = rememberHoverIndication(Theme[colors][text]),
     ) {
         Box(Modifier.size(34.dp).background(Theme[colors][surface3], CircleShape), contentAlignment = Alignment.Center) {
-            UnstyledIcon(Lucide.Square, contentDescription = "Stop the task", tint = Theme[colors][text], modifier = Modifier.size(12.dp))
+            UnstyledIcon(Lucide.Square, contentDescription = stringResource(Res.string.chat_stop_task), tint = Theme[colors][text], modifier = Modifier.size(12.dp))
         }
     }
 }

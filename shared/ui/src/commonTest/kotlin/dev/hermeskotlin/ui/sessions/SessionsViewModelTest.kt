@@ -57,8 +57,10 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertIs
 import kotlin.test.assertNotNull
 import kotlin.test.assertTrue
+import dev.hermeskotlin.ui.resources.*
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class SessionsViewModelTest {
@@ -481,7 +483,7 @@ class SessionsViewModelTest {
         socket.projects["projects.create"] = """{"project":{"id":"p_new","name":"Fresh"}}"""
         socket.projects["projects.tree"] = """{"projects":[{"id":"p_new","label":"Fresh","path":"/srv/fresh","isAuto":false,"sessionIds":[]},
             {"id":"__no_project__","label":"Home","isNoProject":true,"sessionCount":2}]}"""
-        var done: String? = "not yet"
+        var done: Said? = Said.Verbatim("not yet")
         vm.createProject("Fresh", "/srv/fresh") { done = it }
         val made = vm.state.first { it.projects.isNotEmpty() }
         assertEquals(listOf("p_new", "__no_project__"), made.projects.map { it.id })
@@ -532,7 +534,7 @@ class SessionsViewModelTest {
         vm.renameProject(project, "Taken")
         val after = vm.state.first { it.message != null }
         assertEquals("herald", after.projects.single().label)
-        assertEquals("name taken", after.message)
+        assertEquals(Said.Verbatim("name taken"), after.message)
     }
 
     @Test
@@ -548,10 +550,10 @@ class SessionsViewModelTest {
         vm.bind(gateway)
         vm.awaitLoaded()
         vm.state.first { it.canMakeProjects }
-        var done: String? = null
+        var done: Said? = null
         vm.createProject("site", "/srv/site") { done = it }
         assertFalse(vm.state.first { !it.canMakeProjects }.canMakeProjects)
-        assertEquals("This gateway can't change projects.", done)
+        assertEquals(said(Res.string.sessions_gateway_cant_change_projects), done)
         // A later tree doesn't bring the button back.
         vm.refresh()
         vm.awaitLoaded()
@@ -564,10 +566,10 @@ class SessionsViewModelTest {
         val vm = viewModel(socket = socket)
         vm.bind(gateway)
         vm.awaitLoaded()
-        var done: String? = null
+        var done: Said? = null
         vm.createProject("Dup", "/srv/herald") { done = it }
         vm.state.first { done != null }
-        assertTrue(done.orEmpty().contains("already belongs"))
+        assertTrue(assertIs<Said.Verbatim>(done).text.contains("already belongs"))
     }
 
     @Test
@@ -646,7 +648,7 @@ class SessionsViewModelTest {
 
         val state = vm.state.first { it.message != null }
         assertEquals(listOf("a", "b"), state.sessions.map { it.id })
-        assertTrue("Store is busy" in state.message!!)
+        assertTrue("Store is busy" in assertIs<Said.Verbatim>(state.message).text)
     }
 
     @Test
@@ -659,7 +661,7 @@ class SessionsViewModelTest {
         vm.toggleArchived(alpha)
         val archived = vm.state.first { it.undo != null }
         assertEquals(listOf("b"), archived.sessions.map { it.id })
-        assertEquals("Archived", archived.undo!!.message)
+        assertEquals(Res.string.sessions_archived, archived.undo!!.message)
 
         vm.undoArchive()
         val restored = vm.state.first { patches.size == 2 }

@@ -57,7 +57,13 @@ import dev.hermeskotlin.core.bots.mentionQuery
 import dev.hermeskotlin.core.rooms.mentionable
 import dev.hermeskotlin.core.rooms.mentionsEveryone
 import dev.hermeskotlin.core.rooms.roomRecipients
-import dev.hermeskotlin.core.rooms.waitingLine
+import dev.hermeskotlin.core.rooms.RoomMember
+import dev.hermeskotlin.ui.inbox.Words
+import dev.hermeskotlin.ui.inbox.text
+import dev.hermeskotlin.ui.inbox.words
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
 import dev.hermeskotlin.ui.chat.MentionChoice
 import dev.hermeskotlin.ui.chat.MentionSuggestions
 import androidx.compose.runtime.getValue
@@ -112,6 +118,7 @@ import dev.hermeskotlin.core.media.GatewayFile
 import dev.hermeskotlin.core.media.MediaApi
 import dev.hermeskotlin.core.rooms.Room
 import dev.hermeskotlin.core.rooms.RoomLine
+import dev.hermeskotlin.core.rooms.RoomNote
 import dev.hermeskotlin.core.rooms.RoomPendingAction
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.background
@@ -184,7 +191,7 @@ interface RoomActions {
     val composer: TextFieldState
     fun addAttachments(picked: List<OutgoingAttachment>, draftKey: Int) {}
     fun removeAttachment(id: String) {}
-    fun attachmentError(message: String, draftKey: Int) {}
+    fun attachmentError(message: Words, draftKey: Int) {}
     fun send()
     fun stop()
     fun loadEarlier()
@@ -218,11 +225,12 @@ internal fun RoomView(
         Column(Modifier.widthIn(max = 760.dp).fillMaxSize().imePadding()) {
             val members = room.room.members
             TopBar(
-                title = room.room.name,
+                // A room opened from a notification without its name has none until the first read.
+                title = room.room.name.ifBlank { stringResource(Res.string.rooms_room) },
                 titleFace = members.takeIf { it.isNotEmpty() }?.let { { RoomFaces(it, faces, size = 20.dp, max = 3) } },
                 // Who's in it, unless the room waits on the user.
                 status = when {
-                    room.pendingActions.isNotEmpty() -> BarStatus("Waiting on you", StatusTone.Waiting)
+                    room.pendingActions.isNotEmpty() -> BarStatus(stringResource(Res.string.rooms_waiting_on_you), StatusTone.Waiting)
                     members.isNotEmpty() -> BarStatus(members.joinToString(", ") { it.label }, StatusTone.Neutral)
                     else -> null
                 },
@@ -231,6 +239,7 @@ internal fun RoomView(
                 onOpenMenu = null,
                 trailing = {
                     var menuOpen by remember { mutableStateOf(false) }
+                    val options = stringResource(Res.string.rooms_options)
                     DropdownMenu(
                         expanded = menuOpen,
                         onExpandedChange = { menuOpen = it },
@@ -241,16 +250,16 @@ internal fun RoomView(
                             )
                         },
                     ) {
-                        BarButton(Lucide.Ellipsis, "Room options", onClick = { menuOpen = true })
+                        BarButton(Lucide.Ellipsis, options, onClick = { menuOpen = true })
                     }
-                    BarButton(Lucide.X, "Close the room", onClick = onBack)
+                    BarButton(Lucide.X, stringResource(Res.string.rooms_close), onClick = onBack)
                 },
             )
             Box(Modifier.weight(1f).fillMaxWidth()) {
                 Transcript(room, faces, onLoadEarlier = viewModel::loadEarlier, onOpenFile = onOpenFile)
             }
             // A failed read in full, above whatever waits on the user; the loop keeps trying.
-            room.error?.let { ListNotice(it) }
+            room.error?.let { ListNotice(it.text()) }
             PendingActions(room, onApprove = viewModel::approve, onRetry = viewModel::retry)
             if (room.working && room.pendingActions.isEmpty()) {
                 Row(
@@ -261,7 +270,7 @@ internal fun RoomView(
                     Spinner(Modifier.size(14.dp))
                     // Who's replying to the user's message; past its first round, bots answering each other.
                     Text(
-                        waitingLine(room.waiting) ?: "The room is talking it over…",
+                        waitingLine(room.waiting) ?: stringResource(Res.string.rooms_talking_it_over),
                         style = Theme[typography][caption],
                         color = Theme[colors][textTertiary],
                         maxLines = 1,
@@ -274,7 +283,7 @@ internal fun RoomView(
             RoomComposer(room, viewModel, mentions, keysEnabled)
         }
         room.notice?.let { message ->
-            MessageBanner(message, onDismiss = viewModel::dismissRoomNotice, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp))
+            MessageBanner(message.text(), onDismiss = viewModel::dismissRoomNotice, modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 120.dp))
         }
     }
 }
@@ -319,7 +328,7 @@ private fun Transcript(room: OpenRoom, faces: BotFaces, onLoadEarlier: () -> Uni
     }
     when {
         (room.loading || room.loadingEarlier || room.canLoadEarlier) && lines.isEmpty() -> ListSpinner()
-        lines.isEmpty() -> ListNotice("The room is quiet. Say something to start it.")
+        lines.isEmpty() -> ListNotice(stringResource(Res.string.rooms_quiet))
         else -> Box(Modifier.fillMaxSize()) {
             TranscriptList(lines, listState, faces, onOpenFile)
             // Over the list, not in it: a row on top would hold the scroll there and pull the reader up.
@@ -379,7 +388,7 @@ internal fun UserLine(line: RoomLine.Message) {
             verticalAlignment = Alignment.Bottom,
         ) {
             if (copyable(line.text)) {
-                CopyButton(line.text, Modifier.semantics { traversalIndex = 1f }, label = copyLabel(null))
+                CopyButton(line.text, Modifier.semantics { traversalIndex = 1f }, label = copyLabel(null).text())
             }
             Box(
                 Modifier
@@ -448,7 +457,7 @@ internal fun MemberLine(line: RoomLine.Message, continued: Boolean, faces: BotFa
                     }
                 }
                 // Copy keeps the message as the bot wrote it, not with its paths turned into links.
-                if (copyable(line.text)) CopyButton(line.text, label = copyLabel(name))
+                if (copyable(line.text)) CopyButton(line.text, label = copyLabel(name).text())
             }
         }
     }
@@ -458,14 +467,48 @@ internal fun MemberLine(line: RoomLine.Message, continued: Boolean, faces: BotFa
 internal fun copyable(text: String): Boolean = text.isNotBlank()
 
 /** What a screen reader hears for a line's Copy: whose message it copies, the user's when [speaker] is null. */
-internal fun copyLabel(speaker: String?): String =
-    if (speaker == null) "Copy your message" else "Copy $speaker's message"
+internal fun copyLabel(speaker: String?): Words =
+    if (speaker == null) words(Res.string.rooms_copy_your_message) else words(Res.string.rooms_copy_their_message, speaker)
+
+/**
+ * Who the room waits on for the user's newest message: the one replying now, then the rest in turn order. Null
+ * while no one is.
+ */
+@Composable
+private fun waitingLine(waiting: List<RoomMember>): String? {
+    val now = waiting.firstOrNull() ?: return null
+    val next = waiting.drop(1)
+    return if (next.isEmpty()) {
+        stringResource(Res.string.rooms_replying, now.label)
+    } else {
+        stringResource(Res.string.rooms_replying_then, now.label, next.joinToString(", ") { it.label })
+    }
+}
+
+/** [note] in the app's language; the gateway's own reasons and names stay as it wrote them. */
+@Composable
+internal fun roomNoteText(note: RoomNote): String {
+    val someone = stringResource(Res.string.rooms_note_member)
+    return when (note) {
+        is RoomNote.TurnFailed -> stringResource(
+            Res.string.rooms_note_turn_failed,
+            note.member ?: someone,
+            note.error ?: stringResource(Res.string.rooms_note_unknown_error),
+        )
+        is RoomNote.TurnStopped -> note.reason
+            ?.let { stringResource(Res.string.rooms_note_turn_stopped_reason, it) }
+            ?: stringResource(Res.string.rooms_note_turn_stopped)
+        is RoomNote.Passed -> stringResource(Res.string.rooms_note_passed, note.member ?: someone)
+        RoomNote.StopRequested -> stringResource(Res.string.rooms_note_stop_requested)
+        is RoomNote.Renamed -> stringResource(Res.string.rooms_note_renamed, note.name)
+    }
+}
 
 /** A line the gateway wrote: centred and quiet between the messages. */
 @Composable
 private fun SystemLine(line: RoomLine.System) {
     Text(
-        line.text,
+        roomNoteText(line.note),
         modifier = Modifier.fillMaxWidth().padding(vertical = 2.dp),
         style = Theme[typography][caption],
         color = Theme[colors][textTertiary],
@@ -484,19 +527,27 @@ private fun PendingActions(room: OpenRoom, onApprove: (RoomPendingAction, String
         room.pendingActions.forEach { action ->
             Surface(Modifier.fillMaxWidth(), elevated = true) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    val who = room.room.member(action.memberId)?.label ?: "A member"
+                    val who = room.room.member(action.memberId)?.label
                     if (action.kind == "approval") {
-                        Text("$who needs your approval", style = Theme[typography][bodySmall], color = Theme[colors][warning])
+                        Text(
+                            if (who == null) stringResource(Res.string.rooms_member_needs_approval) else stringResource(Res.string.rooms_needs_approval, who),
+                            style = Theme[typography][bodySmall],
+                            color = Theme[colors][warning],
+                        )
                         action.approvalSummary?.let {
                             Text(it, style = Theme[typography][caption], color = Theme[colors][textSecondary])
                         }
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Button("Deny", onClick = { onApprove(action, "deny") }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-                            Button("Approve once", onClick = { onApprove(action, "once") }, variant = ButtonVariant.Primary, size = ButtonSize.Small)
+                            Button(stringResource(Res.string.common_deny), onClick = { onApprove(action, "deny") }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+                            Button(stringResource(Res.string.rooms_approve_once), onClick = { onApprove(action, "once") }, variant = ButtonVariant.Primary, size = ButtonSize.Small)
                         }
                     } else {
-                        Text("$who's turn didn't go through", style = Theme[typography][bodySmall], color = Theme[colors][warning])
-                        Button("Retry", onClick = { onRetry(action) }, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
+                        Text(
+                            if (who == null) stringResource(Res.string.rooms_member_turn_failed) else stringResource(Res.string.rooms_turn_failed, who),
+                            style = Theme[typography][bodySmall],
+                            color = Theme[colors][warning],
+                        )
+                        Button(stringResource(Res.string.rooms_retry), onClick = { onRetry(action) }, variant = ButtonVariant.Secondary, size = ButtonSize.Small)
                     }
                 }
             }
@@ -518,11 +569,16 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomActions, mentions: RoomM
         val draftKey = room.draftKey
         rememberAttachmentPicker(
             onPicked = { viewModel.addAttachments(it, draftKey) },
-            onError = { viewModel.attachmentError(it, draftKey) },
+            onError = { viewModel.attachmentError(Words.Raw(it), draftKey) },
         )
     }
     AttachSheet(attachOpen, onDismiss = { attachOpen = false }, picker = picker,
-        subtitle = RoomAttachment.LIMITS)
+        subtitle = stringResource(
+            Res.string.rooms_attachment_limits,
+            RoomAttachment.MAX_COUNT,
+            RoomAttachment.MAX_BYTES / 1_000_000,
+            RoomAttachment.MAX_TOTAL_BYTES / 1_000_000,
+        ))
     val shape = RoundedCornerShape(Theme[radii][radiusLarge])
     var focused by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
@@ -565,8 +621,8 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomActions, mentions: RoomM
     ) {
         if (room.attachments.isNotEmpty()) ComposerTray(room.attachments, onRemove = viewModel::removeAttachment)
         if (room.attachmentRetry) Text(
-            if (room.retryText.isBlank()) "Send again to confirm the previous message."
-            else "Send again to confirm the previous message: “${room.retryText}”", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+            if (room.retryText.isBlank()) stringResource(Res.string.rooms_send_again)
+            else stringResource(Res.string.rooms_send_again_quoted, room.retryText), style = Theme[typography][caption], color = Theme[colors][textTertiary])
         UnstyledTextField(
             state = viewModel.composer,
             enabled = !room.attachmentRetry,
@@ -593,21 +649,21 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomActions, mentions: RoomM
         ) {
             TextInput(
                 placeholder = {
-                    Text("Message the room", style = Theme[typography][body], color = Theme[colors][textTertiary])
+                    Text(stringResource(Res.string.rooms_message_placeholder), style = Theme[typography][body], color = Theme[colors][textTertiary])
                 },
             )
         }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-            BarButton(Lucide.Paperclip, "Add photos or files", onClick = {
+            BarButton(Lucide.Paperclip, stringResource(Res.string.rooms_add_files), onClick = {
                 // A desktop has no camera, and its file dialog picks photos as well: it opens straight away.
                 if (room.attachmentsSupported) { if (isDesktop) picker.pickFiles() else attachOpen = true }
-                else viewModel.attachmentError("This gateway doesn't support room attachments. Update Hermes to use them.", room.draftKey)
+                else viewModel.attachmentError(words(Res.string.rooms_attachments_unsupported), room.draftKey)
             }, enabled = !room.sending && !room.attachmentRetry && room.attachments.size < RoomAttachment.MAX_COUNT)
             // Who answers first, by the gateway's own @ rule: everyone, unless the message names someone.
             val members = room.room.members
             val recipients by remember(members) { derivedStateOf { roomRecipients(viewModel.composer.text.toString(), members) } }
             // Starts an @ where the cursor is, which brings up the members to pick from.
-            BarButton(Lucide.AtSign, "Mention a member", onClick = {
+            BarButton(Lucide.AtSign, stringResource(Res.string.rooms_mention), onClick = {
                 viewModel.composer.edit {
                     val at = selection
                     val previous = asCharSequence().getOrNull(at.start - 1)
@@ -621,7 +677,7 @@ private fun RoomComposer(room: OpenRoom, viewModel: RoomActions, mentions: RoomM
             }, enabled = !room.attachmentRetry)
             Text(
                 if (recipients.size == members.size) members.joinToString(" · ") { it.label }
-                else "To ${recipients.joinToString(", ") { it.label }}",
+                else stringResource(Res.string.rooms_to, recipients.joinToString(", ") { it.label }),
                 style = Theme[typography][caption],
                 color = Theme[colors][textTertiary],
                 maxLines = 1,
@@ -677,9 +733,10 @@ private fun rememberRoomMentions(room: OpenRoom, viewModel: RoomActions, faces: 
         derivedStateOf { viewModel.composer.let { mentionQuery(it.text.toString(), it.selection.end) } }
     }
     val retry = room.attachmentRetry
-    return remember(mention, members, faces, retry) {
+    val everyoneLabel = stringResource(Res.string.rooms_everyone)
+    return remember(mention, members, faces, retry, everyoneLabel) {
         val typed = mention
-        val everyone = MentionChoice("Everyone", "all", bot = null).takeIf { typed != null && mentionsEveryone(typed.query) }
+        val everyone = MentionChoice(everyoneLabel, "all", bot = null).takeIf { typed != null && mentionsEveryone(typed.query) }
         val choices = if (typed == null || retry) emptyList() else listOfNotNull(everyone) + members.mentionable(typed.query).mapNotNull { member ->
             member.handle?.let { MentionChoice(member.label, it, faces.roomBot(member.profile ?: member.memberId)) }
         }
@@ -714,14 +771,14 @@ internal data class RoomFileLink(val gateway: GatewayUrl, val room: String, val 
     }
 
     suspend fun preview(media: MediaApi, linked: GatewayFile = file): FileLoad =
-        if (profile.isNullOrBlank()) FileLoad.Failed(NO_OWNER) else media.fileLoad(gateway, linked, profile)
+        if (profile.isNullOrBlank()) FileLoad.Failed(noOwner()) else media.fileLoad(gateway, linked, profile)
 
     suspend fun download(media: MediaApi, linked: GatewayFile = file): FileDownload =
-        if (profile.isNullOrBlank()) FileDownload.Failed(NO_OWNER) else media.fileDownload(gateway, linked, profile)
+        if (profile.isNullOrBlank()) FileDownload.Failed(noOwner()) else media.fileDownload(gateway, linked, profile)
 
     companion object {
         /** No request goes out without an owner: another profile's file at the same path is not this one. */
-        const val NO_OWNER = "Kyllene can't tell which of this gateway's bots owns this file."
+        private suspend fun noOwner(): String = getString(Res.string.rooms_file_no_owner)
 
         private const val HOSTED = "hosted:"
         private const val DESKTOP = "desktop:"

@@ -108,7 +108,7 @@ import dev.hermeskotlin.core.config.ConfigCatalog
 import dev.hermeskotlin.core.config.ConfigControl
 import dev.hermeskotlin.core.config.ConfigEntry
 import dev.hermeskotlin.core.config.ConfigSection
-import dev.hermeskotlin.core.config.NOT_SET
+import dev.hermeskotlin.core.config.ConfigSummary
 import dev.hermeskotlin.core.config.editText
 import dev.hermeskotlin.core.config.parseConfigInput
 import dev.hermeskotlin.core.config.summary
@@ -160,6 +160,9 @@ import com.composables.icons.lucide.Copy
 import dev.hermeskotlin.designsystem.components.plainTextClipEntry
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonNull
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The sidebar's Config page, after Desktop's Settings: Hermes's own settings for the profile, by section,
@@ -172,7 +175,7 @@ internal fun ConfigPage(
     profile: String?,
     onBack: () -> Unit,
     onSessionExpired: () -> Unit,
-    title: String = "Config",
+    title: String = stringResource(Res.string.sessions_nav_config),
     /** A line under the title, e.g. whose settings these are. */
     note: String? = null,
     /** False while the sidebar holding it is closed, so Back is the chat's. */
@@ -220,7 +223,7 @@ internal fun ConfigView(
     yaml: TextFieldState,
     actions: ConfigActions,
     onBack: () -> Unit,
-    title: String = "Config",
+    title: String = stringResource(Res.string.sessions_nav_config),
     note: String? = null,
 ) {
     // The setting whose picker or editor is open.
@@ -252,16 +255,16 @@ internal fun ConfigView(
                     TwoPaneConfig(state, pane, schema, values, query, actions, onEntry, title = title, note = note, onBack = onBack)
                 } else Column(Modifier.fillMaxSize()) {
                 when (view) {
-                    is ConfigPlace.Section -> SubpageHeader(view.section.label, onBack = { actions.back() }, subtitle = sectionNote(view.section))
-                    ConfigPlace.AllSettings -> SubpageHeader("All settings", onBack = { actions.back() }, subtitle = "Every setting the gateway knows, by its own grouping.")
-                    else -> SubpageHeader(title, onBack = onBack, subtitle = note ?: "Hermes's own settings, saved to its config.yaml. Most apply from the next chat.") {
-                        IconButton(Lucide.FileCode, contentDescription = "Edit config.yaml", onClick = { actions.open(ConfigPlace.Yaml) })
+                    is ConfigPlace.Section -> SubpageHeader(sectionLabel(view.section), onBack = { actions.back() }, subtitle = sectionNote(view.section))
+                    ConfigPlace.AllSettings -> SubpageHeader(stringResource(Res.string.sessions_config_all), onBack = { actions.back() }, subtitle = stringResource(Res.string.sessions_config_all_detail))
+                    else -> SubpageHeader(title, onBack = onBack, subtitle = note ?: stringResource(Res.string.sessions_config_detail)) {
+                        IconButton(Lucide.FileCode, contentDescription = stringResource(Res.string.sessions_config_edit_yaml), onClick = { actions.open(ConfigPlace.Yaml) })
                     }
                 }
                 Box(Modifier.weight(1f).fillMaxWidth()) {
                     when {
-                        (schema == null || values == null) && state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load", state.error, error = true) {
-                            Button("Try again", onClick = actions::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+                        (schema == null || values == null) && state.error != null -> EmptyState(Lucide.CloudOff, stringResource(Res.string.sessions_couldnt_load), state.error, error = true) {
+                            Button(stringResource(Res.string.sessions_try_again), onClick = actions::refresh, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                         }
                         schema == null || values == null -> ListSkeleton()
                         view is ConfigPlace.Section -> SectionSettings(view.section, schema, values, state.saving, onEntry)
@@ -272,7 +275,7 @@ internal fun ConfigView(
                 }
             }
         }
-        state.message?.let { MessageBanner(it, onDismiss = actions::dismissMessage, modifier = Modifier.padding(bottom = PageFoot)) }
+        state.message?.let { MessageBanner(it.text(), onDismiss = actions::dismissMessage, modifier = Modifier.padding(bottom = PageFoot)) }
     }
 
     ChoiceSheet(picking, onDismiss = { picking = null }, onPick = { entry, value ->
@@ -290,21 +293,21 @@ internal fun ConfigView(
     Dialog(
         visible = state.confirmDiscard,
         onDismissRequest = actions::keepEditing,
-        title = "Discard your changes?",
-        message = "config.yaml stays as it was saved.",
+        title = stringResource(Res.string.sessions_discard_title),
+        message = stringResource(Res.string.sessions_config_discard_detail),
         actions = {
-            Button("Keep editing", onClick = actions::keepEditing, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Discard", onClick = actions::discardYaml, variant = ButtonVariant.Danger, size = ButtonSize.Small)
+            Button(stringResource(Res.string.sessions_keep_editing), onClick = actions::keepEditing, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(stringResource(Res.string.sessions_discard), onClick = actions::discardYaml, variant = ButtonVariant.Danger, size = ButtonSize.Small)
         },
     )
     Dialog(
         visible = state.confirm != null,
         onDismissRequest = actions::cancelChange,
-        title = "Turn off every toolset?",
-        message = "The agent would lose memory, the terminal, web search, subagents and most of its tools until some are turned back on.",
+        title = stringResource(Res.string.sessions_config_all_off_title),
+        message = stringResource(Res.string.sessions_config_all_off_detail),
         actions = {
-            Button("Cancel", onClick = actions::cancelChange, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Turn off", onClick = actions::confirmChange, variant = ButtonVariant.Danger, size = ButtonSize.Small)
+            Button(stringResource(Res.string.common_cancel), onClick = actions::cancelChange, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(stringResource(Res.string.sessions_turn_off), onClick = actions::confirmChange, variant = ButtonVariant.Danger, size = ButtonSize.Small)
         },
     )
 }
@@ -322,13 +325,14 @@ private fun Overview(
     val schema = state.schema ?: return
     val values = state.values ?: return
     val typed = query.text.toString()
-    val results = remember(typed, schema, values) { ConfigCatalog.search(typed, schema, values) }
+    val shown = shownLabels()
+    val results = remember(typed, schema, values, shown) { ConfigCatalog.search(typed, schema, values, shown) }
     val sections = remember(schema, values) { ConfigCatalog.sections.map { it to ConfigCatalog.entries(it, schema, values).size }.filter { it.second > 0 } }
     PageList {
         if (withSearch) item(key = "search") {
             TextField(
                 state = query,
-                placeholder = "Search ${schema.fields.size} settings",
+                placeholder = pluralStringResource(Res.plurals.sessions_config_search, schema.fields.size, schema.fields.size),
                 leadingIcon = Lucide.Search,
                 clearable = true,
                 autofocus = true,
@@ -338,30 +342,30 @@ private fun Overview(
         }
         if (typed.isNotBlank()) {
             if (results.isEmpty()) {
-                item(key = "no-results") { ListNotice("No settings match “${typed.trim()}”.") }
+                item(key = "no-results") { ListNotice(stringResource(Res.string.sessions_config_no_match, typed.trim())) }
             } else {
                 val shown = results.take(SEARCH_LIMIT)
                 item(key = "results-count") {
                     Eyebrow(
-                        if (results.size > shown.size) "First ${shown.size} of ${results.size} settings"
-                        else "${results.size} ${if (results.size == 1) "setting" else "settings"}",
+                        if (results.size > shown.size) stringResource(Res.string.sessions_config_first_of, shown.size, results.size)
+                        else pluralStringResource(Res.plurals.sessions_config_settings, results.size, results.size),
                     )
                 }
                 item(key = "results") { EntryCard(shown, state.saving, showKeys = true, onEntry = onEntry) }
-                if (results.size > shown.size) item(key = "narrow") { ListNotice("Type more to narrow it down.") }
+                if (results.size > shown.size) item(key = "narrow") { ListNotice(stringResource(Res.string.sessions_config_type_more)) }
             }
         } else {
             item(key = "sections") {
                 NavCard(sections) { (section, count) ->
-                    NavRow(sectionIcon(section.id), section.label, "$count ${if (count == 1) "setting" else "settings"}") { actions.open(ConfigPlace.Section(section)) }
+                    NavRow(sectionIcon(section.id), sectionLabel(section), pluralStringResource(Res.plurals.sessions_config_settings, count, count)) { actions.open(ConfigPlace.Section(section)) }
                 }
             }
             item(key = "more") {
                 NavCard(listOf("all", "yaml"), modifier = Modifier.padding(top = 14.dp)) { which ->
                     if (which == "all") {
-                        NavRow(Lucide.ListTree, "All settings", "Every field, by the gateway's own grouping") { actions.open(ConfigPlace.AllSettings) }
+                        NavRow(Lucide.ListTree, stringResource(Res.string.sessions_config_all), stringResource(Res.string.sessions_config_all_row_detail)) { actions.open(ConfigPlace.AllSettings) }
                     } else {
-                        NavRow(Lucide.FileCode, "Edit config.yaml", "The whole file, for anything not listed") { actions.open(ConfigPlace.Yaml) }
+                        NavRow(Lucide.FileCode, stringResource(Res.string.sessions_config_edit_yaml), stringResource(Res.string.sessions_config_yaml_row_detail)) { actions.open(ConfigPlace.Yaml) }
                     }
                 }
             }
@@ -375,7 +379,7 @@ private fun SectionSettings(section: ConfigSection, schema: ConfigSchema, values
     val entries = remember(section, schema, values) { ConfigCatalog.entries(section, schema, values) }
     PageList {
         when {
-            entries.isEmpty() -> item(key = "none") { ListNotice("This gateway has none of these settings.") }
+            entries.isEmpty() -> item(key = "none") { ListNotice(stringResource(Res.string.sessions_config_none_here)) }
             section.category == null -> item(key = "fields") { EntryCard(entries, saving, showKeys = false, onEntry = onEntry) }
             // A category can hold a hundred fields: one card per parent, each its own list item.
             else -> ConfigCatalog.grouped(entries).forEachIndexed { i, (parent, group) ->
@@ -393,7 +397,7 @@ private fun Categories(schema: ConfigSchema, onOpen: (ConfigSection) -> Unit) {
     PageList {
         item(key = "categories") {
             NavCard(categories) { (section, count) ->
-                NavRow(icon = null, title = section.label, detail = "$count ${if (count == 1) "setting" else "settings"}") { onOpen(section) }
+                NavRow(icon = null, title = sectionLabel(section), detail = pluralStringResource(Res.plurals.sessions_config_settings, count, count)) { onOpen(section) }
             }
         }
     }
@@ -443,14 +447,14 @@ private fun TwoPaneConfig(
     }
     val typed = query.text.toString()
     Column(Modifier.fillMaxSize()) {
-        SubpageHeader(title, onBack = onBack, subtitle = note ?: "Hermes's own settings, saved to its config.yaml. Most apply from the next chat.") {
-            IconButton(Lucide.FileCode, contentDescription = "Edit config.yaml", onClick = { actions.open(ConfigPlace.Yaml) })
+        SubpageHeader(title, onBack = onBack, subtitle = note ?: stringResource(Res.string.sessions_config_detail)) {
+            IconButton(Lucide.FileCode, contentDescription = stringResource(Res.string.sessions_config_edit_yaml), onClick = { actions.open(ConfigPlace.Yaml) })
         }
         Row(Modifier.weight(1f).fillMaxWidth()) {
             Column(Modifier.width(PANE_LIST_WIDTH).fillMaxHeight().padding(start = 14.dp, top = 4.dp)) {
                 TextField(
                     state = query,
-                    placeholder = "Search ${schema.fields.size} settings",
+                    placeholder = pluralStringResource(Res.plurals.sessions_config_search, schema.fields.size, schema.fields.size),
                     leadingIcon = Lucide.Search,
                     clearable = true,
                     autofocus = true,
@@ -459,14 +463,14 @@ private fun TwoPaneConfig(
                 )
                 Column(Modifier.weight(1f).verticalScrollWithBar().arrowFocus()) {
                     sections.forEach { (section, count) ->
-                        PaneRow(sectionIcon(section.id), section.label, count, selected = typed.isBlank() && !allSettings && picked == section) {
+                        PaneRow(sectionIcon(section.id), sectionLabel(section), count, selected = typed.isBlank() && !allSettings && picked == section) {
                             query.clearText()
                             allSettings = false
                             picked = section
                         }
                     }
                     Box(Modifier.padding(vertical = 8.dp).fillMaxWidth().height(1.dp).background(Theme[colors][stroke]))
-                    PaneRow(Lucide.ListTree, "All settings", null, selected = typed.isBlank() && allSettings) {
+                    PaneRow(Lucide.ListTree, stringResource(Res.string.sessions_config_all), null, selected = typed.isBlank() && allSettings) {
                         query.clearText()
                         allSettings = true
                         category = null
@@ -536,9 +540,10 @@ private val PANE_LIST_WIDTH = 220.dp
 /** Results shown at once; a word like "model" matches a few hundred. */
 private const val SEARCH_LIMIT = 60
 
+@Composable
 private fun sectionNote(section: ConfigSection): String? = when (section.id) {
-    "voice" -> "Only the picked providers' own settings show."
-    "model" -> "The default for new chats; a chat's model picker can still change its own."
+    "voice" -> stringResource(Res.string.sessions_config_voice_note)
+    "model" -> stringResource(Res.string.sessions_config_model_note)
     else -> null
 }
 
@@ -634,15 +639,23 @@ private fun EntryRow(entry: ConfigEntry, saving: Boolean, showKey: Boolean, onCl
     var menuOpen by remember { mutableStateOf(false) }
     val clipboard = LocalClipboard.current
     val scope = rememberCoroutineScope()
+    val changeWord = when {
+        !toggle -> stringResource(Res.string.sessions_change_ellipsis)
+        entry.isOn -> stringResource(Res.string.sessions_turn_off)
+        else -> stringResource(Res.string.common_turn_on)
+    }
+    val copyKeyWord = stringResource(Res.string.sessions_copy_key)
+    val copyValueWord = stringResource(Res.string.sessions_copy_value)
     val menu = {
         val value = entry.value?.takeUnless { it is JsonNull }?.let { (it as? JsonPrimitive)?.contentOrNull ?: it.toString() }
         listOfNotNull(
-            RowMenuItem(if (toggle) (if (entry.isOn) "Turn off" else "Turn on") else "Change…", Lucide.PenLine, run = onClick),
-            RowMenuItem("Copy key", Lucide.Copy) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(entry.key)) } },
-            value?.let { RowMenuItem("Copy value", Lucide.Copy) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(it)) } } },
+            RowMenuItem(changeWord, Lucide.PenLine, run = onClick),
+            RowMenuItem(copyKeyWord, Lucide.Copy) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(entry.key)) } },
+            value?.let { RowMenuItem(copyValueWord, Lucide.Copy) { scope.launch { clipboard.setClipEntry(plainTextClipEntry(it)) } } },
         )
     }
     RowContextMenu(menuOpen, onDismiss = { menuOpen = false }, items = menu)
+    val changeLabel = stringResource(Res.string.common_change)
     Row(
         Modifier
             .fillMaxWidth()
@@ -656,14 +669,14 @@ private fun EntryRow(entry: ConfigEntry, saving: Boolean, showKey: Boolean, onCl
             .heightIn(min = PageRowHeight)
             .then(
                 if (toggle) Modifier.handCursor().toggleable(value = entry.isOn, role = Role.Switch, onValueChange = { onClick() })
-                else Modifier.handCursor().clickable(role = Role.Button, onClickLabel = "Change", onClick = onClick),
+                else Modifier.handCursor().clickable(role = Role.Button, onClickLabel = changeLabel, onClick = onClick),
             )
             .padding(horizontal = 14.dp, vertical = if (isDesktop) 9.dp else 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(entry.label, style = Theme[typography][body], color = Theme[colors][text])
+            Text(entryLabel(entry), style = Theme[typography][body], color = Theme[colors][text])
             if (showKey) {
                 Text(entry.key, style = Theme[typography][code].copy(fontSize = 11.5.sp), color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
@@ -673,9 +686,9 @@ private fun EntryRow(entry: ConfigEntry, saving: Boolean, showKey: Boolean, onCl
             if (!toggle) {
                 val summary = entry.summary()
                 Text(
-                    summary,
+                    summaryText(summary),
                     style = Theme[typography][code].copy(fontSize = 12.5.sp, fontWeight = FontWeight.Medium),
-                    color = if (summary == NOT_SET) Theme[colors][textTertiary] else Theme[colors][accentText],
+                    color = if (summary == ConfigSummary.NotSet) Theme[colors][textTertiary] else Theme[colors][accentText],
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.padding(top = 2.dp),
@@ -713,11 +726,11 @@ internal fun ChoiceSheet(entry: ConfigEntry?, onDismiss: () -> Unit, onPick: (Co
         if (e == null || control == null) return@BottomSheet
         // Null is "not set", like "".
         val current = (e.value as? JsonPrimitive)?.contentOrNull.orEmpty()
-        SheetHeader(e.label, e.description)
+        SheetHeader(entryLabel(e), e.description)
         if (control.searchable) {
             TextField(
                 state = search,
-                placeholder = "Search ${control.options.size}",
+                placeholder = stringResource(Res.string.sessions_config_search_options, control.options.size),
                 leadingIcon = Lucide.Search,
                 clearable = true,
                 autofocus = true,
@@ -729,10 +742,10 @@ internal fun ChoiceSheet(entry: ConfigEntry?, onDismiss: () -> Unit, onPick: (Co
         ScrollbarBox { listState ->
             LazyColumn(Modifier.fillMaxWidth().heightIn(max = 420.dp), state = listState) {
                 items(options, key = { "o-$it" }) { option ->
-                    OptionRow(if (option.isEmpty()) NOT_SET else option, selected = option == current, mono = option.isNotEmpty()) { onPick(e, option) }
+                    OptionRow(if (option.isEmpty()) stringResource(Res.string.config_not_set) else option, selected = option == current, mono = option.isNotEmpty()) { onPick(e, option) }
                 }
                 if (control.other) {
-                    item(key = "other") { OptionRow("Other…", selected = false, mono = false) { onOther(e) } }
+                    item(key = "other") { OptionRow(stringResource(Res.string.sessions_config_other), selected = false, mono = false) { onOther(e) } }
                 }
             }
         }
@@ -788,19 +801,19 @@ private fun EditDialog(entry: ConfigEntry?, onDismiss: () -> Unit, onSave: (Conf
     Dialog(
         visible = entry != null,
         onDismissRequest = onDismiss,
-        title = e.label,
+        title = entryLabel(e),
         message = when (e.control) {
-            ConfigControl.Lines -> listOfNotNull(e.description, "One per line.").joinToString(" ")
+            ConfigControl.Lines -> listOfNotNull(e.description, stringResource(Res.string.sessions_config_one_per_line)).joinToString(" ")
             else -> e.description
         },
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Save", onClick = { submit() }, size = ButtonSize.Small)
+            Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(stringResource(Res.string.sessions_save), onClick = { submit() }, size = ButtonSize.Small)
         },
     ) {
         TextField(
             state = input,
-            placeholder = NOT_SET,
+            placeholder = stringResource(Res.string.config_not_set),
             singleLine = !multiline,
             maxLines = 10,
             error = error,
@@ -825,9 +838,9 @@ private fun ColumnScope.YamlEditor(state: YamlState?, file: TextFieldState, onBa
     val changed = state?.loaded != null && file.text.toString() != state.loaded
     // Ctrl+S asks as the Save button does: the whole file is replaced.
     ShortcutHandler(enabled = changed && state?.saving != true && !confirming) { (it == Shortcut.Save).also { save -> if (save) confirming = true } }
-    SubpageHeader("config.yaml", onBack = onBack, subtitle = state?.path?.ifEmpty { null } ?: "The profile's whole config file.") {
+    SubpageHeader("config.yaml", onBack = onBack, subtitle = state?.path?.ifEmpty { null } ?: stringResource(Res.string.sessions_config_yaml_detail)) {
         Button(
-            "Save",
+            stringResource(Res.string.sessions_save),
             onClick = { confirming = true },
             size = ButtonSize.Small,
             enabled = changed && state?.saving != true,
@@ -837,7 +850,7 @@ private fun ColumnScope.YamlEditor(state: YamlState?, file: TextFieldState, onBa
     Box(Modifier.weight(1f).fillMaxWidth()) {
         when {
             state == null || state.loading -> ListSkeleton()
-            state.loaded == null && state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load", state.error, error = true)
+            state.loaded == null && state.error != null -> EmptyState(Lucide.CloudOff, stringResource(Res.string.sessions_couldnt_load), state.error, error = true)
             else -> {
                 val scroll = rememberScrollState()
                 ScrollbarBox(scroll, Modifier.fillMaxSize().imePadding(), bottomInset = PageFoot) {
@@ -852,11 +865,11 @@ private fun ColumnScope.YamlEditor(state: YamlState?, file: TextFieldState, onBa
     Dialog(
         visible = confirming,
         onDismissRequest = { confirming = false },
-        title = "Replace config.yaml?",
-        message = "The file becomes exactly this text. Hermes reads it again for new chats; some settings need a gateway restart.",
+        title = stringResource(Res.string.sessions_config_replace_title),
+        message = stringResource(Res.string.sessions_config_replace_detail),
         actions = {
-            Button("Cancel", onClick = { confirming = false }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Replace", onClick = { confirming = false; onSave() }, size = ButtonSize.Small)
+            Button(stringResource(Res.string.common_cancel), onClick = { confirming = false }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(stringResource(Res.string.sessions_replace), onClick = { confirming = false; onSave() }, size = ButtonSize.Small)
         },
     )
 }

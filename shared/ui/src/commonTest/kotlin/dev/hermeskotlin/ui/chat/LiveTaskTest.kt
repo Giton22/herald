@@ -8,6 +8,7 @@ import dev.hermeskotlin.core.chat.TodoItem
 import dev.hermeskotlin.core.chat.TodoList
 import dev.hermeskotlin.core.chat.TodoStatus
 import dev.hermeskotlin.core.chat.ToolActivity
+import dev.hermeskotlin.ui.resources.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -22,8 +23,7 @@ class LiveTaskTest {
         val tool = ToolActivity("t1", "read_file", detail = "/opt/backup/backup.sh\nmore", running = true)
         val state = ChatState(running = true, messages = listOf(ChatMessage.Assistant("a1", streaming = true, tools = listOf(tool))))
 
-        assertEquals(LiveStep("Reading a file", "/opt/backup/backup.sh"), currentStep(state))
-        assertEquals("Reading a file: /opt/backup/backup.sh", currentAction(state))
+        assertEquals(LiveStep(Words.Of(Res.string.chat_step_reading_file), "/opt/backup/backup.sh"), currentStep(state))
     }
 
     private fun delegating(vararg statuses: SubagentStatus): ChatState {
@@ -41,14 +41,20 @@ class LiveTaskTest {
 
         val step = currentStep(state)
         assertEquals(listOf(SubagentStatus.Done, SubagentStatus.Running, SubagentStatus.Running), step.team)
-        assertEquals("1 of 3 done", step.teamProgress)
-        assertEquals("Working with subagents · 1 of 3 done", currentAction(state))
-        assertEquals("Working · 2 subagents", chatStatus(state, connected = true, connectionLabel = "", place = null).text)
+        assertEquals(Words.Of(Res.string.chat_team_done, listOf(1, 3)), step.teamProgress)
+        assertEquals(Words.Of(Res.string.chat_step_delegating), step.title)
+        assertEquals(
+            Words.Count(Res.plurals.chat_status_working_subagents, 2),
+            chatStatusPick(state, connected = true, connectionLabel = "", place = null).text,
+        )
     }
 
     @Test
     fun aSubagentThatFailedIsFinishedNotDone() {
-        assertEquals("2 of 2 finished", currentStep(delegating(SubagentStatus.Done, SubagentStatus.Failed)).teamProgress)
+        assertEquals(
+            Words.Of(Res.string.chat_team_finished, listOf(2, 2)),
+            currentStep(delegating(SubagentStatus.Done, SubagentStatus.Failed)).teamProgress,
+        )
     }
 
     @Test
@@ -57,7 +63,7 @@ class LiveTaskTest {
         val state = delegating(SubagentStatus.Running).copy(messages = listOf(ChatMessage.Assistant("a2", streaming = true)))
 
         assertNull(currentStep(state).teamProgress)
-        assertEquals("Working", chatStatus(state, connected = true, connectionLabel = "", place = null).text)
+        assertEquals(Words.Of(Res.string.chat_status_working), chatStatusPick(state, connected = true, connectionLabel = "", place = null).text)
     }
 
     @Test
@@ -88,19 +94,23 @@ class LiveTaskTest {
 
     @Test
     fun aBlankDescriptionOrJsonListDoesNotHideOrBecomeTheDetail() {
-        assertEquals(LiveStep("Ran", "uptime"), toolDone(ToolActivity("1", "terminal", detail = " ", input = "\nuptime")))
-        assertEquals(LiveStep("Ran with terminal"), toolDone(ToolActivity("2", "terminal", input = """["a","b"]""")))
+        assertEquals(ran("uptime"), toolDone(ToolActivity("1", "terminal", detail = " ", input = "\nuptime")))
+        assertEquals(ranWithTerminal, toolDone(ToolActivity("2", "terminal", input = """["a","b"]""")))
     }
+
+    private fun ran(detail: String) = LiveStep(Words.Of(Res.string.chat_done_ran), detail)
+
+    private val ranWithTerminal = LiveStep(Words.Of(Res.string.chat_done_ran_with, listOf("terminal")))
 
     @Test
     fun finishedStepsAreSaidInThePast() {
-        assertEquals(LiveStep("Ran", "df -h /mnt/nas"), toolDone(ToolActivity("1", "terminal", detail = "df -h /mnt/nas")))
-        assertEquals(LiveStep("Read", "backup.log"), toolDone(ToolActivity("2", "read_file", detail = "backup.log")))
-        assertEquals(LiveStep("Searched with web search"), toolDone(ToolActivity("3", "web_search")))
+        assertEquals(ran("df -h /mnt/nas"), toolDone(ToolActivity("1", "terminal", detail = "df -h /mnt/nas")))
+        assertEquals(LiveStep(Words.Of(Res.string.chat_done_read), "backup.log"), toolDone(ToolActivity("2", "read_file", detail = "backup.log")))
+        assertEquals(LiveStep(Words.Of(Res.string.chat_done_searched_with, listOf("web search"))), toolDone(ToolActivity("3", "web_search")))
         // Without a description, a plain input says what it worked on; JSON arguments don't.
-        assertEquals(LiveStep("Ran", "ls -la"), toolDone(ToolActivity("5", "terminal", input = "ls -la")))
-        assertEquals(LiveStep("Ran with terminal"), toolDone(ToolActivity("6", "terminal", input = """{"command":"ls"}""")))
-        assertEquals(LiveStep("Used some tool", "x"), toolDone(ToolActivity("4", "some_tool", detail = "x")))
+        assertEquals(ran("ls -la"), toolDone(ToolActivity("5", "terminal", input = "ls -la")))
+        assertEquals(ranWithTerminal, toolDone(ToolActivity("6", "terminal", input = """{"command":"ls"}""")))
+        assertEquals(LiveStep(Words.Of(Res.string.chat_done_used, listOf("some tool")), "x"), toolDone(ToolActivity("4", "some_tool", detail = "x")))
     }
 
     @Test

@@ -90,6 +90,9 @@ class JsonRpcClient(
     private val answers: (String) -> Boolean = { true },
 ) {
     private val sendMutex = Mutex()
+
+    /** Held by the one request over [LARGE_FRAME_CHARS] that's out, from sending it to its reply. */
+    private val largeFrames = Mutex()
     private val pending = mutableMapOf<String, CompletableDeferred<JsonElement>>()
     private val pendingMutex = Mutex()
     /** Taken only under [pendingMutex]: callers run on several threads, and a shared id hands one caller another's reply. */
@@ -162,17 +165,27 @@ class JsonRpcClient(
         closedWith?.let { throw it }
         val deferred = CompletableDeferred<JsonElement>()
         val id = pendingMutex.withLock { "c${++nextId}".also { pending[it] = deferred } }
-        // A cast, not jsonPrimitive: a request whose session_id isn't a string must still go out.
-        _sent.tryEmit(SentRequest(method, (params["session_id"] as? JsonPrimitive)?.contentOrNull, clock()))
         try {
-            send(buildJsonObject {
+            val frame = encode(buildJsonObject {
                 put("jsonrpc", "2.0")
                 put("id", id)
                 put("method", method)
                 put("params", params)
             })
-            // withTimeout would throw a cancellation, indistinguishable from the caller being cancelled.
-            return withTimeoutOrNull(timeoutMs) { deferred.await() } ?: throw RpcTimeoutException(method)
+            // OkHttp's 16 MiB is for everything still queued, not each message: one upload draining over a slow
+            // link and a second one queued behind it would close the socket. So one large message is out at a
+            // time, until its reply shows the gateway has all of it.
+            val large = frame.length > LARGE_FRAME_CHARS
+            if (large) largeFrames.lock()
+            try {
+                // A cast, not jsonPrimitive: a request whose session_id isn't a string must still go out.
+                _sent.tryEmit(SentRequest(method, (params["session_id"] as? JsonPrimitive)?.contentOrNull, clock()))
+                sendText(frame)
+                // withTimeout would throw a cancellation, indistinguishable from the caller being cancelled.
+                return withTimeoutOrNull(timeoutMs) { deferred.await() } ?: throw RpcTimeoutException(method)
+            } finally {
+                if (large) largeFrames.unlock()
+            }
         } finally {
             pendingMutex.withLock { pending.remove(id) }
         }
@@ -286,8 +299,18 @@ class JsonRpcClient(
         }
     }
 
-    private suspend fun send(frame: JsonObject) = sendMutex.withLock {
-        transport.send(HermesJson.encodeToString(JsonObject.serializer(), frame))
+    private suspend fun send(frame: JsonObject) = sendText(encode(frame))
+
+    private suspend fun sendText(text: String) = sendMutex.withLock { transport.send(text) }
+
+    /**
+     * [frame] as it goes on the wire, or [RpcException] ([MESSAGE_TOO_LARGE]) before anything is sent when
+     * it's over [MAX_FRAME_BYTES]: OkHttp drops a message that would queue more and closes the whole socket.
+     */
+    private fun encode(frame: JsonObject): String {
+        val text = HermesJson.encodeToString(JsonObject.serializer(), frame)
+        if (utf8Size(text) > MAX_FRAME_BYTES) throw RpcException(MESSAGE_TOO_LARGE, "That's too large to send to the gateway.")
+        return text
     }
 
     private suspend fun failPending(cause: Throwable) {
@@ -303,5 +326,35 @@ class JsonRpcClient(
 
         /** tui_gateway/server_requests.py `NOT_SHOWN_CODE`: nothing in this client shows the request. */
         const val SESSION_NOT_SHOWN = 4404
+
+        /** This client's own code, never the gateway's: the request was too large and didn't go out. */
+        const val MESSAGE_TOO_LARGE = -1
+
+        /**
+         * The largest message this client sends. OkHttp closes the socket (1001) rather than queue more than
+         * 16 MiB, and the gateway's own limit is far above that. Only one message over [LARGE_FRAME_CHARS] is
+         * out at a time, so the 512 KiB spare is for the pings and small requests queued beside it.
+         */
+        const val MAX_FRAME_BYTES = 16 * 1024 * 1024 - 512 * 1024
+
+        /** A message longer than this waits for the large one before it to be answered (see [request]). */
+        internal const val LARGE_FRAME_CHARS = 64 * 1024
     }
+}
+
+/** [text]'s length in UTF-8, without encoding it: a frame can hold megabytes of base64. */
+internal fun utf8Size(text: String): Long {
+    var size = 0L
+    var i = 0
+    while (i < text.length) {
+        val c = text[i]
+        size += when {
+            c.code < 0x80 -> 1
+            c.code < 0x800 -> 2
+            c.isHighSurrogate() && i + 1 < text.length && text[i + 1].isLowSurrogate() -> 4.also { i++ }
+            else -> 3
+        }
+        i++
+    }
+    return size
 }

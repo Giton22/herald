@@ -2,6 +2,7 @@ package dev.hermeskotlin.ui.chat
 
 import androidx.compose.ui.unit.IntSize
 import dev.hermeskotlin.core.connection.ConnectionState
+import dev.hermeskotlin.ui.resources.*
 import dev.hermeskotlin.ui.voice.DictationState
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -12,11 +13,11 @@ class ChatScreenTest {
 
     @Test
     fun theDictateLabelFollowsTheDictation() {
-        assertEquals("Dictate", dictateLabel(DictationState()))
-        assertEquals("Finish dictating", dictateLabel(DictationState(recording = true)))
-        assertEquals("Transcribing…", dictateLabel(DictationState(transcribing = true)))
+        assertEquals(Res.string.chat_dictate, dictateLabel(DictationState()))
+        assertEquals(Res.string.chat_finish_dictating, dictateLabel(DictationState(recording = true)))
+        assertEquals(Res.string.chat_transcribing, dictateLabel(DictationState(transcribing = true)))
         // An error leaves it ready to try again.
-        assertEquals("Dictate", dictateLabel(DictationState(error = "Didn't catch anything.")))
+        assertEquals(Res.string.chat_dictate, dictateLabel(DictationState(error = "Didn't catch anything.")))
     }
 
     @Test
@@ -44,10 +45,17 @@ class ChatScreenTest {
 
     @Test
     fun theLinkLineSaysWhyTheChatIsOffline() {
-        assertEquals("Waiting for network…", linkStatus(ConnectionState.Reconnecting(3, 0, "Can't reach gateway: Unable to resolve host")))
-        assertEquals("Reconnecting…", linkStatus(ConnectionState.Reconnecting(1, 0, "Connection lost")))
+        assertEquals(Res.string.chat_link_waiting_network, linkStatus(ConnectionState.Reconnecting(3, 0, "Can't reach gateway: Unable to resolve host")))
+        assertEquals(Res.string.chat_link_reconnecting, linkStatus(ConnectionState.Reconnecting(1, 0, "Connection lost")))
         // A retry under way still says reconnecting.
-        assertEquals("Reconnecting…", linkStatus(ConnectionState.Connecting(2)))
+        assertEquals(Res.string.chat_link_reconnecting, linkStatus(ConnectionState.Connecting(2)))
+    }
+
+    @Test
+    fun theTitleLineTellsTheWaysTheLinkIsDown() {
+        assertEquals(Res.string.chat_link_connecting_again, connectionLabelKey(ConnectionState.Connecting(1)))
+        assertEquals(Res.string.chat_link_signed_out, connectionLabelKey(ConnectionState.SessionExpired))
+        assertEquals(Res.string.chat_link_none, connectionLabelKey(ConnectionState.Failed("4403")))
     }
 
     @Test
