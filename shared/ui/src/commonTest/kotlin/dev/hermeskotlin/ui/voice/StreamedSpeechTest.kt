@@ -276,6 +276,28 @@ class StreamedSpeechTest {
         assertFalse(player.audioOpen)
     }
 
+    /** Ended without End: saying "stop" lets the route go too. */
+    @Test
+    fun chainedAudioIsClosedWhenTheChatEndsItself() = runTest {
+        val recorder = CutsIn()
+        val stream = Stream()
+        val player = Player()
+        val setup = chat(player = player, recorder = recorder, transcripts = listOf("How was your day?", "stop")) { stream }
+        assertTrue(player.audioOpen)
+
+        setup.socket.event("message.start")
+        setup.socket.event("message.delta", """{"text":"It was a long day. "}""")
+        stream.appended.first { it.isNotEmpty() }
+        stream.gateway.send(SpeechStreamEvent.Start(sampleRate = 24_000))
+        stream.gateway.send(SpeechStreamEvent.Audio(byteArrayOf(1, 0, 2, 0)))
+        setup.voice.chat.first { it.phase == VoicePhase.Speaking }
+        recorder.listening.first { it >= 1 }
+        recorder.cut.complete(Unit)
+
+        setup.voice.chat.first { it.phase == VoicePhase.Off }
+        assertFalse(player.audioOpen)
+    }
+
     @Test
     fun aReplyIsVoicedWhileItIsStillBeingWritten() = runTest {
         val stream = Stream()
