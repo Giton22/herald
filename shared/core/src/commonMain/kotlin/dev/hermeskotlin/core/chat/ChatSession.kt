@@ -545,7 +545,8 @@ class ChatSession(
                     read = true
                     val prompts = historyToMessages(stored).filterIsInstance<ChatMessage.User>()
                     // Any prompt past the ones shown before it: later prompts may follow it by a later check.
-                    if (prompts.drop(before).any { it.text.contains(visible) }) return true
+                    // A file sent with no words: every text contains "", so only a prompt with attachments of its own counts.
+                    if (prompts.drop(before).any { it.text.contains(visible) && (visible.isNotEmpty() || it.attachments.isNotEmpty()) }) return true
                 }
                 // A new chat's stored row only appears with its first prompt.
                 is ApiResult.Failed -> if (result.status == 404 && !rowExists) read = true

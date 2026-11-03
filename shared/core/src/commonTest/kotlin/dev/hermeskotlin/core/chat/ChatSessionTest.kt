@@ -1514,6 +1514,27 @@ class ChatSessionTest {
     }
 
     @Test
+    fun aDroppedFileWithoutWordsIsNotTakenForAnotherPrompt() = runTest {
+        val stored = history
+        for (arrives in listOf(false, true)) {
+            history = stored
+            val (chat, transport) = resumedChat(backgroundScope, mapOf(
+                "file.attach" to """{"attached":true,"ref_text":"@file:attachments/report.pdf"}""",
+                "prompt.submit" to SILENT,
+            ))
+            val pdf = OutgoingAttachment("pdf", "report.pdf", "application/pdf", byteArrayOf(4))
+            val sending = backgroundScope.async { chat.send("", listOf(pdf)) }
+            transport.awaitSent { it.isCall("prompt.submit") }
+            // Another client's prompt lands either way; the file's own only when it arrived.
+            val own = if (arrives) """,{"id":4,"role":"user","content":"@file:attachments/report.pdf"}""" else ""
+            history = history.replace("]}", """,{"id":3,"role":"user","content":"something else"}$own]}""")
+            transport.serverClose(1006)
+
+            assertEquals(arrives, sending.await(), "arrives=$arrives")
+        }
+    }
+
+    @Test
     fun aLostResendOfTheLastPromptIsNotTakenForTheEarlierOne() = runTest {
         // Read on every call, so the gateway can stop answering partway through.
         val results = mutableMapOf(
