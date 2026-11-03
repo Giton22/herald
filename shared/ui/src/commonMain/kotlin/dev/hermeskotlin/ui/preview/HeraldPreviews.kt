@@ -801,11 +801,11 @@ private fun NewChatPreview() = HeraldPreview(PreviewScene.NewChat)
 @Composable
 private fun SidebarPreview() = HeraldPreview(PreviewScene.Sidebar)
 
-@Preview(widthDp = 360, heightDp = 800)
+@Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun SidebarProfilesPreview() = HeraldPreview(PreviewScene.SidebarProfiles)
 
-@Preview(widthDp = 360, heightDp = 800)
+@Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun SidebarProfilesLightPreview() = HeraldPreview(PreviewScene.SidebarProfiles, dark = false)
 
