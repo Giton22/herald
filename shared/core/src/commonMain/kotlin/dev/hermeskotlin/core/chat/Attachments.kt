@@ -13,7 +13,6 @@ enum class AttachmentKind { Image, Pdf, File }
  * A small one is held in [bytes] and goes inside the WebSocket message. One past [MAX_INLINE_BYTES]
  * goes over HTTP first ([AttachmentUploads]) and is attached by its path on the gateway; it can come as
  * a [source], read only as it's sent, so a large file is never held in memory whole.
->>>>>>> origin/master
  */
 class OutgoingAttachment(
     val id: String,
