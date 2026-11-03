@@ -25,29 +25,4 @@
     <string name="android_save_needs_android_10">Guardar requiere Android 10. Usa Compartir en su lugar.</string>
     <string name="android_save_failed">No se pudo guardar %1$s.</string>
     <string name="android_saved_to">Guardado en %1$s</string>
-
-    <string name="android_plugin_close">Cerrar la página</string>
-    <string name="android_plugin_failed">No se pudo abrir la página.</string>
-    <string name="android_plugin_retry">Reintentar</string>
-
-    <string name="android_wallpaper_too_large">Esa foto es demasiado grande o no se puede leer.</string>
-    <string name="android_wallpaper_not_image">Ese archivo no es una imagen que Kyllene pueda leer.</string>
-    <string name="android_wallpaper_failed">No se pudo leer esa foto.</string>
-
-    <string name="android_access_notifications">Activa las notificaciones de Kyllene: los cambios se preguntan ahí.</string>
-    <string name="android_access_dnd">Permite que Kyllene cambie No molestar.</string>
-    <string name="android_access_usage">Da a Kyllene acceso a los datos de uso, para ver qué apps usas.</string>
-    <string name="android_access_location">Permite que Kyllene use la ubicación de este teléfono.</string>
-    <string name="android_access_precise">Permite la ubicación precisa: Android solo vigila lugares con ella.</string>
-    <string name="android_access_background">Permite la ubicación todo el tiempo: los lugares se vigilan aunque Kyllene esté cerrada. Elige «Permitir todo el tiempo».</string>
-    <string name="android_access_calendar">Permite que Kyllene use tu calendario.</string>
-    <string name="android_access_contacts">Permite que Kyllene lea tus contactos.</string>
-    <string name="android_access_health_update">Actualiza Health Connect, de donde vienen los datos.</string>
-    <string name="android_access_health_install">Instala Health Connect, de donde vienen los datos.</string>
-    <string name="android_access_health_none">Este teléfono no tiene Health Connect.</string>
-    <string name="android_access_health_read">Permite que Kyllene lea pasos, sueño o frecuencia cardíaca en Health Connect.</string>
-    <string name="android_access_closed_optional">También con Kyllene cerrada (opcional)</string>
-    <string name="android_access_health_more_optional">También pasos, sueño o frecuencia cardíaca (opcional)</string>
-    <string name="android_access_call_notifications">Activa las notificaciones de Kyllene: la llamada suena ahí.</string>
-    <string name="android_access_full_screen">Permite las notificaciones a pantalla completa, para que la llamada aparezca sobre la pantalla de bloqueo.</string>
 </resources>

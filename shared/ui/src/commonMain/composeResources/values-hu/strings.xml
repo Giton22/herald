@@ -243,7 +243,7 @@
     <string name="connected_devices_prompt_remove">Prompt eltávolítása</string>
     <string name="connected_devices_prompt_add">Prompt hozzáadása</string>
     <string name="connected_devices_section_wear">Wear OS</string>
-    <string name="connected_devices_wear_detail">A Kyllene egy Wear OS órán saját beállításokkal rendelkezik: az órán nyisd meg a Kyllene csevegéseit, és koppints a Beállítások elemre. Azt, hogy a telefonnal együtt csörögjön-e, a Telefoneszközök › Calls alatt állíthatod be, ahogy a Pebble-nél is.</string>
+    <string name="connected_devices_wear_detail">A Kyllene egy Wear OS órán saját beállításokkal rendelkezik: az órán nyisd meg a Kyllene csevegéseit, és koppints a Beállítások elemre. Azt, hogy a telefonnal együtt csörögjön-e, a Telefoneszközök › Hívások alatt állíthatod be, ahogy a Pebble-nél is.</string>
     <plurals name="settings_phone_tools_count">
         <item quantity="one">%1$d eszköz bekapcsolva.</item>
         <item quantity="other">%1$d eszköz bekapcsolva.</item>

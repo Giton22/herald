@@ -137,6 +137,7 @@ import dev.hermeskotlin.ui.chat.connectionLabel
 import dev.hermeskotlin.ui.chat.currentAction
 import dev.hermeskotlin.ui.chat.rememberImageBitmap
 import dev.hermeskotlin.ui.chat.userBubbleShape
+import dev.hermeskotlin.ui.components.ProvideAppWords
 import dev.hermeskotlin.ui.voice.DictationState
 import dev.hermeskotlin.ui.voice.briefError
 import kotlinx.coroutines.flow.emptyFlow
@@ -180,17 +181,30 @@ fun AssistantPanel(
             LocalGlow provides settings.glow,
             LocalDensity provides Density(density.density, density.fontScale * settings.textSize.scale),
         ) {
-            AssistantBackdrop(onClose) {
-                val circling by model.circling.collectAsState()
-                if (circling) {
-                    val screen by model.screen.collectAsState()
-                    CircleOverlay(screen, onCircled = model::circled, onCancel = model::cancelCircling)
-                    MessengerEdge(model, Modifier.fillMaxSize())
-                } else {
-                    MessengerEdge(model, Modifier.fillMaxSize())
-                    Card(model, microphoneAllowed, onOpenHerald, onAllowMicrophone, onOpenScreenSettings, onClose)
-                }
-            }
+            ProvideAppWords { Panel(model, microphoneAllowed, onOpenHerald, onAllowMicrophone, onOpenScreenSettings, onClose) }
+        }
+    }
+}
+
+/** The panel inside the app's theme: the backdrop, and the card or the circle to search. */
+@Composable
+private fun Panel(
+    model: AssistantPanelModel,
+    microphoneAllowed: Boolean,
+    onOpenHerald: (storedSessionId: String?) -> Unit,
+    onAllowMicrophone: () -> Unit,
+    onOpenScreenSettings: () -> Unit,
+    onClose: () -> Unit,
+) {
+    AssistantBackdrop(onClose) {
+        val circling by model.circling.collectAsState()
+        if (circling) {
+            val screen by model.screen.collectAsState()
+            CircleOverlay(screen, onCircled = model::circled, onCancel = model::cancelCircling)
+            MessengerEdge(model, Modifier.fillMaxSize())
+        } else {
+            MessengerEdge(model, Modifier.fillMaxSize())
+            Card(model, microphoneAllowed, onOpenHerald, onAllowMicrophone, onOpenScreenSettings, onClose)
         }
     }
 }

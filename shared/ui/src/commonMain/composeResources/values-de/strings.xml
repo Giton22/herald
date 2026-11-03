@@ -243,7 +243,7 @@
     <string name="connected_devices_prompt_remove">Diesen Prompt entfernen</string>
     <string name="connected_devices_prompt_add">Prompt hinzufügen</string>
     <string name="connected_devices_section_wear">Wear OS</string>
-    <string name="connected_devices_wear_detail">Kyllene auf einer Wear-OS-Uhr hat eigene Einstellungen: Öffne auf der Uhr Kyllenes Chats und tippe auf Einstellungen. Ob sie mit dem Telefon klingelt, steht unter Telefon-Tools › Calls, wie für eine Pebble.</string>
+    <string name="connected_devices_wear_detail">Kyllene auf einer Wear-OS-Uhr hat eigene Einstellungen: Öffne auf der Uhr Kyllenes Chats und tippe auf Einstellungen. Ob sie mit dem Telefon klingelt, steht unter Telefon-Tools › Anrufe, wie für eine Pebble.</string>
     <plurals name="settings_phone_tools_count">
         <item quantity="one">1 Tool an.</item>
         <item quantity="other">%1$d Tools an.</item>

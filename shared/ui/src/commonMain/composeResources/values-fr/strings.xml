@@ -243,7 +243,7 @@
     <string name="connected_devices_prompt_remove">Retirer ce prompt</string>
     <string name="connected_devices_prompt_add">Ajouter un prompt</string>
     <string name="connected_devices_section_wear">Wear OS</string>
-    <string name="connected_devices_wear_detail">Kyllene sur une montre Wear OS a ses propres paramètres : sur la montre, ouvrez les discussions de Kyllene et touchez Paramètres. Le fait qu’elle sonne avec le téléphone se règle dans Outils du téléphone › Calls, comme pour une Pebble.</string>
+    <string name="connected_devices_wear_detail">Kyllene sur une montre Wear OS a ses propres paramètres : sur la montre, ouvrez les discussions de Kyllene et touchez Paramètres. Le fait qu’elle sonne avec le téléphone se règle dans Outils du téléphone › Appels, comme pour une Pebble.</string>
     <plurals name="settings_phone_tools_count">
         <item quantity="one">%1$d outil activé.</item>
         <item quantity="other">%1$d outils activés.</item>

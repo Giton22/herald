@@ -56,6 +56,10 @@ import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.PlatformBackHandler
 import dev.hermeskotlin.ui.chat.BarButton
+import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.app_try_again
+import dev.hermeskotlin.ui.resources.plugins_close_page
+import dev.hermeskotlin.ui.resources.plugins_page_failed
 import kotlin.coroutines.resume
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.currentCoroutineContext
@@ -63,9 +67,8 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.suspendCancellableCoroutine
-import org.koin.compose.koinInject
-import dev.hermeskotlin.ui.resources.*
 import org.jetbrains.compose.resources.stringResource
+import org.koin.compose.koinInject
 
 /**
  * The plugin page in a WebView: the gateway's own HTML and JS for it, loaded at the gateway's origin.
@@ -203,7 +206,7 @@ actual fun PluginWebView(url: String, gateway: String, title: String, onClose: (
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            BarButton(Lucide.X, stringResource(Res.string.android_plugin_close), onClick = onClose)
+            BarButton(Lucide.X, stringResource(Res.string.plugins_close_page), onClick = onClose)
             Text(
                 title,
                 style = Theme[typography][body].copy(fontWeight = FontWeight.SemiBold),
@@ -222,8 +225,8 @@ actual fun PluginWebView(url: String, gateway: String, title: String, onClose: (
                     horizontalAlignment = Alignment.CenterHorizontally,
                     verticalArrangement = Arrangement.spacedBy(12.dp, Alignment.CenterVertically),
                 ) {
-                    Text(stringResource(Res.string.android_plugin_failed), style = Theme[typography][body], color = Theme[colors][textTertiary])
-                    Button(stringResource(Res.string.android_plugin_retry), onClick = {
+                    Text(stringResource(Res.string.plugins_page_failed), style = Theme[typography][body], color = Theme[colors][textTertiary])
+                    Button(stringResource(Res.string.app_try_again), onClick = {
                         failed = false
                         loading = true
                         val target = webView.url?.takeUnless { it == "about:blank" } ?: url

@@ -12,6 +12,8 @@ import dev.hermeskotlin.core.network.createHttpClient
 import dev.hermeskotlin.core.sessions.SessionsApi
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import dev.hermeskotlin.core.voice.*
+import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.voice_error_nothing_heard
 import io.ktor.client.engine.mock.MockEngine
 import io.ktor.client.engine.mock.respond
 import io.ktor.http.*
@@ -21,6 +23,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.*
 import kotlinx.coroutines.flow.first
+import org.jetbrains.compose.resources.getString
 import org.junit.After
 import org.junit.Before
 import org.junit.Test
@@ -60,7 +63,7 @@ class AndroidVoiceRecorderTest {
         voice.finishDictation()
         withTimeout(2_000) { voice.dictation.first { !it.active } }
         assertEquals(1, released.get())
-        assertEquals("Didn't catch anything.", voice.dictation.value.error)
+        assertEquals(getString(Res.string.voice_error_nothing_heard), voice.dictation.value.error)
     }
 
     @Test fun muteDropsTheRecordingAndUnmuteCanListenAgain() = controller { voice, session ->

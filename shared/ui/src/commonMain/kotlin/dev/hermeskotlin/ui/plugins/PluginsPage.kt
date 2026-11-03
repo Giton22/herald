@@ -70,6 +70,8 @@ import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.components.EmptyState
 import dev.hermeskotlin.ui.sessions.CenteredSpinner
 import dev.hermeskotlin.ui.sessions.SubpageHeader
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.viewmodel.koinViewModel
 
 /**
@@ -108,18 +110,18 @@ internal fun PluginsView(
 ) {
     Column(Modifier.fillMaxSize()) {
         SubpageHeader(
-            "Plugins",
+            stringResource(Res.string.plugins_title),
             onBack = onBack,
-            subtitle = "The gateway's dashboard plugins with a page of their own, like Kanban. One opens in the app.",
+            subtitle = stringResource(Res.string.plugins_detail),
         )
         Box(Modifier.weight(1f).fillMaxWidth()) {
             val plugins = state.plugins
             when {
-                plugins == null && state.error != null -> EmptyState(Lucide.CloudOff, "Couldn't load plugins", state.error, error = true) {
-                    Button("Try again", onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
+                plugins == null && state.error != null -> EmptyState(Lucide.CloudOff, stringResource(Res.string.plugins_error), state.error, error = true) {
+                    Button(stringResource(Res.string.app_try_again), onClick = onRetry, variant = ButtonVariant.Secondary, leadingIcon = Lucide.RefreshCw)
                 }
                 plugins == null -> CenteredSpinner()
-                state.openable.isEmpty() -> EmptyState(Lucide.Puzzle, "No plugin pages", "A plugin with a page, like Kanban, shows up here.")
+                state.openable.isEmpty() -> EmptyState(Lucide.Puzzle, stringResource(Res.string.plugins_empty), stringResource(Res.string.plugins_empty_detail))
                 else -> BoxWithConstraints(Modifier.fillMaxSize()) {
                     val list = rememberLazyListState()
                     // A wide desktop page sets the cards side by side, as a desktop's catalogue does; a phone, one a row.
@@ -153,6 +155,7 @@ private val GRID_CELL = 300.dp
 /** One plugin: its name and what it does, version and where it comes from, and the way in. */
 @Composable
 private fun PluginRow(plugin: DashboardPlugin, modifier: Modifier = Modifier.fillMaxWidth(), onClick: () -> Unit) {
+    val open = stringResource(Res.string.plugins_open, plugin.label)
     Row(
         modifier
             .heightIn(min = MinTouchTarget)
@@ -160,7 +163,7 @@ private fun PluginRow(plugin: DashboardPlugin, modifier: Modifier = Modifier.fil
             .background(Theme[colors][surface])
             .border(1.dp, Theme[colors][stroke], RoundedCornerShape(Theme[radii][radiusLarge]))
             .handCursor()
-            .clickable(onClickLabel = "Open ${plugin.label}") { onClick() }
+            .clickable(onClickLabel = open) { onClick() }
             .padding(start = 14.dp, end = 12.dp, top = 12.dp, bottom = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,

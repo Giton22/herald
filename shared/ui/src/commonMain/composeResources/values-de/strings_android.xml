@@ -25,29 +25,4 @@
     <string name="android_save_needs_android_10">Speichern braucht Android 10. Nutze stattdessen Teilen.</string>
     <string name="android_save_failed">%1$s konnte nicht gespeichert werden.</string>
     <string name="android_saved_to">Gespeichert in %1$s</string>
-
-    <string name="android_plugin_close">Seite schließen</string>
-    <string name="android_plugin_failed">Die Seite konnte nicht geöffnet werden.</string>
-    <string name="android_plugin_retry">Erneut versuchen</string>
-
-    <string name="android_wallpaper_too_large">Das Foto ist zu groß oder lässt sich nicht lesen.</string>
-    <string name="android_wallpaper_not_image">Diese Datei ist kein Bild, das Kyllene lesen kann.</string>
-    <string name="android_wallpaper_failed">Das Foto konnte nicht gelesen werden.</string>
-
-    <string name="android_access_notifications">Schalte die Benachrichtigungen von Kyllene ein: Änderungen werden dort erfragt.</string>
-    <string name="android_access_dnd">Erlaube Kyllene, „Bitte nicht stören“ zu ändern.</string>
-    <string name="android_access_usage">Gib Kyllene Zugriff auf Nutzungsdaten, um zu sehen, welche Apps du nutzt.</string>
-    <string name="android_access_location">Erlaube Kyllene, den Standort dieses Telefons zu nutzen.</string>
-    <string name="android_access_precise">Erlaube den genauen Standort: Nur damit beobachtet Android Orte.</string>
-    <string name="android_access_background">Erlaube den Standort jederzeit: Orte werden beobachtet, während Kyllene geschlossen ist. Wähle „Immer zulassen“.</string>
-    <string name="android_access_calendar">Erlaube Kyllene, deinen Kalender zu nutzen.</string>
-    <string name="android_access_contacts">Erlaube Kyllene, deine Kontakte zu lesen.</string>
-    <string name="android_access_health_update">Aktualisiere Health Connect, woher die Daten kommen.</string>
-    <string name="android_access_health_install">Installiere Health Connect, woher die Daten kommen.</string>
-    <string name="android_access_health_none">Dieses Telefon hat kein Health Connect.</string>
-    <string name="android_access_health_read">Erlaube Kyllene, Schritte, Schlaf oder Herzfrequenz in Health Connect zu lesen.</string>
-    <string name="android_access_closed_optional">Auch während Kyllene geschlossen ist (optional)</string>
-    <string name="android_access_health_more_optional">Auch Schritte, Schlaf oder Herzfrequenz (optional)</string>
-    <string name="android_access_call_notifications">Schalte die Benachrichtigungen von Kyllene ein: Dort klingelt der Anruf.</string>
-    <string name="android_access_full_screen">Erlaube Vollbild-Benachrichtigungen, damit der Anruf über dem Sperrbildschirm erscheint.</string>
 </resources>

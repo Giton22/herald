@@ -46,9 +46,11 @@ import dev.hermeskotlin.designsystem.components.PointedLink
 import dev.hermeskotlin.designsystem.components.MenuRow
 import dev.hermeskotlin.designsystem.components.MenuSeparator
 import dev.hermeskotlin.ui.chat.SelectionAction
-import dev.hermeskotlin.ui.resources.*
-import kotlinx.coroutines.CompletableDeferred
+import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.app_copy_link
+import dev.hermeskotlin.ui.resources.app_open_link
 import org.jetbrains.compose.resources.stringResource
+import kotlinx.coroutines.CompletableDeferred
 
 /**
  * Turns on Compose's newer text menu, which takes the items a [androidx.compose.foundation.text.selection.SelectionContainer]
@@ -105,8 +107,8 @@ private class OpenMenu(val data: TextContextMenuDataProvider) : TextContextMenuS
 
 @Composable
 private fun TextMenu(open: OpenMenu, anchor: LayoutCoordinates) {
-    val openLink = stringResource(Res.string.desktop_open_link)
-    val copyLink = stringResource(Res.string.desktop_copy_link)
+    val openLink = stringResource(Res.string.app_open_link)
+    val copyLink = stringResource(Res.string.app_copy_link)
     val entries by remember(open, openLink, copyLink) {
         derivedStateOf {
             val own = open.data.data().components.entries()
@@ -142,11 +144,11 @@ private fun List<TextContextMenuComponent>.entries(): List<Entry?> {
 private val SEPARATOR = Entry(Unit, "", false) {}
 
 /** Open link and Copy link, above the text's own rows, when the right-click was on a link. */
-private fun OpenMenu.linkEntries(openLabel: String, copyLabel: String): List<Entry?> {
+private fun OpenMenu.linkEntries(openLink: String, copyLink: String): List<Entry?> {
     val link = link ?: return emptyList()
     return listOf(
-        Entry(LinkKey.Open, openLabel, true) { it.close(); link.open() },
-        Entry(LinkKey.Copy, copyLabel, true) { it.close(); link.copy() },
+        Entry(LinkKey.Open, openLink, true) { it.close(); link.open() },
+        Entry(LinkKey.Copy, copyLink, true) { it.close(); link.copy() },
         null,
     )
 }

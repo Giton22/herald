@@ -243,7 +243,7 @@
     <string name="connected_devices_prompt_remove">移除此提示语</string>
     <string name="connected_devices_prompt_add">添加提示语</string>
     <string name="connected_devices_section_wear">Wear OS</string>
-    <string name="connected_devices_wear_detail">Wear OS 手表上的 Kyllene 有自己的设置：在手表上打开 Kyllene 的聊天，然后点按“设置”。是否随手机一起响铃，在“手机工具 › Calls”中设置，与 Pebble 相同。</string>
+    <string name="connected_devices_wear_detail">Wear OS 手表上的 Kyllene 有自己的设置：在手表上打开 Kyllene 的聊天，然后点按“设置”。是否随手机一起响铃，在“手机工具 › 通话”中设置，与 Pebble 相同。</string>
     <plurals name="settings_phone_tools_count">
         <item quantity="other">已开启 %1$d 个工具。</item>
     </plurals>

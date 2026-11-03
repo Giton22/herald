@@ -38,7 +38,6 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import dev.hermeskotlin.core.phone.PhoneTool
 import dev.hermeskotlin.ui.resources.*
 import org.jetbrains.compose.resources.StringResource
-import org.jetbrains.compose.resources.stringResource
 
 @Composable
 actual fun rememberPhoneToolAccess(): PhoneToolAccess {
@@ -50,33 +49,9 @@ actual fun rememberPhoneToolAccess(): PhoneToolAccess {
     val healthPrompt = rememberLauncherForActivityResult(PermissionController.createRequestPermissionResultContract()) { version++ }
     // Health Connect only says what it allows asynchronously; null until it has.
     val health by produceState<HealthState?>(null, version) { value = healthState(context) }
-    // Looked up here, in the screen's language: the access answers outside composition.
-    val words = ACCESS_WORDS.associateWith { stringResource(it) }
-    return remember(version, health, words) {
-        AndroidPhoneToolAccess(context, health, words, ask = { prompt.launch(it) }, askHealth = { healthPrompt.launch(it) })
+    return remember(version, health) {
+        AndroidPhoneToolAccess(context, health, ask = { prompt.launch(it) }, askHealth = { healthPrompt.launch(it) })
     }
-}
-
-/** Every line [AndroidPhoneToolAccess] can say. */
-private val ACCESS_WORDS: List<StringResource> by lazy {
-    listOf(
-        Res.string.android_access_notifications,
-        Res.string.android_access_dnd,
-        Res.string.android_access_usage,
-        Res.string.android_access_location,
-        Res.string.android_access_precise,
-        Res.string.android_access_background,
-        Res.string.android_access_calendar,
-        Res.string.android_access_contacts,
-        Res.string.android_access_health_update,
-        Res.string.android_access_health_install,
-        Res.string.android_access_health_none,
-        Res.string.android_access_health_read,
-        Res.string.android_access_closed_optional,
-        Res.string.android_access_health_more_optional,
-        Res.string.android_access_call_notifications,
-        Res.string.android_access_full_screen,
-    )
 }
 
 /** Whether the phone has Health Connect, what Kyllene may read there, and whether reading while closed exists. */
@@ -99,32 +74,29 @@ private suspend fun healthState(context: Context): HealthState {
 private class AndroidPhoneToolAccess(
     private val context: Context,
     private val health: HealthState?,
-    private val words: Map<StringResource, String>,
     private val ask: (Array<String>) -> Unit,
     private val askHealth: (Set<String>) -> Unit,
 ) : PhoneToolAccess {
 
-    private fun say(line: StringResource): String = words.getValue(line)
-
-    override fun missing(tool: PhoneTool): String? = when {
-        tool in ASKS && !notificationsOn() -> say(Res.string.android_access_notifications)
-        tool == PhoneTool.Sound && !policyAccess() -> say(Res.string.android_access_dnd)
-        tool == PhoneTool.ScreenTime && !usageAccess() -> say(Res.string.android_access_usage)
-        tool == PhoneTool.Location && !granted(FINE) && !granted(COARSE) -> say(Res.string.android_access_location)
-        tool == PhoneTool.Geofences && !granted(FINE) -> say(Res.string.android_access_precise)
-        tool == PhoneTool.Geofences && needsBackground() -> say(Res.string.android_access_background)
-        tool == PhoneTool.Calendar && (!granted(READ_CALENDAR) || !granted(WRITE_CALENDAR)) -> say(Res.string.android_access_calendar)
-        tool == PhoneTool.Contacts && !granted(READ_CONTACTS) -> say(Res.string.android_access_contacts)
+    override fun missing(tool: PhoneTool): StringResource? = when {
+        tool in ASKS && !notificationsOn() -> Res.string.phone_need_notifications
+        tool == PhoneTool.Sound && !policyAccess() -> Res.string.phone_need_dnd
+        tool == PhoneTool.ScreenTime && !usageAccess() -> Res.string.phone_need_usage
+        tool == PhoneTool.Location && !granted(FINE) && !granted(COARSE) -> Res.string.phone_need_location
+        tool == PhoneTool.Geofences && !granted(FINE) -> Res.string.phone_need_precise
+        tool == PhoneTool.Geofences && needsBackground() -> Res.string.phone_need_always
+        tool == PhoneTool.Calendar && (!granted(READ_CALENDAR) || !granted(WRITE_CALENDAR)) -> Res.string.phone_need_calendar
+        tool == PhoneTool.Contacts && !granted(READ_CONTACTS) -> Res.string.phone_need_contacts
         // A call from the agent rings as an approval does.
         tool == PhoneTool.CallMe -> ringsMissing()
         tool == PhoneTool.Health -> when {
             health == null -> null
-            health.status == HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> say(Res.string.android_access_health_update)
+            health.status == HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> Res.string.phone_need_health_update
             // Before Android 14 it's an app of its own, from the Play Store.
             health.status != HealthConnectClient.SDK_AVAILABLE && Build.VERSION.SDK_INT in Build.VERSION_CODES.P until Build.VERSION_CODES.UPSIDE_DOWN_CAKE ->
-                say(Res.string.android_access_health_install)
-            health.status != HealthConnectClient.SDK_AVAILABLE -> say(Res.string.android_access_health_none)
-            health.granted.none { it in HEALTH_READS } -> say(Res.string.android_access_health_read)
+                Res.string.phone_need_health_install
+            health.status != HealthConnectClient.SDK_AVAILABLE -> Res.string.phone_need_health_none
+            health.granted.none { it in HEALTH_READS } -> Res.string.phone_need_health_read
             else -> null
         }
         else -> null
@@ -160,14 +132,14 @@ private class AndroidPhoneToolAccess(
         }
     }
 
-    override fun optional(tool: PhoneTool): String? = when {
+    override fun optional(tool: PhoneTool): StringResource? = when {
         tool == PhoneTool.Location && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q &&
-            (granted(FINE) || granted(COARSE)) && !granted(BACKGROUND) -> say(Res.string.android_access_closed_optional)
+            (granted(FINE) || granted(COARSE)) && !granted(BACKGROUND) -> Res.string.phone_optional_closed
         // Some of the three allowed: the rest stay one tap away, before reading while closed.
         tool == PhoneTool.Health && health != null && health.granted.any { it in HEALTH_READS } && !health.granted.containsAll(HEALTH_READS) ->
-            say(Res.string.android_access_health_more_optional)
+            Res.string.phone_optional_health
         tool == PhoneTool.Health && health != null && health.background && health.granted.any { it in HEALTH_READS } &&
-            HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND !in health.granted -> say(Res.string.android_access_closed_optional)
+            HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND !in health.granted -> Res.string.phone_optional_closed
         else -> null
     }
 
@@ -180,9 +152,9 @@ private class AndroidPhoneToolAccess(
         }
     }
 
-    override fun ringsMissing(): String? = when {
-        !notificationsOn(CALL_CHANNEL) -> say(Res.string.android_access_call_notifications)
-        !fullScreen() -> say(Res.string.android_access_full_screen)
+    override fun ringsMissing(): StringResource? = when {
+        !notificationsOn(CALL_CHANNEL) -> Res.string.phone_need_call_notifications
+        !fullScreen() -> Res.string.phone_need_full_screen
         else -> null
     }
 

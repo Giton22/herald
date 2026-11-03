@@ -243,7 +243,7 @@
     <string name="connected_devices_prompt_remove">Quitar este prompt</string>
     <string name="connected_devices_prompt_add">Añadir un prompt</string>
     <string name="connected_devices_section_wear">Wear OS</string>
-    <string name="connected_devices_wear_detail">Kyllene en un reloj Wear OS tiene sus propios ajustes: en el reloj, abre los chats de Kyllene y toca Ajustes. Si suena junto con el teléfono se elige en Herramientas del teléfono › Calls, como para un Pebble.</string>
+    <string name="connected_devices_wear_detail">Kyllene en un reloj Wear OS tiene sus propios ajustes: en el reloj, abre los chats de Kyllene y toca Ajustes. Si suena junto con el teléfono se elige en Herramientas del teléfono › Llamadas, como para un Pebble.</string>
     <plurals name="settings_phone_tools_count">
         <item quantity="one">%1$d herramienta activada.</item>
         <item quantity="other">%1$d herramientas activadas.</item>
