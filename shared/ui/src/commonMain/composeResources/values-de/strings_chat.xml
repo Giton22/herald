@@ -416,6 +416,10 @@
     <string name="chat_greeting_place_default">Hermes auf %1$s · Standardprofil</string>
     <string name="chat_greeting_profile">Hermes · Profil %1$s</string>
     <string name="chat_greeting_default">Hermes · Standardprofil</string>
+    <string name="chat_greeting_question_in">Was bauen wir\nin %1$s?</string>
+    <string name="chat_greeting_home">Start</string>
+    <string name="chat_greeting_choose_project">Projekt wählen</string>
+    <string name="chat_greeting_choose_place">Profil oder Gateway wählen</string>
     <string name="chat_attach">Anhängen</string>
     <string name="chat_voice_chat">Sprachchat</string>
     <string name="chat_dictate">Diktieren</string>

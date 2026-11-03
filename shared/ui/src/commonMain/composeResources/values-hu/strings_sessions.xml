@@ -187,6 +187,7 @@
     <string name="sessions_sign_out">Kijelentkezés</string>
     <string name="sessions_switch_gateway">Gateway váltása vagy hozzáadása</string>
     <string name="sessions_profiles">Profilok</string>
+    <string name="sessions_switch_profile">Profil váltása</string>
     <string name="sessions_profiles_detail">Minden profil külön ügynök, saját csevegésekkel, memóriával és modellel.</string>
     <string name="sessions_profiles_add_hint">Profilt a gateway gépén a „hermes profile create” paranccsal adhatsz hozzá.</string>
     <string name="sessions_profile_default">Alapértelmezett</string>
