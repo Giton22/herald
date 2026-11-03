@@ -75,13 +75,13 @@ jobs:
         run: |
           git update-ref refs/heads/flatpak-ci-tested "$GITHUB_SHA"
           python3 packaging/flatpak/prepare-ci.py \
-            packaging/flatpak/io.github.Giton22.Kyllene.Devel.json \
+            packaging/flatpak/app.kyllene.Kyllene.Devel.json \
             --repository "file://$GITHUB_WORKSPACE" \
             --ref flatpak-ci-tested --commit "$GITHUB_SHA"
       - name: Build offline and bundle
         run: |
           flatpak-builder --user --repo=build/flatpak-repo build/flatpak packaging/flatpak/ci.json
-          flatpak build-bundle build/flatpak-repo build/kyllene.flatpak io.github.Giton22.Kyllene.Devel devel
+          flatpak build-bundle build/flatpak-repo build/kyllene.flatpak app.kyllene.Kyllene.Devel devel
       # The app reads its settings key from the Secret portal at startup, so the smoke runs in a session as a
       # desktop has one: its own bus, and an unlocked keyring answering the portal.
       - name: Installed sandbox smoke

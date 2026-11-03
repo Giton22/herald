@@ -15,7 +15,7 @@ import time
 from PIL import ImageGrab
 from smoke_gateway import server
 
-APP = 'io.github.Giton22.Kyllene.Devel'
+APP = 'app.kyllene.Kyllene.Devel'
 BUTTON = (18, 69, 171)
 # The widget's background: before any click, after the first, after the second.
 LOADED, CLICKED, CLICKED_TWICE = (25, 195, 125), (195, 25, 224), (224, 160, 25)
