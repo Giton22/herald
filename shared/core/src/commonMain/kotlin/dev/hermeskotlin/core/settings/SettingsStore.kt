@@ -1,5 +1,6 @@
 package dev.hermeskotlin.core.settings
 
+import dev.hermeskotlin.core.gateway.GatewayUrl
 import dev.hermeskotlin.core.network.HermesJson
 import dev.hermeskotlin.core.storage.KeyValueStore
 import kotlinx.coroutines.CoroutineScope
@@ -109,6 +110,13 @@ data class AppSettings(
      * my phone: keep replies short". Blank: nothing. Chats already going keep what they started with.
      */
     val startInstruction: String = "",
+    /** A new chat starts in the project the last one was started in, on its gateway and profile (see [lastProjects]). */
+    val useLastProject: Boolean = true,
+    /**
+     * The folder of the project the last new chat was started in or moved to, by [lastProjectKey]. No entry: the
+     * last one had no project.
+     */
+    val lastProjects: Map<String, String> = emptyMap(),
     /** Notify when a turn finishes while the app is in the background. */
     val notifyReplies: Boolean = true,
     /** Notify when the agent waits on an approval or a question while the app is in the background. */
@@ -196,6 +204,19 @@ val DEFAULT_PEBBLE_PROMPTS = listOf("Summarize my day", "What's running?", "What
 
 /** Approvals and questions are answered on a Pebble: its switch is on, and so is answering there. */
 val AppSettings.answersOnPebble: Boolean get() = pebble && pebbleAnswers
+
+/** Where [AppSettings.lastProjects] keeps [gateway]'s project for [profile] (null: the launch profile). */
+fun lastProjectKey(gateway: GatewayUrl, profile: String?): String = gateway.value + (profile?.let { "#$it" } ?: "")
+
+/** The folder a new chat on [gateway] and [profile] starts in: the last one's project, while [AppSettings.useLastProject] is on. */
+fun AppSettings.startProject(gateway: GatewayUrl, profile: String?): String? =
+    if (useLastProject) lastProjects[lastProjectKey(gateway, profile)] else null
+
+/** [folder] (null: no project) is the project the last new chat on [gateway] and [profile] was started in. */
+fun AppSettings.withLastProject(gateway: GatewayUrl, profile: String?, folder: String?): AppSettings {
+    val key = lastProjectKey(gateway, profile)
+    return copy(lastProjects = if (folder == null) lastProjects - key else lastProjects + (key to folder))
+}
 
 /** The [AppSettings.startInstruction] a new chat starts with, trimmed; null when there is none or the settings aren't read yet. */
 fun SettingsStore.startInstruction(): String? = settings.value?.startInstruction?.trim()?.takeIf { it.isNotEmpty() }

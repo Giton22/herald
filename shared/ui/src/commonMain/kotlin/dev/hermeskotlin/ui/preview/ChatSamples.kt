@@ -7,6 +7,7 @@ import dev.hermeskotlin.core.chat.TranscriptEvent
 import dev.hermeskotlin.core.chat.ChatMessage
 import dev.hermeskotlin.core.chat.GatewayNotice
 import dev.hermeskotlin.core.projects.Project
+import dev.hermeskotlin.core.profiles.Profile
 import dev.hermeskotlin.core.threads.ChatThread
 import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.DelegatedTask
@@ -430,6 +431,13 @@ internal object ChatSamples {
         Project("/srv/backup", "backup", "/srv/backup", sessionCount = 6, isAuto = true, sessionIds = setOf("p1", "s2", "s7", "t-backup")),
         Project("p-site", "website", "/srv/site", sessionCount = 3, sessionIds = setOf("s9", "t-site")),
         Project("__no_project__", "Home", null, sessionCount = 9, isNoProject = true),
+    )
+
+    /** A gateway's profiles, `default` the one in use. */
+    val profiles = listOf(
+        Profile("default", isDefault = true),
+        Profile("research", displayName = "Research"),
+        Profile("writing", displayName = "Writing"),
     )
 
     /** Two comments on [reply]'s answer, waiting in the composer with their notes. */

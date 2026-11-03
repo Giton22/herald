@@ -82,6 +82,8 @@
     <string name="running_send_stop_and_send_label">Leállít és küld</string>
     <string name="settings_start_instruction">Kezdő utasítás</string>
     <string name="settings_start_instruction_none">Nincs. Mondj előbb valamit minden új csevegésnek, például hogy rövid válaszokat adjon.</string>
+    <string name="settings_use_last_project">Utolsó projekt használata</string>
+    <string name="settings_use_last_project_detail">Az új csevegések abban a projektben indulnak, amelyben az utolsót itt indítottad, gatewayenként és profilonként.</string>
     <string name="settings_show_reasoning">Gondolatmenet mutatása</string>
     <string name="settings_show_reasoning_detail">A modell gondolkodása, összecsukva minden válasz fölött.</string>
     <string name="settings_show_tool_activity">Eszközhasználat mutatása</string>

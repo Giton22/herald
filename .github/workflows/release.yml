@@ -262,8 +262,14 @@ jobs:
   # (https://flatpak.kyllene.app/repo/, see flatpak-repo.yml) as that remote, so `flatpak update` reaches it.
   #   FLATPAK_GPG_PRIVATE_KEY   the repository's signing key (ASCII-armoured, no passphrase); its public half is
   #                             packaging/flatpak/kyllene-repo.asc. Without it the bundle has no remote and never updates.
+  flatpak-checks:
+    uses: ./.github/workflows/linux-checks.yml
+    secrets:
+      GRADLE_ENCRYPTION_KEY: ${{ secrets.GRADLE_ENCRYPTION_KEY }}
+
   flatpak:
-    needs: release
+    permissions:
+      contents: read
     runs-on: ubuntu-24.04
     timeout-minutes: 60
     steps:
@@ -276,9 +282,22 @@ jobs:
       - name: Install Flatpak tools and SDK
         run: |
           sudo apt-get update
-          sudo apt-get install -y flatpak flatpak-builder xvfb xauth xdotool python3-pil xdg-desktop-portal gnome-keyring
+          sudo apt-get install -y flatpak flatpak-builder ostree xvfb xauth xdotool python3-pil xdg-desktop-portal gnome-keyring
           flatpak remote-add --user --if-not-exists flathub https://flathub.org/repo/flathub.flatpakrepo
           flatpak install --user --noninteractive flathub org.freedesktop.Sdk//26.08 org.freedesktop.Platform//26.08
+
+      - name: Packaging contracts
+        run: |
+          mkdir -p "$RUNNER_TEMP/fontconfig-sdk"
+          cat > "$RUNNER_TEMP/fontconfig-sdk/fc-list" <<'SH'
+          #!/bin/sh
+          set -eu
+          fixture="$(dirname "$(realpath "$FONTCONFIG_FILE")")"
+          exec flatpak run --filesystem="$fixture" --filesystem="$GITHUB_WORKSPACE:ro" \
+            --env="FONTCONFIG_FILE=$FONTCONFIG_FILE" --command=fc-list org.freedesktop.Sdk//26.08 "$@"
+          SH
+          chmod +x "$RUNNER_TEMP/fontconfig-sdk/fc-list"
+          PATH="$RUNNER_TEMP/fontconfig-sdk:$PATH" python3 -m unittest discover -s packaging/flatpak/tests -p test_fonts.py -v
 
       - name: Select the tagged source
         run: |
@@ -323,6 +342,27 @@ jobs:
           dbus-run-session -- sh -c 'printf smoke | gnome-keyring-daemon --unlock --components=secrets >/dev/null &&
             python3 packaging/flatpak/tests/installed_smoke.py --app app.kyllene.Kyllene build/kyllene.flatpak'
 
+      # Real candidate payload on release; the PR workflow uses the tiny fixture for this matrix.
+      - name: Repository update qualification
+        run: timeout 1200 sh packaging/flatpak/tests/repo_smoke.sh build/flatpak-repo app.kyllene.Kyllene stable
+
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: qualified-flatpak
+          path: build/kyllene.flatpak
+          if-no-files-found: error
+          # Long enough to re-run a failed Android job days later without rebuilding the Flatpak.
+          retention-days: 14
+
+  flatpak-attach:
+    needs: [release, flatpak, flatpak-checks]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
+        with:
+          name: qualified-flatpak
+          path: build
       - name: Add to the draft release
         env:
           GH_TOKEN: ${{ github.token }}
@@ -330,4 +370,4 @@ jobs:
           file="kyllene-desktop-${GITHUB_REF_NAME#v}_x86_64.flatpak"
           cp build/kyllene.flatpak "$file"
           sha256sum "$file" > "$file.sha256"
-          gh release upload "$GITHUB_REF_NAME" "$file" "$file.sha256"
+          gh release upload --repo "$GITHUB_REPOSITORY" "$GITHUB_REF_NAME" "$file" "$file.sha256"

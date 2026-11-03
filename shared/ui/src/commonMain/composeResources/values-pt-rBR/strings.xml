@@ -82,6 +82,8 @@
     <string name="running_send_stop_and_send_label">Parar e enviar</string>
     <string name="settings_start_instruction">Instrução inicial</string>
     <string name="settings_start_instruction_none">Nenhuma. Diga algo primeiro a cada nova conversa, como manter as respostas curtas.</string>
+    <string name="settings_use_last_project">Usar o último projeto</string>
+    <string name="settings_use_last_project_detail">Novas conversas começam no projeto da última que você começou aqui, em cada gateway e perfil.</string>
     <string name="settings_show_reasoning">Mostrar raciocínio</string>
     <string name="settings_show_reasoning_detail">O pensamento do modelo, recolhido acima de cada resposta.</string>
     <string name="settings_show_tool_activity">Mostrar atividade das ferramentas</string>

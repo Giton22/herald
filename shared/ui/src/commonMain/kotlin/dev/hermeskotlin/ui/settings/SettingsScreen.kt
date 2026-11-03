@@ -126,6 +126,7 @@ import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageCircle
 import com.composables.icons.lucide.MessageSquarePlus
+import com.composables.icons.lucide.Folder
 import com.composables.icons.lucide.MessagesSquare
 import com.composables.icons.lucide.Moon
 import com.composables.icons.lucide.Phone
@@ -571,6 +572,14 @@ internal fun SettingsView(
                         icon = Lucide.MessageSquarePlus,
                         onClick = onOpenStartInstruction,
                         detailLines = 2,
+                    )
+                    Divider()
+                    SwitchRow(
+                        title = stringResource(Res.string.settings_use_last_project),
+                        detail = stringResource(Res.string.settings_use_last_project_detail),
+                        checked = settings.useLastProject,
+                        onCheckedChange = { on -> onUpdate { it.copy(useLastProject = on) } },
+                        icon = Lucide.Folder,
                     )
                     Divider()
                     SwitchRow(
