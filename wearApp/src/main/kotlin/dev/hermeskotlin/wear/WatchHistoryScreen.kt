@@ -36,7 +36,7 @@ internal fun WatchHistoryScreen(link: WatchLink, store: WatchStore, speech: Spee
     var positioned by remember(chat.id, chat.botProfile, chat.scope) { mutableStateOf(false) }
     // Short pieces stay scrollable within the narrow middle of a round display, even for a very long answer.
     val pieces = remember(page?.messages) {
-        page?.messages.orEmpty().flatMap { message -> message.text.chunked(600).mapIndexed { index, text ->
+        page?.messages.orEmpty().flatMap { message -> historyTextParts(message.text).mapIndexed { index, text ->
             Triple("${message.id}:$index", message.role, text)
         } }
     }
@@ -83,5 +83,16 @@ internal fun WatchHistoryScreen(link: WatchLink, store: WatchStore, speech: Spee
                 }
             }
         }
+    }
+}
+
+internal fun historyTextParts(text: String): List<String> = buildList {
+    var start = 0
+    while (start < text.length) {
+        var end = minOf(start + 600, text.length)
+        // Each part is rendered alone: keep both halves of an emoji or other supplementary character together.
+        if (end < text.length && text[end - 1].isHighSurrogate() && text[end].isLowSurrogate()) end--
+        add(text.substring(start, end))
+        start = end
     }
 }
