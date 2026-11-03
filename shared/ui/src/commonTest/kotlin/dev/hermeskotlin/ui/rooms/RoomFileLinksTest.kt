@@ -14,6 +14,7 @@ import io.ktor.client.engine.mock.respond
 import io.ktor.http.HttpStatusCode
 import io.ktor.http.headersOf
 import kotlinx.coroutines.test.runTest
+import dev.hermeskotlin.ui.JvmOnly
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
@@ -105,6 +106,7 @@ class RoomFileLinksTest {
     }
 
     @Test
+    @JvmOnly
     fun missingOwnerNeverFallsBackToTheHostOrAnotherProfile() = runTest {
         var requests = 0
         val api = MediaApi(createHttpClient(MockEngine { requests++; respond("wrong file") }))
