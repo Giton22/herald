@@ -23,7 +23,7 @@
 
     <string name="storage_title">Armazenamento do Kyllene</string>
     <string name="storage_folder">Pasta de configurações:</string>
-    <string name="storage_retry">Tentar de novo</string>
+    <string name="storage_retry">Repetir</string>
     <string name="storage_start_fresh">Do zero</string>
     <string name="storage_quit">Sair</string>
     <string name="storage_with_start_fresh">%1$s “Do zero” guarda esse arquivo com outro nome e abre o Kyllene sem login.</string>
