@@ -201,6 +201,15 @@
     <string name="plugins_empty">No plugin pages</string>
     <string name="plugins_empty_detail">A plugin with a page, like Kanban, shows up here.</string>
     <string name="plugins_open">Open %1$s</string>
+    <string name="plugins_close_page">Close the page</string>
+    <string name="plugins_page_failed">Couldn’t open the page.</string>
+    <string name="app_open_link">Open link</string>
+    <string name="app_copy_link">Copy link</string>
+    <string name="wallpaper_dialog_title">Chat background</string>
+    <string name="wallpaper_dialog_failed">Couldn’t open the file dialog.</string>
+    <string name="wallpaper_too_large">That photo is too large or can’t be read.</string>
+    <string name="wallpaper_not_an_image">That file isn’t an image Kyllene can read.</string>
+    <string name="wallpaper_read_failed">Couldn’t read that picture.</string>
 
     <string name="update_renamed">Herald is now Kyllene</string>
     <string name="update_renamed_detail">Same app with a new name and icon. Your sign-in, chats and settings stay.</string>

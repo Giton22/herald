@@ -195,6 +195,15 @@
     <string name="plugins_empty">No hay páginas de plugins</string>
     <string name="plugins_empty_detail">Un plugin con página propia, como Kanban, aparece aquí.</string>
     <string name="plugins_open">Abrir %1$s</string>
+    <string name="plugins_close_page">Cerrar la página</string>
+    <string name="plugins_page_failed">No se pudo abrir la página.</string>
+    <string name="app_open_link">Abrir enlace</string>
+    <string name="app_copy_link">Copiar enlace</string>
+    <string name="wallpaper_dialog_title">Fondo del chat</string>
+    <string name="wallpaper_dialog_failed">No se pudo abrir el diálogo de archivos.</string>
+    <string name="wallpaper_too_large">Esa foto es demasiado grande o no se puede leer.</string>
+    <string name="wallpaper_not_an_image">Ese archivo no es una imagen que Kyllene pueda leer.</string>
+    <string name="wallpaper_read_failed">No se pudo leer esa imagen.</string>
 
     <string name="update_renamed">Herald ahora es Kyllene</string>
     <string name="update_renamed_detail">La misma app con nuevo nombre e icono. Tu sesión, tus chats y tus ajustes se mantienen.</string>

@@ -195,6 +195,15 @@
     <string name="plugins_empty">Nincs bővítményoldal</string>
     <string name="plugins_empty_detail">Egy saját oldallal rendelkező bővítmény, például a Kanban, itt jelenik meg.</string>
     <string name="plugins_open">%1$s megnyitása</string>
+    <string name="plugins_close_page">Az oldal bezárása</string>
+    <string name="plugins_page_failed">Nem sikerült megnyitni az oldalt.</string>
+    <string name="app_open_link">Hivatkozás megnyitása</string>
+    <string name="app_copy_link">Hivatkozás másolása</string>
+    <string name="wallpaper_dialog_title">Csevegés háttere</string>
+    <string name="wallpaper_dialog_failed">Nem sikerült megnyitni a fájlválasztót.</string>
+    <string name="wallpaper_too_large">A fotó túl nagy, vagy nem olvasható.</string>
+    <string name="wallpaper_not_an_image">Ez a fájl nem olyan kép, amelyet a Kyllene be tud olvasni.</string>
+    <string name="wallpaper_read_failed">Nem sikerült beolvasni a képet.</string>
 
     <string name="update_renamed">A Herald mostantól Kyllene</string>
     <string name="update_renamed_detail">Ugyanaz az alkalmazás új névvel és ikonnal. A bejelentkezésed, a csevegéseid és a beállításaid megmaradnak.</string>

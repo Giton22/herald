@@ -192,6 +192,15 @@
     <string name="plugins_empty">没有插件页面</string>
     <string name="plugins_empty_detail">带有自己页面的插件（例如看板）会显示在这里。</string>
     <string name="plugins_open">打开 %1$s</string>
+    <string name="plugins_close_page">关闭页面</string>
+    <string name="plugins_page_failed">无法打开该页面。</string>
+    <string name="app_open_link">打开链接</string>
+    <string name="app_copy_link">复制链接</string>
+    <string name="wallpaper_dialog_title">聊天背景</string>
+    <string name="wallpaper_dialog_failed">无法打开文件对话框。</string>
+    <string name="wallpaper_too_large">该照片太大或无法读取。</string>
+    <string name="wallpaper_not_an_image">该文件不是 Kyllene 能读取的图片。</string>
+    <string name="wallpaper_read_failed">无法读取该图片。</string>
 
     <string name="update_renamed">Herald 现已更名为 Kyllene</string>
     <string name="update_renamed_detail">同一个应用，换了新名字和新图标。你的登录、对话和设置都会保留。</string>
