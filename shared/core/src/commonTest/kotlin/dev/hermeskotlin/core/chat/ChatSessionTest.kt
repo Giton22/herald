@@ -1148,6 +1148,37 @@ class ChatSessionTest {
     }
 
     @Test
+    fun aNewChatMovesToAnotherFolderOnlyUntilItsFirstSendIsUnderWay() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf("session.create" to SILENT, "prompt.submit" to """{"status":"streaming"}"""),
+        )
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        // Before anything is sent it moves, as often as it's asked, and starts in the last folder picked.
+        assertTrue(chat.unstarted)
+        assertTrue(chat.startIn("/srv/site"))
+        assertTrue(chat.startIn("/srv/other"))
+        val sending = backgroundScope.async { chat.send("hi") }
+        val create = transport.awaitSent { it.isCall("session.create") }
+        assertEquals("/srv/other", create.param("cwd"))
+
+        // While session.create is on its way, the chat stays where it is going.
+        assertFalse(chat.unstarted)
+        assertFalse(chat.startIn("/srv/site"))
+
+        transport.push("""{"jsonrpc":"2.0","id":${create["id"]},"result":{"session_id":"rt9","stored_session_id":"stored-9","info":{}}}""")
+        assertTrue(sending.await())
+
+        // And once it has begun, for good.
+        assertFalse(chat.unstarted)
+        assertFalse(chat.startIn("/srv/site"))
+        assertEquals(1, transport.sent.value.count { it.isCall("session.create") })
+    }
+
+    @Test
     fun aLargeFileTheGatewayUsesInPlaceStays() = runTest {
         val routes = FileRoutes()
         val (connection, _) = setup(

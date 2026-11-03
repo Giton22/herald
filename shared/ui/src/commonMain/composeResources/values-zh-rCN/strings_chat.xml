@@ -403,6 +403,10 @@
     <string name="chat_greeting_place_default">Hermes 在 %1$s · 默认配置</string>
     <string name="chat_greeting_profile">Hermes · 配置 %1$s</string>
     <string name="chat_greeting_default">Hermes · 默认配置</string>
+    <string name="chat_greeting_question_in">我们要在 %1$s\n构建什么？</string>
+    <string name="chat_greeting_home">主页</string>
+    <string name="chat_greeting_choose_project">选择项目</string>
+    <string name="chat_greeting_choose_place">选择配置或网关</string>
     <string name="chat_attach">附加</string>
     <string name="chat_voice_chat">语音对话</string>
     <string name="chat_dictate">听写</string>

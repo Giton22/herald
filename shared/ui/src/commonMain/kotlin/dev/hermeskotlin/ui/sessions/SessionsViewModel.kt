@@ -182,6 +182,9 @@ class SessionsViewModel(
 
     private val bound = MutableStateFlow<Pair<GatewayUrl, String?>?>(null)
 
+    /** The gateway and profile the list (and its projects) are of; null before the first. */
+    val listedFor: StateFlow<Pair<GatewayUrl, String?>?> = bound.asStateFlow()
+
     private val _attentionFilter = MutableStateFlow(AttentionFilter.All)
     val attentionFilter: StateFlow<AttentionFilter> = _attentionFilter.asStateFlow()
 
