@@ -13,6 +13,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.getString
 import java.io.File
 
 @Composable
@@ -30,7 +32,7 @@ private class AndroidMediaActions(private val context: Context) : MediaActions {
             ?: "application/octet-stream"
         val image = mime.startsWith("image/")
         // Before Android 10 this needs a storage permission; sharing to Files covers those phones.
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return@withContext "Saving needs Android 10. Use Share instead."
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return@withContext getString(Res.string.android_save_needs_android_10)
         val collection = if (image) {
             MediaStore.Images.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
         } else {
@@ -44,15 +46,16 @@ private class AndroidMediaActions(private val context: Context) : MediaActions {
             put(MediaStore.MediaColumns.IS_PENDING, 1)
         }
         val resolver = context.contentResolver
-        val uri = resolver.insert(collection, values) ?: return@withContext "Couldn't save $name."
-        try {
+        val uri = resolver.insert(collection, values) ?: return@withContext getString(Res.string.android_save_failed, name)
+        val saved = try {
             resolver.openOutputStream(uri)?.use { it.write(bytes) } ?: error("no stream")
             resolver.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
-            "Saved to $folder"
+            true
         } catch (e: Exception) {
             resolver.delete(uri, null, null)
-            "Couldn't save $name."
+            false
         }
+        if (saved) getString(Res.string.android_saved_to, folder) else getString(Res.string.android_save_failed, name)
     }
 
     override fun share(bytes: ByteArray, name: String) {

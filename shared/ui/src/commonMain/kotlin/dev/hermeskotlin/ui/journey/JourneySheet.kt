@@ -74,6 +74,10 @@ import dev.hermeskotlin.designsystem.text as textColor
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringArrayResource
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * `/journey`: the skills the agent wrote and the memories it keeps, newest first by month, Desktop's
@@ -104,29 +108,36 @@ internal fun JourneySheetView(
         }
         val graph = state.graph
         SheetHeader(
-            "Journey",
-            graph?.let { "${count(it.skills, "skill")} and ${count(it.memories, "memory", "memories")} this profile's agent has picked up." },
+            stringResource(Res.string.journey_title),
+            graph?.let {
+                stringResource(
+                    Res.string.journey_detail,
+                    pluralStringResource(Res.plurals.journey_skills, it.skills, it.skills),
+                    pluralStringResource(Res.plurals.journey_memories, it.memories, it.memories),
+                )
+            },
         )
         when {
             graph == null && state.loading -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Spinner() }
-            graph == null -> Note(state.error ?: "Couldn't load the journey.", error = true)
-            graph.nodes.isEmpty() -> Note("Nothing learned yet. Skills the agent writes and memories it saves show up here.")
+            graph == null -> Note(state.error ?: stringResource(Res.string.journey_error), error = true)
+            graph.nodes.isEmpty() -> Note(stringResource(Res.string.journey_empty))
             else -> {
                 val months = remember(graph) {
-                    graph.nodes.sortedByDescending { it.timestamp ?: Long.MIN_VALUE }.groupBy { node -> node.timestamp?.let(::monthLabel) ?: "Undated" }
+                    graph.nodes.sortedByDescending { it.timestamp ?: Long.MIN_VALUE }.groupBy { node -> node.timestamp?.let(::monthLabel) ?: UNDATED }
                 }
                 ScrollbarBox { listState -> LazyColumn(Modifier.fillMaxWidth().heightIn(max = 520.dp), state = listState) {
                     months.forEach { (month, nodes) ->
                         item(key = "m-$month") {
+                            val title = monthTitle(month)
                             Text(
-                                month.uppercase(),
+                                title.uppercase(),
                                 style = Theme[typography][eyebrow],
                                 color = Theme[colors][textTertiary],
                                 modifier = Modifier
                                     .padding(start = 18.dp, end = 18.dp, top = 14.dp, bottom = 6.dp)
                                     .semantics {
                                         heading()
-                                        contentDescription = month
+                                        contentDescription = title
                                     },
                             )
                         }
@@ -179,7 +190,7 @@ private fun NodeRow(node: JourneyNode, onClick: () -> Unit) {
             )
             Text(node.detailLine(), style = Theme[typography][caption].copy(fontSize = 12.sp), color = Theme[colors][textTertiary], maxLines = 1, overflow = TextOverflow.Ellipsis)
         }
-        if (node.pinned) UnstyledIcon(Lucide.Pin, contentDescription = "Pinned", tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
+        if (node.pinned) UnstyledIcon(Lucide.Pin, contentDescription = stringResource(Res.string.journey_pinned), tint = Theme[colors][textTertiary], modifier = Modifier.size(14.dp))
     }
 }
 
@@ -191,7 +202,7 @@ private fun NodeDetail(node: JourneyNode, read: suspend (JourneyNode) -> Journey
     val back = remember { FocusRequester() }
     LaunchedEffect(node.id) { if (isDesktop) runCatching { back.requestFocus() } }
     Row(Modifier.fillMaxWidth().padding(start = 8.dp, end = 20.dp), verticalAlignment = Alignment.CenterVertically) {
-        IconButton(Lucide.ArrowLeft, contentDescription = "Back to the journey", onClick = onBack, modifier = Modifier.focusRequester(back))
+        IconButton(Lucide.ArrowLeft, contentDescription = stringResource(Res.string.journey_back), onClick = onBack, modifier = Modifier.focusRequester(back))
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 node.title,
@@ -207,7 +218,7 @@ private fun NodeDetail(node: JourneyNode, read: suspend (JourneyNode) -> Journey
     val content = detail?.getOrNull()?.content
     when {
         detail == null -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Spinner() }
-        content.isNullOrBlank() -> Note("Couldn't read this one.", error = true)
+        content.isNullOrBlank() -> Note(stringResource(Res.string.journey_unreadable), error = true)
         else -> Box(Modifier.fillMaxWidth().heightIn(max = 520.dp).verticalScrollWithBar().padding(horizontal = 20.dp, vertical = 12.dp)) {
             SelectionContainer { MarkdownText(content) }
         }
@@ -224,27 +235,32 @@ private fun Note(text: String, error: Boolean = false) {
     )
 }
 
+@Composable
 private fun JourneyNode.detailLine(): String = if (isMemory) {
-    listOfNotNull("Memory", memorySource?.substringAfterLast('/')?.takeIf { it.isNotBlank() }).joinToString(" · ")
+    listOfNotNull(stringResource(Res.string.journey_memory), memorySource?.substringAfterLast('/')?.takeIf { it.isNotBlank() }).joinToString(" · ")
 } else {
     listOfNotNull(
-        "Skill",
+        stringResource(Res.string.journey_skill),
         category?.takeIf { it.isNotBlank() && it != "uncategorized" },
-        when (useCount) {
-            0 -> null
-            1 -> "used once"
-            else -> "used $useCount times"
-        },
-        "archived".takeIf { state == "archived" },
+        if (useCount > 0) pluralStringResource(Res.plurals.journey_used, useCount, useCount) else null,
+        stringResource(Res.string.journey_archived).takeIf { state == "archived" },
     ).joinToString(" · ")
 }
 
-private fun count(n: Int, one: String, many: String = "${one}s"): String = "$n ${if (n == 1) one else many}"
+/** "October 2026" for a [monthLabel], in the app's language; [UNDATED] for the nodes with no time. */
+@Composable
+private fun monthTitle(month: Int): String {
+    if (month == UNDATED) return stringResource(Res.string.journey_undated)
+    val names = stringArrayResource(Res.array.journey_months)
+    val name = names.getOrNull(month % 100 - 1) ?: (month % 100).toString()
+    return stringResource(Res.string.journey_month_year, name, (month / 100).toString())
+}
 
-private val MONTHS = listOf("January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December")
+/** The month key of the nodes with no time: after every real month, so they come last. */
+private const val UNDATED = -1
 
-/** "October 2026" for epoch seconds, in UTC (Howard Hinnant's civil-from-days). */
-internal fun monthLabel(epochSeconds: Long): String {
+/** The month of epoch seconds as year × 100 + month (202610 for October 2026), in UTC (Howard Hinnant's civil-from-days). */
+internal fun monthLabel(epochSeconds: Long): Int {
     val days = epochSeconds.floorDiv(86_400L)
     val z = days + 719_468
     val era = z.floorDiv(146_097L)
@@ -254,5 +270,5 @@ internal fun monthLabel(epochSeconds: Long): String {
     val mp = (5 * doy + 2) / 153
     val month = (if (mp < 10) mp + 3 else mp - 9).toInt()
     val year = yoe + era * 400 + if (month <= 2) 1 else 0
-    return "${MONTHS[month - 1]} $year"
+    return (year * 100 + month).toInt()
 }

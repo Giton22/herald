@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="android_media_picture_not_shown">Imagem não exibida</string>
+    <string name="android_media_picture_failed">A imagem não carregou</string>
+    <string name="android_media_audio_not_played">Áudio não reproduzido</string>
+    <string name="android_media_video_not_shown">Vídeo não exibido</string>
+    <string name="android_media_audio_failed">O áudio não carregou</string>
+    <string name="android_media_video_failed">O vídeo não carregou</string>
+    <string name="android_screen_closed">O agente fechou esta tela.</string>
+    <string name="android_screen_part_failed">Não foi possível exibir esta parte</string>
+
+    <string name="android_attach_photo_failed">Não foi possível ler a foto.</string>
+    <string name="android_attach_no_camera">Nenhum app de câmera disponível.</string>
+    <string name="android_attach_not_allowed">O app que compartilhou não deixou o Kyllene ler o arquivo.</string>
+    <string name="android_attach_read_failed">Não foi possível ler um arquivo.</string>
+    <string name="android_attach_photo_too_large">%1$s tem mais de 50 MB.</string>
+    <string name="android_attach_file_too_large">%1$s tem mais de %2$d MB.</string>
+    <string name="android_attach_unreadable">Não foi possível ler %1$s.</string>
+    <string name="android_attach_not_image">Não foi possível ler %1$s como imagem.</string>
+    <string name="android_attach_too_much">São mais de 50 MB de anexos de uma vez.</string>
+
+    <string name="android_widget_update_webview">Atualize o Android System WebView para executar este widget.</string>
+    <string name="android_widget_failed">Não foi possível exibir este widget.</string>
+
+    <string name="android_save_needs_android_10">Salvar precisa do Android 10. Use Compartilhar.</string>
+    <string name="android_save_failed">Não foi possível salvar %1$s.</string>
+    <string name="android_saved_to">Salvo em %1$s</string>
+</resources>

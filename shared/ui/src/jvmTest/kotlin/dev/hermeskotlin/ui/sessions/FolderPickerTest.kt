@@ -24,7 +24,7 @@ class FolderPickerTest {
 
     @Test
     fun aLateNewFolderDoesntPullThePickerBack() = runComposeUiTest {
-        val answer = CompletableDeferred<String?>()
+        val answer = CompletableDeferred<Said?>()
         val asked = mutableListOf<String>()
         setContent {
             hermesTheme(AccentPalette.Blue)(ColorScheme.Dark) {
@@ -62,7 +62,7 @@ class FolderPickerTest {
 
     @Test
     fun closingNewFolderClearsItAndDropsTheCall() = runComposeUiTest {
-        val answer = CompletableDeferred<String?>()
+        val answer = CompletableDeferred<Said?>()
         var asked = 0
         var made = false
         setContent {

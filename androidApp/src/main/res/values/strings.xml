@@ -1,9 +1,205 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name">Kyllene</string>
+    <string name="app_name" translatable="false">Kyllene</string>
     <string name="shortcut_new_chat">New chat</string>
     <string name="shortcut_voice_short">Dictate</string>
     <string name="shortcut_voice">New chat with voice</string>
     <string name="shortcut_voice_chat">Call Hermes</string>
     <string name="shortcut_voice_chat_moved">Call Hermes moved. Hold the app icon and pin it again.</string>
+
+    <!-- App lock and links -->
+    <string name="app_lock_prompt_title">Unlock Kyllene</string>
+    <string name="link_no_app">No app on this phone can open that link.</string>
+
+    <!-- Notification channels, as Settings › Notifications lists them -->
+    <string name="channel_connection_name">Background connection</string>
+    <string name="channel_connection_description">Shown while Kyllene stays connected in the background, or works on a turn.</string>
+    <string name="channel_requests_name">Approvals and questions</string>
+    <string name="channel_requests_description">The agent is waiting on you.</string>
+    <string name="channel_replies_name">Finished replies</string>
+    <string name="channel_replies_description">A turn ended while the app was in the background.</string>
+    <string name="channel_bots_name">Bot messages</string>
+    <string name="channel_bots_description">A bot wrote in its chat while the app was in the background.</string>
+    <string name="channel_inbox_name">Inbox</string>
+    <string name="channel_inbox_description">A scheduled job you follow reported, such as a morning briefing.</string>
+    <string name="channel_inbox_failed_name">Failed jobs</string>
+    <string name="channel_inbox_failed_description">A scheduled job’s run failed.</string>
+    <string name="channel_voice_name">Voice chat</string>
+    <string name="channel_voice_description">Shown while a voice chat goes on with the screen off or another app open.</string>
+    <string name="channel_calls_name">Calls for an answer</string>
+    <string name="channel_calls_description">An approval or a question rings like a call (Settings → Phone tools → Calls).</string>
+    <string name="channel_phone_tools_name">Phone tools</string>
+    <string name="channel_phone_tools_description">When the agent wants to change something on this phone</string>
+
+    <!-- The ongoing notification while Kyllene stays connected -->
+    <string name="notification_connected">Connected to Hermes</string>
+    <string name="notification_reconnecting">Reconnecting to Hermes…</string>
+    <string name="notification_push_anywhere">Bot messages reach you through Notifications anywhere</string>
+    <string name="notification_not_connected">Not connected to Hermes</string>
+    <string name="notification_turn_off">Turn off</string>
+
+    <!-- A voice chat kept up like a call -->
+    <string name="notification_voice_title">Voice chat</string>
+    <string name="notification_voice_text">Talking with Hermes</string>
+    <string name="notification_voice_end">End</string>
+
+    <!-- Approvals, questions, passwords -->
+    <string name="notification_approve_title">Approve this command?</string>
+    <string name="notification_question_title">Hermes has a question</string>
+    <plurals name="notification_questions">
+        <item quantity="one">%d question</item>
+        <item quantity="other">%d questions</item>
+    </plurals>
+    <string name="notification_your_answer">Your answer</string>
+    <string name="notification_answer">Answer</string>
+    <string name="notification_secret_sudo">Sudo password needed</string>
+    <string name="notification_secret_secret">Secret needed</string>
+    <string name="notification_secret_vault_unlock">Unlock your password manager</string>
+    <string name="notification_secret_vault_code">Sign-in code needed</string>
+    <!-- %1$s: the site, or notification_vault_this_site -->
+    <string name="notification_vault_no_login">Hermes has no login for %1$s. Open the chat to save one.</string>
+    <string name="notification_vault_this_site">this site</string>
+    <string name="notification_allow_once">Allow once</string>
+    <string name="notification_allow_session">Allow for chat</string>
+    <string name="notification_allow_always">Always allow</string>
+    <string name="notification_deny">Deny</string>
+
+    <!-- Finished turns, bots, rooms, the Inbox -->
+    <string name="notification_turn_failed_text">The turn failed.</string>
+    <string name="notification_done">Done.</string>
+    <string name="notification_finished">Finished.</string>
+    <string name="notification_message_hermes">Message Hermes</string>
+    <string name="notification_turn_failed">Turn failed</string>
+    <string name="notification_hermes_replied">Hermes replied</string>
+    <string name="notification_reply">Reply</string>
+    <string name="notification_you">You</string>
+    <!-- %1$s: the bot's name -->
+    <string name="notification_message_bot">Message %1$s</string>
+    <string name="notification_run_failed_text">The run failed.</string>
+    <!-- %1$s: the scheduled job's name -->
+    <string name="notification_job_failed">%1$s failed</string>
+    <string name="notification_mark_read">Mark read</string>
+    <string name="notification_push_test_title">Notifications anywhere work</string>
+    <string name="notification_push_test_text">This came end-to-end encrypted through ntfy, not over your gateway connection.</string>
+
+    <!-- An answer from the shade that couldn't be delivered -->
+    <string name="notification_send_failed">Couldn’t send</string>
+    <string name="notification_bot_send_failed">Couldn’t send it. Open Kyllene to try again.</string>
+    <string name="notification_chat_closed">That chat isn’t open anymore. Open Kyllene to reply.</string>
+    <string name="notification_reply_send_failed">Couldn’t send it. Open Kyllene to send it again.</string>
+    <string name="notification_reply_open_app">Open Kyllene to send it again.</string>
+    <string name="notification_answer_not_connected">Not connected to the gateway. Open Kyllene to answer.</string>
+
+    <!-- Calls -->
+    <string name="call_needs_microphone">Kyllene needs the microphone for calls. The question is in the chat.</string>
+    <string name="call_new_session">New session</string>
+
+    <!-- Phone tools: what the agent asks to do, before it happens -->
+    <string name="phone_allow">Allow</string>
+    <string name="phone_deny">Deny</string>
+    <string name="phone_question_change">The agent wants to change your phone</string>
+    <!-- Joins the items of a short list, such as days or settings -->
+    <string name="phone_list_separator">", "</string>
+    <!-- Ends a sentence built from parts; %1$s: the sentence -->
+    <string name="phone_sentence">%1$s.</string>
+
+    <string name="phone_alarm_question">Set an alarm for %1$s.</string>
+    <!-- %2$s: when it repeats, such as phone_alarm_every_weekday -->
+    <string name="phone_alarm_question_repeats">Set an alarm for %1$s, %2$s.</string>
+    <!-- %2$s: the alarm's label. Keep the straight quotes: a label can't have one in it, so it can't close them. -->
+    <string name="phone_alarm_question_label">Set an alarm for %1$s: \"%2$s\".</string>
+    <string name="phone_alarm_question_repeats_label">Set an alarm for %1$s, %2$s: \"%3$s\".</string>
+    <string name="phone_alarm_every_day">every day</string>
+    <string name="phone_alarm_every_weekday">every weekday</string>
+    <string name="phone_alarm_every_weekend">every weekend</string>
+    <!-- %1$s: day names, such as “Monday, Friday” -->
+    <string name="phone_alarm_every_days">every %1$s</string>
+    <!-- %1$s: how long, such as “1 h 30 min” -->
+    <string name="phone_timer_question">Start a %1$s timer.</string>
+    <string name="phone_timer_question_label">Start a %1$s timer: \"%2$s\".</string>
+    <string name="phone_hours_short">%1$d h</string>
+    <string name="phone_minutes_short">%1$d min</string>
+    <string name="phone_seconds_short">%1$d s</string>
+
+    <string name="phone_clipboard_title">The agent wants to copy something to your clipboard</string>
+    <string name="phone_clipboard_question">Copy to the clipboard: %1$s</string>
+    <string name="phone_clipboard_label">From the agent</string>
+
+    <string name="phone_open_title">The agent wants to open something on your phone</string>
+    <!-- %1$s: the site; %2$s: phone_open_not_secure or nothing; %3$s: the link -->
+    <string name="phone_open_link">Open a link on %1$s%2$s: %3$s</string>
+    <string name="phone_open_not_secure">" (not secure)"</string>
+    <string name="phone_open_directions">Start directions in the maps app to: %1$s</string>
+    <string name="phone_open_map">Show in the maps app: %1$s</string>
+    <string name="phone_open_app">Open the app: %1$s</string>
+    <string name="phone_open_share">Share this text: %1$s</string>
+
+    <string name="phone_sound_dnd_off">turn Do Not Disturb off</string>
+    <!-- %1$s: phone_sound_dnd_priority, _alarms or _silence -->
+    <string name="phone_sound_dnd_on">turn on Do Not Disturb (%1$s)</string>
+    <string name="phone_sound_dnd_priority">priority only</string>
+    <string name="phone_sound_dnd_alarms">alarms only</string>
+    <string name="phone_sound_dnd_silence">total silence</string>
+    <!-- %1$s: phone_sound_ringer_normal, _vibrate or _silent -->
+    <string name="phone_sound_ringer">set the ringer to %1$s</string>
+    <string name="phone_sound_ringer_normal">normal</string>
+    <string name="phone_sound_ringer_vibrate">vibrate</string>
+    <string name="phone_sound_ringer_silent">silent</string>
+    <!-- %1$d: the volume in percent -->
+    <string name="phone_sound_volume_ring">set the ring volume to %1$d%%</string>
+    <string name="phone_sound_volume_notification">set the notification volume to %1$d%%</string>
+    <string name="phone_sound_volume_media">set the media volume to %1$d%%</string>
+    <string name="phone_sound_volume_alarm">set the alarm volume to %1$d%%</string>
+
+    <string name="phone_calendar_add_title">The agent wants to add to your calendar</string>
+    <string name="phone_calendar_move_title">The agent wants to move an event</string>
+    <!-- %1$s: when; %2$s: the calendar -->
+    <string name="phone_calendar_add_question">%1$s, in %2$s.</string>
+    <!-- %3$s: the place -->
+    <string name="phone_calendar_add_question_place">%1$s, in %2$s, at %3$s.</string>
+    <!-- %1$s: when it was; %2$s: when it moves to; %3$s: the calendar -->
+    <string name="phone_calendar_move_question">From %1$s to %2$s, in %3$s.</string>
+    <plurals name="phone_calendar_guests">
+        <item quantity="one">%d guest may be told.</item>
+        <item quantity="other">%d guests may be told.</item>
+    </plurals>
+    <string name="phone_calendar_title_line">Title: %1$s</string>
+    <string name="phone_calendar_notes_line">Notes: %1$s</string>
+    <!-- %1$s: a day -->
+    <string name="phone_calendar_all_day">%1$s, all day</string>
+    <string name="phone_calendar_days_all_day">%1$s to %2$s, all day</string>
+    <!-- %1$s: a day; %2$s, %3$s: start and end times -->
+    <string name="phone_calendar_day_hours">%1$s, %2$s–%3$s</string>
+    <!-- %1$s, %2$s: phone_calendar_day_time each -->
+    <string name="phone_calendar_range">%1$s to %2$s</string>
+    <!-- %1$s: a day; %2$s: a time -->
+    <string name="phone_calendar_day_time">%1$s, %2$s</string>
+    <!-- java.time patterns for a day in the question: weekday, day and month, and with the year. Keep the letters. -->
+    <string name="phone_calendar_day_pattern">EEE d MMM</string>
+    <string name="phone_calendar_day_year_pattern">EEE d MMM yyyy</string>
+
+    <string name="phone_place_title">The agent wants to watch a place</string>
+    <string name="phone_place_remove_title">The agent wants to stop watching a place</string>
+    <string name="phone_place_remove_arrive">Stop watching %1$s? Nothing is sent any more when you arrive at it.</string>
+    <string name="phone_place_remove_leave">Stop watching %1$s? Nothing is sent any more when you leave it.</string>
+    <!-- %1$s: coordinates -->
+    <string name="phone_place_here">where the phone is now, %1$s</string>
+    <!-- %1$s: the chat's title -->
+    <string name="phone_place_chat">\"%1$s\"</string>
+    <string name="phone_place_this_chat">this chat</string>
+    <!-- %1$s: the place; %2$s: where; %3$d: radius in metres; %4$s: the chat; %5$s: the message -->
+    <string name="phone_place_add_arrive">When you arrive at %1$s (%2$s, %3$d m), Kyllene sends this to %4$s as you: %5$s</string>
+    <string name="phone_place_add_leave">When you leave %1$s (%2$s, %3$d m), Kyllene sends this to %4$s as you: %5$s</string>
+    <string name="phone_place_arrived">Arrived at %1$s</string>
+    <string name="phone_place_left">Left %1$s</string>
+    <string name="phone_place_the_chat">the chat</string>
+    <!-- %1$s: the chat; %2$s: the message -->
+    <string name="phone_place_sent">Sent to %1$s: %2$s</string>
+    <!-- %2$s: why, such as phone_place_no_reach -->
+    <string name="phone_place_not_sent">Couldn’t send it to %1$s: %2$s. Open Kyllene to send it yourself.</string>
+    <string name="phone_place_no_answer">the gateway didn’t answer in time</string>
+    <string name="phone_place_other_gateway">Kyllene is signed in to another gateway now</string>
+    <string name="phone_place_not_accepted">it wasn’t accepted</string>
+    <string name="phone_place_no_reach">Kyllene couldn’t reach the gateway</string>
+    <string name="phone_place_refused">the gateway refused it</string>
 </resources>

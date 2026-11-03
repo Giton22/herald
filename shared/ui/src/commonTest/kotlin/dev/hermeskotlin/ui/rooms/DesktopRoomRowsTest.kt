@@ -4,6 +4,9 @@ import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.rooms.DesktopLine
 import dev.hermeskotlin.core.rooms.DesktopRoom
 import dev.hermeskotlin.ui.bots.BotFaces
+import dev.hermeskotlin.ui.inbox.Words
+import dev.hermeskotlin.ui.inbox.words
+import dev.hermeskotlin.ui.resources.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -20,15 +23,15 @@ class DesktopRoomRowsTest {
     @Test
     fun subtitleNamesTheMemberByItsBotsLabelNotItsProfile() {
         // The mirror names the default bot "default"; the roster calls it "Main".
-        assertEquals("Main: Hey there", room(member("default", "Hey\n  there")).rowSubtitle(faces))
-        assertEquals("Side: ok", room(member("side", "ok")).rowSubtitle(faces))
-        assertEquals("You: hi", room(DesktopLine(fromUser = true, speaker = "You", text = "hi")).rowSubtitle(faces))
-        assertEquals("Continue on Hermes Desktop", room().rowSubtitle(faces))
+        assertEquals(Words.Raw("Main: Hey there"), room(member("default", "Hey\n  there")).rowSubtitle(faces))
+        assertEquals(Words.Raw("Side: ok"), room(member("side", "ok")).rowSubtitle(faces))
+        assertEquals(Words.Raw("You: hi"), room(DesktopLine(fromUser = true, speaker = "You", text = "hi")).rowSubtitle(faces))
+        assertEquals(words(Res.string.rooms_desktop_continue), room().rowSubtitle(faces))
     }
 
     @Test
     fun subtitleSaysWhyTheDotIsThereWhenTheRoomAsksForTheUser() {
-        assertEquals("Needs you · Main: @user take a look", room(member("default", "@user take a look")).rowSubtitle(faces))
+        assertEquals(words(Res.string.rooms_needs_you_said, "Main: @user take a look"), room(member("default", "@user take a look")).rowSubtitle(faces))
     }
 
     @Test

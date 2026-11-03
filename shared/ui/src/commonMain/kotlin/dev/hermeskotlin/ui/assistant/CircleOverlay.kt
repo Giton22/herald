@@ -41,6 +41,8 @@ import com.composables.icons.lucide.X
 import com.composeunstyled.Text
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.designsystem.LocalAccentPalette
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 import dev.hermeskotlin.designsystem.components.IconButton
 import dev.hermeskotlin.designsystem.label
 import dev.hermeskotlin.designsystem.typography
@@ -64,7 +66,7 @@ internal fun CircleOverlay(screen: ScreenCapture, onCircled: (ScreenRegion) -> U
     val edge = LocalAccentPalette.current.edge
 
     Box(Modifier.fillMaxSize().background(Color.Black)) {
-        shot?.let { Image(it, contentDescription = "Your screen", contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize()) }
+        shot?.let { Image(it, contentDescription = stringResource(Res.string.assistant_your_screen), contentScale = ContentScale.FillBounds, modifier = Modifier.fillMaxSize()) }
         Canvas(
             Modifier
                 .fillMaxSize()
@@ -151,8 +153,8 @@ internal fun CircleOverlay(screen: ScreenCapture, onCircled: (ScreenRegion) -> U
             horizontalArrangement = Arrangement.spacedBy(4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            Text("Circle or tap what to ask about", style = Theme[typography][label], color = Color.White)
-            IconButton(Lucide.X, contentDescription = "Stop circling", onClick = onCancel, tint = Color.White)
+            Text(stringResource(Res.string.assistant_circle_hint), style = Theme[typography][label], color = Color.White)
+            IconButton(Lucide.X, contentDescription = stringResource(Res.string.assistant_stop_circling), onClick = onCancel, tint = Color.White)
         }
     }
 }
