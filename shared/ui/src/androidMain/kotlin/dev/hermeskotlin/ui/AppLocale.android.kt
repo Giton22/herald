@@ -75,7 +75,10 @@ private fun Resources.useLocale(locale: Locale) {
     updateConfiguration(updated, displayMetrics)
 }
 
-/** The phone's own first language: the system's resources, which a per-app language or [applyAppLanguage] leave alone. */
+/**
+ * The phone's own first language, below Android 13: the system's resources, which [applyAppLanguage] leaves alone.
+ * From Android 13 a per-app language shows up here too, so [PerAppLanguage] asks the LocaleManager instead.
+ */
 private fun systemLocale(): Locale = Resources.getSystem().configuration.locales[0] ?: Locale.getDefault()
 
 internal actual fun systemLanguage(): AppLanguage = systemLocale().let { systemAppLanguage(it.language, it.country) }
@@ -94,7 +97,9 @@ internal actual fun rememberSystemLanguageChoice(): LanguageChoice? {
 private class PerAppLanguage(context: Context) : LanguageChoice {
     private val manager = context.getSystemService(LocaleManager::class.java)
     override val picked: String? = pickedFromPerAppLocales(manager.applicationLocales.toLanguageTags())
-    override val system: AppLanguage = systemLanguage()
+    // The phone's own language. Not Resources.getSystem(): with a per-app language set, it reports that one, and
+    // System default would then read "Follows the system: Magyar" on an English phone.
+    override val system: AppLanguage = manager.systemLocales[0]?.let { systemAppLanguage(it.language, it.country) } ?: systemLanguage()
 
     // The system recreates the activity in the new language, so the screens read it from there.
     override fun pick(tag: String?) {
