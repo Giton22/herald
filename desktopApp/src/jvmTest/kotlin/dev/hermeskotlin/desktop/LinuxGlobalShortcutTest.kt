@@ -197,7 +197,9 @@ class LinuxGlobalShortcutTest {
         ShortcutPortalFixture().use { fixture ->
             val classes = listOf(LinuxGlobalShortcut::class.java, ShortcutRuntimeProbe::class.java, Unit::class.java,
                 DBusConnectionBuilder::class.java, Class.forName("org.slf4j.LoggerFactory"),
-                Class.forName("org.freedesktop.dbus.transport.jre.NativeTransportProvider"))
+                Class.forName("org.freedesktop.dbus.transport.junixsocket.JUnixSocketTransportProvider"),
+                Class.forName("org.newsclub.net.unix.AFUNIXSocket"),
+                Class.forName("org.newsclub.lib.junixsocket.common.NarMetadata"))
             val classpath = classes.map { File(it.protectionDomain.codeSource.location.toURI()).path }.distinct().joinToString(File.pathSeparator)
             val java = File(System.getProperty("java.home"), "bin/java").path
             val child = ProcessBuilder(java, "--limit-modules", modules, "-cp", classpath,
@@ -221,9 +223,10 @@ object ShortcutRuntimeProbe {
         val authentication = runCatching { Class.forName("com.sun.security.auth.module.UnixSystem") }
         if (expected == LinuxGlobalShortcut.State.Bound) authentication.getOrThrow()
         else check(authentication.exceptionOrNull() is ClassNotFoundException)
-        Class.forName("org.freedesktop.dbus.transport.jre.NativeTransportProvider")
+        Class.forName("org.freedesktop.dbus.transport.junixsocket.JUnixSocketTransportProvider")
         // Warm the JDK's process-lifetime Unix socket plumbing before counting backend resources.
         java.nio.channels.SocketChannel.open(java.net.StandardProtocolFamily.UNIX).close()
+        (Class.forName("org.newsclub.net.unix.AFUNIXSocket").getMethod("newInstance").invoke(null) as AutoCloseable).close()
         val sockets = sockets()
         val reached = CountDownLatch(1)
         val shortcut = LinuxGlobalShortcut({ error("No activation") }, { state, _ ->
