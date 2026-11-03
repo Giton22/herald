@@ -275,30 +275,33 @@ class AndroidSpeechPlayer(private val context: Context) : SpeechPlayer {
     /**
      * A chained chat on the phone's own speaker uses call routing, so the phone's echo cancelling keeps the voice out
      * of the microphone. Headphones, earbuds or another speaker keep their usual route: call routing would move
-     * earbuds without a call profile to the phone's speaker and drop the others to call quality. The returned close
-     * action is safe to call again or after a newer chat.
+     * earbuds without a call profile to the phone's speaker and drop the others to call quality. A route that won't
+     * take leaves the chat on its usual one, never on the earpiece. The returned close action is safe to call again or
+     * after a newer chat.
      */
     @Suppress("DEPRECATION")
     override fun chainedChatAudio(): () -> Unit = synchronized(lock) {
         val owner = Any()
         if (restoreChatAudio == null) {
-            if (audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS).any { it.type in OWN_OUTPUTS }) return@synchronized {}
+            val outputs = runCatching { audioManager.getDevices(AudioManager.GET_DEVICES_OUTPUTS) }.getOrNull()
+            if (outputs == null || outputs.any { it.type in OWN_OUTPUTS }) return@synchronized {}
             val mode = audioManager.mode
             val speaker = audioManager.isSpeakerphoneOn
             val restore = {
-                try {
-                    if (Build.VERSION.SDK_INT >= 31) audioManager.clearCommunicationDevice() else audioManager.isSpeakerphoneOn = speaker
-                } finally { audioManager.mode = mode }
+                // Each step on its own: a chat's end must never throw.
+                runCatching { if (Build.VERSION.SDK_INT >= 31) audioManager.clearCommunicationDevice() else audioManager.isSpeakerphoneOn = speaker }
+                runCatching { audioManager.mode = mode }
+                Unit
             }
             try {
                 audioManager.mode = AudioManager.MODE_IN_COMMUNICATION
                 if (Build.VERSION.SDK_INT >= 31) {
-                    audioManager.availableCommunicationDevices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
-                        ?.let(audioManager::setCommunicationDevice)
+                    val builtIn = audioManager.availableCommunicationDevices.firstOrNull { it.type == AudioDeviceInfo.TYPE_BUILTIN_SPEAKER }
+                    check(builtIn != null && audioManager.setCommunicationDevice(builtIn))
                 } else audioManager.isSpeakerphoneOn = true
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 restore()
-                throw e
+                return@synchronized {}
             }
             restoreChatAudio = restore
         }

@@ -51,8 +51,22 @@ class AndroidChainedAudioTest {
         }
     }
 
+    /** Call mode without the speaker would read the reply into the earpiece; the chat keeps its usual route instead. */
+    @Test
+    fun aRouteThatWontTakeLeavesTheChatAudioAlone() {
+        shadowOf(manager).setOutputDevices(listOf(speaker))
+        shadowOf(manager).setAvailableCommunicationDevices(listOf(device(AudioDeviceInfo.TYPE_BUILTIN_EARPIECE)))
+        manager.mode = AudioManager.MODE_NORMAL
+        val close = AndroidSpeechPlayer(context).chainedChatAudio()
+        assertEquals(AudioManager.MODE_NORMAL, manager.mode)
+        assertNull(manager.communicationDevice)
+        close()
+        assertEquals(AudioManager.MODE_NORMAL, manager.mode)
+    }
+
     @Test
     fun aStaleCloseCannotRestoreOverANewerChat() {
+        shadowOf(manager).setAvailableCommunicationDevices(listOf(speaker))
         val player = AndroidSpeechPlayer(context)
         manager.mode = AudioManager.MODE_NORMAL
         val first = player.chainedChatAudio()
