@@ -8,15 +8,13 @@ import java.util.concurrent.CountDownLatch
 import kotlin.concurrent.thread
 
 /**
- * Ctrl+Shift+Space from any app, as Hermes Desktop's quick entry: Windows' own hotkey, on a thread that waits for
- * it. Elsewhere there's none yet, and [register] says so.
+ * Quick entry from any app: Windows' hotkey or a Linux desktop's consent-managed portal session.
  */
-class GlobalHotkey private constructor(private val threadId: Int, private val waiter: Thread) {
+class GlobalHotkey private constructor(private val release: () -> Unit) {
 
     /** Lets go of the hotkey, waiting briefly for it to be free, so registering it again right after works. */
     fun unregister() {
-        User32.INSTANCE.PostThreadMessage(threadId, WinUser.WM_QUIT, WinDef.WPARAM(0), WinDef.LPARAM(0))
-        waiter.join(UNREGISTER_WAIT_MS)
+        release()
     }
 
     companion object {
@@ -28,10 +26,21 @@ class GlobalHotkey private constructor(private val threadId: Int, private val wa
         private const val UNREGISTER_WAIT_MS = 500L
 
         /**
-         * Calls [onPress] (on the hotkey's thread) for each Ctrl+Shift+Space; null where the system has no such
-         * hotkey for the app, or another app holds this one.
+         * Calls [onPress] off the window thread. Linux reports its asynchronous consent through [onStatus];
+         * Windows returns null when another app holds its keys. Other platforms return null.
          */
-        fun register(onPress: () -> Unit): GlobalHotkey? {
+        fun register(onStatus: (String) -> Unit = {}, onPress: () -> Unit): GlobalHotkey? {
+            if (System.getProperty("os.name") == "Linux") {
+                val portal = LinuxGlobalShortcut(onPress, { state, trigger ->
+                    onStatus(when (state) {
+                        LinuxGlobalShortcut.State.Binding -> "Choose a shortcut in your desktop's permission dialog."
+                        LinuxGlobalShortcut.State.Bound -> "Desktop shortcut: ${trigger ?: "chosen by your desktop"}."
+                        LinuxGlobalShortcut.State.Declined -> "No desktop shortcut was granted. Turn Quick entry off and on to try again."
+                        LinuxGlobalShortcut.State.Unavailable -> "This desktop's global shortcut portal is unavailable."
+                    })
+                })
+                return GlobalHotkey(portal::close)
+            }
             if (!System.getProperty("os.name").orEmpty().startsWith("Windows")) return null
             var registered = false
             var threadId = 0
@@ -49,7 +58,10 @@ class GlobalHotkey private constructor(private val threadId: Int, private val wa
                 User32.INSTANCE.UnregisterHotKey(null, ID)
             }
             ready.await()
-            return if (registered) GlobalHotkey(threadId, waiter) else null
+            return if (registered) GlobalHotkey {
+                User32.INSTANCE.PostThreadMessage(threadId, WinUser.WM_QUIT, WinDef.WPARAM(0), WinDef.LPARAM(0))
+                waiter.join(UNREGISTER_WAIT_MS)
+            } else null
         }
     }
 }

@@ -276,9 +276,10 @@ class ShortcutBus {
     fun fire(shortcut: Shortcut): Boolean = handlers.asReversed().any { it.enabled && it.take(shortcut) }
 }
 
-/** Whether the quick entry's global keys are held by another app, so Settings can say why they do nothing. */
+/** The desktop shortcut's availability, so Settings can explain permission or keys held by another app. */
 object QuickEntryHotkey {
     var taken by mutableStateOf(false)
+    var detail by mutableStateOf<String?>(null)
 }
 
 /** The window's shortcuts; a bus nothing fires into where there's no keyboard to speak of (phones). */

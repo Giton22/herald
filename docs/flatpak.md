@@ -275,3 +275,19 @@ runtime available. Screenshots and profiles are not uploaded. Xvfb smoke does
 not qualify KDE focus, context menus, portals other than the Secret portal
 through gnome-keyring, voice or live-provider behavior;
 real Bazzite acceptance remains a separate release gate.
+
+### Quick entry shortcut
+
+With **Settings → Desktop → Quick entry** enabled, Linux asks the desktop's
+GlobalShortcuts portal to bind the existing composer. The portal's permission
+dialog chooses the actual shortcut; Ctrl+Shift+Space is a preference, never a
+forced replacement for another app's keys. Settings shows the granted trigger,
+refusal or unavailable portal. After refusing, turn the setting off and on to
+ask again. Disabling it or quitting closes the request/session; a portal restart
+recreates the session. A held key opens once until released.
+
+The shortcut opens the current profile's existing composer and does not send a
+prompt. It needs the app running; launcher actions and login startup are separate.
+Window focus follows the existing runtime/compositor rules. The pinned public
+JBR API cannot consume the portal's activation token, so native Wayland activation
+is not guaranteed. In-app shortcuts remain available without this portal.

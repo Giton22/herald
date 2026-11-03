@@ -230,12 +230,16 @@ fun main(args: Array<String>) {
             }
         }
         LaunchedEffect(Unit) { DesktopNotifier(koin.get(), settingsStore, focused, post).start(this) }
-        // Ctrl+Shift+Space from any app, while the setting is on.
+        // The global shortcut from any app, while the setting is on.
         DisposableEffect(settings.quickEntry) {
-            val hotkey = if (settings.quickEntry) GlobalHotkey.register { SwingUtilities.invokeLater { quickOpen = true } } else null
+            var disposed = false
+            QuickEntryHotkey.detail = if (System.getProperty("os.name") == "Linux") "Your desktop asks which shortcut to use when this is on." else null
+            val hotkey = if (settings.quickEntry) GlobalHotkey.register(onStatus = { detail ->
+                SwingUtilities.invokeLater { if (!disposed) QuickEntryHotkey.detail = detail }
+            }) { SwingUtilities.invokeLater { if (!disposed) quickOpen = true } } else null
             // Off where Windows has none for us (another platform) is no news; held by another app, Settings says so.
             QuickEntryHotkey.taken = settings.quickEntry && hotkey == null && System.getProperty("os.name").orEmpty().startsWith("Windows")
-            onDispose { hotkey?.unregister() }
+            onDispose { disposed = true; hotkey?.unregister() }
         }
 
         Tray(

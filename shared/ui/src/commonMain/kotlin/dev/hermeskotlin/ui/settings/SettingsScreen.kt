@@ -699,10 +699,10 @@ internal fun SettingsView(
                     Divider()
                     SwitchRow(
                         title = stringResource(Res.string.settings_quick_entry),
-                        detail = stringResource(
+                        detail = (QuickEntryHotkey.detail ?: stringResource(
                             Res.string.settings_quick_entry_detail,
                             keysLabel("Ctrl+Shift+Space"),
-                        ) +
+                        )) +
                             // Windows gives a hotkey to one app at a time: say so rather than leave it on and silent.
                             if (settings.quickEntry && QuickEntryHotkey.taken) {
                                 " " + stringResource(Res.string.settings_quick_entry_taken)
