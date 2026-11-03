@@ -240,3 +240,8 @@ if (System.getProperty("os.name").startsWith("Linux")) {
         }
     }
 }
+
+// A failed check's message (which language, how wide) shows in the CI log, not only in the HTML report.
+tasks.withType<Test>().configureEach {
+    testLogging { exceptionFormat = org.gradle.api.tasks.testing.logging.TestExceptionFormat.FULL }
+}
