@@ -59,7 +59,6 @@ import dev.hermeskotlin.designsystem.surface2
 import dev.hermeskotlin.designsystem.surface3
 import dev.hermeskotlin.designsystem.textMuted
 import dev.hermeskotlin.designsystem.warningSoft
-import dev.hermeskotlin.ui.chat.AppMark
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import dev.hermeskotlin.designsystem.components.Chip
@@ -1322,7 +1321,7 @@ private fun modeLabel(mode: SidebarMode, names: Map<SidebarMode, String>, needsY
 }
 
 /**
- * The app's mark and name over the gateway in use, its dot showing the connection, and Settings; then the
+ * The app's name over the gateway in use, its dot showing the connection, and Settings; then the
  * search pill. With more than one profile, the name and gateway open a menu of them; otherwise the account sheet.
  */
 @Composable
@@ -1355,7 +1354,6 @@ internal fun MainHeader(
             horizontalArrangement = Arrangement.spacedBy(if (isDesktop) 4.dp else 10.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            AppMark(30.dp, glow = false)
             // On the desktop this strip is the window's title bar: only the name and gateway are a button, as wide
             // as they are, and the rest of the strip drags the window (a double-click maximises it). The Box takes
             // what Settings leaves, so a long gateway name can't push Settings off the strip.
@@ -1406,7 +1404,8 @@ internal fun MainHeader(
                 ) {
                     Text(
                         "Kyllene",
-                        style = Theme[typography][heading].copy(fontSize = 17.sp, lineHeight = 21.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.02).em),
+                        // The name alone, without the mark beside it, so it carries the header.
+                        style = Theme[typography][heading].copy(fontSize = 22.sp, lineHeight = 27.sp, fontWeight = FontWeight.SemiBold, letterSpacing = (-0.02).em),
                         color = Theme[colors][text],
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -1421,8 +1420,8 @@ internal fun MainHeader(
                             overflow = TextOverflow.Ellipsis,
                             modifier = Modifier.weight(1f, fill = false),
                         )
-                        // Both names share the room left by the chevron, so a long one of either is cut short
-                        // and the chevron always shows.
+                        // The profile takes what it needs up to a cap, and the gateway the rest: a long name of
+                        // either is cut short and the chevron always shows.
                         if (switching && active != null) {
                             Text(
                                 "· ${active.label}",
@@ -1430,7 +1429,7 @@ internal fun MainHeader(
                                 color = Theme[colors][textSecondary],
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
-                                modifier = Modifier.weight(1f, fill = false),
+                                modifier = Modifier.widthIn(max = PROFILE_NAME_MAX_WIDTH),
                             )
                         }
                         UnstyledIcon(
@@ -1472,6 +1471,9 @@ internal fun connectionWord(connection: ConnectionState?): StringResource = when
     is ConnectionState.Reconnecting -> Res.string.sessions_connection_reconnecting
     is ConnectionState.Connecting, ConnectionState.Idle -> Res.string.sessions_connection_connecting
 }
+
+/** The most the header's profile name takes, so the gateway's keeps some room beside it. */
+private val PROFILE_NAME_MAX_WIDTH = 120.dp
 
 /** How tall the search pill is drawn; the touch target around it can be taller. */
 private val SEARCH_PILL_HEIGHT = 40.dp
