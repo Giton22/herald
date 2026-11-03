@@ -1836,6 +1836,39 @@ class ChatSessionTest {
     }
 
     @Test
+    fun resendingAFileSendsItsReferenceAgainWithItsCard() = runTest {
+        val results = mutableMapOf(
+            "session.resume" to """{"session_id":"rt1","running":false}""",
+            "file.attach" to """{"attached":true,"ref_text":"@file:attachments/report.pdf"}""",
+            "prompt.submit" to SILENT,
+        )
+        val (connection, transports) = reconnectingSetup(backgroundScope, results)
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        historyFails = true
+        val pdf = OutgoingAttachment("pdf", "report.pdf", "application/pdf", byteArrayOf(4))
+        val sending = backgroundScope.async { chat.submit("", listOf(pdf)) }
+        transports.last().awaitSent { it.isCall("prompt.submit") }
+        val first = transports.last()
+        first.serverClose(1006)
+        assertEquals(SendOutcome.Unsettled, sending.await())
+        historyFails = false
+        results["prompt.submit"] = """{"status":"streaming"}"""
+        chat.state.first { it.runtimeSessionId == "rt1" && transports.last() !== first }
+
+        assertNull(chat.resend(chat.state.value.messages.last().key))
+
+        // The file is in the workspace already: only its reference goes again, and its card stays on the bubble.
+        val again = transports.last { it !== first }
+        val resent = again.awaitSent { it.isCall("prompt.submit") }
+        assertEquals("@file:attachments/report.pdf", resent.param("text"))
+        assertTrue(again.sent.value.none { it.isCall("file.attach") })
+        val bubble = assertIs<ChatMessage.User>(chat.state.value.messages.last())
+        assertEquals(listOf("report.pdf"), bubble.attachments.map { it.name })
+    }
+
+    @Test
     fun aResendThatNeverArrivesHandsItsTextBack() = runTest {
         val chat = unsettledSend(backgroundScope, "deploy it")
         val key = chat.state.value.messages.last().key

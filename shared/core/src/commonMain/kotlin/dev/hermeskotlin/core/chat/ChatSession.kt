@@ -206,9 +206,19 @@ class ChatSession(
         display: String? = null,
         queue: Boolean = false,
         voiceLive: VoiceLiveTurn? = null,
+    ): SendOutcome = submitPrompt(text, attachments, display, queue, voiceLive, resent = emptyList())
+
+    /** [submit], with [resent]: the `@file:` references, and their cards, of a prompt sent again ([resend]). */
+    private suspend fun submitPrompt(
+        text: String,
+        attachments: List<OutgoingAttachment>,
+        display: String?,
+        queue: Boolean,
+        voiceLive: VoiceLiveTurn?,
+        resent: List<Pair<String, ShownAttachment>>,
     ): SendOutcome {
         val trimmed = text.trim()
-        if (trimmed.isEmpty() && attachments.isEmpty()) return SendOutcome.NotSent
+        if (trimmed.isEmpty() && attachments.isEmpty() && resent.isEmpty()) return SendOutcome.NotSent
         // Desktop's fallback, so an image-only prompt still asks something.
         val visible = trimmed.ifEmpty { if (attachments.any { it.kind == AttachmentKind.Image }) IMAGE_ONLY_PROMPT else "" }
         val key = "local-${_state.value.keySeq}"
@@ -218,7 +228,7 @@ class ChatSession(
                     key,
                     display ?: visible,
                     pending = true,
-                    attachments = attachments.map { a -> a.toShown() },
+                    attachments = resent.map { (_, shown) -> shown } + attachments.map { a -> a.toShown() },
                     timestamp = nowSeconds(),
                 ),
                 keySeq = it.keySeq + 1,
@@ -248,6 +258,8 @@ class ChatSession(
         val promptsBefore = _state.value.takeIf { it.historyRead }
             ?.messages?.count { it is ChatMessage.User && !it.pending && it.check == null }
         var submitted = false
+        // The files' references in the workspace, each with its card, kept for a resend.
+        val files = resent.toMutableList()
         return try {
             // The composer holds files to this size; checked before any goes, so none is uploaded for nothing.
             attachments.firstOrNull { it.size > OutgoingAttachment.MAX_BYTES }?.let {
@@ -257,7 +269,8 @@ class ChatSession(
             val runtimeId = ensureAttached(client)
             uploadClient = client
             uploadRuntimeId = runtimeId
-            val refs = attachments.mapNotNull { upload(client, runtimeId, it, queuedImages, key) }
+            attachments.forEach { a -> upload(client, runtimeId, a, queuedImages, key)?.let { files += it to a.toShown() } }
+            val refs = files.map { (ref, _) -> ref }
             submitted = true
             val result = client.request(
                 "prompt.submit",
@@ -278,7 +291,7 @@ class ChatSession(
             if (status !in TURN_STARTING_STATUSES) ownTurnsPending = (ownTurnsPending - 1).coerceAtLeast(0)
             // The row written for it, so it can be regenerated or edited before the transcript is read again.
             val rowId = result.long("user_row_id")
-            val sentText = visible.takeIf { attachments.isEmpty() && display == null && it.isNotEmpty() }
+            val sentText = visible.takeIf { attachments.isEmpty() && resent.isEmpty() && display == null && it.isNotEmpty() }
             _state.update { state ->
                 val sent = state.copy(
                     running = true,
@@ -297,7 +310,7 @@ class ChatSession(
             // An error reply is the gateway turning it down; anything else after it went out is no verdict.
             if (submitted && e !is RpcException) {
                 val arrived = if (startsTurn) findInTranscript(visible, key, promptsBefore) else null
-                return settleUnanswered(key, arrived, UnsettledPrompt(text, display, startsTurn)) {
+                return settleUnanswered(key, arrived, UnsettledPrompt(text, display, startsTurn, files.toList())) {
                     detach(uploadClient, uploadRuntimeId, queuedImages)
                 }
             }
@@ -422,7 +435,8 @@ class ChatSession(
     suspend fun resend(key: String): String? {
         val prompt = unsettled[key]
         val shown = takeBack(key) ?: return null
-        val outcome = submit(prompt?.text ?: shown, display = prompt?.display)
+        // Its files are in the workspace already: their references go again, with their cards. Pictures don't.
+        val outcome = submitPrompt(prompt?.text ?: shown, emptyList(), prompt?.display, queue = false, voiceLive = null, resent = prompt?.files.orEmpty())
         return shown.takeIf { outcome == SendOutcome.NotSent }
     }
 
