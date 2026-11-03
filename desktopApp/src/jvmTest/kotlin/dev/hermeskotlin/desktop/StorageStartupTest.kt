@@ -14,7 +14,7 @@ class StorageStartupTest {
     @Test fun everyFailurePromptFitsA360PixelDisplay() {
         SwingUtilities.invokeAndWait {
             for (reason in SecureStorageException.Reason.entries) {
-                val folder = "/home/a-long-user-name/.var/app/io.github.Giton22.Kyllene.Devel/data/herald"
+                val folder = "/home/a-much-longer-user-name/.var/app/app.kyllene.Kyllene.Devel/data/herald"
                 val pane = storageUnlockPane(reason, storageGuidance(reason), folder)
                 assertTrue(pane.preferredSize.width <= 360, "${reason.name}: ${pane.preferredSize.width}px")
             }
