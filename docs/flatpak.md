@@ -275,3 +275,17 @@ runtime available. Screenshots and profiles are not uploaded. Xvfb smoke does
 not qualify KDE focus, context menus, portals other than the Secret portal
 through gnome-keyring, voice or live-provider behavior;
 real Bazzite acceptance remains a separate release gate.
+
+### Launcher actions
+
+The desktop entry offers **New chat** and **Quick entry**. Both can start the app;
+a later launch forwards its action to the existing instance. Quick entry opens
+the existing small composer and waits for the user to send a prompt.
+
+The entry handles the app's existing `herald://` links, including stored chats and
+bots. It does not claim `hermes://`, which belongs to Hermes Desktop. Launchers
+can use `herald://new-chat` and the desktop-only `herald://quick-entry` action.
+The latter is an exact action URI, without parameters or an extra path. Foreground
+activation follows the existing window/compositor behavior; X11 qualification does
+not establish native Wayland focus. Global shortcut registration, voice launcher
+actions and automatic startup require their separate integrations.

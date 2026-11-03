@@ -6,3 +6,13 @@ Exec=kyllene %u
 Icon=app.kyllene.Kyllene.Devel
 Terminal=false
 Categories=Network;Chat;
+MimeType=x-scheme-handler/herald;
+Actions=NewChat;QuickEntry;
+
+[Desktop Action NewChat]
+Name=New chat
+Exec=kyllene herald://new-chat
+
+[Desktop Action QuickEntry]
+Name=Quick entry
+Exec=kyllene herald://quick-entry

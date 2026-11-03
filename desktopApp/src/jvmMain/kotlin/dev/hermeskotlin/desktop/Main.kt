@@ -172,6 +172,7 @@ fun main(args: Array<String>) {
                 answer.sessionId?.let { links.open(it, title = null) }
                 return
             }
+            if (handleQuickEntryLink(link) { quickOpen = true }) return
             show()
             AppLink.parse(link)?.let(links::follow)
         }
