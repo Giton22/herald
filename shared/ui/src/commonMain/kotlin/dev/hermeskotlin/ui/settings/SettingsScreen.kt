@@ -68,6 +68,7 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.dropShadow
 import androidx.compose.ui.graphics.Color
@@ -1147,13 +1148,14 @@ private fun Field(title: String, detail: String? = null, control: @Composable ()
 
 /** A setting that's on or off: the whole row toggles. An [icon] sits on a small tile before the title. */
 @Composable
-internal fun SwitchRow(title: String, detail: String?, checked: Boolean, onCheckedChange: (Boolean) -> Unit, icon: ImageVector? = null) {
+internal fun SwitchRow(title: String, detail: String?, checked: Boolean, onCheckedChange: (Boolean) -> Unit, icon: ImageVector? = null, enabled: Boolean = true) {
     if (!settingShown(title, detail)) return
     Row(
         Modifier
             .fillMaxWidth()
             .handCursor()
-            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+            .alpha(if (enabled) 1f else 0.45f)
+            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange)
             .padding(horizontal = 14.dp, vertical = 13.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,

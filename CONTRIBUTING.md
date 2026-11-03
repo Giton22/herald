@@ -35,7 +35,7 @@ Add a test with every behaviour change. A bug fix should come with a test that f
 Before you push, run what CI runs:
 
 ```bash
-./gradlew --continue :shared:core:testAndroidHostTest :shared:designsystem:testAndroidHostTest :shared:ui:testAndroidHostTest :shared:wearlink:testAndroidHostTest :androidApp:assembleDebug :androidApp:assembleDev :androidApp:lintDebug :wearApp:testDebugUnitTest :wearApp:assembleDebug :wearApp:lintDebug
+./gradlew --continue :shared:core:testAndroidHostTest :shared:designsystem:testAndroidHostTest :shared:ui:testAndroidHostTest :shared:wearlink:testAndroidHostTest :androidApp:testDebugUnitTest :androidApp:assembleDebug :androidApp:assembleDev :androidApp:lintDebug :wearApp:testDebugUnitTest :wearApp:assembleDebug :wearApp:lintDebug
 ```
 
 Lint fails on any new issue. Fix it instead of adding it to `lint-baseline.xml`.

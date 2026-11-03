@@ -116,6 +116,7 @@ fun PhoneToolsScreen(onBack: () -> Unit, viewModel: PhoneToolsViewModel = koinVi
             if (on && access.missing(tool) != null) access.request(tool)
         },
         onSetUp = viewModel::setUp,
+        onPermission = viewModel::setPermission,
         phones = phones,
         onMovePhone = viewModel::movePhone,
         onRemovePhone = viewModel::removePhone,
@@ -206,6 +207,7 @@ internal fun PhoneToolsView(
     onQuietFrom: (Int) -> Unit = {},
     onQuietUntil: (Int) -> Unit = {},
     nowMillis: Long = Clock.System.now().toEpochMilliseconds(),
+    onPermission: (PhoneTool, Boolean) -> Unit = { _, _ -> },
 ) {
     var removing by remember { mutableStateOf<KnownPhone?>(null) }
     // Which end of quiet hours is being picked: true for the start.
@@ -248,10 +250,8 @@ internal fun PhoneToolsView(
                 verticalArrangement = Arrangement.spacedBy(22.dp),
             ) {
                 Text(
-                    "Let the agent use this phone: read how it is, or do something on it. Every tool is off until you " +
-                        "turn it on, and anything that changes the phone asks you first: in Kyllene while it's open, else " +
-                        "in a notification. A tool you " +
-                        "turn off is taken away from the agent at once.",
+                    "Tools stay off until you enable them. Choose below whether each enabled tool must ask you " +
+                        "before it runs. Android permissions still apply. A tool you turn off is taken away from the agent at once.",
                     style = Theme[typography][bodySmall],
                     color = Theme[colors][textTertiary],
                     modifier = Modifier.padding(horizontal = 6.dp),
@@ -290,6 +290,7 @@ internal fun PhoneToolsView(
                                 onCheckedChange = { onTool(tool, it) },
                                 icon = tool.icon,
                             )
+                            PhoneToolPermissionRow(tool, settings, onPermission)
                             if (needs != null) {
                                 Divider()
                                 ActionRow("Allow on this phone", Lucide.ShieldCheck) { onAllow(tool) }
@@ -312,6 +313,7 @@ internal fun PhoneToolsView(
                             onCheckedChange = { onTool(PhoneTool.CallMe, it) },
                             icon = PhoneTool.CallMe.icon,
                         )
+                        PhoneToolPermissionRow(PhoneTool.CallMe, settings, onPermission)
                         if (callNeeds != null) {
                             Divider()
                             ActionRow("Allow on this phone", Lucide.ShieldCheck, onAllowRings)

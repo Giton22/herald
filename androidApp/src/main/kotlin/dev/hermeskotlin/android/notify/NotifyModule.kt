@@ -50,7 +50,7 @@ val notifyModule = module {
     single { InboxApi(get(), get()) }
     single { PushListener(get(), get(), get(), get(), get(), get(), get(), get(), get(), get()) }
     single { PushSetup(get(), get(), get(), get(), get(), get(), deviceName = { Build.MODEL ?: "Android phone" }) }
-    single { PhoneConfirmations(androidContext()) }
+    single { PhoneConfirmations(androidContext(), get()) }
     single { Geofences(androidContext(), get(), get()) } bind WatchedPlaces::class
     single { ChatTargets(get(), get(), get(), get()) }
     single { AndroidPhoneTools(androidContext(), get(), get(), get(), get(), get()) } bind PhoneToolRunner::class

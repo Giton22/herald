@@ -5,6 +5,7 @@ import android.content.Context
 import android.media.AudioManager
 import android.os.Build
 import android.service.notification.Condition
+import dev.hermeskotlin.core.phone.PhoneTool
 import dev.hermeskotlin.core.phone.PhoneToolException
 import kotlinx.coroutines.delay
 import kotlinx.serialization.json.JsonObject
@@ -13,7 +14,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.put
 import kotlinx.serialization.json.putJsonObject
 
-/** `phone_sound`: Do Not Disturb, the ringer and the volumes; a change asks first. */
+/** `phone_sound`: Do Not Disturb, the ringer and the volumes; confirmation follows the tool preference. */
 internal class SoundTool(private val context: Context, private val confirmations: PhoneConfirmations) {
 
     private val audio get() = context.getSystemService(AudioManager::class.java) ?: throw PhoneToolException("The phone has no audio settings.")
@@ -80,7 +81,7 @@ internal class SoundTool(private val context: Context, private val confirmations
             args.string("ringer")?.let { add("set the ringer to $it") }
             if (streamName != null) add("set the $streamName volume to $volume%")
         }.joinToString(", ").replaceFirstChar { it.uppercase() } + "."
-        confirmations.confirm(what) {
+        confirmations.confirm(PhoneTool.Sound, what) {
             try {
                 // The volume before the ringer: a ring volume above 0 puts the ringer back to normal.
                 if (stream != null && volume != null) {
@@ -106,7 +107,7 @@ internal class SoundTool(private val context: Context, private val confirmations
             }
         }
         if (kept.isNotEmpty()) {
-            throw PhoneToolException("The user allowed it, but Android kept ${kept.joinToString(" and ")} as it was: $now")
+            throw PhoneToolException("Android kept ${kept.joinToString(" and ")} as it was: $now")
         }
         return now
     }

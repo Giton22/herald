@@ -43,7 +43,7 @@ jobs:
         run: >
           ./gradlew --no-daemon --continue
           :shared:core:testAndroidHostTest :shared:designsystem:testAndroidHostTest :shared:ui:testAndroidHostTest :shared:wearlink:testAndroidHostTest
-          :androidApp:assembleDebug :androidApp:assembleDev :androidApp:lintDebug :wearApp:testDebugUnitTest :wearApp:assembleDebug :wearApp:lintDebug
+          :androidApp:testDebugUnitTest :androidApp:assembleDebug :androidApp:assembleDev :androidApp:lintDebug :wearApp:testDebugUnitTest :wearApp:assembleDebug :wearApp:lintDebug
 
       # WebRTC's native code looks up org.jni_zero classes by name. If R8 renames them, live voice aborts in
       # JNI_OnLoad, and only in minified builds.

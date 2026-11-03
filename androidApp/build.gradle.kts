@@ -66,6 +66,8 @@ android {
         }
     }
 
+    testOptions.unitTests.isIncludeAndroidResources = true
+
     buildFeatures {
         compose = true
         buildConfig = true
@@ -124,5 +126,9 @@ dependencies {
     // The watch companion's link to Herald's Wear OS app (wearApp).
     implementation(libs.play.services.wearable)
     implementation(libs.kotlinx.coroutines.play.services)
+    testImplementation(libs.junit4)
+    testImplementation(libs.kotlin.test)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
     debugImplementation(libs.compose.ui.tooling)
 }

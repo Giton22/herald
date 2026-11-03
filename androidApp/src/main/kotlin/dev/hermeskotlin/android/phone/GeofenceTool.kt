@@ -6,6 +6,7 @@ import android.location.LocationManager
 import dev.hermeskotlin.core.chat.ChatHost
 import dev.hermeskotlin.core.chat.SessionWatcher
 import dev.hermeskotlin.core.gateway.GatewayRepository
+import dev.hermeskotlin.core.phone.PhoneTool
 import dev.hermeskotlin.core.phone.PhoneToolException
 import dev.hermeskotlin.core.phone.WatchedPlace
 import dev.hermeskotlin.core.phone.forQuestion
@@ -48,8 +49,8 @@ class ChatTargets(
 }
 
 /**
- * `phone_geofence`: places the phone watches. Adding one asks first and shows exactly what will be sent and where,
- * and removing one asks too; listing doesn't. Watching needs precise location all the time,
+ * `phone_geofence`: places the phone watches. Adding one shows exactly what will be sent and where when confirmation is on.
+ * Watching needs precise location all the time,
  * since the place matters most while Kyllene is closed.
  */
 internal class GeofenceTool(
@@ -108,9 +109,9 @@ internal class GeofenceTool(
     private suspend fun remove(args: JsonObject, session: String): JsonObject {
         val id = args.string("id") ?: throw PhoneToolException("id is needed: take it from action=list.")
         val place = visible(session).firstOrNull { it.id == id } ?: throw PhoneToolException("No watched place has that id.")
-        // The user allowed the place: only the user takes it back.
+        // The place was added on this phone: only the user takes it back.
         val event = if (place.arriving) "arrive at" else "leave"
-        confirmations.confirm("Stop watching ${forQuestion(place.name)}? Nothing is sent any more when you $event it.", TITLE_REMOVE) {
+        confirmations.confirm(PhoneTool.Geofences, "Stop watching ${forQuestion(place.name)}? Nothing is sent any more when you $event it.", TITLE_REMOVE) {
             places.remove(id)
         }
         return buildJsonObject {
@@ -187,6 +188,7 @@ internal class GeofenceTool(
         val chat = target.title?.takeIf { it.isNotBlank() }?.let { "\"${forQuestion(it)}\"" } ?: "this chat"
         val event = if (place.arriving) "When you arrive at" else "When you leave"
         confirmations.confirm(
+            PhoneTool.Geofences,
             "$event ${forQuestion(name)} ($where, $radius m), Kyllene sends this to $chat as you: ${forQuestion(place.sent)}",
             TITLE,
         ) {
@@ -200,7 +202,7 @@ internal class GeofenceTool(
             put("radius_m", radius)
             put(
                 "note",
-                "The user allowed it. The message is sent to this chat as the user when it fires, marked as coming from the " +
+                "The message is sent to this chat as the user when it fires, marked as coming from the " +
                     "place. Android checks the place every few minutes, so it can fire a little late.",
             )
         }

@@ -9,6 +9,7 @@ import android.database.Cursor
 import android.net.Uri
 import android.provider.CalendarContract
 import androidx.core.content.ContextCompat
+import dev.hermeskotlin.core.phone.PhoneTool
 import dev.hermeskotlin.core.phone.PhoneToolException
 import dev.hermeskotlin.core.phone.forQuestion
 import dev.hermeskotlin.core.phone.hidden
@@ -29,7 +30,7 @@ import java.util.Locale
 
 /**
  * `phone_calendar`: the phone's own calendars (Android's calendar provider, whichever accounts sync to it). Listing
- * reads; adding and moving ask first, showing what changes. Only single events are moved: a change to one of a
+ * reads; adding and moving describe what changes when confirmation is on. Only single events are moved: a change to one of a
  * repeating series would need the user's say on which ones, and that's for the calendar app.
  */
 internal class CalendarTool(private val context: Context, private val confirmations: PhoneConfirmations) {
@@ -153,7 +154,7 @@ internal class CalendarTool(private val context: Context, private val confirmati
             notes?.let { append("\nNotes: ${forQuestion(it)}") }
         }
         var id = 0L
-        confirmations.confirm(what, TITLE_ADD) {
+        confirmations.confirm(PhoneTool.Calendar, what, TITLE_ADD) {
             val uri = context.contentResolver.insert(CalendarContract.Events.CONTENT_URI, values)
                 ?: throw PhoneToolException("The calendar didn't take the event.")
             id = ContentUris.parseId(uri)
@@ -207,7 +208,7 @@ internal class CalendarTool(private val context: Context, private val confirmati
             if (guests > 0) append(" ${if (guests == 1) "1 guest" else "$guests guests"} may be told.")
             append("\nTitle: ${forQuestion(event.title)}")
         }
-        confirmations.confirm(what, TITLE_MOVE) {
+        confirmations.confirm(PhoneTool.Calendar, what, TITLE_MOVE) {
             if (context.contentResolver.update(uri, values, null, null) != 1) throw PhoneToolException("The calendar didn't take the change.")
         }
         return buildJsonObject {
