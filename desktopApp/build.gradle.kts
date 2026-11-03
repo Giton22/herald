@@ -57,9 +57,11 @@ compose.desktop {
 
         // The installers (packageRelease…) leave out the library code the app never reaches. Names are kept:
         // renaming would save little more, and code that looks classes up by name (Warmup, Compose's text menu)
-        // would need a rule for each.
+        // would need a rule for each. No optimisation either: it took over half of a Linux CI run (13 of 25 min)
+        // and saved only about 3.4 MB on top of the shrinking.
         buildTypes.release.proguard {
             obfuscate = false
+            optimize = false
             configurationFiles.from(project.file("proguard-rules.pro"))
         }
 
