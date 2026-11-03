@@ -110,6 +110,8 @@ private keys, pinned gateway and identities awaiting unregistration share the
 encrypted settings store; an unavailable or corrupt identity is preserved and
 reported, never silently replaced. It is not available through plaintext desktop
 stores.
+After an uncertain save, identity reads also stop until the encrypted store is
+reopened, so an earlier unbound or retired identity cannot be registered again.
 
 One identity belongs to one gateway. Retirement clears its keys, topics and pin
 together, retaining the old device ID only for that gateway's later unregistration.

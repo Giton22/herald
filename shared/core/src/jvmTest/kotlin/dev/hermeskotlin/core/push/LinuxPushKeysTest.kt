@@ -1,11 +1,16 @@
 package dev.hermeskotlin.core.push
 
+import dev.hermeskotlin.core.storage.AtomicSettingsFile
 import dev.hermeskotlin.core.storage.InMemoryKeyValueStore
 import dev.hermeskotlin.core.storage.KeyValueStore
 import dev.hermeskotlin.core.storage.LinuxKeyValueStore
 import dev.hermeskotlin.core.storage.PortalSecret
 import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.StandardCopyOption.ATOMIC_MOVE
+import java.nio.file.StandardCopyOption.REPLACE_EXISTING
+import java.nio.file.attribute.PosixFilePermissions
+import kotlinx.coroutines.runBlocking
 import org.junit.Assume.assumeTrue
 import java.util.UUID
 import java.util.concurrent.Executors
@@ -119,6 +124,57 @@ class LinuxPushKeysTest {
         val fresh = reopened.registration("Fixture")
         assertNotEquals(old.deviceId, fresh.deviceId)
         assertEquals(fresh, keys.registration("Fixture"))
+    }
+
+    @Test fun uncertainPinCannotExposeAnUnboundIdentity() = uncertainIdentityRead(retire = false)
+
+    @Test fun uncertainRetirementCannotExposeARevokedIdentity() = uncertainIdentityRead(retire = true)
+
+    private fun uncertainIdentityRead(retire: Boolean) = runBlocking {
+        assumeTrue("Secure identity commit integration requires Linux.", System.getProperty("os.name").startsWith("Linux"))
+        val dir = Files.createTempDirectory("push-uncertain-test").toFile()
+        try {
+            val permissionProbe = dir.resolve("permission-probe").apply { writeText("fixture") }
+            permissionProbe.setReadable(false, false)
+            val canDenyRead = !Files.isReadable(permissionProbe.toPath())
+            permissionProbe.setReadable(true, true)
+            assumeTrue("This filesystem/user bypasses read permissions", canDenyRead)
+            val file = dir.resolve("settings.secure")
+            var failAfterMove = false
+            val disk = AtomicSettingsFile(file) { from, to ->
+                Files.move(from, to, ATOMIC_MOVE, REPLACE_EXISTING)
+                if (failAfterMove) {
+                    Files.setPosixFilePermissions(to, PosixFilePermissions.fromString("---------"))
+                    throw IOException("synthetic inaccessible acknowledgement")
+                }
+            }
+            fun reopen() = LinuxKeyValueStore(file, "io.example.PushUncertain") { PortalSecret(ByteArray(32) { 7 }, null) }
+            val store = LinuxKeyValueStore(file, "io.example.PushUncertain", disk = disk) { PortalSecret(ByteArray(32) { 7 }, null) }
+            store.put("fixture.preference", "keep")
+            val keys = assertNotNull(linuxPushKeys(store))
+            val original = keys.registration("Fixture")
+            if (retire) keys.pin("https://one.invalid", gateway())
+            failAfterMove = true
+            try {
+                assertFailsWith<IOException> {
+                    if (retire) keys.retire("https://one.invalid") else keys.pin("https://one.invalid", gateway())
+                }
+            } finally { Files.setPosixFilePermissions(file.toPath(), PosixFilePermissions.fromString("rw-------")) }
+            assertEquals("keep", store.get("fixture.preference"))
+            assertFailsWith<IOException> { keys.registration("Fixture") }
+            assertFailsWith<IOException> { keys.pinnedGatewayUrl() }
+            assertFailsWith<IOException> { keys.pinned("https://one.invalid") }
+            assertFailsWith<IOException> { keys.retired("https://one.invalid") }
+            val reopened = assertNotNull(linuxPushKeys(reopen()))
+            if (retire) {
+                assertNull(reopened.pinnedGatewayUrl())
+                assertEquals(setOf(original.deviceId), reopened.retired("https://one.invalid"))
+                assertNotEquals(original.deviceId, reopened.registration("Fixture").deviceId)
+            } else {
+                assertEquals("https://one.invalid", reopened.pinnedGatewayUrl())
+                assertEquals(original.deviceId, reopened.registration("Fixture").deviceId)
+            }
+        } finally { dir.deleteRecursively() }
     }
 
     @Test

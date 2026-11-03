@@ -73,7 +73,9 @@ internal class LinuxPushKeys(private val store: KeyValueStore) : PushKeys {
 
     // PushKeys is synchronous. Startup unlocks the store first; disk commits run on IO before callers publish success.
     private fun read(): State {
-        val text = runBlocking(Dispatchers.IO) { store.get(KEY) } ?: return State(1, null, null, null, emptyMap())
+        val text = runBlocking(Dispatchers.IO) {
+            if (store is LinuxKeyValueStore) store.getChecked(KEY) else store.get(KEY)
+        } ?: return State(1, null, null, null, emptyMap())
         return try {
             stateJson.decodeFromString(State.serializer(), text).also { state ->
                 check(state.version == 1)
