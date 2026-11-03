@@ -314,8 +314,8 @@ fun SessionsSidebar(
     visible: Boolean,
     /** Opens a chat, with how far it had been read when it has new messages since (null otherwise). */
     onOpenSession: (session: SessionSummary, readUpTo: Double?) -> Unit,
-    /** A new chat; [cwd] is the folder of the project the list shows, when one is picked. */
-    onNewChat: (cwd: String?) -> Unit,
+    /** A new chat, in the project the list shows when one is picked (Home among them); null when none is. */
+    onNewChat: (project: Project?) -> Unit,
     onDeleted: (SessionSummary) -> Unit,
     onSessionExpired: () -> Unit,
     onSignOut: () -> Unit,
@@ -746,7 +746,7 @@ fun SessionsSidebar(
                 // keeps the account. A phone keeps the pill under the thumb.
                 if (isDesktop) {
                     NavTile(
-                        NavLink(Lucide.SquarePen, stringResource(Res.string.sessions_new_chat), keys = "Ctrl+N") { onNewChat(state.project?.path) },
+                        NavLink(Lucide.SquarePen, stringResource(Res.string.sessions_new_chat), keys = "Ctrl+N") { onNewChat(state.project) },
                         // In line with the pages listed under it, which sit in the list's own 8dp margin.
                         Modifier.fillMaxWidth().padding(horizontal = 14.dp),
                     )
@@ -990,7 +990,7 @@ fun SessionsSidebar(
             onDismissMessage = viewModel::dismissMessage,
             onNewChat = {
                 if (searchOpen) closeSearch()
-                onNewChat(state.project?.path.takeIf { state.filter == SessionListFilter.Recent })
+                onNewChat(state.project.takeIf { state.filter == SessionListFilter.Recent })
             },
             onAccount = {
                 accountAnchor = accountRow[0]
@@ -2844,7 +2844,7 @@ private fun Project.hasOptions(canMake: Boolean): Boolean = !isNoProject && (isU
  * Tallest the projects menu gets before it scrolls, so many projects are a menu, not a wall: the 4dp top padding
  * and 8½ rows of 48dp, so the last row shows cut in half and the menu reads as one that goes on.
  */
-private val PROJECT_MENU_MAX_HEIGHT = 412.dp
+internal val PROJECT_MENU_MAX_HEIGHT = 412.dp
 
 /**
  * The gateway's projects behind one button, as Desktop's sidebar groups chats: the button names the picked
@@ -2955,7 +2955,7 @@ private fun RowScope.ProjectMenuButton(projects: List<Project>, selected: Projec
 }
 
 /** A project's icon in the projects menu and on its button: Home a house, all projects a stack, the rest a folder. */
-private fun projectIcon(project: Project?): ImageVector = when {
+internal fun projectIcon(project: Project?): ImageVector = when {
     project == null -> Lucide.Folders
     project.isNoProject -> Lucide.House
     else -> Lucide.Folder
