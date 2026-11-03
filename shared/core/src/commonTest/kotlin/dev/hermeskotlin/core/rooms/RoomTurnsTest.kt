@@ -75,16 +75,8 @@ class RoomTurnsTest {
     }
 
     @Test
-    fun theStatusLineNamesWhoIsReplyingAndWhoIsNext() {
-        assertEquals("Main is replying · then Side", waitingLine(listOf(main, side)))
-        assertEquals("Side is replying…", waitingLine(listOf(side)))
-        assertNull(waitingLine(emptyList()))
-    }
-
-    @Test
     fun aPassShowsAsAQuietLine() {
-        val line = roomLine(answer(5, "turn.settled", 1, "side", passed = true), members) as RoomLine.System
-        assertEquals("Side had nothing to add.", line.text)
+        assertEquals(RoomLine.System(5, RoomNote.Passed("Side")), roomLine(answer(5, "turn.settled", 1, "side", passed = true), members))
         assertNull(roomLine(answer(6, "turn.settled", 1, "side", passed = false), members))
     }
 }

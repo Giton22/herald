@@ -6,6 +6,7 @@ import dev.hermeskotlin.core.inbox.InboxPluginTooOld
 import dev.hermeskotlin.core.inbox.InboxGroups
 import dev.hermeskotlin.core.inbox.InboxLayout
 import dev.hermeskotlin.core.inbox.InboxRun
+import dev.hermeskotlin.ui.resources.*
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -169,12 +170,15 @@ class InboxFilterTest {
 
     @Test
     fun aSaveErrorSaysWhatWentWrong() {
-        assertTrue(saveErrorText(InboxPluginTooOld(InboxApi.ALL_JOBS_PLUGIN_VERSION)).contains(InboxApi.ALL_JOBS_PLUGIN_VERSION))
-        assertTrue(saveErrorText(InboxPluginTooOld(InboxApi.MIN_PLUGIN_VERSION)).contains(InboxApi.TOO_OLD))
+        val allJobs = saveErrorText(InboxPluginTooOld(InboxApi.ALL_JOBS_PLUGIN_VERSION))
+        assertEquals(Res.string.inbox_save_needs_all_jobs_plugin, allJobs.entry)
+        assertTrue(allJobs.mentions(InboxApi.ALL_JOBS_PLUGIN_VERSION))
+        assertEquals(Res.string.inbox_save_plugin_too_old, saveErrorText(InboxPluginTooOld(InboxApi.MIN_PLUGIN_VERSION)).entry)
         // Anything else is said as it is, not as an old plugin.
         val offline = saveErrorText(IllegalStateException("Not connected to the gateway."))
-        assertTrue(offline.contains("Not connected"))
-        assertFalse(offline.contains(InboxApi.ALL_JOBS_PLUGIN_VERSION))
-        assertEquals("Couldn't save that.", saveErrorText(IllegalStateException()))
+        assertEquals(Res.string.inbox_save_failed_because, offline.entry)
+        assertTrue(offline.mentions("Not connected"))
+        assertFalse(offline.mentions(InboxApi.ALL_JOBS_PLUGIN_VERSION))
+        assertEquals(words(Res.string.inbox_save_failed), saveErrorText(IllegalStateException()))
     }
 }

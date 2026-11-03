@@ -23,16 +23,6 @@ fun waitingFor(events: List<RoomEvent>, members: List<RoomMember>): List<RoomMem
         .sortedBy { it.memberId in putOff }
 }
 
-/** What the transcript's status line says while the room works, from [waitingFor]: who's replying, and who's next. */
-fun waitingLine(waiting: List<RoomMember>): String? {
-    val now = waiting.firstOrNull() ?: return null
-    val next = waiting.drop(1)
-    return when {
-        next.isEmpty() -> "${now.label} is replying…"
-        else -> "${now.label} is replying · then ${next.joinToString(", ") { it.label }}"
-    }
-}
-
 /** A member's first-round message, or how its turn ended. */
 private val ANSWERS = setOf("message.member", "turn.settled", "turn.failed", "turn.cancelled")
 
