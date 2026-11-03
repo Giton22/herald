@@ -14,8 +14,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** Desktop's Insights periods. */
-enum class InsightsPeriod(val days: Int, val label: String) { Week(7, "7 days"), Month(30, "30 days"), Quarter(90, "90 days") }
+/** Desktop's Insights periods, named on screen by how many [days] they cover. */
+enum class InsightsPeriod(val days: Int) { Week(7), Month(30), Quarter(90) }
 
 data class InsightsUiState(
     val period: InsightsPeriod = InsightsPeriod.Month,

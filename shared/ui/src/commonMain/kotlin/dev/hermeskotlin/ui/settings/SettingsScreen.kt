@@ -116,6 +116,10 @@ import com.composables.icons.lucide.Globe
 import com.composables.icons.lucide.Image
 import com.composables.icons.lucide.Download
 import com.composables.icons.lucide.LayoutGrid
+import com.composables.icons.lucide.Languages
+import androidx.compose.runtime.saveable.rememberSaveable
+import dev.hermeskotlin.ui.LanguagePageReturn
+import dev.hermeskotlin.ui.rememberLanguageChoice
 import com.composables.icons.lucide.Lightbulb
 import com.composables.icons.lucide.Lock
 import com.composables.icons.lucide.LogOut
@@ -256,11 +260,14 @@ fun SettingsScreen(
     var callTargetOpen by remember { mutableStateOf(false) }
     var appIconOpen by remember { mutableStateOf(false) }
     var startInstructionOpen by remember { mutableStateOf(false) }
+    // Saveable, and open again after a pick redraws the screens, so a new language shows on the page it was picked on.
+    var languageOpen by rememberSaveable { mutableStateOf(LanguagePageReturn.take()) }
     // Read again when the App icon page closes, so its row names the icon just applied.
     val appIcons = key(appIconOpen) { rememberAppIcons() }
+    val language = rememberLanguageChoice()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
-    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen, onBack = onBack)
+    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen && !languageOpen, onBack = onBack)
     // The desktop lists the sections beside the page; they say here where they start.
     val anchors = remember { mutableStateMapOf<String, Int>() }
     CompositionLocalProvider(LocalSectionAnchors provides anchors.takeIf { isDesktop }) { SettingsView(
@@ -288,6 +295,8 @@ fun SettingsScreen(
         onChooseCallTarget = { callTargetOpen = true },
         appIcon = appIcons.current,
         onOpenAppIcon = { appIconOpen = true },
+        language = appLanguage(language.picked),
+        onOpenLanguage = { languageOpen = true },
         onOpenStartInstruction = { startInstructionOpen = true },
         suggestions = suggestions,
         onInstallSuggestions = viewModel::installSuggestions,
@@ -306,6 +315,7 @@ fun SettingsScreen(
         )
     }
     if (appIconOpen) AppIconScreen(onBack = { appIconOpen = false })
+    if (languageOpen) LanguageScreen(onBack = { languageOpen = false })
     ConnectionCheckSheet(
         visible = checkOpen,
         results = check.results,
@@ -387,6 +397,9 @@ internal fun SettingsView(
     onChooseCallTarget: () -> Unit = {},
     appIcon: AppIcon = AppIcon.Blue,
     onOpenAppIcon: () -> Unit = {},
+    /** The language picked in Settings › Language; null for System default. */
+    language: AppLanguage? = null,
+    onOpenLanguage: () -> Unit = {},
     onOpenStartInstruction: () -> Unit = {},
     /** Where the Next Prompt plugin behind Suggested replies stands on the gateway. */
     suggestions: SuggestionsPlugin = SuggestionsPlugin.Checking,
@@ -452,6 +465,13 @@ internal fun SettingsView(
                     // The launcher's icon is the phone's; the desktop keeps Herald's own.
                     if (!isDesktop) NavRow(title = stringResource(Res.string.settings_app_icon), detail = stringResource(appIcon.labelRes), icon = Lucide.LayoutGrid, onClick = onOpenAppIcon)
                     if (!isDesktop) Divider()
+                    NavRow(
+                        title = stringResource(Res.string.settings_language),
+                        detail = language?.endonym ?: stringResource(Res.string.settings_language_system),
+                        icon = Lucide.Languages,
+                        onClick = onOpenLanguage,
+                    )
+                    Divider()
                     SwitchRow(
                         title = stringResource(Res.string.settings_pure_black),
                         detail = stringResource(Res.string.settings_pure_black_detail),

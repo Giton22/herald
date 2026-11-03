@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="desktop_open_link">Link öffnen</string>
+    <string name="desktop_copy_link">Link kopieren</string>
+
+    <string name="desktop_attach_photos">Fotos anhängen</string>
+    <string name="desktop_attach_files">Dateien anhängen</string>
+    <string name="desktop_file_dialog_failed">Der Dateidialog konnte nicht geöffnet werden.</string>
+    <string name="desktop_attach_read_failed">Eine Datei konnte nicht gelesen werden.</string>
+    <string name="desktop_attach_no_camera">Die Desktop-App kann noch keine Kamera nutzen.</string>
+    <string name="desktop_attach_photo_too_large">%1$s ist größer als 50 MB.</string>
+    <string name="desktop_attach_file_too_large">%1$s ist größer als %2$d MB.</string>
+    <string name="desktop_attach_over_budget">Das sind mehr als 50 MB Anhänge auf einmal.</string>
+    <string name="desktop_attach_not_an_image">%1$s konnte nicht als Bild gelesen werden.</string>
+
+    <string name="desktop_save_title">Speichern</string>
+    <string name="desktop_save_dialog_failed">Der Speichern-Dialog konnte nicht geöffnet werden.</string>
+    <string name="desktop_save_cancelled">Nicht gespeichert.</string>
+    <string name="desktop_saved_to">Gespeichert unter %1$s</string>
+    <string name="desktop_save_failed">Speichern fehlgeschlagen: %1$s</string>
+
+    <string name="desktop_pdf_unsupported">PDFs öffnen sich in der Desktop-App noch nicht. Du kannst die Datei speichern.</string>
+    <string name="desktop_widgets_unsupported">Widgets werden in diesem Build der Desktop-App nicht angezeigt.</string>
+    <string name="desktop_phone_tools_need_phone">Telefon-Tools funktionieren mit Kyllene auf einem Android-Telefon.</string>
+
+    <string name="desktop_wallpaper_title">Chat-Hintergrund</string>
+    <string name="desktop_wallpaper_unreadable">Dieses Bild konnte nicht gelesen werden.</string>
+</resources>
