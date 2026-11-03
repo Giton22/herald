@@ -7,6 +7,9 @@ package dev.hermeskotlin.core.storage
 interface KeyValueStore {
     suspend fun get(key: String): String?
     suspend fun put(key: String, value: String)
+    /** True only after a platform-confirmed synchronous persistent write. This does not
+     * guarantee survival of power loss or hardware failure. Unsupported stores fail closed. */
+    suspend fun putConfirmed(key: String, value: String): Boolean = false
     suspend fun remove(key: String)
 }
 

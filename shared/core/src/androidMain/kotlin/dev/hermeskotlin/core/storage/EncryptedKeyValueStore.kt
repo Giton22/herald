@@ -1,6 +1,7 @@
 package dev.hermeskotlin.core.storage
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.security.keystore.KeyGenParameterSpec
 import android.security.keystore.KeyProperties
 import android.util.Base64
@@ -31,6 +32,10 @@ class EncryptedKeyValueStore(context: Context) : KeyValueStore {
 
     override suspend fun put(key: String, value: String) = withContext(Dispatchers.IO) {
         prefs.edit { putString(key, encrypt(value)) }
+    }
+
+    override suspend fun putConfirmed(key: String, value: String): Boolean = withContext(Dispatchers.IO) {
+        commitString(prefs, key, encrypt(value))
     }
 
     override suspend fun remove(key: String) = withContext(Dispatchers.IO) {
@@ -75,3 +80,6 @@ class EncryptedKeyValueStore(context: Context) : KeyValueStore {
         const val TAG_BITS = 128
     }
 }
+
+internal fun commitString(prefs: SharedPreferences, key: String, value: String): Boolean =
+    prefs.edit().putString(key, value).commit()

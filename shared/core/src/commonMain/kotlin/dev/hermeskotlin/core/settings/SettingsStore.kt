@@ -3,9 +3,12 @@ package dev.hermeskotlin.core.settings
 import dev.hermeskotlin.core.network.HermesJson
 import dev.hermeskotlin.core.storage.KeyValueStore
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.InternalCoroutinesApi
+import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.updateAndGet
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -153,6 +156,8 @@ data class AppSettings(
     val checkForUpdates: Boolean = true,
     /** Ask for a fingerprint, face or the screen lock when Herald opens, and keep it out of Recents. */
     val appLock: Boolean = false,
+    /** Android clipboard access is opt-in on this device. */
+    val screenClipboardAccess: Boolean = false,
     /** Models starred in the model picker (`provider/id`, see `ModelOption.starKey`), first starred first. */
     val starredModels: List<String> = emptyList(),
     /** Models last picked in the model picker (`provider/id`), newest first. */
@@ -171,6 +176,8 @@ data class AppSettings(
     val zoom: Int = 100,
     /** Desktop: the sidebar's width in dp, as its edge was last dragged to. */
     val sidebarWidth: Int = 304,
+    /** Installs whose remote completion has not been established, keyed by gateway URL and expected ID. */
+    val uncertainGitInstalls: Set<String> = emptySet(),
 )
 
 /** The [AppSettings.startInstruction] a new chat starts with, trimmed; null when there is none or the settings aren't read yet. */
@@ -182,25 +189,66 @@ fun SettingsStore.startInstruction(): String? = settings.value?.startInstruction
  */
 class SettingsStore(private val store: KeyValueStore, private val scope: CoroutineScope) {
 
-    private val _settings = MutableStateFlow<AppSettings?>(null)
-    val settings: StateFlow<AppSettings?> = _settings.asStateFlow()
+    private data class State(
+        val value: AppSettings? = null,
+        val pending: List<(AppSettings) -> AppSettings> = emptyList(),
+    )
+
+    private val state = MutableStateFlow(State())
+    // Project the atomic loading/loaded state without delaying synchronous value reads.
+    val settings: StateFlow<AppSettings?> = object : StateFlow<AppSettings?> {
+        override val value: AppSettings? get() = state.value.value
+        override val replayCache: List<AppSettings?> get() = listOf(value)
+        @OptIn(InternalCoroutinesApi::class)
+        override suspend fun collect(collector: FlowCollector<AppSettings?>): Nothing {
+            state.map { it.value }.distinctUntilChanged().collect(collector)
+            error("StateFlow completed")
+        }
+    }
 
     private val writes = Mutex()
 
     init {
         scope.launch {
             val stored = store.get(KEY)?.let { runCatching { HermesJson.decodeFromString(AppSettings.serializer(), it) }.getOrNull() }
-            // An update made before the read finished wins over the stored copy.
-            _settings.compareAndSet(null, stored ?: AppSettings())
+            while (true) {
+                val current = state.value
+                val loaded = current.pending.fold(stored ?: AppSettings()) { value, transform -> transform(value) }
+                if (state.compareAndSet(current, State(value = loaded))) {
+                    if (current.pending.isNotEmpty()) save(loaded)
+                    break
+                }
+            }
+        }
+    }
+
+    /** Persist a safety marker before allowing a remote side effect. */
+    suspend fun updateDurably(transform: (AppSettings) -> AppSettings) {
+        writes.withLock {
+            val current = state.value.value ?: error("Settings not loaded")
+            val next = transform(current)
+            check(store.putConfirmed(KEY, HermesJson.encodeToString(AppSettings.serializer(), next))) {
+                "Settings persistence could not be confirmed"
+            }
+            // Merge updates made while the confirmed write suspended, then save them.
+            val merged = state.updateAndGet { it.copy(value = transform(it.value ?: error("Settings not loaded"))) }.value!!
+            if (merged != next) store.put(KEY, HermesJson.encodeToString(AppSettings.serializer(), merged))
         }
     }
 
     fun update(transform: (AppSettings) -> AppSettings) {
-        val next = _settings.updateAndGet { transform(it ?: AppSettings()) } ?: return
+        val next = state.updateAndGet { current ->
+            if (current.value == null) current.copy(pending = current.pending + transform)
+            else current.copy(value = transform(current.value))
+        }.value ?: return
+        save(next)
+    }
+
+    private fun save(next: AppSettings) {
         scope.launch {
             writes.withLock {
                 // Only the newest value matters if several writes queue up.
-                if (_settings.value == next) store.put(KEY, HermesJson.encodeToString(AppSettings.serializer(), next))
+                if (state.value.value == next) store.put(KEY, HermesJson.encodeToString(AppSettings.serializer(), next))
             }
         }
     }

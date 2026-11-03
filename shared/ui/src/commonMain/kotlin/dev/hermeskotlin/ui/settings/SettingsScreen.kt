@@ -257,6 +257,8 @@ fun SettingsScreen(
     // Read again when the App icon page closes, so its row names the icon just applied.
     val appIcons = key(appIconOpen) { rememberAppIcons() }
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
+    val gitInstall by viewModel.gitInstall.collectAsStateWithLifecycle()
+    val screenStatus by viewModel.screenStatus.collectAsStateWithLifecycle()
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
     PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen, onBack = onBack)
     // The desktop lists the sections beside the page; they say here where they start.
@@ -290,7 +292,11 @@ fun SettingsScreen(
         suggestions = suggestions,
         onInstallSuggestions = viewModel::installSuggestions,
         onCheckSuggestions = viewModel::checkSuggestions,
+        screenStatus = screenStatus,
+        onRefreshScreenStatus = viewModel::refreshScreenStatus,
+        onInstallScreen = viewModel::openScreenInstall,
     ) }
+    GitInstallSheet(gitInstall, viewModel::closeScreenInstall, viewModel::confirmScreenInstall, viewModel::resetScreenInstallWarning)
     if (callTargetOpen) CallTargetPicker(gateway, viewModel, botFaces, onDismiss = { callTargetOpen = false }) { target ->
         viewModel.update { it.copy(callTargets = it.callTargets + (gateway.url to target)) }
         callTargetOpen = false
@@ -390,6 +396,9 @@ internal fun SettingsView(
     suggestions: SuggestionsPlugin = SuggestionsPlugin.Checking,
     onInstallSuggestions: () -> Unit = {},
     onCheckSuggestions: () -> Unit = {},
+    screenStatus: ScreenPluginStatus = ScreenPluginStatus.Unknown,
+    onRefreshScreenStatus: () -> Unit = {},
+    onInstallScreen: () -> Unit = {},
 ) {
     Box(
         Modifier
@@ -797,6 +806,8 @@ internal fun SettingsView(
                     )
                 }
 
+                if (screenClipboardSettingAvailable) AgentScreenSection(settings, screenStatus, onUpdate, onRefreshScreenStatus, onInstallScreen)
+
                 Section("Account") {
                     ActionRow("Check connection", Lucide.Activity, onCheckConnection)
                     Divider()
@@ -976,10 +987,36 @@ internal val LocalSectionAnchors = staticCompositionLocalOf<SnapshotStateMap<Str
 /** Under this, a section's anchor is only its place in the list: it hasn't been laid out yet. */
 private const val UNPLACED_SECTION = Int.MIN_VALUE / 2
 
-/**
- * The desktop's settings search: what's typed in it, which each row checks its title and detail against. Empty, all
- * rows show.
- */
+/** The Android Agent Screen settings, also used by the synthetic preview. */
+@Composable
+internal fun AgentScreenSection(
+    settings: AppSettings,
+    screenStatus: ScreenPluginStatus,
+    onUpdate: ((AppSettings) -> AppSettings) -> Unit,
+    onRefreshScreenStatus: () -> Unit,
+    onInstallScreen: () -> Unit,
+) {
+    Section("Agent Screen") {
+        InfoRow("Plugin status", screenStatusText(screenStatus))
+        Divider()
+        ActionRow("Refresh plugin status", Lucide.RefreshCw, onClick = onRefreshScreenStatus)
+        Divider()
+        ActionRow("Set up Agent Screen", Lucide.Download, onClick = onInstallScreen)
+        Divider()
+        InfoRow("Setup", "Screen must be available to the gateway's launch profile. Listing does not verify that its routes are running. Configure a trusted loopback-only TigerVNC desktop and trusted connection on the gateway.")
+        Divider()
+        if (settings.screenClipboardAccess || screenStatus == ScreenPluginStatus.Enabled) SwitchRow(
+            title = "Android clipboard access",
+            detail = "Allow Screen's buttons to copy and paste text between the remote desktop and this Android device. This setting applies only on this device.",
+            checked = settings.screenClipboardAccess,
+            onCheckedChange = { on -> onUpdate { it.copy(screenClipboardAccess = on) } },
+            icon = Lucide.Smartphone,
+            enabled = canChangeScreenClipboard(settings.screenClipboardAccess, screenStatus),
+        )
+    }
+}
+
+/** The current desktop settings search; an empty query shows every row. */
 internal val LocalSettingsQuery = compositionLocalOf { "" }
 
 /** Whether each [Section] has anything showing for the search, so the page can say when nothing matched. */
@@ -1147,13 +1184,13 @@ private fun Field(title: String, detail: String? = null, control: @Composable ()
 
 /** A setting that's on or off: the whole row toggles. An [icon] sits on a small tile before the title. */
 @Composable
-internal fun SwitchRow(title: String, detail: String?, checked: Boolean, onCheckedChange: (Boolean) -> Unit, icon: ImageVector? = null) {
+internal fun SwitchRow(title: String, detail: String?, checked: Boolean, onCheckedChange: (Boolean) -> Unit, icon: ImageVector? = null, enabled: Boolean = true) {
     if (!settingShown(title, detail)) return
     Row(
         Modifier
             .fillMaxWidth()
             .handCursor()
-            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange)
+            .toggleable(value = checked, enabled = enabled, role = Role.Switch, onValueChange = onCheckedChange)
             .padding(horizontal = 14.dp, vertical = 13.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalAlignment = Alignment.CenterVertically,

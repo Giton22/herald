@@ -1055,20 +1055,30 @@ class ChatViewModel(
 
     /** `/skin [light|dark|black|system]`: this app's theme; bare, it steps to the next one. */
     private fun skin(chat: ChatSession, arg: String) {
-        val current = settings.settings.value ?: AppSettings()
-        val next = when (arg.lowercase()) {
-            "" -> when (current.theme) {
-                ThemeMode.System -> current.copy(theme = ThemeMode.Light)
-                ThemeMode.Light -> current.copy(theme = ThemeMode.Dark)
-                ThemeMode.Dark -> current.copy(theme = ThemeMode.System)
-            }
-            "light" -> current.copy(theme = ThemeMode.Light)
-            "dark" -> current.copy(theme = ThemeMode.Dark, pureBlack = false)
-            "black", "oled", "amoled" -> current.copy(theme = ThemeMode.Dark, pureBlack = true)
-            "system", "auto", "default" -> current.copy(theme = ThemeMode.System)
-            else -> return chat.showCommandOutput("/skin", "Themes here: light, dark, black or system.", failed = true)
+        val choice = arg.lowercase()
+        if (choice !in setOf("", "light", "dark", "black", "oled", "amoled", "system", "auto", "default")) {
+            return chat.showCommandOutput("/skin", "Themes here: light, dark, black or system.", failed = true)
         }
-        settings.update { next }
+        if (settings.settings.value == null) {
+            return chat.showCommandOutput("/skin", "Settings are still loading. Try /skin again shortly.", failed = true)
+        }
+        var applied: AppSettings? = null
+        settings.update { current ->
+            val next = when (choice) {
+                "" -> when (current.theme) {
+                    ThemeMode.System -> current.copy(theme = ThemeMode.Light)
+                    ThemeMode.Light -> current.copy(theme = ThemeMode.Dark)
+                    ThemeMode.Dark -> current.copy(theme = ThemeMode.System)
+                }
+                "light" -> current.copy(theme = ThemeMode.Light)
+                "dark" -> current.copy(theme = ThemeMode.Dark, pureBlack = false)
+                "black", "oled", "amoled" -> current.copy(theme = ThemeMode.Dark, pureBlack = true)
+                else -> current.copy(theme = ThemeMode.System)
+            }
+            applied = next
+            next
+        }
+        val next = checkNotNull(applied)
         val name = when (next.theme) {
             ThemeMode.System -> "matches the system"
             ThemeMode.Light -> "light"

@@ -6,6 +6,22 @@ plugins {
     alias(libs.plugins.room)
 }
 
+// A trusted app release supplies the exact reviewed upstream commit; local builds fail closed.
+val generateScreenPluginRelease = tasks.register("generateScreenPluginRelease") {
+    val revision = providers.gradleProperty("screenPluginRevision").orElse("")
+    inputs.property("revision", revision)
+    val output = layout.buildDirectory.dir("generated/screenPluginRelease")
+    outputs.dir(output)
+    doLast {
+        val sha = revision.get()
+        require(sha.isEmpty() || sha.matches(Regex("[0-9a-fA-F]{40}"))) { "screenPluginRevision must be a full 40-character commit SHA" }
+        val spec = if (sha.isEmpty()) "null" else "GitPluginSpec(\"herald-screen\", \"https://github.com/Giton22/kyllene.git#plugins/herald-screen\", \"$sha\")"
+        val file = output.get().file("dev/hermeskotlin/core/plugins/ScreenPluginRelease.kt").asFile
+        file.parentFile.mkdirs()
+        file.writeText("package dev.hermeskotlin.core.plugins\nobject ScreenPluginRelease { val spec: GitPluginSpec? = $spec }\n")
+    }
+}
+
 kotlin {
     android {
         namespace = "dev.hermeskotlin.core"
@@ -24,6 +40,7 @@ kotlin {
     jvm()
 
     sourceSets {
+        commonMain.get().kotlin.srcDir(generateScreenPluginRelease)
         // What Android and the desktop share: the JDK's crypto, text and time, jsoup and OkHttp.
         val jvmShared by creating {
             dependsOn(commonMain.get())
