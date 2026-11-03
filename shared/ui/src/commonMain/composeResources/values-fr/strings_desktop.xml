@@ -9,7 +9,7 @@
     <string name="desktop_attach_read_failed">Impossible de lire un fichier.</string>
     <string name="desktop_attach_no_camera">L’application de bureau ne peut pas encore utiliser d’appareil photo.</string>
     <string name="desktop_attach_photo_too_large">%1$s dépasse 50 Mo.</string>
-    <string name="desktop_attach_file_too_large">%1$s dépasse 25 Mo.</string>
+    <string name="desktop_attach_file_too_large">%1$s dépasse %2$d Mo.</string>
     <string name="desktop_attach_over_budget">Cela fait plus de 50 Mo de pièces jointes à la fois.</string>
     <string name="desktop_attach_not_an_image">Impossible de lire %1$s comme une image.</string>
 

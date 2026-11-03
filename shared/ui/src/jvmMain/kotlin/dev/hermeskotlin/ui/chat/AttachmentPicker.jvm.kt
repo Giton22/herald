@@ -13,6 +13,7 @@ import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.DragData
 import androidx.compose.ui.draganddrop.dragData
 import dev.hermeskotlin.core.chat.OutgoingAttachment
+import dev.hermeskotlin.core.chat.streamedSource
 import dev.hermeskotlin.ui.resources.*
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -143,11 +144,11 @@ private fun Image.png(): ByteArray {
 private fun newId() = "att-${Random.nextLong().toULong().toString(16)}"
 
 /** A file that can't go, and the words for why; [name] fills the sentence where it has a place for one. */
-private class PickRefused(val text: StringResource, val name: String? = null) : Exception()
+private class PickRefused(val text: StringResource, vararg val args: Any) : Exception()
 
 /** Why a pick failed, in the app's words where it's one of [PickRefused]; otherwise the system's own. */
 private suspend fun Throwable.pickMessage(): String = when {
-    this is PickRefused -> if (name != null) getString(text, name) else getString(text)
+    this is PickRefused -> getString(text, *args)
     else -> message ?: getString(Res.string.desktop_attach_read_failed)
 }
 
@@ -160,7 +161,13 @@ private fun readAttachment(file: File, budget: Long): OutgoingAttachment {
         if (size > MAX_PHOTO_BYTES) throw PickRefused(Res.string.desktop_attach_photo_too_large, name)
         return imageAttachment(name, file.readBytes(), budget)
     }
-    if (size > OutgoingAttachment.MAX_BYTES) throw PickRefused(Res.string.desktop_attach_file_too_large, name)
+    if (size > OutgoingAttachment.MAX_BYTES) {
+        throw PickRefused(Res.string.desktop_attach_file_too_large, name, OutgoingAttachment.MAX_BYTES / 1_000_000)
+    }
+    // Too large for one socket message: read as it goes up, never held here (the pick's budget is for what is).
+    if (size > OutgoingAttachment.MAX_INLINE_BYTES) {
+        return OutgoingAttachment(newId(), name, mime, ByteArray(0), source = streamedSource(size) { file.inputStream() })
+    }
     if (size > budget) throw PickRefused(Res.string.desktop_attach_over_budget)
     val bytes = file.readBytes()
     val thumbnail = if (mime.startsWith("image/")) decodeScaled(bytes, THUMBNAIL_EDGE)?.jpeg(THUMBNAIL_QUALITY) else null

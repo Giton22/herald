@@ -15,7 +15,7 @@
     <string name="desktop_attach_read_failed">Couldn’t read a file.</string>
     <string name="desktop_attach_no_camera">The desktop app can’t use a camera yet.</string>
     <string name="desktop_attach_photo_too_large">%1$s is larger than 50 MB.</string>
-    <string name="desktop_attach_file_too_large">%1$s is larger than 25 MB.</string>
+    <string name="desktop_attach_file_too_large">%1$s is larger than %2$d MB.</string>
     <string name="desktop_attach_over_budget">That’s more than 50 MB of attachments at once.</string>
     <string name="desktop_attach_not_an_image">Couldn’t read %1$s as an image.</string>
 

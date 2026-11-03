@@ -9,7 +9,7 @@
     <string name="desktop_attach_read_failed">Não foi possível ler um arquivo.</string>
     <string name="desktop_attach_no_camera">O app para desktop ainda não pode usar uma câmera.</string>
     <string name="desktop_attach_photo_too_large">%1$s tem mais de 50 MB.</string>
-    <string name="desktop_attach_file_too_large">%1$s tem mais de 25 MB.</string>
+    <string name="desktop_attach_file_too_large">%1$s tem mais de %2$d MB.</string>
     <string name="desktop_attach_over_budget">São mais de 50 MB de anexos de uma vez.</string>
     <string name="desktop_attach_not_an_image">Não foi possível ler %1$s como imagem.</string>
 

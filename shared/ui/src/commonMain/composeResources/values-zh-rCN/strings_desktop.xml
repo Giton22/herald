@@ -9,7 +9,7 @@
     <string name="desktop_attach_read_failed">无法读取文件。</string>
     <string name="desktop_attach_no_camera">桌面版暂时无法使用摄像头。</string>
     <string name="desktop_attach_photo_too_large">%1$s 超过 50 MB。</string>
-    <string name="desktop_attach_file_too_large">%1$s 超过 25 MB。</string>
+    <string name="desktop_attach_file_too_large">%1$s 超过 %2$d MB。</string>
     <string name="desktop_attach_over_budget">一次附加的内容超过了 50 MB。</string>
     <string name="desktop_attach_not_an_image">无法将 %1$s 读取为图片。</string>
 

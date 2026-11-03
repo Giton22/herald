@@ -15,7 +15,7 @@ import kotlin.test.assertTrue
 
 class StorageStartupTest {
     @Test fun everyFailurePromptFitsA360PixelDisplayInEveryLanguage() {
-        val folder = "/home/a-long-user-name/.var/app/io.github.Giton22.Kyllene.Devel/data/herald"
+        val folder = "/home/a-much-longer-user-name/.var/app/app.kyllene.Kyllene.Devel/data/herald"
         for (language in LANGUAGES) withLocale(language) {
             val words = runBlocking { StoragePromptWords.load() }
             for (reason in SecureStorageException.Reason.entries) {

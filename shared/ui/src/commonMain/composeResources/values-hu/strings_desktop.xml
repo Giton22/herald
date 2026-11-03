@@ -9,7 +9,7 @@
     <string name="desktop_attach_read_failed">Nem sikerült beolvasni egy fájlt.</string>
     <string name="desktop_attach_no_camera">Az asztali alkalmazás még nem tud kamerát használni.</string>
     <string name="desktop_attach_photo_too_large">%1$s nagyobb 50 MB-nál.</string>
-    <string name="desktop_attach_file_too_large">%1$s nagyobb 25 MB-nál.</string>
+    <string name="desktop_attach_file_too_large">%1$s nagyobb, mint %2$d MB.</string>
     <string name="desktop_attach_over_budget">Ez egyszerre több mint 50 MB melléklet.</string>
     <string name="desktop_attach_not_an_image">Nem sikerült képként beolvasni ezt: %1$s.</string>
 

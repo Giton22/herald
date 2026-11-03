@@ -360,7 +360,7 @@ class RoomsViewModel(
         val error = when {
             !open.attachmentsSupported -> "This gateway doesn't support room attachments. Update Hermes to use them."
             files.size > RoomAttachment.MAX_COUNT -> "Up to ${RoomAttachment.MAX_COUNT} attachments per room message."
-            picked.any { it.bytes.isEmpty() || it.bytes.size > RoomAttachment.MAX_BYTES } ->
+            picked.any { it.size == 0L || it.size > RoomAttachment.MAX_BYTES } ->
                 "Room files must be between 1 byte and ${RoomAttachment.MAX_BYTES / 1_000_000} MB."
             files.sumOf { size(it).toLong() } > RoomAttachment.MAX_TOTAL_BYTES ->
                 "Up to ${RoomAttachment.MAX_TOTAL_BYTES / 1_000_000} MB of room attachments per message."
