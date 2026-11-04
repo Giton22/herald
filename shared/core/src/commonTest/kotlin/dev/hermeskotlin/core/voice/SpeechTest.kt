@@ -54,6 +54,24 @@ class SpeechTest {
         assertEquals(text.trim(), chunks.joinToString(" "))
     }
 
+    @Test
+    fun laterPiecesGrowSoALongReplyTakesFewerRequests() {
+        val text = "Short opener here. " + "This sentence carries about fifty characters, yes. ".repeat(34)
+        val chunks = speechChunks(text)
+        val limits = listOf(160, 480, 1440, 2000)
+        chunks.forEachIndexed { i, chunk -> assertTrue(chunk.length <= limits[minOf(i, 3)], "piece $i is ${chunk.length}") }
+        assertEquals(3, chunks.size, "a ${text.length}-char reply")
+        assertEquals(text.trim(), chunks.joinToString(" "))
+    }
+
+    @Test
+    fun piecesNeverPassTheCap() {
+        val text = "Opener. " + "Every one of these sentences is the same length. ".repeat(200)
+        val chunks = speechChunks(text)
+        assertTrue(chunks.drop(3).isNotEmpty() && chunks.all { it.length <= 2000 })
+        assertEquals(text.trim(), chunks.joinToString(" "))
+    }
+
     /** Feeds [levels] as 20 ms frames; the time the recording would end, or null if it wouldn't. */
     private fun endsAt(levels: List<Float>, activity: VoiceActivity = VoiceActivity()): Long? {
         val detector = EndOfSpeech(activity)

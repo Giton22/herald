@@ -259,18 +259,22 @@ fun readAloudText(reply: String): String =
     speakableText(extractReplyMedia(reply).first).takeIf { text -> text.any { it.isLetterOrDigit() } }.orEmpty()
 
 /**
- * Cuts [text] into pieces of at most about [maxChars], at sentence ends where possible, so the first
- * piece can be spoken while the rest are still being synthesized. The first piece is kept short.
+ * Cuts [text] into pieces at sentence ends where possible, so the first piece can be spoken while the rest
+ * are still being synthesized. The first piece is kept short; each one after may be [growth] times the one
+ * before, up to [maxChars]. Every piece is one request to the gateway's voice, and a longer piece is made
+ * while the one before it plays, so growing pieces cost fewer requests without a longer wait (a 1,750-char
+ * reply is 3 pieces, not 5).
  */
-fun speechChunks(text: String, maxChars: Int = 400, firstChars: Int = 160): List<String> {
+fun speechChunks(text: String, maxChars: Int = 2000, firstChars: Int = 160, growth: Double = 3.0): List<String> {
     val sentences = Regex("""[^.!?]+(?:[.!?]+["')\]]*|$)\s*""").findAll(text).map { it.value.trim() }.filter { it.isNotEmpty() }.toList()
     val chunks = mutableListOf<String>()
     val current = StringBuilder()
+    var limit = minOf(firstChars, maxChars)
     for (sentence in sentences) {
-        val limit = if (chunks.isEmpty()) firstChars else maxChars
         if (current.isNotEmpty() && current.length + sentence.length + 1 > limit) {
             chunks += current.toString()
             current.clear()
+            limit = minOf(maxChars, (limit * growth).toInt())
         }
         if (current.isNotEmpty()) current.append(' ')
         current.append(sentence)
