@@ -100,6 +100,15 @@ class ChatSession(
     private val sendMutex = Mutex()
 
     /**
+     * The socket [ChatState.runtimeSessionId] was attached on. Runtime ids belong to the
+     * socket: after a reconnect or a relogin the cached id must not go out on the new
+     * socket (the gateway has no subscription for it there and refuses the send as a
+     * stranger's). Written wherever the id is (re-)attached, read by [ensureAttached].
+     */
+    @kotlin.concurrent.Volatile
+    private var attachedClient: JsonRpcClient? = null
+
+    /**
      * Prompts this client submitted whose turn hasn't started yet. A `message.start` beyond them is a
      * turn another client (Desktop, CLI, a messaging platform) started: the gateway sends no event with
      * that prompt, so the transcript is refetched to show it.
@@ -800,7 +809,7 @@ class ChatSession(
      */
     suspend fun accountLimits(): List<String> {
         val client = connectedClient() ?: return emptyList()
-        val runtimeId = _state.value.runtimeSessionId ?: return emptyList()
+        val runtimeId = liveRuntimeId(client) ?: return emptyList()
         return try {
             val result = client.request("session.usage", buildJsonObject { put("session_id", runtimeId) }) as? JsonObject
             listOf("account_lines", "credits_lines").flatMap { key ->
@@ -816,7 +825,7 @@ class ChatSession(
     /** What fills the context window now (`session.context_breakdown`); null before the first prompt or offline. */
     suspend fun contextBreakdown(): ContextBreakdown? {
         val client = connectedClient() ?: return null
-        val runtimeId = _state.value.runtimeSessionId ?: return null
+        val runtimeId = liveRuntimeId(client) ?: return null
         return try {
             ContextBreakdown.parse(
                 client.request("session.context_breakdown", buildJsonObject { put("session_id", runtimeId) }) as? JsonObject,
@@ -831,7 +840,7 @@ class ChatSession(
     /** The background processes this chat's agent started (`process.list`); null when offline or before the first prompt. */
     suspend fun processes(): List<BackgroundProcess>? {
         val client = connectedClient() ?: return null
-        val runtimeId = _state.value.runtimeSessionId ?: return null
+        val runtimeId = liveRuntimeId(client) ?: return null
         return try {
             BackgroundProcess.parseList(client.request("process.list", buildJsonObject { put("session_id", runtimeId) }) as? JsonObject)
         } catch (e: CancellationException) {
@@ -844,7 +853,7 @@ class ChatSession(
     /** Stops one background process (`process.kill`), and says how that went. */
     suspend fun killProcess(processId: String): String {
         val client = connectedClient() ?: return NOT_CONNECTED
-        val runtimeId = _state.value.runtimeSessionId ?: return NOT_CONNECTED
+        val runtimeId = liveRuntimeId(client) ?: return NOT_CONNECTED
         return try {
             killOutcome(
                 client.request(
@@ -922,7 +931,7 @@ class ChatSession(
 
     /** The runtime id the `rollback.*` calls take: attaching a stored chat, but never creating one for an empty chat. */
     private suspend fun liveIdForCheckpoints(client: JsonRpcClient): String? =
-        _state.value.runtimeSessionId ?: if (rowExists) ensureAttached(client) else null
+        liveRuntimeId(client) ?: if (rowExists) ensureAttached(client) else null
 
     /**
      * The link on which `session.control.read` came back "no such method": that gateway predates it, so
@@ -938,7 +947,7 @@ class ChatSession(
     suspend fun refreshControl() {
         val client = connectedClient() ?: return
         if (client === controlUnsupportedOn) return
-        val runtimeId = _state.value.runtimeSessionId ?: return
+        val runtimeId = liveRuntimeId(client) ?: return
         // An update that lands while the read is out is newer than the read's answer, so the answer yields to it.
         val before = _state.value.control
         val result = try {
@@ -965,7 +974,7 @@ class ChatSession(
      */
     suspend fun refreshReasoning() {
         val client = connectedClient() ?: return
-        val runtimeId = _state.value.runtimeSessionId ?: return
+        val runtimeId = liveRuntimeId(client) ?: return
         // A pick or session.info that lands while the read is out is newer than the read's answer.
         val before = _state.value.reasoningRevision
         val result = try {
@@ -1454,8 +1463,8 @@ class ChatSession(
         val trimmed = text.trim()
         if (trimmed.isEmpty()) return SendOutcome.NotSent
         val client = connectedClient()
-        val runtimeId = _state.value.runtimeSessionId
-        // Offline, submit says so and hands the text back.
+        val runtimeId = client?.let(::liveRuntimeId)
+        // Offline or mid-reconnect, submit says so or attaches again, and queues the text.
         if (!_state.value.running || client == null || runtimeId == null) return submit(trimmed, queue = true)
         val key = "local-${_state.value.keySeq}"
         _state.update {
@@ -1521,8 +1530,11 @@ class ChatSession(
     /** [interrupt], null when the turn couldn't be stopped (the reason is in [ChatState.error]). */
     private suspend fun interruptTurn(): List<String>? {
         val client = connectedClient() ?: return null
-        val runtimeId = _state.value.runtimeSessionId ?: return null
+        // Tapped mid-reconnect, an id from the old socket would be turned down: a stored chat's stop waits for the
+        // re-attach instead. A new chat has nothing to stop until it's created.
+        if (liveRuntimeId(client) == null && !rowExists) return null
         try {
+            val runtimeId = ensureAttached(client)
             client.request("session.interrupt", buildJsonObject { put("session_id", runtimeId) })
         } catch (e: CancellationException) {
             throw e
@@ -1545,7 +1557,7 @@ class ChatSession(
     /** Stops one running subagent (`subagent.interrupt`); its `subagent.complete` follows. */
     suspend fun stopSubagent(subagentId: String) {
         val client = connectedClient() ?: return
-        val runtimeId = _state.value.runtimeSessionId ?: return
+        val runtimeId = liveRuntimeId(client) ?: return
         try {
             val result = client.request(
                 "subagent.interrupt",
@@ -1725,7 +1737,8 @@ class ChatSession(
             if (!attachedBefore && !_state.value.historyRead && !historyMutex.isLocked) loadHistory()
             // A chat created on this link was live too, though it never resumed: it catches up the same way.
             val reconnected = attachedBefore || streamMutex.withLock { seqRuntime != null }
-            if (runCatchingAttach(connectionState.client, reconnected = reconnected)) attachedBefore = true
+            // A send on this link may have attached first; that runtime is kept, not resumed a second time.
+            if (runCatchingAttach(connectionState.client, reconnected = reconnected, reuse = true)) attachedBefore = true
         }
     }
 
@@ -2069,8 +2082,8 @@ class ChatSession(
         )
     }
 
-    private suspend fun runCatchingAttach(client: JsonRpcClient, reconnected: Boolean = false): Boolean = try {
-        val runtimeId = attach(client, reconnected)
+    private suspend fun runCatchingAttach(client: JsonRpcClient, reconnected: Boolean = false, reuse: Boolean = false): Boolean = try {
+        val runtimeId = attach(client, reconnected, reuse)
         scope.launch { refreshSubagents(client, runtimeId) }
         true
     } catch (e: CancellationException) {
@@ -2088,16 +2101,37 @@ class ChatSession(
     }
 
     private suspend fun ensureAttached(client: JsonRpcClient): String {
-        _state.value.runtimeSessionId?.let { return it }
-        return if (rowExists) attach(client) else create(client)
+        // The cached id belongs to the socket it was attached on; a new socket re-attaches
+        // (under the attach mutex, so a send racing a reconnect waits for the re-attach)
+        // instead of firing the stale id where the gateway has no subscription for it.
+        liveRuntimeId(client)?.let { return it }
+        // Attached before, on another socket or before a failed attach on this one, events may have been missed since.
+        val stored = rowExists
+        return try {
+            if (stored) attach(client, reconnected = attachedClient != null, reuse = true) else create(client)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Not left "Attaching": a stored chat shows the failure with its retry; a new one is made again on the next send.
+            _state.update {
+                if (it.attachment !is Attachment.Attaching) it
+                else it.copy(attachment = if (stored) Attachment.Failed(e.message ?: "Couldn't open the session.") else Attachment.Detached)
+            }
+            throw e
+        }
     }
+
+    /** The runtime id, when it was attached on [client]; one from an earlier socket is null, since it's no good on this one. */
+    private fun liveRuntimeId(client: JsonRpcClient): String? = _state.value.runtimeSessionId?.takeIf { attachedClient === client }
 
     /**
      * `session.resume` the stored id; the reply's `session_id` is the runtime id events carry. After a drop
      * ([reconnected]) the same runtime picks up from the last event applied (see [catchUp]); a new one, or one
-     * with nothing to pick up from, reloads the transcript instead.
+     * with nothing to pick up from, reloads the transcript instead. With [reuse], a runtime already attached on
+     * [client] by the time the lock is free (a send and the reconnect racing) is kept rather than resumed again.
      */
-    private suspend fun attach(client: JsonRpcClient, reconnected: Boolean = false): String = attachMutex.withLock {
+    private suspend fun attach(client: JsonRpcClient, reconnected: Boolean = false, reuse: Boolean = false): String = attachMutex.withLock {
+        if (reuse) liveRuntimeId(client)?.let { return@withLock it }
         val stored = _state.value.storedSessionId ?: error("No stored session to resume")
         _state.update { it.copy(attachment = Attachment.Attaching) }
         val result = client.request(
@@ -2144,6 +2178,8 @@ class ChatSession(
         }
         if (reconnected && (!resumable || (!_state.value.historyRead && !historyMutex.isLocked))) loadHistory()
         var replyKey: String? = null
+        // Named with the id it goes with, so no reader ever pairs this socket with the old id or the old socket with this one.
+        attachedClient = client
         _state.update { state ->
             state.copy(
                 attachment = Attachment.Attached(runtimeId),
@@ -2200,6 +2236,8 @@ class ChatSession(
      * with an instruction (a seeded chat's row is stored on create), so it's resumed from then on, not made again.
      */
     private suspend fun create(client: JsonRpcClient): String = attachMutex.withLock {
+        // Two sends racing on a new chat: the one that waited takes the session the first made.
+        liveRuntimeId(client)?.let { return@withLock it }
         _state.update { it.copy(attachment = Attachment.Attaching) }
         val picks = _state.value
         val instruction = startInstruction()
@@ -2230,6 +2268,7 @@ class ChatSession(
         // The gateway takes a folder that's gone without an error and runs the chat in its own folder instead.
         val ranIn = (result["info"] as? JsonObject).string("cwd")
         val movedFrom = cwd?.takeIf { ranIn != null && ranIn.trimEnd('/', '\\') != it.trimEnd('/', '\\') }
+        attachedClient = client
         _state.update {
             it.copy(
                 attachment = Attachment.Attached(runtimeId),
