@@ -84,6 +84,26 @@ class SpeechTest {
         assertEquals(text.trim(), chunks.joinToString(" "))
     }
 
+    /** A list with no full stops is one long "sentence": it's cut at its spaces, so speech still starts soon. */
+    @Test
+    fun aLongSentenceIsCutAtItsSpaces() {
+        val list = (1..400).joinToString("\n") { "- item number $it on the list" }
+        val chunks = speechChunks(list)
+        assertTrue(chunks.first().length <= 160, "first piece ${chunks.first().length}")
+        assertTrue(chunks.all { it.length <= 2000 })
+        chunks.zipWithNext { before, piece -> assertTrue(piece.length <= maxOf(160, before.length * 3), "${before.length} then ${piece.length}") }
+        assertEquals(list.split(Regex("""\s+""")).joinToString(" "), chunks.joinToString(" "))
+
+        // A short opener and then a long sentence: the long one doesn't make the second piece too long to be ready.
+        val opened = speechChunks("Hi. " + "word ".repeat(180).trim())
+        assertTrue(opened.first().startsWith("Hi. word") && opened.first().length <= 160, opened.map { it.length }.toString())
+        assertTrue(opened[1].length <= opened[0].length * 3, opened.map { it.length }.toString())
+
+        // Only a single word longer than the limit stays whole.
+        val word = "x".repeat(2500)
+        assertEquals(listOf("Read", word), speechChunks("Read $word", maxChars = 2000, firstChars = 4))
+    }
+
     /** Feeds [levels] as 20 ms frames; the time the recording would end, or null if it wouldn't. */
     private fun endsAt(levels: List<Float>, activity: VoiceActivity = VoiceActivity()): Long? {
         val detector = EndOfSpeech(activity)

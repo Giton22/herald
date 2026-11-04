@@ -264,21 +264,27 @@ fun readAloudText(reply: String): String =
  * of the piece actually made before it (never under [firstChars]), up to [maxChars]. Every piece is one request
  * to the gateway's voice, and a piece is made while the one before it plays, so it has to be ready before that
  * one ends: growing from the real length, not the limit, keeps a short first sentence from being followed by a
- * piece too long to make in time. A 1,750-char reply is 4 pieces, not 5.
+ * piece too long to make in time. A 1,750-char reply of ordinary sentences is 4 pieces (6 at a flat 400).
+ *
+ * A sentence longer than the piece it would go in (a list without full stops, say) is cut at its spaces, so it
+ * neither delays the first words nor passes [maxChars]; only a single word longer than the limit stays whole.
  */
 fun speechChunks(text: String, maxChars: Int = 2000, firstChars: Int = 160, growth: Double = 3.0): List<String> {
     val sentences = Regex("""[^.!?]+(?:[.!?]+["')\]]*|$)\s*""").findAll(text).map { it.value.trim() }.filter { it.isNotEmpty() }.toList()
     val chunks = mutableListOf<String>()
     val current = StringBuilder()
     var limit = minOf(firstChars, maxChars)
-    for (sentence in sentences) {
-        if (current.isNotEmpty() && current.length + sentence.length + 1 > limit) {
+    fun add(part: String) {
+        if (current.isNotEmpty() && current.length + part.length + 1 > limit) {
             chunks += current.toString()
             limit = minOf(maxChars, maxOf(firstChars, (current.length * growth).toInt()))
             current.clear()
         }
         if (current.isNotEmpty()) current.append(' ')
-        current.append(sentence)
+        current.append(part)
+    }
+    for (sentence in sentences) {
+        if (sentence.length > limit) sentence.split(WHITESPACE).forEach(::add) else add(sentence)
     }
     if (current.isNotEmpty()) chunks += current.toString()
     return chunks
