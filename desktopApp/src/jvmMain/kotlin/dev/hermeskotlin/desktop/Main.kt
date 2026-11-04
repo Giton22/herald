@@ -135,6 +135,8 @@ fun main(args: Array<String>) {
         var frame by remember { mutableStateOf<Frame?>(null) }
         val focused = remember { MutableStateFlow(false) }
         var quickOpen by remember { mutableStateOf(false) }
+        var quickRaise by remember { mutableStateOf(0) }
+        var launcherRaise by remember { mutableStateOf(0) }
         val tray = rememberTrayState()
         // The chat the last notification was about, which a click on it opens.
         var lastNotice by remember { mutableStateOf<DesktopNotice?>(null) }
@@ -172,9 +174,12 @@ fun main(args: Array<String>) {
                 answer.sessionId?.let { links.open(it, title = null) }
                 return
             }
-            if (handleQuickEntryLink(link) { quickOpen = true }) return
+            if (handleQuickEntryLink(link) { quickOpen = true; quickRaise++ }) return
             show()
-            AppLink.parse(link)?.let(links::follow)
+            AppLink.parse(link)?.let { action ->
+                if (action == AppLink.NewChat) launcherRaise++
+                links.follow(action)
+            }
         }
 
         LaunchedEffect(Unit) {
@@ -286,6 +291,9 @@ fun main(args: Array<String>) {
         ) {
             dialogOwner = window
             frame = window
+            LaunchedEffect(launcherRaise) {
+                if (launcherRaise != 0) SwingUtilities.invokeLater { LinuxWindowActivation.request(window) }
+            }
             // Narrow enough for Windows' snap layouts (a third of a screen), where the sidebar folds into a drawer;
             // past that, things would only be cut off.
             LaunchedEffect(Unit) { window.minimumSize = java.awt.Dimension(500, 520) }
@@ -360,9 +368,11 @@ fun main(args: Array<String>) {
 
         QuickEntryWindow(
             visible = quickOpen,
-            onDismiss = { quickOpen = false },
+            raise = quickRaise,
+            onDismiss = { quickOpen = false; quickRaise = 0 },
             onSend = { text, target ->
                 quickOpen = false
+                quickRaise = 0
                 // The open chat takes it if it can; one it can't reach (Settings over it, still connecting) gets a new chat.
                 if (target == QuickTarget.NewChat || !shortcuts.fire(Shortcut.Prompt(text))) {
                     links.newChat(ComposeDraft(text = text, start = DraftStart.Send))

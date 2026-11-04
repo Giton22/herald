@@ -285,7 +285,8 @@ the existing small composer and waits for the user to send a prompt.
 The entry handles the app's existing `herald://` links, including stored chats and
 bots. It does not claim `hermes://`, which belongs to Hermes Desktop. Launchers
 can use `herald://new-chat` and the desktop-only `herald://quick-entry` action.
-The latter is an exact action URI, without parameters or an extra path. Foreground
-activation follows the existing window/compositor behavior; X11 qualification does
-not establish native Wayland focus. Global shortcut registration, voice launcher
-actions and automatic startup require their separate integrations.
+The latter is an exact action URI, without parameters or an extra path. On Linux,
+these actions ask the window manager to activate their target X11/Xwayland window;
+the manager may decline. This does not qualify a native Wayland backend. Global
+shortcut binding is a separate integration; these entries do not request voice
+calls or automatic startup.
