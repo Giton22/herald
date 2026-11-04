@@ -127,6 +127,7 @@ class LiveConversationTest {
         private val incoming = Channel<String>(Channel.UNLIMITED)
         override val events: ReceiveChannel<String> = incoming
         val sent = MutableStateFlow<List<JsonObject>>(emptyList())
+        val muteChanges = mutableListOf<Boolean>()
         var answer: String? = null
         var closed = false
 
@@ -155,12 +156,14 @@ class LiveConversationTest {
 
         override fun speaking() = false
         override fun micLevel() = 0f
-        override fun setMuted(muted: Boolean) = Unit
+        override fun setMuted(muted: Boolean) { muteChanges += muted }
 
         override fun close() {
             closed = true
-            incoming.close()
+            incoming.cancel()
         }
+
+        fun drop() { incoming.close() }
 
         fun receive(event: String) {
             incoming.trySend(event)
@@ -202,6 +205,24 @@ class LiveConversationTest {
     )
 
     @Test
+    fun muteUsesLocalTrackAndOnlySendsWireEventsForStockVoice() = runTest {
+        val client = http("live", mutableListOf())
+        val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> Socket() }, backgroundScope)
+        val session = ChatSession(gateway, null, null, connection, SessionsApi(client), backgroundScope)
+        for (subscription in listOf(false, true)) {
+            val call = FakeCall()
+            val conversation = LiveConversation(call, session, MutableStateFlow(VoiceChatState()),
+                subscriptionProtocol = if (subscription) SubscriptionLiveProtocol() else null)
+            conversation.setMuted(true)
+            conversation.setMuted(false)
+            assertEquals(listOf(true, false), call.muteChanges)
+            assertEquals(if (subscription) emptyList() else listOf("session.input_audio.mute", "session.input_audio.unmute"),
+                call.sent.value.map { it.getValue("type").jsonPrimitive.content })
+        }
+        client.close()
+    }
+
+    @Test
     fun subscriptionCallUsesProfileAndOpensOnlyAfterSessionStarts() = runTest {
         val paths = mutableListOf<String>()
         val client = createHttpClient(MockEngine { request ->
@@ -241,6 +262,11 @@ class LiveConversationTest {
         val submitted = socket.submits.first { it.isNotEmpty() }.single()["params"]!!.jsonObject
         assertEquals("Check the weather", submitted["text"]!!.jsonPrimitive.content)
         socket.event("message.start")
+        socket.event("tool.start", """{"tool_id":"t1","name":"web_search","context":"weather"}""")
+        voice.chat.first { it.working == "weather" }
+        assertTrue(call.sent.value.none { it["channel"]?.jsonPrimitive?.contentOrNull == "commentary" })
+        socket.event("tool.complete", """{"tool_id":"t1"}""")
+        voice.chat.first { it.working == null }
         socket.event("message.delta", """{"text":"It is sunny. "}""")
         socket.event("message.end")
         val reply = call.sent.first { messages -> messages.any { it["type"]?.jsonPrimitive?.contentOrNull == "delegation.context.append" && it["channel"]?.jsonPrimitive?.contentOrNull == "speakable" } }.last { it["type"]?.jsonPrimitive?.contentOrNull == "delegation.context.append" && it["channel"]?.jsonPrimitive?.contentOrNull == "speakable" }
@@ -831,6 +857,7 @@ class LiveConversationTest {
     }
 
     @Test
+    @JvmOnly // The drop message uses Compose resources, unavailable to Android host tests.
     fun incomingSpokenDenialRemovesRequestWithoutFalseRejection() = runTest {
         val client = http("gpt-live", mutableListOf())
         val socket = Socket().apply { resume = """{"session_id":"rt9","running":true,"open_requests":[{"id":"bound","method":"approval","params":{"session_id":"rt9","command":"example","description":"Example operation","choices":["once","session","deny"]}}]}""" }
@@ -856,7 +883,7 @@ class LiveConversationTest {
         session.state.first { it.inputRequests.isEmpty() }
         runCurrent()
         assertFalse(result.isCompleted)
-        call.close()
+        call.drop()
         assertEquals("The live call dropped.", result.await())
         assertTrue(voiceState.value.error?.contains("no longer verified") != true)
         assertEquals(1, socket.answers.value.size)

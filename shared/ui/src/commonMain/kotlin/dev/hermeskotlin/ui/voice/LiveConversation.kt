@@ -375,7 +375,7 @@ internal class LiveConversation(
 
     fun setMuted(muted: Boolean) {
         call.setMuted(muted)
-        call.send(LiveCommands.mute(nextId(if (muted) "mute" else "unmute"), muted))
+        send(LiveCommands.mute(nextId(if (muted) "mute" else "unmute"), muted))
     }
 
     /** Shows [fragment] as captions: the speaker's words so far, or theirs anew once the other one spoke. */
@@ -456,7 +456,8 @@ internal class LiveConversation(
             if (running != tool) {
                 tool = running
                 state.update { it.copy(working = running) }
-                if (running != null) send(LiveCommands.thinking(nextId("think"), id, "Hermes is working: $running. Not done yet."))
+                // Subscription voice may speak every progress update; keep it in the UI only.
+                if (running != null && subscriptionProtocol == null) send(LiveCommands.thinking(nextId("think"), id, "Hermes is working: $running. Not done yet."))
             }
             replies.forEachIndexed { i, reply ->
                 val before = spoken.getOrNull(i).orEmpty()
