@@ -274,17 +274,33 @@ fun speechChunks(text: String, maxChars: Int = 2000, firstChars: Int = 160, grow
     val chunks = mutableListOf<String>()
     val current = StringBuilder()
     var limit = minOf(firstChars, maxChars)
-    fun add(part: String) {
-        if (current.isNotEmpty() && current.length + part.length + 1 > limit) {
-            chunks += current.toString()
-            limit = minOf(maxChars, maxOf(firstChars, (current.length * growth).toInt()))
-            current.clear()
-        }
+    // The limit of the piece after this one: it grows from the piece actually made.
+    fun nextLimit() = minOf(maxChars, maxOf(firstChars, (current.length * growth).toInt()))
+    fun flush() {
+        chunks += current.toString()
+        limit = nextLimit()
+        current.clear()
+    }
+    fun append(part: String) {
         if (current.isNotEmpty()) current.append(' ')
         current.append(part)
     }
     for (sentence in sentences) {
-        if (sentence.length > limit) sentence.split(WHITESPACE).forEach(::add) else add(sentence)
+        if (current.length + (if (current.isEmpty()) 0 else 1) + sentence.length <= limit) {
+            append(sentence)
+            continue
+        }
+        // Too long for this piece: one that fits the next piece starts it; a longer one fills this piece word by
+        // word and goes on in the next.
+        if (current.isNotEmpty() && sentence.length <= nextLimit()) {
+            flush()
+            append(sentence)
+            continue
+        }
+        for (word in sentence.split(WHITESPACE)) {
+            if (current.isNotEmpty() && current.length + word.length + 1 > limit) flush()
+            append(word)
+        }
     }
     if (current.isNotEmpty()) chunks += current.toString()
     return chunks

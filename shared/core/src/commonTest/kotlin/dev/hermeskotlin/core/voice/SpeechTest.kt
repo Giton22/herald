@@ -99,6 +99,12 @@ class SpeechTest {
         assertTrue(opened.first().startsWith("Hi. word") && opened.first().length <= 160, opened.map { it.length }.toString())
         assertTrue(opened[1].length <= opened[0].length * 3, opened.map { it.length }.toString())
 
+        // A long sentence that ends a short piece is judged against the next piece's limit, not the old one's.
+        val text = "a ".repeat(74) + "a. " + "b ".repeat(49) + "b. " + "c ".repeat(199) + "c."
+        val grown = speechChunks(text)
+        grown.zipWithNext { before, piece -> assertTrue(piece.length <= maxOf(160, before.length * 3), grown.map { it.length }.toString()) }
+        assertEquals(text, grown.joinToString(" "))
+
         // Only a single word longer than the limit stays whole.
         val word = "x".repeat(2500)
         assertEquals(listOf("Read", word), speechChunks("Read $word", maxChars = 2000, firstChars = 4))
