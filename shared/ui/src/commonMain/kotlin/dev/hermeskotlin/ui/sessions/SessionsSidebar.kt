@@ -397,10 +397,10 @@ fun SessionsSidebar(
         if (!modeSwitch && pickedMode != mode) bots.setMode(mode, remember = false)
     }
     // The switch back: the side last picked with it, not the one Settings held the sidebar on.
-    var hadSwitch by remember { mutableStateOf(modeSwitch) }
+    // With the switch every pick is remembered, so this changes nothing then; it's done whenever the switch shows,
+    // not only on a change seen here, which a sidebar drawn afresh with the switch back would miss.
     LaunchedEffect(modeSwitch) {
-        if (modeSwitch && !hadSwitch) bots.showRemembered()
-        hadSwitch = modeSwitch
+        if (modeSwitch) bots.showRemembered()
     }
     /** A side picked by the switch, or for search or a page; without the switch the view stays where Settings put it. */
     val pickMode: (SidebarMode) -> Unit = { if (modeSwitch) bots.setMode(it) }
