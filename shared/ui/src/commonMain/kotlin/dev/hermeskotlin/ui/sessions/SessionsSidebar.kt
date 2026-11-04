@@ -124,6 +124,7 @@ import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import dev.hermeskotlin.core.settings.AppSettings
+import androidx.compose.ui.unit.Dp
 import dev.hermeskotlin.core.settings.SettingsStore
 import dev.hermeskotlin.core.settings.showsSidebarPage
 import dev.hermeskotlin.core.settings.sidebarMode
@@ -709,6 +710,30 @@ fun SessionsSidebar(
             )
         }
     }
+    // The page buttons left on in Settings › Sidebar pages, over the chats; over the bots too while the switch is
+    // hidden, since the Chats side, where they'd otherwise be, can't be reached then. [inset] lines them up with the list.
+    val navGrid: @Composable (inset: Dp) -> Unit = { inset ->
+        if (navPages.isNotEmpty()) NavGrid(
+            navPages.mapNotNull { page ->
+                val icon = navIcon(page)
+                val label = stringResource(navLabel(page))
+                when (page) {
+                    SidebarPage.Inbox -> NavLink(icon, label, badge = inboxUnread) { inboxOpen = true }
+                    SidebarPage.Scheduled -> NavLink(icon, label, selected = pageInMain && scheduledOpen) { closePages(); scheduledOpen = true }
+                    SidebarPage.Insights -> NavLink(icon, label, selected = pageInMain && insightsOpen) { closePages(); insightsOpen = true }
+                    SidebarPage.Capabilities -> NavLink(icon, label, selected = pageInMain && capabilitiesOpen) { closePages(); capabilitiesOpen = true }
+                    SidebarPage.Plugins -> NavLink(icon, label, selected = pageInMain && pluginsOpen) { closePages(); pluginsOpen = true }
+                    SidebarPage.Config -> NavLink(icon, label, selected = pageInMain && configOpen) { closePages(); configOpen = true }
+                    SidebarPage.Archived -> NavLink(icon, label, selected = isDesktop && state.filter == SessionListFilter.Archived) {
+                        viewModel.setFilter(SessionListFilter.Archived)
+                    }
+                    // The two sides are the switch's, not pages with a button here.
+                    SidebarPage.Chats, SidebarPage.Bots -> null
+                }
+            },
+            inset = inset,
+        )
+    }
     if (pageInMain && mainPage != null) {
         val latest by rememberUpdatedState(pageView)
         DisposableEffect(pageKey) {
@@ -751,8 +776,8 @@ fun SessionsSidebar(
                         openAccount()
                     },
                     onSettings = onOpenSettings,
-                    onSearch = { searchOpen = true }.takeIf { mode == SidebarMode.Chats },
-                    keepSearchRoom = modeSwitch,
+                    // Without the switch, search is the Bots side's only way to the chats, so it keeps the pill.
+                    onSearch = { searchOpen = true }.takeIf { mode == SidebarMode.Chats || !modeSwitch },
                     profiles = roster?.profiles.orEmpty(),
                     activeProfile = roster?.active(profile)?.name,
                     // Profiles made or removed on the host since show up, as the account sheet's do.
@@ -819,6 +844,8 @@ fun SessionsSidebar(
                             },
                             onRetry = bots::refresh,
                             onDismissNotice = bots::dismissNotice,
+                            // The roster's own 14dp margin already lines the buttons up with its cards.
+                            top = if (modeSwitch) null else ({ navGrid(0.dp) }),
                             troubles = troubles,
                             failingRoutines = failingRoutines,
                             needsYou = needsYou,
@@ -977,27 +1004,7 @@ fun SessionsSidebar(
                         // The pages left on in Settings › Sidebar pages; with none, no room is kept for them. The item
                         // stays when it's empty: the list holds on to the first row it shows, so pages turned back on
                         // would otherwise come in above it, out of sight.
-                        item(key = "nav") {
-                            if (navPages.isNotEmpty()) NavGrid(
-                                navPages.mapNotNull { page ->
-                                    val icon = navIcon(page)
-                                    val label = stringResource(navLabel(page))
-                                    when (page) {
-                                        SidebarPage.Inbox -> NavLink(icon, label, badge = inboxUnread) { inboxOpen = true }
-                                        SidebarPage.Scheduled -> NavLink(icon, label, selected = pageInMain && scheduledOpen) { closePages(); scheduledOpen = true }
-                                        SidebarPage.Insights -> NavLink(icon, label, selected = pageInMain && insightsOpen) { closePages(); insightsOpen = true }
-                                        SidebarPage.Capabilities -> NavLink(icon, label, selected = pageInMain && capabilitiesOpen) { closePages(); capabilitiesOpen = true }
-                                        SidebarPage.Plugins -> NavLink(icon, label, selected = pageInMain && pluginsOpen) { closePages(); pluginsOpen = true }
-                                        SidebarPage.Config -> NavLink(icon, label, selected = pageInMain && configOpen) { closePages(); configOpen = true }
-                                        SidebarPage.Archived -> NavLink(icon, label, selected = isDesktop && state.filter == SessionListFilter.Archived) {
-                                            viewModel.setFilter(SessionListFilter.Archived)
-                                        }
-                                        // The two sides are the switch's, not pages with a button here.
-                                        SidebarPage.Chats, SidebarPage.Bots -> null
-                                    }
-                                },
-                            )
-                        }
+                        item(key = "nav") { navGrid(6.dp) }
                     }
                     state.loading -> ListSkeleton()
                     state.error != null -> EmptyState(Lucide.CloudOff, stringResource(Res.string.sessions_load_failed), state.error, error = true) {
@@ -1313,7 +1320,7 @@ internal fun BotsSidebarSample(
     }
 }
 
-private object PreviewBotActions : BotActions {
+internal object PreviewBotActions : BotActions {
     override fun open(bot: Bot) = Unit
     override fun setPinned(bot: Bot, pinned: Boolean) = Unit
     override fun setHidden(bot: Bot, hidden: Boolean) = Unit
@@ -1363,8 +1370,6 @@ internal fun MainHeader(
     onAccount: () -> Unit,
     onSettings: () -> Unit,
     onSearch: (() -> Unit)?,
-    /** Without [onSearch], the pill's room is kept so the Chats / Bots switch under it stays put; false: no switch to keep still. */
-    keepSearchRoom: Boolean = true,
     /** The gateway's profiles; with more than one, the header names the active one and opens them in a menu. */
     profiles: List<Profile> = emptyList(),
     /** The active profile's name, the launch profile's included. */
@@ -1485,7 +1490,7 @@ internal fun MainHeader(
         }
         // Search looks through chats; the bot roster is short enough to read. The header keeps its height
         // without the pill, so switching sides doesn't move the switch under the finger.
-        if (onSearch != null) SearchPill(onSearch) else if (keepSearchRoom) Spacer(Modifier.height(maxOf(MinTouchTarget, SEARCH_PILL_HEIGHT)))
+        if (onSearch != null) SearchPill(onSearch) else Spacer(Modifier.height(maxOf(MinTouchTarget, SEARCH_PILL_HEIGHT)))
     }
 }
 
@@ -1734,14 +1739,14 @@ internal fun navLabel(page: SidebarPage): StringResource = when (page) {
 
 /** The sidebar's pages as tiles, two to a row; on the desktop one under another, as a desktop sidebar lists its places. */
 @Composable
-private fun NavGrid(links: List<NavLink>) {
+private fun NavGrid(links: List<NavLink>, inset: Dp = 6.dp) {
     if (isDesktop) {
-        Column(Modifier.padding(start = 6.dp, end = 6.dp, bottom = 10.dp)) {
+        Column(Modifier.padding(start = inset, end = inset, bottom = 10.dp)) {
             links.forEach { NavTile(it, Modifier.fillMaxWidth()) }
         }
         return
     }
-    Column(Modifier.padding(start = 6.dp, end = 6.dp, bottom = 10.dp)) {
+    Column(Modifier.padding(start = inset, end = inset, bottom = 10.dp)) {
         links.chunked(2).forEach { pair ->
             // A tile whose label wraps keeps its neighbour the same height.
             Row(Modifier.height(IntrinsicSize.Min), horizontalArrangement = Arrangement.spacedBy(6.dp)) {

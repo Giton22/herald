@@ -22,14 +22,9 @@ import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
-import androidx.compose.foundation.layout.Box
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.setValue
-import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.height
+import com.composeunstyled.Text
+import dev.hermeskotlin.ui.bots.BotsRoster
+import dev.hermeskotlin.ui.bots.BotsUiState
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w360dp-h640dp-xhdpi")
@@ -118,22 +113,27 @@ class SidebarHeaderTest {
     }
 
     @Test
-    fun withoutTheSwitchTheBotsSideKeepsNoRoomForSearch() {
-        var keepRoom by mutableStateOf(true)
+    fun theRosterDrawsItsTopAboveTheBots() {
+        // The sidebar's page buttons when it has no Chats / Bots switch, so the Bots side still reaches the pages.
         composeRule.setContent {
             HermesTheme(ColorScheme.Dark) {
-                Box(Modifier.testTag("header")) {
-                    MainHeader(gatewayLabel = "homelab", connection = null, onAccount = {}, onSettings = {}, onSearch = null, keepSearchRoom = keepRoom)
-                }
+                BotsRoster(
+                    state = BotsUiState(loading = false),
+                    avatars = emptyMap(),
+                    selectedId = null,
+                    selectedRunning = false,
+                    nowSeconds = 0.0,
+                    actions = PreviewBotActions,
+                    onRetry = {},
+                    onDismissNotice = {},
+                    top = { Text("Page buttons") },
+                )
             }
         }
         settle()
-        val kept = composeRule.onNodeWithTag("header").getUnclippedBoundsInRoot().height
-        keepRoom = false
-        settle()
-        val without = composeRule.onNodeWithTag("header").getUnclippedBoundsInRoot().height
-        // The pill's room goes: at least a touch target shorter.
-        assertTrue(kept - without >= 48.dp, "kept $kept, without $without")
+        val top = composeRule.onNodeWithText("Page buttons").assertIsDisplayed().getUnclippedBoundsInRoot()
+        val bots = composeRule.onNodeWithText("No bots on this gateway yet.").getUnclippedBoundsInRoot()
+        assertTrue(top.bottom <= bots.top, "top ${top.bottom}, bots ${bots.top}")
     }
 
     private fun settle() {
