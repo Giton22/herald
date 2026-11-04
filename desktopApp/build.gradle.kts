@@ -47,10 +47,6 @@ compose.desktop {
         // runtime, which Gradle often runs on, has neither. `run` uses it too.
         providers.environmentVariable("HERALD_PACKAGING_JDK").orNull?.let { javaHome = it }
         jvmArgs += "-Dherald.version=$appVersion"
-        // AWT otherwise forces macOS's native dialogs to light Aqua, independently of Compose's theme.
-        if (System.getProperty("os.name").startsWith("Mac")) {
-            jvmArgs += "-Dapple.awt.application.appearance=system"
-        }
         if (releasesRepo.isNotEmpty()) jvmArgs += "-Dherald.releasesRepo=$releasesRepo"
         // Herald sits in the tray for hours: G1 hands an idle heap back to the system each minute (JEP 346),
         // and the many equal strings of chat JSON share their bytes.

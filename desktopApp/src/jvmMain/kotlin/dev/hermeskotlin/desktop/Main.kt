@@ -81,10 +81,20 @@ private const val TITLE = "Kyllene"
 /** ⌘ stands where Ctrl does elsewhere. */
 private val mac = System.getProperty("os.name").orEmpty().startsWith("Mac")
 
+/**
+ * macOS's own dialogs (+ attach, Export's Save) stay light Aqua unless told otherwise, whatever the screens show:
+ * they follow the system's appearance instead. AWT reads this once as it starts, so it's set before anything else.
+ * Kyllene's own theme can't be read that early: it's in storage that may first ask to be unlocked, with a dialog.
+ */
+internal fun followSystemAppearance(osName: String?) {
+    if (osName.orEmpty().startsWith("Mac")) System.setProperty("apple.awt.application.appearance", "system")
+}
+
 /** A chat in a window of its own; [raise] goes up when it's asked for again. */
 private data class PoppedChat(val target: ChatTarget, val key: Int, val raise: Int = 0)
 
 fun main(args: Array<String>) {
+    followSystemAppearance(System.getProperty("os.name"))
     // An error that ends the app ends the process too: Compose exits only when the app closes normally, and the
     // gateway's socket would otherwise keep Herald running with no window, its tray icon and the one-Herald lock
     // still held, so the next launch could only ask it to come forward. What went wrong goes to crash.log.
