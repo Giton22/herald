@@ -155,11 +155,21 @@ class StreamedSpeechTest {
     }
 
     /** [canHold]: the voice holds when someone seems to cut in; [holds] is each hold and letting go. */
-    private class Player(val fails: Boolean = false, val canHold: Boolean = false) : SpeechPlayer {
+    private class Player(
+        val fails: Boolean = false,
+        val canHold: Boolean = false,
+        /** Shared by several players: each route opened and closed, in order, by [name]. */
+        val routes: MutableList<String>? = null,
+        val name: String = "",
+    ) : SpeechPlayer {
         var audioOpen = false
         override fun chainedChatAudio(): () -> Unit {
             audioOpen = true
-            return { audioOpen = false }
+            routes?.add("$name open")
+            return {
+                if (audioOpen) routes?.add("$name close")
+                audioOpen = false
+            }
         }
         val holds = mutableListOf<Boolean>()
         override fun hold(on: Boolean): Boolean {
@@ -274,6 +284,21 @@ class StreamedSpeechTest {
         assertFalse(player.audioOpen)
         yield()
         assertFalse(player.audioOpen)
+    }
+
+    /**
+     * One chat at a time, app-wide: a chat started on another screen ends this one, and routes only once this one has
+     * let its route go.
+     */
+    @Test
+    fun aChatOnAnotherScreenEndsThisOneAndRoutesAfterIt() = runTest {
+        val routes = mutableListOf<String>()
+        val first = chat(player = Player(routes = routes, name = "first")) { Stream() }
+        val second = chat(player = Player(routes = routes, name = "second")) { Stream() }
+
+        first.voice.chat.first { it.phase == VoicePhase.Off }
+        assertEquals(listOf("first open", "first close", "second open"), routes)
+        second.voice.stopChat()
     }
 
     /** Ended without End: saying "stop" lets the route go too. */

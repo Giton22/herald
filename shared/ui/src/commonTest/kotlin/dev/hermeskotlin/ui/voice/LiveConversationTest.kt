@@ -100,7 +100,8 @@ class LiveConversationTest {
         }
     }
 
-    private class FakeCall : LiveCall {
+    /** [calls]: shared by several, each connect and close, in order, by [name]. */
+    private class FakeCall(private val calls: MutableList<String>? = null, private val name: String = "") : LiveCall {
         private val incoming = Channel<String>(Channel.UNLIMITED)
         override val events: ReceiveChannel<String> = incoming
         val sent = MutableStateFlow<List<JsonObject>>(emptyList())
@@ -108,6 +109,7 @@ class LiveConversationTest {
         var closed = false
 
         override suspend fun connect(answer: suspend (offerSdp: String) -> String) {
+            calls?.add("$name connect")
             this.answer = answer("v=0 offer\r\n")
         }
 
@@ -135,6 +137,7 @@ class LiveConversationTest {
         override fun setMuted(muted: Boolean) = Unit
 
         override fun close() {
+            if (!closed) calls?.add("$name close")
             closed = true
             incoming.close()
         }
@@ -195,6 +198,32 @@ class LiveConversationTest {
         voice.startChat(session, gateway, "work")
         voice.chat.first { it.live && it.phase == VoicePhase.Listening }
         voice.stopChat()
+    }
+
+    /** One call at a time, app-wide: a live call started on another screen ends this one, and connects after it closed. */
+    @Test
+    fun aLiveCallOnAnotherScreenEndsThisOneAndConnectsAfterIt() = runTest {
+        val client = http("gpt-live", mutableListOf())
+        val calls = mutableListOf<String>()
+        suspend fun screen(name: String): Pair<ChatSession, VoiceController> {
+            val connection = GatewayConnection(AuthApi(client, PersistentCookiesStorage(InMemoryKeyValueStore())), { _, _ -> Socket() }, backgroundScope)
+            connection.start(gateway)
+            connection.state.first { it is ConnectionState.Connected }
+            val session = ChatSession(gateway, null, null, connection, SessionsApi(client), backgroundScope)
+            session.start()
+            return session to VoiceController(AudioApi(client), NoRecorder, Silent, backgroundScope, backgroundScope) { FakeCall(calls, name) }
+        }
+        val (oneSession, one) = screen("first")
+        val (twoSession, two) = screen("second")
+
+        one.startChat(oneSession, gateway, "work")
+        one.chat.first { it.live && it.phase == VoicePhase.Listening }
+        two.startChat(twoSession, gateway, "work")
+        two.chat.first { it.live && it.phase == VoicePhase.Listening }
+
+        assertEquals(VoicePhase.Off, one.chat.value.phase)
+        assertEquals(listOf("first connect", "first close", "second connect"), calls)
+        two.stopChat()
     }
 
     @Test

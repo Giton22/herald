@@ -40,6 +40,7 @@
     <string name="voice_error_nothing_heard">No se oyó nada.</string>
     <string name="voice_error_voice_reply">No se pudo poner voz a la respuesta.</string>
     <string name="voice_error_play_reply">No se pudo reproducir la respuesta.</string>
+    <string name="voice_error_call_on">Hay una llamada en curso.</string>
     <string name="voice_error_live_start">No se pudo iniciar la llamada en directo.</string>
     <string name="voice_error_live_vendor">GPT-Live no pudo iniciarse: %1$s</string>
     <string name="voice_error_live_no_answer">GPT-Live no envió respuesta.</string>

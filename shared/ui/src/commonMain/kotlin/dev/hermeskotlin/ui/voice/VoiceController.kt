@@ -69,6 +69,7 @@ import kotlinx.coroutines.flow.transformWhile
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.job
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.withContext
@@ -203,6 +204,9 @@ class VoiceController(
         ringback: Boolean = false,
     ) {
         if (chatJob?.isActive == true) return
+        // One chat at a time, app-wide: another screen's ends now, and this one routes only once every earlier one
+        // (this screen's last, still winding down, too) has let its route and microphone go.
+        val windingDown = VoiceChats.endOthers(this)
         cancelDictation()
         // The voice chat has the speaker now.
         stopReading()
@@ -222,19 +226,22 @@ class VoiceController(
             },
         ) == true
         val job = scope.launch {
-            val ringing = if (ringback) launch {
-                try {
-                    while (isActive) {
-                        player.playRingback()
-                        delay(3_000)
-                    }
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                    // A connection cue must never prevent the call.
-                }
-            } else null
+            var ringing: Job? = null
             try {
+                // Inside the try, so an End while it waits still puts the panel back.
+                withTimeoutOrNull(WIND_DOWN_MS) { windingDown.joinAll() }
+                ringing = if (ringback) launch {
+                    try {
+                        while (isActive) {
+                            player.playRingback()
+                            delay(3_000)
+                        }
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        // A connection cue must never prevent the call.
+                    }
+                } else null
                 if (startLive(session, gateway, profile, opener) { ringing?.cancelAndJoin() }) return@launch
                 ringing?.cancelAndJoin()
                 converseChained(session, gateway, profile, pauseMs, opener)
@@ -249,11 +256,13 @@ class VoiceController(
             }
         }
         chatJob = job
+        VoiceChats.started(job, this, ::stopChat)
         job.invokeOnCompletion {
-            // A newer chat may already hold it again.
+            VoiceChats.ended(job)
+            // A newer chat may already hold it again, here or on another screen (the call service is one for all).
             if (chatJob === job || chatJob == null) {
                 held = false
-                keepAlive?.release()
+                if (!VoiceChats.any) keepAlive?.release()
             }
         }
     }
@@ -1077,6 +1086,16 @@ class VoiceController(
         onText: (String) -> Unit,
     ) {
         if (dictationJob?.isActive == true || chatJob?.isActive == true) return
+        // Another screen's chat has the microphone. Why is shown once its words are looked up, unless something else
+        // changed the dictation meanwhile.
+        if (VoiceChats.any) {
+            val before = _dictation.value
+            scope.launch {
+                val why = getString(Res.string.voice_error_call_on)
+                _dictation.compareAndSet(before, DictationState(error = why))
+            }
+            return
+        }
         // The microphone would hear it.
         stopReading()
         _dictation.value = DictationState(recording = true)
@@ -1160,6 +1179,8 @@ class VoiceController(
 
     private companion object {
         const val MAX_FAILURES = 3
+        /** How long a new chat waits for earlier ones to let their route go; past it, it goes on regardless. */
+        const val WIND_DOWN_MS = 2_000L
         /** Times a question is asked before it's left for the screen. */
         const val MAX_ASKS = 3
         /** How often a waiting turn is looked at again, for an approval held back while the phone was locked. */
@@ -1169,6 +1190,33 @@ class VoiceController(
         const val DICTATION_SILENCE_MS = 3_000L
         const val DICTATION_IDLE_MS = 15_000L
         const val DICTATION_MAX_MS = 120_000L
+    }
+}
+
+/**
+ * The voice chats running or winding down, on every screen: each screen has its own controller, but the microphone,
+ * the speaker's call routing and the call service are one for all. Each is kept by its job, so one ending doesn't
+ * speak for another. All on the main thread, as the voice chat is.
+ */
+internal object VoiceChats {
+    private class Chat(val job: Job, val owner: Any, val stop: () -> Unit)
+
+    private val running = MutableStateFlow(emptyList<Chat>())
+
+    fun started(job: Job, owner: Any, stop: () -> Unit) = running.update { it + Chat(job, owner, stop) }
+
+    fun ended(job: Job) = running.update { chats -> chats.filterNot { it.job === job } }
+
+    val any: Boolean get() = running.value.isNotEmpty()
+
+    /**
+     * Ends every chat [owner] doesn't run ([stop]), and hands back the jobs of all still running or winding down,
+     * [owner]'s own earlier one too, for a new chat to wait out before it routes.
+     */
+    fun endOthers(owner: Any): List<Job> {
+        val now = running.value
+        now.filter { it.owner !== owner }.forEach { it.stop() }
+        return now.map { it.job }
     }
 }
 
