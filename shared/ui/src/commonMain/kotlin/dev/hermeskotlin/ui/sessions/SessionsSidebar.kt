@@ -395,6 +395,12 @@ fun SessionsSidebar(
     LaunchedEffect(modeSwitch, mode, pickedMode) {
         if (!modeSwitch && pickedMode != mode) bots.setMode(mode, remember = false)
     }
+    // The switch back: the side last picked with it, not the one Settings held the sidebar on.
+    var hadSwitch by remember { mutableStateOf(modeSwitch) }
+    LaunchedEffect(modeSwitch) {
+        if (modeSwitch && !hadSwitch) bots.showRemembered()
+        hadSwitch = modeSwitch
+    }
     /** A side picked by the switch, or for search or a page; without the switch the view stays where Settings put it. */
     val pickMode: (SidebarMode) -> Unit = { if (modeSwitch) bots.setMode(it) }
     val navPages = remember(settings?.sidebarNav, settings?.sidebarNavHidden) { shownNavPages(settings, isDesktop) }

@@ -149,6 +149,9 @@ class BotsViewModel(
     private val _mode = MutableStateFlow(SidebarMode.Chats)
     val mode: StateFlow<SidebarMode> = _mode.asStateFlow()
 
+    /** The side last picked on this gateway, which [showRemembered] goes back to after one set without remembering it. */
+    private var remembered = SidebarMode.Chats
+
     private val _avatars = MutableStateFlow<Map<String, ByteArray>>(emptyMap())
 
     /** Pictures of the bots that have one, by profile name. */
@@ -219,7 +222,10 @@ class BotsViewModel(
         _avatars.value = emptyMap()
         avatarsAsked.clear()
         watched.clear()
-        viewModelScope.launch { _mode.value = modes.get(url) }
+        viewModelScope.launch {
+            remembered = modes.get(url)
+            _mode.value = remembered
+        }
     }
 
     fun setVisible(shown: Boolean) {
@@ -234,8 +240,14 @@ class BotsViewModel(
     fun setMode(mode: SidebarMode, remember: Boolean = true) {
         _mode.value = mode
         if (!remember) return
+        remembered = mode
         val url = gateway.value ?: return
         viewModelScope.launch { modes.set(url, mode) }
+    }
+
+    /** Back to the side last picked on this gateway, e.g. when the sidebar's switch shows again. */
+    fun showRemembered() {
+        _mode.value = remembered
     }
 
     fun refresh() {
