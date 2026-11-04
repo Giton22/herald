@@ -17,7 +17,8 @@ internal object LinuxWindowActivation {
             val x11 = X11.INSTANCE
             val display = x11.XOpenDisplay(null) ?: return
             try {
-                val atom = x11.XInternAtom(display, "_NET_ACTIVE_WINDOW", true)
+                // Intern normally: JNA's true Bool produces an invalid atom on this Xlib path.
+                val atom = x11.XInternAtom(display, "_NET_ACTIVE_WINDOW", false)
                 if (atom == null || atom.toLong() == 0L) return
                 val event = eventFor(Native.getWindowID(window), atom)
                 event.xclient.display = display
