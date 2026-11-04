@@ -20,6 +20,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -28,6 +29,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.dp
+import androidx.compose.runtime.collectAsState
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.composeunstyled.theme.ColorScheme
 import com.composeunstyled.theme.Theme
@@ -144,6 +146,8 @@ val LocalAppVersion = staticCompositionLocalOf<String?> { null }
  * While [locked] (App lock), a cover hides everything until [onUnlock] lets the user back in.
  * [phoneQuestion] is a phone tool asking before it changes something, shown over any screen.
  * [titleBar] is the desktop's own title bar, whose row the screens share.
+ * [onSessionEnded] is told the gateway (its saved URL) whose signed-in session the desktop's main window just left,
+ * for the windows of its chats.
  */
 @Composable
 fun App(
@@ -154,12 +158,14 @@ fun App(
     onUnlock: () -> Unit = {},
     phoneQuestion: PhoneQuestion? = null,
     titleBar: TitleBar? = null,
+    onSessionEnded: (gatewayUrl: String) -> Unit = {},
 ) {
     // Nothing is drawn until the stored settings are read, so the first frame has the right theme.
     val settingsStore = koinInject<SettingsStore>()
     // The words dates and times are built from, in the app's language, for code that runs outside composition.
     TimeWords.current = rememberTimeWords()
     val settings = settingsStore.settings.collectAsStateWithLifecycle().value ?: return
+    if (isDesktop) EndVoiceWithSession(onSessionEnded)
     val dark = isDark(settings)
     LaunchedEffect(dark) { onDarkTheme(dark) }
     val density = LocalDensity.current
@@ -385,6 +391,39 @@ private fun Routes() {
         onRemove = app::removeGateway,
         onSetClientCert = app::setClientCert,
     )
+}
+
+/** Adding a gateway: the current one stays signed in, and Back returns to it. */
+private val Route.addingGateway: Boolean
+    get() = this is Route.Connect && canCancel || this is Route.SignIn && adding
+
+/**
+ * Desktop: a voice call ends with the signed-in session it was made in, on sign-out, an expired session, or
+ * another gateway or profile, even while the window is hidden and draws nothing. Adding a gateway keeps it, and
+ * so does changing the language. [onSessionEnded] is told the gateway left, as [App] says.
+ */
+@Composable
+private fun EndVoiceWithSession(onSessionEnded: (gatewayUrl: String) -> Unit) {
+    val app: AppViewModel = koinViewModel()
+    // Its own scope: a route change redraws this, not the whole app.
+    val route by app.route.collectAsState()
+    if (route !is Route.Chat && !route.addingGateway) return
+    val chat: ChatViewModel = koinViewModel()
+    val ended by rememberUpdatedState(onSessionEnded)
+    // A hidden window doesn't draw, so the route is watched here rather than waiting for a frame.
+    LaunchedEffect(app, chat) {
+        var session: Pair<String, String?>? = null
+        app.route.collect { next ->
+            if (next.addingGateway) return@collect
+            val now = (next as? Route.Chat)?.let { it.gateway.url to it.target.profile }
+            val was = session
+            session = now
+            if (was == null || was == now) return@collect
+            chat.voice.stopAll()
+            if (was.first != now?.first) ended(was.first)
+        }
+    }
+    DisposableEffect(chat) { onDispose { chat.voice.stopAll() } }
 }
 
 /** The bot editor's subject: [bot] to change, or null for a new one. */
