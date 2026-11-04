@@ -605,8 +605,12 @@ class ChatViewModel(
             this.target = target
             if (changed) resolveReadPosition(target)
             // An expired session or sign-out closes the host's chat; the same chat reopened after signing
-            // back in needs a fresh session, not the stopped one this view model still holds.
-            if (session.value !== host.session.value) bind(target)
+            // back in needs a fresh session, not the stopped one this view model still holds. A voice chat
+            // went with the stopped one (the host closed under it, as on adding the gateway already open).
+            if (session.value !== host.session.value) {
+                voice.stopAll()
+                bind(target)
+            }
             return
         }
         if (moveNewChat(target)) return

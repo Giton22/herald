@@ -290,3 +290,23 @@ these actions ask the window manager to activate their target X11/Xwayland windo
 the manager may decline. This does not qualify a native Wayland backend. Global
 shortcut binding is a separate integration; these entries do not request voice
 calls or automatic startup.
+
+### Quick entry shortcut
+
+With **Settings → Desktop → Quick entry** enabled, Linux asks the desktop's
+GlobalShortcuts portal to bind the existing composer. The portal's permission
+dialog chooses the actual shortcut; Ctrl+Shift+Space is a preference, never a
+forced replacement for another app's keys. Settings shows the granted trigger,
+refusal or unavailable portal. After refusing, turn the setting off and on to
+ask again. When the desktop grants it with no key (KDE does once its dialog is
+closed, and remembers that), Settings says so: pick a key in the desktop's own
+shortcut settings, and the row follows. Outside Flatpak the app names itself to
+the portal as `kyllene-Kyllene`, the .deb's desktop entry; a build run without
+that entry installed gets no shortcut. Disabling it or quitting closes the request/session; a portal restart
+recreates the session. A held key opens once until released.
+
+The shortcut opens the current profile's existing composer and does not send a
+prompt. It needs the app running; launcher actions and login startup are separate.
+Window focus follows the existing runtime/compositor rules. The pinned public
+JBR API cannot consume the portal's activation token, so native Wayland activation
+is not guaranteed. In-app shortcuts remain available without this portal.

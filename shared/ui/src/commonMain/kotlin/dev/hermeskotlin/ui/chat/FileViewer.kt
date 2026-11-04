@@ -2,6 +2,7 @@ package dev.hermeskotlin.ui.chat
 
 import dev.hermeskotlin.ui.PlatformBackHandler
 import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.clearOfWindowControls
 import dev.hermeskotlin.ui.fullScreenDialogProperties
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.fadeIn
@@ -395,7 +396,8 @@ internal fun FileViewerPage(
 
     Column(Modifier.fillMaxSize().background(Theme[colors][background]).windowInsetsPadding(WindowInsets.safeDrawing)) {
         Row(
-            Modifier.fillMaxWidth().padding(start = 4.dp, end = 8.dp, top = 6.dp, bottom = 12.dp),
+            // Full screen on the desktop it's in the title bar's row: Back and Open in app stay clear of its buttons.
+            Modifier.fillMaxWidth().clearOfWindowControls().padding(start = 4.dp, end = 8.dp, top = 6.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(10.dp),
         ) {

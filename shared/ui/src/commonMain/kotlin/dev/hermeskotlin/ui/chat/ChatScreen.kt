@@ -3435,10 +3435,10 @@ internal fun Disclosure(
     }
 }
 
-/** The reply's reasoning, folded; live progress is the dock's to show. */
+/** The reply's reasoning, folded; live progress is the dock's to show. Opened, it stays open when the activity is made again. */
 @Composable
-private fun Reasoning(text: String, streaming: Boolean) {
-    var expanded by remember { mutableStateOf(false) }
+internal fun Reasoning(text: String, streaming: Boolean) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
     Disclosure(
         icon = { UnstyledIcon(Lucide.Brain, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(16.dp)) },
         label = stringResource(Res.string.chat_usage_reasoning),
@@ -3453,10 +3453,13 @@ private fun Reasoning(text: String, streaming: Boolean) {
     }
 }
 
-/** The tools the reply used, folded; the one running now is named above the composer instead. */
+/**
+ * The tools the reply used, folded; the one running now is named above the composer instead. Opened, it stays open
+ * when the activity is made again, as on unfolding a foldable.
+ */
 @Composable
-private fun Tools(tools: List<ToolActivity>, messageKey: String) {
-    var expanded by remember { mutableStateOf(false) }
+internal fun Tools(tools: List<ToolActivity>, messageKey: String) {
+    var expanded by rememberSaveable(messageKey) { mutableStateOf(false) }
     val icons = remember(tools) { tools.map { toolIcon(it.name) }.distinct().take(3) }
     val (ranWords, took) = workedLabel(tools)
     val ran = ranWords.text()
@@ -3509,7 +3512,8 @@ private fun Tools(tools: List<ToolActivity>, messageKey: String) {
                     .padding(12.dp),
             ) {
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    tools.forEach { ToolRow(it, messageKey) }
+                    // Keyed, so a row opened before the activity was made again is restored by its tool, not its place.
+                    tools.forEach { key(it.id) { ToolRow(it, messageKey) } }
                 }
             }
         }
@@ -3518,10 +3522,11 @@ private fun Tools(tools: List<ToolActivity>, messageKey: String) {
 
 /**
  * A running reply's finished steps, newest last: a check (or a cross) in a soft circle, what was done, and
- * how long it took. The step in hand is on the live task card instead. Only the last few show.
+ * how long it took. The step in hand is on the live task card instead. Only the last few show. One opened stays
+ * open when the activity is made again, as on unfolding a foldable.
  */
 @Composable
-private fun LiveSteps(tools: List<ToolActivity>, messageKey: String) {
+internal fun LiveSteps(tools: List<ToolActivity>, messageKey: String) {
     val done = tools.filterNot { it.running }
     if (done.isEmpty()) return
     val shown = done.takeLast(LIVE_STEPS_SHOWN)
@@ -3543,7 +3548,7 @@ private fun LiveSteps(tools: List<ToolActivity>, messageKey: String) {
 @Composable
 private fun LiveStepRow(tool: ToolActivity, messageKey: String) {
     val step = remember(tool) { toolDone(tool) }
-    var open by remember(tool.id) { mutableStateOf(false) }
+    var open by rememberSaveable(tool.id) { mutableStateOf(false) }
     Row(
         Modifier
             .fillMaxWidth()
