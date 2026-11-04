@@ -70,7 +70,16 @@ enum class SendOutcome {
 }
 
 /** What went out for a bubble marked by a [SendCheck]: [text] as sent, [display] as shown. */
-internal class UnsettledPrompt(val text: String, val display: String?, val startsTurn: Boolean)
+/**
+ * A prompt whose delivery isn't known yet, as it went out. [files] are the `@file:` references it carried, each
+ * with its card: they stay in the session's workspace, so a resend refers to them again.
+ */
+internal class UnsettledPrompt(
+    val text: String,
+    val display: String?,
+    val startsTurn: Boolean,
+    val files: List<Pair<String, ShownAttachment>> = emptyList(),
+)
 
 sealed interface ChatMessage {
     val key: String

@@ -159,6 +159,12 @@ object NoDeviceDictation : DeviceDictation {
 
 /** Plays synthesized speech through the device speaker. */
 interface SpeechPlayer {
+    /**
+     * Sets up chained chat audio; the returned action restores it. Best effort: neither throws, and a chat goes on
+     * without it. Other voice modes don't call this.
+     */
+    fun chainedChatAudio(): () -> Unit = {}
+
     /** Plays the local connection cue once; cancelling stops it. Unsupported devices stay silent. */
     suspend fun playRingback() = Unit
 
