@@ -72,6 +72,17 @@
     <string name="wallpaper_strong">Erős</string>
     <string name="settings_projects_as_list">Projektek listaként</string>
     <string name="settings_projects_as_list_detail">A csevegéslista projektjei egyetlen gombként jelennek meg, amely listát nyit, oldalra görgethető címkesor helyett.</string>
+    <string name="settings_sidebar_switch">Csevegések/Botok kapcsoló</string>
+    <string name="settings_sidebar_switch_detail">A kapcsoló az oldalsáv tetején. Kikapcsolva az oldalsáv csak az általad választott nézetet mutatja.</string>
+    <string name="settings_sidebar_view">Az oldalsáv mutatja</string>
+    <string name="settings_sidebar_view_detail">Amíg a kapcsoló rejtve van, az oldalsáv mindig ezt a nézetet mutatja.</string>
+    <string name="settings_sidebar_pages">Oldalsáv oldalai</string>
+    <string name="settings_sidebar_pages_intro">A csevegéseid feletti gombok az oldalsávban, például Ütemezett és Archivált. Ha elrejtesz egyet, csak a gombja tűnik el.</string>
+    <string name="settings_sidebar_pages_show">Oldalgombok megjelenítése</string>
+    <string name="settings_sidebar_pages_show_detail">Kikapcsolva az oldalsávban egyik sincs, és a csevegéseiddel kezdődik.</string>
+    <string name="settings_sidebar_pages_each">Oldalak</string>
+    <string name="settings_sidebar_pages_off">Rejtve.</string>
+    <string name="settings_sidebar_pages_all">Mind látható.</string>
     <string name="settings_running_send">Futó válasz közben a Küldés…</string>
     <string name="settings_running_send_detail">%1$s. Tartsd lenyomva a Küldést, ha egy üzenetnél másképp szeretnéd.</string>
     <string name="running_send_steer">Hozzáadja a futó válaszhoz</string>
@@ -82,6 +93,8 @@
     <string name="running_send_stop_and_send_label">Leállít és küld</string>
     <string name="settings_start_instruction">Kezdő utasítás</string>
     <string name="settings_start_instruction_none">Nincs. Mondj előbb valamit minden új csevegésnek, például hogy rövid válaszokat adjon.</string>
+    <string name="settings_use_last_project">Utolsó projekt használata</string>
+    <string name="settings_use_last_project_detail">Az új csevegések abban a projektben indulnak, amelyben az utolsót itt indítottad, gatewayenként és profilonként.</string>
     <string name="settings_show_reasoning">Gondolatmenet mutatása</string>
     <string name="settings_show_reasoning_detail">A modell gondolkodása, összecsukva minden válasz fölött.</string>
     <string name="settings_show_tool_activity">Eszközhasználat mutatása</string>
@@ -201,6 +214,14 @@
     <string name="settings_quick_entry">Gyorsbevitel</string>
     <string name="settings_quick_entry_detail">A %1$s bármelyik alkalmazásból megnyit egy kis mezőt, hogy kérdezz a Hermestől, új csevegésben vagy a nyitottban. Egyelőre csak Windowson.</string>
     <string name="settings_quick_entry_taken">Egy másik alkalmazás használja most ezeket a billentyűket, ezért nem nyílik meg.</string>
+    <string name="settings_quick_entry_detail_portal">Egy asztali billentyűparancs bármelyik alkalmazásból megnyit egy kis mezőt, hogy kérdezz a Hermestől, új csevegésben vagy a nyitottban.</string>
+    <string name="settings_quick_entry_off">Ha ez be van kapcsolva, az asztali környezet megkérdezi, melyik billentyűparancsot használja.</string>
+    <string name="settings_quick_entry_binding">Válassz billentyűparancsot az asztali környezet engedélykérő ablakában.</string>
+    <string name="settings_quick_entry_bound">Asztali billentyűparancs: %1$s.</string>
+    <string name="settings_quick_entry_desktop_choice">az asztali környezet választja</string>
+    <string name="settings_quick_entry_unassigned">Az asztali környezet nem rendelt hozzá billentyűt. Válassz egyet a billentyűparancs-beállításaiban.</string>
+    <string name="settings_quick_entry_declined">Nem kaptál asztali billentyűparancsot. Kapcsold ki, majd be a gyorsbevitelt az újrapróbáláshoz.</string>
+    <string name="settings_quick_entry_unavailable">Ennek az asztali környezetnek a globális billentyűparancs-portálja nem érhető el.</string>
     <string name="settings_zoom">Nagyítás</string>
     <string name="settings_zoom_detail">%1$d%. A %2$s és a %3$s bárhol módosítja; a %4$s visszaállítja 100%-ra.</string>
     <string name="settings_zoom_smaller">Kisebb</string>
@@ -231,5 +252,9 @@
     <plurals name="settings_phone_tools_count">
         <item quantity="one">%1$d eszköz bekapcsolva.</item>
         <item quantity="other">%1$d eszköz bekapcsolva.</item>
+    </plurals>
+    <plurals name="settings_sidebar_pages_count">
+        <item quantity="one">%2$d közül %1$d látható.</item>
+        <item quantity="other">%2$d közül %1$d látható.</item>
     </plurals>
 </resources>

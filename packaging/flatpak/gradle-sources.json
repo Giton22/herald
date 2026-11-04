@@ -13781,6 +13781,26 @@
   },
   {
     "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/2.0.17/slf4j-api-2.0.17.jar",
+    "sha512": "9a3e79db6666a6096a3021bb2e1d918f30f589d8de51d6b600f8ebd92515a510ae2d8f87919cc2dfa8365d64f10194cac8dfa0fb950160eef0e9da06f6caaeb9",
+    "dest": "offline-repository/org/slf4j/slf4j-api/2.0.17",
+    "dest-filename": "slf4j-api-2.0.17.jar",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/2.0.17/slf4j-api-2.0.17.pom",
+    "sha512": "462872ccda241179a77ebc89c3f7be93870fffae344e09d3cccc33d6448336dc77affc9572f420d7da788b3f0eb072b7facc9b7e609b33742ed48f4bb467cb70",
+    "dest": "offline-repository/org/slf4j/slf4j-api/2.0.17",
+    "dest-filename": "slf4j-api-2.0.17.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
     "url": "https://repo.maven.apache.org/maven2/org/slf4j/slf4j-api/2.0.19/slf4j-api-2.0.19.jar",
     "sha512": "627253cf27192750fd5ff84622526ac04f6848829adccd807d485a971bb74e83e47539214a054b8c129f3608cbc6450f2076000ab075b44a1b2dc7b74f592857",
     "dest": "offline-repository/org/slf4j/slf4j-api/2.0.19",
@@ -13801,6 +13821,16 @@
   },
   {
     "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/slf4j/slf4j-bom/2.0.17/slf4j-bom-2.0.17.pom",
+    "sha512": "cb2db4597b98b9981959413e3ffcd5882f8e267d3d51f989c396807c36893296065cbe443a173029e8d3a0851eced25f5149dc2dafa0dd2c29fca737180a7029",
+    "dest": "offline-repository/org/slf4j/slf4j-bom/2.0.17",
+    "dest-filename": "slf4j-bom-2.0.17.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
     "url": "https://repo.maven.apache.org/maven2/org/slf4j/slf4j-bom/2.0.19/slf4j-bom-2.0.19.pom",
     "sha512": "fa1db5970670db9a117648430568461bd66bd2d4ffea181dc69466c6607a7bddcd8f985eb84bf7d97a7d98423c69e1496aa9f818b8684a956fb2dd6179bd3d21",
     "dest": "offline-repository/org/slf4j/slf4j-bom/2.0.19",
@@ -13815,6 +13845,16 @@
     "sha512": "1103234e739366ed3a4a82451723b6a495243ced75c73cf4a9fddd36381a11ecd7f454f5abc7eab13b2f5d594db9192831483aee7a6e26cbd6e4d0cd1eae260d",
     "dest": "offline-repository/org/slf4j/slf4j-parent/1.7.30",
     "dest-filename": "slf4j-parent-1.7.30.pom",
+    "only-arches": [
+      "x86_64"
+    ]
+  },
+  {
+    "type": "file",
+    "url": "https://repo.maven.apache.org/maven2/org/slf4j/slf4j-parent/2.0.17/slf4j-parent-2.0.17.pom",
+    "sha512": "5b16a209843c18a478a0a16dff83ae1c75eedbdeadc15a958d536a36631d4d39a9998e085c165a79ced8ad187f021e2f3cd4068856ca174db35657ef5a473c5a",
+    "dest": "offline-repository/org/slf4j/slf4j-parent/2.0.17",
+    "dest-filename": "slf4j-parent-2.0.17.pom",
     "only-arches": [
       "x86_64"
     ]

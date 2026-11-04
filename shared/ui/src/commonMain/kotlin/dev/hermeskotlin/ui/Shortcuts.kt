@@ -276,8 +276,11 @@ class ShortcutBus {
     fun fire(shortcut: Shortcut): Boolean = handlers.asReversed().any { it.enabled && it.take(shortcut) }
 }
 
-/** Whether the quick entry's global keys are held by another app, so Settings can say why they do nothing. */
+/** The desktop shortcut's availability, so Settings can explain permission or keys held by another app. */
 object QuickEntryHotkey {
+    enum class State { Off, Binding, Bound, Unassigned, Declined, Unavailable }
+    data class Status(val state: State, val trigger: String? = null)
+    var status by mutableStateOf<Status?>(null)
     var taken by mutableStateOf(false)
 }
 
