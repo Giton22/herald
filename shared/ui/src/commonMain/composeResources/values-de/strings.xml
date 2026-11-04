@@ -72,6 +72,17 @@
     <string name="wallpaper_strong">Kräftig</string>
     <string name="settings_projects_as_list">Projekte als Liste</string>
     <string name="settings_projects_as_list_detail">Zeigt die Projekte der Chatliste als einen Button, der eine Liste öffnet, statt als Chip-Reihe, die seitlich scrollt.</string>
+    <string name="settings_sidebar_switch">Chats-/Bots-Umschalter</string>
+    <string name="settings_sidebar_switch_detail">Der Umschalter oben in der Seitenleiste. Aus zeigt die Seitenleiste nur die Ansicht, die du wählst.</string>
+    <string name="settings_sidebar_view">Seitenleiste zeigt</string>
+    <string name="settings_sidebar_view_detail">Solange der Umschalter ausgeblendet ist, zeigt die Seitenleiste immer diese Ansicht.</string>
+    <string name="settings_sidebar_pages">Seiten in der Seitenleiste</string>
+    <string name="settings_sidebar_pages_intro">Die Buttons über deinen Chats in der Seitenleiste, etwa Geplant und Archiviert. Ausblenden entfernt nur den Button.</string>
+    <string name="settings_sidebar_pages_show">Seiten-Buttons zeigen</string>
+    <string name="settings_sidebar_pages_show_detail">Aus hat die Seitenleiste keinen davon und beginnt mit deinen Chats.</string>
+    <string name="settings_sidebar_pages_each">Seiten</string>
+    <string name="settings_sidebar_pages_off">Ausgeblendet.</string>
+    <string name="settings_sidebar_pages_all">Alle sichtbar.</string>
     <string name="settings_running_send">Bei laufender Antwort: Senden …</string>
     <string name="settings_running_send_detail">%1$s. Halte Senden gedrückt, um es für eine Nachricht anders zu machen.</string>
     <string name="running_send_steer">Fügt sie der laufenden Antwort hinzu</string>
@@ -257,5 +268,9 @@
     <plurals name="settings_phone_tools_count">
         <item quantity="one">1 Tool an.</item>
         <item quantity="other">%1$d Tools an.</item>
+    </plurals>
+    <plurals name="settings_sidebar_pages_count">
+        <item quantity="one">%1$d von %2$d sichtbar.</item>
+        <item quantity="other">%1$d von %2$d sichtbar.</item>
     </plurals>
 </resources>

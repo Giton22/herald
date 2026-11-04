@@ -72,6 +72,17 @@
     <string name="wallpaper_strong">浓</string>
     <string name="settings_projects_as_list">项目以列表显示</string>
     <string name="settings_projects_as_list_detail">将对话列表中的项目显示为一个打开列表的按钮，而不是一排横向滚动的标签。</string>
+    <string name="settings_sidebar_switch">对话/机器人切换</string>
+    <string name="settings_sidebar_switch_detail">侧边栏顶部的切换。关闭后，侧边栏只显示你选择的视图。</string>
+    <string name="settings_sidebar_view">侧边栏显示</string>
+    <string name="settings_sidebar_view_detail">切换隐藏时，侧边栏始终显示此视图。</string>
+    <string name="settings_sidebar_pages">侧边栏页面</string>
+    <string name="settings_sidebar_pages_intro">侧边栏中对话上方的按钮，例如定时任务和已归档。隐藏某个页面只会移除它的按钮。</string>
+    <string name="settings_sidebar_pages_show">显示页面按钮</string>
+    <string name="settings_sidebar_pages_show_detail">关闭后，侧边栏不显示任何页面按钮，直接从你的对话开始。</string>
+    <string name="settings_sidebar_pages_each">页面</string>
+    <string name="settings_sidebar_pages_off">已隐藏。</string>
+    <string name="settings_sidebar_pages_all">全部显示。</string>
     <string name="settings_running_send">回复进行中时，发送…</string>
     <string name="settings_running_send_detail">%1$s。长按发送可为单条消息换一种方式。</string>
     <string name="running_send_steer">加入正在进行的回复</string>
@@ -256,5 +267,8 @@
     <string name="connected_devices_wear_detail">Wear OS 手表上的 Kyllene 有自己的设置：在手表上打开 Kyllene 的聊天，然后点按“设置”。是否随手机一起响铃，在“手机工具 › 通话”中设置，与 Pebble 相同。</string>
     <plurals name="settings_phone_tools_count">
         <item quantity="other">已开启 %1$d 个工具。</item>
+    </plurals>
+    <plurals name="settings_sidebar_pages_count">
+        <item quantity="other">显示 %1$d 个，共 %2$d 个。</item>
     </plurals>
 </resources>
