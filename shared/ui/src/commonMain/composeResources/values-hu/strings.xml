@@ -207,6 +207,14 @@
     <string name="settings_quick_entry">Gyorsbevitel</string>
     <string name="settings_quick_entry_detail">A %1$s bármelyik alkalmazásból megnyit egy kis mezőt, hogy kérdezz a Hermestől, új csevegésben vagy a nyitottban. Egyelőre csak Windowson.</string>
     <string name="settings_quick_entry_taken">Egy másik alkalmazás használja most ezeket a billentyűket, ezért nem nyílik meg.</string>
+    <string name="settings_quick_entry_detail_portal">Egy asztali billentyűparancs bármelyik alkalmazásból megnyit egy kis mezőt, hogy kérdezz a Hermestől, új csevegésben vagy a nyitottban.</string>
+    <string name="settings_quick_entry_off">Ha ez be van kapcsolva, az asztali környezet megkérdezi, melyik billentyűparancsot használja.</string>
+    <string name="settings_quick_entry_binding">Válassz billentyűparancsot az asztali környezet engedélykérő ablakában.</string>
+    <string name="settings_quick_entry_bound">Asztali billentyűparancs: %1$s.</string>
+    <string name="settings_quick_entry_desktop_choice">az asztali környezet választja</string>
+    <string name="settings_quick_entry_unassigned">Az asztali környezet nem rendelt hozzá billentyűt. Válassz egyet a billentyűparancs-beállításaiban.</string>
+    <string name="settings_quick_entry_declined">Nem kaptál asztali billentyűparancsot. Kapcsold ki, majd be a gyorsbevitelt az újrapróbáláshoz.</string>
+    <string name="settings_quick_entry_unavailable">Ennek az asztali környezetnek a globális billentyűparancs-portálja nem érhető el.</string>
     <string name="settings_zoom">Nagyítás</string>
     <string name="settings_zoom_detail">%1$d%. A %2$s és a %3$s bárhol módosítja; a %4$s visszaállítja 100%-ra.</string>
     <string name="settings_zoom_smaller">Kisebb</string>

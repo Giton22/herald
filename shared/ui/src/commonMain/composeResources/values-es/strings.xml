@@ -207,6 +207,14 @@
     <string name="settings_quick_entry">Entrada rápida</string>
     <string name="settings_quick_entry_detail">%1$s desde cualquier app abre un cuadro pequeño para preguntar a Hermes, en un chat nuevo o en el abierto. Por ahora solo en Windows.</string>
     <string name="settings_quick_entry_taken">Otra app usa ahora estas teclas, así que no se puede abrir.</string>
+    <string name="settings_quick_entry_detail_portal">Un atajo del escritorio abre desde cualquier app un cuadro pequeño para preguntar a Hermes, en un chat nuevo o en el abierto.</string>
+    <string name="settings_quick_entry_off">Tu escritorio pregunta qué atajo usar cuando esto está activado.</string>
+    <string name="settings_quick_entry_binding">Elige un atajo en el diálogo de permisos de tu escritorio.</string>
+    <string name="settings_quick_entry_bound">Atajo del escritorio: %1$s.</string>
+    <string name="settings_quick_entry_desktop_choice">elegido por tu escritorio</string>
+    <string name="settings_quick_entry_unassigned">Tu escritorio no le asignó ninguna tecla. Elige una en sus ajustes de atajos.</string>
+    <string name="settings_quick_entry_declined">No se concedió ningún atajo del escritorio. Desactiva y vuelve a activar la entrada rápida para intentarlo de nuevo.</string>
+    <string name="settings_quick_entry_unavailable">El portal de atajos globales de este escritorio no está disponible.</string>
     <string name="settings_zoom">Zoom</string>
     <string name="settings_zoom_detail">%1$d %. %2$s y %3$s lo cambian en cualquier parte; %4$s vuelve al 100 %.</string>
     <string name="settings_zoom_smaller">Más pequeño</string>

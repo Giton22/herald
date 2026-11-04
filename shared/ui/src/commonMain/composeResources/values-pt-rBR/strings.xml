@@ -207,6 +207,14 @@
     <string name="settings_quick_entry">Entrada rápida</string>
     <string name="settings_quick_entry_detail">%1$s em qualquer app abre uma caixinha para perguntar ao Hermes, em uma nova conversa ou na aberta. Por enquanto só no Windows.</string>
     <string name="settings_quick_entry_taken">Outro app está usando essas teclas agora, então a entrada rápida não pode abrir.</string>
+    <string name="settings_quick_entry_detail_portal">Um atalho da área de trabalho abre, em qualquer app, uma caixinha para perguntar ao Hermes, em uma nova conversa ou na aberta.</string>
+    <string name="settings_quick_entry_off">Sua área de trabalho pergunta qual atalho usar quando isto está ativado.</string>
+    <string name="settings_quick_entry_binding">Escolha um atalho na janela de permissão da sua área de trabalho.</string>
+    <string name="settings_quick_entry_bound">Atalho da área de trabalho: %1$s.</string>
+    <string name="settings_quick_entry_desktop_choice">escolhido pela sua área de trabalho</string>
+    <string name="settings_quick_entry_unassigned">Sua área de trabalho não atribuiu nenhuma tecla. Escolha uma nas configurações de atalhos dela.</string>
+    <string name="settings_quick_entry_declined">Nenhum atalho da área de trabalho foi concedido. Desative e ative a entrada rápida para tentar de novo.</string>
+    <string name="settings_quick_entry_unavailable">O portal de atalhos globais desta área de trabalho não está disponível.</string>
     <string name="settings_zoom">Zoom</string>
     <string name="settings_zoom_detail">%1$d%. %2$s e %3$s mudam o zoom em qualquer lugar; %4$s volta para 100%.</string>
     <string name="settings_zoom_smaller">Menor</string>

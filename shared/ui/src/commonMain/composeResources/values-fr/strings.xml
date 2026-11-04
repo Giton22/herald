@@ -207,6 +207,14 @@
     <string name="settings_quick_entry">Saisie rapide</string>
     <string name="settings_quick_entry_detail">%1$s depuis n’importe quelle app ouvre une petite zone pour poser une question à Hermes, dans une nouvelle conversation ou celle ouverte. Windows uniquement pour l’instant.</string>
     <string name="settings_quick_entry_taken">Une autre app utilise maintenant ces touches, la saisie rapide ne peut donc pas s’ouvrir.</string>
+    <string name="settings_quick_entry_detail_portal">Un raccourci du bureau ouvre depuis n’importe quelle app une petite zone pour poser une question à Hermes, dans une nouvelle conversation ou celle ouverte.</string>
+    <string name="settings_quick_entry_off">Votre bureau demande quel raccourci utiliser une fois cette option activée.</string>
+    <string name="settings_quick_entry_binding">Choisissez un raccourci dans la fenêtre d’autorisation de votre bureau.</string>
+    <string name="settings_quick_entry_bound">Raccourci du bureau : %1$s.</string>
+    <string name="settings_quick_entry_desktop_choice">choisi par votre bureau</string>
+    <string name="settings_quick_entry_unassigned">Votre bureau ne lui a attribué aucune touche. Choisissez-en une dans ses réglages de raccourcis.</string>
+    <string name="settings_quick_entry_declined">Aucun raccourci du bureau n’a été accordé. Désactivez puis réactivez la saisie rapide pour réessayer.</string>
+    <string name="settings_quick_entry_unavailable">Le portail des raccourcis globaux de ce bureau n’est pas disponible.</string>
     <string name="settings_zoom">Zoom</string>
     <string name="settings_zoom_detail">%1$d %. %2$s et %3$s le modifient partout ; %4$s revient à 100 %.</string>
     <string name="settings_zoom_smaller">Plus petit</string>

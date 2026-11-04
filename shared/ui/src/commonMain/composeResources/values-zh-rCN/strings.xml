@@ -207,6 +207,14 @@
     <string name="settings_quick_entry">快速输入</string>
     <string name="settings_quick_entry_detail">在任何应用中按 %1$s 都会打开一个小输入框向 Hermes 提问，可在新对话或当前对话中。目前仅支持 Windows。</string>
     <string name="settings_quick_entry_taken">另一个应用正在使用这些按键，所以无法打开。</string>
+    <string name="settings_quick_entry_detail_portal">在任何应用中按桌面快捷键都会打开一个小输入框向 Hermes 提问，可在新对话或当前对话中。</string>
+    <string name="settings_quick_entry_off">开启后，桌面会询问要使用哪个快捷键。</string>
+    <string name="settings_quick_entry_binding">请在桌面的权限对话框中选择一个快捷键。</string>
+    <string name="settings_quick_entry_bound">桌面快捷键：%1$s。</string>
+    <string name="settings_quick_entry_desktop_choice">由桌面选择</string>
+    <string name="settings_quick_entry_unassigned">桌面没有为它分配按键。请在桌面的快捷键设置中选择一个。</string>
+    <string name="settings_quick_entry_declined">桌面未授予快捷键。关闭再开启快速输入即可重试。</string>
+    <string name="settings_quick_entry_unavailable">此桌面的全局快捷键门户不可用。</string>
     <string name="settings_zoom">缩放</string>
     <string name="settings_zoom_detail">%1$d%。%2$s 和 %3$s 可在任何地方调整；%4$s 恢复到 100%。</string>
     <string name="settings_zoom_smaller">缩小</string>
