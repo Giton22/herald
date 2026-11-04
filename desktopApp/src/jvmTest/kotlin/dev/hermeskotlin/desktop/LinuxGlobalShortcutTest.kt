@@ -177,13 +177,97 @@ class LinuxGlobalShortcutTest {
             LinuxGlobalShortcut({ presses.incrementAndGet() }, { state, _ -> states.add(state) }, fixture.address).use {
                 fixture.service.started.get(3, TimeUnit.SECONDS)
                 fixture.bus.sendMessage(ShortcutsPortal.Session.Closed(fixture.service.session, emptyMap()))
-                await { states.contains(LinuxGlobalShortcut.State.Unavailable) }
+                // The desktop ended it, like a refusal: the portal itself still works.
+                await { states.contains(LinuxGlobalShortcut.State.Declined) }
+                assertTrue(LinuxGlobalShortcut.State.Unavailable !in states)
                 fixture.service.requestClosed.get(3, TimeUnit.SECONDS)
                 fixture.service.sessionClosed.get(3, TimeUnit.SECONDS)
                 fixture.service.activate()
                 Thread.sleep(100)
                 assertEquals(0, presses.get())
             }
+        }
+    }
+
+    @Test fun aHostInstallNamesItselfBeforeItsFirstRequestAndAFlatpakDoesNot() {
+        // Newer portals refuse a host app without an ID ("An app id is required"), so a .deb never bound.
+        ShortcutPortalFixture().use { fixture ->
+            val states = LinkedBlockingQueue<LinuxGlobalShortcut.State>()
+            LinuxGlobalShortcut({}, { state, _ -> states.add(state) }, fixture.address, flatpakInfo = File("/nonexistent/.flatpak-info")).use {
+                states.bound()
+                assertEquals(listOf("Register kyllene-Kyllene", "CreateSession"), fixture.service.calls.toList())
+            }
+        }
+        val sandbox = Files.createTempFile("kyllene-flatpak-info", "")
+        try {
+            ShortcutPortalFixture().use { fixture ->
+                val states = LinkedBlockingQueue<LinuxGlobalShortcut.State>()
+                LinuxGlobalShortcut({}, { state, _ -> states.add(state) }, fixture.address, flatpakInfo = sandbox.toFile()).use {
+                    states.bound()
+                    assertEquals(listOf("CreateSession"), fixture.service.calls.toList())
+                }
+            }
+        } finally { Files.deleteIfExists(sandbox) }
+    }
+
+    @Test fun aPortalWithoutTheRegistryStillBindsAHostInstall() {
+        ShortcutPortalFixture().use { fixture ->
+            fixture.service.registry = false
+            val states = LinkedBlockingQueue<LinuxGlobalShortcut.State>()
+            LinuxGlobalShortcut({}, { state, _ -> states.add(state) }, fixture.address, flatpakInfo = File("/nonexistent/.flatpak-info")).use {
+                states.bound()
+            }
+        }
+    }
+
+    @Test fun aGrantWithoutKeysIsUnassignedUntilTheUserPicksOne() {
+        // KDE answers "" once its dialog was closed or the key cleared, and remembers it.
+        ShortcutPortalFixture().use { fixture ->
+            fixture.service.trigger = ""
+            val states = LinkedBlockingQueue<Pair<LinuxGlobalShortcut.State, String?>>()
+            LinuxGlobalShortcut({}, { state, trigger -> states.add(state to trigger) }, fixture.address).use {
+                await { states.any { it.first == LinuxGlobalShortcut.State.Unassigned } }
+                assertTrue(states.none { it.first == LinuxGlobalShortcut.State.Bound })
+                fixture.service.rebind("Ctrl+Alt+K")
+                await { (LinuxGlobalShortcut.State.Bound to "Ctrl+Alt+K") in states }
+                assertEquals(1, fixture.service.binds.get())
+            }
+        }
+    }
+
+    @Test fun aMissingReleaseDoesNotLockTheShortcut() {
+        // KDE sends no Deactivated when another tool fires the shortcut.
+        ShortcutPortalFixture().use { fixture ->
+            val states = LinkedBlockingQueue<LinuxGlobalShortcut.State>()
+            val presses = AtomicInteger()
+            LinuxGlobalShortcut({ presses.incrementAndGet() }, { state, _ -> states.add(state) }, fixture.address).use {
+                states.bound()
+                fixture.service.activate()
+                await { presses.get() == 1 }
+                Thread.sleep(1_100)
+                fixture.service.activate()
+                await { presses.get() == 2 }
+            }
+        }
+    }
+
+    @Test fun revocationAfterBindingIsDeclinedNotUnavailable() {
+        ShortcutPortalFixture().use { fixture ->
+            val states = LinkedBlockingQueue<LinuxGlobalShortcut.State>()
+            LinuxGlobalShortcut({}, { state, _ -> states.add(state) }, fixture.address).use {
+                states.bound()
+                fixture.bus.sendMessage(ShortcutsPortal.Session.Closed(fixture.service.session, emptyMap()))
+                await { states.contains(LinuxGlobalShortcut.State.Declined) }
+                assertTrue(LinuxGlobalShortcut.State.Unavailable !in states)
+            }
+        }
+    }
+
+    @Test fun aSessionHandleSentAsAnObjectPathBinds() {
+        ShortcutPortalFixture().use { fixture ->
+            fixture.service.handleAsPath = true
+            val states = LinkedBlockingQueue<LinuxGlobalShortcut.State>()
+            LinuxGlobalShortcut({}, { state, _ -> states.add(state) }, fixture.address).use { states.bound() }
         }
     }
 

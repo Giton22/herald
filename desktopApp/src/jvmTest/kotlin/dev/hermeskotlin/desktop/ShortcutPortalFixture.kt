@@ -2,12 +2,14 @@ package dev.hermeskotlin.desktop
 
 import java.nio.file.Files
 import java.util.concurrent.CompletableFuture
+import java.util.concurrent.ConcurrentLinkedQueue
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicInteger
 import org.freedesktop.dbus.DBusPath
 import org.freedesktop.dbus.connections.AbstractConnection
 import org.freedesktop.dbus.connections.impl.DBusConnection
 import org.freedesktop.dbus.connections.impl.DBusConnectionBuilder
+import org.freedesktop.dbus.exceptions.DBusExecutionException
 import org.freedesktop.dbus.interfaces.DBus
 import org.freedesktop.dbus.interfaces.Properties
 import org.freedesktop.dbus.types.UInt32
@@ -52,15 +54,20 @@ internal class ShortcutPortalFixture : AutoCloseable {
         }
     }
 
-    class Service(val bus: DBusConnection) : ShortcutsPortal, Properties {
+    class Service(val bus: DBusConnection) : ShortcutsPortal, ShortcutsPortal.HostRegistry, Properties {
         var version = 1L
         var response = 0L
         var empty = false
         var pending = false
         var pendingCreate = false
         var wrongHandle = false
+        var handleAsPath = false
+        /** Whether this portal has the host app registry (xdg-desktop-portal 1.19 and later). */
+        var registry = true
         var trigger = "Ctrl+Shift+Space"
         val binds = AtomicInteger()
+        /** Registrations and session requests, in the order they arrived. */
+        val calls = ConcurrentLinkedQueue<String>()
         val requestClosed = CompletableFuture<Unit>()
         val sessionClosed = CompletableFuture<Unit>()
         val started = CompletableFuture<Unit>()
@@ -72,14 +79,19 @@ internal class ShortcutPortalFixture : AutoCloseable {
         override fun <A> Get(iface: String, property: String): A = UInt32(version) as A
         override fun <A> Set(iface: String, property: String, value: A) = error("Not supported")
         override fun GetAll(iface: String): Map<String, Variant<*>> = emptyMap()
+        override fun Register(appId: String, options: Map<String, Variant<*>>) {
+            if (!registry) throw DBusExecutionException("No such interface")
+            calls += "Register $appId"
+        }
         override fun CreateSession(options: Map<String, Variant<*>>): DBusPath {
+            calls += "CreateSession"
             val sender = AbstractConnection.getCallInfo().source.substring(1).replace('.', '_')
             session = "$PATH/session/$sender/${options.getValue("session_handle_token").value}"
             bus.exportObject(session, object : ShortcutsPortal.Session {
                 override fun getObjectPath() = session
                 override fun Close() { sessionClosed.complete(Unit) }
             })
-            return respond(options, mapOf("session_handle" to Variant(session)))
+            return respond(options, mapOf("session_handle" to if (handleAsPath) Variant(DBusPath(session)) else Variant(session)))
         }
         override fun BindShortcuts(session: DBusPath, shortcuts: List<ShortcutsPortal.Shortcut>, parent: String, options: Map<String, Variant<*>>): DBusPath {
             check(session.path == this.session && shortcuts.single().id == ID)
@@ -105,6 +117,11 @@ internal class ShortcutPortalFixture : AutoCloseable {
             sender.sendMessage(ShortcutsPortal.Activated(PATH, DBusPath(handle), id, UInt64(1), emptyMap()))
         }
         fun release() { bus.sendMessage(ShortcutsPortal.Deactivated(PATH, DBusPath(session), ID, UInt64(2), emptyMap())) }
+        /** The user picks other keys in the desktop's settings. */
+        fun rebind(trigger: String) {
+            bus.sendMessage(ShortcutsPortal.ShortcutsChanged(PATH, DBusPath(session),
+                listOf(ShortcutsPortal.Shortcut(ID, mapOf("trigger_description" to Variant(trigger))))))
+        }
     }
     companion object {
         const val NAME = "org.freedesktop.portal.Desktop"

@@ -36,6 +36,7 @@ class GlobalHotkey private constructor(private val release: () -> Unit) {
                     onStatus(QuickEntryHotkey.Status(when (state) {
                         LinuxGlobalShortcut.State.Binding -> QuickEntryHotkey.State.Binding
                         LinuxGlobalShortcut.State.Bound -> QuickEntryHotkey.State.Bound
+                        LinuxGlobalShortcut.State.Unassigned -> QuickEntryHotkey.State.Unassigned
                         LinuxGlobalShortcut.State.Declined -> QuickEntryHotkey.State.Declined
                         LinuxGlobalShortcut.State.Unavailable -> QuickEntryHotkey.State.Unavailable
                     }, trigger))

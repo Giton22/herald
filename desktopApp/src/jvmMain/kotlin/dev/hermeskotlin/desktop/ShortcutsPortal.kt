@@ -21,6 +21,8 @@ internal interface ShortcutsPortal : DBusInterface {
         DBusSignal(path, session, id, timestamp, options)
     class Deactivated(path: String, val session: DBusPath, val id: String, val timestamp: UInt64, val options: Map<String, Variant<*>>) :
         DBusSignal(path, session, id, timestamp, options)
+    /** The user changed the keys in the desktop's own settings. */
+    class ShortcutsChanged(path: String, val session: DBusPath, val shortcuts: List<Shortcut>) : DBusSignal(path, session, shortcuts)
 
     @DBusInterfaceName("org.freedesktop.portal.Request")
     interface Request : DBusInterface {
@@ -32,5 +34,11 @@ internal interface ShortcutsPortal : DBusInterface {
     interface Session : DBusInterface {
         fun Close()
         class Closed(path: String, val details: Map<String, Variant<*>>) : DBusSignal(path, details)
+    }
+
+    /** Names a host (unsandboxed) app to the portal; without it, newer portals refuse every request. */
+    @DBusInterfaceName("org.freedesktop.host.portal.Registry")
+    interface HostRegistry : DBusInterface {
+        fun Register(appId: String, options: Map<String, Variant<*>>)
     }
 }
