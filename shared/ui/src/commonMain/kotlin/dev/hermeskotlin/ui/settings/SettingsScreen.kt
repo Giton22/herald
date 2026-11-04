@@ -126,6 +126,7 @@ import com.composables.icons.lucide.LogOut
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.MessageCircle
 import com.composables.icons.lucide.MessageSquarePlus
+import com.composables.icons.lucide.Folder
 import com.composables.icons.lucide.MessagesSquare
 import com.composables.icons.lucide.Moon
 import com.composables.icons.lucide.Phone
@@ -213,6 +214,11 @@ import dev.hermeskotlin.core.gateway.CheckStage
 import dev.hermeskotlin.core.gateway.StageResult
 import dev.hermeskotlin.ui.connect.ConnectionChecklist
 import dev.hermeskotlin.ui.sessions.SubpageHeader
+import dev.hermeskotlin.ui.sessions.navIcon
+import dev.hermeskotlin.ui.sessions.navLabel
+import dev.hermeskotlin.ui.SidebarPage
+import dev.hermeskotlin.core.bots.SidebarMode
+import com.composables.icons.lucide.LayoutList
 import dev.hermeskotlin.ui.update.UpdateBanner
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.roundToInt
@@ -260,6 +266,7 @@ fun SettingsScreen(
     var callTargetOpen by remember { mutableStateOf(false) }
     var appIconOpen by remember { mutableStateOf(false) }
     var startInstructionOpen by remember { mutableStateOf(false) }
+    var sidebarPagesOpen by remember { mutableStateOf(false) }
     // Saveable, and open again after a pick redraws the screens, so a new language shows on the page it was picked on.
     var languageOpen by rememberSaveable { mutableStateOf(LanguagePageReturn.take()) }
     // Read again when the App icon page closes, so its row names the icon just applied.
@@ -267,7 +274,7 @@ fun SettingsScreen(
     val language = rememberLanguageChoice()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
-    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen && !languageOpen, onBack = onBack)
+    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen && !languageOpen && !sidebarPagesOpen, onBack = onBack)
     // The desktop lists the sections beside the page; they say here where they start.
     val anchors = remember { mutableStateMapOf<String, Int>() }
     CompositionLocalProvider(LocalSectionAnchors provides anchors.takeIf { isDesktop }) { SettingsView(
@@ -298,6 +305,7 @@ fun SettingsScreen(
         language = appLanguage(language.picked),
         onOpenLanguage = { languageOpen = true },
         onOpenStartInstruction = { startInstructionOpen = true },
+        onOpenSidebarPages = { sidebarPagesOpen = true },
         suggestions = suggestions,
         onInstallSuggestions = viewModel::installSuggestions,
         onCheckSuggestions = viewModel::checkSuggestions,
@@ -315,6 +323,7 @@ fun SettingsScreen(
         )
     }
     if (appIconOpen) AppIconScreen(onBack = { appIconOpen = false })
+    if (sidebarPagesOpen) SidebarPagesScreen(settings, viewModel::update, onBack = { sidebarPagesOpen = false })
     if (languageOpen) LanguageScreen(onBack = { languageOpen = false })
     ConnectionCheckSheet(
         visible = checkOpen,
@@ -401,6 +410,7 @@ internal fun SettingsView(
     language: AppLanguage? = null,
     onOpenLanguage: () -> Unit = {},
     onOpenStartInstruction: () -> Unit = {},
+    onOpenSidebarPages: () -> Unit = {},
     /** Where the Next Prompt plugin behind Suggested replies stands on the gateway. */
     suggestions: SuggestionsPlugin = SuggestionsPlugin.Checking,
     onInstallSuggestions: () -> Unit = {},
@@ -536,6 +546,35 @@ internal fun SettingsView(
                         checked = settings.projectsAsDropdown,
                         onCheckedChange = { on -> onUpdate { it.copy(projectsAsDropdown = on) } },
                     )
+                    Divider()
+                    SwitchRow(
+                        title = stringResource(Res.string.settings_sidebar_switch),
+                        detail = stringResource(Res.string.settings_sidebar_switch_detail),
+                        checked = settings.sidebarModeSwitch,
+                        onCheckedChange = { on -> onUpdate { it.copy(sidebarModeSwitch = on) } },
+                    )
+                    // Without the switch, which side the sidebar shows is picked here.
+                    if (!settings.sidebarModeSwitch) {
+                        Divider()
+                        Field(stringResource(Res.string.settings_sidebar_view), detail = stringResource(Res.string.settings_sidebar_view_detail)) {
+                            // The control takes its labels as a plain lambda, so the words are resolved first.
+                            val viewLabels = SidebarMode.entries.associateWith { stringResource(navLabel(it.page)) }
+                            SegmentedControl(
+                                options = SidebarMode.entries,
+                                selected = settings.sidebarView,
+                                onSelect = { view -> onUpdate { it.copy(sidebarView = view) } },
+                                optionLabel = { viewLabels.getValue(it) },
+                                optionIcon = { navIcon(it.page) },
+                            )
+                        }
+                    }
+                    Divider()
+                    NavRow(
+                        title = stringResource(Res.string.settings_sidebar_pages),
+                        detail = sidebarPagesSummary(settings),
+                        icon = Lucide.LayoutList,
+                        onClick = onOpenSidebarPages,
+                    )
                 }
 
                 Section(stringResource(Res.string.settings_section_chat)) {
@@ -564,6 +603,14 @@ internal fun SettingsView(
                         icon = Lucide.MessageSquarePlus,
                         onClick = onOpenStartInstruction,
                         detailLines = 2,
+                    )
+                    Divider()
+                    SwitchRow(
+                        title = stringResource(Res.string.settings_use_last_project),
+                        detail = stringResource(Res.string.settings_use_last_project_detail),
+                        checked = settings.useLastProject,
+                        onCheckedChange = { on -> onUpdate { it.copy(useLastProject = on) } },
+                        icon = Lucide.Folder,
                     )
                     Divider()
                     SwitchRow(
@@ -699,10 +746,7 @@ internal fun SettingsView(
                     Divider()
                     SwitchRow(
                         title = stringResource(Res.string.settings_quick_entry),
-                        detail = stringResource(
-                            Res.string.settings_quick_entry_detail,
-                            keysLabel("Ctrl+Shift+Space"),
-                        ) +
+                        detail = quickEntryDetail() +
                             // Windows gives a hotkey to one app at a time: say so rather than leave it on and silent.
                             if (settings.quickEntry && QuickEntryHotkey.taken) {
                                 " " + stringResource(Res.string.settings_quick_entry_taken)
@@ -916,6 +960,13 @@ internal fun SettingsView(
 
 /** The Kyllene community server; the invite never expires. */
 private const val DISCORD_INVITE = "https://discord.gg/wCtyvQ3KcM"
+
+/** The sidebar page each side of the Chats / Bots switch is, for its name and icon. */
+private val SidebarMode.page: SidebarPage
+    get() = when (this) {
+        SidebarMode.Chats -> SidebarPage.Chats
+        SidebarMode.Bots -> SidebarPage.Bots
+    }
 
 /** The Phone tools row's line: off, or how many tools the agent may use. */
 @Composable
@@ -1533,5 +1584,20 @@ internal fun ActionRow(title: String, icon: ImageVector, onClick: () -> Unit) {
     ) {
         IconTile(icon)
         Text(title, style = Theme[typography][body], color = Theme[colors][text])
+    }
+}
+
+// What the feature does, then (where the desktop grants the shortcut) where that stands.
+@Composable
+private fun quickEntryDetail(): String {
+    val status = QuickEntryHotkey.status ?: return stringResource(Res.string.settings_quick_entry_detail, keysLabel("Ctrl+Shift+Space"))
+    return stringResource(Res.string.settings_quick_entry_detail_portal) + " " + when (status.state) {
+        QuickEntryHotkey.State.Off -> stringResource(Res.string.settings_quick_entry_off)
+        QuickEntryHotkey.State.Binding -> stringResource(Res.string.settings_quick_entry_binding)
+        QuickEntryHotkey.State.Bound -> stringResource(Res.string.settings_quick_entry_bound,
+            status.trigger ?: stringResource(Res.string.settings_quick_entry_desktop_choice))
+        QuickEntryHotkey.State.Unassigned -> stringResource(Res.string.settings_quick_entry_unassigned)
+        QuickEntryHotkey.State.Declined -> stringResource(Res.string.settings_quick_entry_declined)
+        QuickEntryHotkey.State.Unavailable -> stringResource(Res.string.settings_quick_entry_unavailable)
     }
 }

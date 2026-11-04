@@ -73,8 +73,8 @@ class ChatSession(
     private val risks: ToolRiskStore? = null,
     /** Dates what this device sends and sees finish; live events carry no time of their own. */
     private val clock: Clock = Clock.System,
-    /** For a new chat: the working folder it starts in (a project's), or null for the profile's default. */
-    private val cwd: String? = null,
+    /** For a new chat: the working folder it starts in (a project's), or null for the profile's default. See [startIn]. */
+    private var cwd: String? = null,
     /** The device's copy of the transcript, shown while the gateway can't be read. */
     private val cache: OfflineCache? = null,
     /** `/btw` and `/bg` cards from when this chat was last open ([ChatHost] keeps them across a switch). */
@@ -206,11 +206,21 @@ class ChatSession(
         display: String? = null,
         queue: Boolean = false,
         voiceLive: VoiceLiveTurn? = null,
+    ): SendOutcome = submitPrompt(text, attachments, display, queue, voiceLive, resent = emptyList())
+
+    /** [submit], with [resent]: the `@file:` references, and their cards, of a prompt sent again ([resend]). */
+    private suspend fun submitPrompt(
+        text: String,
+        attachments: List<OutgoingAttachment>,
+        display: String?,
+        queue: Boolean,
+        voiceLive: VoiceLiveTurn?,
+        resent: List<Pair<String, ShownAttachment>>,
     ): SendOutcome {
         val trimmed = text.trim()
-        if (trimmed.isEmpty() && attachments.isEmpty()) return SendOutcome.NotSent
+        if (trimmed.isEmpty() && attachments.isEmpty() && resent.isEmpty()) return SendOutcome.NotSent
         // Desktop's fallback, so an image-only prompt still asks something.
-        val visible = trimmed.ifEmpty { if (attachments.any { it.kind != AttachmentKind.File }) IMAGE_ONLY_PROMPT else "" }
+        val visible = trimmed.ifEmpty { if (attachments.any { it.kind == AttachmentKind.Image }) IMAGE_ONLY_PROMPT else "" }
         val key = "local-${_state.value.keySeq}"
         _state.update {
             it.copy(
@@ -218,7 +228,7 @@ class ChatSession(
                     key,
                     display ?: visible,
                     pending = true,
-                    attachments = attachments.map { a -> a.toShown() },
+                    attachments = resent.map { (_, shown) -> shown } + attachments.map { a -> a.toShown() },
                     timestamp = nowSeconds(),
                 ),
                 keySeq = it.keySeq + 1,
@@ -236,7 +246,7 @@ class ChatSession(
         val queued = queue || (waited && _state.value.running)
         // Counted before submitting: the turn's message.start can arrive before the prompt.submit reply.
         ownTurnsPending++
-        // Images and PDF pages queued on the session: if the prompt never goes out they would ride along
+        // Images queued on the session: if the prompt never goes out they would ride along
         // with the next one, so a failed send takes them back.
         val queuedImages = mutableListOf<String>()
         var uploadClient: JsonRpcClient? = null
@@ -248,6 +258,8 @@ class ChatSession(
         val promptsBefore = _state.value.takeIf { it.historyRead }
             ?.messages?.count { it is ChatMessage.User && !it.pending && it.check == null }
         var submitted = false
+        // The files' references in the workspace, each with its card, kept for a resend.
+        val files = resent.toMutableList()
         return try {
             // The composer holds files to this size; checked before any goes, so none is uploaded for nothing.
             attachments.firstOrNull { it.size > OutgoingAttachment.MAX_BYTES }?.let {
@@ -257,7 +269,8 @@ class ChatSession(
             val runtimeId = ensureAttached(client)
             uploadClient = client
             uploadRuntimeId = runtimeId
-            val refs = attachments.mapNotNull { upload(client, runtimeId, it, queuedImages, key) }
+            attachments.forEach { a -> upload(client, runtimeId, a, queuedImages, key)?.let { files += it to a.toShown() } }
+            val refs = files.map { (ref, _) -> ref }
             submitted = true
             val result = client.request(
                 "prompt.submit",
@@ -278,7 +291,7 @@ class ChatSession(
             if (status !in TURN_STARTING_STATUSES) ownTurnsPending = (ownTurnsPending - 1).coerceAtLeast(0)
             // The row written for it, so it can be regenerated or edited before the transcript is read again.
             val rowId = result.long("user_row_id")
-            val sentText = visible.takeIf { attachments.isEmpty() && display == null && it.isNotEmpty() }
+            val sentText = visible.takeIf { attachments.isEmpty() && resent.isEmpty() && display == null && it.isNotEmpty() }
             _state.update { state ->
                 val sent = state.copy(
                     running = true,
@@ -297,7 +310,7 @@ class ChatSession(
             // An error reply is the gateway turning it down; anything else after it went out is no verdict.
             if (submitted && e !is RpcException) {
                 val arrived = if (startsTurn) findInTranscript(visible, key, promptsBefore) else null
-                return settleUnanswered(key, arrived, UnsettledPrompt(text, display, startsTurn)) {
+                return settleUnanswered(key, arrived, UnsettledPrompt(text, display, startsTurn, files.toList())) {
                     detach(uploadClient, uploadRuntimeId, queuedImages)
                 }
             }
@@ -422,7 +435,8 @@ class ChatSession(
     suspend fun resend(key: String): String? {
         val prompt = unsettled[key]
         val shown = takeBack(key) ?: return null
-        val outcome = submit(prompt?.text ?: shown, display = prompt?.display)
+        // Its files are in the workspace already: their references go again, with their cards. Pictures don't.
+        val outcome = submitPrompt(prompt?.text ?: shown, emptyList(), prompt?.display, queue = false, voiceLive = null, resent = prompt?.files.orEmpty())
         return shown.takeIf { outcome == SendOutcome.NotSent }
     }
 
@@ -545,7 +559,8 @@ class ChatSession(
                     read = true
                     val prompts = historyToMessages(stored).filterIsInstance<ChatMessage.User>()
                     // Any prompt past the ones shown before it: later prompts may follow it by a later check.
-                    if (prompts.drop(before).any { it.text.contains(visible) }) return true
+                    // A file sent with no words: every text contains "", so only a prompt with attachments of its own counts.
+                    if (prompts.drop(before).any { it.text.contains(visible) && (visible.isNotEmpty() || it.attachments.isNotEmpty()) }) return true
                 }
                 // A new chat's stored row only appears with its first prompt.
                 is ApiResult.Failed -> if (result.status == 404 && !rowExists) read = true
@@ -556,7 +571,7 @@ class ChatSession(
     }
 
     /**
-     * Uploads one attachment to [runtimeId]. Images and PDF pages are queued for the next turn; a file
+     * Uploads one attachment to [runtimeId]. Images are queued for the next turn; a PDF or other file
      * comes back as the `@file:` reference to put in the prompt, which this returns. Bubble [key] shows
      * how far a large one has gone up.
      */
@@ -580,7 +595,7 @@ class ChatSession(
             ) as? JsonObject
             return result.string("ref_text")?.takeIf { result.boolean("attached") == true } ?: throw RpcException(0, failure)
         }
-        if (!attachment.inline) return uploadStaged(client, runtimeId, attachment, queuedImages, key)
+        if (!attachment.inline) return uploadStaged(client, runtimeId, attachment, key)
         return when (attachment.kind) {
             AttachmentKind.Image -> {
                 val result = client.request(
@@ -596,38 +611,20 @@ class ChatSession(
                 result.string("path")?.let(queuedImages::add)
                 null
             }
-            AttachmentKind.Pdf -> try {
-                val result = client.request(
-                    "pdf.attach",
-                    buildJsonObject {
-                        put("session_id", runtimeId)
-                        put("content_base64", attachment.base64())
-                        put("filename", attachment.name)
-                    },
-                    timeoutMs = UPLOAD_TIMEOUT_MS,
-                ) as? JsonObject
-                result?.get("pages").asObjectList().mapNotNullTo(queuedImages) { it.string("path") }
-                null
-            } catch (e: RpcException) {
-                // 5028: the gateway can't render PDFs (no poppler); the agent can still read the file.
-                if (e.code == PDF_RENDER_UNAVAILABLE) asFile() else throw e
-            }
-            AttachmentKind.File -> asFile()
+            AttachmentKind.Pdf, AttachmentKind.File -> asFile()
         }
     }
 
     /**
      * An attachment too large for one WebSocket message: it goes up over HTTP ([AttachmentUploads]) and is
-     * attached by its path there. A PDF the gateway can render gives its pages, as [upload] does; anything
-     * else, or a PDF it can't render, becomes an `@file:` reference. `file.attach` copies a file from outside
-     * the session's workspace into it, so the upload is removed after; one inside the workspace stays.
-     * Bubble [key] shows how far it has gone up, by whole percents, while it goes.
+     * attached by its path there as an `@file:` reference, a PDF whole like any other file. `file.attach`
+     * copies a file from outside the session's workspace into it, so the upload is removed after; one
+     * inside the workspace stays. Bubble [key] shows how far it has gone up, by whole percents, while it goes.
      */
     private suspend fun uploadStaged(
         client: JsonRpcClient,
         runtimeId: String,
         attachment: OutgoingAttachment,
-        queuedImages: MutableList<String>,
         key: String,
     ): String? {
         fun show(progress: UploadProgress?) =
@@ -647,25 +644,6 @@ class ChatSession(
         }
         var usedInPlace = false
         try {
-            if (attachment.kind == AttachmentKind.Pdf && attachment.size <= OutgoingAttachment.MAX_PDF_PAGES_BYTES) {
-                try {
-                    val result = client.request(
-                        "pdf.attach",
-                        buildJsonObject {
-                            put("session_id", runtimeId)
-                            put("path", staged.path)
-                            put("filename", attachment.name)
-                        },
-                        // Past the gateway's own 120 s for rendering, so its answer comes before this gives up.
-                        timeoutMs = PDF_PAGES_TIMEOUT_MS,
-                    ) as? JsonObject
-                    result?.get("pages").asObjectList().mapNotNullTo(queuedImages) { it.string("path") }
-                    return null
-                } catch (e: RpcException) {
-                    // Pages it can't make (no poppler, a PDF it can't read): the agent can still read the file.
-                    if (e.code == JsonRpcClient.MESSAGE_TOO_LARGE) throw e
-                }
-            }
             val result = client.request(
                 "file.attach",
                 buildJsonObject {
@@ -1690,6 +1668,20 @@ class ChatSession(
     fun showTitle(title: String?) = _state.update { it.copy(title = title) }
 
     /**
+     * Moves a chat the gateway hasn't made yet to [folder] (a project's; null: the profile's default), so its first
+     * send starts there, with the model and text picked for it kept. False, leaving it, once it's being made or is.
+     */
+    fun startIn(folder: String?): Boolean {
+        if (!unstarted) return false
+        cwd = folder
+        return true
+    }
+
+    /** Not made on the gateway yet, nor being made: [startIn] can still move it. */
+    val unstarted: Boolean
+        get() = _state.value.let { !rowExists && it.storedSessionId == null && it.attachment == Attachment.Detached }
+
+    /**
      * Shows a model set elsewhere (a Bot Chat's bot's own, which the chat follows) without asking the
      * gateway to pin it here; [error] says it couldn't be set.
      */
@@ -2292,11 +2284,6 @@ class ChatSession(
 
         /** Uploads of several MB over a phone link take a while. */
         const val UPLOAD_TIMEOUT_MS = 120_000L
-
-        /** `pdf.attach` of an uploaded PDF: the gateway gives pdftoppm 120 s, so this waits longer. */
-        const val PDF_PAGES_TIMEOUT_MS = 180_000L
-
-        const val PDF_RENDER_UNAVAILABLE = 5028
 
         /** The gateway's "busy": a turn is running, so nothing was cut. */
         const val BUSY = 4009
