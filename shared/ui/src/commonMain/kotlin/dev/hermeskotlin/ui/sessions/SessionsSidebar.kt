@@ -844,8 +844,10 @@ fun SessionsSidebar(
                             },
                             onRetry = bots::refresh,
                             onDismissNotice = bots::dismissNotice,
-                            // The roster's own 14dp margin already lines the buttons up with its cards.
-                            top = if (modeSwitch) null else ({ navGrid(0.dp) }),
+                            // The roster's own 14dp margin already lines the buttons up with its cards. Empty while
+                            // the switch shows, not left out: the list holds on to the first row it shows, so buttons
+                            // the switch going away brings in would otherwise come in above it, out of sight.
+                            top = { if (!modeSwitch) navGrid(0.dp) },
                             troubles = troubles,
                             failingRoutines = failingRoutines,
                             needsYou = needsYou,
