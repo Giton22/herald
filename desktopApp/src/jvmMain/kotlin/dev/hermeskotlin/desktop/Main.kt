@@ -233,7 +233,10 @@ fun main(args: Array<String>) {
         // The global shortcut from any app, while the setting is on.
         DisposableEffect(settings.quickEntry) {
             var disposed = false
-            QuickEntryHotkey.status = if (System.getProperty("os.name") == "Linux") QuickEntryHotkey.Status(QuickEntryHotkey.State.Off) else null
+            // Turning it on starts a request at once, so the row says so rather than "when this is on" next to an on switch.
+            QuickEntryHotkey.status = if (System.getProperty("os.name") == "Linux") {
+                QuickEntryHotkey.Status(if (settings.quickEntry) QuickEntryHotkey.State.Binding else QuickEntryHotkey.State.Off)
+            } else null
             val hotkey = if (settings.quickEntry) GlobalHotkey.register(onStatus = { status ->
                 SwingUtilities.invokeLater { if (!disposed) QuickEntryHotkey.status = status }
             }) { SwingUtilities.invokeLater { if (!disposed) quickOpen = true } } else null

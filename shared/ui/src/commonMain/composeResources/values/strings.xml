@@ -203,10 +203,12 @@
     <string name="settings_quick_entry">Quick entry</string>
     <string name="settings_quick_entry_detail">%1$s from any app opens a small box to ask Hermes, in a new chat or the open one. Windows only for now.</string>
     <string name="settings_quick_entry_taken">Another app has these keys now, so it can’t open.</string>
+    <string name="settings_quick_entry_detail_portal">A desktop shortcut opens a small box from any app to ask Hermes, in a new chat or the open one.</string>
     <string name="settings_quick_entry_off">Your desktop asks which shortcut to use when this is on.</string>
     <string name="settings_quick_entry_binding">Choose a shortcut in your desktop’s permission dialog.</string>
     <string name="settings_quick_entry_bound">Desktop shortcut: %1$s.</string>
     <string name="settings_quick_entry_desktop_choice">chosen by your desktop</string>
+    <string name="settings_quick_entry_unassigned">Your desktop gave it no key. Pick one in its shortcut settings.</string>
     <string name="settings_quick_entry_declined">No desktop shortcut was granted. Turn Quick entry off and on to try again.</string>
     <string name="settings_quick_entry_unavailable">This desktop’s global shortcut portal is unavailable.</string>
     <string name="settings_zoom">Zoom</string>

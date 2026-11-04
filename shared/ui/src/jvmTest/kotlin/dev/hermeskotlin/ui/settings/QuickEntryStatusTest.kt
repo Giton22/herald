@@ -32,16 +32,19 @@ class QuickEntryStatusTest {
                 }
             }
             onNodeWithText("Schnelleingabe").performScrollTo().assertExists()
+            // Each state follows what the feature does, in the selected language.
+            val about = "Ein Tastenkürzel des Desktops öffnet aus jeder App ein kleines Feld, um Hermes zu fragen – in einem neuen Chat oder im offenen."
             for ((state, trigger, text) in listOf(
-                Triple(QuickEntryHotkey.State.Binding, null, "Choose a shortcut in your desktop’s permission dialog."),
-                Triple(QuickEntryHotkey.State.Bound, "Ctrl+Alt+K", "Desktop shortcut: Ctrl+Alt+K."),
-                Triple(QuickEntryHotkey.State.Bound, null, "Desktop shortcut: chosen by your desktop."),
-                Triple(QuickEntryHotkey.State.Declined, null, "No desktop shortcut was granted. Turn Quick entry off and on to try again."),
-                Triple(QuickEntryHotkey.State.Unavailable, null, "This desktop’s global shortcut portal is unavailable."),
-                Triple(QuickEntryHotkey.State.Off, null, "Your desktop asks which shortcut to use when this is on."),
+                Triple(QuickEntryHotkey.State.Binding, null, "Wähle im Berechtigungsdialog deines Desktops ein Tastenkürzel."),
+                Triple(QuickEntryHotkey.State.Bound, "Ctrl+Alt+K", "Tastenkürzel des Desktops: Ctrl+Alt+K."),
+                Triple(QuickEntryHotkey.State.Bound, null, "Tastenkürzel des Desktops: von deinem Desktop gewählt."),
+                Triple(QuickEntryHotkey.State.Unassigned, null, "Dein Desktop hat ihm keine Taste gegeben. Wähle eine in seinen Kurzbefehl-Einstellungen."),
+                Triple(QuickEntryHotkey.State.Declined, null, "Kein Tastenkürzel des Desktops erlaubt. Schalte die Schnelleingabe aus und wieder an, um es erneut zu versuchen."),
+                Triple(QuickEntryHotkey.State.Unavailable, null, "Das Portal für globale Tastenkürzel ist auf diesem Desktop nicht verfügbar."),
+                Triple(QuickEntryHotkey.State.Off, null, "Dein Desktop fragt nach dem Tastenkürzel, sobald das hier an ist."),
             )) {
                 runOnIdle { QuickEntryHotkey.status = QuickEntryHotkey.Status(state, trigger) }
-                onNodeWithText(text).performScrollTo().assertExists()
+                onNodeWithText("$about $text").performScrollTo().assertExists()
             }
         } finally {
             QuickEntryHotkey.status = previous

@@ -1542,13 +1542,17 @@ internal fun ActionRow(title: String, icon: ImageVector, onClick: () -> Unit) {
     }
 }
 
+// What the feature does, then (where the desktop grants the shortcut) where that stands.
 @Composable
-private fun quickEntryDetail(): String = when (QuickEntryHotkey.status?.state) {
-    QuickEntryHotkey.State.Off -> stringResource(Res.string.settings_quick_entry_off)
-    QuickEntryHotkey.State.Binding -> stringResource(Res.string.settings_quick_entry_binding)
-    QuickEntryHotkey.State.Bound -> stringResource(Res.string.settings_quick_entry_bound,
-        QuickEntryHotkey.status?.trigger ?: stringResource(Res.string.settings_quick_entry_desktop_choice))
-    QuickEntryHotkey.State.Declined -> stringResource(Res.string.settings_quick_entry_declined)
-    QuickEntryHotkey.State.Unavailable -> stringResource(Res.string.settings_quick_entry_unavailable)
-    null -> stringResource(Res.string.settings_quick_entry_detail, keysLabel("Ctrl+Shift+Space"))
+private fun quickEntryDetail(): String {
+    val status = QuickEntryHotkey.status ?: return stringResource(Res.string.settings_quick_entry_detail, keysLabel("Ctrl+Shift+Space"))
+    return stringResource(Res.string.settings_quick_entry_detail_portal) + " " + when (status.state) {
+        QuickEntryHotkey.State.Off -> stringResource(Res.string.settings_quick_entry_off)
+        QuickEntryHotkey.State.Binding -> stringResource(Res.string.settings_quick_entry_binding)
+        QuickEntryHotkey.State.Bound -> stringResource(Res.string.settings_quick_entry_bound,
+            status.trigger ?: stringResource(Res.string.settings_quick_entry_desktop_choice))
+        QuickEntryHotkey.State.Unassigned -> stringResource(Res.string.settings_quick_entry_unassigned)
+        QuickEntryHotkey.State.Declined -> stringResource(Res.string.settings_quick_entry_declined)
+        QuickEntryHotkey.State.Unavailable -> stringResource(Res.string.settings_quick_entry_unavailable)
+    }
 }
