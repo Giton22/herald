@@ -185,6 +185,13 @@ class VoiceController(
     private var bargeIn: Deferred<BargeInSettings>? = null
     /** The microphone wouldn't listen over the voice in this chat; it isn't asked again. */
     private var cantListenOver = false
+    /** The last hold was one nobody talked through, the voice's own echo or a knock ([heardOver]). */
+    private var echoHeld = false
+    /**
+     * Holds nobody talked through in this turn's reply, streamed or read out after (#264); counted for the turn, so a
+     * reply that moves from the speech socket to being read out doesn't start over.
+     */
+    private var echoHolds = 0
 
     /** The chained chat running, whose microphone Mute holds shut; null outside one. */
     private var chained: Job? = null
@@ -211,6 +218,8 @@ class VoiceController(
         stoppedByUser = false
         roomFloor = 0f
         noSpeechStream = null
+        // A new chat listens over its replies afresh, even one that starts by answering a question already asked.
+        echoHolds = 0
         // Held now, on the tap: Android only lets the microphone go to the background from the foreground.
         away = false
         held = keepAlive?.hold(
@@ -417,6 +426,7 @@ class VoiceController(
         voicedSoFar = ""
         voicedUntilAsked = false
         voiced = ""
+        echoHolds = 0
         val cut = coroutineScope {
             // The speech socket opens while the prompt goes out, so the first words don't wait for it.
             val opening = async { openSpeech(gateway, profile) }
@@ -481,6 +491,12 @@ class VoiceController(
         val done = async { work() }
         var cut: Cut<T>? = null
         while (cut == null) {
+            // Past a few holds where nobody went on talking, it's a speaker turned right up, its echo over every bar,
+            // not a knock: the rest of this reply plays through, without the microphone (#264).
+            if (echoHolds >= MAX_ECHO_HOLDS) {
+                cut = Cut.Done(done.await())
+                continue
+            }
             val tripped = CompletableDeferred<Unit>()
             val over = async { listenOver(activity, tripped) }
             val someone = select {
@@ -494,7 +510,12 @@ class VoiceController(
                 over.onAwait { heard -> heard != null }
             }
             // Null when it was its own voice, or a knock: the voice went on where it held; listen again.
-            cut = if (someone) heardOver(session, gateway, profile, done, over)?.let { Cut.Over(it) } else Cut.Done(done.await())
+            cut = if (someone) {
+                echoHeld = false
+                heardOver(session, gateway, profile, done, over)?.let { Cut.Over(it) }.also { if (it == null && echoHeld) echoHolds++ }
+            } else {
+                Cut.Done(done.await())
+            }
         }
         cut
     }
@@ -561,7 +582,9 @@ class VoiceController(
             val heard = over.await()
             if (held && heard?.heardSpeech != true) {
                 // Nobody went on once it held: its own echo, or a knock. It goes on at once. What was heard is still
-                // written down meanwhile, since a quick "stop" can be over before the voice held.
+                // written down meanwhile, since a quick "stop" can be over before the voice held. Only a listen heard
+                // to its end counts as an echo, not one Mute cut off.
+                echoHeld = heard != null
                 val chat = chatJob
                 if (heard != null) scope.launch {
                     val words = (audio.transcribe(gateway, heard.bytes, heard.mimeType, profile) as? ApiResult.Success)?.value.orEmpty()
@@ -1160,6 +1183,8 @@ class VoiceController(
 
     private companion object {
         const val MAX_FAILURES = 3
+        /** Holds nobody talked through before the rest of a reply plays without listening over it. */
+        const val MAX_ECHO_HOLDS = 2
         /** Times a question is asked before it's left for the screen. */
         const val MAX_ASKS = 3
         /** How often a waiting turn is looked at again, for an approval held back while the phone was locked. */
