@@ -34,6 +34,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
@@ -809,5 +810,39 @@ class VoiceControllerTest {
         testScheduler.advanceTimeBy(60_000)
         testScheduler.runCurrent()
         assertEquals(VoicePhase.Off, call.chat.value.phase)
+    }
+
+    /** The one call service every screen's chat holds, with each hold and release in order. */
+    private class LoggingKeeper : VoiceKeepAlive {
+        val log = mutableListOf<String>()
+        override fun hold(onEnd: () -> Unit, onLost: () -> Unit): Boolean {
+            log += "hold"
+            return true
+        }
+
+        override fun release() {
+            log += "release"
+        }
+    }
+
+    /**
+     * On the main thread (Android's immediate dispatch), another screen's chat can end inside the new one's start: the
+     * call service stays up across the handover, rather than being let go and held again.
+     */
+    @OptIn(kotlinx.coroutines.ExperimentalCoroutinesApi::class)
+    @Test
+    fun theCallServiceStaysUpThroughAHandoverThatEndsTheOtherChatAtOnce() = runTest(UnconfinedTestDispatcher()) {
+        val keeper = LoggingKeeper()
+        val first = ScriptedRecorder()
+        val one = VoiceController(audio("unused", Requests()), first, FakePlayer(), backgroundScope, backgroundScope, keepAlive = keeper)
+        val two = VoiceController(audio("unused", Requests()), ScriptedRecorder(), FakePlayer(), backgroundScope, backgroundScope, keepAlive = keeper)
+
+        one.startChat(offlineSession(), gateway, null)
+        first.waiting.await()
+        two.startChat(offlineSession(), gateway, null)
+        one.chat.first { it.phase == VoicePhase.Off }
+
+        assertEquals(listOf("hold", "hold"), keeper.log)
+        two.stopChat()
     }
 }

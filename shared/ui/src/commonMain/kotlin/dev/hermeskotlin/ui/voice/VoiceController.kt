@@ -204,9 +204,6 @@ class VoiceController(
         ringback: Boolean = false,
     ) {
         if (chatJob?.isActive == true) return
-        // One chat at a time, app-wide: another screen's ends now, and this one routes only once every earlier one
-        // (this screen's last, still winding down, too) has let its route and microphone go.
-        val windingDown = VoiceChats.endOthers(this)
         cancelDictation()
         // The voice chat has the speaker now.
         stopReading()
@@ -215,17 +212,9 @@ class VoiceController(
         stoppedByUser = false
         roomFloor = 0f
         noSpeechStream = null
-        // Held now, on the tap: Android only lets the microphone go to the background from the foreground.
         away = false
-        held = keepAlive?.hold(
-            onEnd = ::stopChat,
-            onLost = {
-                held = false
-                // Refused after the app already went away: it can't listen from there.
-                if (away) stopChat()
-            },
-        ) == true
-        val job = scope.launch {
+        var windingDown = emptyList<Job>()
+        val job = scope.launch(start = CoroutineStart.LAZY) {
             var ringing: Job? = null
             try {
                 // Inside the try, so an End while it waits still puts the panel back.
@@ -256,7 +245,21 @@ class VoiceController(
             }
         }
         chatJob = job
+        // One chat at a time, app-wide. This one counts as on first, so another screen's, ending at once inside
+        // endOthers on the main thread, leaves the call service up for it. It routes only once every earlier one (this
+        // screen's last, still winding down, too) has let its route and microphone go.
         VoiceChats.started(job, this, ::stopChat)
+        windingDown = VoiceChats.endOthers(this, job)
+        // Held now, on the tap: Android only lets the microphone go to the background from the foreground.
+        held = keepAlive?.hold(
+            onEnd = ::stopChat,
+            onLost = {
+                held = false
+                // Refused after the app already went away: it can't listen from there.
+                if (away) stopChat()
+            },
+        ) == true
+        // After the hold, so a chat that can't start (its screen closing) still lets it go.
         job.invokeOnCompletion {
             VoiceChats.ended(job)
             if (chatJob === job || chatJob == null) held = false
@@ -264,6 +267,7 @@ class VoiceController(
             // is, by whichever ends last, whether or not it's still this screen's newest.
             if (!VoiceChats.on) keepAlive?.release()
         }
+        job.start()
     }
 
     /** Desktop's chained voice chat: listen, send what you said, read the reply aloud, until it ends. */
@@ -1209,15 +1213,18 @@ internal object VoiceChats {
 
     fun ended(job: Job) = running.update { chats -> chats.filterNot { it.job === job } }
 
-    /** A chat is on somewhere. One winding down isn't, so one slow or stuck in ending holds nothing up for good. */
-    val on: Boolean get() = running.value.any { it.job.isActive }
+    /**
+     * A chat is on somewhere, starting or running. One winding down isn't, so one slow or stuck in ending holds nothing
+     * up for good.
+     */
+    val on: Boolean get() = running.value.any { !it.job.isCancelled && !it.job.isCompleted }
 
     /**
      * Ends every chat [owner] doesn't run ([stop]), and hands back the jobs of all still running or winding down,
-     * [owner]'s own earlier one too, for a new chat to wait out before it routes.
+     * [owner]'s own earlier one too, but not its new [chat], for that one to wait out before it routes.
      */
-    fun endOthers(owner: Any): List<Job> {
-        val now = running.value
+    fun endOthers(owner: Any, chat: Job): List<Job> {
+        val now = running.value.filter { it.job !== chat }
         now.filter { it.owner !== owner }.forEach { it.stop() }
         return now.map { it.job }
     }
