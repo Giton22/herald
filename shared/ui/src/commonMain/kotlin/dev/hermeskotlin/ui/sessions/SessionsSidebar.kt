@@ -974,9 +974,11 @@ fun SessionsSidebar(
                             }
                         },
                     ) {
-                        // The pages left on in Settings › Sidebar pages; with none, no room is kept for them.
-                        if (navPages.isNotEmpty()) item(key = "nav") {
-                            NavGrid(
+                        // The pages left on in Settings › Sidebar pages; with none, no room is kept for them. The item
+                        // stays when it's empty: the list holds on to the first row it shows, so pages turned back on
+                        // would otherwise come in above it, out of sight.
+                        item(key = "nav") {
+                            if (navPages.isNotEmpty()) NavGrid(
                                 navPages.mapNotNull { page ->
                                     val icon = navIcon(page)
                                     val label = stringResource(navLabel(page))
