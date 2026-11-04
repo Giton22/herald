@@ -87,6 +87,7 @@
     <string name="chat_pdf_locked">It’s protected with a password. Save it, or share it to an app that asks for one.</string>
     <string name="chat_pdf_broken">It doesn’t read as a PDF: it may be damaged or cut short. Save gets the file as it is.</string>
     <string name="chat_pdf_no_room">The phone has no room to open it right now. Save or share it instead.</string>
+    <string name="chat_pdf_desktop_limit">This PDF exceeds the desktop viewer's limits. Save it to open it elsewhere.</string>
 
     <!-- HTML widgets in a reply -->
     <string name="chat_widget_not_html">This file isn’t HTML text.</string>

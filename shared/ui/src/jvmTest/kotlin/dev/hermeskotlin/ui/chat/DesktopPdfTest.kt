@@ -4,6 +4,12 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.toPixelMap
 import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.runComposeUiTest
+import androidx.compose.ui.test.onNodeWithText
+import dev.hermeskotlin.core.media.GatewayFile
+import dev.hermeskotlin.designsystem.HermesTheme
+import dev.hermeskotlin.ui.ProvideAppLanguage
+import dev.hermeskotlin.ui.applyAppLanguage
+import java.util.Locale
 import kotlin.coroutines.CoroutineContext
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Job
@@ -32,6 +38,26 @@ import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class DesktopPdfTest {
+    @Test
+    fun desktopLimitGuidanceUsesSpanish() = runComposeUiTest {
+        val locale = Locale.getDefault()
+        try {
+            setContent {
+                ProvideAppLanguage("es") {
+                    HermesTheme {
+                        FileViewerPage(GatewayFile("/fixture.pdf"), {}, { error("PDFs download whole") },
+                            { FileDownload.Ready(byteArrayOf(1)) },
+                            openPdf = { PdfOpen.Failed(PDF_DESKTOP_LIMIT) })
+                    }
+                }
+            }
+            onNodeWithText("Este PDF supera los límites del visor de escritorio. Guárdalo para abrirlo en otra aplicación.").assertExists()
+        } finally {
+            applyAppLanguage(null)
+            Locale.setDefault(locale)
+        }
+    }
+
     @Test
     fun desktopOpenerDrawsPdfPages() = runComposeUiTest {
         lateinit var open: suspend (ByteArray) -> PdfOpen

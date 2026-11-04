@@ -25,7 +25,7 @@ import java.net.URLClassLoader
 import java.util.concurrent.atomic.AtomicReference
 import java.util.concurrent.atomic.AtomicBoolean
 
-internal const val PDF_DESKTOP_LIMIT = "This PDF exceeds the desktop viewer's limits. Save it to open it elsewhere."
+internal val PDF_DESKTOP_LIMIT: FileProblem = FileProblem.PdfDesktopLimit
 
 internal suspend fun openDesktopPdf(
     bytes: ByteArray,

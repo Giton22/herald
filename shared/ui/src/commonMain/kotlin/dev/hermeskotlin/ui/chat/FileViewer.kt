@@ -187,6 +187,7 @@ sealed interface FileProblem {
     data object PdfLocked : FileProblem
     data object PdfBroken : FileProblem
     data object PdfNoRoom : FileProblem
+    data object PdfDesktopLimit : FileProblem
     data object WidgetNotHtml : FileProblem
     data object WidgetTooBig : FileProblem
     data object WidgetEmpty : FileProblem
@@ -211,6 +212,7 @@ private fun FileProblem.resource(): Pair<StringResource, String?>? = when (this)
     FileProblem.PdfLocked -> Res.string.chat_pdf_locked to null
     FileProblem.PdfBroken -> Res.string.chat_pdf_broken to null
     FileProblem.PdfNoRoom -> Res.string.chat_pdf_no_room to null
+    FileProblem.PdfDesktopLimit -> Res.string.chat_pdf_desktop_limit to null
     FileProblem.WidgetNotHtml -> Res.string.chat_widget_not_html to null
     FileProblem.WidgetTooBig -> Res.string.chat_widget_too_big to null
     FileProblem.WidgetEmpty -> Res.string.chat_widget_empty to null
