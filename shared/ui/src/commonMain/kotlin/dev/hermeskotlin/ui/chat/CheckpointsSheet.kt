@@ -87,13 +87,16 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 data class CheckpointsState(
     /** Null until the first answer arrives. */
     val list: Checkpoints? = null,
     /** Offline, or a chat with nothing on the gateway yet. */
     val unavailable: Boolean = false,
-    /** Why the gateway couldn't list them. */
+    /** Why the gateway couldn't list them; empty when it gave no reason. */
     val error: String? = null,
     /** Each opened checkpoint's changes since; a key with a null value is still loading. */
     val diffs: Map<String, CheckpointDiff?> = emptyMap(),
@@ -133,7 +136,7 @@ class CheckpointsController(private val scope: CoroutineScope) {
             if (chat == null) return@launch _state.update { it.copy(unavailable = true) }
             read(chat).fold(
                 onSuccess = { list -> _state.update { if (list == null) it.copy(unavailable = true) else it.copy(list = list) } },
-                onFailure = { e -> _state.update { it.copy(error = e.message ?: "Couldn't read the checkpoints.") } },
+                onFailure = { e -> _state.update { it.copy(error = e.message.orEmpty()) } },
             )
         }
     }
@@ -216,30 +219,24 @@ internal fun CheckpointsSheetView(
     BottomSheet(visible = visible, onDismiss = onDismiss) {
         val list = state.list
         Column(Modifier.fillMaxWidth().padding(start = 18.dp, end = 18.dp, top = 4.dp, bottom = 8.dp), verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text("Checkpoints", style = Theme[typography][title], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
+            Text(stringResource(Res.string.chat_checkpoints_title), style = Theme[typography][title], color = Theme[colors][text], modifier = Modifier.semantics { heading() })
             Text(
                 when {
-                    list == null || !list.enabled || list.checkpoints.isEmpty() -> "Snapshots of this chat's folder"
-                    list.checkpoints.size == 1 -> "1 snapshot, taken before the agent changed files"
-                    else -> "${list.checkpoints.size} snapshots, taken before the agent changed files"
+                    list == null || !list.enabled || list.checkpoints.isEmpty() -> stringResource(Res.string.chat_checkpoints_subtitle)
+                    else -> pluralStringResource(Res.plurals.chat_checkpoints_count, list.checkpoints.size, list.checkpoints.size)
                 },
                 style = Theme[typography][bodySmall].copy(fontSize = 13.sp),
                 color = Theme[colors][textTertiary],
             )
         }
         when {
-            list == null && state.error != null -> Note(state.error, error = true)
+            list == null && state.error != null ->
+                Note(state.error.ifEmpty { stringResource(Res.string.chat_checkpoints_read_failed) }, error = true)
             list == null && state.unavailable ->
-                Note("Available once this chat is connected and has had its first reply.")
+                Note(stringResource(Res.string.chat_available_after_first_reply))
             list == null -> Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) { Spinner() }
-            !list.enabled -> Note(
-                "Checkpoints are off on the gateway. Turn them on with checkpoints.enabled in the profile's config.yaml; " +
-                    "older Hermes versions read only HERMES_TUI_CHECKPOINTS=1 in the dashboard's environment.",
-            )
-            list.checkpoints.isEmpty() -> Note(
-                "None yet. Hermes takes one just before the agent first changes a file in this chat's folder. " +
-                    "It never snapshots the home folder, so start the chat in a project to get them.",
-            )
+            !list.enabled -> Note(stringResource(Res.string.chat_checkpoints_off))
+            list.checkpoints.isEmpty() -> Note(stringResource(Res.string.chat_checkpoints_none))
             else -> ScrollbarBox { listState -> LazyColumn(
                 Modifier.fillMaxWidth().heightIn(max = 560.dp),
                 state = listState,
@@ -262,7 +259,7 @@ internal fun CheckpointsSheetView(
                 }
             } }
         }
-        if (running && list?.checkpoints?.isNotEmpty() == true) Note("Restoring waits until the reply is done.")
+        if (running && list?.checkpoints?.isNotEmpty() == true) Note(stringResource(Res.string.chat_checkpoints_restore_waits))
         state.message?.let { Note(it) }
     }
     RestoreDialog(confirm, use24Hour, onDismiss = { confirm = null }, onConfirm = onRestore)
@@ -277,12 +274,11 @@ private fun RestoreDialog(checkpoint: Checkpoint?, use24Hour: Boolean, onDismiss
     Dialog(
         visible = checkpoint != null,
         onDismissRequest = onDismiss,
-        title = "Restore this checkpoint?",
-        message = "Files the agent changed go back to this snapshot (${checkpointTime(target, use24Hour)}), and " +
-            "this chat's last turn is taken back. Files you edited yourself since are left alone.",
+        title = stringResource(Res.string.chat_checkpoints_restore_title),
+        message = stringResource(Res.string.chat_checkpoints_restore_message, checkpointTime(target, use24Hour)),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
-            Button("Restore", onClick = { onDismiss(); onConfirm(target) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
+            Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+            Button(stringResource(Res.string.chat_restore), onClick = { onDismiss(); onConfirm(target) }, variant = ButtonVariant.Danger, size = ButtonSize.Small)
         },
     )
 }
@@ -314,7 +310,7 @@ private fun CheckpointRow(
             Modifier
                 .fillMaxWidth()
                 .handCursor()
-                .clickable(role = Role.Button, onClickLabel = if (expanded) "Hide changes" else "Show changes since this checkpoint", onClick = onToggle)
+                .clickable(role = Role.Button, onClickLabel = stringResource(if (expanded) Res.string.chat_checkpoints_hide_changes else Res.string.chat_checkpoints_show_changes), onClick = onToggle)
                 .padding(start = 12.dp, end = 10.dp, top = 10.dp, bottom = 10.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             verticalAlignment = Alignment.CenterVertically,
@@ -324,7 +320,7 @@ private fun CheckpointRow(
             }
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                 Text(
-                    checkpoint.message.ifBlank { "Checkpoint" },
+                    checkpoint.message.ifBlank { stringResource(Res.string.chat_checkpoint) },
                     style = Theme[typography][body].copy(fontSize = 14.5.sp, lineHeight = 20.sp, fontWeight = FontWeight.Medium),
                     color = Theme[colors][text],
                     maxLines = if (expanded) 4 else 2,
@@ -339,7 +335,7 @@ private fun CheckpointRow(
                 )
             }
             Button(
-                "Restore",
+                stringResource(Res.string.chat_restore),
                 onClick = onRestore,
                 variant = ButtonVariant.Secondary,
                 size = ButtonSize.Small,
@@ -355,7 +351,7 @@ private fun CheckpointRow(
                 }
                 diff.unchanged -> Well {
                     Text(
-                        "The folder is the same as at this checkpoint.",
+                        stringResource(Res.string.chat_checkpoints_unchanged),
                         style = Theme[typography][bodySmall],
                         color = Theme[colors][textSecondary],
                         modifier = Modifier.padding(14.dp),

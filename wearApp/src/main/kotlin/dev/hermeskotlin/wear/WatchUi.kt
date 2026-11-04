@@ -55,6 +55,8 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.annotation.StringRes
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -187,6 +189,7 @@ private fun EdgeStatus(link: WatchLink, store: WatchStore) {
     val phone by link.phone.collectAsState()
     val chat by store.chat.collectAsState()
     val dot = phoneDot(phone)
+    val dotLabel = phoneDotLabel(phone).text()
     val model = chat.model?.let(::shortModel)
     TimeText { time ->
         timeTextCurvedText(time)
@@ -198,7 +201,7 @@ private fun EdgeStatus(link: WatchLink, store: WatchStore) {
                         .padding(horizontal = 3.dp)
                         .size(6.dp)
                         .background(dot, CircleShape)
-                        .semantics { contentDescription = phoneDotLabel(phone) },
+                        .semantics { contentDescription = dotLabel },
                 )
             }
         }
@@ -215,11 +218,13 @@ private fun phoneDot(phone: PhoneState): Color? = when (phone) {
     PhoneState.Unknown -> null
 }
 
-private fun phoneDotLabel(phone: PhoneState): String = when (phone) {
-    PhoneState.Ready -> "Connected"
-    PhoneState.Reconnecting -> "Reconnecting"
-    else -> "Not connected"
-}
+private fun phoneDotLabel(phone: PhoneState): WatchLine = WatchLine.Res(
+    when (phone) {
+        PhoneState.Ready -> R.string.wear_phone_connected
+        PhoneState.Reconnecting -> R.string.wear_phone_reconnecting
+        else -> R.string.wear_phone_not_connected
+    },
+)
 
 /** The model's name, short enough for the edge beside the clock. */
 internal fun shortModel(name: String): String =
@@ -275,11 +280,20 @@ private fun TalkScreen(
 
     if (inCall) {
         ScreenScaffold(modifier = Modifier.halo(mood, MaterialTheme.colorScheme.primaryContainer)) {
-            CallScreen(call, mood, title = chat.title ?: if (chat.id == null) "New chat" else "Chat", onMute = link::toggleMute, onEnd = link::endCall)
+            CallScreen(call, mood, title = chat.title ?: stringResource(if (chat.id == null) R.string.wear_new_chat else R.string.wear_chat), onMute = link::toggleMute, onEnd = link::endCall)
         }
         return
     }
 
+    val orbLabel = stringResource(
+        when {
+            mic.recording -> R.string.wear_done_talking
+            running || speaking -> R.string.wear_stop
+            else -> R.string.wear_talk_to_hermes
+        },
+    ) + chat.contextPercent?.let { stringResource(R.string.wear_context_full, it) }.orEmpty()
+    val chatTitle = chat.title ?: stringResource(if (chat.id == null) R.string.wear_new_chat else R.string.wear_chat)
+    val captionLine = (if (call != null) callCaption(call) else caption(mood, current, mic, phone))?.text()
     val content: @Composable (PaddingValues) -> Unit = { contentPadding ->
         TransformingLazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
             item {
@@ -295,20 +309,14 @@ private fun TalkScreen(
                             .size(orbSize.dp)
                             .clip(CircleShape)
                             .clickable(interactionSource = remember { MutableInteractionSource() }, indication = null, role = Role.Button, onClick = onOrb)
-                            .semantics {
-                                contentDescription = when {
-                                    mic.recording -> "Done talking"
-                                    running || speaking -> "Stop"
-                                    else -> "Talk to Hermes"
-                                } + chat.contextPercent?.let { ", context $it% full" }.orEmpty()
-                            },
+                            .semantics { contentDescription = orbLabel },
                     )
                 }
             }
-            item { ChatTitle(chat.title ?: if (chat.id == null) "New chat" else "Chat", onChats) }
-            item { Caption(if (call != null) callCaption(call) else caption(mood, current, mic, phone), mood) }
+            item { ChatTitle(chatTitle, onChats) }
+            item { Caption(captionLine, mood) }
             val micError = mic.error
-            if (micError != null) item { Notice(micError, onClick = onDismissListeningError) }
+            if (micError != null) item { Notice(micError.text(), onClick = onDismissListeningError) }
             if (call == null && current != null && !mic.recording) {
                 current.said?.let { said -> item { Said(said) } }
                 val update = current.update
@@ -342,7 +350,7 @@ private fun CallScreen(call: WatchCallState, mood: OrbMood, title: String, onMut
         )
         CallButton(
             icon = if (call.muted) R.drawable.ic_mic_off else R.drawable.ic_mic,
-            label = if (call.muted) "Unmute" else "Mute",
+            label = stringResource(if (call.muted) R.string.wear_unmute else R.string.wear_mute),
             color = if (call.muted) Text1 else Surface2,
             tint = if (call.muted) Color.Black else Text1,
             enabled = call.stage == CallStage.Live,
@@ -357,7 +365,7 @@ private fun CallScreen(call: WatchCallState, mood: OrbMood, title: String, onMut
         )
         CallButton(
             icon = R.drawable.ic_volume,
-            label = "Volume",
+            label = stringResource(R.string.wear_volume),
             color = Surface2,
             tint = Text1,
             enabled = true,
@@ -371,7 +379,7 @@ private fun CallScreen(call: WatchCallState, mood: OrbMood, title: String, onMut
         if (since != null) {
             CallTimer(since, status)
         } else {
-            Text(callCaption(call), style = geist(14, FontWeight.Medium, color = Muted), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = status)
+            Text(callCaption(call).text(), style = geist(14, FontWeight.Medium, color = Muted), textAlign = TextAlign.Center, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = status)
         }
         EdgeButton(
             onClick = onEnd,
@@ -380,7 +388,7 @@ private fun CallScreen(call: WatchCallState, mood: OrbMood, title: String, onMut
             colors = ButtonDefaults.buttonColors(containerColor = EndCall, contentColor = OnEndCall),
             modifier = Modifier.align(Alignment.BottomCenter),
         ) {
-            Icon(painterResource(R.drawable.ic_call_end), contentDescription = "End call", tint = OnEndCall)
+            Icon(painterResource(R.drawable.ic_call_end), contentDescription = stringResource(R.string.wear_end_call), tint = OnEndCall)
         }
     }
 }
@@ -408,7 +416,7 @@ fun RingScreen(title: String, approval: Boolean, onDecline: () -> Unit, onAnswer
             HeraldOrb(mood = OrbMood.Speaking, level = 0f, modifier = Modifier.size(w * 0.24f).align(Alignment.Center).offset(y = -h * 0.02f))
             CallButton(
                 icon = R.drawable.ic_call_end,
-                label = "Decline",
+                label = stringResource(R.string.wear_decline),
                 color = EndCall,
                 tint = OnEndCall,
                 enabled = true,
@@ -417,7 +425,7 @@ fun RingScreen(title: String, approval: Boolean, onDecline: () -> Unit, onAnswer
             )
             CallButton(
                 icon = R.drawable.ic_call,
-                label = "Answer",
+                label = stringResource(R.string.wear_answer),
                 color = Connected,
                 tint = Color.Black,
                 enabled = true,
@@ -425,7 +433,7 @@ fun RingScreen(title: String, approval: Boolean, onDecline: () -> Unit, onAnswer
                 modifier = Modifier.size(side).align(Alignment.Center).offset(x = w * 0.354f),
             )
             Text(
-                ringReason(approval, agent),
+                stringResource(ringReason(approval, agent)),
                 style = geist(14, FontWeight.Medium, color = Muted),
                 textAlign = TextAlign.Center,
                 maxLines = 2,
@@ -436,10 +444,11 @@ fun RingScreen(title: String, approval: Boolean, onDecline: () -> Unit, onAnswer
 }
 
 /** Why Hermes calls, never what it asks: [agent], it called on its own, and says why on the call. */
-internal fun ringReason(approval: Boolean, agent: Boolean = false): String = when {
-    agent -> "Calling you"
-    approval -> "Needs your approval"
-    else -> "Has a question for you"
+@StringRes
+internal fun ringReason(approval: Boolean, agent: Boolean = false): Int = when {
+    agent -> R.string.wear_ring_agent
+    approval -> R.string.wear_ring_approval
+    else -> R.string.wear_ring_question
 }
 
 /** The time on the call, counting: only this redraws each second, and only while it shows. */
@@ -498,25 +507,25 @@ internal fun callMood(call: WatchCallState): OrbMood = when (call.stage) {
 }
 
 /** What a call is doing, under the orb. */
-internal fun callCaption(call: WatchCallState): String = when (call.stage) {
-    CallStage.Starting -> "Starting…"
-    CallStage.Connecting -> "Connecting…"
+internal fun callCaption(call: WatchCallState): WatchLine = when (call.stage) {
+    CallStage.Starting -> WatchLine.Res(R.string.wear_call_starting)
+    CallStage.Connecting -> WatchLine.Res(R.string.wear_call_connecting)
     CallStage.Live -> when {
-        call.muted -> "Muted"
-        call.thinking -> call.working?.let { "Hermes: $it" } ?: "Hermes is on it…"
-        else -> "Live"
+        call.muted -> WatchLine.Res(R.string.wear_call_muted)
+        call.thinking -> call.working?.let { WatchLine.Res(R.string.wear_call_working, listOf(it)) } ?: WatchLine.Res(R.string.wear_call_thinking)
+        else -> WatchLine.Res(R.string.wear_call_live)
     }
-    CallStage.Ended -> call.error ?: "Call ended"
+    CallStage.Ended -> call.error?.let(WatchLine::Raw) ?: WatchLine.Res(R.string.wear_call_ended)
 }
 
 /** What's going on, under the orb. */
-private fun caption(mood: OrbMood, turn: WatchTurn?, mic: Listening, phone: PhoneState): String? = when {
-    mic.recording -> "Listening… tap when done"
-    mic.waiting -> "Checking your phone…"
-    mood == OrbMood.Speaking -> "Tap to stop"
-    turn != null && turn.update.phase == ReplyPhase.Failed -> turn.update.error ?: "Something went wrong."
+private fun caption(mood: OrbMood, turn: WatchTurn?, mic: Listening, phone: PhoneState): WatchLine? = when {
+    mic.recording -> WatchLine.Res(R.string.wear_listening)
+    mic.waiting -> WatchLine.Res(R.string.wear_checking_phone)
+    mood == OrbMood.Speaking -> WatchLine.Res(R.string.wear_tap_to_stop)
+    turn != null && turn.update.phase == ReplyPhase.Failed -> turn.update.error?.let(WatchLine::Raw) ?: WatchLine.Res(R.string.wear_something_wrong)
     turn != null && turn.running -> activityLine(turn.update.phase, turn.update.activity)
-    turn == null -> phoneProblem(phone) ?: "Tap to talk"
+    turn == null -> phoneProblem(phone)?.let { WatchLine.Res(it) } ?: WatchLine.Res(R.string.wear_tap_to_talk)
     else -> null
 }
 
@@ -531,7 +540,7 @@ private fun ChatTitle(title: String, onClick: () -> Unit) {
             "$title  ›",
             modifier = Modifier
                 .clip(RoundedCornerShape(12.dp))
-                .clickable(role = Role.Button, onClickLabel = "Open chats", onClick = onClick)
+                .clickable(role = Role.Button, onClickLabel = stringResource(R.string.wear_open_chats), onClick = onClick)
                 .padding(horizontal = 18.dp, vertical = 2.dp),
             style = geist(14, FontWeight.SemiBold, Text1, line = 18),
             textAlign = TextAlign.Center,
@@ -566,7 +575,7 @@ private fun Caption(text: String?, mood: OrbMood) {
 @Composable
 private fun Said(text: String) {
     Text(
-        "“$text”",
+        stringResource(R.string.wear_said, text),
         modifier = Modifier.fillMaxWidth().padding(horizontal = 18.dp, vertical = 4.dp),
         style = geist(13, color = Muted),
         textAlign = TextAlign.Center,
@@ -641,7 +650,7 @@ private fun ChatsScreen(link: WatchLink, store: WatchStore, onPicked: () -> Unit
                 BoxWithConstraints(Modifier.fillMaxWidth().height(56.dp).clip(CallTabsShape)) {
                     val tabSize = if (maxWidth < 210.dp) 12 else 14
                     Row(Modifier.fillMaxSize()) {
-                        listOf("Chats", "Bots").forEachIndexed { index, title ->
+                        listOf(stringResource(R.string.wear_chats), stringResource(R.string.wear_bots)).forEachIndexed { index, title ->
                             val picked = showBots == (index == 1)
                             if (index != 0) Box(Modifier.width(1.dp).fillMaxHeight().background(Color.Black))
                             Box(Modifier.weight(1f).fillMaxHeight().background(if (picked) MaterialTheme.colorScheme.primaryContainer else Surface2)
@@ -665,7 +674,7 @@ private fun ChatsScreen(link: WatchLink, store: WatchStore, onPicked: () -> Unit
                         modifier = Modifier.weight(1f),
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primaryContainer, contentColor = MaterialTheme.colorScheme.onPrimaryContainer),
                         label = {
-                            Text("New chat", modifier = Modifier.fillMaxWidth(), style = geist(15, FontWeight.Medium, MaterialTheme.colorScheme.onPrimaryContainer), textAlign = TextAlign.Center, maxLines = 1)
+                            Text(stringResource(R.string.wear_new_chat), modifier = Modifier.fillMaxWidth(), style = geist(15, FontWeight.Medium, MaterialTheme.colorScheme.onPrimaryContainer), textAlign = TextAlign.Center, maxLines = 1)
                         },
                     )
                     FilledIconButton(
@@ -673,7 +682,7 @@ private fun ChatsScreen(link: WatchLink, store: WatchStore, onPicked: () -> Unit
                         modifier = Modifier.size(48.dp),
                         colors = IconButtonDefaults.filledIconButtonColors(containerColor = Surface2, contentColor = Text1),
                     ) {
-                        Icon(painterResource(R.drawable.ic_settings), contentDescription = "Settings", tint = Text1)
+                        Icon(painterResource(R.drawable.ic_settings), contentDescription = stringResource(R.string.wear_settings), tint = Text1)
                     }
                 }
             }
@@ -685,7 +694,7 @@ private fun ChatsScreen(link: WatchLink, store: WatchStore, onPicked: () -> Unit
                 }
                 error != null -> item { Box(Modifier.padding(horizontal = 12.dp)) { Notice(error, onClick = link::refreshChats) } }
                 showBots && current.bots.isEmpty() || !showBots && current.chats.isEmpty() -> item {
-                    Text(if (showBots) "No bots yet." else "No chats yet.", modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), style = geist(13, color = Muted), textAlign = TextAlign.Center)
+                    Text(stringResource(if (showBots) R.string.wear_no_bots else R.string.wear_no_chats), modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp), style = geist(13, color = Muted), textAlign = TextAlign.Center)
                 }
                 showBots -> current.bots.forEach { row ->
                     item(key = "bot:${row.profile}") {
@@ -740,6 +749,13 @@ fun AssistPanel(
             turn?.update?.phase == ReplyPhase.Failed || listening.error != null -> OrbMood.Failed
             else -> OrbMood.Idle
         }
+        val orbLabel = stringResource(
+            when {
+                listening.recording -> R.string.wear_done_talking
+                listening.waiting -> R.string.wear_cancel
+                else -> R.string.wear_talk_to_hermes
+            },
+        )
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -762,17 +778,11 @@ fun AssistPanel(
                         role = Role.Button,
                         onClick = onOrb,
                     )
-                    .semantics {
-                        contentDescription = when {
-                            listening.recording -> "Done talking"
-                            listening.waiting -> "Cancel"
-                            else -> "Talk to Hermes"
-                        }
-                    },
+                    .semantics { contentDescription = orbLabel },
             )
             Spacer(Modifier.height(6.dp))
-            Caption(caption(mood, turn, listening, phone), mood)
-            listening.error?.let { Notice(it, onClick = onNotice) }
+            Caption(caption(mood, turn, listening, phone)?.text(), mood)
+            listening.error?.let { Notice(it.text(), onClick = onNotice) }
             if (!listening.recording && !listening.waiting) {
                 turn?.said?.let { Said(it) }
                 turn?.update?.text?.takeIf { it.isNotBlank() }?.let { Reply(it) }
@@ -810,13 +820,13 @@ private fun SettingsScreen(link: WatchLink, store: WatchStore) {
     ScreenScaffold(scrollState = listState, modifier = Modifier.halo(OrbMood.Idle, MaterialTheme.colorScheme.primaryContainer)) { contentPadding ->
         TransformingLazyColumn(state = listState, contentPadding = contentPadding, modifier = Modifier.fillMaxSize()) {
             item {
-                Text("Settings", modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp), style = geist(17, FontWeight.SemiBold), textAlign = TextAlign.Center)
+                Text(stringResource(R.string.wear_settings), modifier = Modifier.fillMaxWidth().padding(bottom = 6.dp), style = geist(17, FontWeight.SemiBold), textAlign = TextAlign.Center)
             }
             // One short line each, and what it means under it: longer labels wrap on a round screen.
             if (liveVoice) {
-                item { VoiceSwitch("Talk live", "As a voice call", live, store::setLive) }
+                item { VoiceSwitch(stringResource(R.string.wear_talk_live), stringResource(R.string.wear_talk_live_detail), live, store::setLive) }
             }
-            item { VoiceSwitch("Read aloud", "Every reply", speak, store::setSpeak) }
+            item { VoiceSwitch(stringResource(R.string.wear_read_aloud), stringResource(R.string.wear_read_aloud_detail), speak, store::setSpeak) }
             // Not a switch: the system's picker decides it, and it can be taken away there too.
             if (canBeAssistant && assistantRequest != null) {
                 item {
@@ -824,14 +834,16 @@ private fun SettingsScreen(link: WatchLink, store: WatchStore) {
                         onClick = { askAssistant.launch(assistantRequest) },
                         modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Surface2, contentColor = Text1, secondaryContentColor = Muted),
-                        label = { Text("Assistant", style = geist(14, FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis) },
+                        label = { Text(stringResource(R.string.wear_assistant), style = geist(14, FontWeight.Medium), maxLines = 1, overflow = TextOverflow.Ellipsis) },
                         secondaryLabel = {
                             Text(
-                                when {
-                                    isAssistant -> "Kyllene answers the button"
-                                    refused -> "Not set. Tap to try again"
-                                    else -> "Set Kyllene as assistant"
-                                },
+                                stringResource(
+                                    when {
+                                        isAssistant -> R.string.wear_assistant_set
+                                        refused -> R.string.wear_assistant_refused
+                                        else -> R.string.wear_assistant_unset
+                                    },
+                                ),
                                 style = geist(12, color = Text2),
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
@@ -867,38 +879,39 @@ private fun ChatRow(title: String, activityAt: Double?, picked: Boolean, onClick
         } else {
             null
         },
-        secondaryLabel = ago(activityAt)?.let { { Text(it, style = geist(12, color = Muted)) } },
+        secondaryLabel = ago(activityAt)?.let { { Text(it.text(), style = geist(12, color = Muted)) } },
         label = { Text(title, style = geist(14, FontWeight.Medium), maxLines = 2, overflow = TextOverflow.Ellipsis) },
     )
 }
 
 /** How long ago [epochSeconds] was, the way a list says it: "now", "5m", "3h", "2d". */
-internal fun ago(epochSeconds: Double?, nowMillis: Long = System.currentTimeMillis()): String? {
+internal fun ago(epochSeconds: Double?, nowMillis: Long = System.currentTimeMillis()): WatchLine? {
     epochSeconds ?: return null
     val minutes = ((nowMillis / 1000.0 - epochSeconds) / 60).toLong()
     return when {
-        minutes < 1 -> "now"
-        minutes < 60 -> "${minutes}m"
-        minutes < 60 * 24 -> "${minutes / 60}h"
-        minutes < 60 * 24 * 7 -> "${minutes / (60 * 24)}d"
-        else -> "${minutes / (60 * 24 * 7)}w"
+        minutes < 1 -> WatchLine.Res(R.string.wear_ago_now)
+        minutes < 60 -> WatchLine.Res(R.string.wear_ago_minutes, listOf(minutes))
+        minutes < 60 * 24 -> WatchLine.Res(R.string.wear_ago_hours, listOf(minutes / 60))
+        minutes < 60 * 24 * 7 -> WatchLine.Res(R.string.wear_ago_days, listOf(minutes / (60 * 24)))
+        else -> WatchLine.Res(R.string.wear_ago_weeks, listOf(minutes / (60 * 24 * 7)))
     }
 }
 
-private fun phoneProblem(phone: PhoneState): String? = when (phone) {
-    PhoneState.NotConnected -> WatchLink.NOT_CONNECTED
-    PhoneState.NoHerald -> WatchLink.NO_HERALD
-    PhoneState.SignedOut -> "Sign in to Kyllene on your phone first."
-    PhoneState.Unreachable -> "Kyllene can't reach your gateway. Check it on your phone."
+@StringRes
+private fun phoneProblem(phone: PhoneState): Int? = when (phone) {
+    PhoneState.NotConnected -> R.string.wear_phone_not_connected_detail
+    PhoneState.NoHerald -> R.string.wear_phone_no_app
+    PhoneState.SignedOut -> R.string.wear_phone_signed_out
+    PhoneState.Unreachable -> R.string.wear_phone_unreachable
     PhoneState.Unknown, PhoneState.Ready, PhoneState.Reconnecting -> null
 }
 
-internal fun activityLine(phase: ReplyPhase, activity: String?): String = activity ?: when (phase) {
-    ReplyPhase.Transcribing -> "Writing it down…"
-    ReplyPhase.Sending -> "Sending…"
-    ReplyPhase.WaitingOnPhone -> "Waiting for you on your phone"
-    ReplyPhase.Working -> "Thinking…"
-    ReplyPhase.Done, ReplyPhase.Failed -> ""
+internal fun activityLine(phase: ReplyPhase, activity: String?): WatchLine = activity?.let { WatchLine.Raw(it) } ?: when (phase) {
+    ReplyPhase.Transcribing -> WatchLine.Res(R.string.wear_transcribing)
+    ReplyPhase.Sending -> WatchLine.Res(R.string.wear_sending)
+    ReplyPhase.WaitingOnPhone -> WatchLine.Res(R.string.wear_waiting_on_phone)
+    ReplyPhase.Working -> WatchLine.Res(R.string.wear_thinking)
+    ReplyPhase.Done, ReplyPhase.Failed -> WatchLine.Raw("")
 }
 
 private const val TALK = "talk"

@@ -15,20 +15,39 @@ class DesktopNotifierTest {
     private val prefs = AppSettings(notifyRequests = true, notifyReplies = true)
     private val question = InputRequest.Clarify("q1", listOf(ClarifyQuestion(null, "Which branch?\nmore")))
 
+    /** Each line its own marker, so a test sees which one a notice chose, whatever the language. */
+    private val words = NoticeWords(
+        replyFailed = "<failed>",
+        replied = "<replied>",
+        replyIn = "<reply in>",
+        approval = "<approval>",
+        question = "<question>",
+        needsYou = "<needs you>",
+    )
+
     private fun running(title: String? = "Release") = ChatState(title = title, storedSessionId = "s1", running = true)
 
-    private fun done(text: String, outcome: TurnOutcome? = null) = running().copy(
+    private fun done(text: String, outcome: TurnOutcome? = null, title: String? = "Release") = running(title).copy(
         running = false,
         messages = listOf(ChatMessage.Assistant("a1", text = text, outcome = outcome)),
     )
+
+    private fun noticesFor(previous: ChatState?, state: ChatState, focused: Boolean, prefs: AppSettings, notified: MutableSet<String>) =
+        noticesFor(previous, state, focused, prefs, notified, words)
 
     @Test
     fun aQuestionIsToldOnceWhileAway() {
         val notified = mutableSetOf<String>()
         val waiting = running().copy(inputRequests = listOf(question))
         val first = noticesFor(running(), waiting, focused = false, prefs, notified)
-        assertEquals(listOf(DesktopNotice("Hermes has a question · Release", "Which branch?", "s1", "Release", question)), first)
+        assertEquals(listOf(DesktopNotice("<question> · Release", "Which branch?", "s1", "Release", question)), first)
         assertTrue(noticesFor(waiting, waiting, focused = false, prefs, notified).isEmpty())
+    }
+
+    @Test
+    fun aQuestionInAnUntitledChatIsToldWithoutATitle() {
+        val waiting = running(title = null).copy(inputRequests = listOf(question))
+        assertEquals("<question>", noticesFor(running(null), waiting, focused = false, prefs, mutableSetOf()).single().title)
     }
 
     @Test
@@ -46,9 +65,15 @@ class DesktopNotifierTest {
     }
 
     @Test
+    fun anEmptyReplyInAnUntitledChatSaysItReplied() {
+        val notices = noticesFor(running(null), done(" ", title = null), focused = false, prefs, mutableSetOf())
+        assertEquals(listOf(DesktopNotice("<replied>", "<reply in>", "s1", null)), notices)
+    }
+
+    @Test
     fun aFailureSaysSo() {
         val notices = noticesFor(running(), done("boom", TurnOutcome.Error), focused = false, prefs, mutableSetOf())
-        assertEquals("Hermes ran into a problem", notices.single().title)
+        assertEquals("<failed>", notices.single().title)
     }
 
     @Test

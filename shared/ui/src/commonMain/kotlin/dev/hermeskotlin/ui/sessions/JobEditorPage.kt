@@ -86,6 +86,8 @@ import dev.hermeskotlin.designsystem.stroke
 import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.typography
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * The form for a new or existing scheduled job. The schedule is free text that the gateway parses,
@@ -104,7 +106,7 @@ internal fun JobEditorPage(
     onClose: () -> Unit,
     routineOf: String? = null,
 ) {
-    val noun = if (routineOf != null) "routine" else "job"
+    val routine = routineOf != null
     // A job may deliver somewhere the target list doesn't name (a specific chat, or `origin`); keep it selectable.
     val targets = if (deliveryTargets.none { it.id == editor.deliver }) {
         deliveryTargets + DeliveryTarget(id = editor.deliver)
@@ -113,7 +115,17 @@ internal fun JobEditorPage(
     }
     ShortcutHandler(enabled = !editor.saving) { (it == Shortcut.Save).also { save -> if (save) onSave() } }
     Column(Modifier.fillMaxSize()) {
-        SubpageHeader(if (editor.isNew) "New $noun" else "Edit $noun", onBack = onClose)
+        SubpageHeader(
+            stringResource(
+                when {
+                    editor.isNew && routine -> Res.string.sessions_new_routine
+                    editor.isNew -> Res.string.sessions_new_job
+                    routine -> Res.string.sessions_edit_routine
+                    else -> Res.string.sessions_edit_job
+                },
+            ),
+            onBack = onClose,
+        )
         Column(
             Modifier
                 .weight(1f)
@@ -128,10 +140,10 @@ internal fun JobEditorPage(
         ) {
             TextField(
                 state = prompt,
-                label = "Prompt",
-                placeholder = "Summarize my unread email and flag anything urgent",
-                supportingText = routineOf?.let { "What $it does on each run, as itself, with its own memory and skills." }
-                    ?: "What the agent does on each run, as a fresh chat.",
+                label = stringResource(Res.string.sessions_job_prompt),
+                placeholder = stringResource(Res.string.sessions_job_prompt_example),
+                supportingText = routineOf?.let { stringResource(Res.string.sessions_routine_prompt_hint, it) }
+                    ?: stringResource(Res.string.sessions_job_prompt_hint),
                 singleLine = false,
                 maxLines = 8,
                 enabled = !editor.saving,
@@ -141,53 +153,65 @@ internal fun JobEditorPage(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 TextField(
                     state = schedule,
-                    label = "Schedule",
+                    label = stringResource(Res.string.sessions_job_schedule),
                     placeholder = "every 30m",
-                    supportingText = scheduleHint(editor),
+                    supportingText = stringResource(
+                        if (editor.isNew) Res.string.sessions_job_schedule_hint_new else Res.string.sessions_job_schedule_hint_edit,
+                    ),
                     enabled = !editor.saving,
                     keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),
                 )
                 FlowRow(Modifier.selectableGroup(), horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     SCHEDULE_PRESETS.forEach { (label, value) ->
                         Choice(selected = schedule.text.toString() == value, onClick = { schedule.setTextAndPlaceCursorAtEnd(value) }, shape = CircleShape) { tint, weight ->
-                            Text(label, style = Theme[typography][bodySmall].copy(fontSize = 13.sp, fontWeight = weight), color = tint, maxLines = 1)
+                            Text(stringResource(label), style = Theme[typography][bodySmall].copy(fontSize = 13.sp, fontWeight = weight), color = tint, maxLines = 1)
                         }
                     }
                 }
             }
             TextField(
                 state = name,
-                label = "Name",
-                placeholder = if (routineOf != null) "Morning brief" else "Optional",
+                label = stringResource(Res.string.sessions_project_name),
+                placeholder = stringResource(if (routine) Res.string.sessions_routine_name_example else Res.string.sessions_optional),
                 enabled = !editor.saving,
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
             )
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("Deliver to", style = Theme[typography][label], color = Theme[colors][textSecondary], modifier = Modifier.padding(start = 4.dp))
+                Text(stringResource(Res.string.sessions_deliver_to), style = Theme[typography][label], color = Theme[colors][textSecondary], modifier = Modifier.padding(start = 4.dp))
                 DeliverTiles(targets, selected = editor.deliver, onSelect = onSetDeliver, botLabel = routineOf)
                 targets.firstOrNull { it.id == editor.deliver && !it.homeTargetSet }?.let {
                     Text(
-                        "${it.name} has no home channel set on the gateway, so runs would have nowhere to go.",
+                        stringResource(Res.string.sessions_deliver_no_home, it.name),
                         style = Theme[typography][bodySmall],
                         color = Theme[colors][textSecondary],
                     )
                 }
                 if (editor.deliver == Routines.BOT_CHAT_DELIVERY) {
                     Text(
-                        "Each run's result arrives in ${routineOf ?: "the bot"}'s chat as a message it reads and answers, so a run costs it one more turn.",
+                        stringResource(Res.string.sessions_deliver_bot_chat_detail, botChatName(routineOf)),
                         style = Theme[typography][bodySmall],
                         color = Theme[colors][textSecondary],
                     )
                 }
             }
-            editor.error?.let { CopyableOnDesktop { Text(it, style = Theme[typography][bodySmall], color = Theme[colors][danger]) } }
+            editor.error?.let { error ->
+                val reason = error.text()
+                CopyableOnDesktop { Text(reason, style = Theme[typography][bodySmall], color = Theme[colors][danger]) }
+            }
+            val saveLabel = stringResource(
+                when {
+                    !editor.isNew -> Res.string.sessions_save
+                    routine -> Res.string.sessions_schedule_routine
+                    else -> Res.string.sessions_schedule_job
+                },
+            )
             if (isDesktop) {
                 // A desktop form ends as a desktop dialog does: Cancel, then the main action, at the end of the line.
                 Row(Modifier.fillMaxWidth().padding(top = 4.dp), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
-                    Button("Cancel", onClick = onClose, variant = ButtonVariant.Ghost, enabled = !editor.saving)
+                    Button(stringResource(Res.string.common_cancel), onClick = onClose, variant = ButtonVariant.Ghost, enabled = !editor.saving)
                     Tooltip(keysLabel("Ctrl+S")) {
                         Button(
-                            if (editor.isNew) "Schedule $noun" else "Save",
+                            saveLabel,
                             onClick = onSave,
                             leadingIcon = Lucide.Check,
                             loading = editor.saving,
@@ -197,7 +221,7 @@ internal fun JobEditorPage(
                 }
             } else {
                 Button(
-                    if (editor.isNew) "Schedule $noun" else "Save",
+                    saveLabel,
                     onClick = onSave,
                     leadingIcon = Lucide.Check,
                     loading = editor.saving,
@@ -216,7 +240,9 @@ internal fun JobEditorPage(
 @Composable
 private fun DeliverTiles(targets: List<DeliveryTarget>, selected: String, onSelect: (String) -> Unit, botLabel: String?) {
     val fontScale = LocalDensity.current.fontScale.coerceAtLeast(1f)
-    val labels = targets.associate { it.id to deliveryLabel(it.id, targets, botLabel) }
+    val botChat = botChatName(botLabel)
+    val local = stringResource(Res.string.sessions_delivery_local)
+    val labels = targets.associate { it.id to deliveryLabel(it.id, targets, botChat = botChat, local = local) }
     val (wide, narrow) = targets.partition { labels.getValue(it.id).length > 14 }
     BoxWithConstraints(Modifier.fillMaxWidth()) {
         val perRow = ((maxWidth + 6.dp) / (88.dp * fontScale + 6.dp)).toInt().coerceIn(1, 4)
@@ -296,18 +322,12 @@ private fun targetIcon(id: String): ImageVector = when (id.lowercase().substring
     else -> Lucide.MessageSquare
 }
 
-private fun scheduleHint(editor: JobEditor): String =
-    if (editor.isNew) {
-        "Like “every 2h”, “0 9 * * *”, “every monday 9am”, or “in 30m” for once."
-    } else {
-        "Leave as is to keep the current schedule. One-time jobs start empty."
-    }
-
+/** Each preset's name, and the schedule it fills in, which the gateway reads and so stays as it is. */
 private val SCHEDULE_PRESETS = listOf(
-    "Every 30 min" to "every 30m",
-    "Hourly" to "every 1h",
-    "Daily 9:00" to "0 9 * * *",
-    "Weekdays 9:00" to "0 9 * * 1-5",
-    "Mondays 9:00" to "0 9 * * 1",
-    "Once, in 1h" to "in 1h",
+    Res.string.sessions_preset_every_30_min to "every 30m",
+    Res.string.sessions_preset_hourly to "every 1h",
+    Res.string.sessions_preset_daily to "0 9 * * *",
+    Res.string.sessions_preset_weekdays to "0 9 * * 1-5",
+    Res.string.sessions_preset_mondays to "0 9 * * 1",
+    Res.string.sessions_preset_once to "in 1h",
 )

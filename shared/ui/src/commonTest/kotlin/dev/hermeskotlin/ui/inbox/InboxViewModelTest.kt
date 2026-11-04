@@ -1,6 +1,7 @@
 package dev.hermeskotlin.ui.inbox
 
 import dev.hermeskotlin.core.auth.AuthApi
+import dev.hermeskotlin.ui.resources.*
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
@@ -257,7 +258,7 @@ class InboxViewModelTest {
         assertTrue(vm.state.value.following.failures)
         assertTrue(vm.state.value.followingLoaded)
         assertFalse(vm.state.value.saving)
-        assertTrue(vm.state.value.message!!.contains("timed out"))
+        assertTrue(vm.state.value.message!!.mentions("timed out"))
     }
 
     @Test
@@ -276,7 +277,7 @@ class InboxViewModelTest {
         vm.setFailures(true)
         assertFalse(vm.state.value.followingLoaded)
         assertFalse(vm.state.value.canEditFollowing)
-        assertTrue(vm.state.value.followingError!!.startsWith("Couldn't tell whether that was saved."))
+        assertEquals(Res.string.inbox_save_unknown, vm.state.value.followingError!!.entry)
     }
 
     @Test
@@ -293,7 +294,7 @@ class InboxViewModelTest {
         vm.chooseJobs()
         vm.setAll(Follow.Quiet)
         assertEquals(listOf("a"), store.state.value.runs.map { it.job })
-        assertTrue(vm.state.value.message!!.contains(InboxApi.ALL_JOBS_PLUGIN_VERSION))
+        assertTrue(vm.state.value.message!!.mentions(InboxApi.ALL_JOBS_PLUGIN_VERSION))
         // What the gateway has is read again: still just "a".
         assertEquals(Follow.Off, vm.state.value.following.default)
     }
@@ -625,7 +626,7 @@ class InboxViewModelTest {
         vm.bind(one)
         vm.copy(vm.state.value.runs.single())
         assertEquals("The first 48 KB", (vm.events.first() as InboxEvent.Copy).text)
-        assertTrue(vm.state.value.message!!.contains("48 KB"), vm.state.value.message)
+        assertEquals(words(Res.string.inbox_copied_truncated), vm.state.value.message)
     }
 
     @Test

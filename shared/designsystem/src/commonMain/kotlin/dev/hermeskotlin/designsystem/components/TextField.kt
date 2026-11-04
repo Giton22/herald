@@ -58,6 +58,7 @@ import com.composeunstyled.UnstyledIcon
 import com.composeunstyled.UnstyledTextField
 import com.composeunstyled.theme.Theme
 import dev.hermeskotlin.designsystem.LocalDesktopLayout
+import dev.hermeskotlin.designsystem.LocalDesignWords
 import dev.hermeskotlin.designsystem.accent
 import dev.hermeskotlin.designsystem.accentSoft
 import dev.hermeskotlin.designsystem.accentText
@@ -220,7 +221,7 @@ fun TextField(
                     ) {
                         UnstyledIcon(
                             Lucide.X,
-                            contentDescription = "Clear",
+                            contentDescription = LocalDesignWords.current.clear,
                             tint = Theme[colors][textTertiary],
                             modifier = Modifier.size(18.dp),
                         )
@@ -234,7 +235,7 @@ fun TextField(
                     ) {
                         UnstyledIcon(
                             if (revealed) Lucide.EyeOff else Lucide.Eye,
-                            contentDescription = if (revealed) "Hide password" else "Show password",
+                            contentDescription = LocalDesignWords.current.let { if (revealed) it.hidePassword else it.showPassword },
                             tint = Theme[colors][textTertiary],
                             modifier = Modifier.size(18.dp),
                         )

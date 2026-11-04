@@ -3,8 +3,9 @@ package dev.hermeskotlin.ui.sessions
 import dev.hermeskotlin.core.chat.Waiting
 import dev.hermeskotlin.core.connection.ConnectionState
 import kotlin.test.Test
+import dev.hermeskotlin.ui.resources.*
 import kotlin.test.assertEquals
-import kotlin.test.assertNull
+import kotlin.test.assertTrue
 
 class SessionRowStatusTest {
 
@@ -33,19 +34,24 @@ class SessionRowStatusTest {
     @Test
     fun theLineSaysEveryStatusInWords() {
         assertEquals(
-            "Needs approval · Running · New reply · Draft",
-            rowStatusLine(RowStatus(waiting = Waiting.Approval, unread = true, running = true), draft = true),
+            listOf(
+                Res.string.sessions_waiting_approval,
+                Res.string.sessions_status_running,
+                Res.string.sessions_status_new_reply,
+                Res.string.sessions_status_draft,
+            ),
+            rowStatusWords(RowStatus(waiting = Waiting.Approval, unread = true, running = true), draft = true),
         )
-        assertEquals("Draft", rowStatusLine(null, draft = true))
-        assertNull(rowStatusLine(RowStatus(), draft = false))
+        assertEquals(listOf(Res.string.sessions_status_draft), rowStatusWords(null, draft = true))
+        assertTrue(rowStatusWords(RowStatus(), draft = false).isEmpty())
     }
 
     @Test
     fun theConnectionDotIsSpoken() {
-        assertEquals("Connected", connectionWord(null))
-        assertEquals("Reconnecting", connectionWord(ConnectionState.Reconnecting(1, 0, "lost")))
-        assertEquals("Signed out", connectionWord(ConnectionState.SessionExpired))
-        assertEquals("Not connected", connectionWord(ConnectionState.Failed("guard")))
-        assertEquals("Connecting", connectionWord(ConnectionState.Idle))
+        assertEquals(Res.string.sessions_connection_connected, connectionWord(null))
+        assertEquals(Res.string.sessions_connection_reconnecting, connectionWord(ConnectionState.Reconnecting(1, 0, "lost")))
+        assertEquals(Res.string.sessions_connection_signed_out, connectionWord(ConnectionState.SessionExpired))
+        assertEquals(Res.string.sessions_connection_not_connected, connectionWord(ConnectionState.Failed("guard")))
+        assertEquals(Res.string.sessions_connection_connecting, connectionWord(ConnectionState.Idle))
     }
 }

@@ -38,6 +38,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeoutOrNull
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.getString
 
 /**
  * One GPT-Live call in a chat, Desktop's useVoiceLiveConversation: the voice model owns the microphone and
@@ -129,7 +131,7 @@ internal class LiveConversation(
             throw e
         } catch (e: Exception) {
             call.close()
-            return@coroutineScope e.message ?: "Couldn't start the live call."
+            return@coroutineScope e.message ?: getString(Res.string.voice_error_live_start)
         }
         state.update { it.copy(phase = VoicePhase.Listening) }
         val poll = launch {
@@ -306,7 +308,13 @@ internal class LiveConversation(
                         state.update { it.copy(error = event.message) }
                     }
                     is LiveEvent.Closed -> {
-                        ended.complete(if (event.reason == "closed") "The live call ended." else "The live call ended: ${event.reason}")
+                        ended.complete(
+                            if (event.reason == "closed") {
+                                getString(Res.string.voice_error_live_ended)
+                            } else {
+                                getString(Res.string.voice_error_live_ended_because, event.reason)
+                            },
+                        )
                         break@frames
                     }
                     LiveEvent.Started -> {
@@ -316,7 +324,7 @@ internal class LiveConversation(
                 }
                 }
             }
-            ended.complete("The live call dropped.")
+            ended.complete(getString(Res.string.voice_error_live_dropped))
         }
         // A call the agent placed: the voice says why first, once it's up (it drops what comes earlier).
         if (opener != null) {
@@ -407,7 +415,7 @@ internal class LiveConversation(
         val sent = session.stopAndSubmit(prompt, voiceLive = VoiceLiveTurn(context)).outcome
         if (sent != SendOutcome.Sent) {
             speak(id, "Sorry, I couldn't reach Hermes for that request.")
-            state.update { it.copy(error = session.state.value.error ?: "Couldn't send that to Hermes.") }
+            state.update { it.copy(error = session.state.value.error ?: getString(Res.string.voice_error_send_to_hermes)) }
             return
         }
         // The prompt just sent. A history reload swaps its key for its stored row's; then it's the last prompt.
@@ -632,7 +640,7 @@ internal class LiveConversation(
         if (!answered) {
             // Still asking: what's said next is another go at the answer, not a request that stops the turn.
             send(LiveCommands.commentary(nextId("say"), id, "The answer couldn't reach Hermes. Ask the user to say it again."))
-            state.update { it.copy(error = session.state.value.error ?: "Couldn't send the answer.") }
+            state.update { it.copy(error = session.state.value.error ?: getString(Res.string.voice_error_send_answer)) }
             return
         }
         send(LiveCommands.thinking(nextId("think"), id, "Hermes has the answer and carries on."))

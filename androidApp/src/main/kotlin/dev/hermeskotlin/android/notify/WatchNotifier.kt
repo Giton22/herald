@@ -113,7 +113,7 @@ class WatchNotifier(
                 // A room member's turn: its reply is the room's line, which RoomNotifier tells.
                 if (rooms.isRoomTurn(end.title)) return@collect
                 val failed = end.outcome == TurnOutcome.Error
-                val text = (if (failed) end.error ?: end.text else end.text).ifBlank { "Finished." }
+                val text = (if (failed) end.error ?: end.text else end.text).ifBlank { notifications.finished }
                 notifications.postReply(end.storedId, end.title.ifBlank { null }, text, failed)
             }
         }

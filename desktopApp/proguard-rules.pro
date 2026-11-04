@@ -1,8 +1,9 @@
-# ProGuard for the desktop installers (release build type): shrinking and optimising only, names kept (see
+# ProGuard for the desktop installers (release build type): shrinking only, no optimisation, names kept (see
 # build.gradle.kts). These keep what's reached only by name, by native code or through the runtime.
 
-# Narrowing a method's declared types can pick a type it doesn't always return: okio's buffer() came out
-# declared as RealBufferedSource, and the JVM refused it (VerifyError), so the app never reached the gateway.
+# For when optimisation is turned back on. Narrowing a method's declared types can pick a type it doesn't always
+# return: okio's buffer() came out declared as RealBufferedSource, and the JVM refused it (VerifyError), so the app
+# never reached the gateway.
 -optimizations !method/specialization/returntype,!method/specialization/parametertype
 
 # The app's own code, whole: Warmup links every class under dev/hermeskotlin/ by name, and Koin builds view models

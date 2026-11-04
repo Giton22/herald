@@ -22,10 +22,17 @@ import kotlinx.coroutines.launch
 
 data class ConnectUiState(
     val testing: Boolean = false,
-    val urlError: String? = null,
-    val accessError: String? = null,
+    /** Why the address isn't one; the screen words it. */
+    val urlError: InvalidGatewayUrlException? = null,
+    val accessError: AccessTokenProblem? = null,
     val result: ProbeResult? = null,
 )
+
+/** What's wrong with the service token typed. */
+enum class AccessTokenProblem {
+    /** One of the Client ID and the Client Secret is filled in, the other blank. */
+    HalfFilled,
+}
 
 class ConnectViewModel(
     private val probe: GatewayProbe,
@@ -99,13 +106,13 @@ class ConnectViewModel(
         val gatewayUrl = try {
             GatewayUrl.parse(url.text.toString())
         } catch (e: InvalidGatewayUrlException) {
-            _state.value = ConnectUiState(urlError = e.message)
+            _state.value = ConnectUiState(urlError = e)
             return
         }
         val clientId = accessClientId.text.trim().toString()
         val clientSecret = accessClientSecret.text.trim().toString()
         if (clientId.isEmpty() != clientSecret.isEmpty()) {
-            _state.value = ConnectUiState(accessError = "Enter both the Client ID and the Client Secret, or neither.")
+            _state.value = ConnectUiState(accessError = AccessTokenProblem.HalfFilled)
             return
         }
 

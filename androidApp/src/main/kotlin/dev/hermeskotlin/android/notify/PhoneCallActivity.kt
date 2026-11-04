@@ -11,6 +11,7 @@ import android.os.Build
 import android.os.Bundle
 import android.view.WindowManager
 import android.widget.Toast
+import dev.hermeskotlin.android.R
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -41,7 +42,7 @@ class PhoneCallActivity : ComponentActivity() {
     private var choosing = false
 
     private val microphone = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) model.start() else leave("Kyllene needs the microphone for calls. The question is in the chat.")
+        if (granted) model.start() else leave(getString(R.string.call_needs_microphone))
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {

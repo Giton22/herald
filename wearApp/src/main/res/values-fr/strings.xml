@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tile_label">Appeler Hermes</string>
+    <string name="tile_description">Parlez à Hermes et voyez sa dernière réponse.</string>
+    <string name="complication_label">Appeler Hermes</string>
+
+    <string name="wear_call_hermes">Appeler Hermes</string>
+    <string name="wear_call_target">Appeler %1$s</string>
+    <string name="wear_call_short">Appel</string>
+    <string name="wear_start_call">Lancer un appel</string>
+
+    <string name="wear_phone_connected">Connecté</string>
+    <string name="wear_phone_reconnecting">Reconnexion</string>
+    <string name="wear_phone_not_connected">Non connecté</string>
+    <string name="wear_phone_not_connected_detail">Votre téléphone n’est pas connecté.</string>
+    <string name="wear_phone_no_app">Kyllene sur votre téléphone n’a pas répondu. Ouvrez-le là-bas ou mettez-le à jour.</string>
+    <string name="wear_phone_signed_out">Connectez-vous d’abord à Kyllene sur votre téléphone.</string>
+    <string name="wear_phone_unreachable">Kyllene ne joint pas votre Gateway. Vérifiez-le sur votre téléphone.</string>
+    <string name="wear_phone_no_answer">Kyllene sur votre téléphone n’a pas répondu. Réessayez.</string>
+    <string name="wear_phone_changed">Le téléphone a changé. Réessayez.</string>
+    <string name="wear_phone_unreachable_short">Impossible de joindre votre téléphone.</string>
+    <string name="wear_profile_changed">Le profil du téléphone a changé. Veuillez réessayer.</string>
+    <string name="wear_profile_changed_short">Le profil du téléphone a changé. Réessayez.</string>
+    <string name="wear_update_for_profiles">Mettez à jour Kyllene sur votre téléphone pour les appels par profil.</string>
+    <string name="wear_update_for_bots">Mettez à jour Kyllene sur votre téléphone pour parler aux bots.</string>
+    <string name="wear_update_for_bot_calls">Mettez à jour Kyllene sur votre téléphone pour appeler des bots.</string>
+    <string name="wear_call_target_changed">La cible d’appel a changé. Touchez à nouveau Appeler.</string>
+    <string name="wear_default_call_target_changed">La cible d’appel par défaut a changé. Touchez à nouveau Appeler.</string>
+
+    <string name="wear_new_chat">Nouvelle conversation</string>
+    <string name="wear_chat">Conversation</string>
+    <string name="wear_open_chats">Ouvrir les conversations</string>
+    <string name="wear_done_talking">J’ai fini de parler</string>
+    <string name="wear_stop">Arrêter</string>
+    <string name="wear_cancel">Annuler</string>
+    <string name="wear_talk_to_hermes">Parler à Hermes</string>
+    <string name="wear_context_full">, contexte plein à %1$d %%</string>
+    <string name="wear_ask_hermes">Demander à Hermes</string>
+    <string name="wear_listening">À l’écoute… touchez quand c’est fini</string>
+    <string name="wear_checking_phone">Vérification du téléphone…</string>
+    <string name="wear_tap_to_stop">Touchez pour arrêter</string>
+    <string name="wear_something_wrong">Un problème est survenu.</string>
+    <string name="wear_tap_to_talk">Touchez pour parler</string>
+    <string name="wear_transcribing">Transcription…</string>
+    <string name="wear_sending">Envoi…</string>
+    <string name="wear_waiting_on_phone">Vous attend sur votre téléphone</string>
+    <string name="wear_thinking">Réflexion…</string>
+    <string name="wear_said">« %1$s »</string>
+    <string name="wear_needs_microphone">Kyllene a besoin du micro pour vous entendre.</string>
+    <string name="wear_tap_allow_microphone">Touchez pour autoriser le micro.</string>
+    <string name="wear_nothing_heard">Je n’ai rien entendu.</string>
+    <string name="wear_microphone_failed">Impossible d’utiliser le micro.</string>
+    <string name="wear_microphone_unavailable">Le micro n’est pas disponible.</string>
+
+    <string name="wear_mute">Couper le micro</string>
+    <string name="wear_unmute">Réactiver le micro</string>
+    <string name="wear_volume">Volume</string>
+    <string name="wear_end_call">Raccrocher</string>
+    <string name="wear_decline">Refuser</string>
+    <string name="wear_answer">Répondre</string>
+    <string name="wear_ring_agent">Vous appelle</string>
+    <string name="wear_ring_approval">Attend votre approbation</string>
+    <string name="wear_ring_question">A une question pour vous</string>
+    <string name="wear_call_starting">Démarrage…</string>
+    <string name="wear_call_connecting">Connexion…</string>
+    <string name="wear_call_muted">Micro coupé</string>
+    <string name="wear_call_working">Hermes : %1$s</string>
+    <string name="wear_call_thinking">Hermes s’en occupe…</string>
+    <string name="wear_call_live">En direct</string>
+    <string name="wear_call_ended">Appel terminé</string>
+    <string name="wear_call_ended_detail">L’appel est terminé.</string>
+    <string name="wear_call_dropped">L’appel a été coupé.</string>
+    <string name="wear_call_start_failed">Impossible de lancer l’appel.</string>
+    <string name="wear_call_no_connect">L’appel n’a pas abouti.</string>
+    <string name="wear_call_offer_failed">Impossible de préparer l’appel.</string>
+    <string name="wear_call_setup_failed">Impossible d’établir l’appel.</string>
+    <string name="wear_call_events_failed">Impossible d’ouvrir le canal d’événements de l’appel.</string>
+    <string name="wear_call_refused">L’appel a été refusé.</string>
+    <string name="wear_channel_calls_name">Appels pour une réponse</string>
+    <string name="wear_channel_calls_description">Hermes appelle quand il a besoin d’une approbation ou d’une réponse, ou que quelque chose ne peut pas attendre, si le téléphone sonne pour cela.</string>
+
+    <string name="wear_chats">Conversations</string>
+    <string name="wear_bots">Bots</string>
+    <string name="wear_settings">Paramètres</string>
+    <string name="wear_no_bots">Aucun bot pour l’instant.</string>
+    <string name="wear_no_chats">Aucune conversation pour l’instant.</string>
+    <string name="wear_ago_now">maintenant</string>
+    <string name="wear_ago_minutes">%1$d min</string>
+    <string name="wear_ago_hours">%1$d h</string>
+    <string name="wear_ago_days">%1$d j</string>
+    <string name="wear_ago_weeks">%1$d sem.</string>
+
+    <string name="wear_talk_live">Parler en direct</string>
+    <string name="wear_talk_live_detail">Comme un appel vocal</string>
+    <string name="wear_read_aloud">Lire à voix haute</string>
+    <string name="wear_read_aloud_detail">Chaque réponse</string>
+    <string name="wear_assistant">Assistant</string>
+    <string name="wear_assistant_set">Kyllene répond au bouton</string>
+    <string name="wear_assistant_refused">Non défini. Touchez pour réessayer</string>
+    <string name="wear_assistant_unset">Définir Kyllene comme assistant</string>
+</resources>

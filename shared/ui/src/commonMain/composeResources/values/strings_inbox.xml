@@ -1,0 +1,187 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The Inbox (cron job reports, its folders, groups and follow page) and the assistant panel over other apps.
+    inbox_ for the Inbox, assistant_ for the panel.
+-->
+<resources>
+    <!-- A message, then the gateway's own reason after it ("Couldn’t send." and why). -->
+    <string name="inbox_then_detail">%1$s %2$s</string>
+    <string name="inbox_title">Inbox</string>
+    <string name="inbox_all">All</string>
+    <string name="inbox_other">Other</string>
+    <string name="inbox_failed">Failed</string>
+    <string name="inbox_failed_at">Failed · %1$s</string>
+    <string name="inbox_from_jobs">From the jobs you follow</string>
+    <plurals name="inbox_unread_from_jobs">
+        <item quantity="one">%1$d unread · from the jobs you follow</item>
+        <item quantity="other">%1$d unread · from the jobs you follow</item>
+    </plurals>
+    <plurals name="inbox_reports_from">
+        <item quantity="one">%1$d report from %2$s</item>
+        <item quantity="other">%1$d reports from %2$s</item>
+    </plurals>
+    <plurals name="inbox_reports_in">
+        <item quantity="one">%1$d report in %2$s</item>
+        <item quantity="other">%1$d reports in %2$s</item>
+    </plurals>
+    <plurals name="inbox_reports_in_no_group">
+        <item quantity="one">%1$d report in no group</item>
+        <item quantity="other">%1$d reports in no group</item>
+    </plurals>
+    <string name="inbox_mark_all_read">Mark all read</string>
+    <string name="inbox_folders_and_groups">Folders and groups</string>
+    <string name="inbox_choose_jobs">Choose jobs</string>
+    <string name="inbox_load_failed_title">Couldn’t load the Inbox</string>
+    <string name="inbox_load_failed">Couldn’t load the Inbox.</string>
+    <string name="inbox_load_more_failed">Couldn’t load more.</string>
+    <string name="inbox_not_connected">Not connected to the gateway.</string>
+    <string name="inbox_no_failed_runs">No failed runs</string>
+    <string name="inbox_no_failed_runs_detail">Every run in the Inbox went fine.</string>
+    <string name="inbox_empty">Nothing here yet</string>
+    <string name="inbox_empty_detail">Pick the jobs whose reports you want here, like a morning briefing. Each one can notify you, or arrive quietly.</string>
+    <string name="inbox_mark_read">Mark read</string>
+    <string name="inbox_mark_unread">Mark unread</string>
+    <string name="inbox_unread">Unread</string>
+    <plurals name="inbox_unread_count">
+        <item quantity="one">%1$d unread</item>
+        <item quantity="other">%1$d unread</item>
+    </plurals>
+    <string name="inbox_folder">Folder</string>
+    <string name="inbox_mark_folder_read">Mark folder read</string>
+    <string name="inbox_rename">Rename</string>
+    <string name="inbox_ask_about_this">Ask about this</string>
+    <string name="inbox_continue_its_chat">Continue its chat</string>
+    <string name="inbox_open_its_chat">Open its chat</string>
+    <string name="inbox_copy">Copy</string>
+    <string name="inbox_copy_report">Copy report</string>
+    <string name="inbox_open_named">Open %1$s</string>
+    <string name="inbox_more_for_named">More for %1$s</string>
+    <string name="inbox_read_named">Read %1$s</string>
+    <string name="inbox_more_for_report">More for this report</string>
+    <plurals name="inbox_reports">
+        <item quantity="one">%1$d report</item>
+        <item quantity="other">%1$d reports</item>
+    </plurals>
+    <plurals name="inbox_recent_reports">
+        <item quantity="one">%1$d recent report</item>
+        <item quantity="other">%1$d recent reports</item>
+    </plurals>
+    <plurals name="inbox_failed_count">
+        <item quantity="one">%1$d failed</item>
+        <item quantity="other">%1$d failed</item>
+    </plurals>
+    <string name="inbox_failed_runs">Failed runs</string>
+    <string name="inbox_open_failed_runs">Open failed runs</string>
+    <string name="inbox_needs_push">The Inbox needs Notifications anywhere, which tells the gateway which phone this is.</string>
+    <string name="inbox_needs_plugin">The gateway’s herald-push plugin needs %1$s for the Inbox. Update it in Settings.</string>
+    <string name="inbox_open_settings">Open Settings</string>
+    <string name="inbox_loading">Loading…</string>
+    <string name="inbox_try_again">Try again</string>
+    <string name="inbox_older_reports">Older reports</string>
+    <string name="inbox_note_offline_phone">Only the start of this report is on the phone. Connect to the gateway to read the rest.</string>
+    <string name="inbox_note_offline_computer">Only the start of this report is on the computer. Connect to the gateway to read the rest.</string>
+    <string name="inbox_note_gone_phone">Only the start of this report is on the phone: the gateway no longer has it.</string>
+    <string name="inbox_note_gone_computer">Only the start of this report is on the computer: the gateway no longer has it.</string>
+    <string name="inbox_note_failed_phone">Only the start of this report is on the phone: the gateway couldn’t send the rest.</string>
+    <string name="inbox_note_failed_computer">Only the start of this report is on the computer: the gateway couldn’t send the rest.</string>
+    <string name="inbox_kept_on_phone">Kept on this phone</string>
+    <string name="inbox_kept_on_computer">Kept on this computer</string>
+    <string name="inbox_new_group">New group</string>
+    <string name="inbox_opens_on">The Inbox opens on</string>
+    <string name="inbox_layout_folders">Folders</string>
+    <string name="inbox_layout_one_list">One list</string>
+    <string name="inbox_folders_are">Folders are</string>
+    <string name="inbox_chips_show">Chips show</string>
+    <string name="inbox_mode_each_job">Each job</string>
+    <string name="inbox_mode_my_groups">My groups</string>
+    <string name="inbox_groups_hint">Make a group with the folder button above, then put jobs in it. Until then the chips show each job.</string>
+    <string name="inbox_groups">Groups</string>
+    <string name="inbox_jobs">Jobs</string>
+    <string name="inbox_rename_hint_phone">The pencil renames a job on this phone, for its chip and cards. A long press on its chip does too.</string>
+    <string name="inbox_rename_hint_computer">The pencil renames a job on this computer, for its chip and cards. A right-click on its chip does too.</string>
+    <string name="inbox_no_jobs_yet">Jobs show here once they have reports in the Inbox.</string>
+    <string name="inbox_no_group">No group</string>
+    <string name="inbox_group">Group</string>
+    <string name="inbox_rename_job">Rename job</string>
+    <string name="inbox_rename_job_detail_phone">Only on this phone: on the gateway it stays %1$s.</string>
+    <string name="inbox_rename_job_detail_computer">Only on this computer: on the gateway it stays %1$s.</string>
+    <string name="inbox_reset">Reset</string>
+    <string name="inbox_save">Save</string>
+    <string name="inbox_create">Create</string>
+    <string name="inbox_group_name_taken">There’s a group with that name.</string>
+    <string name="inbox_group_name_reserved">“%1$s” is the folder for jobs in no group: pick another name.</string>
+    <string name="inbox_group_too_many">That’s the most groups there can be.</string>
+    <string name="inbox_rename_group">Rename group</string>
+    <string name="inbox_new_group_detail">Such as Work or Personal. Put jobs in it from the list below.</string>
+    <string name="inbox_group_name">Group name</string>
+    <plurals name="inbox_job_count">
+        <item quantity="one">%1$d job</item>
+        <item quantity="other">%1$d jobs</item>
+    </plurals>
+    <string name="inbox_rename_named">Rename %1$s</string>
+    <string name="inbox_remove_named">Remove %1$s</string>
+    <string name="inbox_choose_group_for">Choose %1$s’s group</string>
+    <string name="inbox_follow_title">Jobs in the Inbox</string>
+    <string name="inbox_follow_subtitle_phone">What each job’s reports do on this phone</string>
+    <string name="inbox_follow_subtitle_computer">What each job’s reports do on this computer</string>
+    <string name="inbox_all_jobs">All jobs</string>
+    <string name="inbox_all_jobs_detail">Sets every job at once, and jobs made later. Jobs that stay silent never show up. Switch single jobs off below.</string>
+    <string name="inbox_all_off">All off</string>
+    <string name="inbox_all_in_inbox">All in Inbox</string>
+    <string name="inbox_all_notify">All notify</string>
+    <string name="inbox_failures">Tell me when any job fails</string>
+    <string name="inbox_failures_detail">A notification for every failed run, including jobs you don’t follow.</string>
+    <string name="inbox_follow_off">Off</string>
+    <string name="inbox_follow_notify">Notify</string>
+    <string name="inbox_save_needs_all_jobs_plugin">Couldn’t save that. All on and switching jobs off need the gateway’s plugin %1$s: update it in Settings.</string>
+    <string name="inbox_save_plugin_too_old">Couldn’t save that. The gateway’s herald-push plugin is too old for the Inbox. Update it in Settings.</string>
+    <string name="inbox_save_failed_because">Couldn’t save that: %1$s</string>
+    <string name="inbox_save_failed">Couldn’t save that.</string>
+    <string name="inbox_save_unknown">Couldn’t tell whether that was saved. %1$s</string>
+    <string name="inbox_plugin_too_old">The gateway’s herald-push plugin is too old for the Inbox.</string>
+    <string name="inbox_following_failed">Couldn’t read what this phone follows.</string>
+    <string name="inbox_following_offline">Connect to the gateway to see what this phone follows.</string>
+    <string name="inbox_change_offline">Connect to the gateway to change this.</string>
+    <string name="inbox_jobs_load_failed">Couldn’t load the jobs.</string>
+    <string name="inbox_report_not_here_phone">That report isn’t on the phone. It may be further back in the list.</string>
+    <string name="inbox_report_not_here_computer">That report isn’t on the computer. It may be further back in the list.</string>
+    <string name="inbox_ask_offline">Connect to the gateway to ask about this report: only its start is on the phone.</string>
+    <string name="inbox_ask_gone">The gateway no longer has this report, so there’s only its start to ask about.</string>
+    <string name="inbox_ask_failed">Couldn’t get the whole report from the gateway. Try again in a moment.</string>
+    <string name="inbox_copied_start_offline">Copied the start of the report: connect to the gateway for the rest.</string>
+    <string name="inbox_copied_start_gone">Copied the start of the report: the gateway no longer has the rest.</string>
+    <string name="inbox_copied_start_failed">Copied the start of the report: the gateway couldn’t send the rest.</string>
+    <string name="inbox_copied_truncated">Copied the report as far as the gateway sends it: the first 48 KB.</string>
+    <string name="inbox_copied">Copied the report.</string>
+
+    <string name="assistant_not_signed_in">Not signed in</string>
+    <string name="assistant_circle_part">Circle part of the screen</string>
+    <string name="assistant_open_in_app">Open in Kyllene</string>
+    <string name="assistant_close">Close</string>
+    <string name="assistant_sign_in">Sign in to a Hermes gateway in Kyllene to ask about your screen.</string>
+    <string name="assistant_open_app">Open Kyllene</string>
+    <string name="assistant_listening">Listening…</string>
+    <string name="assistant_transcribing">Writing down what you said…</string>
+    <string name="assistant_connecting">Connecting to Hermes…</string>
+    <string name="assistant_ask_circled">Ask about what you circled</string>
+    <string name="assistant_ask_follow_up">Ask a follow-up</string>
+    <string name="assistant_ask_screen">Ask about your screen</string>
+    <string name="assistant_ask_hermes">Ask Hermes</string>
+    <string name="assistant_leave_screen_out">Leave the screen out</string>
+    <string name="assistant_include_screen">Include the screen</string>
+    <string name="assistant_this_screen">This screen</string>
+    <string name="assistant_include_this_screen">Include this screen?</string>
+    <string name="assistant_reading_screen">Reading the screen…</string>
+    <string name="assistant_text_only">text only</string>
+    <string name="assistant_screenshot">Screenshot</string>
+    <string name="assistant_add">Add</string>
+    <string name="assistant_cant_see_screen">Kyllene can’t see the screen</string>
+    <string name="assistant_turn_on_screen_text">Turn on “Use text from screen”</string>
+    <string name="assistant_what_you_circled">What you circled</string>
+    <string name="assistant_circled">Circled</string>
+    <string name="assistant_circle_again">Circle again</string>
+    <string name="assistant_remove_circled">Remove what you circled</string>
+    <string name="assistant_your_screen">Your screen</string>
+    <string name="assistant_circle_hint">Circle or tap what to ask about</string>
+    <string name="assistant_stop_circling">Stop circling</string>
+</resources>

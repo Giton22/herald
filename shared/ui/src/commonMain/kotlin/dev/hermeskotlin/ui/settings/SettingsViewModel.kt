@@ -57,7 +57,11 @@ sealed interface SuggestionsPlugin {
         /** Before 0.3.1 a gateway serving several profiles kept suggestions where only one could read them. */
         val outdated: Boolean get() = version != null && !PushPluginReply(version = version).versionAtLeast(NextPromptApi.PLUGIN_VERSION)
     }
-    data class Failed(val message: String) : SuggestionsPlugin
+    /** The install failed: [message] is the gateway's reason, null when it gave none. */
+    data class Failed(val message: String?) : SuggestionsPlugin
+
+    /** Installed, but the gateway doesn't list it yet. */
+    data object NotListed : SuggestionsPlugin
 }
 
 /** "Check connection": the stages done so far, and whether it's still going. */
@@ -298,13 +302,13 @@ class SettingsViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                e.message ?: "The gateway didn't install it."
+                SuggestionsPlugin.Failed(e.message)
             }
             val now = lookUpSuggestions(url, profile)
             _suggestions.value = when {
                 now is SuggestionsPlugin.Installed || now == SuggestionsPlugin.NeedsRestart -> now
-                failure != null -> SuggestionsPlugin.Failed(failure)
-                else -> SuggestionsPlugin.Failed("Installed, but the gateway doesn't list it yet. Restart the gateway, then look again.")
+                failure != null -> failure
+                else -> SuggestionsPlugin.NotListed
             }
             // Settings moved to another gateway or profile meanwhile.
             if (bound?.gatewayUrl != url || boundProfile != profile) checkSuggestions()
