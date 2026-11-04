@@ -72,6 +72,17 @@
     <string name="wallpaper_strong">Fuerte</string>
     <string name="settings_projects_as_list">Proyectos como lista</string>
     <string name="settings_projects_as_list_detail">Muestra los proyectos de la lista de chats como un botón que abre una lista, en lugar de una fila de chips que se desplaza de lado.</string>
+    <string name="settings_sidebar_switch">Selector de Chats y Bots</string>
+    <string name="settings_sidebar_switch_detail">El selector de la parte superior de la barra lateral. Desactivado, la barra lateral solo muestra la vista que elijas.</string>
+    <string name="settings_sidebar_view">La barra lateral muestra</string>
+    <string name="settings_sidebar_view_detail">Con el selector oculto, la barra lateral siempre muestra esta vista.</string>
+    <string name="settings_sidebar_pages">Páginas de la barra lateral</string>
+    <string name="settings_sidebar_pages_intro">Los botones encima de tus chats en la barra lateral, como Programado y Archivadas. Ocultar uno solo quita su botón.</string>
+    <string name="settings_sidebar_pages_show">Mostrar botones de páginas</string>
+    <string name="settings_sidebar_pages_show_detail">Desactivado, la barra lateral no tiene ninguno y empieza con tus chats.</string>
+    <string name="settings_sidebar_pages_each">Páginas</string>
+    <string name="settings_sidebar_pages_off">Ocultas.</string>
+    <string name="settings_sidebar_pages_all">Todas visibles.</string>
     <string name="settings_running_send">Con una respuesta en curso, Enviar…</string>
     <string name="settings_running_send_detail">%1$s. Mantén pulsado Enviar para elegir otra opción solo para ese mensaje.</string>
     <string name="running_send_steer">Lo añade a la respuesta en curso</string>
@@ -241,5 +252,9 @@
     <plurals name="settings_phone_tools_count">
         <item quantity="one">%1$d herramienta activada.</item>
         <item quantity="other">%1$d herramientas activadas.</item>
+    </plurals>
+    <plurals name="settings_sidebar_pages_count">
+        <item quantity="one">%1$d de %2$d visible.</item>
+        <item quantity="other">%1$d de %2$d visibles.</item>
     </plurals>
 </resources>

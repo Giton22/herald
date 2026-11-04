@@ -21,6 +21,10 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import com.composeunstyled.Text
+import dev.hermeskotlin.ui.bots.BotsRoster
+import dev.hermeskotlin.ui.bots.BotsUiState
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w360dp-h640dp-xhdpi")
@@ -106,6 +110,30 @@ class SidebarHeaderTest {
         show(listOf(Profile("default", isDefault = true), Profile("long", displayName = "A research assistant for the whole household")), active = "long")
         composeRule.onNodeWithText("homelab").assertIsDisplayed()
         composeRule.onNodeWithText("· A research assistant for the whole household").assertIsDisplayed()
+    }
+
+    @Test
+    fun theRosterDrawsItsTopAboveTheBots() {
+        // The sidebar's page buttons when it has no Chats / Bots switch, so the Bots side still reaches the pages.
+        composeRule.setContent {
+            HermesTheme(ColorScheme.Dark) {
+                BotsRoster(
+                    state = BotsUiState(loading = false),
+                    avatars = emptyMap(),
+                    selectedId = null,
+                    selectedRunning = false,
+                    nowSeconds = 0.0,
+                    actions = PreviewBotActions,
+                    onRetry = {},
+                    onDismissNotice = {},
+                    top = { Text("Page buttons") },
+                )
+            }
+        }
+        settle()
+        val top = composeRule.onNodeWithText("Page buttons").assertIsDisplayed().getUnclippedBoundsInRoot()
+        val bots = composeRule.onNodeWithText("No bots on this gateway yet.").getUnclippedBoundsInRoot()
+        assertTrue(top.bottom <= bots.top, "top ${top.bottom}, bots ${bots.top}")
     }
 
     private fun settle() {
