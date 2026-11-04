@@ -72,6 +72,17 @@
     <string name="wallpaper_strong">Strong</string>
     <string name="settings_projects_as_list">Projects as a list</string>
     <string name="settings_projects_as_list_detail">Show the chat list’s projects as one button that opens a list, instead of a row of chips that scrolls sideways.</string>
+    <string name="settings_sidebar_switch">Chats and Bots switch</string>
+    <string name="settings_sidebar_switch_detail">The switch at the top of the sidebar. Off, the sidebar shows only the view you pick.</string>
+    <string name="settings_sidebar_view">Sidebar shows</string>
+    <string name="settings_sidebar_view_detail">With the switch hidden, the sidebar always shows this.</string>
+    <string name="settings_sidebar_pages">Sidebar pages</string>
+    <string name="settings_sidebar_pages_intro">The buttons above your chats in the sidebar, such as Scheduled and Archived. Hiding one only removes its button.</string>
+    <string name="settings_sidebar_pages_show">Show page buttons</string>
+    <string name="settings_sidebar_pages_show_detail">Off, the sidebar has none of them and starts with your chats.</string>
+    <string name="settings_sidebar_pages_each">Pages</string>
+    <string name="settings_sidebar_pages_off">Hidden.</string>
+    <string name="settings_sidebar_pages_all">All shown.</string>
     <string name="settings_running_send">While a reply is running, Send…</string>
     <string name="settings_running_send_detail">%1$s. Hold Send to pick another way for one message.</string>
     <string name="running_send_steer">Adds it to the running reply</string>
@@ -241,5 +252,9 @@
     <plurals name="settings_phone_tools_count">
         <item quantity="one">1 tool on.</item>
         <item quantity="other">%1$d tools on.</item>
+    </plurals>
+    <plurals name="settings_sidebar_pages_count">
+        <item quantity="one">%1$d of %2$d shown.</item>
+        <item quantity="other">%1$d of %2$d shown.</item>
     </plurals>
 </resources>

@@ -113,6 +113,8 @@ import dev.hermeskotlin.ui.settings.ConnectionCheckSheet
 import dev.hermeskotlin.ui.settings.GatewayInfo
 import dev.hermeskotlin.ui.settings.SettingsView
 import dev.hermeskotlin.ui.settings.StartInstructionView
+import dev.hermeskotlin.ui.settings.SidebarPagesView
+import dev.hermeskotlin.ui.SidebarPage
 import dev.hermeskotlin.ui.update.LocalRenameOffer
 import dev.hermeskotlin.ui.update.RenameOffer
 import androidx.compose.ui.tooling.preview.Preview
@@ -160,6 +162,7 @@ enum class PreviewScene(val label: String) {
     Settings("Settings"),
     AppIcons("The app icons"),
     StartInstruction("The starting instruction for new chats"),
+    SidebarPages("The sidebar's page buttons, a few hidden"),
     Gateways("Saved gateways"),
     Journey("What the agent has learned"),
     Insights("Insights"),
@@ -625,6 +628,11 @@ fun HeraldPreview(scene: PreviewScene, dark: Boolean = true, accent: String = DE
                     onChange = {},
                     onBack = {},
                 )
+                PreviewScene.SidebarPages -> SidebarPagesView(
+                    settings = AppSettings(sidebarNavHidden = listOf(SidebarPage.Insights.name, SidebarPage.Config.name)),
+                    onUpdate = {},
+                    onBack = {},
+                )
                 PreviewScene.ConnectionCheck -> Box(Modifier.fillMaxSize()) {
                     SettingsView(
                         settings = AppSettings(theme = if (dark) ThemeMode.Dark else ThemeMode.Light, glow = glow),
@@ -844,6 +852,10 @@ private fun SettingsPreview() = HeraldPreview(PreviewScene.Settings)
 @Preview(widthDp = 412, heightDp = 892)
 @Composable
 private fun StartInstructionPreview() = HeraldPreview(PreviewScene.StartInstruction)
+
+@Preview(widthDp = 412, heightDp = 892)
+@Composable
+private fun SidebarPagesPreview() = HeraldPreview(PreviewScene.SidebarPages)
 
 @Preview(widthDp = 412, heightDp = 892)
 @Composable

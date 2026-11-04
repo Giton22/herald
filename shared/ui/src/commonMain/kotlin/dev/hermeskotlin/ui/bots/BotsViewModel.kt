@@ -230,8 +230,10 @@ class BotsViewModel(
         desktopRoomOpen.value = open
     }
 
-    fun setMode(mode: SidebarMode) {
+    /** Shows [mode]'s side; [remember] keeps it as the gateway's pick, which a side the settings fix in place isn't. */
+    fun setMode(mode: SidebarMode, remember: Boolean = true) {
         _mode.value = mode
+        if (!remember) return
         val url = gateway.value ?: return
         viewModelScope.launch { modes.set(url, mode) }
     }

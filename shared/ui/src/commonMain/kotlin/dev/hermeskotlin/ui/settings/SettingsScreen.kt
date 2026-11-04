@@ -214,6 +214,11 @@ import dev.hermeskotlin.core.gateway.CheckStage
 import dev.hermeskotlin.core.gateway.StageResult
 import dev.hermeskotlin.ui.connect.ConnectionChecklist
 import dev.hermeskotlin.ui.sessions.SubpageHeader
+import dev.hermeskotlin.ui.sessions.navIcon
+import dev.hermeskotlin.ui.sessions.navLabel
+import dev.hermeskotlin.ui.SidebarPage
+import dev.hermeskotlin.core.bots.SidebarMode
+import com.composables.icons.lucide.LayoutList
 import dev.hermeskotlin.ui.update.UpdateBanner
 import org.koin.compose.viewmodel.koinViewModel
 import kotlin.math.roundToInt
@@ -261,6 +266,7 @@ fun SettingsScreen(
     var callTargetOpen by remember { mutableStateOf(false) }
     var appIconOpen by remember { mutableStateOf(false) }
     var startInstructionOpen by remember { mutableStateOf(false) }
+    var sidebarPagesOpen by remember { mutableStateOf(false) }
     // Saveable, and open again after a pick redraws the screens, so a new language shows on the page it was picked on.
     var languageOpen by rememberSaveable { mutableStateOf(LanguagePageReturn.take()) }
     // Read again when the App icon page closes, so its row names the icon just applied.
@@ -268,7 +274,7 @@ fun SettingsScreen(
     val language = rememberLanguageChoice()
     val suggestions by viewModel.suggestions.collectAsStateWithLifecycle()
     LaunchedEffect(gateway, profile) { viewModel.bind(gateway, profile) }
-    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen && !languageOpen, onBack = onBack)
+    PlatformBackHandler(enabled = !checkOpen && !phoneToolsOpen && !appIconOpen && !startInstructionOpen && !callTargetOpen && !languageOpen && !sidebarPagesOpen, onBack = onBack)
     // The desktop lists the sections beside the page; they say here where they start.
     val anchors = remember { mutableStateMapOf<String, Int>() }
     CompositionLocalProvider(LocalSectionAnchors provides anchors.takeIf { isDesktop }) { SettingsView(
@@ -299,6 +305,7 @@ fun SettingsScreen(
         language = appLanguage(language.picked),
         onOpenLanguage = { languageOpen = true },
         onOpenStartInstruction = { startInstructionOpen = true },
+        onOpenSidebarPages = { sidebarPagesOpen = true },
         suggestions = suggestions,
         onInstallSuggestions = viewModel::installSuggestions,
         onCheckSuggestions = viewModel::checkSuggestions,
@@ -316,6 +323,7 @@ fun SettingsScreen(
         )
     }
     if (appIconOpen) AppIconScreen(onBack = { appIconOpen = false })
+    if (sidebarPagesOpen) SidebarPagesScreen(settings, viewModel::update, onBack = { sidebarPagesOpen = false })
     if (languageOpen) LanguageScreen(onBack = { languageOpen = false })
     ConnectionCheckSheet(
         visible = checkOpen,
@@ -402,6 +410,7 @@ internal fun SettingsView(
     language: AppLanguage? = null,
     onOpenLanguage: () -> Unit = {},
     onOpenStartInstruction: () -> Unit = {},
+    onOpenSidebarPages: () -> Unit = {},
     /** Where the Next Prompt plugin behind Suggested replies stands on the gateway. */
     suggestions: SuggestionsPlugin = SuggestionsPlugin.Checking,
     onInstallSuggestions: () -> Unit = {},
@@ -536,6 +545,35 @@ internal fun SettingsView(
                         detail = stringResource(Res.string.settings_projects_as_list_detail),
                         checked = settings.projectsAsDropdown,
                         onCheckedChange = { on -> onUpdate { it.copy(projectsAsDropdown = on) } },
+                    )
+                    Divider()
+                    SwitchRow(
+                        title = stringResource(Res.string.settings_sidebar_switch),
+                        detail = stringResource(Res.string.settings_sidebar_switch_detail),
+                        checked = settings.sidebarModeSwitch,
+                        onCheckedChange = { on -> onUpdate { it.copy(sidebarModeSwitch = on) } },
+                    )
+                    // Without the switch, which side the sidebar shows is picked here.
+                    if (!settings.sidebarModeSwitch) {
+                        Divider()
+                        Field(stringResource(Res.string.settings_sidebar_view), detail = stringResource(Res.string.settings_sidebar_view_detail)) {
+                            // The control takes its labels as a plain lambda, so the words are resolved first.
+                            val viewLabels = SidebarMode.entries.associateWith { stringResource(navLabel(it.page)) }
+                            SegmentedControl(
+                                options = SidebarMode.entries,
+                                selected = settings.sidebarView,
+                                onSelect = { view -> onUpdate { it.copy(sidebarView = view) } },
+                                optionLabel = { viewLabels.getValue(it) },
+                                optionIcon = { navIcon(it.page) },
+                            )
+                        }
+                    }
+                    Divider()
+                    NavRow(
+                        title = stringResource(Res.string.settings_sidebar_pages),
+                        detail = sidebarPagesSummary(settings),
+                        icon = Lucide.LayoutList,
+                        onClick = onOpenSidebarPages,
                     )
                 }
 
@@ -922,6 +960,13 @@ internal fun SettingsView(
 
 /** The Kyllene community server; the invite never expires. */
 private const val DISCORD_INVITE = "https://discord.gg/wCtyvQ3KcM"
+
+/** The sidebar page each side of the Chats / Bots switch is, for its name and icon. */
+private val SidebarMode.page: SidebarPage
+    get() = when (this) {
+        SidebarMode.Chats -> SidebarPage.Chats
+        SidebarMode.Bots -> SidebarPage.Bots
+    }
 
 /** The Phone tools row's line: off, or how many tools the agent may use. */
 @Composable

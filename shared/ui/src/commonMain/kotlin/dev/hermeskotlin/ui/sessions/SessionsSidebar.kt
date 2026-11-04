@@ -123,7 +123,10 @@ import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import dev.hermeskotlin.core.settings.AppSettings
 import dev.hermeskotlin.core.settings.SettingsStore
+import dev.hermeskotlin.core.settings.showsSidebarPage
+import dev.hermeskotlin.core.settings.sidebarMode
 import org.koin.compose.koinInject
 import dev.hermeskotlin.designsystem.components.LocalOpenModals
 import androidx.compose.runtime.mutableIntStateOf
@@ -156,6 +159,7 @@ import com.composables.icons.lucide.ArchiveRestore
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.ArrowLeftRight
 import com.composables.icons.lucide.Bot
+import com.composables.icons.lucide.MessagesSquare
 import com.composables.icons.lucide.CalendarClock
 import com.composables.icons.lucide.ChartColumn
 import com.composables.icons.lucide.Check
@@ -355,7 +359,7 @@ fun SessionsSidebar(
     rooms: RoomsViewModel = koinViewModel(),
 ) {
     val state = viewModel.state.collectAsStateWithLifecycle().value
-    val mode by bots.mode.collectAsStateWithLifecycle()
+    val pickedMode by bots.mode.collectAsStateWithLifecycle()
     val botsState by bots.state.collectAsStateWithLifecycle()
     val avatars by bots.avatars.collectAsStateWithLifecycle()
     val troubles by bots.troubles.collectAsStateWithLifecycle()
@@ -383,6 +387,17 @@ fun SessionsSidebar(
     val pinnedCollapsed = settings?.pinnedCollapsed ?: false
     val threadsCollapsed = settings?.threadsCollapsed ?: false
     val projectsAsDropdown = settings?.projectsAsDropdown ?: false
+    // Without its switch, the sidebar shows the view picked in Settings, whatever was last picked on this gateway.
+    val modeSwitch = settings?.sidebarModeSwitch ?: true
+    val mode = settings?.sidebarMode(pickedMode) ?: pickedMode
+    // The bots' side is read from the gateway only while it shows, so the view model shows it too; not kept as
+    // the gateway's pick, which stays for when the switch is back.
+    LaunchedEffect(modeSwitch, mode, pickedMode) {
+        if (!modeSwitch && pickedMode != mode) bots.setMode(mode, remember = false)
+    }
+    /** A side picked by the switch, or for search or a page; without the switch the view stays where Settings put it. */
+    val pickMode: (SidebarMode) -> Unit = { if (modeSwitch) bots.setMode(it) }
+    val navPages = remember(settings?.sidebarNav, settings?.sidebarNavHidden) { shownNavPages(settings, isDesktop) }
     var profilesOpen by remember { mutableStateOf(false) }
 
     var searchOpen by remember { mutableStateOf(false) }
@@ -558,7 +573,7 @@ fun SessionsSidebar(
         when (shortcut) {
             // Left to the app too, which shows the sidebar if it's put away.
             Shortcut.SearchChats -> false.also {
-                if (mode != SidebarMode.Chats) bots.setMode(SidebarMode.Chats)
+                if (mode != SidebarMode.Chats) pickMode(SidebarMode.Chats)
                 searchOpen = true
                 searchFocusAsks++
             }
@@ -580,12 +595,12 @@ fun SessionsSidebar(
                 insightsOpen = false
                 if (state.filter != SessionListFilter.Recent) viewModel.setFilter(SessionListFilter.Recent)
                 when (shortcut.page) {
-                    SidebarPage.Chats -> bots.setMode(SidebarMode.Chats)
-                    SidebarPage.Bots -> bots.setMode(SidebarMode.Bots)
+                    SidebarPage.Chats -> pickMode(SidebarMode.Chats)
+                    SidebarPage.Bots -> pickMode(SidebarMode.Bots)
                     SidebarPage.Inbox -> inboxOpen = true
                     SidebarPage.Scheduled -> scheduledOpen = true
                     SidebarPage.Archived -> {
-                        bots.setMode(SidebarMode.Chats)
+                        pickMode(SidebarMode.Chats)
                         viewModel.setFilter(SessionListFilter.Archived)
                     }
                     SidebarPage.Capabilities -> capabilitiesOpen = true
@@ -740,15 +755,17 @@ fun SessionsSidebar(
                 )
             }
             if (!searchOpen && state.filter == SessionListFilter.Recent) {
-                val modeNames = sidebarModeNames()
-                SegmentedControl(
-                    options = SidebarMode.entries,
-                    selected = mode,
-                    onSelect = bots::setMode,
-                    // How many bots need the user, readable from the Chats side too.
-                    optionLabel = { modeLabel(it, modeNames, needsYou.size) },
-                    modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
-                )
+                if (modeSwitch) {
+                    val modeNames = sidebarModeNames()
+                    SegmentedControl(
+                        options = SidebarMode.entries,
+                        selected = mode,
+                        onSelect = pickMode,
+                        // How many bots need the user, readable from the Chats side too.
+                        optionLabel = { modeLabel(it, modeNames, needsYou.size) },
+                        modifier = Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp),
+                    )
+                }
                 RenameBanner(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp))
                 UpdateBanner(Modifier.padding(start = 12.dp, end = 12.dp, bottom = 8.dp))
                 // A desktop starts a chat from the top of its sidebar, as desktop chat apps do; the footer
@@ -950,21 +967,26 @@ fun SessionsSidebar(
                             }
                         },
                     ) {
-                        item(key = "nav") {
+                        // The pages left on in Settings › Sidebar pages; with none, no room is kept for them.
+                        if (navPages.isNotEmpty()) item(key = "nav") {
                             NavGrid(
-                                // The Inbox goes by a phone's push registration (Notifications anywhere), which
-                                // a desktop has none of, so it would only ever say it can't load.
-                                listOfNotNull(
-                                    NavLink(Lucide.Inbox, stringResource(Res.string.sessions_nav_inbox), badge = inboxUnread) { inboxOpen = true }.takeIf { !isDesktop },
-                                    NavLink(Lucide.CalendarClock, stringResource(Res.string.sessions_nav_scheduled), selected = pageInMain && scheduledOpen) { closePages(); scheduledOpen = true },
-                                    NavLink(Lucide.ChartColumn, stringResource(Res.string.sessions_nav_insights), selected = pageInMain && insightsOpen) { closePages(); insightsOpen = true },
-                                    NavLink(Lucide.Blocks, stringResource(Res.string.sessions_nav_capabilities), selected = pageInMain && capabilitiesOpen) { closePages(); capabilitiesOpen = true },
-                                    NavLink(Lucide.Puzzle, stringResource(Res.string.sessions_nav_plugins), selected = pageInMain && pluginsOpen) { closePages(); pluginsOpen = true },
-                                    NavLink(Lucide.SlidersHorizontal, stringResource(Res.string.sessions_nav_config), selected = pageInMain && configOpen) { closePages(); configOpen = true },
-                                    NavLink(Lucide.Archive, stringResource(Res.string.sessions_nav_archived), selected = isDesktop && state.filter == SessionListFilter.Archived) {
-                                        viewModel.setFilter(SessionListFilter.Archived)
-                                    },
-                                ),
+                                navPages.mapNotNull { page ->
+                                    val icon = navIcon(page)
+                                    val label = stringResource(navLabel(page))
+                                    when (page) {
+                                        SidebarPage.Inbox -> NavLink(icon, label, badge = inboxUnread) { inboxOpen = true }
+                                        SidebarPage.Scheduled -> NavLink(icon, label, selected = pageInMain && scheduledOpen) { closePages(); scheduledOpen = true }
+                                        SidebarPage.Insights -> NavLink(icon, label, selected = pageInMain && insightsOpen) { closePages(); insightsOpen = true }
+                                        SidebarPage.Capabilities -> NavLink(icon, label, selected = pageInMain && capabilitiesOpen) { closePages(); capabilitiesOpen = true }
+                                        SidebarPage.Plugins -> NavLink(icon, label, selected = pageInMain && pluginsOpen) { closePages(); pluginsOpen = true }
+                                        SidebarPage.Config -> NavLink(icon, label, selected = pageInMain && configOpen) { closePages(); configOpen = true }
+                                        SidebarPage.Archived -> NavLink(icon, label, selected = isDesktop && state.filter == SessionListFilter.Archived) {
+                                            viewModel.setFilter(SessionListFilter.Archived)
+                                        }
+                                        // The two sides are the switch's, not pages with a button here.
+                                        SidebarPage.Chats, SidebarPage.Bots -> null
+                                    }
+                                },
                             )
                         }
                     }
@@ -1651,6 +1673,53 @@ internal class NavLink(
     val keys: String? = null,
     val onClick: () -> Unit,
 )
+
+/** The sidebar's pages that have a button above the chats, in the order they're shown. */
+internal val NAV_PAGES = listOf(
+    SidebarPage.Inbox,
+    SidebarPage.Scheduled,
+    SidebarPage.Insights,
+    SidebarPage.Capabilities,
+    SidebarPage.Plugins,
+    SidebarPage.Config,
+    SidebarPage.Archived,
+)
+
+/**
+ * The pages that can have a button in the sidebar on [desktop] or a phone. The Inbox goes by a phone's push
+ * registration (Notifications anywhere), which a desktop has none of, so it would only ever say it can't load.
+ */
+internal fun navPages(desktop: Boolean): List<SidebarPage> = NAV_PAGES.filter { !(desktop && it == SidebarPage.Inbox) }
+
+/** The page buttons the sidebar shows, in order, as [settings] leave them; all of them before the settings are read. */
+internal fun shownNavPages(settings: AppSettings?, desktop: Boolean): List<SidebarPage> =
+    navPages(desktop).filter { settings?.showsSidebarPage(it.name) ?: true }
+
+/** A sidebar page's icon, on its button and in Settings › Sidebar pages. */
+internal fun navIcon(page: SidebarPage): ImageVector = when (page) {
+    SidebarPage.Chats -> Lucide.MessagesSquare
+    SidebarPage.Bots -> Lucide.Bot
+    SidebarPage.Inbox -> Lucide.Inbox
+    SidebarPage.Scheduled -> Lucide.CalendarClock
+    SidebarPage.Insights -> Lucide.ChartColumn
+    SidebarPage.Capabilities -> Lucide.Blocks
+    SidebarPage.Plugins -> Lucide.Puzzle
+    SidebarPage.Config -> Lucide.SlidersHorizontal
+    SidebarPage.Archived -> Lucide.Archive
+}
+
+/** A sidebar page's name on its button and in Settings › Sidebar pages. */
+internal fun navLabel(page: SidebarPage): StringResource = when (page) {
+    SidebarPage.Chats -> Res.string.sessions_mode_chats
+    SidebarPage.Bots -> Res.string.sessions_mode_bots
+    SidebarPage.Inbox -> Res.string.sessions_nav_inbox
+    SidebarPage.Scheduled -> Res.string.sessions_nav_scheduled
+    SidebarPage.Insights -> Res.string.sessions_nav_insights
+    SidebarPage.Capabilities -> Res.string.sessions_nav_capabilities
+    SidebarPage.Plugins -> Res.string.sessions_nav_plugins
+    SidebarPage.Config -> Res.string.sessions_nav_config
+    SidebarPage.Archived -> Res.string.sessions_nav_archived
+}
 
 /** The sidebar's pages as tiles, two to a row; on the desktop one under another, as a desktop sidebar lists its places. */
 @Composable
