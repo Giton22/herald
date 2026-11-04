@@ -41,6 +41,9 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runInterruptible
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
 import org.koin.compose.koinInject
 import java.io.File
 
@@ -52,7 +55,7 @@ actual fun rememberClientCertPicker(host: String?, port: Int, onPicked: (String?
     val store = koinInject<KeyValueStore>()
     val importer = remember(store) { linuxClientCertificates(store)?.let { it::import } }
     return key(store) { rememberDesktopClientCertPicker(host, port, importer, {
-        fromDialog { openFiles("Client certificate", multiple = false, setOf("p12", "pfx")) }
+        fromDialog { openFiles(getString(Res.string.gateways_client_cert), multiple = false, setOf("p12", "pfx")) }
             .getOrElse { throw IllegalStateException("Couldn't open the file chooser.") }.firstOrNull()
     }, onPicked) }
 }
@@ -114,9 +117,9 @@ internal fun rememberDesktopClientCertPicker(
                 } catch (e: CancellationException) {
                     throw e
                 } catch (e: Exception) {
-                    if (generation == ticket) error = when (e) {
-                        is ClientCertificateException, is ClientCertificateFileException, is SecureStorageException -> e.message
-                        else -> "Couldn't read that PKCS#12 file. Choose it again and check file access."
+                    if (generation == ticket) {
+                        val detail = clientCertificateFailure(e)
+                        if (generation == ticket) error = detail
                     }
                 } finally {
                     bytes?.fill(0)
@@ -126,8 +129,8 @@ internal fun rememberDesktopClientCertPicker(
             }
         }
     }, onDismiss = ::cancel)
-    else if (error != null) Dialog(true, ::cancel, "Client certificate", message = error, actions = {
-        Button("Close", onClick = ::cancel)
+    else if (error != null) Dialog(true, ::cancel, stringResource(Res.string.gateways_client_cert), message = error, actions = {
+        Button(stringResource(Res.string.chat_close), onClick = ::cancel)
     })
     return remember(host, port, importer, choose, onPicked) {
         object : ClientCertPicker {
@@ -147,7 +150,10 @@ internal fun rememberDesktopClientCertPicker(
                     } catch (e: CancellationException) {
                         throw e
                     } catch (_: Exception) {
-                        if (generation == ticket) error = "Couldn't open the file chooser. Try again."
+                        if (generation == ticket) {
+                            val detail = getString(Res.string.desktop_file_dialog_failed)
+                            if (generation == ticket) error = detail
+                        }
                     } finally {
                         if (generation == ticket) { busy = false; operation = null }
                     }
@@ -168,10 +174,10 @@ internal fun ClientCertificateImportDialog(
     Dialog(
         visible = true,
         onDismissRequest = onDismiss,
-        title = "Import client certificate",
+        title = stringResource(Res.string.client_cert_import_title),
         actions = {
-            Button("Cancel", onClick = onDismiss, variant = ButtonVariant.Ghost)
-            Button(if (busy) "Importing…" else "Import", onClick = onImport, enabled = !busy)
+            Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost)
+            Button(stringResource(if (busy) Res.string.client_cert_importing else Res.string.client_cert_import), onClick = onImport, enabled = !busy)
         },
     ) {
         Column(
@@ -179,10 +185,29 @@ internal fun ClientCertificateImportDialog(
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Text(
-                "Enter the password for the PKCS#12 file you selected. Its key will be stored encrypted for this TLS hostname. Gateways sharing the hostname also share certificate selection, regardless of port or path.",
+                stringResource(Res.string.client_cert_import_detail),
                 style = Theme[typography][body], color = Theme[colors][textSecondary],
             )
-            TextField(password, label = "PKCS#12 password", password = true, error = error, enabled = !busy, autofocus = true)
+            TextField(password, label = stringResource(Res.string.client_cert_password), password = true, error = error, enabled = !busy, autofocus = true)
         }
     }
 }
+
+/** UI guidance is catalogued; exception messages stay available as platform diagnostics. */
+private suspend fun clientCertificateFailure(error: Exception): String = getString(when (error) {
+    is ClientCertificateException -> Res.string.client_cert_invalid
+    is ClientCertificateFileException -> Res.string.client_cert_regular_file
+    is SecureStorageException -> when (error.reason) {
+        SecureStorageException.Reason.Unavailable -> Res.string.client_cert_storage_unavailable
+        SecureStorageException.Reason.Cancelled -> Res.string.client_cert_storage_cancelled
+        SecureStorageException.Reason.Corrupt -> Res.string.client_cert_storage_corrupt
+        SecureStorageException.Reason.Version -> Res.string.client_cert_storage_version
+        SecureStorageException.Reason.Read -> Res.string.client_cert_storage_read
+        SecureStorageException.Reason.Write -> Res.string.client_cert_storage_write
+        SecureStorageException.Reason.Uncertain -> Res.string.client_cert_storage_uncertain
+        SecureStorageException.Reason.Changed -> Res.string.client_cert_storage_changed
+        SecureStorageException.Reason.Legacy -> Res.string.client_cert_storage_legacy
+        SecureStorageException.Reason.Unsupported -> Res.string.client_cert_storage_unsupported
+    }
+    else -> Res.string.client_cert_read_failed
+})

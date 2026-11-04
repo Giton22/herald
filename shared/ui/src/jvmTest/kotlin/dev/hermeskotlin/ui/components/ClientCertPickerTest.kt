@@ -20,12 +20,46 @@ import dev.hermeskotlin.designsystem.hermesTheme
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
+import dev.hermeskotlin.ui.ProvideAppLanguage
+import dev.hermeskotlin.ui.applyAppLanguage
+import java.util.Locale
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 @OptIn(ExperimentalTestApi::class)
 class ClientCertPickerTest {
+    @Test fun certificateImportAndItsFailureUseTheChosenLanguage() = runComposeUiTest {
+        val locale = Locale.getDefault()
+        val file = kotlin.io.path.createTempFile("synthetic-cert", ".p12").toFile().apply { writeBytes(byteArrayOf(1)) }
+        var picker: ClientCertPicker? = null
+        val selected = mutableListOf<String?>()
+        try {
+            setContent {
+                ProvideAppLanguage("es") {
+                    hermesTheme(AccentPalette.Blue)(ColorScheme.Light) {
+                        picker = rememberDesktopClientCertPicker("localhost", 9443,
+                            { _, _, _, _ -> throw ClientCertificateException() }, { file }, { selected.add(it) })
+                    }
+                }
+            }
+            runOnIdle { picker!!.pick() }
+            waitUntil { onAllNodes(hasSetTextAction()).fetchSemanticsNodes().isNotEmpty() }
+            onNodeWithText("Importar certificado de cliente").assertExists()
+            onNodeWithText("Contraseña PKCS#12").assertExists()
+            onNodeWithText("Cancelar").assertExists()
+            onNode(hasSetTextAction()).performTextInput("wrong")
+            onNodeWithText("Importar").performClick()
+            waitUntil { onAllNodes(androidx.compose.ui.test.hasText("Kyllene no pudo abrir este certificado de cliente.", substring = true)).fetchSemanticsNodes().isNotEmpty() }
+            onNode(hasSetTextAction()).assertTextEquals("")
+            assertTrue(selected.isEmpty())
+        } finally {
+            file.delete()
+            applyAppLanguage(null)
+            Locale.setDefault(locale)
+        }
+    }
+
     @Test fun aFailedImportCanRetryWithoutSelectingOrRetainingItsPasswordAndBytes() = runComposeUiTest {
         val file = kotlin.io.path.createTempFile("synthetic-cert", ".p12").toFile().apply { writeBytes(byteArrayOf(1, 2, 3)) }
         var picker: ClientCertPicker? = null

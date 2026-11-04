@@ -349,9 +349,7 @@ private fun ClientCertDialog(gateway: SavedGateway?, onDismiss: () -> Unit, onSe
         visible = gateway != null,
         onDismissRequest = onDismiss,
         title = stringResource(Res.string.gateways_client_cert),
-        message = if (isDesktop) "Kyllene presents this certificate to “${g.label}” when its server asks for one. " +
-            "Imported keys are stored encrypted for this TLS hostname. Clearing this selection may still use another saved certificate for the same hostname. Imported keys remain in encrypted settings."
-            else stringResource(Res.string.gateways_client_cert_detail, g.label),
+        message = stringResource(if (isDesktop) Res.string.gateways_client_cert_detail_desktop else Res.string.gateways_client_cert_detail, g.label),
         actions = {
             Button(stringResource(Res.string.common_cancel), onClick = onDismiss, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             Button(stringResource(if (g.clientCertAlias == null) Res.string.gateways_pick else Res.string.gateways_change), onClick = picker::pick, size = ButtonSize.Small)
@@ -368,7 +366,7 @@ private fun ClientCertDialog(gateway: SavedGateway?, onDismiss: () -> Unit, onSe
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                Button(if (isDesktop) "Clear selection" else stringResource(Res.string.gateways_clear), onClick = { onDismiss(); onSet(g, null) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
+                Button(stringResource(if (isDesktop) Res.string.client_cert_clear_selection else Res.string.gateways_clear), onClick = { onDismiss(); onSet(g, null) }, variant = ButtonVariant.Ghost, size = ButtonSize.Small)
             }
         }
     }

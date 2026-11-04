@@ -361,4 +361,27 @@
     <string name="check_fix_https">Comprueba que el dominio apunta al servidor, que su certificado es válido y que el proxy reenvía al panel.</string>
     <string name="check_fix_local_network">Conéctate a la misma wifi o red que el servidor e inicia el panel con --host 0.0.0.0 para que otros dispositivos lo alcancen.</string>
     <string name="check_fix_reachable">Comprueba la dirección y el puerto, y que el servidor sea accesible desde este teléfono.</string>
+
+    <!-- Imported desktop client certificates. -->
+    <string name="client_cert_import_title">Importar certificado de cliente</string>
+    <string name="client_cert_import">Importar</string>
+    <string name="client_cert_importing">Importando…</string>
+    <string name="client_cert_import_detail">Introduce la contraseña del archivo PKCS#12 seleccionado. Su clave se guardará cifrada para este nombre de host TLS. Los gateways que comparten el nombre de host también comparten la selección del certificado, sin importar el puerto o la ruta.</string>
+    <string name="client_cert_password">Contraseña PKCS#12</string>
+    <string name="client_cert_invalid">Kyllene no pudo abrir este certificado de cliente. Comprueba la contraseña y elige un archivo PKCS#12 con un certificado de cliente vigente, su clave privada correspondiente y la cadena de certificados.</string>
+    <string name="client_cert_regular_file">Elige un archivo PKCS#12 normal. No se pueden importar enlaces simbólicos, dispositivos ni tuberías con nombre.</string>
+    <string name="client_cert_read_failed">No se pudo leer ese archivo PKCS#12. Vuelve a seleccionarlo y comprueba los permisos de acceso.</string>
+    <string name="client_cert_clear_selection">Borrar selección</string>
+    <string name="connect_cert_kept_desktop">Las claves importadas se guardan cifradas para este nombre de host TLS. Al borrar esta selección, puede seguir usándose otro certificado guardado para el mismo nombre de host. Las claves importadas permanecen en los ajustes cifrados.</string>
+    <string name="gateways_client_cert_detail_desktop">Kyllene presenta este certificado a «%1$s» cuando su servidor lo solicita. Las claves importadas se guardan cifradas para este nombre de host TLS. Al borrar esta selección, puede seguir usándose otro certificado guardado para el mismo nombre de host. Las claves importadas permanecen en los ajustes cifrados.</string>
+    <string name="client_cert_storage_unavailable">Kyllene no pudo obtener su clave de almacenamiento. Desbloquea el llavero de tu escritorio, comprueba que su portal Secret esté disponible y vuelve a intentarlo.</string>
+    <string name="client_cert_storage_cancelled">Se canceló el desbloqueo del almacenamiento. Reintenta para desbloquearlo; los datos existentes se han conservado.</string>
+    <string name="client_cert_storage_corrupt">Kyllene no pudo abrir sus ajustes cifrados. Restaura una copia de seguridad que funcione o usa la identidad original de la aplicación. Los datos existentes se han conservado.</string>
+    <string name="client_cert_storage_version">Este formato de ajustes necesita otra versión de Kyllene. Los datos existentes se han conservado.</string>
+    <string name="client_cert_storage_read">Kyllene no pudo leer sus ajustes, o el archivo supera los 16 MiB. Comprueba el acceso al archivo antes de reintentar.</string>
+    <string name="client_cert_storage_write">Kyllene no pudo terminar de guardar o limpiar sus ajustes. Las copias existentes se han conservado; comprueba el espacio en disco y el acceso a los archivos antes de reintentar.</string>
+    <string name="client_cert_storage_uncertain">Kyllene no pudo confirmar que sus ajustes se guardaron. Comprueba el acceso a los archivos y vuelve a intentar el inicio, o sal y reinicia antes de hacer más cambios.</string>
+    <string name="client_cert_storage_changed">Los ajustes cambiaron fuera de esta ventana. Sal de Kyllene y reinícialo para volver a cargarlos antes de guardar.</string>
+    <string name="client_cert_storage_legacy">Se encontraron ajustes antiguos en conflicto o sin terminar. Los archivos existentes se han conservado. Sal y resuelve la copia anterior antes de reintentar.</string>
+    <string name="client_cert_storage_unsupported">Kyllene no pudo verificar su identidad de aplicación Flatpak. Comprueba la instalación antes de reintentar. No hay alternativa sin cifrar disponible.</string>
 </resources>

@@ -24,11 +24,33 @@ import dev.hermeskotlin.designsystem.components.ButtonSize
 import dev.hermeskotlin.core.gateway.ClientCertificateException
 import dev.hermeskotlin.designsystem.LocalDesktopLayout
 import dev.hermeskotlin.designsystem.hermesTheme
+import dev.hermeskotlin.ui.ProvideAppLanguage
+import dev.hermeskotlin.ui.applyAppLanguage
+import java.util.Locale
 import kotlin.test.Test
 import kotlin.test.assertEquals
 
 @OptIn(ExperimentalTestApi::class)
 class ClientCertificateImportTest {
+    @Test fun untranslatedCertificateCopyFallsBackWhileSharedButtonsStayLocalized() = runComposeUiTest {
+        val locale = Locale.getDefault()
+        try {
+            setContent {
+                ProvideAppLanguage("fr") {
+                    hermesTheme(AccentPalette.Blue)(ColorScheme.Light) {
+                        ClientCertificateImportDialog(TextFieldState(), false, null, {}, {})
+                    }
+                }
+            }
+            onNodeWithText("Import client certificate").assertExists()
+            onNodeWithText("PKCS#12 password").assertExists()
+            onNodeWithText("Annuler").assertExists()
+        } finally {
+            applyAppLanguage(null)
+            Locale.setDefault(locale)
+        }
+    }
+
     @Test fun importErrorsKeepFullActionButtonsInNarrowAndShortWindows() {
         for (size in listOf(Size(640f, 360f), Size(360f, 640f))) {
             for (scheme in listOf(ColorScheme.Light, ColorScheme.Dark)) runSkikoComposeUiTest(size = size) {

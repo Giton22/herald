@@ -401,14 +401,13 @@ private fun ClientCertFields(cert: ClientCert, demanded: Boolean, onPick: () -> 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
                 StatusDot(Status.Ok, cert.alias)
                 Button(
-                    text = if (isDesktop) "Clear selection" else stringResource(Res.string.connect_forget),
+                    text = stringResource(if (isDesktop) Res.string.client_cert_clear_selection else Res.string.connect_forget),
                     onClick = cert.onClear,
                     variant = ButtonVariant.Ghost,
                     size = ButtonSize.Small,
                 )
             }
-            Hint(if (isDesktop) "Imported keys are stored encrypted for this TLS hostname. Clearing this selection may still use another saved certificate for the same hostname. Imported keys remain in encrypted settings."
-                else stringResource(Res.string.connect_cert_kept))
+            Hint(stringResource(if (isDesktop) Res.string.connect_cert_kept_desktop else Res.string.connect_cert_kept))
         } else {
             Button(
                 text = stringResource(Res.string.connect_pick_cert),
