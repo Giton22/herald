@@ -1454,8 +1454,8 @@ class ChatSession(
     /** [interrupt], null when the turn couldn't be stopped (the reason is in [ChatState.error]). */
     private suspend fun interruptTurn(): List<String>? {
         val client = connectedClient() ?: return null
-        // Tapped mid-reconnect, the id from the old socket would be turned down: the stop waits for the re-attach.
-        if (_state.value.runtimeSessionId == null) return null
+        // Tapped mid-reconnect, an id from the old socket would be turned down: a stored chat's stop waits for the
+        // re-attach instead. A new chat has nothing to stop until it's created.
         if (liveRuntimeId(client) == null && !rowExists) return null
         try {
             val runtimeId = ensureAttached(client)
@@ -2015,8 +2015,20 @@ class ChatSession(
         // (under the attach mutex, so a send racing a reconnect waits for the re-attach)
         // instead of firing the stale id where the gateway has no subscription for it.
         liveRuntimeId(client)?.let { return it }
-        val previous = attachedClient
-        return if (rowExists) attach(client, reconnected = previous != null && previous !== client, reuse = true) else create(client)
+        // Attached before, on another socket or before a failed attach on this one, events may have been missed since.
+        val stored = rowExists
+        return try {
+            if (stored) attach(client, reconnected = attachedClient != null, reuse = true) else create(client)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            // Not left "Attaching": a stored chat shows the failure with its retry; a new one is made again on the next send.
+            _state.update {
+                if (it.attachment !is Attachment.Attaching) it
+                else it.copy(attachment = if (stored) Attachment.Failed(e.message ?: "Couldn't open the session.") else Attachment.Detached)
+            }
+            throw e
+        }
     }
 
     /** The runtime id, when it was attached on [client]; one from an earlier socket is null, since it's no good on this one. */
