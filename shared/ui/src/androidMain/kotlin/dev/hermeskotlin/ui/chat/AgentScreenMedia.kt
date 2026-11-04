@@ -152,6 +152,11 @@ private fun Player(url: String, description: String?, audio: Boolean, modifier: 
             override fun onPlayerError(error: PlaybackException) {
                 failed = true
             }
+
+            // One at a time with the chat's own player: this one pauses it, and pauses for it.
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (isPlaying) NowPlaying.app.started(player, NowPlaying.Group.Screens, player::pause) else NowPlaying.app.stopped(player)
+            }
         }
         // Out of sight, it stops: a screen scrolled away or an app in the background doesn't keep playing.
         val pause = LifecycleEventObserver { _, event -> if (event == Lifecycle.Event.ON_PAUSE) player.pause() }
@@ -160,6 +165,7 @@ private fun Player(url: String, description: String?, audio: Boolean, modifier: 
         onDispose {
             lifecycle.removeObserver(pause)
             player.removeListener(errors)
+            NowPlaying.app.stopped(player)
             player.release()
         }
     }

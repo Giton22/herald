@@ -7,6 +7,7 @@ import dev.hermeskotlin.core.network.map
 import io.ktor.client.HttpClient
 import io.ktor.client.call.body
 import io.ktor.client.request.get
+import io.ktor.client.request.header
 import io.ktor.client.request.post
 import io.ktor.client.request.setBody
 import io.ktor.client.request.prepareGet
@@ -125,6 +126,16 @@ class MediaApi(
             setBody(buildJsonObject { put("path", path) })
         }
     }.map { }.let { if (it is ApiResult.Failed && (it.status == 404 || it.status == 405)) ApiResult.Failed(404, NO_MKDIR) else it }
+
+    /**
+     * Whether the gateway streams [path] for a player (`GET /api/files/stream`): asks for its first byte only, so
+     * nothing more crosses the network, and an expired sign-in is renewed on the way, as on any call. See
+     * [streamPlan] for what each answer means.
+     */
+    suspend fun probeStream(url: GatewayUrl, path: String, profile: String? = null): ApiResult<Unit> =
+        client.prepareGet(mediaStreamUrl(url, path, profile)) { header("Range", "bytes=0-0") }.execute { response ->
+            apiCall { response }.map { }
+        }
 
     /** A reply's picture from the web (`![alt](https://...)`). */
     suspend fun remote(url: String): ApiResult<ByteArray> = apiCall { web.get(url) }.map { response ->

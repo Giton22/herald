@@ -23,3 +23,6 @@ fun OkHttpClient.Builder.publicOnly(): OkHttpClient.Builder = proxy(Proxy.NO_PRO
         if (address == null || !publicAddress(address.address)) throw NotPublicAddress(chain.request().url.host)
         chain.proceed(chain.request())
     }
+
+/** Whether [error] (or what caused it) is [publicOnly] turning away an address on the user's own networks. */
+fun isNotPublicAddress(error: Throwable): Boolean = generateSequence(error) { it.cause }.any { it is NotPublicAddress }

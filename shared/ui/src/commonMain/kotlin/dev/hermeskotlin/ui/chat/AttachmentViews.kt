@@ -23,6 +23,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -96,11 +97,26 @@ internal fun ComposerTray(attachments: List<OutgoingAttachment>, onRemove: (Stri
 internal fun SentAttachments(attachments: List<ShownAttachment>) {
     val load = LocalMediaLoader.current
     val open = LocalOpenImage.current
+    val player = LocalChatMediaPlayer.current
+    val sources = LocalMediaSources.current
+    // Audio and video play from the message: from the bytes sent from here, or the gateway's copy in history.
+    val (clips, tiles) = attachments.partition { attachment ->
+        attachment.mediaType != null && player.available && (attachment.original != null || attachment.gatewayPath != null && sources != null)
+    }
+    if (clips.isNotEmpty()) Column(verticalArrangement = Arrangement.spacedBy(6.dp)) { clips.forEach { attachment ->
+        val type = attachment.mediaType ?: return@forEach
+        val media = remember(attachment.key, attachment.gatewayPath) {
+            PlayableMedia(key = "sent|${attachment.key}|${attachment.gatewayPath}", source = attachment.gatewayPath, name = attachment.name, type = type, bytes = attachment.original)
+        }
+        val save: (suspend () -> ByteArray?)? = attachment.original?.let { bytes -> { bytes } } ?: attachment.gatewayPath?.let { path -> { load(path) } }
+        MediaCard(media, save)
+    } }
+    if (tiles.isEmpty()) return
     FlowRow(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        attachments.forEach { attachment ->
+        tiles.forEach { attachment ->
             // History knows only where the gateway keeps an image; fetch it to show the same thumbnail.
             val bytes by produceState(attachment.thumbnail, attachment.gatewayPath) {
                 if (value == null) attachment.gatewayPath?.let { value = load(it) }

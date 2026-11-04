@@ -38,6 +38,7 @@ import kotlinx.serialization.json.jsonPrimitive
 import kotlin.test.Test
 import kotlin.time.Clock
 import kotlin.time.Instant
+import dev.hermeskotlin.core.media.MediaType
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
@@ -1196,6 +1197,65 @@ class ChatSessionTest {
         assertEquals("@file:attachments/logs.tar\n\nlook", transport.sent.value.single { it.isCall("prompt.submit") }.param("text"))
         // Copied into the workspace, so the upload goes.
         assertEquals(1, routes.deleted.size)
+    }
+
+    @Test
+    fun aLargeClipIsntHeldAndPlaysFromWhereTheGatewayKeepsIt() = runTest {
+        val kept = "/home/u/.hermes/attachments/My clip ünï.mp4"
+        val (connection, _) = setup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
+                "file.attach" to """{"attached":true,"name":"My clip ünï.mp4","path":"$kept","ref_path":"$kept","ref_text":"@file:\"$kept\"","uploaded":true}""",
+                "prompt.submit" to """{"status":"streaming"}""",
+            ),
+        )
+        val routes = FileRoutes()
+        answerFileRoutes(routes)
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        val clip = streamed("My clip ünï.mp4", "video/mp4", 40_000_000L)
+        val small = OutgoingAttachment("s1", "memo.m4a", "audio/mp4", byteArrayOf(1, 2, 3))
+        // While it goes up, the bubble holds none of its bytes: it has none to play from yet.
+        var whileUploading: ShownAttachment? = null
+        routes.uploaded = {
+            whileUploading = chat.state.value.messages.filterIsInstance<ChatMessage.User>().last().attachments.first()
+        }
+
+        assertTrue(chat.send("look", listOf(clip, small)))
+
+        assertNull(whileUploading?.original)
+        assertNull(whileUploading?.gatewayPath)
+        val (sentClip, sentMemo) = chat.state.value.messages.filterIsInstance<ChatMessage.User>().last().attachments
+        assertNull(sentClip.original)
+        assertEquals(kept, sentClip.gatewayPath)
+        assertEquals(MediaType.Video, sentClip.mediaType)
+        // A small clip went inside the socket message and keeps its bytes to play, with no path to stream from.
+        assertNull(sentMemo.gatewayPath)
+        assertEquals(3, sentMemo.original?.size)
+    }
+
+    @Test
+    fun aLargeFileThatIsntAClipGetsNoPathToPlay() = runTest {
+        val (connection, _) = setup(
+            backgroundScope,
+            mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
+                "file.attach" to """{"attached":true,"name":"logs.tar","path":"/home/u/.hermes/attachments/logs.tar","ref_path":"x","ref_text":"@file:x","uploaded":true}""",
+                "prompt.submit" to """{"status":"streaming"}""",
+            ),
+        )
+        answerFileRoutes(FileRoutes())
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        assertTrue(chat.send("look", listOf(streamed("logs.tar", "application/x-tar", 13_000_000L))))
+
+        val sent = chat.state.value.messages.filterIsInstance<ChatMessage.User>().last().attachments.single()
+        assertNull(sent.gatewayPath)
+        assertNull(sent.original)
     }
 
     @Test

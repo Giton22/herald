@@ -178,11 +178,15 @@ enum class GatewayFileKind(val label: String) {
 
     /** Pages drawn from the whole file, not the gateway's text preview. */
     Pdf("PDF"),
+
+    /** Played in the chat, streamed from the gateway; Save and Share stay on its card. */
+    Audio("Audio"),
+    Video("Video"),
     Other("File"),
     ;
 
-    /** Shown in the file viewer at all; the rest go straight to a card with Save and Share. */
-    val previewable: Boolean get() = this != Image && this != Other
+    /** Shown in the file viewer at all; the rest go straight to a card with Save and Share, or to the player. */
+    val previewable: Boolean get() = this != Image && this != Other && this != Audio && this != Video
 
     companion object {
         fun of(name: String): GatewayFileKind {
@@ -194,6 +198,8 @@ enum class GatewayFileKind(val label: String) {
                 ext in TABLE -> Table
                 ext in IMAGE -> Image
                 ext == "pdf" -> Pdf
+                ext in AUDIO -> Audio
+                ext in VIDEO -> Video
                 ext in CODE || lower in CODE_NAMES -> Code
                 ext in TEXT || ext.isEmpty() || lower.startsWith(".") -> Text
                 ext in BINARY -> Other
@@ -216,11 +222,14 @@ enum class GatewayFileKind(val label: String) {
             "css", "scss", "less", "vue", "svelte", "xml", "svg", "yaml", "yml", "toml", "ini", "cfg", "conf", "properties",
             "gradle", "dart", "ex", "exs", "hs", "zig", "nim", "tf", "proto", "graphql", "diff", "patch",
         )
+        // What Media3 plays on a phone. The gateway streams all but AAC and the ones only here (`3gp`, `m4v`,
+        // `oga`), which are fetched whole instead.
+        internal val AUDIO = setOf("mp3", "wav", "ogg", "oga", "opus", "flac", "m4a", "aac")
+        internal val VIDEO = setOf("mp4", "m4v", "mov", "mkv", "webm", "avi", "3gp")
         internal val CODE_NAMES = setOf("dockerfile", "makefile", "justfile", "procfile", "gemfile", "rakefile")
         private val BINARY = setOf(
             "zip", "gz", "tgz", "bz2", "xz", "7z", "rar", "tar", "apk", "aab", "jar", "exe", "dll", "so", "dylib", "bin",
-            "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "epub", "mp3", "wav", "ogg", "opus", "flac", "m4a",
-            "aac", "mp4", "mov", "mkv", "webm", "avi", "psd", "ttf", "otf", "woff", "woff2", "sqlite", "db",
+            "doc", "docx", "xls", "xlsx", "ppt", "pptx", "odt", "ods", "odp", "epub", "psd", "ttf", "otf", "woff", "woff2", "sqlite", "db",
         )
     }
 }

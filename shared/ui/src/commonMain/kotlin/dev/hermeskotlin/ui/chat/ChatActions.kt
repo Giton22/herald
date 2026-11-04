@@ -6,6 +6,7 @@ import dev.hermeskotlin.core.chat.ChatState
 import dev.hermeskotlin.core.chat.ControlAction
 import dev.hermeskotlin.core.chat.InputRequest
 import dev.hermeskotlin.core.media.LinkPreview
+import dev.hermeskotlin.core.media.PlaySource
 import dev.hermeskotlin.core.settings.RunningSend
 import dev.hermeskotlin.core.slash.SlashSuggestion
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -65,6 +66,15 @@ interface ChatActions {
 
     /** The bytes behind a picture or file in the chat, or null when it can't be had. */
     suspend fun loadMedia(source: String): ByteArray?
+
+    /** How to play a clip the chat shows; null where the chat doesn't play audio and video. */
+    val mediaSource: (suspend (String) -> PlaySource)? get() = null
+
+    /**
+     * A clip is about to play: the chat's own voice stops for it. False keeps it from starting, while a voice
+     * chat has the microphone open.
+     */
+    fun mediaStarting(): Boolean = true
 
     /** Webpage metadata and thumbnail, or null when unavailable. */
     suspend fun loadLinkPreview(url: String): LinkPreview? = null

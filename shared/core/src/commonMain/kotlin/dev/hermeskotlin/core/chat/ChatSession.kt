@@ -4,6 +4,7 @@ import dev.hermeskotlin.core.cache.OfflineCache
 import dev.hermeskotlin.core.connection.ConnectionState
 import dev.hermeskotlin.core.connection.GatewayConnection
 import dev.hermeskotlin.core.gateway.GatewayUrl
+import dev.hermeskotlin.core.media.mediaTypeOf
 import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.network.errorMessage
 import dev.hermeskotlin.core.rpc.GatewayEvent
@@ -655,8 +656,19 @@ class ChatSession(
             ) as? JsonObject
             // `uploaded: false` is a file referenced where it is (in the chat's workspace), which has to stay.
             usedInPlace = result.boolean("uploaded")?.not() ?: (result.string("path") == staged.path)
-            return result.string("ref_text")?.takeIf { result.boolean("attached") == true }
+            val ref = result.string("ref_text")?.takeIf { result.boolean("attached") == true }
                 ?: throw RpcException(0, "Couldn't attach ${attachment.name}")
+            // Audio or video too large to keep here plays from where the gateway now keeps it, as from history.
+            result.string("path")?.takeIf { it.isNotEmpty() && mediaTypeOf(attachment.name, attachment.mimeType) != null }?.let { path ->
+                _state.update { state ->
+                    state.copy(
+                        messages = state.messages.updateUser(key) { user ->
+                            user.copy(attachments = user.attachments.map { if (it.key == attachment.id) it.storedAt(path) else it })
+                        },
+                    )
+                }
+            }
+            return ref
         } finally {
             if (!usedInPlace) {
                 withContext(NonCancellable) {

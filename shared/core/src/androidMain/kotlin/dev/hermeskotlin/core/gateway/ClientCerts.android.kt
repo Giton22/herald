@@ -2,9 +2,13 @@ package dev.hermeskotlin.core.gateway
 
 import android.content.Context
 import android.security.KeyChain
+import io.ktor.client.HttpClient
 import io.ktor.client.engine.HttpClientEngine
 import io.ktor.client.engine.okhttp.OkHttp
+import io.ktor.client.engine.okhttp.OkHttpConfig
 import okhttp3.ConnectionPool
+import okhttp3.OkHttpClient
+import org.koin.mp.KoinPlatform
 import java.net.InetAddress
 import java.net.InetSocketAddress
 import java.net.Socket
@@ -134,13 +138,25 @@ internal actual fun mtlsEngine(certs: ClientCertAliases, gateways: GatewayReposi
         ssl.set(tlsContext(keyManager, trustManager))
         evictor.execute { runCatching { pool.evictAll() } }
     }
-    return OkHttp.create {
-        config {
-            connectionPool(pool)
-            sslSocketFactory(SniCapturingSocketFactory { ssl.get().socketFactory }, trustManager)
-        }
-    }
+    // Built here rather than in the engine's config, so code that has to speak OkHttp itself (the chat's media
+    // player) can start from the same TLS and pool: see [gatewayOkHttp].
+    val client = OkHttpClient.Builder()
+        .connectionPool(pool)
+        .sslSocketFactory(SniCapturingSocketFactory { ssl.get().socketFactory }, trustManager)
+        .build()
+    return OkHttp.create { preconfigured = client }
 }
+
+/**
+ * The OkHttp client under [HttpClient]'s engine when it's the gateway's ([mtlsEngine]): its TLS presents each
+ * gateway's client certificate, and its pool is the one a certificate change empties. Clients made from it with
+ * [OkHttpClient.newBuilder] keep both, so requests made outside Ktor (the media player's streams) reach a gateway
+ * that asks for a certificate. Null for any other engine.
+ */
+fun HttpClient.gatewayOkHttp(): OkHttpClient? = (engine.config as? OkHttpConfig)?.preconfigured
+
+/** [gatewayOkHttp] of the app's gateway client, once the app has started Koin; null before. */
+fun appGatewayOkHttp(): OkHttpClient? = KoinPlatform.getKoinOrNull()?.getOrNull<HttpClient>()?.gatewayOkHttp()
 
 /** A new context, so a new client session cache: nothing resumes a session made with another certificate. */
 private fun tlsContext(keyManager: KeyManager, trustManager: X509TrustManager): SSLContext =

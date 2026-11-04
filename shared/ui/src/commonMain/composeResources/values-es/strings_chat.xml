@@ -30,6 +30,37 @@
     <string name="chat_kind_text">Texto</string>
     <string name="chat_kind_picture">Imagen</string>
     <string name="chat_kind_pdf">PDF</string>
+    <string name="chat_kind_audio">Audio</string>
+    <string name="chat_kind_video">Vídeo</string>
+    <!-- Playing audio and video -->
+    <string name="chat_media_cant_decode">Este teléfono no puede reproducir este archivo.</string>
+    <string name="chat_media_cant_play">No se pudo reproducir este archivo.</string>
+    <string name="chat_media_cant_play_here">%1$s · no se puede reproducir aquí</string>
+    <string name="chat_media_close_named">Cerrar %1$s</string>
+    <string name="chat_media_full_screen">Pantalla completa</string>
+    <string name="chat_media_gateway_stopped">El gateway dejó de enviarlo (HTTP %1$d).</string>
+    <string name="chat_media_gateway_unreachable">No se pudo contactar con el gateway.</string>
+    <string name="chat_media_get_failed">No se pudo obtener %1$s.</string>
+    <string name="chat_media_get_failed_gateway">No se pudo obtener %1$s del gateway.</string>
+    <string name="chat_media_hide_controls">Ocultar controles del vídeo</string>
+    <string name="chat_media_in_a_window">En una ventana</string>
+    <string name="chat_media_loading">Cargando…</string>
+    <string name="chat_media_own_network">No se reprodujo: el enlace apunta a tu propia red.</string>
+    <string name="chat_media_pause_named">Pausar %1$s</string>
+    <string name="chat_media_play_in_window">Reproducir en una ventana</string>
+    <string name="chat_media_play_named">Reproducir %1$s</string>
+    <string name="chat_media_replay_named">Reproducir %1$s de nuevo</string>
+    <string name="chat_media_retry_named">Intentar reproducir %1$s de nuevo</string>
+    <string name="chat_media_show_controls">Mostrar controles del vídeo</string>
+    <string name="chat_media_show_in_chat">Mostrar en el chat</string>
+    <string name="chat_media_sign_in">Vuelve a iniciar sesión para reproducir archivos.</string>
+    <string name="chat_media_site_stopped">El sitio dejó de enviarlo (HTTP %1$d).</string>
+    <string name="chat_media_site_unreachable">No se pudo contactar con el sitio.</string>
+    <string name="chat_media_speed">Velocidad de reproducción %1$s</string>
+    <string name="chat_media_stop_named">Detener %1$s</string>
+    <string name="chat_media_video_failed">No se pudo reproducir este vídeo.</string>
+    <string name="chat_media_video_in_window">Vídeo %1$s, en una ventana</string>
+    <string name="chat_media_wait_for_voice">Se podrá reproducir cuando termine el chat de voz o el dictado.</string>
     <string name="chat_kind_file">Archivo</string>
 
     <string name="chat_file_line">línea %1$d</string>

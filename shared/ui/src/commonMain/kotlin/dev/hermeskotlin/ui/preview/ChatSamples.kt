@@ -22,6 +22,8 @@ import dev.hermeskotlin.core.chat.ToolActivity
 import dev.hermeskotlin.core.chat.AgentScreen
 import dev.hermeskotlin.core.chat.SHOW_UI_TOOL
 import dev.hermeskotlin.core.chat.TurnUsage
+import dev.hermeskotlin.core.media.PlaySource
+import dev.hermeskotlin.core.network.ApiResult
 import dev.hermeskotlin.core.settings.RunningSend
 import dev.hermeskotlin.core.slash.SlashSuggestion
 import dev.hermeskotlin.ui.chat.ChatActions
@@ -319,6 +321,18 @@ internal object ChatSamples {
         running = true,
     )
 
+    /** A reply that delivered a voice memo and a screen recording: an audio row and a video card. */
+    val clips: ChatState = connected.copy(
+        title = "Doorbell clips",
+        messages = listOf(
+            ChatMessage.User("u1", "Send me the doorbell's chime and last night's clip from the porch camera."),
+            ChatMessage.Assistant(
+                key = "a1",
+                text = "Here they are: the chime, and the porch clip from 02:14.\n\nMEDIA:/srv/doorbell/chime.mp3\nMEDIA:/srv/porch/porch-0214.mp4",
+            ),
+        ),
+    )
+
     /** Three subagents working on parts of a bigger job, one of them already done. */
     val subagents: ChatState = connected.copy(
         title = "Audit the home server",
@@ -457,8 +471,12 @@ internal object ChatSamples {
 }
 
 /** Does nothing: previews only draw. */
-internal class PreviewChatActions(text: String = "") : ChatActions {
+internal class PreviewChatActions(text: String = "", clips: Boolean = false) : ChatActions {
     override val composer = TextFieldState(text)
+
+    /** With [clips], audio and video show as players; nothing loads unless one is tapped, and then it can't. */
+    override val mediaSource: (suspend (String) -> PlaySource)? =
+        if (clips) { _ -> PlaySource.Failed(ApiResult.Unavailable("Only a preview.")) } else null
     override fun send(mode: RunningSend?) = Unit
     override fun interrupt() = Unit
     override fun removeAttachment(id: String) = Unit

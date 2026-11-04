@@ -1,5 +1,7 @@
 package dev.hermeskotlin.core.chat
 
+import dev.hermeskotlin.core.media.MediaType
+import dev.hermeskotlin.core.media.mediaTypeOf
 import kotlin.io.encoding.Base64
 import kotlin.io.encoding.ExperimentalEncodingApi
 
@@ -37,7 +39,15 @@ class OutgoingAttachment(
     /** Whether it can go inside a WebSocket message, base64, rather than over HTTP first. */
     val inline: Boolean get() = source == null && bytes.size <= MAX_INLINE_BYTES
 
-    fun toShown() = ShownAttachment(id, name, kind, thumbnail, original = bytes.takeIf { kind == AttachmentKind.Image })
+    /**
+     * Pictures keep their bytes for opening full size, and audio and video small enough to go inline keep theirs
+     * for playing from the sent message. A larger clip isn't held here: it plays from where the gateway put it.
+     */
+    fun toShown() = ShownAttachment(
+        id, name, kind, thumbnail,
+        original = bytes.takeIf { kind == AttachmentKind.Image || inline && mediaTypeOf(name, mimeType) != null },
+        mimeType = mimeType,
+    )
 
     @OptIn(ExperimentalEncodingApi::class)
     internal fun base64(): String = Base64.encode(bytes)
@@ -88,9 +98,17 @@ class ShownAttachment(
     val kind: AttachmentKind,
     val thumbnail: ByteArray? = null,
     val gatewayPath: String? = null,
-    /** The uploaded image itself, for opening it full size; only for images sent from here. */
+    /** The uploaded file itself: an image to open full size, or audio or video to play; only when sent from here. */
     val original: ByteArray? = null,
-)
+    /** The type the file was picked with, when sent from here. */
+    val mimeType: String? = null,
+) {
+    /** Audio or video the message can play: from [original] when sent from here, else from [gatewayPath]. */
+    val mediaType: MediaType? get() = if (kind == AttachmentKind.File) mediaTypeOf(name, mimeType) else null
+
+    /** This attachment, now kept on the gateway at [path]. */
+    internal fun storedAt(path: String) = ShownAttachment(key, name, kind, thumbnail, gatewayPath = path, original = original, mimeType = mimeType)
+}
 
 /** Desktop's prompt when only images go out (`use-prompt-actions/submit.ts`). */
 internal const val IMAGE_ONLY_PROMPT = "What do you see in this image?"
@@ -133,7 +151,8 @@ internal fun splitAttachmentRefs(text: String, keyPrefix: String): Pair<List<Sho
         attachments += when {
             match.groupValues[1] == "image" -> ShownAttachment("$keyPrefix-r${attachments.size}", name, AttachmentKind.Image, gatewayPath = path)
             name.endsWith(".pdf", ignoreCase = true) -> ShownAttachment("$keyPrefix-r${attachments.size}", name, AttachmentKind.Pdf)
-            else -> ShownAttachment("$keyPrefix-r${attachments.size}", name, AttachmentKind.File)
+            // An absolute path can be played from the gateway; a workspace-relative one can't be found from here.
+            else -> ShownAttachment("$keyPrefix-r${attachments.size}", name, AttachmentKind.File, gatewayPath = path.takeIf { it.startsWith("/") })
         }
         false
     }

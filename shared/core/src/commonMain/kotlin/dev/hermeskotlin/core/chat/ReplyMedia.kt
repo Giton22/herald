@@ -1,6 +1,8 @@
 package dev.hermeskotlin.core.chat
 
 import dev.hermeskotlin.core.media.GatewayFile
+import dev.hermeskotlin.core.media.MediaType
+import dev.hermeskotlin.core.media.mediaTypeOf
 
 /**
  * A picture or file a reply points at: a Markdown image (`![alt](src)`) or a `MEDIA:<path>` delivery
@@ -20,6 +22,17 @@ data class ReplyMedia(
 
     /** [source] as a gateway path, without a `file://` scheme. */
     val gatewayPath: String get() = source.removePrefix("file://")
+
+    /**
+     * Audio or video the chat can play, by a `data:` URL's type or the file's extension; null for a picture
+     * and any other file, which keep their card.
+     */
+    val mediaType: MediaType?
+        get() = when {
+            isImage -> null
+            source.startsWith("data:") -> mediaTypeOf("", source.removePrefix("data:").substringBefore(',').substringBefore(';'))
+            else -> mediaTypeOf(source)
+        }
 }
 
 /**
