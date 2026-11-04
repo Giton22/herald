@@ -1291,6 +1291,34 @@ class ChatSessionTest {
     }
 
     @Test
+    fun aSendRacingTheReconnectWaitsForItsResumeInsteadOfResumingAgain() = runTest {
+        val (connection, transports) = reconnectingSetup(
+            backgroundScope,
+            mapOf("session.resume" to """{"session_id":"rt1","running":false}""", "prompt.submit" to """{"status":"streaming"}"""),
+        )
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        val first = transports.last()
+        // The next link's resume hangs until the test answers it, so the send comes while it's out.
+        val canned = gateway.answer
+        gateway.answer = { call -> if (call.method == "session.resume" && call.socket !== first) null else canned(call) }
+        first.serverClose(1006)
+        connection.state.first { it is ConnectionState.Connected && transports.last() !== first }
+        val second = transports.last()
+        val resume = second.awaitSent { it.isCall("session.resume") }
+
+        val sending = backgroundScope.async { chat.submit("deploy it") }
+        testScheduler.runCurrent()
+        second.push("""{"jsonrpc":"2.0","id":${resume["id"]},"result":{"session_id":"rt2","running":false}}""")
+
+        assertEquals(SendOutcome.Sent, sending.await())
+        // The send went with the new link's id, and the link was resumed once, not again for the send.
+        assertEquals("rt2", second.awaitSent { it.isCall("prompt.submit") }.param("session_id"))
+        assertEquals(1, second.sent.value.count { it.isCall("session.resume") })
+    }
+
+    @Test
     fun resendingASkillSendsItsBodyAgainShowingTheCommand() = runTest {
         val results = mutableMapOf(
             "session.resume" to """{"session_id":"rt1","running":false}""",
