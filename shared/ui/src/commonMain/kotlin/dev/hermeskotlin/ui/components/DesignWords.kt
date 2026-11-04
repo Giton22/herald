@@ -5,6 +5,8 @@ import androidx.compose.runtime.CompositionLocalProvider
 import dev.hermeskotlin.designsystem.DesignWords
 import dev.hermeskotlin.designsystem.LocalDesignWords
 import dev.hermeskotlin.ui.resources.*
+import dev.hermeskotlin.ui.voice.VoiceWords
+import dev.hermeskotlin.ui.voice.rememberVoiceWords
 import org.jetbrains.compose.resources.stringResource
 
 /** The design system's own words (a spinner's "Loading", a field's "Clear"), from the catalogue. */
@@ -29,5 +31,6 @@ fun rememberDesignWords(): DesignWords = DesignWords(
 @Composable
 fun ProvideAppWords(content: @Composable () -> Unit) {
     TimeWords.current = rememberTimeWords()
+    VoiceWords.current = rememberVoiceWords()
     CompositionLocalProvider(LocalDesignWords provides rememberDesignWords(), content = content)
 }

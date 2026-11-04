@@ -51,6 +51,12 @@
     <string name="voice_error_live_ended">The live call ended.</string>
     <string name="voice_error_live_ended_because">The live call ended: %1$s</string>
     <string name="voice_error_live_dropped">The live call dropped.</string>
+    <string name="voice_said_unreachable">Sorry, I couldn’t reach Hermes for that request.</string>
+    <string name="watch_call_target_changed">Default Call Target changed. Tap Call again.</string>
+    <string name="watch_call_not_live">Live voice isn’t set up on your gateway any more. Tap to ask one question at a time.</string>
+    <string name="watch_call_lost">Kyllene on your phone lost the call.</string>
+    <string name="voice_said_questions_in_chat">Hermes has a few questions for you. They’re waiting in the chat.</string>
+    <string name="voice_said_needs_answer">Hermes needs an answer before it goes on. %1$s</string>
     <string name="call_title">Kyllene call</string>
     <string name="call_answer">Answer</string>
     <string name="call_decline">Decline</string>

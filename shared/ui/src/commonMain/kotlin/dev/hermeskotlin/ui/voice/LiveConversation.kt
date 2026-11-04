@@ -38,6 +38,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.withTimeoutOrNull
 import dev.hermeskotlin.ui.resources.*
 import org.jetbrains.compose.resources.getString
+import dev.hermeskotlin.ui.components.fill
 
 /**
  * One GPT-Live call in a chat, Desktop's useVoiceLiveConversation: the voice model owns the microphone and
@@ -302,7 +303,7 @@ internal class LiveConversation(
     private suspend fun answer(id: String, prompt: String, context: String) {
         val sent = session.stopAndSubmit(prompt, voiceLive = VoiceLiveTurn(context)).outcome
         if (sent != SendOutcome.Sent) {
-            speak(id, "Sorry, I couldn't reach Hermes for that request.")
+            speak(id, VoiceWords.current.unreachable)
             state.update { it.copy(error = session.state.value.error ?: getString(Res.string.voice_error_send_to_hermes)) }
             return
         }
@@ -364,18 +365,18 @@ internal class LiveConversation(
         val request = chat.inputRequests.firstOrNull { VoiceAnswers.canAsk(it) && it.id !in announced } ?: return
         // From a locked phone an approval isn't taken; it's asked once the phone is unlocked.
         if (request is InputRequest.Approval && lock.locked()) {
-            if (request.id !in heldBack) speakAside("Hermes needs your approval. Unlock the phone, and I'll ask you for it.")
+            if (request.id !in heldBack) speakAside(VoiceWords.current.unlockForApproval)
             heldBack += request.id
             return
         }
         announced += request.id
         // Several questions at once are too many to take by ear.
-        val prompt = askPrompt(request) ?: return speakAside("Hermes has a few questions for you. They're waiting in the chat.")
+        val prompt = askPrompt(request) ?: return speakAside(VoiceWords.current.questionsInChat)
         if (!steered) send(LiveCommands.instructions(nextId("steer"), ASKING_INSTRUCTIONS))
         steered = true
         heard.clear()
         asking = request
-        speakAside("Hermes needs an answer before it goes on. $prompt")
+        speakAside(fill(VoiceWords.current.needsAnswer, prompt))
     }
 
     /**

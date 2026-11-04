@@ -96,7 +96,7 @@ class WatchCalls(
             if (held != null) {
                 held.received(events)
             } else {
-                val over = CallUpdate(events.callId, CallPhase.Ended, seq = Int.MAX_VALUE, error = CALL_LOST)
+                val over = CallUpdate(events.callId, CallPhase.Ended, seq = Int.MAX_VALUE, error = VoiceWords.current.watchLost)
                 outbox.sendSafely(node, WearPaths.CALL_UPDATE, WearJson.encode(over))
             }
         }
@@ -130,7 +130,7 @@ class WatchCalls(
         when (val status = audio.voiceLiveStatus(chat.gateway, chat.profile)) {
             is ApiResult.Success -> {
                 relay.liveVoiceIs(chat.gateway, status.value.live, chat.profile)
-                if (!status.value.live) return end(NOT_LIVE)
+                if (!status.value.live) return end(VoiceWords.current.watchNotLive)
             }
             else -> return end(liveFailure(status))
         }
@@ -188,10 +188,10 @@ class WatchCalls(
                 held.connect { offer ->
                     val defaultRequest = start.defaultRequestId
                     if (defaultRequest != null && !relay.defaultCallCurrent(node, defaultRequest)) {
-                        error("Default Call Target changed. Tap Call again.")
+                        error(VoiceWords.current.watchTargetChanged)
                     }
                     when (val result = audio.startVoiceLive(chat.gateway, offer, conversation.history(), chat.profile)) {
-                        is ApiResult.Success -> result.value.ifBlank { error("GPT-Live sent no answer.") }
+                        is ApiResult.Success -> result.value.ifBlank { error(VoiceWords.current.watchNoAnswer) }
                         else -> error(liveFailure(result))
                     }
                 }
@@ -205,7 +205,7 @@ class WatchCalls(
         }
         // Hung up on the watch: nothing to tell. Otherwise ("stop" said, the call dropped, the watch gone quiet)
         // it's told, in case it's still there.
-        if (!held.hungUp) end(if (held.lost) CALL_LOST else error?.let(::briefError))
+        if (!held.hungUp) end(if (held.lost) VoiceWords.current.watchLost else error?.let(::briefError))
     }
 
     /** The watch's call as [LiveConversation] sees it: the model's events come from the watch, and go back to it. */
@@ -315,8 +315,6 @@ class WatchCalls(
     }
 
     companion object {
-        const val NOT_LIVE = "Live voice isn't set up on your gateway any more. Tap to ask one question at a time."
-        const val CALL_LOST = "Kyllene on your phone lost the call."
         private const val UPDATE_EVERY_MS = 250L
         private const val ANSWER_AGAIN_MS = 1_500L
         private const val SEND_GATHER_MS = 60L

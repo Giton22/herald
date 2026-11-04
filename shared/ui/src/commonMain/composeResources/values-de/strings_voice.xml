@@ -46,6 +46,12 @@
     <string name="voice_error_live_ended">Der Live-Anruf ist beendet.</string>
     <string name="voice_error_live_ended_because">Der Live-Anruf ist beendet: %1$s</string>
     <string name="voice_error_live_dropped">Der Live-Anruf ist abgebrochen.</string>
+    <string name="voice_said_unreachable">Entschuldige, ich konnte Hermes für diese Anfrage nicht erreichen.</string>
+    <string name="watch_call_target_changed">Das Standard-Anrufziel hat sich geändert. Tippe erneut auf Anrufen.</string>
+    <string name="watch_call_not_live">Live-Sprache ist auf deinem Gateway nicht mehr eingerichtet. Tippe, um jeweils eine Frage zu stellen.</string>
+    <string name="watch_call_lost">Kyllene auf deinem Telefon hat den Anruf verloren.</string>
+    <string name="voice_said_questions_in_chat">Hermes hat ein paar Fragen an dich. Sie warten im Chat.</string>
+    <string name="voice_said_needs_answer">Hermes braucht eine Antwort, bevor es weitergeht. %1$s</string>
     <string name="call_title">Kyllene-Anruf</string>
     <string name="call_answer">Annehmen</string>
     <string name="call_decline">Ablehnen</string>
