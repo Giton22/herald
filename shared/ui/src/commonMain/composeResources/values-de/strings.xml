@@ -203,6 +203,14 @@
     <string name="settings_quick_entry">Schnelleingabe</string>
     <string name="settings_quick_entry_detail">%1$s öffnet aus jeder App ein kleines Feld, um Hermes zu fragen – in einem neuen Chat oder im offenen. Vorerst nur unter Windows.</string>
     <string name="settings_quick_entry_taken">Eine andere App hat diese Tasten inzwischen, deshalb öffnet es nicht.</string>
+    <string name="settings_quick_entry_detail_portal">Ein Tastenkürzel des Desktops öffnet aus jeder App ein kleines Feld, um Hermes zu fragen – in einem neuen Chat oder im offenen.</string>
+    <string name="settings_quick_entry_off">Dein Desktop fragt nach dem Tastenkürzel, sobald das hier an ist.</string>
+    <string name="settings_quick_entry_binding">Wähle im Berechtigungsdialog deines Desktops ein Tastenkürzel.</string>
+    <string name="settings_quick_entry_bound">Tastenkürzel des Desktops: %1$s.</string>
+    <string name="settings_quick_entry_desktop_choice">von deinem Desktop gewählt</string>
+    <string name="settings_quick_entry_unassigned">Dein Desktop hat ihm keine Taste gegeben. Wähle eine in seinen Kurzbefehl-Einstellungen.</string>
+    <string name="settings_quick_entry_declined">Kein Tastenkürzel des Desktops erlaubt. Schalte die Schnelleingabe aus und wieder an, um es erneut zu versuchen.</string>
+    <string name="settings_quick_entry_unavailable">Das Portal für globale Tastenkürzel ist auf diesem Desktop nicht verfügbar.</string>
     <string name="settings_zoom">Zoom</string>
     <string name="settings_zoom_detail">%1$d %. %2$s und %3$s ändern ihn überall; %4$s setzt wieder auf 100 %.</string>
     <string name="settings_zoom_smaller">Kleiner</string>
