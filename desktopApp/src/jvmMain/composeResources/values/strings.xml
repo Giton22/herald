@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    The desktop app’s own words, in English: the tray, the quick entry, its notifications, the storage prompt
+    and the browser pages. The screens inside the window read shared/ui’s catalogue. See docs/i18n.md.
+-->
+<resources>
+    <!-- The tray icon’s menu. -->
+    <string name="tray_open">Open Kyllene</string>
+    <string name="tray_new_chat">New chat</string>
+    <string name="tray_quick_entry">Quick entry</string>
+    <string name="tray_quit">Quit Kyllene</string>
+
+    <!-- The quick entry over other apps (Ctrl+Shift+Space). -->
+    <string name="quick_entry_window_title">Kyllene quick entry</string>
+    <string name="quick_entry_new_chat">New chat</string>
+    <string name="quick_entry_this_chat">This chat</string>
+    <string name="quick_entry_field">Ask Hermes</string>
+    <string name="quick_entry_placeholder">Ask Hermes anything…</string>
+    <string name="quick_entry_keys">Enter to send · Tab to switch · Esc to close</string>
+
+    <!-- System notifications while the window isn’t in use. -->
+    <string name="notice_reply_failed">Hermes ran into a problem</string>
+    <string name="notice_replied">Hermes replied</string>
+    <string name="notice_reply_in">The reply is in.</string>
+    <string name="notice_approval">Approval needed</string>
+    <string name="notice_question">Hermes has a question</string>
+    <string name="notice_needs_you">Hermes needs you</string>
+    <string name="notice_approve_once">Approve once</string>
+    <string name="notice_deny">Deny</string>
+
+    <!-- The prompt when the settings’ storage won’t open at start-up. -->
+    <string name="storage_title">Kyllene storage</string>
+    <string name="storage_folder">Settings folder:</string>
+    <string name="storage_retry">Retry</string>
+    <string name="storage_start_fresh">Start fresh</string>
+    <string name="storage_quit">Quit</string>
+    <string name="storage_with_start_fresh">%1$s Start fresh keeps that file under another name and opens Kyllene signed out.</string>
+    <string name="storage_unavailable">Kyllene couldn’t retrieve its storage key. Unlock your desktop keyring and check that its Secret portal is available, then retry.</string>
+    <string name="storage_cancelled">Storage unlock was cancelled. Retry to unlock it; existing data has been preserved.</string>
+    <string name="storage_corrupt">Kyllene couldn’t open its encrypted settings. Restore a known-good backup or use the original application identity. Existing data has been preserved.</string>
+    <string name="storage_version">This settings format needs a different version of Kyllene. Existing data has been preserved.</string>
+    <string name="storage_read">Kyllene couldn’t read its settings, or the file exceeds 16 MiB. Check file access before retrying.</string>
+    <string name="storage_write">Kyllene couldn’t finish saving or cleaning up its settings. Existing copies have been preserved; check disk space and file access before retrying.</string>
+    <string name="storage_uncertain">Kyllene couldn’t confirm its settings commit. Check file access, then retry startup or quit and restart before making further changes.</string>
+    <string name="storage_changed">Settings changed outside this window. Quit and restart Kyllene to reload them before saving.</string>
+    <string name="storage_legacy">Conflicting or unfinished legacy settings were found. Existing files were preserved. Quit and resolve the older copy before retrying.</string>
+    <string name="storage_unsupported">Kyllene couldn’t verify its Flatpak application identity. Check the installation before retrying. No plaintext fallback is available.</string>
+
+    <!-- Widgets and plugin pages in the app’s own browser. -->
+    <string name="web_widget_no_browser">Couldn’t start the browser widgets show in.</string>
+    <string name="web_widget_failed">Couldn’t display this widget.</string>
+    <string name="web_close_page">Close the page</string>
+    <string name="web_page_failed">Couldn’t open the page.</string>
+    <string name="web_try_again">Try again</string>
+</resources>

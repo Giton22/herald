@@ -1,0 +1,459 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The sessions list and sidebar and the pages it opens, in Simplified Chinese. Keys and placeholders as in values/. -->
+<resources>
+    <!-- Sidebar: header, switch, pages -->
+    <string name="sessions_mode_chats">对话</string>
+    <string name="sessions_mode_bots">机器人</string>
+    <string name="sessions_new_chat">新对话</string>
+    <string name="sessions_search_chats">搜索对话</string>
+    <string name="sessions_close_search">关闭搜索</string>
+    <string name="sessions_account">账户</string>
+    <string name="sessions_account_and_gateways">账户和网关</string>
+    <string name="sessions_nav_inbox">收件箱</string>
+    <string name="sessions_nav_scheduled">定时任务</string>
+    <string name="sessions_nav_insights">统计</string>
+    <string name="sessions_nav_capabilities">能力</string>
+    <string name="sessions_nav_plugins">插件</string>
+    <string name="sessions_nav_config">配置文件</string>
+    <string name="sessions_nav_archived">已归档</string>
+    <plurals name="sessions_unread_count">
+        <item quantity="other">%1$d 条未读</item>
+    </plurals>
+
+    <!-- Connection -->
+    <string name="sessions_connection_connected">已连接</string>
+    <string name="sessions_connection_not_connected">未连接</string>
+    <string name="sessions_connection_signed_out">已退出登录</string>
+    <string name="sessions_connection_reconnecting">正在重连</string>
+    <string name="sessions_connection_connecting">正在连接</string>
+
+    <!-- The list -->
+    <string name="sessions_no_matches">没有结果</string>
+    <string name="sessions_no_matches_detail">搜索范围包括标题、会话 ID 和消息内容。</string>
+    <string name="sessions_saved_copy">已保存的副本 · %1$s</string>
+    <string name="sessions_saved_copy_unreachable">%1$s。暂时无法连接 Hermes。</string>
+    <string name="sessions_try_again">重试</string>
+    <string name="sessions_load_failed">无法加载会话</string>
+    <string name="sessions_load_failed_detail">无法加载会话。%1$s</string>
+    <string name="sessions_empty_project">此项目中没有对话。</string>
+    <string name="sessions_empty">你的对话会显示在这里。</string>
+    <string name="sessions_none_running">目前没有正在运行的内容。</string>
+    <string name="sessions_none_waiting">目前没有需要你处理的内容。</string>
+    <string name="sessions_nothing_archived">没有已归档的内容</string>
+    <string name="sessions_nothing_archived_detail">已归档的会话不会出现在最近列表中，但仍可继续。</string>
+    <string name="sessions_filter_all">全部</string>
+    <string name="sessions_filter_needs_you">待你处理</string>
+    <string name="sessions_section_threads">话题</string>
+    <string name="sessions_section_pinned">已置顶</string>
+    <string name="sessions_show_threads">显示话题</string>
+    <string name="sessions_hide_threads">隐藏话题</string>
+    <string name="sessions_show_pinned">显示置顶对话</string>
+    <string name="sessions_hide_pinned">隐藏置顶对话</string>
+    <string name="sessions_collapsed">已折叠</string>
+    <string name="sessions_expanded">已展开</string>
+    <string name="sessions_threads_drag_to_reorder">话题 · 拖动以排序</string>
+    <string name="sessions_done">完成</string>
+    <string name="sessions_drag_thread">拖动 %1$s</string>
+    <string name="sessions_session_actions">会话操作</string>
+    <string name="sessions_thread">话题</string>
+    <string name="sessions_in_project">在项目 %1$s 中</string>
+    <string name="sessions_dismiss">关闭</string>
+
+    <!-- A row's status line -->
+    <string name="sessions_status_running">运行中</string>
+    <string name="sessions_status_new_reply">新回复</string>
+    <string name="sessions_status_draft">草稿</string>
+    <string name="sessions_waiting_approval">需要批准</string>
+    <string name="sessions_waiting_question">有一个问题</string>
+    <string name="sessions_waiting_input">需要输入</string>
+    <string name="sessions_waiting_unknown">等待你处理</string>
+
+    <!-- Ages -->
+    <string name="sessions_age_now">现在</string>
+    <string name="sessions_age_minutes">%1$d分钟</string>
+    <string name="sessions_age_hours">%1$d小时</string>
+    <string name="sessions_age_days">%1$d天</string>
+    <string name="sessions_age_weeks">%1$d周</string>
+    <string name="sessions_age_months">%1$d个月</string>
+    <string name="sessions_age_years">%1$d年</string>
+    <string name="sessions_just_now">刚刚</string>
+    <plurals name="sessions_minutes_ago">
+        <item quantity="other">%1$d 分钟前</item>
+    </plurals>
+    <plurals name="sessions_hours_ago">
+        <item quantity="other">%1$d 小时前</item>
+    </plurals>
+    <plurals name="sessions_days_ago">
+        <item quantity="other">%1$d 天前</item>
+    </plurals>
+    <plurals name="sessions_weeks_ago">
+        <item quantity="other">%1$d 周前</item>
+    </plurals>
+    <plurals name="sessions_months_ago">
+        <item quantity="other">%1$d 个月前</item>
+    </plurals>
+    <plurals name="sessions_years_ago">
+        <item quantity="other">%1$d 年前</item>
+    </plurals>
+    <string name="sessions_active_ago">%1$s活跃</string>
+
+    <!-- A chat's actions -->
+    <string name="sessions_pin">置顶</string>
+    <string name="sessions_unpin">取消置顶</string>
+    <string name="sessions_archive">归档</string>
+    <string name="sessions_unarchive">取消归档</string>
+    <string name="sessions_archived">已归档</string>
+    <string name="sessions_unarchived">已取消归档</string>
+    <string name="sessions_undo_toast">%1$s“%2$s”</string>
+    <string name="sessions_undo">撤销</string>
+    <string name="sessions_delete">删除</string>
+    <string name="sessions_rename">重命名</string>
+    <string name="sessions_save">保存</string>
+    <string name="sessions_create">创建</string>
+    <string name="sessions_open_in_new_window">在新窗口中打开</string>
+    <string name="sessions_make_a_thread">设为话题</string>
+    <string name="sessions_make_thread">设为话题</string>
+    <string name="sessions_start_fresh">重新开始</string>
+    <string name="sessions_usage_and_cost">用量和费用</string>
+    <string name="sessions_background_processes">后台进程</string>
+    <string name="sessions_checkpoints">检查点</string>
+    <string name="sessions_goal_and_loops">目标和循环</string>
+    <string name="sessions_export_markdown">导出为 Markdown</string>
+    <string name="sessions_copy_session_id">复制会话 ID</string>
+    <string name="sessions_rename_chat">重命名对话</string>
+    <string name="sessions_rename_chat_detail">留空可清除标题。</string>
+    <string name="sessions_delete_chat_title">删除对话？</string>
+    <string name="sessions_delete_chat_detail">“%1$s”及其消息将从网关中删除。此操作无法撤销。</string>
+
+    <!-- Threads -->
+    <string name="sessions_rename_thread">重命名话题</string>
+    <string name="sessions_rename_thread_detail">它的对话也会改名，之后每个新对话都使用这个名字。</string>
+    <string name="sessions_move_up">上移</string>
+    <string name="sessions_move_down">下移</string>
+    <string name="sessions_reorder">排序</string>
+    <string name="sessions_remove_thread">移除话题</string>
+    <string name="sessions_start_thread_fresh_title">重新开始 %1$s？</string>
+    <string name="sessions_start_thread_fresh_detail">它的对话将归档为“%1$s · 日期和时间”，并由一个新的空对话取代。已归档的对话保留 30 天。</string>
+    <string name="sessions_thread_make_failed">无法创建话题。</string>
+    <string name="sessions_thread_remove_failed">无法移除话题。</string>
+    <string name="sessions_thread_rename_failed">无法重命名话题。</string>
+    <string name="sessions_thread_move_failed">无法移动话题。</string>
+    <string name="sessions_thread_order_failed">无法保存顺序。</string>
+    <string name="sessions_thread_fresh_failed">无法重新开始话题。</string>
+
+    <!-- Projects -->
+    <string name="sessions_all_projects">全部项目</string>
+    <string name="sessions_new_project">新项目</string>
+    <string name="sessions_project_options">%1$s 的选项</string>
+    <string name="sessions_choose_project">选择项目</string>
+    <string name="sessions_delete_project">删除项目</string>
+    <string name="sessions_save_as_project">保存为项目</string>
+    <string name="sessions_choose_folder">选择文件夹</string>
+    <string name="sessions_new_project_detail">该文件夹中的对话会归入此项目，在项目中新建的对话也会在那里运行。</string>
+    <string name="sessions_use_this_folder">使用此文件夹</string>
+    <string name="sessions_project_name">名称</string>
+    <string name="sessions_project_folder">网关上的文件夹</string>
+    <string name="sessions_project_folder_hint">可选。Hermes 所在机器上的一个文件夹。</string>
+    <string name="sessions_browse_folders">浏览文件夹</string>
+    <string name="sessions_folder_list_failed">无法列出此文件夹。</string>
+    <string name="sessions_folder_up">上一级文件夹</string>
+    <string name="sessions_folder_home">主文件夹</string>
+    <string name="sessions_folder_new">新建文件夹</string>
+    <string name="sessions_folder_filter">筛选</string>
+    <string name="sessions_folder_new_name">新文件夹名称</string>
+    <string name="sessions_folder_empty">这里没有文件夹。</string>
+    <string name="sessions_folder_more">有些文件夹可能不会显示在这里。输入名称开头即可查找。</string>
+    <string name="sessions_rename_project">重命名项目</string>
+    <string name="sessions_delete_project_title">删除项目？</string>
+    <string name="sessions_delete_project_detail">“%1$s”将从网关中删除。它的对话会保留，并重新按文件夹分组。</string>
+    <string name="sessions_not_connected">未连接。</string>
+    <string name="sessions_cant_make_folders">此版本无法创建文件夹。</string>
+    <string name="sessions_gateway_cant_change_projects">此网关无法更改项目。</string>
+    <string name="sessions_project_change_failed">无法更改项目。</string>
+
+    <!-- Account and profiles -->
+    <string name="sessions_signed_in">已登录</string>
+    <string name="sessions_profile_named">配置：%1$s</string>
+    <string name="sessions_refresh_chats">刷新对话</string>
+    <string name="sessions_refreshing_chats">正在刷新对话…</string>
+    <string name="sessions_retry_connection">立即重新连接</string>
+    <string name="sessions_sign_out">退出登录</string>
+    <string name="sessions_switch_gateway">切换或添加网关</string>
+    <string name="sessions_profiles">配置</string>
+    <string name="sessions_switch_profile">切换配置</string>
+    <string name="sessions_profiles_detail">每个配置都是一个独立的智能体，有自己的对话、记忆和模型。</string>
+    <string name="sessions_profiles_add_hint">在网关主机上用“hermes profile create”添加配置。</string>
+    <string name="sessions_profile_default">默认</string>
+    <string name="sessions_profile_active">当前</string>
+
+    <!-- Other chats -->
+    <string name="sessions_badge">会话</string>
+    <plurals name="sessions_badge_need_you">
+        <item quantity="other">会话，%1$d 个待你处理</item>
+    </plurals>
+    <string name="sessions_other_reply">%1$s 有新回复</string>
+    <string name="sessions_other_approval">%1$s 需要你的批准</string>
+    <string name="sessions_other_question">%1$s 需要你回答</string>
+    <string name="sessions_other_input">%1$s 需要你输入</string>
+    <plurals name="sessions_other_and_more">
+        <item quantity="other">%1$s，另有 %2$d 个</item>
+    </plurals>
+
+    <string name="sessions_with_detail">%1$s：%2$s</string>
+
+    <!-- Shared words -->
+    <string name="sessions_couldnt_load">无法加载</string>
+    <string name="sessions_loading">正在加载…</string>
+    <string name="sessions_open">打开</string>
+    <string name="sessions_edit">编辑</string>
+    <string name="sessions_discard">放弃</string>
+    <string name="sessions_keep_editing">继续编辑</string>
+    <string name="sessions_replace">替换</string>
+    <string name="sessions_optional">可选</string>
+    <string name="sessions_turn_off">关闭</string>
+    <string name="sessions_change_ellipsis">更改…</string>
+    <string name="sessions_more_for">%1$s 的更多操作</string>
+    <string name="sessions_in_time">%1$s后</string>
+    <string name="sessions_just_now_alone">刚刚</string>
+
+    <!-- Scheduled jobs and routines -->
+    <string name="sessions_bot_routines">%1$s 的例行任务</string>
+    <plurals name="sessions_jobs_count">
+        <item quantity="other">%1$d 个任务 · 每次运行都会打开一个对话</item>
+    </plurals>
+    <plurals name="sessions_routines_count">
+        <item quantity="other">%1$d 个例行任务 · 都以 %2$s 的身份运行</item>
+    </plurals>
+    <string name="sessions_new_job">新任务</string>
+    <string name="sessions_new_routine">新例行任务</string>
+    <string name="sessions_edit_job">编辑任务</string>
+    <string name="sessions_edit_routine">编辑例行任务</string>
+    <string name="sessions_delete_job">删除任务</string>
+    <string name="sessions_delete_routine">删除例行任务</string>
+    <string name="sessions_delete_job_title">删除任务？</string>
+    <string name="sessions_delete_routine_title">删除例行任务？</string>
+    <string name="sessions_delete_job_detail">“%1$s”将不再运行。以往运行产生的对话会保留。</string>
+    <string name="sessions_discard_changes_title">放弃更改？</string>
+    <string name="sessions_discard_job_detail">你对此任务的更改尚未保存。</string>
+    <string name="sessions_discard_routine_detail">你对此例行任务的更改尚未保存。</string>
+    <string name="sessions_pick_job">选择一个任务</string>
+    <string name="sessions_pick_routine">选择一个例行任务</string>
+    <string name="sessions_pick_job_detail">它的提示词、结果发送位置和运行记录会显示在这里。</string>
+    <string name="sessions_jobs_load_failed">无法加载定时任务</string>
+    <string name="sessions_routines_load_failed">无法加载例行任务</string>
+    <string name="sessions_no_jobs">没有定时任务</string>
+    <string name="sessions_no_jobs_detail">让智能体按计划做事，比如每天早上的简报。每次运行都会在这里打开一个对话。</string>
+    <string name="sessions_no_routines">还没有例行任务</string>
+    <string name="sessions_no_routines_detail">让 %1$s 按计划做事，比如每天早上的简报。它以 %1$s 的身份运行，使用自己的记忆和技能，并可在自己的对话中汇报。</string>
+    <string name="sessions_run_now">立即运行</string>
+    <string name="sessions_pause">暂停</string>
+    <string name="sessions_resume">继续</string>
+    <string name="sessions_runs">运行记录</string>
+    <string name="sessions_runs_load_failed">无法加载运行记录。%1$s</string>
+    <string name="sessions_no_runs">还没有运行记录。每次运行都会在这里打开一个对话。</string>
+    <plurals name="sessions_run_messages">
+        <item quantity="other">%1$d 条消息</item>
+    </plurals>
+    <string name="sessions_delivers_to">发送到%1$s</string>
+    <string name="sessions_delivery_local">本地（仅保存）</string>
+    <string name="sessions_delivery_bot_chat">%1$s 的对话</string>
+    <string name="sessions_delivery_the_bot_chat">机器人的对话</string>
+    <string name="sessions_job_paused">已暂停</string>
+    <string name="sessions_job_done">已完成</string>
+    <string name="sessions_job_finished">已结束</string>
+    <string name="sessions_job_missed">已错过</string>
+    <string name="sessions_job_failed">失败</string>
+    <string name="sessions_job_last_run">上次运行</string>
+    <string name="sessions_job_last_run_failed">上次运行失败</string>
+    <string name="sessions_job_next_run">下次运行</string>
+    <string name="sessions_job_next">下次：%1$s</string>
+    <string name="sessions_job_due_now">现在到期</string>
+    <string name="sessions_schedule_daily">每天 %1$s</string>
+    <string name="sessions_schedule_weekdays">工作日 %1$s</string>
+    <string name="sessions_schedule_sundays">每周日 %1$s</string>
+    <string name="sessions_schedule_mondays">每周一 %1$s</string>
+    <string name="sessions_schedule_tuesdays">每周二 %1$s</string>
+    <string name="sessions_schedule_wednesdays">每周三 %1$s</string>
+    <string name="sessions_schedule_thursdays">每周四 %1$s</string>
+    <string name="sessions_schedule_fridays">每周五 %1$s</string>
+    <string name="sessions_schedule_saturdays">每周六 %1$s</string>
+    <string name="sessions_job_prompt">提示词</string>
+    <string name="sessions_job_prompt_example">总结我的未读邮件，并标出所有紧急事项</string>
+    <string name="sessions_job_prompt_hint">智能体每次运行时要做的事，作为一个新对话。</string>
+    <string name="sessions_routine_prompt_hint">%1$s 每次运行时要做的事，以它自己的身份，使用自己的记忆和技能。</string>
+    <string name="sessions_job_schedule">计划</string>
+    <string name="sessions_job_schedule_hint_new">例如“every 2h”、“0 9 * * *”、“every monday 9am”，或用“in 30m”表示运行一次。</string>
+    <string name="sessions_job_schedule_hint_edit">保持不变即可沿用当前计划。一次性任务的计划为空。</string>
+    <string name="sessions_preset_every_30_min">每 30 分钟</string>
+    <string name="sessions_preset_hourly">每小时</string>
+    <string name="sessions_preset_daily">每天 9:00</string>
+    <string name="sessions_preset_weekdays">工作日 9:00</string>
+    <string name="sessions_preset_mondays">每周一 9:00</string>
+    <string name="sessions_preset_once">一次，1 小时后</string>
+    <string name="sessions_routine_name_example">早间简报</string>
+    <string name="sessions_deliver_to">发送到</string>
+    <string name="sessions_deliver_no_home">%1$s 在网关上没有设置主频道，运行结果将无处可发。</string>
+    <string name="sessions_deliver_bot_chat_detail">每次运行的结果会作为一条消息发到%1$s，由它阅读并回复，因此每次运行会多花它一个回合。</string>
+    <string name="sessions_schedule_job">安排任务</string>
+    <string name="sessions_schedule_routine">安排例行任务</string>
+    <string name="sessions_job_gone">此任务已在网关上被删除，没有可保存的内容。</string>
+    <string name="sessions_job_needs_name">请给例行任务起个名字。</string>
+    <string name="sessions_job_needs_prompt">请说明智能体每次运行时要做什么。</string>
+    <string name="sessions_job_needs_schedule">请说明何时运行。</string>
+    <string name="sessions_job_scheduled">任务已安排</string>
+    <string name="sessions_job_saved">任务已保存</string>
+    <string name="sessions_job_deleted">任务已删除</string>
+    <string name="sessions_routine_scheduled">例行任务已安排</string>
+    <string name="sessions_routine_saved">例行任务已保存</string>
+    <string name="sessions_routine_deleted">例行任务已删除</string>
+    <string name="sessions_job_run_started">已开始运行</string>
+    <string name="sessions_job_run_failed">无法开始运行</string>
+    <string name="sessions_job_pause_failed">无法暂停任务</string>
+    <string name="sessions_job_resume_failed">无法继续任务</string>
+    <string name="sessions_job_save_failed">无法保存任务</string>
+    <string name="sessions_job_delete_failed">无法删除任务</string>
+
+    <!-- Insights -->
+    <plurals name="sessions_insights_days">
+        <item quantity="other">%1$d 天</item>
+    </plurals>
+    <string name="sessions_insights_load_failed">无法加载统计</string>
+    <string name="sessions_insights_empty">尚无用量</string>
+    <string name="sessions_insights_empty_detail">这段时间的对话及其费用会显示在这里。</string>
+    <string name="sessions_insights_billed">已计费</string>
+    <string name="sessions_insights_estimated">预估费用</string>
+    <plurals name="sessions_insights_chats">
+        <item quantity="other">个对话</item>
+    </plurals>
+    <string name="sessions_insights_tokens_in_out">输入和输出 token</string>
+    <string name="sessions_insights_from_cache">提示词来自缓存</string>
+    <string name="sessions_insights_models">模型</string>
+    <string name="sessions_insights_tokens">%1$s token</string>
+    <string name="sessions_insights_tool_calls">工具调用</string>
+    <string name="sessions_insights_tool_calls_spoken">%1$s，%2$s 次调用</string>
+    <string name="sessions_insights_skill_uses">技能使用</string>
+    <string name="sessions_insights_skill_uses_spoken">%1$s，使用 %2$s 次</string>
+    <string name="sessions_insights_tokens_by_day">每日 token</string>
+    <string name="sessions_insights_peak">峰值 %1$s · %2$s</string>
+    <plurals name="sessions_insights_day_chats">
+        <item quantity="other">%1$d 个对话</item>
+    </plurals>
+    <string name="sessions_insights_hint_touch">点按某一天查看数据。</string>
+    <string name="sessions_insights_hint_pointer">将指针移到某一天查看数据。</string>
+    <string name="sessions_insights_show_numbers">查看数据</string>
+    <string name="sessions_insights_day_spoken">%1$s：%2$s token</string>
+    <string name="sessions_short_date">%1$s%2$s日</string>
+    <string name="sessions_month_1">1月</string>
+    <string name="sessions_month_2">2月</string>
+    <string name="sessions_month_3">3月</string>
+    <string name="sessions_month_4">4月</string>
+    <string name="sessions_month_5">5月</string>
+    <string name="sessions_month_6">6月</string>
+    <string name="sessions_month_7">7月</string>
+    <string name="sessions_month_8">8月</string>
+    <string name="sessions_month_9">9月</string>
+    <string name="sessions_month_10">10月</string>
+    <string name="sessions_month_11">11月</string>
+    <string name="sessions_month_12">12月</string>
+
+    <!-- Capabilities -->
+    <string name="sessions_capabilities_detail">智能体在新对话中可以使用的内容</string>
+    <string name="sessions_tab_skills">技能</string>
+    <string name="sessions_tab_toolsets">工具集</string>
+    <string name="sessions_tab_mcp">MCP</string>
+    <string name="sessions_no_toolsets">未配置工具集。</string>
+    <string name="sessions_toolsets_hint">智能体在新对话中获得的工具集。</string>
+    <string name="sessions_no_mcp_servers">没有 MCP 服务器。可在网关上用 `hermes mcp add` 添加，或通过 Hermes Desktop 添加。</string>
+    <string name="sessions_changes_next_chat">更改从下一个对话开始生效。</string>
+    <string name="sessions_no_skills">还没有技能。智能体会在学习中自己编写，或者用 `hermes skills` 安装。</string>
+    <plurals name="sessions_search_skills">
+        <item quantity="other">在 %1$d 个技能中搜索</item>
+    </plurals>
+    <string name="sessions_browse_hub">浏览技能中心</string>
+    <string name="sessions_no_skills_match">没有与“%1$s”匹配的技能。</string>
+    <string name="sessions_skills_other">其他</string>
+    <string name="sessions_skill_tag_hub">技能中心</string>
+    <string name="sessions_skill_tag_learned">自学</string>
+    <string name="sessions_skill_tag_external">外部</string>
+    <string name="sessions_toolset_needs_setup">需要设置</string>
+    <plurals name="sessions_tools_count">
+        <item quantity="other">%1$d 个工具</item>
+    </plurals>
+    <string name="sessions_mcp_from_plugin">来自 %1$s</string>
+    <string name="sessions_mcp_set_by_plugin">由 %1$s 设置</string>
+    <string name="sessions_locked_note">无法在此更改</string>
+    <string name="sessions_switch_on_locked">开启，%1$s</string>
+    <string name="sessions_switch_off_locked">关闭，%1$s</string>
+    <string name="sessions_mcp_test">测试</string>
+    <plurals name="sessions_mcp_connected_tools">
+        <item quantity="other">已连接 · %1$d 个工具</item>
+    </plurals>
+    <string name="sessions_mcp_connect_failed">无法连接。</string>
+    <string name="sessions_turn_on_failed">无法开启 %1$s</string>
+    <string name="sessions_turn_off_failed">无法关闭 %1$s</string>
+    <string name="sessions_uninstall">卸载</string>
+    <string name="sessions_uninstall_skill_detail">要从 %2$s 中移除 %1$s 吗？关闭它则会保留安装。</string>
+    <string name="sessions_uninstall_skill_main_detail">要从主配置中移除 %1$s 吗？关闭它则会保留安装。</string>
+
+    <!-- Skills hub -->
+    <string name="sessions_hub_title">技能中心</string>
+    <string name="sessions_hub_installs_into">安装到 %1$s</string>
+    <string name="sessions_hub_installs_into_main">安装到主配置</string>
+    <string name="sessions_hub_update_all">全部更新</string>
+    <string name="sessions_hub_unsupported">此网关还没有技能中心。</string>
+    <string name="sessions_hub_search">搜索技能中心</string>
+    <string name="sessions_hub_timed_out">部分来源没有响应：%1$s</string>
+    <string name="sessions_hub_no_match">没有与搜索匹配的技能。</string>
+    <string name="sessions_hub_featured">精选</string>
+    <string name="sessions_hub_official">官方</string>
+    <string name="sessions_hub_official_empty">官方目录中没有内容。</string>
+    <string name="sessions_hub_installed_tag">已安装</string>
+    <string name="sessions_hub_blocked_by_scan">已被安全扫描拦截</string>
+    <string name="sessions_hub_view_scan">查看扫描结果</string>
+    <string name="sessions_hub_scan_title">扫描：%1$s</string>
+    <string name="sessions_hub_install_anyway">仍然安装</string>
+    <string name="sessions_hub_scan_failed">无法扫描</string>
+    <string name="sessions_hub_check_failed">无法检查 %1$s</string>
+    <string name="sessions_hub_blocked">%1$s 已被安全扫描拦截。</string>
+    <string name="sessions_hub_installed">已安装 %1$s。从下一个对话开始生效。</string>
+    <string name="sessions_hub_removed">已移除 %1$s。从下一个对话开始生效。</string>
+    <string name="sessions_hub_updated">技能已更新。从下一个对话开始生效。</string>
+    <string name="sessions_hub_install_failed">无法安装 %1$s</string>
+    <string name="sessions_hub_remove_failed">无法移除 %1$s</string>
+    <string name="sessions_hub_update_failed">无法更新技能</string>
+
+    <!-- Config -->
+    <string name="sessions_config_detail">Hermes 自身的设置，保存在它的 config.yaml 中。大多数从下一个对话开始生效。</string>
+    <string name="sessions_config_edit_yaml">编辑 config.yaml</string>
+    <string name="sessions_config_yaml_row_detail">完整文件，用于未列出的任何内容</string>
+    <string name="sessions_config_yaml_detail">此配置的完整配置文件。</string>
+    <string name="sessions_config_all">所有设置</string>
+    <string name="sessions_config_all_detail">网关所知的每项设置，按其自身分组。</string>
+    <string name="sessions_config_all_row_detail">每个字段，按网关的分组</string>
+    <plurals name="sessions_config_search">
+        <item quantity="other">在 %1$d 项设置中搜索</item>
+    </plurals>
+    <plurals name="sessions_config_settings">
+        <item quantity="other">%1$d 项设置</item>
+    </plurals>
+    <string name="sessions_config_first_of">前 %1$d 项，共 %2$d 项设置</string>
+    <string name="sessions_config_no_match">没有与“%1$s”匹配的设置。</string>
+    <string name="sessions_config_type_more">多输入一些以缩小范围。</string>
+    <string name="sessions_config_none_here">此网关没有这些设置。</string>
+    <string name="sessions_config_voice_note">只显示所选提供商自己的设置。</string>
+    <string name="sessions_config_model_note">新对话的默认值；对话中的模型选择器仍可更改该对话的模型。</string>
+    <string name="sessions_config_search_options">在 %1$d 项中搜索</string>
+    <string name="sessions_config_other">其他…</string>
+    <string name="sessions_config_one_per_line">每行一个。</string>
+    <string name="sessions_copy_key">复制键名</string>
+    <string name="sessions_copy_value">复制值</string>
+    <string name="sessions_discard_title">放弃你的更改？</string>
+    <string name="sessions_config_discard_detail">config.yaml 将保持上次保存的样子。</string>
+    <string name="sessions_config_all_off_title">关闭所有工具集？</string>
+    <string name="sessions_config_all_off_detail">在重新开启部分工具集之前，智能体将失去记忆、终端、网页搜索、子智能体以及大部分工具。</string>
+    <string name="sessions_config_replace_title">替换 config.yaml？</string>
+    <string name="sessions_config_replace_detail">文件将完全变为此文本。Hermes 会为新对话重新读取它；有些设置需要重启网关。</string>
+    <string name="sessions_config_refresh_failed">无法刷新</string>
+    <string name="sessions_config_save_failed">无法保存 %1$s</string>
+    <string name="sessions_config_yaml_saved">已保存 config.yaml</string>
+</resources>

@@ -1,0 +1,169 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="shortcut_new_chat">Új csevegés</string>
+    <string name="shortcut_voice_short">Diktálás</string>
+    <string name="shortcut_voice">Új csevegés hanggal</string>
+    <string name="shortcut_voice_chat">Hermes hívása</string>
+    <string name="shortcut_voice_chat_moved">A „Hermes hívása” máshova került. Tartsd lenyomva az alkalmazás ikonját, és rögzítsd újra.</string>
+
+    <string name="app_lock_prompt_title">Kyllene feloldása</string>
+    <string name="link_no_app">Ezen a telefonon egyik alkalmazás sem tudja megnyitni ezt a linket.</string>
+
+    <string name="channel_connection_name">Háttérkapcsolat</string>
+    <string name="channel_connection_description">Látható, amíg a Kyllene a háttérben kapcsolódva marad, vagy egy körön dolgozik.</string>
+    <string name="channel_requests_name">Jóváhagyások és kérdések</string>
+    <string name="channel_requests_description">Az ügynök rád vár.</string>
+    <string name="channel_replies_name">Kész válaszok</string>
+    <string name="channel_replies_description">Egy kör véget ért, amíg az alkalmazás a háttérben volt.</string>
+    <string name="channel_bots_name">Bot üzenetek</string>
+    <string name="channel_bots_description">Egy bot írt a csevegésébe, amíg az alkalmazás a háttérben volt.</string>
+    <string name="channel_inbox_name">Beérkezett</string>
+    <string name="channel_inbox_description">Egy követett ütemezett feladat jelentett, például egy reggeli összefoglaló.</string>
+    <string name="channel_inbox_failed_name">Sikertelen feladatok</string>
+    <string name="channel_inbox_failed_description">Egy ütemezett feladat futása sikertelen volt.</string>
+    <string name="channel_voice_name">Hangos csevegés</string>
+    <string name="channel_voice_description">Látható, amíg egy hangos csevegés kikapcsolt képernyővel vagy egy másik alkalmazás mellett folytatódik.</string>
+    <string name="channel_calls_name">Válaszra váró hívások</string>
+    <string name="channel_calls_description">Egy jóváhagyás vagy kérdés hívásként csörög (Beállítások → Telefonos eszközök → Hívások).</string>
+    <string name="channel_phone_tools_name">Telefonos eszközök</string>
+    <string name="channel_phone_tools_description">Amikor az ügynök módosítani szeretne valamit ezen a telefonon</string>
+
+    <string name="notification_connected">Kapcsolódva a Hermeshez</string>
+    <string name="notification_reconnecting">Újrakapcsolódás a Hermeshez…</string>
+    <string name="notification_push_anywhere">A bot üzenetek az Értesítések bárhol funkción keresztül érnek el</string>
+    <string name="notification_not_connected">Nincs kapcsolat a Hermesszel</string>
+    <string name="notification_turn_off">Kikapcsolás</string>
+
+    <string name="notification_voice_title">Hangos csevegés</string>
+    <string name="notification_voice_text">Beszélgetés a Hermesszel</string>
+    <string name="notification_voice_end">Befejezés</string>
+
+    <string name="notification_approve_title">Engedélyezed ezt a parancsot?</string>
+    <string name="notification_question_title">Hermesnek kérdése van</string>
+    <plurals name="notification_questions">
+        <item quantity="one">%d kérdés</item>
+        <item quantity="other">%d kérdés</item>
+    </plurals>
+    <string name="notification_your_answer">Válaszod</string>
+    <string name="notification_answer">Válasz</string>
+    <string name="notification_secret_sudo">Sudo jelszó szükséges</string>
+    <string name="notification_secret_secret">Titok szükséges</string>
+    <string name="notification_secret_vault_unlock">Oldd fel a jelszókezelődet</string>
+    <string name="notification_secret_vault_code">Bejelentkezési kód szükséges</string>
+    <string name="notification_vault_no_login">Hermesnek nincs bejelentkezési adata ehhez: %1$s. Nyisd meg a csevegést, és ments el egyet.</string>
+    <string name="notification_vault_this_site">ez a webhely</string>
+    <string name="notification_allow_once">Engedélyezés egyszer</string>
+    <string name="notification_allow_session">Engedélyezés a csevegésben</string>
+    <string name="notification_allow_always">Engedélyezés mindig</string>
+    <string name="notification_deny">Elutasítás</string>
+
+    <string name="notification_turn_failed_text">A kör sikertelen volt.</string>
+    <string name="notification_done">Kész.</string>
+    <string name="notification_finished">Befejeződött.</string>
+    <string name="notification_message_hermes">Üzenet Hermesnek</string>
+    <string name="notification_turn_failed">Sikertelen kör</string>
+    <string name="notification_hermes_replied">Hermes válaszolt</string>
+    <string name="notification_reply">Válasz</string>
+    <string name="notification_you">Te</string>
+    <string name="notification_message_bot">Üzenet neki: %1$s</string>
+    <string name="notification_run_failed_text">A futás sikertelen volt.</string>
+    <string name="notification_job_failed">Sikertelen: %1$s</string>
+    <string name="notification_mark_read">Olvasottnak jelölés</string>
+    <string name="notification_push_test_title">Az Értesítések bárhol működik</string>
+    <string name="notification_push_test_text">Ez végpontok közötti titkosítással, az ntfy-on keresztül érkezett, nem a Gateway-kapcsolatodon.</string>
+
+    <string name="notification_send_failed">Nem sikerült elküldeni</string>
+    <string name="notification_bot_send_failed">Nem sikerült elküldeni. Nyisd meg a Kyllene-t, és próbáld újra.</string>
+    <string name="notification_chat_closed">Ez a csevegés már nincs megnyitva. Nyisd meg a Kyllene-t a válaszhoz.</string>
+    <string name="notification_reply_send_failed">Nem sikerült elküldeni. Nyisd meg a Kyllene-t, és küldd el újra.</string>
+    <string name="notification_reply_open_app">Nyisd meg a Kyllene-t, és küldd el újra.</string>
+    <string name="notification_answer_not_connected">Nincs kapcsolat a Gateway-jel. Nyisd meg a Kyllene-t a válaszhoz.</string>
+
+    <string name="call_needs_microphone">A Kyllene-nek mikrofon kell a hívásokhoz. A kérdés a csevegésben van.</string>
+    <string name="call_new_session">Új munkamenet</string>
+
+    <string name="phone_allow">Engedélyezés</string>
+    <string name="phone_deny">Elutasítás</string>
+    <string name="phone_question_change">Az ügynök módosítani szeretné a telefonodat</string>
+    <string name="phone_list_separator">", "</string>
+    <string name="phone_sentence">%1$s.</string>
+
+    <string name="phone_alarm_question">Ébresztő beállítása erre: %1$s.</string>
+    <string name="phone_alarm_question_repeats">Ébresztő beállítása erre: %1$s, %2$s.</string>
+    <string name="phone_alarm_question_label">Ébresztő beállítása erre: %1$s: \"%2$s\".</string>
+    <string name="phone_alarm_question_repeats_label">Ébresztő beállítása erre: %1$s, %2$s: \"%3$s\".</string>
+    <string name="phone_alarm_every_day">minden nap</string>
+    <string name="phone_alarm_every_weekday">minden hétköznap</string>
+    <string name="phone_alarm_every_weekend">minden hétvégén</string>
+    <string name="phone_alarm_every_days">minden %1$s</string>
+    <string name="phone_timer_question">%1$s hosszú időzítő indítása.</string>
+    <string name="phone_timer_question_label">%1$s hosszú időzítő indítása: \"%2$s\".</string>
+    <string name="phone_hours_short">%1$d ó</string>
+    <string name="phone_minutes_short">%1$d p</string>
+    <string name="phone_seconds_short">%1$d mp</string>
+
+    <string name="phone_clipboard_title">Az ügynök valamit a vágólapodra szeretne másolni</string>
+    <string name="phone_clipboard_question">Másolás a vágólapra: %1$s</string>
+    <string name="phone_clipboard_label">Az ügynöktől</string>
+
+    <string name="phone_open_title">Az ügynök meg szeretne nyitni valamit a telefonodon</string>
+    <string name="phone_open_link">Link megnyitása itt: %1$s%2$s: %3$s</string>
+    <string name="phone_open_not_secure">" (nem biztonságos)"</string>
+    <string name="phone_open_directions">Útvonaltervezés indítása a térképalkalmazásban ide: %1$s</string>
+    <string name="phone_open_map">Megjelenítés a térképalkalmazásban: %1$s</string>
+    <string name="phone_open_app">Az alkalmazás megnyitása: %1$s</string>
+    <string name="phone_open_share">Ennek a szövegnek a megosztása: %1$s</string>
+
+    <string name="phone_sound_dnd_off">a Ne zavarjanak kikapcsolása</string>
+    <string name="phone_sound_dnd_on">a Ne zavarjanak bekapcsolása (%1$s)</string>
+    <string name="phone_sound_dnd_priority">csak prioritásos</string>
+    <string name="phone_sound_dnd_alarms">csak ébresztők</string>
+    <string name="phone_sound_dnd_silence">teljes csend</string>
+    <string name="phone_sound_ringer">a csengő beállítása erre: %1$s</string>
+    <string name="phone_sound_ringer_normal">normál</string>
+    <string name="phone_sound_ringer_vibrate">rezgés</string>
+    <string name="phone_sound_ringer_silent">néma</string>
+    <string name="phone_sound_volume_ring">a csengőhang hangerejének beállítása %1$d%% értékre</string>
+    <string name="phone_sound_volume_notification">az értesítések hangerejének beállítása %1$d%% értékre</string>
+    <string name="phone_sound_volume_media">a média hangerejének beállítása %1$d%% értékre</string>
+    <string name="phone_sound_volume_alarm">az ébresztő hangerejének beállítása %1$d%% értékre</string>
+
+    <string name="phone_calendar_add_title">Az ügynök hozzá szeretne adni valamit a naptáradhoz</string>
+    <string name="phone_calendar_move_title">Az ügynök át szeretne helyezni egy eseményt</string>
+    <string name="phone_calendar_add_question">%1$s, naptár: %2$s.</string>
+    <string name="phone_calendar_add_question_place">%1$s, naptár: %2$s, helyszín: %3$s.</string>
+    <string name="phone_calendar_move_question">Innen: %1$s, ide: %2$s, naptár: %3$s.</string>
+    <plurals name="phone_calendar_guests">
+        <item quantity="one">%d vendég értesítést kaphat.</item>
+        <item quantity="other">%d vendég értesítést kaphat.</item>
+    </plurals>
+    <string name="phone_calendar_title_line">Cím: %1$s</string>
+    <string name="phone_calendar_notes_line">Jegyzetek: %1$s</string>
+    <string name="phone_calendar_all_day">%1$s, egész nap</string>
+    <string name="phone_calendar_days_all_day">%1$s – %2$s, egész nap</string>
+    <string name="phone_calendar_day_hours">%1$s, %2$s–%3$s</string>
+    <string name="phone_calendar_range">%1$s – %2$s</string>
+    <string name="phone_calendar_day_time">%1$s, %2$s</string>
+    <string name="phone_calendar_day_pattern">MMM d., EEE</string>
+    <string name="phone_calendar_day_year_pattern">yyyy. MMM d., EEE</string>
+
+    <string name="phone_place_title">Az ügynök figyelni szeretne egy helyet</string>
+    <string name="phone_place_remove_title">Az ügynök már nem szeretne figyelni egy helyet</string>
+    <string name="phone_place_remove_arrive">Nem figyeled tovább ezt: %1$s? Ha odaérsz, többé semmi sem lesz elküldve.</string>
+    <string name="phone_place_remove_leave">Nem figyeled tovább ezt: %1$s? Ha elmész onnan, többé semmi sem lesz elküldve.</string>
+    <string name="phone_place_here">ahol a telefon most van, %1$s</string>
+    <string name="phone_place_chat">\"%1$s\"</string>
+    <string name="phone_place_this_chat">ez a csevegés</string>
+    <string name="phone_place_add_arrive">Amikor ideérsz: %1$s (%2$s, %3$d m), a Kyllene a nevedben elküldi ezt ide: %4$s: %5$s</string>
+    <string name="phone_place_add_leave">Amikor elmész innen: %1$s (%2$s, %3$d m), a Kyllene a nevedben elküldi ezt ide: %4$s: %5$s</string>
+    <string name="phone_place_arrived">Megérkeztél: %1$s</string>
+    <string name="phone_place_left">Elmentél: %1$s</string>
+    <string name="phone_place_the_chat">a csevegés</string>
+    <string name="phone_place_sent">Elküldve ide: %1$s: %2$s</string>
+    <string name="phone_place_not_sent">Nem sikerült elküldeni ide: %1$s: %2$s. Nyisd meg a Kyllene-t, és küldd el magad.</string>
+    <string name="phone_place_no_answer">a Gateway nem válaszolt időben</string>
+    <string name="phone_place_other_gateway">A Kyllene most egy másik Gateway-be van bejelentkezve</string>
+    <string name="phone_place_not_accepted">nem fogadták el</string>
+    <string name="phone_place_no_reach">A Kyllene nem érte el a Gateway-t</string>
+    <string name="phone_place_refused">a Gateway elutasította</string>
+</resources>

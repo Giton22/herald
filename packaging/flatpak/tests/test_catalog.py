@@ -29,7 +29,7 @@ class CatalogTest(unittest.TestCase):
     def test_gradle_archive_matches_the_wrapper(self):
         wrapper = (ROOT / 'gradle/wrapper/gradle-wrapper.properties').read_text()
         version = re.search(r'gradle-([\d.]+)-bin\.zip', wrapper).group(1)
-        manifest = json.loads((FLATPAK / 'io.github.Giton22.Kyllene.Devel.json').read_text())
+        manifest = json.loads((FLATPAK / 'app.kyllene.Kyllene.Devel.json').read_text())
         urls = [s['url'] for s in manifest['modules'][0]['sources']
                 if isinstance(s, dict) and 'url' in s]
         self.assertIn(f'https://services.gradle.org/distributions/gradle-{version}-bin.zip', urls)

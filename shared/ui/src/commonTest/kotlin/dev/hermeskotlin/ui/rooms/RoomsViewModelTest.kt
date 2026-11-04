@@ -2,6 +2,10 @@ package dev.hermeskotlin.ui.rooms
 
 import androidx.compose.foundation.text.input.setTextAndPlaceCursorAtEnd
 import dev.hermeskotlin.core.auth.AuthApi
+import dev.hermeskotlin.ui.inbox.mentions
+import dev.hermeskotlin.ui.inbox.words
+import dev.hermeskotlin.ui.resources.Res
+import dev.hermeskotlin.ui.resources.rooms_attachment_size
 import dev.hermeskotlin.core.auth.PersistentCookiesStorage
 import dev.hermeskotlin.core.bots.Bot
 import dev.hermeskotlin.core.connection.ConnectionState
@@ -153,7 +157,7 @@ class RoomsViewModelTest {
             // #340: the gateway takes 15 MB, but 13 MB base64 is past the socket's 16 MiB message.
             vm.addAttachments(listOf(picked("scan", size = 13_000_000)), vm.opened.value!!.draftKey)
             assertTrue(vm.opened.value!!.attachments.isEmpty())
-            assertEquals("Room files must be between 1 byte and 12 MB.", vm.opened.value!!.notice)
+            assertEquals(words(Res.string.rooms_attachment_size, 12), vm.opened.value!!.notice)
 
             vm.addAttachments(listOf(picked("scan", size = 12_000_000)), vm.opened.value!!.draftKey)
             assertEquals("scan", vm.opened.value!!.attachments.single().id)
@@ -519,7 +523,7 @@ class RoomsViewModelTest {
             vm.send(); runCurrent()
             assertEquals(2, socket.sent("groups.send").size)
             assertTrue(vm.opened.value!!.attachments.isEmpty())
-            assertTrue(vm.opened.value!!.notice!!.contains("report.csv"))
+            assertTrue(vm.opened.value!!.notice!!.mentions("report.csv"))
         } finally { vm.close(); vm.setVisible(false); held.complete(Unit) }
     }
 
@@ -991,7 +995,7 @@ class RoomsViewModelTest {
 
         vm.deleteRoom(roomB)
         val notice = vm.state.first { it.actionNotice != null }.actionNotice!!
-        assertTrue(notice.contains("Room B") && notice.contains("The room is busy"))
+        assertTrue(notice.mentions("Room B") && notice.mentions("The room is busy"))
     }
 
     @Test
@@ -1135,7 +1139,7 @@ class RoomsViewModelTest {
 
         vm.createRoom("Release", bots) {}
         val failed = vm.state.first { it.busy == null && it.notice != null }
-        assertTrue(failed.notice!!.contains("Handle ops is taken"))
+        assertTrue(failed.notice!!.mentions("Handle ops is taken"))
 
         var made: Room? = null
         vm.createRoom("Release", bots) { made = it }

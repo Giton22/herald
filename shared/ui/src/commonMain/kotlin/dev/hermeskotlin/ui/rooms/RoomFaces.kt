@@ -22,6 +22,9 @@ import dev.hermeskotlin.designsystem.background
 import dev.hermeskotlin.designsystem.colors
 import dev.hermeskotlin.ui.bots.BotAvatar
 import dev.hermeskotlin.ui.bots.BotFaces
+import dev.hermeskotlin.ui.inbox.Words
+import dev.hermeskotlin.ui.inbox.words
+import dev.hermeskotlin.ui.resources.*
 
 /**
  * The bot behind a room member's [profile]: the gateway's own when it still has it, so its picture and
@@ -75,11 +78,11 @@ internal fun DesktopRoom.roomMembers(): List<RoomMember> =
  * (the mirror names it by profile, "default"); "Needs you · " first when the room asks for the user, so the
  * dot says why. "Continue on Hermes Desktop" while the copy has no lines.
  */
-internal fun DesktopRoom.rowSubtitle(faces: BotFaces): String {
-    val line = lines.lastOrNull() ?: return "Continue on Hermes Desktop"
+internal fun DesktopRoom.rowSubtitle(faces: BotFaces): Words {
+    val line = lines.lastOrNull() ?: return words(Res.string.rooms_desktop_continue)
     val who = if (line.fromUser) line.speaker else faces.roomBot(line.speaker).label
     val said = "$who: ${line.text}".replace(WHITESPACE, " ").trim()
-    return if (needsYou) "Needs you · $said" else said
+    return if (needsYou) words(Res.string.rooms_needs_you_said, said) else Words.Raw(said)
 }
 
 private val WHITESPACE = Regex("\\s+")

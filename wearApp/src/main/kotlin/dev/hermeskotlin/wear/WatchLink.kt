@@ -132,6 +132,10 @@ class WatchLink(
     private val channels = Wearable.getChannelClient(context)
     private val capabilities = Wearable.getCapabilityClient(context)
     private val nodes = Wearable.getNodeClient(context)
+    /** One of the watch's own lines, in its language, for what the link tells the screen. */
+    private fun say(id: Int): String = context.getString(id)
+    private val notConnected get() = say(R.string.wear_phone_not_connected_detail)
+
     private val fake = if (BuildConfig.DEBUG) FakePhone(scope) { path, data -> onMessage(path, data) } else null
 
     private val _turn = MutableStateFlow<WatchTurn?>(null)
@@ -218,13 +222,13 @@ class WatchLink(
         val chat = store.chat.value
         val ask = WatchAsk(id, text.orEmpty().trim(), chat.id, speak = store.speak.value && speech.canPlay(), audioType = audioType, botProfile = chat.botProfile, scope = chat.scope)
         _turn.value = WatchTurn(id, text?.trim(), ReplyUpdate(id, if (audio != null) ReplyPhase.Transcribing else ReplyPhase.Sending, chatId = chat.id, title = chat.title))
-        if (chat.botProfile != null && !botChats) return fail(id, "Update Kyllene on your phone to talk to bots.")
+        if (chat.botProfile != null && !botChats) return fail(id, say(R.string.wear_update_for_bots))
         val generation = _profileReset.value
         askJob?.cancel()
         askJob = scope.launch(main) {
-            if (!synchronizeProfile()) return@launch fail(id, NOT_CONNECTED)
+            if (!synchronizeProfile()) return@launch fail(id, notConnected)
             if (generation != _profileReset.value || _turn.value?.askId != id) return@launch
-            if (chat.scope != null && !profileSync) return@launch fail(id, UPDATE_PROFILE)
+            if (chat.scope != null && !profileSync) return@launch fail(id, say(R.string.wear_update_for_profiles))
             val bot = chat.botProfile != null
             val sent = if (audio != null) stream(WearPaths.recordingPath(id, bot), RecordedAsk.write(ask, audio)) { generation == _profileReset.value && profileChecked && _turn.value?.askId == id }
                 else send(if (bot) WearPaths.BOT_ASK else WearPaths.ASK, WearJson.encode(ask)) { generation == _profileReset.value && profileChecked && _turn.value?.askId == id }
@@ -236,7 +240,7 @@ class WatchLink(
             val now = _turn.value
             if (now != null && now.askId == id && now.update.seq == 0 && now.running) {
                 _phone.value = PhoneState.NoHerald
-                fail(id, NO_HERALD)
+                fail(id, NO_HERALD.text(context))
             }
         }
     }
@@ -272,8 +276,8 @@ class WatchLink(
     private var resolvedDefault: String? = null
 
     suspend fun resolveDefaultCall(): DefaultCallTarget {
-        if (!synchronizeProfile()) return DefaultCallTarget("", error = NOT_CONNECTED)
-        if (!profileSync) return DefaultCallTarget("", error = UPDATE_PROFILE)
+        if (!synchronizeProfile()) return DefaultCallTarget("", error = notConnected)
+        if (!profileSync) return DefaultCallTarget("", error = say(R.string.wear_update_for_profiles))
         endCall()
         dismissCall()
         val id = UUID.randomUUID().toString()
@@ -284,7 +288,7 @@ class WatchLink(
             val result = withTimeout(20_000) { waiting.await() }
             val owner = result.scope
             if (result.error == null && (owner == null || owner.gateway != store.phoneScope?.gateway || result.botProfile != null && owner.profile != result.botProfile)) {
-                return DefaultCallTarget(id, error = "Call target changed. Tap Call again.")
+                return DefaultCallTarget(id, error = say(R.string.wear_call_target_changed))
             }
             if (result.error == null) {
                 store.setChat(result.chatId, result.title, result.botProfile, result.scope)
@@ -312,13 +316,13 @@ class WatchLink(
         _turn.value = null
         _call.value = WatchCallState(id, CallStage.Starting)
         val chat = store.chat.value
-        if (defaultRequestId != null && resolvedDefault != defaultRequestId) return finishCall(id, "Default Call Target changed. Tap Call again.")
-        if (defaultRequestId == null && chat.botProfile != null && !botChats) return finishCall(id, "Update Kyllene on your phone to call bots.")
+        if (defaultRequestId != null && resolvedDefault != defaultRequestId) return finishCall(id, say(R.string.wear_default_call_target_changed))
+        if (defaultRequestId == null && chat.botProfile != null && !botChats) return finishCall(id, say(R.string.wear_update_for_bot_calls))
         val generation = _profileReset.value
         callJob = scope.launch(main) {
-            if (!synchronizeProfile()) return@launch finishCall(id, NOT_CONNECTED)
+            if (!synchronizeProfile()) return@launch finishCall(id, notConnected)
             if (generation != _profileReset.value || _call.value?.id != id) return@launch
-            if (chat.scope != null && !profileSync) return@launch finishCall(id, UPDATE_PROFILE)
+            if (chat.scope != null && !profileSync) return@launch finishCall(id, say(R.string.wear_update_for_profiles))
             val ringing = launch { ringCall(defaultRequestId) { playCallRingback(context) } }
             val call = WatchCall(context)
             watchCall = call
@@ -332,7 +336,7 @@ class WatchLink(
                     delay(ANSWER_WITHIN_MS)
                     if (_call.value?.id == id && callUpdateSeq == 0) {
                         _phone.value = PhoneState.NoHerald
-                        finishCall(id, NO_HERALD)
+                        finishCall(id, NO_HERALD.text(context))
                     }
                 }
                 launch {
@@ -356,12 +360,12 @@ class WatchLink(
                 delay(DROP_GRACE_MS)
                 if (_call.value?.let { it.id == id && it.active } == true) {
                     send(WearPaths.CALL_END, WearJson.encode(CallEnd(id)))
-                    finishCall(id, "The call dropped.")
+                    finishCall(id, say(R.string.wear_call_dropped))
                 }
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                finishCall(id, e.message ?: "Couldn't start the call.")
+                finishCall(id, e.message ?: say(R.string.wear_call_start_failed))
             } finally {
                 ringing.cancel()
             }
@@ -463,7 +467,7 @@ class WatchLink(
                     // Hung up meanwhile: the failure is only the call closing under it.
                     if (_call.value?.let { it.id == now.id && it.active } != true) return@launch
                     send(WearPaths.CALL_END, WearJson.encode(CallEnd(now.id)))
-                    finishCall(now.id, e.message ?: "The call didn't connect.")
+                    finishCall(now.id, e.message ?: say(R.string.wear_call_no_connect))
                 }
             }
         }
@@ -527,7 +531,7 @@ class WatchLink(
     fun refreshChats() {
         scope.launch(main) {
             if (!profileChecked && !synchronizeProfile()) {
-                _chats.value = ChatList(error = NOT_CONNECTED, botError = NOT_CONNECTED)
+                _chats.value = ChatList(error = notConnected, botError = notConnected)
                 return@launch
             }
             val id = UUID.randomUUID().toString()
@@ -680,7 +684,7 @@ class WatchLink(
     private suspend fun reach(path: String, data: ByteArray, current: () -> Boolean = { true }, block: suspend (String) -> Unit): String? {
         return try {
             val node = reachablePhone()
-            if (!current()) return "Phone profile changed. Try again."
+            if (!current()) return say(R.string.wear_profile_changed_short)
             if (node == null) {
                 if (fake != null) {
                     phoneNode = "debug-fake"
@@ -689,9 +693,9 @@ class WatchLink(
                     return null
                 }
                 _phone.value = PhoneState.NotConnected
-                return NOT_CONNECTED
+                return notConnected
             }
-            if (path != WearPaths.STATUS && phoneNode != null && phoneNode != node.id) { profileChecked = false; return "Phone changed. Try again." }
+            if (path != WearPaths.STATUS && phoneNode != null && phoneNode != node.id) { profileChecked = false; return say(R.string.wear_phone_changed) }
             phoneNode = node.id
             HeraldWatch.of(context).callDisplay.bindPhone(node.id)
             block(node.id)
@@ -699,7 +703,7 @@ class WatchLink(
         } catch (e: CancellationException) {
             throw e
         } catch (_: Exception) {
-            "Couldn't reach your phone."
+            say(R.string.wear_phone_unreachable_short)
         }
     }
 
@@ -721,9 +725,8 @@ class WatchLink(
     }
 
     companion object {
-        private const val UPDATE_PROFILE = "Update Kyllene on your phone to use profile-aware calls."
-        const val NOT_CONNECTED = "Your phone isn't connected."
-        const val NO_HERALD = "Kyllene on your phone didn't answer. Open it there, or update it."
+        /** Kyllene on the phone didn't answer, for a screen to say. */
+        val NO_HERALD = WatchLine.Res(R.string.wear_phone_no_app)
         private const val ANSWER_WITHIN_MS = 30_000L
         private const val CALL_POLL_MS = 100L
         private const val EVENT_GATHER_MS = 120L

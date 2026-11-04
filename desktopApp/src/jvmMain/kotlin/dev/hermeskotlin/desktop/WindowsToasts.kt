@@ -58,8 +58,11 @@ internal object WindowsToasts {
         }
     }
 
-    /** Shows [notice]; false when Windows wouldn't, and the tray's balloon should tell it instead. */
-    fun show(notice: DesktopNotice): Boolean {
+    /**
+     * Shows [notice], an approval's with [approveLabel] and [denyLabel] as its buttons; false when Windows wouldn't,
+     * and the tray's balloon should tell it instead.
+     */
+    fun show(notice: DesktopNotice, approveLabel: String, denyLabel: String): Boolean {
         if (!available) return false
         val open = notice.sessionId?.let { "${AppLink.DESKTOP_SCHEME}://session/${encode(it)}" } ?: "${AppLink.DESKTOP_SCHEME}://show"
         val approval = notice.request as? InputRequest.Approval
@@ -67,8 +70,8 @@ internal object WindowsToasts {
             ""
         } else {
             "<actions>" +
-                button("Approve once", answerLink(NoticeAnswer(notice.sessionId, approval, ApprovalChoice.Once))) +
-                button("Deny", answerLink(NoticeAnswer(notice.sessionId, approval, ApprovalChoice.Deny))) +
+                button(approveLabel, answerLink(NoticeAnswer(notice.sessionId, approval, ApprovalChoice.Once))) +
+                button(denyLabel, answerLink(NoticeAnswer(notice.sessionId, approval, ApprovalChoice.Deny))) +
                 "</actions>"
         }
         val xml = "<toast activationType=\"protocol\" launch=\"${attr(open)}\">" +

@@ -3,6 +3,7 @@ package dev.hermeskotlin.android.phone
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import dev.hermeskotlin.android.R
 import android.location.LocationManager
 import dev.hermeskotlin.core.bots.BotsApi
 import dev.hermeskotlin.core.chat.ChatHost
@@ -52,34 +53,35 @@ class GeofenceReceiver : BroadcastReceiver(), KoinComponent {
     }
 
     private suspend fun fire(place: WatchedPlace) {
-        val event = if (place.arriving) "Arrived at ${place.name}" else "Left ${place.name}"
+        val words = confirmations
+        val event = words.text(if (place.arriving) R.string.phone_place_arrived else R.string.phone_place_left, place.name)
         val text = place.sent
-        val chat = place.chatTitle?.takeIf { it.isNotBlank() } ?: "the chat"
-        val sent = withTimeoutOrNull(BUDGET_MS) { send(place, text) } ?: "the gateway didn't answer in time"
+        val chat = place.chatTitle?.takeIf { it.isNotBlank() } ?: words.text(R.string.phone_place_the_chat)
+        val sent = withTimeoutOrNull(BUDGET_MS) { send(place, text) } ?: words.text(R.string.phone_place_no_answer)
         if (sent == SENT) {
-            confirmations.tell(place.id, event, "Sent to $chat: ${place.message}")
+            confirmations.tell(place.id, event, words.text(R.string.phone_place_sent, chat, place.message))
         } else {
-            confirmations.tell(place.id, event, "Couldn't send it to $chat: $sent. Open Kyllene to send it yourself.")
+            confirmations.tell(place.id, event, words.text(R.string.phone_place_not_sent, chat, sent))
         }
     }
 
     /** [SENT], or why it couldn't go. */
     private suspend fun send(place: WatchedPlace, text: String): String {
         val gateway = gateways.current()?.gatewayUrl
-        if (gateway?.value != place.gateway) return "Kyllene is signed in to another gateway now"
+        if (gateway?.value != place.gateway) return confirmations.text(R.string.phone_place_other_gateway)
         val open = host.session.value
         if (open != null && open.state.value.storedSessionId == place.storedSessionId && open.profile == place.profile) {
             awaitConnection(gateway)
-            return if (open.send(text)) SENT else open.state.value.error ?: "it wasn't accepted"
+            return if (open.send(text)) SENT else open.state.value.error ?: confirmations.text(R.string.phone_place_not_accepted)
         }
-        if (awaitConnection(gateway) !is ConnectionState.Connected) return "Kyllene couldn't reach the gateway"
+        if (awaitConnection(gateway) !is ConnectionState.Connected) return confirmations.text(R.string.phone_place_no_reach)
         return try {
             chats.sendToChat(place.profile, place.storedSessionId, text)
             SENT
         } catch (e: CancellationException) {
             throw e
         } catch (e: Exception) {
-            e.message?.takeIf { it.isNotBlank() } ?: "the gateway refused it"
+            e.message?.takeIf { it.isNotBlank() } ?: confirmations.text(R.string.phone_place_refused)
         }
     }
 

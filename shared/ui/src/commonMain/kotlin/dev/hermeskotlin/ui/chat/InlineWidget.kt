@@ -43,7 +43,9 @@ import dev.hermeskotlin.designsystem.surface
 import dev.hermeskotlin.designsystem.text
 import dev.hermeskotlin.designsystem.textTertiary
 import dev.hermeskotlin.designsystem.typography
-import dev.hermeskotlin.ui.tapVerb
+import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -64,17 +66,17 @@ internal suspend fun downloadWidget(files: WidgetFiles, file: GatewayFile): File
 } catch (e: CancellationException) {
     throw e
 } catch (_: Exception) {
-    FileDownload.Failed("Couldn't get this widget from the gateway.")
+    FileDownload.Failed(FileProblem.WidgetNotFetched)
 }
 
 internal suspend fun loadWidget(files: WidgetFiles, file: GatewayFile): FileLoad = try {
-    val loaded = withTimeoutOrNull(20_000) { files.load(file) } ?: FileLoad.Failed("The widget took too long to load.")
+    val loaded = withTimeoutOrNull(20_000) { files.load(file) } ?: FileLoad.Failed(FileProblem.WidgetSlow)
     if (loaded is FileLoad.Ready) widgetProblem(loaded.text)?.let { FileLoad.Failed(it) } ?: loaded
-    else if (loaded is FileLoad.Failed) loaded else FileLoad.Failed("Couldn't read this widget.")
+    else if (loaded is FileLoad.Failed) loaded else FileLoad.Failed(FileProblem.WidgetUnreadable)
 } catch (e: CancellationException) {
     throw e
 } catch (_: Exception) {
-    FileLoad.Failed("Couldn't load this widget from the gateway.")
+    FileLoad.Failed(FileProblem.WidgetNotLoaded)
 }
 
 @Composable
@@ -98,9 +100,9 @@ internal fun InlineWidget(item: ReplyMedia, file: GatewayFile, files: WidgetFile
             FileLoad.Loading -> Box(Modifier.fillMaxWidth().height(80.dp), contentAlignment = Alignment.Center) { Spinner() }
             else -> Unit
         }
-        val problem = (loaded as? FileLoad.Failed)?.message ?: failed
+        val problem = (loaded as? FileLoad.Failed)?.let { fileProblemText(it.problem) } ?: failed
         if (problem != null) {
-            Text("$problem $tapVerb to retry.", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary],
+            Text(stringResource(if (isDesktop) Res.string.chat_widget_retry_click else Res.string.chat_widget_retry_tap, problem), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary],
                 modifier = Modifier.fillMaxWidth().handCursor().clickable { attempt++ }.padding(12.dp))
         }
     }

@@ -1,7 +1,11 @@
 package dev.hermeskotlin.ui.chat
 
 import dev.hermeskotlin.ui.fullScreenDialogProperties
-import dev.hermeskotlin.ui.tapVerb
+import dev.hermeskotlin.ui.clearOfWindowControls
+import dev.hermeskotlin.ui.isDesktop
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -56,7 +60,6 @@ import com.composables.icons.lucide.Image
 import com.composables.icons.lucide.ImageOff
 import com.composables.icons.lucide.Lucide
 import dev.hermeskotlin.ui.shareIcon
-import dev.hermeskotlin.ui.shareLabel
 import com.composables.icons.lucide.X
 import com.composeunstyled.Text
 import com.composeunstyled.UnstyledIcon
@@ -141,8 +144,12 @@ private fun ReplyImage(item: ReplyMedia) {
         ) {
             UnstyledIcon(Lucide.Image, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(18.dp))
             Column(Modifier.weight(1f)) {
-                Text("Picture from $remoteHost", style = Theme[typography][bodySmall], color = Theme[colors][textSecondary])
-                Text("$tapVerb to load it from that site", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                Text(
+                    if (remoteHost.isNullOrEmpty()) stringResource(Res.string.chat_picture_from_web) else stringResource(Res.string.chat_picture_from, remoteHost),
+                    style = Theme[typography][bodySmall],
+                    color = Theme[colors][textSecondary],
+                )
+                Text(stringResource(if (isDesktop) Res.string.chat_picture_load_click else Res.string.chat_picture_load_tap), style = Theme[typography][caption], color = Theme[colors][textTertiary])
             }
         }
         return
@@ -185,8 +192,8 @@ private fun ReplyImage(item: ReplyMedia) {
             ) {
                 UnstyledIcon(Lucide.ImageOff, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(18.dp))
                 Column {
-                    Text("Couldn't load ${item.name}", style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
-                    if (failed) Text("$tapVerb to try again", style = Theme[typography][caption], color = Theme[colors][textTertiary])
+                    Text(stringResource(Res.string.chat_load_failed_named, item.name), style = Theme[typography][bodySmall], color = Theme[colors][textTertiary])
+                    if (failed) Text(stringResource(if (isDesktop) Res.string.chat_retry_click else Res.string.chat_retry_tap), style = Theme[typography][caption], color = Theme[colors][textTertiary])
                 }
             }
             else -> Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) { Spinner() }
@@ -194,10 +201,13 @@ private fun ReplyImage(item: ReplyMedia) {
     }
 }
 
-/** The site an `http(s)://` picture would be fetched from; null for the gateway's own files and inline data. */
+/**
+ * The site an `http(s)://` picture would be fetched from, empty when the link names none; null for the gateway's
+ * own files and inline data.
+ */
 internal fun webHost(source: String): String? {
     if (!source.startsWith("http://") && !source.startsWith("https://")) return null
-    return source.substringAfter("://").substringBefore('/').substringBefore('?').substringBefore('#').substringAfterLast('@').ifEmpty { null } ?: "the web"
+    return source.substringAfter("://").substringBefore('/').substringBefore('?').substringBefore('#').substringAfterLast('@')
 }
 
 /** A delivered file: its name, with Save and Share. */
@@ -218,11 +228,11 @@ internal fun ReplyFile(item: ReplyMedia, download: (suspend () -> FileDownload)?
                 if (download != null) {
                     when (val result = download()) {
                         is FileDownload.Ready -> action(result.bytes)
-                        is FileDownload.Failed -> notify(result.message)
+                        is FileDownload.Failed -> notify(fileProblemWords(result.problem))
                     }
                 } else {
                     val bytes = load(item.source)
-                    if (bytes == null) notify("Couldn't get ${item.name} from the gateway.") else action(bytes)
+                    if (bytes == null) notify(getString(Res.string.chat_get_failed_named, item.name)) else action(bytes)
                 }
             } finally {
                 busy = false
@@ -244,13 +254,13 @@ internal fun ReplyFile(item: ReplyMedia, download: (suspend () -> FileDownload)?
         UnstyledIcon(Lucide.File, contentDescription = null, tint = Theme[colors][textTertiary], modifier = Modifier.size(22.dp))
         Column(Modifier.weight(1f)) {
             Text(item.name, style = Theme[typography][label], color = Theme[colors][textColor], maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(item.name.substringAfterLast('.', "file").uppercase(), style = Theme[typography][caption], color = Theme[colors][textTertiary])
+            Text(item.name.substringAfterLast('.', stringResource(Res.string.chat_kind_file)).uppercase(), style = Theme[typography][caption], color = Theme[colors][textTertiary])
         }
         if (busy) {
             Box(Modifier.size(40.dp), contentAlignment = Alignment.Center) { Spinner(Modifier.size(18.dp)) }
         } else {
-            IconButton(Lucide.Download, contentDescription = "Save ${item.name}", onClick = { withBytes { notify(actions.save(it, item.name)) } })
-            IconButton(shareIcon, contentDescription = "$shareLabel: ${item.name}", onClick = { withBytes { actions.share(it, item.name) } })
+            IconButton(Lucide.Download, contentDescription = stringResource(Res.string.chat_save_named, item.name), onClick = { withBytes { notify(actions.save(it, item.name)) } })
+            IconButton(shareIcon, contentDescription = shareNamed(item.name), onClick = { withBytes { actions.share(it, item.name) } })
         }
     }
 }
@@ -272,11 +282,11 @@ internal fun ImageViewer(image: ViewerImage, onDismiss: () -> Unit) {
         if (fetch != null) {
             when (val result = fetch()) {
                 is FileDownload.Ready -> value = result.bytes
-                is FileDownload.Failed -> failed = result.message
+                is FileDownload.Failed -> failed = fileProblemWords(result.problem)
             }
         } else {
             value = image.source?.let { load(it) }
-            if (value == null) failed = "Couldn't load this picture."
+            if (value == null) failed = getString(Res.string.chat_picture_load_failed)
         }
     }
     var notice by remember { mutableStateOf<String?>(null) }
@@ -315,7 +325,7 @@ internal fun ImageViewer(image: ViewerImage, onDismiss: () -> Unit) {
                 )
             } else {
                 Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-                    val error = failed ?: "Couldn't show this picture.".takeIf { decoded?.decoding == false }
+                    val error = failed ?: stringResource(Res.string.chat_picture_show_failed).takeIf { decoded?.decoding == false }
                     if (error != null) {
                         Text(error, style = Theme[typography][bodySmall], color = Color.White, textAlign = TextAlign.Center)
                     } else {
@@ -327,11 +337,12 @@ internal fun ImageViewer(image: ViewerImage, onDismiss: () -> Unit) {
                 Modifier
                     .fillMaxWidth()
                     .background(Color.Black.copy(alpha = 0.55f))
+                    .clearOfWindowControls()
                     .windowInsetsPadding(WindowInsets.safeDrawing)
                     .padding(horizontal = 8.dp, vertical = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                IconButton(Lucide.X, contentDescription = "Close", onClick = onDismiss, tint = Color.White)
+                IconButton(Lucide.X, contentDescription = stringResource(Res.string.chat_close), onClick = onDismiss, tint = Color.White)
                 Text(
                     image.name,
                     style = Theme[typography][label],
@@ -343,14 +354,14 @@ internal fun ImageViewer(image: ViewerImage, onDismiss: () -> Unit) {
                 val ready = bytes
                 IconButton(
                     Lucide.Download,
-                    contentDescription = "Save",
+                    contentDescription = stringResource(Res.string.chat_save),
                     onClick = { ready?.let { scope.launch { notice = actions.save(it, image.name.withImageExtension(it)) } } },
                     enabled = ready != null,
                     tint = Color.White,
                 )
                 IconButton(
                     shareIcon,
-                    contentDescription = shareLabel,
+                    contentDescription = shareText(),
                     onClick = { ready?.let { actions.share(it, image.name.withImageExtension(it)) } },
                     enabled = ready != null,
                     tint = Color.White,

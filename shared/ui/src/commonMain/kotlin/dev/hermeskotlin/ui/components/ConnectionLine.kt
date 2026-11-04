@@ -16,6 +16,8 @@ import dev.hermeskotlin.designsystem.components.StatusDot
 import dev.hermeskotlin.designsystem.textSecondary
 import dev.hermeskotlin.designsystem.typography
 import dev.hermeskotlin.ui.CopyableOnDesktop
+import dev.hermeskotlin.ui.resources.*
+import org.jetbrains.compose.resources.stringResource
 import kotlin.time.Clock
 import kotlinx.coroutines.delay
 
@@ -29,9 +31,10 @@ fun ConnectionLine(state: ConnectionState, detailed: Boolean = false) {
     }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         when (state) {
-            ConnectionState.Idle -> StatusDot(Status.Neutral, "Not connected")
-            is ConnectionState.Connecting -> StatusDot(Status.Warning, if (state.attempt > 1) "Reconnecting…" else "Connecting…")
-            is ConnectionState.Connected -> StatusDot(Status.Ok, "Connected")
+            ConnectionState.Idle -> StatusDot(Status.Neutral, stringResource(Res.string.app_not_connected))
+            is ConnectionState.Connecting ->
+                StatusDot(Status.Warning, stringResource(if (state.attempt > 1) Res.string.app_reconnecting else Res.string.voice_connecting))
+            is ConnectionState.Connected -> StatusDot(Status.Ok, stringResource(Res.string.app_connected))
             is ConnectionState.Reconnecting -> {
                 val seconds by produceState(secondsUntil(state.retryAtMillis), state.retryAtMillis) {
                     while (true) {
@@ -39,10 +42,10 @@ fun ConnectionLine(state: ConnectionState, detailed: Boolean = false) {
                         delay(500)
                     }
                 }
-                StatusDot(Status.Warning, "Offline · retrying in ${seconds}s")
+                StatusDot(Status.Warning, stringResource(Res.string.app_offline_retrying, seconds.toInt()))
             }
-            ConnectionState.SessionExpired -> StatusDot(Status.Error, "Session expired")
-            is ConnectionState.Failed -> StatusDot(Status.Error, "Connection refused")
+            ConnectionState.SessionExpired -> StatusDot(Status.Error, stringResource(Res.string.app_session_expired))
+            is ConnectionState.Failed -> StatusDot(Status.Error, stringResource(Res.string.app_connection_refused))
         }
         if (detailed && reason != null) {
             CopyableOnDesktop { Text(reason, style = Theme[typography][bodySmall], color = Theme[colors][textSecondary]) }

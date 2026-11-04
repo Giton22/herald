@@ -940,11 +940,14 @@ class ChatSessionTest {
             mapOf(
                 "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
                 "image.attach_bytes" to """{"attached":true,"path":"/tmp/upload_1.jpg"}""",
-                "pdf.attach" to "error:5028",
-                "file.attach" to """{"attached":true,"name":"x","path":"p","ref_path":"r","ref_text":"@file:attachments/notes.txt","uploaded":true}""",
                 "prompt.submit" to """{"status":"streaming"}""",
             ),
         )
+        val answer = gateway.answer
+        gateway.answer = { call ->
+            if (call.method == "file.attach") """{"attached":true,"ref_text":"@file:attachments/${call.param("name")}"}"""
+            else answer(call)
+        }
         connection.state.first { it is ConnectionState.Connected }
         val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
         chat.start()
@@ -955,16 +958,62 @@ class ChatSessionTest {
         assertTrue(chat.send("  summarise  ", listOf(image, pdf, file)))
 
         val sent = transport.sent.value.mapNotNull { it["method"]?.jsonPrimitive?.contentOrNull }.filter { it != "client.capabilities" && it != "ping" && it != "config.get" }
-        assertEquals(listOf("session.create", "image.attach_bytes", "pdf.attach", "file.attach", "file.attach", "prompt.submit"), sent)
+        assertEquals(listOf("session.create", "image.attach_bytes", "file.attach", "file.attach", "prompt.submit"), sent)
         val upload = transport.sent.value.first { it.isCall("image.attach_bytes") }
         assertEquals("AQID", upload.param("content_base64"))
         assertEquals("rt9", upload.param("session_id"))
-        // The PDF fell back to a plain file once the gateway said it can't render pages.
         assertEquals("data:application/pdf;base64,BA==", transport.sent.value.first { it.isCall("file.attach") }.param("data_url"))
         val submit = transport.sent.value.first { it.isCall("prompt.submit") }
-        assertEquals("@file:attachments/notes.txt\n\n@file:attachments/notes.txt\n\nsummarise", submit.param("text"))
+        assertEquals("@file:attachments/spec.pdf\n\n@file:attachments/notes.txt\n\nsummarise", submit.param("text"))
         val user = assertIs<ChatMessage.User>(chat.state.value.messages.single())
         assertEquals(listOf("cat.jpg", "spec.pdf", "notes.txt"), user.attachments.map { it.name })
+    }
+
+    @Test
+    fun aPdfWithoutTextUploadsTheOriginalAndSubmitsOnlyItsFileReference() = runTest {
+        val (connection, transport) = setup(backgroundScope, mapOf(
+            "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
+            "file.attach" to """{"attached":true,"ref_text":"@file:attachments/report.pdf"}""",
+            "prompt.submit" to """{"status":"streaming"}""",
+        ))
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        assertTrue(chat.send("", listOf(
+            OutgoingAttachment("pdf", "report.pdf", "application/pdf", byteArrayOf(4)),
+        )))
+
+        val upload = assertNotNull(transport.sent.value.singleOrNull { it.isCall("file.attach") })
+        assertEquals("rt9", upload.param("session_id"))
+        assertEquals("report.pdf", upload.param("name"))
+        assertEquals("data:application/pdf;base64,BA==", upload.param("data_url"))
+        assertFalse(transport.sent.value.any { it.isCall("pdf.attach") })
+        val submit = transport.sent.value.single { it.isCall("prompt.submit") }
+        assertEquals("@file:attachments/report.pdf", submit.param("text"))
+        val user = assertIs<ChatMessage.User>(chat.state.value.messages.single())
+        assertEquals(AttachmentKind.Pdf, user.attachments.single().kind)
+        assertEquals("", user.text)
+    }
+
+    @Test
+    fun aRejectedPdfUploadDoesNotSubmitAPrompt() = runTest {
+        for (response in listOf("error:5028", "error:-32601", """{"attached":false}""", """{"attached":true}""")) {
+            val (connection, transport) = setup(backgroundScope, mapOf(
+                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
+                "file.attach" to response,
+                "prompt.submit" to """{"status":"streaming"}""",
+            ))
+            connection.state.first { it is ConnectionState.Connected }
+            val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+            chat.start()
+
+            assertFalse(chat.send("Read this", listOf(
+                OutgoingAttachment("pdf", "report.pdf", "application/pdf", byteArrayOf(4)),
+            )), response)
+            assertFalse(transport.sent.value.any { it.isCall("prompt.submit") }, response)
+            assertTrue(chat.state.value.messages.isEmpty(), response)
+        }
     }
 
     @Test
@@ -1069,7 +1118,7 @@ class ChatSessionTest {
             backgroundScope,
             mapOf(
                 "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
-                "pdf.attach" to """{"attached":true,"pages":[{"path":"/tmp/page-1.png"}],"pages_attached":1}""",
+                "file.attach" to """{"attached":true,"name":"report.pdf","path":"/work/attachments/report.pdf","ref_path":"attachments/report.pdf","ref_text":"@file:attachments/report.pdf","uploaded":true}""",
                 "prompt.submit" to """{"status":"streaming"}""",
             ),
         )
@@ -1087,12 +1136,14 @@ class ChatSessionTest {
         assertTrue(Regex("""/home/u/\.kyllene-uploads/[0-9a-f]+/report\.pdf""").matches(staged), staged)
         assertTrue(routes.uploadLength > 12_806_962)
         assertEquals(routes.uploadLength, routes.uploadBody.size.toLong())
-        val attach = transport.sent.value.single { it.isCall("pdf.attach") }
+        // The whole PDF is attached as a file, not rendered to its first pages.
+        assertFalse(transport.sent.value.any { it.isCall("pdf.attach") })
+        val attach = transport.sent.value.single { it.isCall("file.attach") }
         assertEquals(staged, attach.param("path"))
-        assertNull(attach.param("content_base64"))
-        // The pages are made, so the upload goes; nothing went inline.
+        assertNull(attach.param("data_url"))
+        // Copied into the workspace, so the upload goes; nothing went inline.
         assertEquals(listOf(staged.substringBeforeLast('/')), routes.deleted)
-        assertTrue(transport.sent.value.any { it.isCall("prompt.submit") })
+        assertEquals("@file:attachments/report.pdf\n\nsummarise", transport.sent.value.single { it.isCall("prompt.submit") }.param("text"))
         assertIs<ConnectionState.Connected>(connection.state.value)
     }
 
@@ -1148,6 +1199,37 @@ class ChatSessionTest {
     }
 
     @Test
+    fun aNewChatMovesToAnotherFolderOnlyUntilItsFirstSendIsUnderWay() = runTest {
+        val (connection, transport) = setup(
+            backgroundScope,
+            mapOf("session.create" to SILENT, "prompt.submit" to """{"status":"streaming"}"""),
+        )
+        connection.state.first { it is ConnectionState.Connected }
+        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+
+        // Before anything is sent it moves, as often as it's asked, and starts in the last folder picked.
+        assertTrue(chat.unstarted)
+        assertTrue(chat.startIn("/srv/site"))
+        assertTrue(chat.startIn("/srv/other"))
+        val sending = backgroundScope.async { chat.send("hi") }
+        val create = transport.awaitSent { it.isCall("session.create") }
+        assertEquals("/srv/other", create.param("cwd"))
+
+        // While session.create is on its way, the chat stays where it is going.
+        assertFalse(chat.unstarted)
+        assertFalse(chat.startIn("/srv/site"))
+
+        transport.push("""{"jsonrpc":"2.0","id":${create["id"]},"result":{"session_id":"rt9","stored_session_id":"stored-9","info":{}}}""")
+        assertTrue(sending.await())
+
+        // And once it has begun, for good.
+        assertFalse(chat.unstarted)
+        assertFalse(chat.startIn("/srv/site"))
+        assertEquals(1, transport.sent.value.count { it.isCall("session.create") })
+    }
+
+    @Test
     fun aLargeFileTheGatewayUsesInPlaceStays() = runTest {
         val routes = FileRoutes()
         val (connection, _) = setup(
@@ -1171,29 +1253,6 @@ class ChatSessionTest {
         assertTrue(chat.send("look", listOf(streamed("logs.tar", "application/x-tar", 13_000_000L))))
 
         assertEquals(emptyList(), routes.deleted)
-    }
-
-    @Test
-    fun aLargePdfTheGatewayCantRenderGoesAsAFile() = runTest {
-        val (connection, transport) = setup(
-            backgroundScope,
-            mapOf(
-                "session.create" to """{"session_id":"rt9","stored_session_id":"stored-9","info":{}}""",
-                "pdf.attach" to "error:5028",
-                "file.attach" to """{"attached":true,"name":"r.pdf","path":"/work/attachments/r.pdf","ref_path":"attachments/r.pdf","ref_text":"@file:attachments/r.pdf","uploaded":true}""",
-                "prompt.submit" to """{"status":"streaming"}""",
-            ),
-        )
-        val routes = FileRoutes()
-        answerFileRoutes(routes)
-        connection.state.first { it is ConnectionState.Connected }
-        val chat = ChatSession(url, null, null, connection, SessionsApi(client()), backgroundScope)
-        chat.start()
-
-        assertTrue(chat.send("", listOf(streamed("r.pdf", "application/pdf", 20_000_000L))))
-
-        assertEquals(routes.uploadPath, transport.sent.value.single { it.isCall("file.attach") }.param("path"))
-        assertEquals(1, routes.deleted.size)
     }
 
     @Test
@@ -1452,6 +1511,27 @@ class ChatSessionTest {
         val messages = chat.state.value.messages
         assertEquals(listOf("hello", "Hi! What next?", "deploy it"), messages.map { it.textOf() })
         assertEquals("row-3", messages.last().key)
+    }
+
+    @Test
+    fun aDroppedFileWithoutWordsIsNotTakenForAnotherPrompt() = runTest {
+        val stored = history
+        for (arrives in listOf(false, true)) {
+            history = stored
+            val (chat, transport) = resumedChat(backgroundScope, mapOf(
+                "file.attach" to """{"attached":true,"ref_text":"@file:attachments/report.pdf"}""",
+                "prompt.submit" to SILENT,
+            ))
+            val pdf = OutgoingAttachment("pdf", "report.pdf", "application/pdf", byteArrayOf(4))
+            val sending = backgroundScope.async { chat.send("", listOf(pdf)) }
+            transport.awaitSent { it.isCall("prompt.submit") }
+            // Another client's prompt lands either way; the file's own only when it arrived.
+            val own = if (arrives) """,{"id":4,"role":"user","content":"@file:attachments/report.pdf"}""" else ""
+            history = history.replace("]}", """,{"id":3,"role":"user","content":"something else"}$own]}""")
+            transport.serverClose(1006)
+
+            assertEquals(arrives, sending.await(), "arrives=$arrives")
+        }
     }
 
     @Test
@@ -1753,6 +1833,39 @@ class ChatSessionTest {
         val resent = transports.last { it !== first }.awaitSent { it.isCall("prompt.submit") }
         assertEquals("[IMPORTANT: skill body]", resent.param("text"))
         assertEquals("/spike go", chat.state.value.messages.last().textOf())
+    }
+
+    @Test
+    fun resendingAFileSendsItsReferenceAgainWithItsCard() = runTest {
+        val results = mutableMapOf(
+            "session.resume" to """{"session_id":"rt1","running":false}""",
+            "file.attach" to """{"attached":true,"ref_text":"@file:attachments/report.pdf"}""",
+            "prompt.submit" to SILENT,
+        )
+        val (connection, transports) = reconnectingSetup(backgroundScope, results)
+        val chat = ChatSession(url, "stored-1", "Greeting", connection, SessionsApi(client()), backgroundScope)
+        chat.start()
+        chat.state.first { it.runtimeSessionId == "rt1" && it.historyLoaded }
+        historyFails = true
+        val pdf = OutgoingAttachment("pdf", "report.pdf", "application/pdf", byteArrayOf(4))
+        val sending = backgroundScope.async { chat.submit("", listOf(pdf)) }
+        transports.last().awaitSent { it.isCall("prompt.submit") }
+        val first = transports.last()
+        first.serverClose(1006)
+        assertEquals(SendOutcome.Unsettled, sending.await())
+        historyFails = false
+        results["prompt.submit"] = """{"status":"streaming"}"""
+        chat.state.first { it.runtimeSessionId == "rt1" && transports.last() !== first }
+
+        assertNull(chat.resend(chat.state.value.messages.last().key))
+
+        // The file is in the workspace already: only its reference goes again, and its card stays on the bubble.
+        val again = transports.last { it !== first }
+        val resent = again.awaitSent { it.isCall("prompt.submit") }
+        assertEquals("@file:attachments/report.pdf", resent.param("text"))
+        assertTrue(again.sent.value.none { it.isCall("file.attach") })
+        val bubble = assertIs<ChatMessage.User>(chat.state.value.messages.last())
+        assertEquals(listOf("report.pdf"), bubble.attachments.map { it.name })
     }
 
     @Test

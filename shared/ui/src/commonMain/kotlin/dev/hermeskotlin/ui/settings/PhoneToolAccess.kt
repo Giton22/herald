@@ -2,11 +2,15 @@ package dev.hermeskotlin.ui.settings
 
 import androidx.compose.runtime.Composable
 import dev.hermeskotlin.core.phone.PhoneTool
+import org.jetbrains.compose.resources.StringResource
 
-/** What a phone tool needs from the platform before it can work: a permission, or a special access in its settings. */
+/**
+ * What a phone tool needs from the platform before it can work: a permission, or a special access in its settings.
+ * The sentences are catalogue keys, so the page words them in the app's language.
+ */
 interface PhoneToolAccess {
     /** What [tool] still needs, as a sentence for under its switch; null when it has everything. */
-    fun missing(tool: PhoneTool): String?
+    fun missing(tool: PhoneTool): StringResource?
 
     /** Asks for it: the permission prompt, or the settings page where the user grants it. */
     fun request(tool: PhoneTool)
@@ -15,13 +19,13 @@ interface PhoneToolAccess {
      * A grant [tool] works without but does more with, as the label of the row that asks for it (location all the
      * time, so it also works while Herald is closed); null when there's none or it's granted. Never asked unprompted.
      */
-    fun optional(tool: PhoneTool): String? = null
+    fun optional(tool: PhoneTool): StringResource? = null
 
     /** Asks for [optional]'s grant, when the user taps its row. */
     fun requestOptional(tool: PhoneTool) {}
 
     /** What ringing for an answer still needs (notifications, full-screen calls), as a sentence; null when nothing. */
-    fun ringsMissing(): String? = null
+    fun ringsMissing(): StringResource? = null
 
     /** Asks for [ringsMissing]'s grant. */
     fun requestRings() {}
