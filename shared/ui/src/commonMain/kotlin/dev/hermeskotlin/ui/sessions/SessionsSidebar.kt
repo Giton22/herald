@@ -752,6 +752,7 @@ fun SessionsSidebar(
                     },
                     onSettings = onOpenSettings,
                     onSearch = { searchOpen = true }.takeIf { mode == SidebarMode.Chats },
+                    keepSearchRoom = modeSwitch,
                     profiles = roster?.profiles.orEmpty(),
                     activeProfile = roster?.active(profile)?.name,
                     // Profiles made or removed on the host since show up, as the account sheet's do.
@@ -1360,6 +1361,8 @@ internal fun MainHeader(
     onAccount: () -> Unit,
     onSettings: () -> Unit,
     onSearch: (() -> Unit)?,
+    /** Without [onSearch], the pill's room is kept so the Chats / Bots switch under it stays put; false: no switch to keep still. */
+    keepSearchRoom: Boolean = true,
     /** The gateway's profiles; with more than one, the header names the active one and opens them in a menu. */
     profiles: List<Profile> = emptyList(),
     /** The active profile's name, the launch profile's included. */
@@ -1480,7 +1483,7 @@ internal fun MainHeader(
         }
         // Search looks through chats; the bot roster is short enough to read. The header keeps its height
         // without the pill, so switching sides doesn't move the switch under the finger.
-        if (onSearch != null) SearchPill(onSearch) else Spacer(Modifier.height(maxOf(MinTouchTarget, SEARCH_PILL_HEIGHT)))
+        if (onSearch != null) SearchPill(onSearch) else if (keepSearchRoom) Spacer(Modifier.height(maxOf(MinTouchTarget, SEARCH_PILL_HEIGHT)))
     }
 }
 

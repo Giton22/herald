@@ -21,6 +21,15 @@ import org.robolectric.annotation.Config
 import org.robolectric.annotation.GraphicsMode
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
+import kotlin.test.assertTrue
+import androidx.compose.foundation.layout.Box
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.height
 
 @RunWith(RobolectricTestRunner::class)
 @Config(sdk = [35], qualifiers = "w360dp-h640dp-xhdpi")
@@ -106,6 +115,25 @@ class SidebarHeaderTest {
         show(listOf(Profile("default", isDefault = true), Profile("long", displayName = "A research assistant for the whole household")), active = "long")
         composeRule.onNodeWithText("homelab").assertIsDisplayed()
         composeRule.onNodeWithText("· A research assistant for the whole household").assertIsDisplayed()
+    }
+
+    @Test
+    fun withoutTheSwitchTheBotsSideKeepsNoRoomForSearch() {
+        var keepRoom by mutableStateOf(true)
+        composeRule.setContent {
+            HermesTheme(ColorScheme.Dark) {
+                Box(Modifier.testTag("header")) {
+                    MainHeader(gatewayLabel = "homelab", connection = null, onAccount = {}, onSettings = {}, onSearch = null, keepSearchRoom = keepRoom)
+                }
+            }
+        }
+        settle()
+        val kept = composeRule.onNodeWithTag("header").getUnclippedBoundsInRoot().height
+        keepRoom = false
+        settle()
+        val without = composeRule.onNodeWithTag("header").getUnclippedBoundsInRoot().height
+        // The pill's room goes: at least a touch target shorter.
+        assertTrue(kept - without >= 48.dp, "kept $kept, without $without")
     }
 
     private fun settle() {
